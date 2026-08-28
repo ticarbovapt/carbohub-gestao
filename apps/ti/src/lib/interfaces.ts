@@ -54,7 +54,7 @@ export const SYSTEM_BRAND: Record<string, SystemBrand> = {
   carbo_financas:    { short: "Finanças",    chip: "bg-teal-500/10 text-teal-600 ring-1 ring-inset ring-teal-500/20",       dot: "bg-teal-500" },
   carbo_mkt:         { short: "Marketing",   chip: "bg-pink-500/10 text-pink-600 ring-1 ring-inset ring-pink-500/20",       dot: "bg-pink-500" },
   carbo_ti:          { short: "TI",          chip: "bg-sky-500/10 text-sky-600 ring-1 ring-inset ring-sky-500/20",         dot: "bg-sky-500" },
-  carbo_atendimento: { short: "Atendimento", chip: "bg-orange-500/10 text-orange-600 ring-1 ring-inset ring-orange-500/20", dot: "bg-orange-500" },
+  carbo_atendimento: { short: "Atendimento", chip: "bg-purple-500/10 text-purple-600 ring-1 ring-inset ring-purple-500/20", dot: "bg-purple-500" },
   carbo_admin:       { short: "Admin",       chip: "bg-slate-500/10 text-slate-600 ring-1 ring-inset ring-slate-500/20",   dot: "bg-slate-500" },
 };
 export const brandOf = (iface: string): SystemBrand =>

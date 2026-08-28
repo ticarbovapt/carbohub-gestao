@@ -1,0 +1,1904 @@
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
+import { toast } from "sonner";
+import { Mail, Repeat } from "lucide-react";
+import { UserCog, Users } from "lucide-react";
+import {
+  ShoppingCart, Plus, Trash2, AlertTriangle, Building2, MapPin, Package, Gift, FileText, Search, Target, ChevronDown,
+  Loader2, CheckCircle2, AlertCircle, CreditCard, Percent, Tag, CalendarClock, Sparkles,
+  PackageCheck,
+} from "lucide-react";
+import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
+import { CarboButton } from "@/components/ui/carbo-button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { ptBR } from "date-fns/locale";
+import { useAuth } from "@/contexts/AuthContext";
+import { appKeyAtual } from "@carbo/shell";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { generateQuotePdf } from "@/lib/quotePdf";
+import { useCreateVenda, useUpdateVendaFull, useCriarRecorrencia, RECORRENCIA_PERIODOS, type RecorrenciaPeriodo } from "@/hooks/useVendas";
+import { useMeuEstoque } from "@/hooks/useMeuEstoque";
+import { useConvertQuote } from "@/hooks/useCarbozeVendas";
+import { useVincularOrcamento } from "@/hooks/useLeadOrcamento";
+import { useProdutos } from "@/hooks/useProdutos";
+import { useCreateOSFromSale } from "@/hooks/useDescarbOS";
+import {
+  DESCARB_MODALIDADES, DESCARB_SERVICE_TYPES,
+  modalidadePrice, modalidadeLabel, modalidadeHint,
+  servicoPadraoPorDoc, type DescarbServiceType,
+} from "@carbo/shell";
+import { useDiscountTiersPublic } from "@/hooks/useDiscountTiers";
+import { computeLineDiscount, resolveTier } from "@/lib/discount";
+import { usePrazoConfigPublic } from "@/hooks/usePrazoConfig";
+import { computePrazos } from "@/lib/prazos";
+import { validateInscricaoEstadual } from "@/lib/inscricaoEstadual";
+import { useGeocode } from "@/hooks/useGeocode";
+import { ClienteDocInput } from "@/components/vender/ClienteDocInput";
+import { CepInput, maskCep } from "@/components/vender/CepInput";
+import type { ClienteSugestao } from "@/hooks/useClienteBusca";
+import { MapContainer, TileLayer, CircleMarker, Popup } from "react-leaflet";
+import "leaflet/dist/leaflet.css";
+
+// Vender — grava a venda de verdade (carboze_orders) e lê o catálogo real (mrp_products).
+// Tela ÚNICA e IDÊNTICA em todos os apps (sales/crm, ops, finance, admin): a do
+// sales/crm é a referência. Gestor pode lançar por outro vendedor; os Dados
+// Estratégicos e Notas Internas são gravados em internal_notes (nada é descartado).
+
+const TIPOS_PONTO = ["Posto", "Oficina", "Frota", "PDV", "Licenciado"];
+const CLASSIFICACOES = ["Estratégico", "Potencial", "Regular"];
+const UFS = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"];
+
+const brl = (n: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n);
+// Data local (yyyy-mm-dd) para o <input type="date"> e formatação pt-BR.
+const toISO = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const fmtBr = (d: Date) => d.toLocaleDateString("pt-BR");
+
+interface ItemRow {
+  id: string; productId: string; qty: number; unitPrice: number; unitPriceStr?: string; hasBonus: boolean; bonusQty: number;
+  // Desconto POR ITEM: toggle % ou R$ e o valor digitado naquela linha.
+  discType: "percent" | "value"; discValue: number;
+}
+const emptyRow = (): ItemRow => ({ id: crypto.randomUUID(), productId: "", qty: 1, unitPrice: 0, unitPriceStr: "", hasBonus: false, bonusQty: 0, discType: "percent", discValue: 0 });
+
+// ── Itens de Serviço (descarbonizações) ──
+// A tabela de preços vive em @carbo/shell: era hardcoded aqui nos 5 apps, e
+// cinco cópias do preço é cinco chances de divergir. O Licenciados tem a dele
+// (NewSalePage.tsx) — repo separado, sem como importar; as duas se espelham.
+
+// Linha de serviço: separada da de produto. Preço vem fixo da modalidade.
+interface ServiceRow {
+  id: string; modality: "" | "P" | "M" | "G"; qty: number; hasBonus: boolean; bonusQty: number;
+  discType: "percent" | "value"; discValue: number;
+}
+const emptyServiceRow = (): ServiceRow => ({ id: crypto.randomUUID(), modality: "", qty: 1, hasBonus: false, bonusQty: 0, discType: "percent", discValue: 0 });
+
+// Preço em pt-BR: aceita vírgula como decimal ("1,50") ou ponto ("1.50"); com
+// vírgula, os pontos são separador de milhar. String vazia → 0.
+const parsePreco = (s: string): number => {
+  if (!s) return 0;
+  const norm = s.includes(",") ? s.replace(/\./g, "").replace(",", ".") : s;
+  const n = parseFloat(norm);
+  return Number.isFinite(n) ? n : 0;
+};
+
+const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+
+// Cabeçalho clicável de seção opcional (recolhível).
+function CollapsibleCard({
+  title, icon: Icon, open, onToggle, children,
+}: { title: string; icon: React.ElementType; open: boolean; onToggle: () => void; children: React.ReactNode }) {
+  return (
+    <CarboCard>
+      <CarboCardContent className="p-4">
+        <button onClick={onToggle} className="w-full flex items-center justify-between">
+          <h3 className="font-semibold flex items-center gap-2">
+            <Icon className="h-4 w-4 text-carbo-green" /> {title}
+            <span className="text-xs text-muted-foreground font-normal">(opcional)</span>
+          </h3>
+          <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
+        </button>
+        {open && <div className="mt-4 space-y-3">{children}</div>}
+      </CarboCardContent>
+    </CarboCard>
+  );
+}
+
+export default function Vender() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { profile, isGestor: gestor } = useAuth();
+  const vendedorLogado = profile?.full_name ?? profile?.username ?? "";
+  const createVenda = useCreateVenda();
+  const criarRecorrencia = useCriarRecorrencia();
+  // Recorrência: o vendedor preenche UM mês; o sistema replica N vezes.
+  const [recorrente, setRecorrente] = useState(false);
+  const [recPeriodo, setRecPeriodo] = useState<RecorrenciaPeriodo>("mensal");
+  const [recParcelas, setRecParcelas] = useState(6);
+  const recProximosMeses = useMemo(() => {
+    const step = RECORRENCIA_PERIODOS.find((p) => p.value === recPeriodo)?.meses ?? 1;
+    const base = new Date();
+    return Array.from({ length: recParcelas }, (_, i) => {
+      const d = new Date(base.getFullYear(), base.getMonth() + i * step, 1);
+      return d.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" });
+    });
+  }, [recPeriodo, recParcelas]);
+  const updateVenda = useUpdateVendaFull();
+  const convertQuote = useConvertQuote();
+  const vincular = useVincularOrcamento();
+  const createOSFromSale = useCreateOSFromSale();
+  const [searchParams] = useSearchParams();
+  const editId = searchParams.get("edit");
+  const { data: produtos = [] } = useProdutos();
+  /** A linha é bonificação quando o produto escolhido é um gêmeo.
+   *  ⚠️ A regra mora no PRODUTO, não numa flag da linha: assim ela sobrevive
+   *  a reabrir o orçamento, e um gêmeo escolhido por qualquer caminho já
+   *  entra com 100% — não há como salvar bonificação cobrada.
+   *
+   *  ⚠️ Declarado AQUI, logo depois de `produtos`, e não junto do validItems:
+   *  os useMemo de total rodam DURANTE o render e chamam esta função. Declarada
+   *  lá embaixo, ela cai na zona morta do `const` e a tela inteira morre com
+   *  "Cannot access before initialization" — que o tsc não pega, porque não
+   *  sabe quando o callback do useMemo executa. Já derrubou o /vender no ar. */
+  const ehBonificacao = (productId: string) =>
+    !!produtos.find((p) => p.id === productId)?.bonificacao_de;
+
+  /**
+   * Para onde ir depois de salvar — e se há para onde ir.
+   *
+   * O `/pedidos` do Sales está TRAVADO, então mandar qualquer app para lá seria
+   * jogar o vendedor numa tela sem acesso logo depois de fechar a venda.
+   *
+   * No Sales o equivalente é `/vendas`. Nos outros cinco apps não existe tela
+   * de acompanhamento do pedido: lá a venda só é confirmada, e a pessoa fica
+   * onde estava — mandá-la para uma rota que aquele app não tem daria 404 ou
+   * um redirecionamento silencioso para a home, que é pior que não navegar.
+   *
+   * ⚠️ `appKeyAtual()` devolve null fora de produção (localhost não distingue
+   * app), e null significa "não sei" — cai no caminho sem navegação, que é o
+   * seguro: não navegar nunca quebra, navegar para o lugar errado sim.
+   */
+  const destinoPedido = appKeyAtual() === "crm" ? "/vendas" : null;
+  const sairDaTela = () => { if (destinoPedido) navigate(destinoPedido); else navigate(-1); };
+
+  // Modo edição: carrega o pedido cru (com o snapshot do formulário) para reabrir.
+  const { data: editOrder } = useQuery({
+    queryKey: ["vender_edit", editId],
+    enabled: !!editId,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).from("carboze_orders").select("*").eq("id", editId).maybeSingle();
+      if (error) throw error;
+      return data as Record<string, any> | null;
+    },
+  });
+  const [hydrated, setHydrated] = useState(false);
+  const editNumero = (editOrder?.order_number as string | null) ?? null;
+  // Editar orçamento e editar venda usam a MESMA tela — muda só o que acontece
+  // ao salvar. Orçamento salva e converte; venda apenas salva.
+  const editStatus = (editOrder?.status as string | null) ?? null;
+  const editandoVenda = !!editOrder && editStatus !== "quote";
+  // Espelha carbo_pedido_faturado() no banco: com NF, o comercial está travado.
+  const editFaturado = !!editOrder && (
+    !!editOrder.invoice_number || !!editOrder.nf_access_key || !!editOrder.bling_nf_id ||
+    ["invoiced", "shipped", "delivered"].includes(editStatus ?? "")
+  );
+  // Lista de vendedores (só pra gestor poder lançar por outro).
+  const { data: vendedores = [] } = useQuery({
+    queryKey: ["all_profiles_vender"],
+    enabled: gestor,
+    queryFn: async () => {
+      const { data } = await (supabase as any).rpc("carbo_all_profiles");
+      return (data ?? []) as { id: string; full_name: string | null }[];
+    },
+  });
+
+  const [mode, setMode] = useState<"venda" | "promo">("venda");
+  const [doc, setDoc] = useState("");
+  const [customerName, setCustomerName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [isLicenciado, setIsLicenciado] = useState(false);
+  const [rows, setRows] = useState<ItemRow[]>([emptyRow()]);
+  // Itens de serviço (descarbonizações) — opcional, começa VAZIO.
+  const [serviceRows, setServiceRows] = useState<ServiceRow[]>([]);
+  const [obsPublica, setObsPublica] = useState("");
+  const [notasInternas, setNotasInternas] = useState("");
+  const [tipoPonto, setTipoPonto] = useState("");
+  const [classificacao, setClassificacao] = useState("");
+  const [volumeMedio, setVolumeMedio] = useState("");
+  const [atuaDiesel, setAtuaDiesel] = useState(false);
+  const [atuaFrotas, setAtuaFrotas] = useState(false);
+  const [vendedorId, setVendedorId] = useState<string>(""); // "" = usuário logado
+  // Vendedor efetivo: se o gestor escolheu outro, usa o nome dele; senão o logado.
+  // (declarado APÓS o useState de vendedorId — senão daria ReferenceError/TDZ.)
+  const vendedor = vendedorId ? (vendedores.find((v) => v.id === vendedorId)?.full_name ?? vendedorLogado) : vendedorLogado;
+  const [showEstrategicos, setShowEstrategicos] = useState(false);
+  const [showObs, setShowObs] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [emailing, setEmailing] = useState(false);
+  const [buscando, setBuscando] = useState(false);
+  const [docFeedback, setDocFeedback] = useState<{ kind: "ok" | "err"; msg: string } | null>(null);
+  const [endereco, setEndereco] = useState({ logradouro: "", numero: "", bairro: "", cidade: "", uf: "", cep: "" });
+  const setEnd = (patch: Partial<typeof endereco>) => setEndereco((e) => ({ ...e, ...patch }));
+  // Faturamento (NF): o endereço da empresa (CNPJ) pode diferir do de entrega.
+  const [fatMesmo, setFatMesmo] = useState(true);
+  const [fatEndereco, setFatEndereco] = useState({ logradouro: "", numero: "", bairro: "", cidade: "", uf: "", cep: "" });
+  const setFat = (patch: Partial<typeof fatEndereco>) => setFatEndereco((e) => ({ ...e, ...patch }));
+  const [ie, setIe] = useState("");
+  const [ieUf, setIeUf] = useState(""); // override da UF p/ validar a IE; vazio = usa a do endereço
+  const isIsento = /^isento$/i.test(ie.trim());
+  const ieUfEff = ieUf || endereco.uf || "";
+  const ieResult = ie && !isIsento ? validateInscricaoEstadual(ie, ieUfEff) : null;
+  const { geocodeAddress, isLoading: geoLoading } = useGeocode();
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+
+  // ── Forma de pagamento (obrigatória) ──
+  const [pagModalidade, setPagModalidade] = useState("");      // pix | boleto_avista | boleto_faturado | debito | credito
+  const [pagParcelas, setPagParcelas] = useState("1");          // 1..12 (crédito)
+  const [pagFaturamento, setPagFaturamento] = useState("");     // ex.: 30/60/90 (boleto faturado)
+
+  // ── Desconto POR ITEM (cada linha tem o seu) + alçada pela % AGREGADA do pedido ──
+  // Motivo único do desconto (só aparece quando há desconto) — alimenta a alçada.
+  const [discReason, setDiscReason] = useState("");
+  const { data: discountCfg = { enabled: false, tiers: [] } } = useDiscountTiersPublic();
+
+  // ── Prazo de entrega + PPF/PPE (opcional; banco recalcula de forma autoritativa) ──
+  const [deliveryDate, setDeliveryDate] = useState("");
+  // Como o produto sai. Padrão 'producao' = o comportamento de sempre; a
+  // pronta entrega é opt-in explícito, nunca o default.
+  const [modalidade, setModalidade] = useState<"producao" | "pronta_entrega">("producao");
+  // A caixa é a de QUEM VENDE, não a de quem digita: o gestor pode lançar por
+  // outro vendedor, e nesse caso o produto sai da caixa dele.
+  const { data: meuEstoque } = useMeuEstoque(vendedorId || profile?.id || null);
+  const [dateOpen, setDateOpen] = useState(false);
+  // Previsão de execução da descarbonização (serviço) — independente da entrega.
+  const [executionDate, setExecutionDate] = useState("");
+  // Tipo da OS de descarbonização. Antes era derivado do documento (CNPJ→b2b),
+  // então "frota" nunca era criada nem com 9 carros na venda. Agora o vendedor
+  // escolhe, com o documento só dando o palpite inicial.
+  const [serviceType, setServiceType] = useState<DescarbServiceType>("b2c");
+  const [serviceTypeTocado, setServiceTypeTocado] = useState(false);
+  const [execDateOpen, setExecDateOpen] = useState(false);
+  const { data: prazoCfg = { enabled: false, minBusinessDays: 3, shipOffsetDays: 1 } } = usePrazoConfigPublic();
+  const prazos = useMemo(
+    () => (deliveryDate ? computePrazos(new Date(), new Date(deliveryDate + "T00:00:00"), prazoCfg) : null),
+    [deliveryDate, prazoCfg],
+  );
+  const pagamentoLabel = useMemo(() => {
+    switch (pagModalidade) {
+      case "pix": return "PIX";
+      case "boleto_avista": return "Boleto à vista";
+      case "boleto_faturado": return pagFaturamento.trim() ? `Boleto faturado (${pagFaturamento.trim()})` : "Boleto faturado";
+      case "debito": return "Cartão de débito";
+      case "credito": return `Cartão de crédito ${pagParcelas}x`;
+      default: return "";
+    }
+  }, [pagModalidade, pagParcelas, pagFaturamento]);
+  const pagamentoValido = pagModalidade !== "" && !(pagModalidade === "boleto_faturado" && !pagFaturamento.trim());
+  // Cliente é obrigatório. Antes o gate só olhava o pagamento, e a venda salvava
+  // com nome vazio — o buildOrderFields faz `customer_name: input.customer_name || ""`
+  // e grava a string vazia. Aconteceu de verdade: o V2026080004 nasceu de R$ 400
+  // sem nome e sem CNPJ. Pedido sem cliente não fatura, não cobra e não se acha.
+  const nomeValido = customerName.trim().length > 0;
+  const podeSalvar = pagamentoValido && nomeValido;
+  // Por que não vale para o orçamento também? Vale: orçamento sem nome de
+  // cliente não pode ser enviado a ninguém, e o PDF sai com o cabeçalho vazio.
+
+  // Id do lead de origem. O CRM JÁ mandava isto no state e o tipo inline não
+  // declarava `id` — então o efeito nunca lia, e metade do elo era descartada
+  // em silêncio. Guardado em estado para sobreviver ao salvar.
+  const [leadOrigemId, setLeadOrigemId] = useState<string | null>(null);
+
+  // Prefill quando vem de um lead (Tunnel do CRM). Não acopla — venda direta segue normal.
+  useEffect(() => {
+    const fl = (location.state as { fromLead?: { id?: string; name?: string; cnpj?: string; phone?: string; email?: string; city?: string; state?: string; address?: string; bairro?: string; numero?: string; cep?: string; ie?: string; legalName?: string } } | null)?.fromLead;
+    if (!fl) return;
+    if (fl.id) setLeadOrigemId(fl.id);
+    // Razão social manda sobre o nome do card: é ela que sai na nota.
+    if (fl.legalName || fl.name) setCustomerName(fl.legalName || fl.name || "");
+    if (fl.cnpj) setDoc(fl.cnpj);
+    if (fl.phone) setPhone(fl.phone);
+    if (fl.email) setEmail(fl.email);
+    if (fl.ie) setIe(fl.ie);
+    setEndereco((e) => ({
+      ...e,
+      logradouro: fl.address || e.logradouro, numero: fl.numero || e.numero,
+      bairro: fl.bairro || e.bairro, cidade: fl.city || e.cidade,
+      uf: fl.state || e.uf, cep: fl.cep || e.cep,
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const [mapMsg, setMapMsg] = useState<string | null>(null);
+
+  // Localiza a posição aproximada do endereço no mapa (para conferência visual).
+  async function localizarNoMapa() {
+    setMapMsg(null);
+    if (!endereco.cidade || !endereco.uf) {
+      setMapMsg("Preencha ao menos Cidade e Estado para localizar no mapa.");
+      return;
+    }
+    const addr = [endereco.logradouro, endereco.numero].filter(Boolean).join(", ");
+    const geo = await geocodeAddress(addr, endereco.cidade, endereco.uf);
+    if (geo) { setCoords({ lat: geo.lat, lng: geo.lng }); }
+    else { setCoords(null); setMapMsg("Não foi possível localizar este endereço. Confira os dados."); }
+  }
+
+  // Totais do pedido a partir do desconto POR ITEM:
+  // subtotalBruto = Σ brutos · descontoTotal = Σ descontos de linha · total = líquido.
+  // percentAgregado = descontoTotal / subtotalBruto × 100 (é o que alimenta a alçada).
+  const { subtotalBruto, descontoTotal, total, percentAgregado } = useMemo(() => {
+    let bruto = 0, desc = 0;
+    for (const r of rows) {
+      const g = r.qty * r.unitPrice;
+      const line = ehBonificacao(r.productId)
+        ? { amount: g, net: 0 }
+        : computeLineDiscount(g, { type: r.discType, value: r.discValue });
+      bruto += g;
+      desc += line.amount;
+    }
+    bruto = round2(bruto);
+    desc = round2(desc);
+    return {
+      subtotalBruto: bruto,
+      descontoTotal: desc,
+      total: round2(Math.max(0, bruto - desc)),
+      percentAgregado: bruto > 0 ? round2((desc / bruto) * 100) : 0,
+    };
+  }, [rows]);
+  const discTier = useMemo(() => resolveTier(percentAgregado, discountCfg), [percentAgregado, discountCfg]);
+
+  // Totais dos itens de SERVIÇO (preço fixo por modalidade). Separado da alçada de produto.
+  const { servSubtotal, servDesconto, servTotal } = useMemo(() => {
+    let bruto = 0, desc = 0;
+    for (const s of serviceRows) {
+      const g = s.qty * modalidadePrice(s.modality);
+      const line = computeLineDiscount(g, { type: s.discType, value: s.discValue });
+      bruto += g;
+      desc += line.amount;
+    }
+    bruto = round2(bruto);
+    desc = round2(desc);
+    return { servSubtotal: bruto, servDesconto: desc, servTotal: round2(Math.max(0, bruto - desc)) };
+  }, [serviceRows]);
+
+  // Totais do PEDIDO = produto + serviço (usados no rodapé e no buildPayload).
+  const orderSubtotal = round2(subtotalBruto + servSubtotal);
+  const orderDesconto = round2(descontoTotal + servDesconto);
+  const orderTotal = round2(total + servTotal);
+
+  // Formata CPF (≤11 díg.) ou CNPJ (12+).
+  function formatDoc(v: string) {
+    const d = v.replace(/\D/g, "").slice(0, 14);
+    if (d.length <= 11) {
+      if (d.length <= 3) return d;
+      if (d.length <= 6) return `${d.slice(0, 3)}.${d.slice(3)}`;
+      if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`;
+      return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+    }
+    // Separador só entra quando JÁ existe dígito depois dele. Antes, com 12
+    // dígitos a máscara devolvia "61.744.398/0001-" com o hífen sobrando: o
+    // backspace tirava o hífen, esta função recolocava, e o campo travava —
+    // era preciso apagar um dígito "por cima" do hífen para destravar.
+    if (d.length <= 2) return d;
+    if (d.length <= 5) return `${d.slice(0, 2)}.${d.slice(2)}`;
+    if (d.length <= 8) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5)}`;
+    if (d.length <= 12) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8)}`;
+    return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
+  }
+  // Validação de CPF (dígitos verificadores).
+  function isValidCpf(cpf: string) {
+    const d = cpf.replace(/\D/g, "");
+    if (d.length !== 11 || /^(\d)\1{10}$/.test(d)) return false;
+    const calc = (len: number) => {
+      let sum = 0;
+      for (let i = 0; i < len; i++) sum += parseInt(d[i]) * (len + 1 - i);
+      const r = (sum * 10) % 11;
+      return r === 10 ? 0 : r;
+    };
+    return calc(9) === parseInt(d[9]) && calc(10) === parseInt(d[10]);
+  }
+  // Cliente escolhido no autocomplete — preenche com o que JÁ temos.
+  // Só sobrescreve campo vazio: se o vendedor já digitou um telefone novo,
+  // o dado antigo do sistema não pode apagar por cima.
+  function aplicarClienteExistente(c: ClienteSugestao) {
+    setDoc(formatDoc(c.doc));
+    if (c.nome) setCustomerName(c.nome);
+    if (c.email && !email) setEmail(c.email);
+    if (c.telefone && !phone) setPhone(String(c.telefone));
+    if (c.ie && !ie) setIe(c.ie);
+    setEndereco((e) => ({
+      ...e,
+      logradouro: e.logradouro || c.endereco || "",
+      bairro: e.bairro || "",
+      cidade: e.cidade || c.cidade || "",
+      uf: e.uf || c.uf || "",
+      cep: e.cep || maskCep(c.cep || ""),
+    }));
+    setDocFeedback({
+      kind: "ok",
+      msg: c.tipo === "cliente"
+        ? `Cliente da base (${c.pedidos} pedido${c.pedidos > 1 ? "s" : ""}). Confira os dados — "Buscar dados" atualiza pela Receita.`
+        : 'Lead do comercial. Confira os dados — "Buscar dados" completa pela Receita.',
+    });
+  }
+
+  // CPF → valida (manual); CNPJ → busca na BrasilAPI e auto-preenche cliente + endereço.
+  async function handleBuscarDoc() {
+    const digits = doc.replace(/\D/g, "");
+    setDocFeedback(null);
+    if (digits.length === 11) {
+      if (!isValidCpf(digits)) { setDocFeedback({ kind: "err", msg: "CPF inválido. Verifique os números." }); return; }
+      setDocFeedback({ kind: "ok", msg: "CPF válido — preencha os dados do cliente abaixo." });
+      return;
+    }
+    if (digits.length !== 14) { setDocFeedback({ kind: "err", msg: "Digite um CPF (11 dígitos) ou CNPJ (14 dígitos)." }); return; }
+    setBuscando(true);
+    try {
+      const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${digits}`, { signal: AbortSignal.timeout(10000) });
+      if (res.status === 404) { setDocFeedback({ kind: "err", msg: "CNPJ não encontrado na Receita Federal. Verifique o número ou preencha manualmente." }); return; }
+      if (!res.ok) throw new Error(`Erro ${res.status}`);
+      const raw = await res.json();
+      setCustomerName(raw.nome_fantasia || raw.razao_social || "");
+      if (raw.email) setEmail(raw.email);
+      const tel = raw.ddd_telefone_1 || raw.ddd_telefone_2;
+      if (tel) setPhone(String(tel));
+      setEndereco({
+        logradouro: [raw.logradouro, raw.complemento].filter(Boolean).join(", "),
+        numero: raw.numero || "",
+        bairro: raw.bairro || "",
+        cidade: raw.municipio || "",
+        uf: raw.uf || "",
+        cep: maskCep(raw.cep || ""),
+      });
+      setDocFeedback({ kind: "ok", msg: "Dados do CNPJ carregados com sucesso!" });
+      // Localiza no mapa automaticamente após o CNPJ.
+      if (raw.municipio && raw.uf) {
+        const geo = await geocodeAddress([raw.logradouro, raw.numero].filter(Boolean).join(", "), raw.municipio, raw.uf);
+        if (geo) { setCoords({ lat: geo.lat, lng: geo.lng }); setMapMsg(null); }
+      }
+    } catch (err) {
+      const name = (err as { name?: string }).name;
+      setDocFeedback({ kind: "err", msg: name === "TimeoutError" || name === "AbortError"
+        ? "Tempo esgotado na consulta. Tente de novo ou preencha manualmente."
+        : "Serviço de consulta indisponível. Preencha os dados manualmente." });
+    } finally { setBuscando(false); }
+  }
+
+  function updateRow(id: string, patch: Partial<ItemRow>) {
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  }
+  function updateServiceRow(id: string, patch: Partial<ServiceRow>) {
+    setServiceRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  }
+  function onProduct(id: string, productId: string) {
+    // O preço vem da TABELA (Admin › Tabela de preços), não da digitação. Antes
+    // cada vendedor punha o valor no olho, e o mesmo produto saía por preços
+    // diferentes em pedidos diferentes — sem ninguém conseguir auditar.
+    //
+    // Produto sem preço definido entra com 0 e a validação barra o salvamento:
+    // é lacuna de configuração, e precisa aparecer em vez de ser preenchida à
+    // mão por quem não decide preço.
+    const prod = produtos.find((p) => p.id === productId);
+    const preco = prod?.sale_price ?? 0;
+    updateRow(id, {
+      productId,
+      unitPrice: preco,
+      unitPriceStr: preco ? String(preco).replace(".", ",") : "",
+    });
+  }
+  const validItems = () =>
+    rows.filter((r) => r.productId && r.qty > 0).map((r) => {
+      const prod = produtos.find((p) => p.id === r.productId);
+      const bruto = r.qty * r.unitPrice;
+      const bonif = !!prod?.bonificacao_de;
+      // ⚠️ A linha de bonificação carrega a IDENTIDADE DO PAI (product_id e
+      // product_code), não a do gêmeo. É o mesmo SKU — a bonificação é uma
+      // marca sobre ele, não outro produto.
+      //
+      // Sem isto, tudo o que é a jusante recebe um código que não existe fora
+      // do nosso catálogo: o estoque precisa resolver o vínculo toda vez, e no
+      // Bling o `CZ100-BON` não casa com produto nenhum e a linha vira
+      // "descrição livre" — uma NF com produto sem cadastro.
+      //
+      // O NOME continua o do gêmeo ("... - bonificação"): nome é exibição,
+      // id é identidade. É o que faz o orçamento e a NF ficarem legíveis.
+      const pai = bonif ? produtos.find((p) => p.id === prod!.bonificacao_de) : null;
+      // Bonificação: 100% de desconto, sempre. Não é o que o vendedor digitou —
+      // é o que o produto É. Calcular pelo desconto da linha deixaria uma
+      // brecha para salvar bonificação cobrada.
+      const line = bonif
+        ? { amount: bruto, net: 0 }
+        : computeLineDiscount(bruto, { type: r.discType, value: r.discValue });
+      return {
+        name: prod?.name ?? "Produto",
+        product_id: pai?.id ?? r.productId,
+        product_code: pai?.product_code ?? prod?.product_code ?? null,
+        quantity: r.qty, unit_price: r.unitPrice,
+        // ⚠️ Sempre 0 no modelo novo. O campo continua existindo porque o
+        // HISTÓRICO tem valor nele, e quem lê (estoque, PDF) precisa dos dois.
+        bonus_quantity: 0,
+        is_bonificacao: bonif,
+        discount_type: bonif ? "percent" : (line.amount > 0 ? r.discType : "none"),
+        discount_value: bonif ? 100 : r.discValue,
+        discount_amount: line.amount,
+        total: line.net,
+      };
+    });
+
+  // Itens que a caixa não cobre. Some quantidade + bonificação porque o produto
+  // bonificado também sai da prateleira — é a mesma conta do banco.
+  //
+  // ⚠️ Depende de `validItems`, então mora DEPOIS dele. Ver a nota no
+  // `ehBonificacao`: useMemo roda no render e não perdoa ordem de declaração.
+  const faltaNaCaixa = useMemo(() => {
+    if (modalidade !== "pronta_entrega") return [];
+    const pedido = new Map<string, { nome: string; qtd: number }>();
+    for (const i of validItems()) {
+      if (!i.product_id) continue;
+      const a = pedido.get(i.product_id) ?? { nome: i.name, qtd: 0 };
+      a.qtd += (i.quantity || 0) + (i.bonus_quantity || 0);
+      pedido.set(i.product_id, a);
+    }
+    const saldo = meuEstoque?.saldo ?? {};
+    return [...pedido.entries()]
+      .map(([id, a]) => ({ id, nome: a.nome, pedido: a.qtd, tem: saldo[id] ?? 0 }))
+      .filter((x) => x.pedido > x.tem);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modalidade, rows, meuEstoque, produtos]);
+
+  // Itens de serviço válidos (com modalidade e qtd). Preço fixo da modalidade.
+  const validServiceItems = () =>
+    serviceRows.filter((s) => s.modality && s.qty > 0).map((s) => {
+      const price = modalidadePrice(s.modality);
+      const bruto = s.qty * price;
+      const line = computeLineDiscount(bruto, { type: s.discType, value: s.discValue });
+      return {
+        name: modalidadeLabel(s.modality),
+        kind: "service" as const,
+        modality: s.modality as "P" | "M" | "G",
+        product_id: null,
+        product_code: null,
+        quantity: s.qty,
+        unit_price: price,
+        bonus_quantity: s.hasBonus ? s.bonusQty : 0,
+        discount_type: line.amount > 0 ? s.discType : "none",
+        discount_value: s.discValue,
+        discount_amount: line.amount,
+        total: line.net,
+      };
+    });
+
+  // Há ao menos um item válido de produto? (habilita a data de entrega combinada.)
+  const hasValidProduct = rows.some((r) => r.productId && r.qty > 0);
+  // Há ao menos um item válido de serviço? (habilita a previsão de execução.)
+  const hasValidService = serviceRows.some((s) => s.modality && s.qty > 0);
+
+  // Itens no formato da RPC: cada unidade (paga OU bonificada) vira uma vaga de
+  // veículo na OS. A bonificação entra aqui porque o carro bonificado também é
+  // um carro que alguém vai descarbonizar.
+  const serviceItemsRpc = () =>
+    serviceRows
+      .filter((s) => s.modality && s.qty > 0)
+      .map((s) => ({
+        porte: s.modality as string,
+        qty: s.qty,
+        bonus: s.hasBonus ? Math.max(0, s.bonusQty) : 0,
+      }));
+
+  // Quantos veículos a OS vai ter (pagos + bonificados).
+  const vagasPrevistas = serviceItemsRpc().reduce((n, i) => n + i.qty + i.bonus, 0);
+
+  // Frota exige agendamento — a RPC recusa sem scheduled_at, então é melhor
+  // barrar aqui do que salvar a venda e falhar na OS.
+  const frotaSemData = hasValidService && serviceType === "frota" && !executionDate;
+
+  // Palpite do tipo de serviço pelo documento — só enquanto o vendedor não
+  // tiver escolhido à mão. CNPJ sugere B2B; se ele trocar para Frota, a escolha
+  // dele manda e o documento para de mexer.
+  useEffect(() => {
+    if (serviceTypeTocado) return;
+    setServiceType(servicoPadraoPorDoc(doc));
+  }, [doc, serviceTypeTocado]);
+
+
+  // Junta notas internas + dados estratégicos num bloco (coluna internal_notes),
+  // pra nada ser digitado e descartado.
+  function buildInternalNotes(): string | undefined {
+    const temEstrategico = tipoPonto || classificacao || volumeMedio || atuaDiesel || atuaFrotas;
+    const estrategico = temEstrategico
+      ? "[Estratégico] " + [
+          tipoPonto && `Tipo de ponto: ${tipoPonto}`,
+          classificacao && `Classificação: ${classificacao}`,
+          volumeMedio && `Volume médio/mês: ${volumeMedio}`,
+          `Diesel: ${atuaDiesel ? "sim" : "não"}`,
+          `Frotas: ${atuaFrotas ? "sim" : "não"}`,
+        ].filter(Boolean).join(" · ")
+      : "";
+    return [notasInternas.trim(), estrategico].filter(Boolean).join("\n") || undefined;
+  }
+
+  // ── Snapshot do formulário: grava tudo (JSON) e reidrata fielmente na edição ──
+  type FormSnapshot = {
+    mode: "venda" | "promo"; doc: string; customerName: string; email: string; phone: string; isLicenciado: boolean;
+    rows: ItemRow[]; obsPublica: string; notasInternas: string; tipoPonto: string; classificacao: string;
+    volumeMedio: string; atuaDiesel: boolean; atuaFrotas: boolean; vendedorId: string;
+    endereco: typeof endereco; fatMesmo: boolean; fatEndereco: typeof fatEndereco;
+    ie: string; ieUf: string; pagModalidade: string; pagParcelas: string; pagFaturamento: string;
+    discReason: string; deliveryDate: string;
+    modalidade?: "producao" | "pronta_entrega";
+    serviceRows: ServiceRow[]; executionDate: string; serviceType?: DescarbServiceType;
+  };
+  function formSnapshot(): FormSnapshot {
+    return {
+      mode, doc, customerName, email, phone, isLicenciado, rows, obsPublica, notasInternas,
+      tipoPonto, classificacao, volumeMedio, atuaDiesel, atuaFrotas, vendedorId, endereco, fatMesmo,
+      fatEndereco, ie, ieUf, pagModalidade, pagParcelas, pagFaturamento, discReason, deliveryDate,
+      serviceRows, executionDate, serviceType,
+      modalidade,
+    };
+  }
+
+  // Reidrata o formulário ao abrir em modo edição (?edit=<id>).
+  useEffect(() => {
+    if (!editOrder || hydrated) return;
+    const snap = editOrder.quote_form_snapshot as FormSnapshot | null;
+    if (snap && typeof snap === "object") {
+      setMode(snap.mode ?? "venda"); setDoc(snap.doc ?? ""); setCustomerName(snap.customerName ?? "");
+      setEmail(snap.email ?? ""); setPhone(snap.phone ?? ""); setIsLicenciado(!!snap.isLicenciado);
+      setRows(Array.isArray(snap.rows) && snap.rows.length ? snap.rows : [emptyRow()]);
+      setObsPublica(snap.obsPublica ?? ""); setNotasInternas(snap.notasInternas ?? "");
+      setTipoPonto(snap.tipoPonto ?? ""); setClassificacao(snap.classificacao ?? ""); setVolumeMedio(snap.volumeMedio ?? "");
+      setAtuaDiesel(!!snap.atuaDiesel); setAtuaFrotas(!!snap.atuaFrotas); setVendedorId(snap.vendedorId ?? "");
+      if (snap.endereco) setEndereco(snap.endereco);
+      setFatMesmo(snap.fatMesmo ?? true); if (snap.fatEndereco) setFatEndereco(snap.fatEndereco);
+      setIe(snap.ie ?? ""); setIeUf(snap.ieUf ?? "");
+      setPagModalidade(snap.pagModalidade ?? ""); setPagParcelas(snap.pagParcelas ?? "1"); setPagFaturamento(snap.pagFaturamento ?? "");
+      setDiscReason(snap.discReason ?? ""); setDeliveryDate(snap.deliveryDate ?? "");
+      // Orçamento antigo não tem o campo: produção, que é o de sempre.
+      setModalidade(snap.modalidade ?? "producao");
+      setServiceRows(snap.serviceRows ?? []); setExecutionDate(snap.executionDate ?? "");
+      // Orçamento antigo não tem o campo: cai no palpite pelo documento.
+      if (snap.serviceType) { setServiceType(snap.serviceType); setServiceTypeTocado(true); }
+      else setServiceType(servicoPadraoPorDoc(snap.doc ?? ""));
+      if (snap.tipoPonto || snap.classificacao || snap.volumeMedio || snap.atuaDiesel || snap.atuaFrotas) setShowEstrategicos(true);
+      if (snap.obsPublica || snap.notasInternas) setShowObs(true);
+    } else {
+      // Best-effort (orçamento antigo, sem snapshot) — restaura o que dá pelas colunas.
+      setCustomerName(editOrder.customer_name ?? ""); setDoc(editOrder.cnpj ?? "");
+      setEmail(editOrder.customer_email ?? ""); setPhone(editOrder.customer_phone ?? ""); setIe(editOrder.customer_ie ?? "");
+      const items = Array.isArray(editOrder.items) ? editOrder.items : [];
+      setRows(items.length ? items.map((it: any) => ({
+        id: crypto.randomUUID(), productId: it.product_id ?? "", qty: it.quantity ?? 1, unitPrice: it.unit_price ?? 0,
+        hasBonus: (it.bonificacao ?? 0) > 0, bonusQty: it.bonificacao ?? 0,
+        discType: it.discount_type === "percent" ? "percent" : "value", discValue: it.discount_value ?? 0,
+      })) : [emptyRow()]);
+      setObsPublica(editOrder.notes ?? ""); setNotasInternas(editOrder.internal_notes ?? "");
+      setEndereco((e) => ({ ...e, logradouro: editOrder.delivery_address ?? "", cidade: editOrder.delivery_city ?? "", uf: editOrder.delivery_state ?? "", cep: editOrder.delivery_zip ?? "" }));
+      if (editOrder.billing_address) { setFatMesmo(false); setFatEndereco(editOrder.billing_address); }
+      setDeliveryDate(editOrder.agreed_delivery_date ? String(editOrder.agreed_delivery_date).slice(0, 10) : "");
+      if (editOrder.vendedor_id) setVendedorId(editOrder.vendedor_id);
+    }
+    setHydrated(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editOrder, hydrated]);
+
+  // Monta o payload de gravação (cabeçalho + itens) a partir do estado da tela.
+  function buildPayload(status: "orcamento" | "pedido") {
+    // Itens combinados: produto (como sempre) + serviço (chaves pt + kind/modalidade).
+    const itens = [
+      ...validItems().map((i) => ({
+        produto: i.name,
+        product_id: i.product_id as string | null,
+        product_code: i.product_code as string | null,
+        quantidade: i.quantity,
+        preco_unitario: i.unit_price,
+        bonificacao: i.bonus_quantity,
+        is_bonificacao: i.is_bonificacao,
+        discount_type: i.discount_type,
+        discount_value: i.discount_value,
+        discount_amount: i.discount_amount,
+      })),
+      ...validServiceItems().map((i) => ({
+        produto: i.name,
+        kind: "service",
+        modalidade: i.modality,
+        product_id: null as string | null,
+        product_code: null as string | null,
+        quantidade: i.quantity,
+        preco_unitario: i.unit_price,
+        bonificacao: i.bonus_quantity,
+        discount_type: i.discount_type,
+        discount_value: i.discount_value,
+        discount_amount: i.discount_amount,
+      })),
+    ];
+    return {
+      form_snapshot: formSnapshot(),
+      tipo: mode,
+      status,
+      vendedor_id: vendedorId || undefined,
+      internal_notes: buildInternalNotes(),
+      customer_name: customerName || undefined,
+      customer_doc: doc || undefined,
+      customer_email: email || undefined,
+      customer_phone: phone || undefined,
+      customer_ie: ie.trim() || undefined,
+      is_licenciado: isLicenciado,
+      payment_terms: pagamentoLabel || undefined,
+      endereco: (endereco.logradouro || endereco.cidade || endereco.cep) ? endereco : null,
+      endereco_faturamento: fatMesmo ? null : ((fatEndereco.logradouro || fatEndereco.cidade || fatEndereco.cep) ? fatEndereco : null),
+      // Totais do PEDIDO = produto + serviço (combinados).
+      subtotal_bruto: orderSubtotal,
+      // Desconto do pedido = agregado dos itens; tipo 'value' (R$) quando há desconto.
+      desconto_tipo: orderDesconto > 0 ? "value" : undefined,
+      desconto_valor: orderDesconto,
+      desconto_percent: percentAgregado,
+      desconto_motivo: orderDesconto > 0 ? (discReason.trim() || undefined) : undefined,
+      entrega_modalidade: modalidade,
+      agreed_delivery_date: deliveryDate || undefined,
+      execution_date: executionDate || undefined,
+      total: orderTotal,
+      notes: obsPublica || undefined,
+      itens,
+    } as const;
+  }
+
+  // Limpa o formulário após salvar.
+  function resetForm() {
+    setMode("venda"); setDoc(""); setCustomerName(""); setEmail(""); setPhone("");
+    setIsLicenciado(false); setRows([emptyRow()]); setObsPublica("");
+    setNotasInternas(""); setTipoPonto(""); setClassificacao(""); setVolumeMedio("");
+    setAtuaDiesel(false); setAtuaFrotas(false); setVendedorId("");
+    setEndereco({ logradouro: "", numero: "", bairro: "", cidade: "", uf: "", cep: "" });
+    setIe(""); setIeUf(""); setDocFeedback(null);
+    setCoords(null); setMapMsg(null);
+    setFatMesmo(true); setFatEndereco({ logradouro: "", numero: "", bairro: "", cidade: "", uf: "", cep: "" });
+    setPagModalidade(""); setPagParcelas("1"); setPagFaturamento("");
+    setDiscReason("");
+    setDeliveryDate("");
+    setRecorrente(false); setRecPeriodo("mensal"); setRecParcelas(6);
+    setServiceRows([]); setExecutionDate("");
+    setServiceType("b2c"); setServiceTypeTocado(false);
+  }
+
+  async function handleQuote() {
+    const items = validItems();
+    if (items.length === 0 && validServiceItems().length === 0) { toast.error("Adicione ao menos um item."); return; }
+    if (items.some((i) => !(i.unit_price > 0))) { toast.error("Há item sem preço na tabela. A gestão precisa cadastrar em Admin › Tabela de preços."); return; }
+    if (!pagamentoValido) { toast.error("Selecione a forma de pagamento."); return; }
+    if (frotaSemData) { toast.error("Frota exige a previsão de execução — a OS não é aberta sem data."); return; }
+    setGenerating(true);
+    try {
+      // 1) Salva/atualiza o orçamento — no create o banco atribui o número (atômico);
+      //    na edição mantém o mesmo número (nova verdade).
+      const payload = buildPayload("orcamento");
+      const salvo = editId
+        ? await updateVenda.mutateAsync({ id: editId, input: payload })
+        : await createVenda.mutateAsync(payload);
+      const { numero } = salvo;
+      // 1b) Amarra ao card do CRM que originou. É o que permite reabrir este
+      //     mesmo orçamento quando o closer mover o card para Ganho, em vez de
+      //     redigitar tudo.
+      const idSalvo = editId ?? (salvo as { id?: string }).id;
+      if (leadOrigemId && idSalvo) vincular.mutate({ leadId: leadOrigemId, orderId: idSalvo });
+      // 2) Gera o PDF já com o número do pedido (orçamento fica atrelado a ele).
+      await generateQuotePdf({
+        order_number: numero ?? undefined,
+        customer_name: customerName || "Cliente", cnpj: doc || undefined,
+        ie: ie || undefined,
+        endereco,
+        endereco_faturamento: fatMesmo ? null : fatEndereco,
+        vendedor_name: vendedor || undefined, items: [...items, ...validServiceItems()],
+        subtotal: orderSubtotal, discount: orderDesconto, discount_percent: percentAgregado, total: orderTotal,
+        payment_terms: pagamentoLabel || undefined,
+        notes: obsPublica || undefined, created_at: new Date().toISOString(), validityDays: 7,
+      });
+      toast.success(`Orçamento ${numero ?? ""} ${editId ? "atualizado" : "gerado"} e salvo!`);
+      if (editId) { if (destinoPedido) navigate(destinoPedido); else navigate(-1); } else resetForm();
+    } catch (e) {
+      toast.error("Erro ao gerar/salvar orçamento: " + (e instanceof Error ? e.message : "tente de novo"));
+    } finally { setGenerating(false); }
+  }
+
+  async function handleEmailQuote() {
+    const items = validItems();
+    if (items.length === 0 && validServiceItems().length === 0) { toast.error("Adicione ao menos um item."); return; }
+    if (items.some((i) => !(i.unit_price > 0))) { toast.error("Há item sem preço na tabela. A gestão precisa cadastrar em Admin › Tabela de preços."); return; }
+    if (!pagamentoValido) { toast.error("Selecione a forma de pagamento."); return; }
+    if (frotaSemData) { toast.error("Frota exige a previsão de execução — a OS não é aberta sem data."); return; }
+    if (!email || !email.includes("@")) { toast.error("Informe o e-mail do cliente para enviar o orçamento."); return; }
+    setEmailing(true);
+    try {
+      const payload = buildPayload("orcamento");
+      const { numero } = editId
+        ? await updateVenda.mutateAsync({ id: editId, input: payload })
+        : await createVenda.mutateAsync(payload);
+      const { base64, filename } = await generateQuotePdf({
+        order_number: numero ?? undefined,
+        customer_name: customerName || "Cliente", cnpj: doc || undefined,
+        ie: ie || undefined,
+        endereco,
+        endereco_faturamento: fatMesmo ? null : fatEndereco,
+        vendedor_name: vendedor || undefined, items: [...items, ...validServiceItems()],
+        subtotal: orderSubtotal, discount: orderDesconto, discount_percent: percentAgregado, total: orderTotal,
+        payment_terms: pagamentoLabel || undefined,
+        notes: obsPublica || undefined, created_at: new Date().toISOString(), validityDays: 7,
+      }, { download: false });
+      const { data: out, error } = await supabase.functions.invoke("send-email", {
+        body: {
+          template: "orcamento",
+          to: email,
+          data: { order_number: numero ?? null, customer_name: customerName || "Cliente", vendedor_name: vendedor || null },
+          attachments: [{ filename, content: base64 }],
+          replyTo: "administrativo@carbovapt.com.br",
+        },
+      });
+      if (error) throw error;
+      if ((out as { error?: string } | null)?.error) throw new Error((out as { error?: string }).error);
+      toast.success(`Orçamento ${numero ?? ""} enviado para ${email}!`);
+      if (editId) { if (destinoPedido) navigate(destinoPedido); else navigate(-1); } else resetForm();
+    } catch (e) {
+      toast.error("Erro ao enviar por e-mail: " + (e instanceof Error ? e.message : "tente de novo"));
+    } finally { setEmailing(false); }
+  }
+
+  // Descarbonização vira OS na fonte de verdade (licenciados.service_orders),
+  // com UMA VAGA DE VEÍCULO por unidade vendida — pagas e bonificadas. Vender 5P
+  // + 3M + 1G cria uma OS com 9 vagas vazias, cada uma com o seu porte; o Carbox
+  // preenche placa/modelo/ano na execução. A previsão de execução vira o
+  // agendamento (scheduled_at → calendário).
+  //
+  // Falha aqui NÃO derruba a venda (já salva) — mas agora a mensagem diz o
+  // número do pedido, porque o toast some e a reconciliação depende dele.
+  async function createDescarbOSForSale(orderId: string, orderNumber: string | null) {
+    const itens = serviceItemsRpc();
+    if (itens.length === 0) return;
+    const digits = doc.replace(/\D/g, "");
+    const pj = serviceType !== "b2c";
+    try {
+      const { id: osId, numero, vagas } = await createOSFromSale.mutateAsync({
+        service_type: serviceType,
+        person_type: pj ? "pj" : "pf",
+        customer_name: customerName.trim() || "Cliente",
+        phone: phone.trim() || null,
+        federal_code: pj ? (digits || null) : null,
+        email: email.trim() || null,
+        scheduled_at: executionDate ? new Date(executionDate + "T00:00:00").toISOString() : null,
+        items: itens,
+        sale_order_id: orderId,
+        sale_order_number: orderNumber,
+        sale_total: servTotal,
+      });
+      // O elo de ida (venda → OS). O de volta (OS → venda) a RPC já gravou.
+      const { data: linked } = await (supabase as any)
+        .from("carboze_orders").update({ descarb_os_id: osId }).eq("id", orderId).select("id");
+      if (!linked?.length) {
+        toast.warning(`OS ${numero ?? ""} criada, mas não consegui vinculá-la ao pedido. Avise o TI.`);
+      } else {
+        const n = vagas || itens.reduce((s, i) => s + i.qty + i.bonus, 0);
+        toast.success(`OS ${numero ?? ""} criada com ${n} veículo(s) para executar.`);
+      }
+    } catch (e) {
+      // O erro do Supabase NÃO é instanceof Error — é um objeto com
+      // message/details/hint/code. Testar por instanceof engolia justamente a
+      // causa que esta mensagem existe para mostrar.
+      const err = e as { message?: string; details?: string; hint?: string; code?: string } | null;
+      const motivo = [err?.message, err?.details, err?.hint].filter(Boolean).join(" · ")
+        || (typeof e === "string" ? e : "causa desconhecida");
+      // No console fica o objeto inteiro, para o TI ver code/status.
+      console.error("[descarb] falha ao criar a OS", e);
+      toast.error(
+        `Venda ${orderNumber ?? ""} salva, mas a OS NÃO foi criada — ${motivo}` +
+        (err?.code ? ` (${err.code})` : "") +
+        ". Ela aparece no aviso de reconciliação em Descarbonização › OS.",
+        { duration: 20000 },
+      );
+    }
+  }
+
+  async function handleSell() {
+    if (validItems().length === 0 && validServiceItems().length === 0) { toast.error("Adicione ao menos um item."); return; }
+    if (validItems().some((i) => !(i.unit_price > 0))) { toast.error("Há item sem preço na tabela. A gestão precisa cadastrar em Admin › Tabela de preços."); return; }
+    if (!pagamentoValido) { toast.error("Selecione a forma de pagamento."); return; }
+    if (frotaSemData) { toast.error("Frota exige a previsão de execução — a OS não é aberta sem data."); return; }
+    try {
+      if (editId && editandoVenda) {
+        // Já é venda: salva as alterações e pronto. Nada de converter — ela não
+        // volta a ser orçamento (o banco recusa) nem gera OS de novo.
+        await updateVenda.mutateAsync({ id: editId, input: buildPayload("pedido") });
+        toast.success(`Venda ${editNumero ?? ""} atualizada!`);
+      } else if (editId) {
+        // Salva as edições mantendo o orçamento e converte pelo caminho oficial.
+        await updateVenda.mutateAsync({ id: editId, input: buildPayload("orcamento") });
+        await convertQuote.mutateAsync(editId);
+        toast.success("Orçamento editado e convertido em venda!");
+        if (leadOrigemId) vincular.mutate({ leadId: leadOrigemId, orderId: editId });
+        if (!editOrder?.descarb_os_id) await createDescarbOSForSale(editId, editOrder?.order_number ?? null);
+      } else {
+        const created = await createVenda.mutateAsync(buildPayload("pedido"));
+        if (recorrente) {
+          // Falha aqui NÃO desfaz a venda: ela é válida como pedido avulso. O
+          // vendedor precisa saber que o contrato não nasceu, não perder tudo.
+          try {
+            const n = await criarRecorrencia.mutateAsync({
+              orderId: created.id, periodo: recPeriodo, parcelas: recParcelas,
+            });
+            toast.success(`Venda ${created.numero ?? ""} registrada com ${n + 1} parcelas de recorrência!`);
+          } catch (err) {
+            toast.error(
+              `Venda ${created.numero ?? ""} foi registrada, mas as parcelas de recorrência NÃO foram criadas: ` +
+              (err instanceof Error ? err.message : "erro desconhecido") +
+              ". Abra o pedido e repita a recorrência.",
+              { duration: 15000 },
+            );
+          }
+        } else {
+          toast.success(`Venda ${created.numero ?? ""} registrada!`);
+        }
+        if (leadOrigemId) vincular.mutate({ leadId: leadOrigemId, orderId: created.id });
+        await createDescarbOSForSale(created.id, created.numero);
+      }
+      resetForm();
+      // Sem destino (fora do Sales): fica na tela. O toast de sucesso acima já
+      // confirmou a venda — é a informação que a pessoa precisa.
+      if (destinoPedido) navigate(destinoPedido);
+    } catch (e) {
+      toast.error("Erro ao registrar venda: " + (e instanceof Error ? e.message : "tente de novo"));
+    }
+  }
+
+  return (
+    <div className="p-4 md:p-6 max-w-4xl mx-auto w-full space-y-5 pb-24">
+      {editId && (
+        <div className={`flex items-center justify-between gap-3 rounded-lg border px-4 py-2.5 text-sm ${
+          editFaturado ? "border-destructive/40 bg-destructive/10" : "border-amber-500/30 bg-amber-500/10"
+        }`}>
+          <span className={`flex items-center gap-2 ${editFaturado ? "text-destructive" : "text-amber-700 dark:text-amber-300"}`}>
+            <FileText className="h-4 w-4 shrink-0" />
+            {editFaturado ? (
+              <>A venda <b>{editNumero ?? "…"}</b> já tem nota emitida — itens e valores não podem mais mudar. Para corrigir, cancele e refaça.</>
+            ) : editandoVenda ? (
+              <>Editando a venda <b>{editNumero ?? "…"}</b> — ao salvar, as alterações valem para este mesmo pedido.</>
+            ) : (
+              <>Editando o orçamento <b>{editNumero ?? "…"}</b> — ao salvar, ele vira a nova versão (mesmo número).</>
+            )}
+          </span>
+          <Button variant="ghost" size="sm" className="shrink-0" onClick={sairDaTela}>Sair</Button>
+        </div>
+      )}
+      {gestor && (
+        <div
+          className={`mb-1 rounded-xl border px-3 py-2.5 transition-colors sm:px-4 ${
+            vendedorId !== ""
+              ? "border-amber-500/40 bg-amber-500/10"
+              : "border-border bg-card"
+          }`}
+        >
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+            <div className="flex items-center gap-2">
+              <span
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                  vendedorId !== ""
+                    ? "bg-amber-500/20 text-amber-700 dark:text-amber-300"
+                    : "bg-muted text-muted-foreground"
+                }`}
+              >
+                <UserCog className="h-4 w-4" />
+              </span>
+              <span
+                className={`text-sm font-medium ${
+                  vendedorId !== ""
+                    ? "text-amber-700 dark:text-amber-300"
+                    : "text-foreground"
+                }`}
+              >
+                {vendedorId !== "" ? "Lançar venda em nome de" : "Responsável pela venda"}
+              </span>
+            </div>
+
+            <div className="flex flex-1 items-center gap-2 sm:justify-end">
+              <Select
+                value={vendedorId || "__self__"}
+                onValueChange={(v) => setVendedorId(v === "__self__" ? "" : v)}
+              >
+                <SelectTrigger
+                  className={`h-9 w-full sm:w-56 ${
+                    vendedorId !== ""
+                      ? "border-amber-500/40 bg-amber-500/5 text-amber-700 focus:ring-amber-500/30 dark:text-amber-300"
+                      : ""
+                  }`}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__self__">
+                    Eu ({vendedorLogado || "—"}) — para mim
+                  </SelectItem>
+                  {vendedores
+                    .filter((v) => v.id !== profile?.id)
+                    .map((v) => (
+                      <SelectItem key={v.id} value={v.id}>
+                        {v.full_name || "—"}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {vendedorId !== "" && (
+            <div className="mt-2 flex items-center gap-1.5 text-sm font-semibold text-amber-700 dark:text-amber-300">
+              <Users className="h-3.5 w-3.5" />
+              <span>
+                Em nome de{" "}
+                {vendedores.find((v) => v.id === vendedorId)?.full_name || "—"}
+              </span>
+            </div>
+          )}
+
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            A comissão desta venda vai para o vendedor selecionado.
+          </p>
+        </div>
+      )}
+
+      {/* Tipo de Operação */}
+      <CarboCard>
+        <CarboCardContent className="p-4 space-y-3">
+          <h3 className="font-semibold flex items-center gap-2"><Package className="h-4 w-4 text-carbo-green" /> Tipo de Operação</h3>
+          <div className="grid grid-cols-2 gap-2 max-w-md">
+            {([["venda", "Venda"], ["promo", "Ação Promocional"]] as const).map(([v, label]) => (
+              <button key={v} onClick={() => setMode(v)}
+                className={`rounded-xl border p-3 text-sm font-medium transition-all ${
+                  mode === v ? "border-carbo-green bg-carbo-green/5 text-foreground" : "bg-card text-muted-foreground hover:bg-muted"}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </CarboCardContent>
+      </CarboCard>
+
+      {/* Busca por CNPJ ou CPF */}
+      <CarboCard>
+        <CarboCardContent className="p-4 space-y-3">
+          <h3 className="font-semibold flex items-center gap-2"><Search className="h-4 w-4 text-carbo-green" /> Busca por CNPJ ou CPF</h3>
+          <p className="text-xs text-muted-foreground">
+            Comece a digitar: se o cliente já existe na base, ele aparece na lista e os dados vêm junto. Para cliente novo, "Buscar dados" consulta a Receita pelo CNPJ; CPF é validado e segue manual.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <ClienteDocInput
+              value={doc}
+              onChange={(v) => { setDoc(formatDoc(v)); setDocFeedback(null); }}
+              onEnter={handleBuscarDoc}
+              onPick={aplicarClienteExistente}
+              maxLength={18}
+              className="font-mono"
+            />
+            <CarboButton type="button" onClick={handleBuscarDoc} disabled={buscando}>
+              {buscando ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Search className="h-4 w-4 mr-1" />}
+              {buscando ? "Buscando..." : "Buscar dados"}
+            </CarboButton>
+          </div>
+          {docFeedback && (
+            <p className={`flex items-center gap-1.5 text-xs font-medium ${docFeedback.kind === "ok" ? "text-carbo-green" : "text-destructive"}`}>
+              {docFeedback.kind === "ok" ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> : <AlertCircle className="h-3.5 w-3.5 shrink-0" />}
+              {docFeedback.msg}
+            </p>
+          )}
+        </CarboCardContent>
+      </CarboCard>
+
+      {/* Informações do Cliente */}
+      <CarboCard>
+        <CarboCardContent className="p-4 space-y-3">
+          <h3 className="font-semibold flex items-center gap-2"><Building2 className="h-4 w-4 text-carbo-green" /> Informações do Cliente</h3>
+          <div className="grid md:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Nome / Razão Social <span className="text-destructive">*</span></Label>
+              <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Nome do cliente"
+                className={!nomeValido ? "border-destructive/50 focus-visible:ring-destructive/40" : undefined} />
+              {!nomeValido && (
+                <p className="text-[11px] text-destructive">Obrigatório — sem o nome o pedido não fatura nem se acha depois.</p>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <Label>Email</Label>
+              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@exemplo.com" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Telefone</Label>
+              <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(00) 00000-0000" />
+            </div>
+            <div className="flex items-start justify-between gap-3 rounded-xl border p-3">
+              <div>
+                <p className="text-sm font-medium">É Licenciado?</p>
+                <p className="text-xs text-muted-foreground">Marque se o cliente é um licenciado Carbo</p>
+              </div>
+              <Switch checked={isLicenciado} onCheckedChange={setIsLicenciado} />
+            </div>
+
+            {/* Inscrição Estadual — validação de formato/dígito por UF */}
+            <div className="space-y-1.5 md:col-span-2">
+              <div className="flex items-center justify-between">
+                <Label>Inscrição Estadual</Label>
+                <label className="flex items-center gap-2 text-xs font-normal text-muted-foreground cursor-pointer">
+                  <Switch checked={isIsento} onCheckedChange={(c) => setIe(c ? "ISENTO" : "")} />
+                  Isento (sem IE)
+                </label>
+              </div>
+              {!isIsento && (
+                <div className="flex gap-2">
+                  <Select value={ieUfEff} onValueChange={setIeUf}>
+                    <SelectTrigger className="w-24 shrink-0"><SelectValue placeholder="UF" /></SelectTrigger>
+                    <SelectContent>{UFS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
+                  </Select>
+                  <Input
+                    value={ie}
+                    onChange={(e) => setIe(e.target.value)}
+                    placeholder="Nº da Inscrição Estadual"
+                    className={`flex-1 ${ieResult && !ieResult.valid ? "border-destructive focus-visible:ring-destructive" : ""} ${ieResult && ieResult.valid ? "border-green-500 focus-visible:ring-green-500" : ""}`}
+                  />
+                </div>
+              )}
+              {isIsento ? (
+                <p className="text-xs flex items-center gap-1 mt-1 text-green-600"><CheckCircle2 className="h-3 w-3 shrink-0" /> Cliente isento de Inscrição Estadual.</p>
+              ) : ieResult ? (
+                <p className={`text-xs flex items-center gap-1 mt-1 ${ieResult.valid ? "text-green-600" : "text-destructive"}`}>
+                  {ieResult.valid ? <CheckCircle2 className="h-3 w-3 shrink-0" /> : <AlertCircle className="h-3 w-3 shrink-0" />}
+                  {ieResult.message}
+                </p>
+              ) : (
+                <p className="text-[11px] text-muted-foreground">Escolha a UF e digite a IE — valida formato e dígito de qualquer estado do Brasil. Marque “Isento” se não houver.</p>
+              )}
+            </div>
+          </div>
+        </CarboCardContent>
+      </CarboCard>
+
+      {/* Endereço de Entrega */}
+      <CarboCard>
+        <CarboCardContent className="p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold flex items-center gap-2"><MapPin className="h-4 w-4 text-carbo-green" /> Endereço de Entrega</h3>
+            <Button variant="outline" size="sm" onClick={localizarNoMapa} disabled={geoLoading}>
+              {geoLoading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <MapPin className="h-4 w-4 mr-1" />}
+              {geoLoading ? "Localizando..." : "Localizar no mapa"}
+            </Button>
+          </div>
+          {/* CEP PRIMEIRO: ele traz rua, bairro, cidade e UF de graça. Deixá-lo
+              por último obrigava a digitar tudo à mão antes de chegar no campo
+              que teria evitado a digitação. */}
+          <div className="grid md:grid-cols-3 gap-3">
+            <CepInput
+              value={endereco.cep}
+              onChange={(cep) => setEnd({ cep })}
+              onEndereco={(e) => setEndereco((prev) => ({
+                ...prev,
+                // O que o CEP devolve manda: se o vendedor trocou o CEP, é
+                // porque o endereço anterior estava errado. Rua e bairro que
+                // vierem vazios não apagam o que já estava lá.
+                logradouro: e.logradouro || prev.logradouro,
+                bairro: e.bairro || prev.bairro,
+                cidade: e.cidade || prev.cidade,
+                uf: e.uf || prev.uf,
+              }))}
+            />
+            <div className="space-y-1.5 md:col-span-2"><Label>Logradouro</Label><Input placeholder="Rua, Avenida, etc." value={endereco.logradouro} onChange={(e) => setEnd({ logradouro: e.target.value })} /></div>
+            <div className="space-y-1.5">
+              <Label>Número</Label>
+              <div className="flex gap-2">
+                <Input placeholder="Nº" value={endereco.numero} onChange={(e) => setEnd({ numero: e.target.value })} />
+                <Button variant="outline" type="button" className="shrink-0" onClick={() => setEnd({ numero: "S/N" })}>S/N</Button>
+              </div>
+            </div>
+            <div className="space-y-1.5"><Label>Bairro</Label><Input placeholder="Bairro" value={endereco.bairro} onChange={(e) => setEnd({ bairro: e.target.value })} /></div>
+            <div className="space-y-1.5"><Label>Cidade</Label><Input placeholder="Cidade" value={endereco.cidade} onChange={(e) => setEnd({ cidade: e.target.value })} /></div>
+            <div className="space-y-1.5">
+              <Label>Estado</Label>
+              <Select value={endereco.uf} onValueChange={(uf) => setEnd({ uf })}>
+                <SelectTrigger><SelectValue placeholder="UF" /></SelectTrigger>
+                <SelectContent>{UFS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+          </div>
+          {coords ? (
+            <div className="space-y-1.5">
+              <div className="rounded-xl overflow-hidden border" style={{ height: 260 }}>
+                <MapContainer key={`${coords.lat},${coords.lng}`} center={[coords.lat, coords.lng]} zoom={15} style={{ height: "100%", width: "100%" }} scrollWheelZoom={false}>
+                  <TileLayer attribution='&copy; OpenStreetMap' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                  <CircleMarker center={[coords.lat, coords.lng]} radius={11} pathOptions={{ color: "#16A34A", fillColor: "#16A34A", fillOpacity: 0.5, weight: 2 }}>
+                    <Popup>{[endereco.logradouro, endereco.numero].filter(Boolean).join(", ") || "Local aproximado"}<br />{[endereco.cidade, endereco.uf].filter(Boolean).join("/")}</Popup>
+                  </CircleMarker>
+                </MapContainer>
+              </div>
+              <p className="text-[11px] text-muted-foreground flex items-center gap-1"><MapPin className="h-3 w-3" /> Posição <b>aproximada</b> pelo endereço — confira se bate com o local de entrega.</p>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed flex flex-col items-center justify-center gap-2 py-10 text-center text-muted-foreground">
+              <MapPin className="h-6 w-6" />
+              <p className="text-sm px-6">{mapMsg ?? <>Preencha o endereço e clique em <b>Localizar no mapa</b> para visualizar o ponto aproximado de entrega.</>}</p>
+            </div>
+          )}
+
+          {/* Endereço de Faturamento (NF) — pode diferir do de entrega */}
+          <div className="border-t pt-3 mt-1 space-y-3">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <h4 className="font-semibold text-sm flex items-center gap-2"><FileText className="h-4 w-4 text-carbo-green" /> Endereço de Faturamento (NF)</h4>
+              <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+                <Checkbox checked={fatMesmo} onCheckedChange={(c) => setFatMesmo(!!c)} /> Mesmo endereço da entrega
+              </label>
+            </div>
+            {!fatMesmo && (
+              <div className="grid md:grid-cols-3 gap-3">
+                {/* Mesma regra do endereço de entrega: CEP primeiro. */}
+                <CepInput
+                  id="cep-faturamento"
+                  value={fatEndereco.cep}
+                  onChange={(cep) => setFat({ cep })}
+                  onEndereco={(e) => setFatEndereco((prev) => ({
+                    ...prev,
+                    logradouro: e.logradouro || prev.logradouro,
+                    bairro: e.bairro || prev.bairro,
+                    cidade: e.cidade || prev.cidade,
+                    uf: e.uf || prev.uf,
+                  }))}
+                />
+                <div className="space-y-1.5 md:col-span-2"><Label>Logradouro</Label><Input placeholder="Rua, Avenida, etc." value={fatEndereco.logradouro} onChange={(e) => setFat({ logradouro: e.target.value })} /></div>
+                <div className="space-y-1.5"><Label>Número</Label><Input placeholder="Nº" value={fatEndereco.numero} onChange={(e) => setFat({ numero: e.target.value })} /></div>
+                <div className="space-y-1.5"><Label>Bairro</Label><Input placeholder="Bairro" value={fatEndereco.bairro} onChange={(e) => setFat({ bairro: e.target.value })} /></div>
+                <div className="space-y-1.5"><Label>Cidade</Label><Input placeholder="Cidade" value={fatEndereco.cidade} onChange={(e) => setFat({ cidade: e.target.value })} /></div>
+                <div className="space-y-1.5">
+                  <Label>Estado</Label>
+                  <Select value={fatEndereco.uf} onValueChange={(uf) => setFat({ uf })}>
+                    <SelectTrigger><SelectValue placeholder="UF" /></SelectTrigger>
+                    <SelectContent>{UFS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+          </div>
+        </CarboCardContent>
+      </CarboCard>
+
+      {/* Itens do Pedido — pôr o produto e fechar a venda */}
+      <CarboCard>
+        <CarboCardContent className="p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold flex items-center gap-2"><ShoppingCart className="h-4 w-4 text-carbo-green" /> Itens do Pedido</h3>
+            <Button variant="outline" size="sm" onClick={() => setRows((p) => [...p, emptyRow()])}>
+              <Plus className="h-4 w-4 mr-1" /> Adicionar Item
+            </Button>
+          </div>
+
+          {rows.map((r) => {
+            const bruto = r.qty * r.unitPrice;
+            const line = computeLineDiscount(bruto, { type: r.discType, value: r.discValue });
+            const semPreco = !!r.productId && !r.unitPrice;
+            return (
+              <div key={r.id} className={`rounded-xl border p-3 space-y-3 ${semPreco ? "border-destructive/50" : ""}`}>
+                {semPreco && (
+                  <p className="flex items-start gap-1.5 text-xs text-destructive">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-px" />
+                    Este produto ainda não tem preço na tabela. Peça à gestão para cadastrar em
+                    <b className="mx-1">Admin › Comercial › Tabela de preços</b> — o valor não é
+                    digitado aqui.
+                  </p>
+                )}
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr_90px_120px_auto] gap-3 items-end">
+                  <div className="space-y-1.5">
+                    <Label>Produto</Label>
+                    <Select value={r.productId} onValueChange={(v) => onProduct(r.id, v)}>
+                      <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                      <SelectContent>{produtos.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Quantidade</Label>
+                    <Input type="number" min={1} value={r.qty} onChange={(e) => updateRow(r.id, { qty: Number(e.target.value) })} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Preço Unit. (R$)</Label>
+                    {/* Somente leitura: o preço é o da tabela mantida pela
+                        gestão. Deixar editável reabriria a porta para o mesmo
+                        produto sair por valores diferentes em cada pedido. */}
+                    <Input
+                      readOnly tabIndex={-1}
+                      className={`cursor-default ${r.productId && !r.unitPrice ? "border-destructive/60 text-destructive" : "bg-muted/40"}`}
+                      value={
+                        !r.productId ? ""
+                        : r.unitPrice ? brl(r.unitPrice)
+                        : "sem preço"
+                      }
+                      title={r.productId && !r.unitPrice
+                        ? "Produto sem preço definido — a gestão precisa cadastrar em Admin › Tabela de preços."
+                        : "Preço definido pela gestão em Admin › Tabela de preços."}
+                      placeholder="—" />
+                  </div>
+                  <div className="flex items-center justify-between sm:justify-end gap-3 sm:pb-2">
+                    <div className="text-right">
+                      <p className="text-xs text-muted-foreground">Total</p>
+                      <p className="font-semibold">{brl(line.net)}</p>
+                      {line.amount > 0 && (
+                        <p className="text-[11px] text-destructive tabular-nums">
+                          − {brl(line.amount)}{r.discType === "percent" ? ` (${line.percent}%)` : ""}
+                        </p>
+                      )}
+                    </div>
+                    {rows.length > 1 && (
+                      <button onClick={() => setRows((p) => p.filter((x) => x.id !== r.id))}
+                        className="p-1.5 rounded hover:bg-destructive/10 text-destructive"><Trash2 className="h-4 w-4" /></button>
+                    )}
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+                  {/* ⚠️ O switch "Tem bonificação" saiu daqui. Bonificação virou
+                      PRODUTO: escolhe-se "X - bonificação" na lista e pronto.
+                      Antes eram dois passos (somar a quantidade, depois abater
+                      o valor) e dois lugares de errar. */}
+                  {ehBonificacao(r.productId) ? (
+                    <span className="text-sm flex items-center gap-1.5 text-carbo-green">
+                      <Gift className="h-3.5 w-3.5" /> Bonificação — 100% de desconto aplicado
+                    </span>
+                  ) : (
+                  <>
+                  {/* Desconto POR ITEM: toggle % | R$ + valor */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm flex items-center gap-1"><Tag className="h-3.5 w-3.5 text-carbo-green" /> Desconto</span>
+                    <div className="grid grid-cols-2 gap-1 w-[92px] shrink-0">
+                      {([["percent", "%", Percent], ["value", "R$", Tag]] as const).map(([v, label, Ico]) => (
+                        <button key={v} type="button" onClick={() => updateRow(r.id, { discType: v })}
+                          className={`rounded-md border px-1.5 py-1 text-xs font-medium flex items-center justify-center gap-0.5 transition-all ${
+                            r.discType === v ? "border-carbo-green bg-carbo-green/5 text-foreground" : "bg-card text-muted-foreground hover:bg-muted"}`}>
+                          <Ico className="h-3 w-3" /> {label}
+                        </button>
+                      ))}
+                    </div>
+                    <Input type="number" min={0} step="0.01" className="w-28"
+                      value={r.discValue || ""} onChange={(e) => updateRow(r.id, { discValue: Number(e.target.value) })}
+                      placeholder={r.discType === "percent" ? "ex.: 5" : "ex.: 100,00"} />
+                  </div>
+                  </>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Motivo do desconto (só quando há desconto) — alimenta a alçada. */}
+          {descontoTotal > 0 && (
+            <div className="rounded-xl border p-3 space-y-3">
+              <div className="space-y-1.5">
+                <Label className="flex items-center gap-1"><Tag className="h-3.5 w-3.5 text-carbo-green" /> Motivo do desconto (opcional)</Label>
+                <Input value={discReason} onChange={(e) => setDiscReason(e.target.value)} placeholder="Ex.: fidelização, volume…" />
+              </div>
+              {discTier.hint && (
+                <p className={`text-xs flex items-center gap-1 ${discTier.needsApproval ? "text-amber-500" : "text-muted-foreground"}`}>
+                  {discTier.needsApproval ? <AlertCircle className="h-3.5 w-3.5 shrink-0" /> : <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />}
+                  {discTier.hint}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Resumo: subtotal · desconto · total */}
+          <div className="flex justify-end border-t pt-3">
+            <div className="w-full sm:w-64 space-y-1 text-sm">
+              <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span className="tabular-nums">{brl(subtotalBruto)}</span></div>
+              {descontoTotal > 0 && (
+                <div className="flex justify-between text-destructive"><span>Desconto{percentAgregado > 0 ? ` (${percentAgregado}%)` : ""}</span><span className="tabular-nums">− {brl(descontoTotal)}</span></div>
+              )}
+              <div className="flex justify-between border-t pt-1 font-bold text-base"><span>Total</span><span className="tabular-nums">{brl(total)}</span></div>
+            </div>
+          </div>
+        </CarboCardContent>
+      </CarboCard>
+
+      {/* Itens de Serviço (descarbonizações) — preço fixo por modalidade */}
+      <CarboCard>
+        <CarboCardContent className="p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold flex items-center gap-2"><Sparkles className="h-4 w-4 text-carbo-green" /> Itens de Serviço <span className="text-xs text-muted-foreground font-normal">(opcional)</span></h3>
+            <Button variant="outline" size="sm" onClick={() => setServiceRows((p) => [...p, emptyServiceRow()])}>
+              <Plus className="h-4 w-4 mr-1" /> Adicionar Serviço
+            </Button>
+          </div>
+
+          {serviceRows.length === 0 && (
+            <p className="text-xs text-muted-foreground">Nenhum serviço adicionado. Use “Adicionar Serviço” para incluir descarbonizações.</p>
+          )}
+
+          {/* Tipo da OS. Define como o Carbox recebe o serviço — e Frota exige
+              data, porque uma ida com vários carros precisa estar agendada. */}
+          {serviceRows.length > 0 && (
+            <div className="space-y-1.5">
+              <Label>Tipo de serviço</Label>
+              <div className="flex flex-wrap gap-2">
+                {DESCARB_SERVICE_TYPES.map((st) => {
+                  const on = serviceType === st.key;
+                  return (
+                    <button key={st.key} type="button"
+                      onClick={() => { setServiceType(st.key); setServiceTypeTocado(true); }}
+                      className={`rounded-lg border px-3 py-2 text-left transition-colors ${on ? "border-carbo-green bg-carbo-green/10" : "hover:bg-muted"}`}>
+                      <span className={`block text-sm font-semibold ${on ? "text-carbo-green" : ""}`}>{st.label}</span>
+                      <span className="block text-[11px] text-muted-foreground">{st.hint}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {serviceRows.map((s) => {
+            const price = modalidadePrice(s.modality);
+            const bruto = s.qty * price;
+            const line = computeLineDiscount(bruto, { type: s.discType, value: s.discValue });
+            return (
+              <div key={s.id} className="rounded-xl border p-3 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr_90px_120px_auto] gap-3 items-end">
+                  <div className="space-y-1.5">
+                    <Label>Modalidade</Label>
+                    <Select value={s.modality} onValueChange={(v) => updateServiceRow(s.id, { modality: v as ServiceRow["modality"] })}>
+                      <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                      <SelectContent>
+                        {DESCARB_MODALIDADES.map((m) => (
+                          <SelectItem key={m.key} value={m.key}>
+                            {m.label} — {brl(m.price)}
+                            <span className="text-muted-foreground"> · {m.motor} · {m.fuels.length === 2 ? "flex ou diesel" : m.fuels[0]}</span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {/* O vendedor não vê o veículo — a faixa de motor é o que
+                        evita vender P para um caminhão. */}
+                    {s.modality && (
+                      <p className="text-[11px] text-muted-foreground">{modalidadeHint(s.modality)}</p>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Quantidade</Label>
+                    <Input type="number" min={1} value={s.qty} onChange={(e) => updateServiceRow(s.id, { qty: Number(e.target.value) })} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Preço Unit. (R$)</Label>
+                    <Input type="text" value={s.modality ? brl(price) : ""} readOnly disabled placeholder="—" />
+                  </div>
+                  <div className="flex items-center justify-between sm:justify-end gap-3 sm:pb-2">
+                    <div className="text-right">
+                      <p className="text-xs text-muted-foreground">Total</p>
+                      <p className="font-semibold">{brl(line.net)}</p>
+                      {line.amount > 0 && (
+                        <p className="text-[11px] text-destructive tabular-nums">
+                          − {brl(line.amount)}{s.discType === "percent" ? ` (${line.percent}%)` : ""}
+                        </p>
+                      )}
+                    </div>
+                    <button onClick={() => setServiceRows((p) => p.filter((x) => x.id !== s.id))}
+                      className="p-1.5 rounded hover:bg-destructive/10 text-destructive"><Trash2 className="h-4 w-4" /></button>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+                  <label className="flex items-center gap-2">
+                    <Switch checked={s.hasBonus} onCheckedChange={(v) => updateServiceRow(s.id, { hasBonus: v })} />
+                    <span className="text-sm flex items-center gap-1"><Gift className="h-3.5 w-3.5 text-carbo-green" /> Tem bonificação</span>
+                  </label>
+                  {s.hasBonus && (
+                    <div className="flex items-center gap-2">
+                      <Label className="text-xs">Qtd bonificada</Label>
+                      <Input type="number" min={0} value={s.bonusQty} onChange={(e) => updateServiceRow(s.id, { bonusQty: Number(e.target.value) })} className="w-24" />
+                    </div>
+                  )}
+                  {/* Desconto POR ITEM: toggle % | R$ + valor */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm flex items-center gap-1"><Tag className="h-3.5 w-3.5 text-carbo-green" /> Desconto</span>
+                    <div className="grid grid-cols-2 gap-1 w-[92px] shrink-0">
+                      {([["percent", "%", Percent], ["value", "R$", Tag]] as const).map(([v, label, Ico]) => (
+                        <button key={v} type="button" onClick={() => updateServiceRow(s.id, { discType: v })}
+                          className={`rounded-md border px-1.5 py-1 text-xs font-medium flex items-center justify-center gap-0.5 transition-all ${
+                            s.discType === v ? "border-carbo-green bg-carbo-green/5 text-foreground" : "bg-card text-muted-foreground hover:bg-muted"}`}>
+                          <Ico className="h-3 w-3" /> {label}
+                        </button>
+                      ))}
+                    </div>
+                    <Input type="number" min={0} step="0.01" className="w-28"
+                      value={s.discValue || ""} onChange={(e) => updateServiceRow(s.id, { discValue: Number(e.target.value) })}
+                      placeholder={s.discType === "percent" ? "ex.: 5" : "ex.: 100,00"} />
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Quantas OS-vagas isso vira. É o número que o Carbox vai ver como
+              carros a executar — pagos + bonificados. */}
+          {vagasPrevistas > 0 && (
+            <div className="rounded-xl border border-carbo-green/30 bg-carbo-green/5 px-3 py-2 text-sm">
+              Vai gerar <strong>1 OS com {vagasPrevistas} veículo(s)</strong> para executar
+              {serviceItemsRpc().some((i) => i.bonus > 0) && " (bonificados incluídos)"}.
+            </div>
+          )}
+
+          {frotaSemData && (
+            <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-600">
+              Frota precisa da <strong>previsão de execução</strong> — sem data a OS não é aberta.
+            </div>
+          )}
+
+          {/* Resumo dos serviços: subtotal · desconto · total */}
+          {serviceRows.length > 0 && (
+            <div className="flex justify-end border-t pt-3">
+              <div className="w-full sm:w-64 space-y-1 text-sm">
+                <div className="flex justify-between"><span className="text-muted-foreground">Subtotal serviços</span><span className="tabular-nums">{brl(servSubtotal)}</span></div>
+                {servDesconto > 0 && (
+                  <div className="flex justify-between text-destructive"><span>Desconto</span><span className="tabular-nums">− {brl(servDesconto)}</span></div>
+                )}
+                <div className="flex justify-between border-t pt-1 font-bold text-base"><span>Total serviços</span><span className="tabular-nums">{brl(servTotal)}</span></div>
+              </div>
+            </div>
+          )}
+        </CarboCardContent>
+      </CarboCard>
+
+      {/* ── Como o produto sai ───────────────────────────────────────────────
+          Só aparece com produto físico no pedido: serviço de descarbonização
+          não sai de caixa nenhuma, e mostrar a pergunta ali seria pedir uma
+          decisão que não existe.
+
+          ⚠️ O padrão é PRODUÇÃO — o comportamento de sempre. A pronta entrega
+          é escolha explícita, porque ela deduz estoque na hora e manda o
+          pedido direto para a NF: efeito grande demais para ser default. */}
+      {hasValidProduct && (
+        <CarboCard>
+          <CarboCardContent className="p-4 space-y-3">
+            <h3 className="font-semibold flex items-center gap-2">
+              <PackageCheck className="h-4 w-4 text-carbo-green" /> Como o produto sai
+            </h3>
+
+            <div className="grid sm:grid-cols-2 gap-2">
+              <button type="button" onClick={() => setModalidade("producao")}
+                className={`rounded-lg border px-3 py-2.5 text-left transition ${
+                  modalidade === "producao" ? "border-carbo-green bg-carbo-green/10" : "hover:bg-muted"}`}>
+                <p className="text-sm font-medium">Precisa produzir</p>
+                <p className="text-[11px] text-muted-foreground">Segue a esteira normal: produção, separação e envio.</p>
+              </button>
+
+              <button type="button" onClick={() => setModalidade("pronta_entrega")}
+                disabled={!meuEstoque?.temCaixa}
+                className={`rounded-lg border px-3 py-2.5 text-left transition ${
+                  modalidade === "pronta_entrega" ? "border-carbo-green bg-carbo-green/10" : "hover:bg-muted"
+                } ${!meuEstoque?.temCaixa ? "opacity-50 cursor-not-allowed" : ""}`}>
+                <p className="text-sm font-medium">Pronta entrega</p>
+                <p className="text-[11px] text-muted-foreground">
+                  {meuEstoque?.temCaixa
+                    ? "Sai do seu estoque agora e vai direto para a NF."
+                    : "Você não tem caixa de estoque."}
+                </p>
+              </button>
+            </div>
+
+            {modalidade === "pronta_entrega" && (
+              <div className="rounded-lg border bg-muted/40 p-3 space-y-2">
+                <p className="text-[11px] text-muted-foreground">
+                  O produto sai da sua caixa assim que a venda for salva, e o pedido
+                  nasce em <strong>Gerar Nota Fiscal</strong> — sem passar por produção.
+                </p>
+
+                {/* ⚠️ O aviso é da TELA, mas quem recusa é o BANCO. Os dois números
+                    podem divergir por segundos se o Ops confirmar uma chegada agora;
+                    por isso a decisão final não é daqui. */}
+                {faltaNaCaixa.length > 0 ? (
+                  <div className="text-xs text-red-600 space-y-0.5">
+                    <p className="font-medium">Não vai dar para salvar — falta na sua caixa:</p>
+                    {faltaNaCaixa.map((f) => (
+                      <p key={f.id}>• {f.nome}: você tem {f.tem}, o pedido pede {f.pedido}</p>
+                    ))}
+                    <p className="text-muted-foreground pt-1">
+                      Se você tem o produto em mãos, a contagem está errada — peça ao Ops para acertar.
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-emerald-600">Sua caixa cobre este pedido.</p>
+                )}
+              </div>
+            )}
+          </CarboCardContent>
+        </CarboCard>
+      )}
+
+      {/* Prazo de Entrega e Fabricação (opcional) */}
+      <CarboCard>
+        <CarboCardContent className="p-4 space-y-3">
+          <h3 className="font-semibold flex items-center gap-2"><CalendarClock className="h-4 w-4 text-carbo-green" /> Prazo de Entrega</h3>
+          <div className="grid md:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Data de entrega combinada</Label>
+              <Popover open={dateOpen} onOpenChange={(o) => { if (hasValidProduct) setDateOpen(o); }}>
+                <PopoverTrigger asChild>
+                  <Button type="button" variant="outline" disabled={!hasValidProduct} className="w-full justify-start font-normal">
+                    <CalendarClock className="h-4 w-4 mr-2 text-muted-foreground" />
+                    {deliveryDate ? fmtBr(new Date(deliveryDate + "T00:00:00")) : <span className="text-muted-foreground">Selecionar data</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    locale={ptBR}
+                    captionLayout="dropdown-buttons"
+                    fromYear={new Date().getFullYear()}
+                    toYear={new Date().getFullYear() + 3}
+                    selected={deliveryDate ? new Date(deliveryDate + "T00:00:00") : undefined}
+                    defaultMonth={deliveryDate ? new Date(deliveryDate + "T00:00:00") : new Date()}
+                    disabled={(d) => d < new Date(new Date().setHours(0, 0, 0, 0))}
+                    onSelect={(d) => { setDeliveryDate(d ? toISO(d) : ""); setDateOpen(false); }}
+                    classNames={{
+                      caption: "flex justify-center pt-1 relative items-center gap-1",
+                      caption_dropdowns: "flex gap-1",
+                      caption_label: "hidden",
+                      vhidden: "sr-only",  // esconde o "Month:/Year:" (rótulo de leitor de tela)
+                      dropdown: "bg-background border rounded-md text-sm px-2 py-1 outline-none",
+                    }}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+              <p className="text-[11px] text-muted-foreground">Combine com o cliente. O prazo de fábrica (PPF/PPE) é calculado em dias úteis.</p>
+            </div>
+
+            {/* Previsão de execução (serviço) — habilita só com item de serviço válido */}
+            <div className="space-y-1.5">
+              <Label>Previsão de execução</Label>
+              <Popover open={execDateOpen} onOpenChange={(o) => { if (hasValidService) setExecDateOpen(o); }}>
+                <PopoverTrigger asChild>
+                  <Button type="button" variant="outline" disabled={!hasValidService} className="w-full justify-start font-normal">
+                    <CalendarClock className="h-4 w-4 mr-2 text-muted-foreground" />
+                    {executionDate ? fmtBr(new Date(executionDate + "T00:00:00")) : <span className="text-muted-foreground">Selecionar data</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    locale={ptBR}
+                    captionLayout="dropdown-buttons"
+                    fromYear={new Date().getFullYear()}
+                    toYear={new Date().getFullYear() + 3}
+                    selected={executionDate ? new Date(executionDate + "T00:00:00") : undefined}
+                    defaultMonth={executionDate ? new Date(executionDate + "T00:00:00") : new Date()}
+                    disabled={(d) => d < new Date(new Date().setHours(0, 0, 0, 0))}
+                    onSelect={(d) => { setExecutionDate(d ? toISO(d) : ""); setExecDateOpen(false); }}
+                    classNames={{
+                      caption: "flex justify-center pt-1 relative items-center gap-1",
+                      caption_dropdowns: "flex gap-1",
+                      caption_label: "hidden",
+                      vhidden: "sr-only",
+                      dropdown: "bg-background border rounded-md text-sm px-2 py-1 outline-none",
+                    }}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+              <p className="text-[11px] text-muted-foreground">Estimativa da data de execução da descarbonização.</p>
+            </div>
+          </div>
+          {prazos && (
+            <div className="space-y-2">
+              <div className="rounded-lg border divide-y text-sm max-w-sm">
+                <div className="flex justify-between px-3 py-2"><span className="text-muted-foreground">Fabricar até (PPF)</span><span className="tabular-nums font-medium">{fmtBr(prazos.ppf)}</span></div>
+                <div className="flex justify-between px-3 py-2"><span className="text-muted-foreground">Expedir até (PPE)</span><span className="tabular-nums font-medium">{fmtBr(prazos.ppe)}</span></div>
+                <div className="flex justify-between px-3 py-2"><span className="text-muted-foreground">Dias úteis para fabricar</span><span className="tabular-nums">{prazos.businessDaysAvailable}</span></div>
+              </div>
+              {prazos.belowMinimum && (
+                <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 space-y-2 max-w-sm">
+                  <p className="text-xs flex items-start gap-1 text-amber-600">
+                    <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                    Precisa de no mínimo {prazoCfg.minBusinessDays} dias úteis para fabricar e enviar. Esta venda abrirá uma liberação de fabricação para o gestor.
+                  </p>
+                  <Button type="button" variant="outline" size="sm" onClick={() => setDeliveryDate(toISO(prazos.suggestedDeliveryDate))}>
+                    <CalendarClock className="h-3.5 w-3.5 mr-1" /> Usar data sugerida ({fmtBr(prazos.suggestedDeliveryDate)})
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+        </CarboCardContent>
+      </CarboCard>
+
+      {/* Recorrência (opcional) — replica ESTE pedido nos meses seguintes */}
+      <CarboCard>
+        <CarboCardContent className="p-4 space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="font-semibold flex items-center gap-2">
+                <Repeat className="h-4 w-4 text-carbo-green" /> Recorrência
+              </h3>
+              <p className="text-xs text-muted-foreground mt-1">
+                Repete este mesmo pedido nos próximos meses, já gravado no sistema.
+              </p>
+            </div>
+            <Switch
+              checked={recorrente}
+              onCheckedChange={setRecorrente}
+              disabled={!!editId || !hasValidProduct}
+              aria-label="Ativar recorrência"
+            />
+          </div>
+
+          {editId && (
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              Recorrência não se aplica a orçamento — converta em venda primeiro.
+            </p>
+          )}
+
+          {recorrente && (
+            <>
+              <div className="grid md:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Periodicidade</Label>
+                  <Select value={recPeriodo} onValueChange={(v) => setRecPeriodo(v as RecorrenciaPeriodo)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {RECORRENCIA_PERIODOS.map((p) => (
+                        <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Quantas entregas no total</Label>
+                  <Input
+                    type="number" min={2} max={60} value={recParcelas}
+                    onChange={(e) => setRecParcelas(Math.max(2, Math.min(60, Number(e.target.value) || 2)))}
+                  />
+                </div>
+              </div>
+
+              {/* O vendedor digitou UM mês. Aqui ele confere o contrato inteiro
+                  sem precisar calcular — e sem digitar o total. */}
+              <div className="rounded-lg border bg-muted/40 p-3 space-y-1.5 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Valor de cada entrega</span>
+                  <span className="tabular-nums font-medium">{brl(orderTotal)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Total do contrato ({recParcelas}×)</span>
+                  <span className="tabular-nums font-bold">{brl(orderTotal * recParcelas)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Período</span>
+                  <span className="tabular-nums">
+                    {recProximosMeses[0]} → {recProximosMeses[recProximosMeses.length - 1]}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground pt-1.5 border-t">
+                  Entra no faturamento <b>mês a mês</b>, {brl(orderTotal)} por vez — não os{" "}
+                  {brl(orderTotal * recParcelas)} de uma vez. As entregas futuras ficam como
+                  <b> Agendado</b> e podem ter a quantidade alterada antes de cada mês.
+                </p>
+              </div>
+            </>
+          )}
+        </CarboCardContent>
+      </CarboCard>
+
+      {/* Forma de Pagamento (obrigatória) */}
+      <CarboCard>
+        <CarboCardContent className="p-4 space-y-4">
+          <h3 className="font-semibold flex items-center gap-2">
+            <CreditCard className="h-4 w-4 text-carbo-green" /> Forma de Pagamento <span className="text-red-400">*</span>
+          </h3>
+          <div className="grid md:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Modalidade <span className="text-destructive">*</span></Label>
+              <Select value={pagModalidade} onValueChange={setPagModalidade}>
+                <SelectTrigger><SelectValue placeholder="Selecione a forma de pagamento" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pix">PIX</SelectItem>
+                  <SelectItem value="boleto_avista">Boleto à vista</SelectItem>
+                  <SelectItem value="boleto_faturado">Boleto faturado</SelectItem>
+                  <SelectItem value="debito">Cartão de débito</SelectItem>
+                  <SelectItem value="credito">Cartão de crédito (parcelado)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {pagModalidade === "credito" && (
+              <div className="space-y-1.5">
+                <Label>Parcelas <span className="text-destructive">*</span></Label>
+                <Select value={pagParcelas} onValueChange={setPagParcelas}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 12 }, (_, i) => String(i + 1)).map((n) => (
+                      <SelectItem key={n} value={n}>{n}x</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {pagModalidade === "boleto_faturado" && (
+              <div className="space-y-1.5">
+                <Label>Prazo do faturamento <span className="text-destructive">*</span></Label>
+                <Input value={pagFaturamento} onChange={(e) => setPagFaturamento(e.target.value)} placeholder="ex.: 30/60/90" />
+              </div>
+            )}
+          </div>
+          {pagamentoLabel && (
+            <p className="text-xs text-muted-foreground">Selecionado: <b className="text-foreground">{pagamentoLabel}</b></p>
+          )}
+        </CarboCardContent>
+      </CarboCard>
+
+      {/* Dados Estratégicos (opcional, recolhível) */}
+      <CollapsibleCard title="Dados Estratégicos" icon={Target} open={showEstrategicos} onToggle={() => setShowEstrategicos((o) => !o)}>
+        <div className="grid md:grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label>Tipo de Ponto</Label>
+            <Select value={tipoPonto} onValueChange={setTipoPonto}>
+              <SelectTrigger><SelectValue placeholder="Selecione o tipo" /></SelectTrigger>
+              <SelectContent>{TIPOS_PONTO.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Classificação Interna</Label>
+            <Select value={classificacao} onValueChange={setClassificacao}>
+              <SelectTrigger><SelectValue placeholder="Classificar como" /></SelectTrigger>
+              <SelectContent>{CLASSIFICACOES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <Label>Volume Médio Mensal (veículos)</Label>
+          <Input type="number" placeholder="Ex: 500" value={volumeMedio} onChange={(e) => setVolumeMedio(e.target.value)} />
+        </div>
+        <div className="grid md:grid-cols-2 gap-3">
+          <label className="flex items-center justify-between gap-3 rounded-xl border p-3">
+            <span className="text-sm font-medium">Atua com Diesel?</span><Switch checked={atuaDiesel} onCheckedChange={setAtuaDiesel} />
+          </label>
+          <label className="flex items-center justify-between gap-3 rounded-xl border p-3">
+            <span className="text-sm font-medium">Atua com Frotas?</span><Switch checked={atuaFrotas} onCheckedChange={setAtuaFrotas} />
+          </label>
+        </div>
+      </CollapsibleCard>
+
+      {/* Observações (opcional, recolhível) */}
+      <CollapsibleCard title="Observações" icon={FileText} open={showObs} onToggle={() => setShowObs((o) => !o)}>
+        <div className="space-y-1.5">
+          <Label>Observações Públicas</Label>
+          <Textarea value={obsPublica} onChange={(e) => setObsPublica(e.target.value)} placeholder="Visíveis para o cliente" />
+        </div>
+        <div className="space-y-1.5">
+          <Label>Notas Internas</Label>
+          <Textarea value={notasInternas} onChange={(e) => setNotasInternas(e.target.value)} placeholder="Visíveis apenas internamente" />
+        </div>
+      </CollapsibleCard>
+
+      {/* Rodapé: total + ações */}
+      <div className="sticky bottom-0 bg-background/95 backdrop-blur border-t -mx-4 md:-mx-6 px-4 md:px-6 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-center justify-between sm:block">
+          <p className="text-xs text-muted-foreground">Total</p>
+          <p className="text-xl font-bold">{brl(orderTotal)}</p>
+        </div>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <Button variant="ghost" className="hidden sm:inline-flex" onClick={sairDaTela}>Cancelar</Button>
+          <Button variant="outline" className="flex-1 sm:flex-none" onClick={handleQuote} disabled={generating || !podeSalvar || editandoVenda}>
+            <FileText className="h-4 w-4 mr-1" /> {generating ? "Gerando..." : (editId ? (<><span className="hidden sm:inline">Salvar e&nbsp;</span>Gerar PDF</>) : (<><span className="hidden sm:inline">Gerar&nbsp;</span>Orçamento</>))}
+          </Button>
+          <Button variant="outline" className="flex-1 sm:flex-none" onClick={handleEmailQuote} disabled={emailing || !podeSalvar} title="Salvar, gerar o PDF e enviar ao e-mail do cliente">
+            <Mail className="h-4 w-4 mr-1" /> {emailing ? "Enviando..." : (<><span className="hidden sm:inline">Enviar por&nbsp;</span>E-mail</>)}
+          </Button>
+          <CarboButton onClick={handleSell} className="flex-1 sm:flex-none sm:min-w-[150px]" disabled={!podeSalvar || editFaturado}>
+            <ShoppingCart className="h-4 w-4 mr-1" /> {editFaturado ? "Nota já emitida" : editandoVenda ? "Salvar alterações" : editId ? "Salvar e Vender" : "Gerar Venda"}
+          </CarboButton>
+        </div>
+      </div>
+
+      <p className="text-xs text-muted-foreground text-center">
+        Vendedor: <b>{vendedor || "—"}</b>{vendedorId ? "" : " (usuário logado)"} · Catálogo real, busca de CNPJ, mapa e gravação ativos.
+      </p>
+    </div>
+  );
+}
