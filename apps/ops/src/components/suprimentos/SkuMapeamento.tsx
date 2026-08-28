@@ -26,10 +26,14 @@ import {
 // ─────────────────────────────────────────────────────────────────────────────
 // Cadastro do mapa SKU → produto (aba "Mapeamento SKU" de Suprimentos, CD SP).
 //
-// O número que a tela edita é UM só: `unidades_por_venda` — quantas unidades
-// físicas saem da prateleira por unidade vendida daquele SKU. `units_per_kit` e
-// `display_units_per_pack` são LEGADO e aparecem apenas como conferência quando
-// discordam; editá-los aqui recriaria a divergência que a 20260955 desfez.
+// ⚠️ A tela edita DOIS números, porque são duas perguntas:
+//
+//     Cliente recebe   display_units_per_pack   o kit de saches entrega 10
+//     Estoque baixa    unidades_por_venda       e tira 1 caixa fechada
+//
+// Editar so um produzia frase falsa na lista — "1 venda = 1 un" para um kit
+// que o comprador leva com 10 sachês. O numero estava certo e a frase mentia.
+// `units_per_kit` continua legado e a tela nao o escreve.
 //
 // A segunda aba é a LISTA DE TRABALHO: SKU que já vendeu e não tem mapa, lida
 // da view do ensaio (`carbo_estoque_ensaio`). Enquanto o SKU estiver ali, a
@@ -42,6 +46,7 @@ interface Form {
   platform_sku: string;
   product_id: string;
   unidades_por_venda: string;
+  display_units_per_pack: string;
 }
 
 const FORM_VAZIO: Form = {
@@ -49,6 +54,7 @@ const FORM_VAZIO: Form = {
   platform_sku: "",
   product_id: "",
   unidades_por_venda: "1",
+  display_units_per_pack: "1",
 };
 
 const fmtData = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("pt-BR") : "—");
@@ -97,6 +103,10 @@ export function SkuMapeamento() {
       platform_sku: m.platform_sku,
       product_id: m.product_id,
       unidades_por_venda: String(m.unidades_por_venda ?? 1),
+      // Cadastro antigo pode nao ter o numero do cliente. Cair no fator do
+      // estoque e o melhor palpite — e o kit de saches, que e onde eles
+      // divergem, ja tem o campo preenchido.
+      display_units_per_pack: String(m.display_units_per_pack ?? m.unidades_por_venda ?? 1),
     });
     setAberto(true);
   };
@@ -109,6 +119,7 @@ export function SkuMapeamento() {
         platform: form.platform === TODAS_AS_PLATAFORMAS ? null : form.platform,
         product_id: form.product_id,
         unidades_por_venda: fator,
+        display_units_per_pack: Number(form.display_units_per_pack) || null,
       },
       {
         onSuccess: () => {
@@ -125,15 +136,21 @@ export function SkuMapeamento() {
       <div className="flex items-start gap-2 px-4 py-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
         <Info className="h-4 w-4 text-blue-400 shrink-0 mt-0.5" />
         <div className="text-sm">
-          <p className="font-medium mb-0.5">O que este mapa decide</p>
+          <p className="font-medium mb-0.5">São duas perguntas, e elas quase nunca dão o mesmo número</p>
           <p className="text-xs text-muted-foreground">
-            Cada linha diz de qual produto sai a venda de um SKU da plataforma e{" "}
-            <strong className="text-foreground">quantas unidades físicas</strong> saem da prateleira
-            por unidade vendida — do produto que está de fato na prateleira. Kit de 5 frascos
-            apontando para o frasco = 5. Frasco avulso = 1. Kit que o galpão guarda fechado (o
-            avulso nem tem saldo) aponta para o próprio kit = 1.{" "}
+            <strong className="text-foreground">Cliente recebe</strong> — quantas unidades vão na
+            caixa do comprador. É o que os painéis de venda contam.{" "}
+            <strong className="text-foreground">Estoque baixa</strong> — o que sai da prateleira, e
+            depende de como o galpão guarda o produto.
+          </p>
+          <p className="text-xs text-muted-foreground mt-1.5">
+            O kit de 10 sachês entrega <strong className="text-foreground">10 sachês</strong> ao
+            cliente e tira <strong className="text-foreground">1 caixa fechada</strong> do galpão —
+            porque a LogHouse guarda caixas, não sachês soltos. Já o kit de 5 frascos entrega 5
+            frascos e tira 5 frascos: ali os dois números coincidem, e é essa coincidência que
+            engana.{" "}
             <strong className="text-foreground">SKU sem mapa não erra: ele some</strong> — a venda
-            simplesmente não deduziria nada.
+            não deduz nada e não aparece em lugar nenhum.
           </p>
         </div>
       </div>
@@ -187,47 +204,77 @@ export function SkuMapeamento() {
                             <CarboBadge variant="secondary">{rotuloPlataforma(m.platform)}</CarboBadge>
                             {!m.is_active && <CarboBadge variant="destructive">Inativo</CarboBadge>}
                           </div>
+                          {/* ⚠️ AS DUAS LINHAS, SEMPRE — mesmo quando os números
+                              coincidem.
+
+                              Mostrar só o fator do estoque escrevia "1 venda =
+                              1 un" no kit de sachês, e isso É MENTIRA para quem
+                              lê: o cliente compra DEZ sachês. O número estava
+                              certo (sai 1 kit fechado da prateleira) e a frase
+                              estava errada — precisão técnica que informa o
+                              contrário do que acontece é pior que número
+                              redondo, porque quem lê não tem como desconfiar.
+
+                              E nada de nome de coluna na cara do usuário:
+                              `unidades_por_venda`, `units_per_kit` e
+                              `display_units_per_pack` não significam nada para
+                              quem opera. O que ele precisa saber é o que o
+                              cliente recebeu e o que saiu do galpão. */}
                           <div className="flex items-center gap-1.5 text-xs text-muted-foreground flex-wrap">
                             <span className="text-carbo-blue">→</span>
                             <span className="font-medium text-foreground">
                               {p?.name ?? "Produto não encontrado"}
                             </span>
                             {p?.product_code && <span>({p.product_code})</span>}
-                            {/* ⚠️ O rótulo NOMEIA a coluna. Este número já foi
-                                confundido com `display_units_per_pack` numa
-                                conferência, e a discussão custou meio dia
-                                porque a tela mostrava "10" sem dizer de onde.
-                                Número na tela sem o nome da coluna é número
-                                que não dá para conferir contra o banco. */}
-                            <span
-                              className="ml-1 px-1.5 py-0.5 rounded bg-muted font-semibold text-foreground"
-                              title="Coluna `unidades_por_venda` de sku_product_mappings — é ela que multiplica a dedução"
-                            >
-                              1 venda = {m.unidades_por_venda} {p?.stock_unit ?? "un"}{" "}
-                              <span className="font-mono font-normal opacity-60">
-                                (unidades_por_venda)
-                              </span>
-                            </span>
                           </div>
+
+                          <div className="grid gap-1 pl-4 text-xs sm:grid-cols-2 sm:gap-x-6">
+                            <div className="flex items-baseline gap-1.5">
+                              <span className="text-muted-foreground shrink-0">
+                                Cliente recebe
+                              </span>
+                              {m.display_units_per_pack != null ? (
+                                <span className="font-semibold text-foreground">
+                                  {Number(m.display_units_per_pack)} un
+                                  <span className="font-normal text-muted-foreground">
+                                    {" "}por venda
+                                  </span>
+                                </span>
+                              ) : (
+                                <span
+                                  className="font-semibold text-amber-400"
+                                  title="Sem esse número os painéis de venda contam a quantidade crua da plataforma."
+                                >
+                                  não informado
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-baseline gap-1.5">
+                              <span className="text-muted-foreground shrink-0">Estoque baixa</span>
+                              <span className="font-semibold text-foreground">
+                                {m.unidades_por_venda} ×{" "}
+                                {p?.product_code ?? p?.name ?? "—"}
+                                <span className="font-normal text-muted-foreground">
+                                  {" "}por venda
+                                </span>
+                              </span>
+                            </div>
+                          </div>
+
                           {kitSuspeito && (
                             <p className="flex items-start gap-1.5 text-[11px] text-amber-400">
                               <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-px" />
-                              O destino é um KIT <strong>e</strong> o fator é {m.unidades_por_venda}:
-                              cada venda baixaria {m.unidades_por_venda} KITS, não{" "}
-                              {m.unidades_por_venda} unidades. Ou o destino é o item unitário (fator{" "}
-                              {m.unidades_por_venda}), ou o destino é o kit com fator 1 — os dois
-                              juntos multiplicam duas vezes.
+                              Cada venda baixaria <strong>{m.unidades_por_venda} caixas
+                              fechadas</strong> de {p?.product_code}. Se a intenção era baixar{" "}
+                              {m.unidades_por_venda} unidades soltas, o destino tem de ser o
+                              produto avulso — não o kit.
                             </p>
                           )}
-                          {legadoDiverge && (
+                          {legadoDiverge && m.display_units_per_pack == null && (
                             <p className="text-[11px] text-muted-foreground">
-                              Legado divergente:{" "}
-                              <code className="font-mono">units_per_kit</code>{" "}
-                              {String(m.units_per_kit ?? "—")} ·{" "}
-                              <code className="font-mono">display_units_per_pack</code>{" "}
-                              {String(m.display_units_per_pack ?? "—")}. Quem manda na dedução é{" "}
-                              <code className="font-mono">unidades_por_venda</code>, o número acima —
-                              nenhum dos dois legados.
+                              Cadastro antigo, sem o número do cliente. Os painéis de venda vão
+                              mostrar “×?” até alguém preenchê-lo.
                             </p>
                           )}
                         </div>
@@ -401,15 +448,48 @@ export function SkuMapeamento() {
                   ))}
                 </SelectContent>
               </Select>
+              {/* ⚠️ Esta ajuda dizia "tem de ser o produto unitário (o frasco),
+                  não o kit". Está ERRADO, e foi medido: no HUB-SP o sachê avulso
+                  tem saldo ZERO e a caixa fechada tem 1.253. Mandar apontar para
+                  o avulso levaria a dedução ao negativo na primeira venda. O
+                  destino é o que o galpão guarda, e isso muda por produto. */}
               <p className="text-[11px] text-muted-foreground mt-1">
-                Tem de ser o produto <strong className="text-foreground">unitário</strong> (o frasco),
-                não o kit — é o fator abaixo que multiplica.
+                É o produto que o galpão <strong className="text-foreground">guarda</strong>. O
+                frasco de 100ml fica avulso na prateleira; o sachê fica dentro da caixa fechada, e
+                aí o destino é a própria caixa.
+              </p>
+            </div>
+
+            {/* ── Os dois números, lado a lado ──────────────────────────────
+                Um campo só produzia frases falsas na lista: "1 venda = 1 un"
+                para um kit que o cliente compra com 10 sachês. São perguntas
+                diferentes e o operador precisa responder as duas. */}
+            <div>
+              <Label>
+                Cliente recebe, por venda <span className="text-destructive">*</span>
+              </Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  min={1}
+                  step={1}
+                  className="w-28"
+                  value={form.display_units_per_pack}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, display_units_per_pack: e.target.value }))
+                  }
+                />
+                <span className="text-sm text-muted-foreground">unidades na mão do comprador</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Kit de 5 frascos = 5. Kit de 10 sachês = 10. É este número que os painéis de venda
+                contam — o Histórico, o Comparativo e a aba Produtos Vendidos.
               </p>
             </div>
 
             <div>
               <Label>
-                1 venda deste SKU = <span className="text-destructive">*</span>
+                Estoque baixa, por venda <span className="text-destructive">*</span>
               </Label>
               <div className="flex items-center gap-2">
                 <Input
@@ -421,14 +501,16 @@ export function SkuMapeamento() {
                   onChange={(e) => setForm((f) => ({ ...f, unidades_por_venda: e.target.value }))}
                 />
                 <span className="text-sm text-muted-foreground">
-                  unidades físicas na prateleira
-                  {produtoEscolhido ? ` de ${produtoEscolhido.product_code}` : ""}
+                  {produtoEscolhido
+                    ? `× ${produtoEscolhido.product_code}`
+                    : "× o produto escolhido acima"}
                 </span>
               </div>
               <p className="text-[11px] text-muted-foreground mt-1">
-                Kit de 5 frascos = 5. Kit de 10 sachês = 10. Frasco avulso = 1. Número inteiro — o
-                banco recusa fração, porque o saldo é inteiro e arredondar em silêncio quebraria a
-                conta.
+                Kit de 5 frascos apontando para o frasco = 5. Kit de 10 sachês apontando para a
+                caixa = <strong className="text-foreground">1</strong>, porque sai uma caixa
+                fechada. Número inteiro — o banco recusa fração, e arredondar em silêncio quebraria
+                o saldo.
               </p>
             </div>
 

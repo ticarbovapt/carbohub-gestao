@@ -85,7 +85,15 @@ export interface MapeamentoInput {
   /** `null` = vale para todas as plataformas. */
   platform: string | null;
   product_id: string;
+  /** Quantos itens do `product_id` saem da prateleira por venda. */
   unidades_por_venda: number;
+  /**
+   * Quantas unidades o CLIENTE levou por venda. ⚠️ NÃO é o mesmo número: o kit
+   * de sachês entrega 10 ao comprador e tira 1 caixa fechada do galpão. É este
+   * campo que os painéis de venda contam, e até agora ele não tinha tela —
+   * quem operava não conseguia corrigir o número que a diretoria lia.
+   */
+  display_units_per_pack: number | null;
 }
 
 const CHAVE = ["ops", "sku-mapeamento"] as const;
@@ -229,6 +237,10 @@ export function useSalvarMapeamento() {
         platform: input.platform,
         product_id: input.product_id,
         unidades_por_venda: input.unidades_por_venda,
+        // ⚠️ Gravado JUNTO, e de propósito. Deixá-lo de fora fazia a tela
+        // salvar metade da verdade: o estoque passava a baixar certo e os
+        // painéis continuavam contando o número antigo, sem ninguém perceber.
+        display_units_per_pack: input.display_units_per_pack,
         updated_at: new Date().toISOString(),
       };
       const q = input.id
