@@ -202,46 +202,36 @@ async function normalizeNuvemshop(body: unknown, _platform: Platform): Promise<N
   return rows as unknown as NormalizedOrder[];
 }
 
-function normalizeMercadoLivre(body: unknown, platform: Platform): NormalizedOrder[] {
-  // ML webhooks send one notification per event; order details must be fetched via API
-  // For now, store the notification and trigger a sync
-  const b = body as Record<string, unknown>;
-  if (b.topic !== "orders_v2") return []; // only process order events
-  return [{
-    platform,
-    order_id:     String(b.resource ?? b.id ?? ""),
-    product_sku:  null,
-    product_name: null,
-    quantity:     1,
-    units_real:   1,
-    unit_price:   0,
-    total:        0,
-    status:       "pending",
-    ordered_at:   b.sent ? new Date(b.sent as string).toISOString() : new Date().toISOString(),
-    raw:          body,
-  }];
-  // NOTE: After storing the notification, the cron sync function will fetch full order details
+// ⚠️ ML e Amazon: a NOTIFICAÇÃO NÃO VIRA LINHA DE PEDIDO.
+//
+// As duas plataformas mandam só um aviso ("o pedido X mudou"), sem itens, sem
+// valor e sem SKU — o detalhe se busca por API depois. As versões anteriores
+// gravavam mesmo assim uma linha de reserva com `quantity: 1`, `units_real: 1`
+// e `total: 0`, esperando que o sync a completasse.
+//
+// Ele não completa, e não tinha como: a chave do upsert é (platform, order_id),
+// e as duas pontas montam `order_id` de formas diferentes —
+//
+//   ML       webhook  "https://api.mercadolibre.com/orders/2000…"  (o `resource`)
+//            sync     "2000…-<item_id>"
+//   Amazon   webhook  "701-1234567-1234567"
+//            sync     "701-1234567-1234567-<OrderItemId>"
+//
+// — então a linha do aviso nunca é sobrescrita. Ela fica para sempre, ao lado
+// da linha real, valendo 1 unidade a R$ 0,00 em TODA contagem que soma
+// `quantity`/`units_real`. E no ML ela é pior ainda: `ecommerce_pedido_raiz`
+// corta no primeiro hífen, e uma URL não colapsa em nada — vira um PEDIDO a
+// mais na contagem, além da unidade.
+//
+// Perder até 5 min de latência (o `ecommerce-sync-5min` traz o pedido de
+// verdade, com itens, SKU e valor) é muito melhor que uma venda fantasma
+// permanente em todo painel. Quem tem o dado é a API, não o aviso.
+function normalizeMercadoLivre(_body: unknown, _platform: Platform): NormalizedOrder[] {
+  return [];
 }
 
-function normalizeAmazon(body: unknown, platform: Platform): NormalizedOrder[] {
-  // Amazon SP-API SNS notification — contains order IDs to fetch
-  const b = body as Record<string, unknown>;
-  const payload = b.Message ? JSON.parse(b.Message as string) : b;
-  const orderId = payload?.OrderId ?? payload?.AmazonOrderId ?? String(payload?.NotificationData ?? "");
-  if (!orderId) return [];
-  return [{
-    platform,
-    order_id:     orderId,
-    product_sku:  null,
-    product_name: null,
-    quantity:     1,
-    units_real:   1,
-    unit_price:   0,
-    total:        0,
-    status:       payload?.OrderStatus?.toLowerCase()?.replace("unshipped", "paid") ?? "pending",
-    ordered_at:   payload?.PurchaseDate ?? new Date().toISOString(),
-    raw:          body,
-  }];
+function normalizeAmazon(_body: unknown, _platform: Platform): NormalizedOrder[] {
+  return [];
 }
 
 function normalizeTikTok(body: unknown, platform: Platform): NormalizedOrder[] {
@@ -324,7 +314,20 @@ function normalizeShopee(body: unknown, platform: Platform): NormalizedOrder[] {
     // (tamanho, cor) tem `item_id` igual e `model_id` diferente — só com
     // `item_id` as duas variações colidiriam numa linha só.
     order_id:     `${orderId}-${item.item_id ?? i}-${item.model_id ?? 0}`,
-    product_sku:  String(item.item_sku ?? ""),
+    // ⚠️ `model_sku` PRIMEIRO, e `null` quando não há nenhum dos dois — as duas
+    // coisas alinham este caminho com o do sync (`_shared/shopeePedido.ts`),
+    // que já fazia assim.
+    //
+    // A ordem importa porque anúncio com variação guarda o SKU útil no MODELO:
+    // ler só `item_sku` traz o código do anúncio-pai, igual para tamanhos
+    // diferentes — e o mapa resolveria a variação errada.
+    //
+    // E `""` não é `null`: o gatilho de estoque guarda com `IS NULL`, que a
+    // string vazia ATRAVESSA, e a tela agrupa com `??`, então o vazio vira uma
+    // categoria de SKU em branco em vez de cair no "Sem SKU". Ausência tem de
+    // se declarar ausência.
+    product_sku:  (item.model_sku ? String(item.model_sku) : null) ??
+                  (item.item_sku ? String(item.item_sku) : null),
     product_name: String(item.item_name ?? ""),
     quantity:     Number(item.model_quantity_purchased ?? 1),
     units_real:   Number(item.model_quantity_purchased ?? 1),
