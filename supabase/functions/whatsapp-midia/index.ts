@@ -29,26 +29,10 @@ import { conferirMidia, corpoDaMidia } from "../_shared/metaMidia.ts";
 import { webmParaOgg } from "../_shared/webmParaOgg.ts";
 
 import { ehTimeInterno } from "../_shared/interfacesInternas.ts";
+import { cors } from "../_shared/cors.ts";
 // deno-lint-ignore-file no-explicit-any
 
-const ALLOWED_ORIGINS = [
-  "https://admin.carbohub.com.br",
-  "https://ops.carbohub.com.br",
-  "https://carbohub-admin.vercel.app",
-  "http://localhost:8080",
-  "http://localhost:8082",
-  "http://localhost:5173",
-];
 
-function cors(req: Request) {
-  const origin = req.headers.get("origin") || "";
-  return {
-    "Access-Control-Allow-Origin": ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0],
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-    "Vary": "Origin",
-  };
-}
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,

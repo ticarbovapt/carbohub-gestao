@@ -7,6 +7,7 @@ import {
   Search, SearchX, X, Package, ArrowUpRight, CornerDownLeft, Megaphone,
   BellRing, BellOff, Check, CheckCheck, Inbox, Undo2, Sparkles, UserCheck, Tag as TagIcon, Plus,
   CalendarClock, Trash2, Square, Play, Pause, Download, StickyNote, EyeOff, Copy,
+  Maximize2,
   type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -408,7 +409,21 @@ function Anexo({ mediaId, tipo, nome, Icone }: {
 }) {
   const rotulo = NOME_MIDIA[tipo] ?? tipo;
   const imagem = tipo === "image" || tipo === "sticker";
+  const video  = tipo === "video";
   const som = tipo === "audio" || tipo === "voice" || tipo === "ptt";
+  // Imagem e vídeo são a MESMA coisa para quem atende: conteúdo para OLHAR.
+  const visual = imagem || video;
+  const [amplo, setAmplo] = useState(false);
+
+  // Esc fecha a tela cheia. ⚠️ Sem isto o overlay só sairia com o clique, e o
+  // reflexo de quem usa o computador o dia inteiro é apertar Esc — ficar preso
+  // numa foto em tela cheia parece a tela ter travado.
+  useEffect(() => {
+    if (!amplo) return;
+    const aoTeclar = (e: KeyboardEvent) => { if (e.key === "Escape") setAmplo(false); };
+    window.addEventListener("keydown", aoTeclar);
+    return () => window.removeEventListener("keydown", aoTeclar);
+  }, [amplo]);
 
   /**
    * ⚠️ IMAGEM carrega sozinha; áudio e documento esperam o clique.
@@ -422,12 +437,12 @@ function Anexo({ mediaId, tipo, nome, Icone }: {
    * O custo de carregar sozinha é pago uma vez: a busca é GET com cache de um
    * dia no navegador, então reabrir a conversa e dar F5 não rebaixam.
    */
-  const [abrir, setAbrir] = useState(imagem);
+  const [abrir, setAbrir] = useState(visual);
   const { data, isFetching, error } = useMidia(mediaId, abrir);
 
   // Enquanto a foto vem, um retângulo do tamanho dela evita o pulo do layout
   // que joga a conversa para cima no meio da leitura.
-  if (imagem && !data && isFetching) {
+  if (visual && !data && isFetching) {
     return (
       <div className="mb-1.5 flex h-32 w-48 items-center justify-center rounded-md
                       border border-dashed bg-background/40">
@@ -437,12 +452,70 @@ function Anexo({ mediaId, tipo, nome, Icone }: {
   }
 
   if (data) {
-    if (imagem) {
+    if (visual) {
       return (
-        <a href={data.url} target="_blank" rel="noreferrer" className="mb-1.5 block">
-          <img src={data.url} alt={rotulo}
-               className="max-h-64 w-auto rounded-md border object-contain" />
-        </a>
+        <>
+          <div className="group relative mb-1.5 w-fit">
+            {video ? (
+              /* ⚠️ Toca AQUI, não baixa. O vídeo caía no ramo de documento e
+                 virava um link de download: quem atende precisava salvar no
+                 computador e abrir noutro programa para ver o que o cliente
+                 filmou — no meio de um atendimento sobre embalagem violada.
+                 `controls` nativo já traz play, linha do tempo, volume e o
+                 botão de tela cheia do próprio navegador. */
+              <video
+                src={data.url} controls playsInline preload="metadata"
+                className="max-h-64 w-auto rounded-md border bg-black"
+              />
+            ) : (
+              <img src={data.url} alt={rotulo}
+                   className="max-h-64 w-auto rounded-md border object-contain" />
+            )}
+            {/* Expandir para a tela inteira. Fica discreto até o mouse chegar —
+                a conversa é o conteúdo principal, o botão não. */}
+            <button
+              type="button" onClick={() => setAmplo(true)}
+              title="Abrir em tela cheia"
+              className="absolute right-1.5 top-1.5 rounded-md bg-black/55 p-1.5 text-white
+                         opacity-0 transition-opacity hover:bg-black/75
+                         focus-visible:opacity-100 group-hover:opacity-100"
+            >
+              <Maximize2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
+
+          {amplo && (
+            /* Sem componente de Dialog: este overlay não é um formulário, e
+               fechar no clique de fora / no Esc é tudo que ele precisa fazer. */
+            <div
+              role="dialog" aria-modal="true" aria-label={rotulo}
+              onClick={() => setAmplo(false)}
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4"
+            >
+              <button
+                type="button" onClick={() => setAmplo(false)} title="Fechar"
+                className="absolute right-4 top-4 rounded-md bg-white/10 p-2 text-white hover:bg-white/20"
+              >
+                <X className="h-5 w-5" />
+              </button>
+              {/* ⚠️ `stopPropagation` na mídia: sem isso, mexer no volume ou
+                  arrastar a linha do tempo do vídeo fecharia o overlay. */}
+              {video ? (
+                <video
+                  src={data.url} controls autoPlay playsInline
+                  onClick={(e) => e.stopPropagation()}
+                  className="max-h-full max-w-full rounded-md"
+                />
+              ) : (
+                <img
+                  src={data.url} alt={rotulo}
+                  onClick={(e) => e.stopPropagation()}
+                  className="max-h-full max-w-full rounded-md object-contain"
+                />
+              )}
+            </div>
+          )}
+        </>
       );
     }
     if (som) return <Reprodutor url={data.url} />;
