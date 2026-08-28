@@ -7,6 +7,7 @@ import {
 // ⚠️ A tradução de status da Shopee vive em UM lugar só. Este arquivo tinha a
 // sua própria tabela, e ela discordava da canônica justamente em `PROCESSED`.
 import { statusDaShopee } from "../_shared/shopeePedido.ts";
+import { linhasDaPayt } from "../_shared/paytPedido.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -15,7 +16,7 @@ const supabase = createClient(
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type Platform = "mercadolivre" | "amazon" | "tiktok" | "shopee" | "nuvemshop";
+type Platform = "mercadolivre" | "amazon" | "tiktok" | "shopee" | "nuvemshop" | "payt";
 
 interface NormalizedOrder {
   platform: Platform;
@@ -234,6 +235,84 @@ function normalizeAmazon(_body: unknown, _platform: Platform): NormalizedOrder[]
   return [];
 }
 
+// ─── PayT ────────────────────────────────────────────────────────────────────
+//
+// ⚠️ A PayT NÃO assina o postback. Não há HMAC, não há header de autenticação.
+// A única prova de origem é o campo `integration_key` DENTRO do corpo — a
+// "Chave única" que o painel gera para cada postback cadastrado.
+//
+// Isso é fraco sozinho, e o desenho compensa somando camadas: TLS obrigatório
+// (a função só atende https), o caminho da URL não é adivinhável, e a chave é
+// comparada em tempo constante para não vazar por timing.
+//
+// ⚠️ Ausência FECHA, como manda a regra da casa: sem `PAYT_INTEGRATION_KEYS`
+// cadastrado, recusa. Aqui isso importa mais que nos outros canais — quem
+// acertasse a URL poderia INVENTAR vendas, e sem API de consulta não haveria
+// com o que conferir.
+function comparaConstante(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let dif = 0;
+  for (let i = 0; i < a.length; i++) dif |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return dif === 0;
+}
+
+// deno-lint-ignore require-await
+async function validatePayt(_req: Request, body: string): Promise<boolean> {
+  // Uma chave por postback cadastrado (Venda, Recorrência, Pague após receber),
+  // separadas por vírgula.
+  const cru = Deno.env.get("PAYT_INTEGRATION_KEYS") ?? "";
+  const chaves = cru.split(",").map((k) => k.trim()).filter(Boolean);
+  if (chaves.length === 0) {
+    console.error("[payt] PAYT_INTEGRATION_KEYS não configurado — recusando.");
+    return false;
+  }
+  let recebida = "";
+  try {
+    recebida = String((JSON.parse(body) as Record<string, unknown>)?.integration_key ?? "");
+  } catch {
+    return false;
+  }
+  if (!recebida) return false;
+  return chaves.some((k) => comparaConstante(recebida, k));
+}
+
+async function normalizePayt(body: unknown, _platform: Platform): Promise<NormalizedOrder[]> {
+  const { linhas, motivo } = linhasDaPayt(body);
+
+  // ⚠️ O CRU PRIMEIRO, e sempre — inclusive quando não vira pedido nenhum.
+  //
+  // A PayT não tem endpoint de consulta: postback perdido é venda que nunca
+  // entra, e não há de onde buscar depois. Este INSERT é a única prova de que o
+  // evento chegou, e é dele que se reprocessa quando o parser mudar.
+  //
+  // O `on conflict do nothing` sobre o hash do corpo é a idempotência: a PayT
+  // reenvia o mesmo evento, e reenvio é comportamento normal, não erro.
+  const b = (body ?? {}) as Record<string, unknown>;
+  try {
+    const bytes = new TextEncoder().encode(JSON.stringify(body));
+    const hash = encodeHex(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)));
+    const { error } = await supabase.from("payt_eventos").upsert({
+      body_hash: hash,
+      corpo: body,
+      status: b.status != null ? String(b.status) : null,
+      tipo: b.type != null ? String(b.type) : null,
+      transaction_id: b.transaction_id != null ? String(b.transaction_id) : null,
+      cart_id: b.cart_id != null ? String(b.cart_id) : null,
+      eh_teste: b.test === true,
+      processado_em: new Date().toISOString(),
+      resultado: motivo,
+    }, { onConflict: "body_hash", ignoreDuplicates: true });
+    if (error) console.error("[payt] falhou gravar o cru:", error.message);
+  } catch (e) {
+    // ⚠️ Falhar aqui NÃO derruba a ingestão: perder o pedido é pior que perder
+    // a cópia dele. O erro fica no log da função.
+    console.error("[payt] erro ao gravar o cru:", String(e));
+  }
+
+  if (linhas.length === 0) console.log(`[payt] sem pedido: ${motivo}`);
+  return linhas as unknown as NormalizedOrder[];
+}
+
 function normalizeTikTok(body: unknown, platform: Platform): NormalizedOrder[] {
   const b = body as Record<string, unknown>;
   const orders: NormalizedOrder[] = [];
@@ -374,7 +453,7 @@ Deno.serve(async (req: Request) => {
   const segments = url.pathname.split("/").filter(Boolean);
   const platform = segments[segments.length - 1] as Platform;
 
-  if (!["mercadolivre", "amazon", "tiktok", "shopee", "nuvemshop"].includes(platform)) {
+  if (!["mercadolivre", "amazon", "tiktok", "shopee", "nuvemshop", "payt"].includes(platform)) {
     return new Response("Unknown platform", { status: 400 });
   }
 
@@ -387,6 +466,7 @@ Deno.serve(async (req: Request) => {
     tiktok:       validateTikTok,
     shopee:       validateShopee,
     nuvemshop:    validateNuvemshop,
+    payt:         validatePayt,
   };
 
   // ── Modo de observação ────────────────────────────────────────────────────
@@ -433,6 +513,7 @@ Deno.serve(async (req: Request) => {
     tiktok:       normalizeTikTok,
     shopee:       normalizeShopee,
     nuvemshop:    normalizeNuvemshop,
+    payt:         normalizePayt,
   };
 
   const orders = await normalizers[platform](parsed, platform);
