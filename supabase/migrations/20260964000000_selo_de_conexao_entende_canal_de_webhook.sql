@@ -88,13 +88,13 @@ select
   'payt'                                            as platform,
   (select e.corpo->>'seller_id' from public.payt_eventos e
     order by e.recebido_em desc limit 1)            as seller_id,
-  exists (select 1 from public.payt_eventos)        as is_connected,
-  (select max(e.recebido_em) from public.payt_eventos) as updated_at,
-  (select max(e.recebido_em) from public.payt_eventos) as last_synced_at,
+  exists (select 1 from public.payt_eventos e)        as is_connected,
+  (select max(e.recebido_em) from public.payt_eventos e) as updated_at,
+  (select max(e.recebido_em) from public.payt_eventos e) as last_synced_at,
   case
-    when (select max(e.recebido_em) from public.payt_eventos) is null then null
+    when (select max(e.recebido_em) from public.payt_eventos e) is null then null
     else round(extract(epoch from (
-           now() - (select max(e.recebido_em) from public.payt_eventos)
+           now() - (select max(e.recebido_em) from public.payt_eventos e)
          )) / 60)::int
   end                                               as minutos_sem_sincronizar
 where not exists (select 1 from public.system_tokens t where t.id = 'payt');
