@@ -286,6 +286,128 @@ Quem decide o que é venda nova é o **banco**, e só ele:
    davam o mesmo sintoma (nada) porque o `catch` era vazio. Hoje os dois
    aparecem no console, e há `__somVenda.estado()` / `__somVenda.testar()`.
 
+### Unidades: são DUAS perguntas, e trocá-las erra nos dois sentidos
+O kit não tem "um" número de unidades. Tem dois, e eles divergem:
+
+```
+display_units_per_pack   quantas unidades o CLIENTE levou    → telas de VENDA
+unidades_por_venda       quantos itens saem da PRATELEIRA    → só o ESTOQUE
+
+SKU 120 → KIT-CARB-SACH-10ML   cliente leva 10 · prateleira perde 1
+SKU 124 → CZ100                cliente leva  5 · prateleira perde 5
+```
+
+O kit de sachês entrega **dez sachês** e tira **um kit fechado**, porque a
+LogHouse guarda kits (saldo 1.253) e **zero** sachês soltos. No CZ100 os dois
+valem 5 e a diferença some — foi essa coincidência que fez a `20260955` unificar
+os campos, e o sachê desmentiu no dia seguinte. **Não volte a juntá-los.**
+
+Trocar um pelo outro erra em direções opostas: no painel, um kit vira 1 unidade
+vendida; na dedução, **10 kits baixados**.
+
+```
+carbo_ecommerce_sku_resolve        estoque    lê unidades_por_venda
+carbo_ecommerce_unidades_exibidas  telas      lê display_units_per_pack
+apps/admin/src/lib/skuUnidades.ts  o espelho no front (regra idêntica)
+src/lib/skuUnidades.ts             cópia na raiz — fonte da verdade é o admin
+```
+
+1. **Fator desconhecido devolve `null`, nunca 1.** O `×1` que aparecia no kit de
+   5 não vinha de mapa errado: a linha vinha **sem SKU**, nunca consultava o
+   mapa, e um `Math.round(unidades/pedidos)` **inventava** o 1. Ausência
+   disfarçada de resposta é pior que ausência — some da lista de trabalho.
+2. **A chave do mapa é (plataforma, SKU).** Indexado só por SKU, o desempate era
+   a ordem que o PostgREST devolvesse: o fator da Nuvemshop podia ser aplicado a
+   uma linha da Shopee, e mudar entre execuções.
+3. ⚠️ **Fator conhecido multiplica `quantity`, NUNCA `units_real`.** A Nuvemshop
+   já multiplica na ESCRITA (`enrichUnitsReal`, em `_shared/nuvemshop.ts`);
+   reusar aquele valor daria ×25 num kit de 5. `units_real` só entra quando não
+   há fator.
+4. **`ecommerce_raw_summary` NÃO recebe a regra.** Ela é a visão crua do que está
+   gravado, e é a **divergência** entre ela e o Histórico que denuncia mapa
+   faltando. Um relatório que só sabe concordar consigo mesmo é a doença da
+   `20260941`.
+5. ⚠️ **A tela de cadastro só EDITA `unidades_por_venda`.** O
+   `display_units_per_pack`, que é o número dos painéis, é somente leitura no
+   Ops — ninguém consegue corrigi-lo pela interface, e display novo entra por
+   SQL. Pendente, e é o próximo passo da tela.
+
+Medido em 28/08/2026, agosto: o ML reportava **96** unidades e o cliente levou
+**580**; a Amazon, 8 contra 50. Faturamento não mudou — o erro era só a
+contagem.
+
+### O mapa SKU→produto é CADASTRO, não código
+`sku_product_mappings`, editável em **Ops → Suprimentos → CD SP → Mapeamento
+SKU**. Produto novo entra por ali; nenhum deploy.
+
+1. **`platform = null` vale para todas as plataformas**, e o mapa específico
+   vence. Foi o que zerou 111 linhas órfãs de uma vez: o ML e a Amazon vendem os
+   MESMOS SKUs (`124`, `120`) que a Nuvemshop, e os mapas estavam presos ao
+   canal.
+2. **`product_id` é o que está FISICAMENTE NA PRATELEIRA**, não o item unitário
+   por princípio. `CZ100` fica avulso (kit de 5 = 5 frascos); o sachê fica em
+   kit fechado (kit de 10 = 1 kit). Confira `warehouse_stock` do HUB-SP antes de
+   escolher: apontar para produto com saldo sempre zero manda a dedução ao
+   negativo na primeira venda.
+3. ⚠️ **Não há fallback por `product_code`.** SKU sem linha não resolve, e o
+   sintoma é `SEM MAPEAMENTO` no ensaio — nunca um erro. O comentário da
+   `20260955` prometia essa rede; a `20260958` desfez a promessa.
+4. **SKU vazio na origem é problema de CADASTRO da plataforma.** A Shopee
+   passou meses com `item_sku`/`model_sku` em branco no anúncio: o código lia os
+   dois campos corretamente e os dois vinham `""`. Resolveu-se preenchendo `124`
+   no painel da Shopee — zero código. ⚠️ Anúncio NOVO sem SKU volta ao mesmo
+   buraco, calado; a aba "SKUs vendidos sem mapa" é o único lugar onde isso
+   aparece, e por isso ela MOSTRA a linha sem SKU em vez de escondê-la.
+
+### E-commerce: dedução de estoque — por canal, com marco zero
+A dedução já existiu, deduzia do mesmo HUB-SP e foi desligada em 03/08/2026
+(`20260834`) sem motivo registrado. Voltou na `20260956`, com o que faltava.
+
+```
+carbo_canal_estoque      qual galpão, e se o canal deduz (nasce ativo=false)
+carbo_estoque_consumo    o ledger — e o índice único é a TRAVA
+carbo_estoque_ensaio     o que a dedução FARIA, sem fazer
+carbo_ecommerce_deduzir_estoque / _estornar_estoque    cron 8-59/10
+```
+
+1. ⚠️ **`deduz_a_partir_de` é MARCO ZERO, e nulo NÃO deduz** mesmo com
+   `ativo = true`. Sem ele a primeira rodada baixaria 90 dias de uma vez: 1.664
+   unidades sobre um saldo de 345, indo a −1.319 em segundos. E 402 delas já
+   saíram pelo caminho antigo — o índice único não pega isso, porque aquelas
+   baixas nunca passaram pela tabela nova. Mesma lição do
+   `carbo_carrinho_config.inicio_em`.
+2. **Função em cron, não trigger.** Idempotente (o índice único decide) e
+   re-executável: rodada interrompida se completa na seguinte. Trigger dá uma
+   chance por evento. O trigger antigo continua existindo e inerte — trocá-lo
+   pediria `AccessExclusiveLock` em `ecommerce_orders`, que o webhook escreve a
+   qualquer hora.
+3. **Saldo negativo NÃO trava.** A venda já aconteceu; recusar não devolve a
+   garrafa à prateleira, só faz o espelho divergir em silêncio. O negativo é a
+   informação: diz que a contagem do galpão está atrás.
+4. **O estorno APAGA a linha do ledger**, não a marca. É a linha que significa
+   "já contabilizado", então removê-la é o que deixa o pedido elegível de novo
+   se voltar a ficar pago. Um booleano faria o pedido ressuscitado nunca mais
+   deduzir.
+5. ⚠️ **"Venda online ⇒ saiu da LogHouse" é PREMISSA, não dado.** Em ML Full e
+   Amazon FBA a mercadoria já está com a plataforma e nada sai daqui. Nuvemshop,
+   ML e Amazon estão ligados porque o dono do processo confirmou despacho
+   próprio (28/08/2026) — **adotou Full, DESLIGA no mesmo dia**, senão a venda e
+   a remessa de reposição contam a mesma saída duas vezes.
+6. ⚠️ **A pegada da etiqueta do Melhor Envio só mede a Nuvemshop.** ML, Amazon e
+   Shopee deram 0% e isso **não** prova Full: prova que não passam pelo Melhor
+   Envio (Mercado Envios, logística da Amazon, SPX). `0 de 102` é limpo demais
+   para ser comportamento comercial — é um teste que não se aplica.
+
+### ⚠️ Aviso de webhook não é pedido
+ML e Amazon mandam só "o pedido X mudou", sem itens, valor ou SKU. O código
+gravava mesmo assim uma linha com `quantity 1`, `units_real 1`, `total 0`,
+contando com o sync para completá-la. Ele não completa: as duas pontas montam
+`order_id` de formas diferentes (`resource` URL vs `<id>-<item>`), o upsert é
+por `(platform, order_id)`, e a linha do aviso **nunca é sobrescrita**. Ficaria
+para sempre valendo 1 unidade a R$ 0,00 em toda contagem — e no ML,
+`ecommerce_pedido_raiz` corta no primeiro hífen, então uma URL vira um PEDIDO a
+mais. Hoje as duas funções devolvem `[]`.
+
 ### E-commerce: a tabela tem uma linha por ITEM, não por pedido
 `ecommerce_orders` grava `order_id = '<pedido>-<item>'` — de propósito, porque
 (platform, order_id) é a chave do upsert e assim webhook e sync podem rodar em
