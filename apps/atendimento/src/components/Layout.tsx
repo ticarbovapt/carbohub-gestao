@@ -1,8 +1,6 @@
 import { useMemo, useState } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
-import {
-  MessagesSquare, ShoppingCart, Bug, LayoutDashboard,
-} from "lucide-react";
+import { MessagesSquare, LayoutDashboard } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAccessPing } from "@/hooks/useAccessPing";
@@ -41,14 +39,18 @@ export function Layout() {
   // Navegação padronizada: topo = item principal + Carbo Chat; depois seções por
   // domínio. As telas de atendimento entram aqui quando existirem — o app nasce
   // com a casca, sem inventar tela vazia.
+  //
+  // ⚠️ "Vender" e "Bugs e sugestões" NÃO entram aqui. Os dois já têm um botão
+  // próprio no TopBar — o "+" abre o Vender, a baratinha abre os bugs — e são os
+  // MESMOS botões em todos os apps do hub. Repetir na sidebar cria dois caminhos
+  // para a mesma ação: quem aprende por um lugar não reconhece o outro, e o dia
+  // em que um deles mudar de comportamento a divergência não dá erro nenhum.
+  // As ROTAS continuam existindo (`/vender`, `/bugs`) — o que sai é o atalho
+  // duplicado.
   const sections: ShellNavSection[] = [
     { items: [
         { to: "/", label: "Visão geral", icon: LayoutDashboard, end: true },
         { to: "/chat", label: "Carbo Chat", icon: MessagesSquare, badge: <ChatBadge /> },
-    ] },
-    { label: "Ferramentas", items: [
-        { to: "/vender", label: "Vender", icon: ShoppingCart },
-        { to: "/bugs", label: "Bugs e sugestões", icon: Bug },
     ] },
   ];
 
