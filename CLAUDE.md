@@ -388,12 +388,25 @@ carbo_ecommerce_deduzir_estoque / _estornar_estoque    cron 8-59/10
    "já contabilizado", então removê-la é o que deixa o pedido elegível de novo
    se voltar a ficar pago. Um booleano faria o pedido ressuscitado nunca mais
    deduzir.
-5. ⚠️ **"Venda online ⇒ saiu da LogHouse" é PREMISSA, não dado.** Em ML Full e
+5. **A baixa vira linha auditável em Movimentações** (`stock_movements`, aba do
+   CD SP). Duas colunas existem só para isso: `ref_externa` guarda o pedido
+   (`nuvemshop:1234-5678`), porque `order_id` é FK de `carboze_orders` e não
+   aceita texto — e `executor` (`cron:ecommerce`) faz a tela escrever
+   "Automático" em vez de "—", que é o que ela mostra quando **não se sabe**
+   quem fez. A observação carrega o CÁLCULO (`3 × 5 un · SKU 124`); o
+   identificador fica na coluna, para dar para filtrar e copiar.
+6. **Saldo negativo em ruptura é O NÚMERO, não um defeito.** Confirmado pelo
+   dono do processo em 28/08/2026: a LogHouse zerou e as vendas continuam; o
+   negativo é quanto ela deve empacotar quando o lote chegar. ⚠️ Ao lançar a
+   reposição, o ajuste da tela recebe o **saldo final contado**, não o que
+   chegou — digitar "800" com saldo em −200 gera entrada de 1.000 e conta a
+   dívida duas vezes.
+7. ⚠️ **"Venda online ⇒ saiu da LogHouse" é PREMISSA, não dado.** Em ML Full e
    Amazon FBA a mercadoria já está com a plataforma e nada sai daqui. Nuvemshop,
    ML e Amazon estão ligados porque o dono do processo confirmou despacho
    próprio (28/08/2026) — **adotou Full, DESLIGA no mesmo dia**, senão a venda e
    a remessa de reposição contam a mesma saída duas vezes.
-6. ⚠️ **A pegada da etiqueta do Melhor Envio só mede a Nuvemshop.** ML, Amazon e
+8. ⚠️ **A pegada da etiqueta do Melhor Envio só mede a Nuvemshop.** ML, Amazon e
    Shopee deram 0% e isso **não** prova Full: prova que não passam pelo Melhor
    Envio (Mercado Envios, logística da Amazon, SPX). `0 de 102` é limpo demais
    para ser comportamento comercial — é um teste que não se aplica.
