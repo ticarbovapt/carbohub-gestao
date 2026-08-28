@@ -4,12 +4,13 @@
 // Mantido sem dependências além de lucide-react (só ícones).
 import {
   Home, Building2, TrendingUp, Boxes, Handshake, Store, Wallet, ShieldCheck, Megaphone, LifeBuoy,
+  MessagesSquare,
   type LucideIcon,
 } from "lucide-react";
 
 export const HUB_URL = "https://carbohub.com.br";
 
-export type AppKey = "controle" | "crm" | "ops" | "licenciados" | "lojas" | "financas" | "mkt" | "admin" | "ti";
+export type AppKey = "controle" | "crm" | "ops" | "licenciados" | "lojas" | "financas" | "mkt" | "admin" | "ti" | "atendimento";
 
 export interface EcoApp {
   key: AppKey;
@@ -31,6 +32,7 @@ export const HUB_APPS: EcoApp[] = [
   { key: "financas",    name: "Carbo Finanças",    tag: "Financeiro · NF e faturamento", href: "https://finance.carbohub.com.br",   icon: Wallet,      accent: "#14B8A6" },
   { key: "mkt",         name: "Carbo Marketing",   tag: "Marketing · Campanhas",       href: "https://mkt.carbohub.com.br",         icon: Megaphone,   accent: "#EC4899" },
   { key: "ti",          name: "Carbo TI",          tag: "Suporte · Demandas",          href: "https://ti.carbohub.com.br",          icon: LifeBuoy,    accent: "#0EA5E9" },
+  { key: "atendimento", name: "Carbo Atendimento", tag: "Atendimento · Clientes",      href: "https://atendimento.carbohub.com.br", icon: MessagesSquare, accent: "#9333EA" },
 ];
 
 // Admin não depende de interface — aparece só p/ quem "manda" (ver seesEverything).
@@ -49,6 +51,10 @@ const INTERFACE_TO_APPS: Record<string, AppKey[]> = {
   carbo_financas: ["financas"],
   carbo_mkt: ["mkt"],
   carbo_ti: ["ti"],
+  // ⚠️ SEM esta linha o app existe, a pessoa tem a flag, e ele simplesmente NAO
+  // APARECE no seletor de apps de nenhum dos sete — sem erro em lugar nenhum. A
+  // resolucao abaixo e estrita: interface sem entrada aqui nao vira app.
+  carbo_atendimento: ["atendimento"],
 };
 
 export function resolveAllowedApps(allowedInterfaces?: string[] | null): EcoApp[] {

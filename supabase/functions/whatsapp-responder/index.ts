@@ -29,6 +29,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { detalheDoErro, ehTransitorio } from "../_shared/metaTemplate.ts";
 
+import { ehTimeInterno } from "../_shared/interfacesInternas.ts";
 // deno-lint-ignore-file no-explicit-any
 
 const ALLOWED_ORIGINS = [
@@ -59,11 +60,6 @@ const TOKEN    = Deno.env.get("WHATSAPP_ACCESS_TOKEN") ?? "";
 const PHONE_ID = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID") ?? "1255756280958635";
 const VERSAO   = Deno.env.get("WHATSAPP_API_VERSION") ?? "v25.0";
 
-/** As mesmas interfaces do `carbo_e_time_interno`. Lista duplicada de propósito
- *  é dívida; aqui ela é inevitável (o SQL não alcança daqui), então fica com o
- *  aviso: mudou lá, muda aqui. */
-const INTERNAS = ["carbo_admin","carbo_crm","carbo_ops","carbo_ops_app",
-                  "carbo_financas","carbo_mkt","carbo_ti"];
 
 Deno.serve(async (req: Request) => {
   const h = { "Content-Type": "application/json", ...cors(req) };
@@ -81,8 +77,11 @@ Deno.serve(async (req: Request) => {
 
   const { data: perfil } = await supabase
     .from("profiles").select("allowed_interfaces, full_name").eq("id", user.id).maybeSingle();
-  const interno = (perfil?.allowed_interfaces ?? [])
-    .some((x: string) => INTERNAS.includes(String(x).toLowerCase()));
+  // ⚠️ Pergunta ao BANCO (`carbo_interface_e_interna`), que e a fonte unica desde
+  // a 20260927. Antes esta lista estava copiada AQUI, e ela nao aprendeu o
+  // `carbo_atendimento` quando o app novo nasceu — quem so tivesse Atendimento
+  // veria o campo na tela e levaria 403 no clique.
+  const interno = await ehTimeInterno(supabase, perfil?.allowed_interfaces ?? []);
   if (!interno) {
     // 403 e não 401: a sessão é válida, o acesso é que não existe. Um 401 aqui
     // faria a tela mandar a pessoa fazer login de novo, para o mesmo resultado.

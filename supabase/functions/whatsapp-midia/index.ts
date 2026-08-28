@@ -28,6 +28,7 @@ import { detalheDoErro } from "../_shared/metaTemplate.ts";
 import { conferirMidia, corpoDaMidia } from "../_shared/metaMidia.ts";
 import { webmParaOgg } from "../_shared/webmParaOgg.ts";
 
+import { ehTimeInterno } from "../_shared/interfacesInternas.ts";
 // deno-lint-ignore-file no-explicit-any
 
 const ALLOWED_ORIGINS = [
@@ -58,8 +59,6 @@ const TOKEN    = Deno.env.get("WHATSAPP_ACCESS_TOKEN") ?? "";
 const PHONE_ID = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID") ?? "1255756280958635";
 const VERSAO   = Deno.env.get("WHATSAPP_API_VERSION") ?? "v25.0";
 
-const INTERNAS = ["carbo_admin","carbo_crm","carbo_ops","carbo_ops_app",
-                  "carbo_financas","carbo_mkt","carbo_ti"];
 
 Deno.serve(async (req: Request) => {
   const h = { "Content-Type": "application/json", ...cors(req) };
@@ -78,8 +77,11 @@ Deno.serve(async (req: Request) => {
 
   const { data: perfil } = await supabase
     .from("profiles").select("allowed_interfaces, full_name").eq("id", user.id).maybeSingle();
-  const interno = (perfil?.allowed_interfaces ?? [])
-    .some((x: string) => INTERNAS.includes(String(x).toLowerCase()));
+  // ⚠️ Pergunta ao BANCO (`carbo_interface_e_interna`), que e a fonte unica desde
+  // a 20260927. Antes esta lista estava copiada AQUI, e ela nao aprendeu o
+  // `carbo_atendimento` quando o app novo nasceu — quem so tivesse Atendimento
+  // veria o campo na tela e levaria 403 no clique.
+  const interno = await ehTimeInterno(supabase, perfil?.allowed_interfaces ?? []);
   if (!interno) return json({ error: "sem acesso ao atendimento" }, 403);
 
   if (!TOKEN) return json({ error: "WHATSAPP_ACCESS_TOKEN não está configurado." }, 500);
