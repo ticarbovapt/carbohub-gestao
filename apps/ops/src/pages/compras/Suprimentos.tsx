@@ -13,7 +13,7 @@ import {
 import {
   Package, MapPin, Users, Cloud, Send, AlertCircle, ArrowLeftRight, Settings2, Building2,
   ArrowDownToLine, ArrowUpFromLine, Boxes, Layers, AlertTriangle, Activity, Info, Link2, Truck,
-  CheckCircle, XCircle, FileText, Loader2, Search,
+  CheckCircle, XCircle, FileText, Loader2, Search, Globe,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -87,6 +87,17 @@ const ABA_PADRAO = ABAS[0].id;
 const abaValeNoHub = (abaId: string, hub: HubId) => {
   const a = ABAS.find((x) => x.id === abaId);
   return !!a && (!("hubs" in a) || (a.hubs as readonly string[]).includes(hub));
+};
+
+// ⚠️ `capitalize` no CSS transformava `ecommerce` em "Ecommerce" — palavra que
+// ninguém usa e que não diz de onde veio a baixa. Rótulo é decisão, não efeito
+// colateral de estilo.
+const ORIGEM_LABEL: Record<string, string> = {
+  ecommerce: "Venda on-line",
+  venda: "Venda",
+  ajuste: "Ajuste",
+  transferencia: "Transferência",
+  producao: "Produção",
 };
 
 const PERIODOS = [{ v: "7d", label: "Últimos 7 dias" }, { v: "30d", label: "Últimos 30 dias" }, { v: "mes", label: "Este mês" }];
@@ -436,8 +447,20 @@ export default function Suprimentos() {
                         </CarboBadge>
                       </TableCell>
                       <TableCell className="text-right font-semibold tabular-nums">{m.qtd.toLocaleString("pt-BR")} {m.unidade}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{m.por ?? "—"}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground capitalize">{m.origem}{m.observacoes ? <span className="ml-1 text-xs">· {m.observacoes}</span> : ""}</TableCell>
+                      {/* ⚠️ "Automático" e "—" NÃO são a mesma coisa: um diz
+                          que o sistema fez, o outro que ninguém sabe quem fez.
+                          A dedução do e-commerce roda pelo pg_cron, sem sessão,
+                          então `created_by` é nulo — e sem esta distinção ela
+                          apareceria igual a movimento antigo sem autor. */}
+                      <TableCell className="text-sm text-muted-foreground">
+                        {m.por ?? (m.executor
+                          ? <span className="text-carbo-blue" title={m.executor}>Automático</span>
+                          : "—")}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        <span className="capitalize">{ORIGEM_LABEL[m.origem] ?? m.origem}</span>
+                        {m.observacoes ? <span className="ml-1 text-xs">· {m.observacoes}</span> : ""}
+                      </TableCell>
                       {/* Coluna própria pro card de origem. O número já aparecia
                           dentro do texto da observação, mas ali é TEXTO: não dá
                           pra filtrar, ordenar nem copiar sem catar no meio da
@@ -453,9 +476,20 @@ export default function Suprimentos() {
                             <FileText className="h-3 w-3 shrink-0" />{m.orderNumber}
                           </span>
                         )}
+                        {/* Pedido de e-commerce: id de TEXTO, não cabe em
+                            `order_id` (uuid, FK de carboze_orders). Vem da
+                            coluna própria `ref_externa`. */}
+                        {m.refExterna && (
+                          <span
+                            className={`inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 font-mono ${m.opNumber || m.orderNumber ? "ml-1" : ""}`}
+                            title="Pedido de e-commerce (plataforma:pedido)"
+                          >
+                            <Globe className="h-3 w-3 shrink-0" />{m.refExterna}
+                          </span>
+                        )}
                         {/* Ajuste manual e transferência não vêm de card nenhum —
                             e o traço diz isso melhor que célula vazia. */}
-                        {!m.opNumber && !m.orderNumber && <span className="text-muted-foreground">—</span>}
+                        {!m.opNumber && !m.orderNumber && !m.refExterna && <span className="text-muted-foreground">—</span>}
                       </TableCell>
                     </TableRow>
                   ))}

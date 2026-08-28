@@ -19,7 +19,7 @@ export interface StockMovement {
   tipo: "entrada" | "saida";
   qtd: number;
   unidade: string;
-  origem: string;          // PC | OP | ajuste
+  origem: string;          // PC | OP | ajuste | ecommerce
   observacoes: string | null;
   warehouseCode: string | null;
   por: string | null;      // nome de quem fez
@@ -29,6 +29,18 @@ export interface StockMovement {
   orderNumber: string | null;
   opId: string | null;
   opNumber: string | null;
+  /**
+   * Documento de origem que NÃO é id do nosso banco — hoje o pedido de
+   * e-commerce (`nuvemshop:1234-5678`). Fica em coluna própria, não dentro da
+   * observação: número no meio de uma frase não dá para filtrar nem copiar.
+   */
+  refExterna: string | null;
+  /**
+   * Quem executou quando não foi gente logada (`cron:ecommerce`). ⚠️ Existe
+   * para a tela não mostrar "—" tanto para "o sistema fez" quanto para "não se
+   * sabe quem fez" — duas coisas diferentes com a mesma cara.
+   */
+  executor: string | null;
 }
 
 /**
@@ -71,7 +83,7 @@ export function useStockMovements(
 
       let q = db
         .from("stock_movements")
-        .select("id, product_id, warehouse_id, tipo, quantidade, origem, observacoes, created_at, created_by, order_id, op_id")
+        .select("id, product_id, warehouse_id, tipo, quantidade, origem, observacoes, created_at, created_by, order_id, op_id, ref_externa, executor")
         .eq("warehouse_id", hubId)
         .order("created_at", { ascending: false })
         .limit(limit);
@@ -133,6 +145,8 @@ export function useStockMovements(
           orderNumber: m.order_id ? ordNum.get(m.order_id as string) ?? null : null,
           opId: (m.op_id as string) ?? null,
           opNumber: m.op_id ? opNum.get(m.op_id as string) ?? null : null,
+          refExterna: (m.ref_externa as string) ?? null,
+          executor: (m.executor as string) ?? null,
         };
       });
     },
