@@ -124,6 +124,21 @@ begin
       || coalesce(' · ' || nullif(NEW.product_name, ''), ''),
     'ecommerce_order', NEW.id);
   return NEW;
+
+-- ⚠️ ESTE HANDLER JÁ EXISTIA em produção e quase foi perdido nesta reescrita.
+--
+-- Sem ele, um erro dentro de `notify_time_interno` ABORTA O INSERT DO PEDIDO: a
+-- venda não entraria em `ecommerce_orders` porque a notificação falhou. Trocar
+-- uma venda perdida por um aviso perdido é o pior negócio possível — a venda é
+-- o dado, o aviso é conveniência.
+--
+-- ⚠️ Mas engolir erro calado é a doença que este repo persegue. Por isso o
+-- `raise warning`: o pedido entra do mesmo jeito, e a falha passa a existir no
+-- log do Postgres em vez de sumir.
+exception when others then
+  raise warning '[venda_notify] aviso falhou para % %: %',
+    NEW.platform, NEW.order_id, sqlerrm;
+  return NEW;
 end $$;
 
 comment on function public.trg_ecommerce_sale_notify is
