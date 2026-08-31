@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { isCarbohubDomain, goToHubLogin } from "@/lib/sso";
 
 export function ProtectedRoute({ children }: { children: ReactNode }) {
-  const { user, hasTiInterface, isLoading, signOut } = useAuth();
+  const { user, profile, hasTiInterface, isLoading, signOut } = useAuth();
 
   if (isLoading) {
     return (
@@ -30,10 +30,12 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
     return <Navigate to="/login" replace />;
   }
 
-  // Logado mas sem a flag carbo_ti liberada — bloqueia mesmo com a URL direta.
-  // O acesso ao app do TI precisa estar liberado no Admin
-  // (profiles.allowed_interfaces inclui "carbo_ti").
-  if (!hasTiInterface) {
+  // Logado mas sem entrada liberada — bloqueia mesmo com a URL direta.
+  // DUAS condições, e a primeira não é redundante: quem não tem linha em
+  // `profiles` (lojista/licenciado usam a MESMA tabela) não é gente do sistema
+  // interno e não entra, mesmo que um dia a flag mude de forma.
+  // A segunda é a flag `carbo_ti` (profiles.allowed_interfaces).
+  if (!profile || !hasTiInterface) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-background px-6 text-center">
         <div className="h-14 w-14 rounded-2xl bg-destructive/10 flex items-center justify-center">
@@ -42,8 +44,9 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
         <div>
           <h1 className="text-xl font-semibold">Acesso restrito</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Você não tem o Carbo TI liberado. Peça a um gestor para habilitar
-            seu acesso ao app do TI.
+            {profile
+              ? "Você não tem o Carbo TI liberado. Peça a um gestor para habilitar seu acesso ao app do TI."
+              : "Esta conta não tem cadastro no sistema interno da Carbo. Fale com um gestor."}
           </p>
         </div>
         <Button variant="outline" onClick={signOut}>Sair</Button>

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 // Login é ÚNICO no Hub (carbohub.com.br). O acesso ao Marketing é liberado pelo
 // Admin via allowed_interfaces (carbo_mkt) — nem todo mundo enxerga o app.
 export function ProtectedRoute({ children }: { children: ReactNode }) {
-  const { user, canAccess, isLoading } = useAuth();
+  const { user, profile, canAccess, isLoading } = useAuth();
 
   // Preview/dev (fora de *.carbohub.com.br): o cookie SSO cross-subdomínio não
   // chega aqui; renderiza direto só para visualização (gate real roda no subdomínio).
@@ -30,17 +30,24 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
     );
   }
 
-  if (!canAccess) {
+  // Logado, mas sem entrada: ou não tem linha em `profiles` (lojista/licenciado
+  // usam a MESMA tabela — não é gente do sistema interno), ou o Admin não
+  // liberou o Marketing. O `!profile` está EXPLÍCITO aqui, e não só dentro do
+  // `canAccess`, para a tela dizer QUAL dos dois casos aconteceu.
+  if (!profile || !canAccess) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-background px-6 text-center">
         <div className="h-14 w-14 rounded-2xl bg-destructive/10 flex items-center justify-center">
           <ShieldAlert className="h-7 w-7 text-destructive" />
         </div>
         <div>
-          <h1 className="text-xl font-semibold">Acesso ao Marketing não liberado</h1>
+          <h1 className="text-xl font-semibold">
+            {profile ? "Acesso ao Marketing não liberado" : "Conta sem cadastro interno"}
+          </h1>
           <p className="text-sm text-muted-foreground mt-1 max-w-sm">
-            Seu perfil não tem o Carbo Marketing habilitado. Solicite a liberação
-            ao time de gestão (feita no Carbo Admin).
+            {profile
+              ? "Seu perfil não tem o Carbo Marketing habilitado. Solicite a liberação ao time de gestão (feita no Carbo Admin)."
+              : "Esta conta não tem cadastro no sistema interno da Carbo. Fale com um gestor."}
           </p>
         </div>
         <Button variant="outline" onClick={() => { window.location.href = `${HUB_URL}/home`; }}>
