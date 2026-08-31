@@ -1,52 +1,65 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- A contagem física vira MARCO, e o marco por DATA não precisa andar
+-- Contagem física do HUB-SP — e por que NÃO se avança o marco
 --
--- ── O que aconteceu ──────────────────────────────────────────────────────
+-- ── ⭐ O que a medição de 31/08 16:30 mostrou ────────────────────────────
 --
--- A `20260965` corrigiu o gatilho (BLOCO 1) e o BLOCO 3 avançaria o marco. Só o
--- BLOCO 1 foi rodado. Na rodada seguinte a dedução baixou os 3 dias acumulados
--- EM CIMA de um saldo que tinha acabado de ser contado à mão na LogHouse — a
--- mesma saída contada duas vezes.
+-- `carbo_ecommerce_deduzir_estoque()` voltou **VAZIO**. Não há atraso: o cron
+-- está em dia e tudo que era elegível já tem linha no ledger. Os saldos foram
+-- escritos hoje (CZ100 às 16:08, o kit às 16:18) pela própria dedução.
 --
--- ── ⚠️ Por que eu NÃO vou mandar avançar o marco desta vez ───────────────
+-- Isso apaga metade do problema previsto. **Não existe nada para semear no
+-- ledger** — a versão anterior desta migração criava uma coluna e um INSERT que
+-- hoje não inseririam uma linha sequer. Mecanismo que não é usado é mecanismo
+-- que ninguém mantém, então ele saiu.
 --
--- Marco zero é filtro por DATA: `e.ordered_at > c.deduz_a_partir_de`. Ele não
--- pergunta se aquela venda já foi contabilizada — pergunta se ela é ANTIGA. As
--- duas coisas coincidem no primeiro dia e divergem depois:
+-- Sobra UMA coisa a fazer: ajustar o saldo para o que foi contado na prateleira.
 --
---   Pedido feito ANTES da contagem, ainda `pending` naquele momento.
---   A mercadoria estava na prateleira e ENTROU na contagem.
---   Amanhã ele vira `paid`, sai da prateleira de verdade...
---   ...e o marco por data o considera "velho" e NUNCA o deduz.
+-- ── ⚠️ E sobra um perigo NOVO, que o ajuste ingênuo cria ────────────────
 --
--- O saldo fica alto para sempre, em silêncio. A `20260965` já tinha notado isso
--- e chamou de "resíduo pequeno, limitado e conhecido" — era verdade naquele dia,
--- quando a alternativa era um erro de tamanho desconhecido. Hoje a alternativa é
--- melhor, porque o LEDGER existe e faz a pergunta certa.
+-- `quantity = <contado>` sobrescreve o saldo com um número absoluto. Mas a
+-- contagem descreve a prateleira num INSTANTE, e o cron deduz a cada 10 min:
 --
--- `carbo_estoque_consumo` significa exatamente "esta saída já está
--- contabilizada". A contagem física da LogHouse contabilizou tudo que estava
--- vendido até o momento dela. Então o que essas vendas precisam é de uma LINHA
--- NO LEDGER — não de uma data que as declare velhas.
+--     16:30  você conta 800 na prateleira
+--     16:38  o cron deduz 5 de uma venda nova   → saldo vai a 795 (certo)
+--     17:10  você roda `quantity = 800`         → a venda das 16:38 SUMIU
 --
---   marco por data   →  bloqueia por IDADE      →  pega o pending por engano
---   linha no ledger  →  bloqueia por CONTAGEM   →  o pending deduz na hora certa
+-- O erro é silencioso e do tamanho do tempo que você levou entre contar e
+-- rodar. É o mesmo defeito da dupla contagem, ao contrário: lá a saída era
+-- contada duas vezes, aqui ela deixa de ser contada.
 --
--- O índice único já é a trava; esta migração só o alimenta com a verdade.
+-- Por isso o bloco pede o INSTANTE da contagem e desconta sozinho o que a
+-- dedução automática já tirou depois dele. Contar às 16:30 e rodar às 23:00
+-- continua dando o número certo.
 --
--- ⚠️ O marco fica onde está. Ele continua sendo a rede contra "religar e baixar
--- 90 dias" — mas quem impede a dupla contagem de HOJE é o ledger.
+-- ── Por que o marco zero fica ONDE ESTÁ ──────────────────────────────────
 --
--- ⚠️ RODE EM BLOCOS, e o BLOCO 2 é uma transação só: não quebre no meio.
+-- Marco zero é filtro por DATA (`ordered_at > deduz_a_partir_de`): ele pergunta
+-- se a venda é ANTIGA, não se ela já foi contabilizada. Avançá-lo para agora
+-- pegaria por engano todo pedido feito antes da contagem que ainda não é venda
+-- — a mercadoria estava na prateleira, ENTROU na contagem, e quando ele for
+-- pago vai sair de verdade sem nunca ser descontado.
+--
+-- ⭐ Medido agora, e não é pequeno: **50 pedidos pendentes, 68 itens**
+-- (nuvemshop 44, mercadolivre 5, shopee 1). Cada um é uma saída futura que o
+-- marco avançado tornaria invisível para sempre.
+--
+-- Como o ledger já cobre tudo que foi deduzido, avançar o marco não protegeria
+-- de nada hoje — só criaria esse vazamento. Ele fica como está, cumprindo o
+-- papel para o qual foi feito: impedir que religar um canal baixe 90 dias.
+--
+-- ⚠️ RODE EM BLOCOS. O BLOCO 1 é uma transação só — não quebre no meio.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 
 -- ╔═══════════════════════════════════════════════════════════════════════╗
--- ║ BLOCO 0 — o estado de agora (medir antes de escrever)                 ║
+-- ║ BLOCO 0 — reconferir na hora de rodar (o estado muda a cada 10 min)   ║
 -- ╚═══════════════════════════════════════════════════════════════════════╝
 
--- (0.a) ⭐ O saldo que o sistema acha que tem no HUB-SP. É este número que você
---       vai comparar com a contagem da LogHouse.
+-- (0.a) ⭐ TEM DE VIR VAZIO. Se vier com linhas, o cron atrasou de novo e
+--       elas deduziriam POR CIMA da contagem — pare e me chame.
+select * from public.carbo_ecommerce_deduzir_estoque();
+
+-- (0.b) O saldo de agora, para comparar com o que você contou.
 select p.product_code, p.name, ws.quantity as saldo_no_sistema, ws.updated_at
 from public.warehouse_stock ws
 join public.mrp_products p on p.id = ws.product_id
@@ -54,145 +67,93 @@ join public.warehouses  w on w.id = ws.warehouse_id
 where w.code = 'HUB-SP'
 order by p.product_code;
 
--- (0.b) ⭐ O que a PRÓXIMA rodada do cron deduziria se você não fizesse nada.
---       Estas são as linhas em risco de dupla contagem: se elas já estão
---       refletidas na contagem física, precisam de linha no ledger.
-select produto, count(*) as pedidos, sum(unidades) as unidades,
-       min(order_id) as exemplo
-from public.carbo_ecommerce_deduzir_estoque()
-group by 1 order by 3 desc;
-
--- (0.c) O marco atual de cada canal, para o registro.
-select platform, warehouse_code, ativo, deduz_a_partir_de
-from public.carbo_canal_estoque order by platform;
-
--- (0.d) ⚠️ O resíduo que o marco por data teria criado, e que o ledger evita:
---       pedidos ANTERIORES a agora que ainda NÃO são venda. Cada um destes é
---       uma unidade que sairia da prateleira sem nunca ser descontada.
-select o.platform, count(*) as pedidos_pendentes, sum(o.quantity) as itens
-from public.ecommerce_orders o
-join public.carbo_canal_estoque c on c.platform = o.platform and c.ativo
-where not public.ecommerce_status_e_venda(o.status)
-  and o.ordered_at > now() - interval '30 days'
-group by 1 order by 2 desc;
-
 
 -- ╔═══════════════════════════════════════════════════════════════════════╗
--- ║ BLOCO 1 — a coluna que distingue as duas formas de contabilizar       ║
+-- ║ BLOCO 1 — o ajuste, numa transação só                                 ║
 -- ╚═══════════════════════════════════════════════════════════════════════╝
 --
--- Sem ela, a linha semeada aqui fica idêntica a uma dedução de verdade, e daqui
--- a três meses ninguém sabe por que o movimento não aparece em Movimentações.
--- Auditoria que não distingue as duas coisas é auditoria que engana.
-
-alter table public.carbo_estoque_consumo
-  add column if not exists contabilizado_por text not null default 'deducao';
-
-comment on column public.carbo_estoque_consumo.contabilizado_por is
-  '`deducao` = a linha baixou o saldo e gerou movimento em stock_movements. `contagem_fisica` = a saída já estava refletida numa contagem de galpão, então a linha existe só para IMPEDIR que a dedução automática a conte de novo — ela não mexeu em saldo nenhum e por isso não tem movimento correspondente.';
-
-
--- ╔═══════════════════════════════════════════════════════════════════════╗
--- ║ BLOCO 2 — a contagem física, numa transação só                        ║
--- ╚═══════════════════════════════════════════════════════════════════════╝
+-- ⚠️ EDITE AS DUAS COISAS ABAIXO e rode o bloco INTEIRO:
+--   1. `contado_em` — o instante em que a prateleira foi contada;
+--   2. a tabela `contagem` — o SALDO FINAL contado de cada produto.
 --
--- ⚠️ EDITE A TABELA `contagem` ABAIXO antes de rodar, e rode o bloco INTEIRO.
+-- ⚠️ É o saldo final na prateleira, NUNCA o que chegou de reposição. Com saldo
+-- em −200, digitar "800" porque chegaram 800 gera entrada de 1.000 e conta a
+-- dívida duas vezes. O sistema calcula a diferença sozinho.
 --
--- ⚠️ O número que entra é o SALDO FINAL CONTADO na prateleira, NUNCA o que
--- chegou de reposição. Com saldo em −200, digitar "800" porque chegaram 800
--- gera entrada de 1.000 e conta a dívida duas vezes — o sistema calcula a
--- diferença sozinho.
---
--- ⚠️ É uma transação porque o cron roda a cada 10 min: semear o ledger e
--- ajustar o saldo em execuções separadas deixa uma janela em que a rodada
--- entra no meio e deduz o que a contagem já tinha descontado.
+-- ⚠️ Produto fora da lista NÃO é tocado. Ausência aqui significa "não contei",
+-- nunca "está zerado" — e `CARB-SACH-10ML` (sachê avulso) tem saldo 0 legítimo,
+-- porque a LogHouse guarda kits fechados, não sachês soltos.
 
 begin;
 
--- Trava o canal enquanto mexemos. Se o cron disparar agora, ele espera.
-select 1 from public.carbo_canal_estoque where ativo for update;
-
-with contagem(product_code, saldo_contado) as (
+with parametros as (
+  select
+    -- ┌─ INSTANTE DA CONTAGEM ─────────────────────────────────────────────┐
+    timestamptz '2026-08-31 16:30:00-03'   as contado_em
+    -- └────────────────────────────────────────────────────────────────────┘
+),
+contagem(product_code, saldo_contado) as (
   values
     -- ┌──────────────────────────┬─────────┐
     -- │ código do produto        │ contado │
     ('CZ100'                      , 0),
     ('KIT-CARB-SACH-10ML'         , 0)
-    -- Acrescente linhas se contou mais produtos. Produto fora desta lista NÃO
-    -- é tocado — ausência aqui significa "não contei", nunca "está zerado".
+    -- └──────────────────────────┴─────────┘
 ),
 alvo as (
-  select w.id as warehouse_id, p.id as product_id, p.product_code,
-         c.saldo_contado::integer                     as contado,
-         coalesce(ws.quantity, 0)::integer            as antes
+  select w.id            as warehouse_id,
+         p.id            as product_id,
+         p.product_code,
+         c.saldo_contado::integer          as contado,
+         coalesce(ws.quantity, 0)::integer as antes
   from contagem c
   join public.mrp_products p on p.product_code = c.product_code
   cross join (select id from public.warehouses where code = 'HUB-SP') w
   left join public.warehouse_stock ws
          on ws.warehouse_id = w.id and ws.product_id = p.id
 ),
-
--- ── (2.1) O LEDGER PRIMEIRO ──────────────────────────────────────────────
---
--- Toda venda elegível que ainda não tem linha ganha uma agora, marcada como
--- `contagem_fisica`. Elas param de ser candidatas à dedução — não por serem
--- antigas, mas por já estarem contadas.
---
--- ⚠️ Isto NÃO mexe em warehouse_stock e NÃO gera stock_movements, de propósito:
--- o saldo já reflete estas saídas. Um movimento aqui seria a dupla contagem que
--- viemos evitar.
-semeadas as (
-  insert into public.carbo_estoque_consumo
-    (origem_tipo, origem_chave, warehouse_id, product_id, unidades,
-     ocorreu_em, platform, platform_sku, quantidade, fator, contabilizado_por)
-  select 'ecommerce',
-         e.platform || ':' || e.order_id,
-         w.id,
-         e.product_id_alvo,
-         e.unidades_a_deduzir::integer,
-         e.ordered_at,
-         e.platform,
-         e.product_sku,
-         e.qtd_vendida,
-         e.fator,
-         'contagem_fisica'
-  from public.carbo_estoque_ensaio e
-  join public.carbo_canal_estoque c on c.platform = e.platform
-  join public.warehouses w on w.code = c.warehouse_code
-  where c.ativo
-    and c.deduz_a_partir_de is not null
-    and e.ordered_at > c.deduz_a_partir_de
-    -- ⭐ O CORTE: só o que já estava vendido quando a prateleira foi contada.
-    --    Venda que chegar depois deste instante deduz normalmente.
-    and e.ordered_at <= now()
-    and e.product_id_alvo is not null
-    and e.unidades_a_deduzir > 0
-  on conflict (origem_tipo, origem_chave, product_id) do nothing
-  returning 1
+-- ⭐ O que a dedução automática mexeu DEPOIS da contagem. Sem isto, o ajuste
+--    apagaria essas vendas — o erro do cabeçalho, do tamanho do tempo entre
+--    contar e rodar. Saída conta negativo, estorno conta positivo.
+depois_da_contagem as (
+  select a.product_id,
+         coalesce(sum(case when m.tipo = 'saida' then -m.quantidade
+                                                 else  m.quantidade end), 0)::integer as delta
+  from alvo a
+  left join public.stock_movements m
+         on m.product_id   = a.product_id
+        and m.warehouse_id = a.warehouse_id
+        and m.origem       = 'ecommerce'
+        and m.created_at   > (select contado_em from parametros)
+  group by a.product_id
 ),
-
--- ── (2.2) O SALDO, com movimento auditável ───────────────────────────────
---
--- A diferença vira UMA linha em Movimentações, com o cálculo escrito. Ajuste
--- sem rastro é saldo que ninguém consegue explicar depois.
+final as (
+  select a.*, d.delta, (a.contado + d.delta) as saldo_alvo
+  from alvo a join depois_da_contagem d on d.product_id = a.product_id
+),
+-- O ajuste vira UMA linha em Movimentações, com a conta escrita. Ajuste sem
+-- rastro é saldo que ninguém consegue explicar três meses depois.
 mov as (
   insert into public.stock_movements
     (product_id, warehouse_id, tipo, quantidade, origem, observacoes, executor)
-  select a.product_id, a.warehouse_id,
-         case when a.contado >= a.antes then 'entrada' else 'saida' end,
-         abs(a.contado - a.antes),
+  select f.product_id, f.warehouse_id,
+         case when f.saldo_alvo >= f.antes then 'entrada' else 'saida' end,
+         abs(f.saldo_alvo - f.antes),
          'ajuste',
-         'Contagem física LogHouse · sistema ' || a.antes
-           || ' → contado ' || a.contado
-           || ' (' || case when a.contado >= a.antes then '+' else '' end
-           || (a.contado - a.antes) || ')',
+         'Contagem física LogHouse · contado ' || f.contado
+           || ' em ' || to_char((select contado_em from parametros)
+                                at time zone 'America/Sao_Paulo', 'DD/MM HH24:MI')
+           || case when f.delta <> 0
+                   then ' · ' || f.delta || ' de venda on-line depois da contagem'
+                   else '' end
+           || ' · sistema ' || f.antes || ' → ' || f.saldo_alvo,
          'contagem:loghouse'
-  from alvo a
-  where a.contado <> a.antes          -- sem diferença, sem movimento
+  from final f
+  where f.saldo_alvo <> f.antes        -- sem diferença, sem movimento
   returning 1
 )
 insert into public.warehouse_stock (warehouse_id, product_id, quantity)
-select a.warehouse_id, a.product_id, a.contado from alvo a
+select f.warehouse_id, f.product_id, f.saldo_alvo from final f
 on conflict (warehouse_id, product_id)
 do update set quantity = excluded.quantity, updated_at = now();
 
@@ -200,15 +161,10 @@ commit;
 
 
 -- ╔═══════════════════════════════════════════════════════════════════════╗
--- ║ BLOCO 3 — conferência (rode logo depois, na mesma sessão)             ║
+-- ║ BLOCO 2 — conferência                                                 ║
 -- ╚═══════════════════════════════════════════════════════════════════════╝
 
--- (3.a) ⭐ O TESTE QUE IMPORTA: o ensaio tem de vir VAZIO.
---       Qualquer linha aqui é uma venda que ainda deduziria por cima da
---       contagem — ou seja, dupla contagem que sobrou.
-select * from public.carbo_ecommerce_deduzir_estoque();
-
--- (3.b) O saldo ficou igual ao contado.
+-- (2.a) O saldo ficou no valor esperado (contado, menos o que saiu depois).
 select p.product_code, ws.quantity as saldo_agora, ws.updated_at
 from public.warehouse_stock ws
 join public.mrp_products p on p.id = ws.product_id
@@ -216,14 +172,7 @@ join public.warehouses  w on w.id = ws.warehouse_id
 where w.code = 'HUB-SP'
 order by p.product_code;
 
--- (3.c) Quantas linhas foram semeadas, e a separação continua legível.
-select contabilizado_por, count(*) as linhas, sum(unidades) as unidades,
-       min(ocorreu_em)::date as de, max(ocorreu_em)::date as ate
-from public.carbo_estoque_consumo
-where origem_tipo = 'ecommerce'
-group by 1 order by 2 desc;
-
--- (3.d) O ajuste aparece em Movimentações, com o cálculo na observação.
+-- (2.b) O ajuste aparece em Movimentações com a conta na observação.
 select m.created_at, p.product_code, m.tipo, m.quantidade, m.origem,
        m.executor, m.observacoes
 from public.stock_movements m
@@ -231,7 +180,10 @@ join public.mrp_products p on p.id = m.product_id
 where m.origem = 'ajuste' and m.executor = 'contagem:loghouse'
 order by m.created_at desc limit 10;
 
--- (3.e) ⚠️ A garantia permanente, a mesma da 20260967: nada fora da lista
+-- (2.c) ⭐ Continua VAZIO: o ajuste não reabriu nada para deduzir.
+select * from public.carbo_ecommerce_deduzir_estoque();
+
+-- (2.d) ⚠️ A garantia permanente (a mesma da 20260967): nada fora da lista
 --       branca pode ter linha no ledger. Tem de vir ZERO.
 select count(*) as consumos_indevidos
 from public.carbo_estoque_consumo k
@@ -241,17 +193,21 @@ where k.origem_tipo = 'ecommerce'
 
 
 -- ╔═══════════════════════════════════════════════════════════════════════╗
--- ║ BLOCO 4 — a próxima venda (rode amanhã, não agora)                    ║
+-- ║ BLOCO 3 — amanhã, não agora                                           ║
 -- ╚═══════════════════════════════════════════════════════════════════════╝
 
--- (4.a) Vendas novas deduzindo de verdade: `deducao`, com movimento.
-select k.contabilizado_por, k.platform, k.origem_chave, k.unidades, k.ocorreu_em
+-- (3.a) As vendas novas continuam deduzindo, agora sobre um saldo confiável.
+select k.platform, k.origem_chave, k.unidades, k.ocorreu_em
 from public.carbo_estoque_consumo k
 where k.origem_tipo = 'ecommerce' and k.ocorreu_em > now() - interval '1 day'
 order by k.ocorreu_em desc;
 
--- (4.b) O cron continua limpo. `failed` aqui foi o sintoma de três dias.
-select status, count(*), max(end_time) as ultimo
-from cron.job_run_details
-where end_time > now() - interval '2 hours'
-group by 1;
+-- (3.b) ⚠️ Os 50 pedidos pendentes de hoje vão virando venda e deduzindo. Esta
+--       consulta mostra o funil encolhendo — é a prova de que NÃO avançar o
+--       marco foi o certo: com o marco avançado, nenhum deles apareceria aqui.
+select o.platform, count(*) as pendentes, sum(o.quantity) as itens
+from public.ecommerce_orders o
+join public.carbo_canal_estoque c on c.platform = o.platform and c.ativo
+where not public.ecommerce_status_e_venda(o.status)
+  and o.ordered_at > now() - interval '30 days'
+group by 1 order by 2 desc;
