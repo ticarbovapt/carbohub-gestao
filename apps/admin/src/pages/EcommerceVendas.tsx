@@ -560,7 +560,11 @@ function PlatformView({ platform, period, custom }: { platform: EcommercePlatfor
         <div className="grid grid-cols-2 lg:grid-cols-1 gap-3">
           <MetricCard
             label="Unidades Vendidas" value={fmtNum(m.saleUnits)}
-            sub={`frascos, já com multiplicador de pack · ${fmtNum(m.totalUnitsSold)} contando não pagos e cancelados`}
+            /* ⚠️ "frascos" estava errado desde a correção de unidades: o número
+               conta o que o CLIENTE levou, e o kit de sachês entrega SACHÊS, não
+               frascos. Rótulo que nomeia o produto errado é pior que rótulo
+               genérico — ele ensina uma leitura falsa do painel. */
+            sub={`unidades entregues ao cliente · ${fmtNum(m.totalUnitsSold)} contando não pagos e cancelados`}
             icon={<Boxes className="h-4 w-4" />} accent={cfg.color}
           />
           <MetricCard
@@ -869,7 +873,7 @@ function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?:
           />
           <MetricCard
             label="Unidades" value={fmtNum(totalUnits)}
-            sub="frascos, já com multiplicador de pack"
+            sub="unidades entregues ao cliente, já com o multiplicador do pack"
             icon={<Boxes className="h-4 w-4" />} accent="#38bdf8"
           />
           <MetricCard

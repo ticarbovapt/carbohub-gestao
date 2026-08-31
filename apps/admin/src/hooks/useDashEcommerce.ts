@@ -392,17 +392,23 @@ function buildMetrics(
  * de informação, e ela precisa aparecer como ausência na tela — número chutado
  * que se passa por medição é a doença que este repo já pagou várias vezes.
  *
- * A `shopee: 0.12` entrou como CHUTE e continua sem medição — é o precedente
- * que a PayT não deve repetir. Cadastre a taxa real pelo cartão "Comissão da
- * Plataforma" (ela vale a partir da data informada) em vez de escrever um
- * número aqui.
+ * A `shopee: 0.12` era um CHUTE herdado e foi para `null` em 31/08/2026 — ela
+ * aparecia como comissão apurada e mexia na margem de todo relatório do canal.
+ * Cadastre a taxa real pelo cartão "Comissão da Plataforma" (ela vale a partir
+ * da data informada) em vez de escrever um número aqui: número no código não
+ * tem data, e comissão muda.
  */
 export const PLATFORM_FEE_DEFAULT: Record<EcommercePlatform, number | null> = {
   mercadolivre: 0.16,
   amazon:       0.15,
   nuvemshop:    0,      // loja própria — sem comissão de marketplace
   payt:         null,   // ⚠️ NÃO MEDIDA — checkout próprio, taxa ainda desconhecida
-  shopee:       0.12,   // ⚠️ CHUTE não medido (herdado) — confirmar com o extrato
+  // ⚠️ Era `0.12`, um CHUTE herdado que nunca foi medido — e que a tela exibia
+  // como se fosse comissão apurada, mexendo na margem de todo relatório da
+  // Shopee. Vira `null` pelo mesmo motivo da PayT: ausência tem de aparecer
+  // como ausência. A taxa real entra pelo cartão "Comissão da Plataforma", que
+  // guarda a data a partir da qual ela vale — número aqui não tem data.
+  shopee:       null,
 };
 
 function getRateForDate(history: CommissionRate[], platform: EcommercePlatform, date: string): number {
