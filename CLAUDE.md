@@ -537,6 +537,19 @@ contornava isso em `/ecommerce/mensagens`, que ele manteve igual ao admin.
 Por isso o Atendimento monta as duas em `/ecommerce/...` — nome estranho para o
 app, e ainda assim melhor que link morto.
 
+⚠️ **O Ops tem um APELIDO `/ecommerce/esteira` → `/logistica/esteira`** (31/08),
+e ele preserva a query. O `MensagensCliente` é idêntico nos três e cai no padrão
+do admin quando não recebe `?voltar=` — link direto, favorito, aba restaurada.
+Sem o apelido, esse botão levava para a **home** do Ops. O redirecionamento
+copia o `search` de propósito: `<Navigate>` descarta a query, e é o `?card=` que
+abre o pedido.
+
+⚠️ **O parâmetro que abre o card chama-se `card`**, e só ele: a Esteira lê
+`params.get("card")` e IGNORA qualquer outro nome. Um link com `?pedido=` abre a
+tela com o card fechado e não dá erro — foi assim que o chip novo de
+Movimentações (`Suprimentos.tsx` do Ops) nasceu quebrado. O nome é o mesmo que o
+botão "Copiar link" da Esteira gera; mudou um, confira o outro.
+
 ⚠️ **Conversas do WhatsApp mudou de casa** (28/08/2026): saiu do `admin` e do
 `ops`, existe SÓ em `apps/atendimento` (`/conversas`). Não é mais arquivo
 replicado — se voltar a ser, volta a precisar de lista.
@@ -988,6 +1001,18 @@ esse disfarce que custou o dia de diagnóstico.
 1. **Todo pedido nomeia o alvo.** "no CRM" → `apps/crm`; "no controle"/"atual" → raiz (`src/`).
 2. **Na dúvida, PERGUNTE — nunca adivinhe.** Se a tela existe em mais de um app, liste os candidatos antes de mexer.
 3. **Congelamento do `controle`:** raiz só recebe correção crítica. Funcionalidade nova vai pros apps novos.
+   ⚠️ **A raiz NÃO conhece PayT nem Shopee, e isso é decisão, não esquecimento**
+   (medido em 31/08). Ela lista os canais em seis arquivos
+   (`useDashEcommerce`, `useMetaEcommerce`, `skuUnidades`, `SkuMappingConfig`,
+   `DashEcommerceVendas`, `MetaEcommercePage`) e o `DashEcommerceVendas` marca
+   `tiktok` e `shopee` como `disabled: true`. **Nenhum número da raiz fica
+   errado por causa disso**: não existe visão "todos os canais" — cada tela é de
+   UM canal (`useDashEcommerce(platform, …)`) e o Comparativo só soma o que foi
+   selecionado. Ou seja, a falta aparece como **aba ausente**, não como total
+   menor — que é o estado aceitável para um app congelado. Acrescentar canal ali
+   seria funcionalidade nova em seis arquivos de um monólito vivo, para uma tela
+   que o `apps/admin` já cobre melhor. Se um dia a raiz ganhar um total geral,
+   isso deixa de valer e vira número mentindo.
 4. **Mudança em `packages/`** → avise que afeta vários apps antes de aplicar.
 5. **Cada app é autossuficiente.** `apps/crm` tem build/lockfile próprio; NÃO mexer no `package.json` da raiz (3 lockfiles frágeis — risco ao deploy do controle).
 

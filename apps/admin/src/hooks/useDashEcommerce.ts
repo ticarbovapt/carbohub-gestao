@@ -304,7 +304,7 @@ function buildMetrics(
   for (const r of rows) {
     const sku  = normalizarSku(r.product_sku);
     const name = r.product_name ?? sku ?? "Produto desconhecido";
-    const key  = sku ?? ` nome:${name}`;
+    const key  = sku ?? `\0nome:${name}`;
     const prev = skuMap.get(key) ?? { name, sku, orders: 0, txns: 0, units: 0, revenue: 0 };
     skuMap.set(key, {
       name,

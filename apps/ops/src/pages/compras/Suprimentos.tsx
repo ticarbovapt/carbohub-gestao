@@ -499,7 +499,14 @@ export default function Suprimentos() {
                           const classe = `inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-mono ${m.opNumber || m.orderNumber ? "ml-1" : ""}`;
                           return m.ecomBlingId ? (
                             <Link
-                              to={`/logistica/esteira?pedido=${m.ecomBlingId}`}
+                              /* ⚠️ O parâmetro é `card`, não `pedido`. A Esteira
+                                 lê `params.get("card")` e ignora qualquer outro
+                                 nome — com `?pedido=` a tela abria e o card
+                                 NUNCA abria, sem erro nenhum. É a mesma falha
+                                 silenciosa que o comentário logo acima descreve.
+                                 O nome vem do botão "Copiar link" da própria
+                                 Esteira; ao mudar um, confira o outro. */
+                              to={`/logistica/esteira?card=${m.ecomBlingId}`}
                               className={`${classe} bg-carbo-blue/10 text-carbo-blue hover:bg-carbo-blue/20`}
                               title={`Abrir na Esteira do On-line · ${m.refExterna}`}
                             >

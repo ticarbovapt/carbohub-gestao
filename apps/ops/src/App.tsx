@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Layout } from "./components/Layout";
 import Home from "./pages/Home";
@@ -27,6 +27,19 @@ import Maquinas from "./pages/campo/Maquinas";
 import Alertas from "./pages/campo/Alertas";
 import AcompMetasVendedores from "./pages/acompanhamento/MetasVendedores";
 import { OPS_ALL_ITEMS } from "@/lib/opsNav";
+
+/**
+ * Apelido `/ecommerce/esteira` → `/logistica/esteira`, com a query INTACTA.
+ *
+ * ⚠️ `<Navigate to="/logistica/esteira" />` sozinho não serve: ele descarta a
+ * query string, e é justamente o `?card=` que abre o pedido. Um redirecionamento
+ * que chega na tela certa com o card fechado é o mesmo tipo de falha muda que
+ * este apelido veio consertar.
+ */
+function RedirEsteira() {
+  const { search } = useLocation();
+  return <Navigate to={`/logistica/esteira${search}`} replace />;
+}
 
 // Login é ÚNICO no Hub (carbohub.com.br). O ProtectedRoute cuida do acesso.
 // As rotas das áreas já existem (placeholders) — telas portadas 1:1 por etapas.
@@ -78,6 +91,16 @@ export default function App() {
         <Route path="/logistica/pos-venda" element={<PosVenda />} />
         <Route path="/logistica/recorrencias" element={<Recorrencias />} />
         <Route path="/logistica/esteira" element={<EsteiraOnline />} />
+        {/* ⚠️ O apelido existe porque o caminho da Esteira DIVERGE entre os apps:
+            /ecommerce/esteira no admin e no atendimento, /logistica/esteira aqui.
+            O `MensagensCliente` é byte a byte idêntico nos três e, sem o
+            `?voltar=` na URL (link direto, favorito, aba restaurada), o botão
+            "voltar" dele cai no padrão do admin — que no Ops não existia e caía
+            no catch-all, levando a pessoa para a HOME sem dizer por quê.
+            Redirecionar em vez de montar a tela aqui mantém um endereço só na
+            barra e no destaque do menu. ⚠️ `search` preservado de propósito: o
+            `?card=` é o que abre o pedido, e `<Navigate>` descarta a query. */}
+        <Route path="/ecommerce/esteira" element={<RedirEsteira />} />
         {/* Mesmo caminho do admin de propósito: o botão da Esteira é o mesmo
             arquivo nos dois apps e precisa levar ao mesmo lugar. */}
         <Route path="/ecommerce/mensagens" element={<MensagensCliente />} />
