@@ -822,9 +822,20 @@ não recebe aviso nenhum. São ~18% dos pedidos.
 
 Consequência para quem lê o painel: **"avisos enviados" mede menos operação do
 que parece** — praticamente só a loja própria. Buscar telefone no ML foi
-descartado (não existe no dado). O que resta é tornar a ausência VISÍVEL, como o
-`sem_telefone` do carrinho abandonado — pendente, e é decisão de tela, não de
-integração.
+descartado (não existe no dado).
+
+✅ **A ausência JÁ é visível no card** (conferido em 31/08): o `EsteiraOnline`
+mostra "sem telefone" em âmbar com `BellOff`, e essa checagem vem **antes** de
+"sem aviso" — a ordem é a informação, porque as duas coisas têm a mesma cara e
+causas opostas. O `ignorado` por marco zero é distinguido do `ignorado` por
+telefone pelo prefixo do `motivo`. A face do card também escreve "sem telefone
+na plataforma" em vez de deixar o campo vazio. Não refaça isso.
+
+⚠️ O que **não** existe é o TAMANHO do buraco num lugar só: para saber quantos
+por cento da operação não pode ser avisada, é consulta, não tela — e enquanto
+for consulta, ninguém olha. Se um dia o painel ganhar um número de "avisos
+enviados", ele precisa vir ao lado de "não avisáveis", senão vira a mesma
+doença do relatório que só sabe concordar consigo mesmo.
 
 ### Cadência das automações — a esteira dispara mensagem, então ela é ao vivo
 Enquanto a esteira era painel para olhar, meia hora de atraso não custava nada.
@@ -996,6 +1007,22 @@ Separe as recusas: **401** para segredo errado (problema de quem chama), **500**
 com mensagem explícita para segredo ausente no servidor (problema nosso). Um 401
 para os dois faz a falha de configuração se disfarçar de chamada indevida — foi
 esse disfarce que custou o dia de diagnóstico.
+
+⚠️ **`WEBHOOK_OBSERVAR=1` é a porta destrancada do `ecommerce-webhook`**, e ela
+existe de propósito: os cinco validadores hoje FECHAM sem segredo, e virar isso
+às cegas derrubaria a entrada de pedido de quem está vendendo. O modo de
+observação registra a recusa e deixa passar, para se ler o log antes de fechar.
+
+O defeito era o INCENTIVO INVERTIDO: só havia rastro quando algo era recusado —
+ou seja, o sinal aparecia exatamente quando ainda **não** se devia fechar, e
+sumia quando se **devia**. Um dia limpo era indistinguível de "a variável já foi
+removida", e é assim que provisório vira definitivo. Desde 31/08 a porta se
+anuncia a cada requisição: **`grep PORTA_ABERTA` nos logs responde "está
+ligado?"** sem abrir o painel do Supabase.
+
+Fechar = remover o secret e fazer deploy. ⚠️ E o deploy é o push em `main`
+(`ecommerce-webhook` está na lista `dep`) — remover o secret sozinho não basta
+se a função no ar for antiga.
 
 ### Regras anti-confusão (OBRIGATÓRIAS)
 1. **Todo pedido nomeia o alvo.** "no CRM" → `apps/crm`; "no controle"/"atual" → raiz (`src/`).

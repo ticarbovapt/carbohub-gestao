@@ -487,6 +487,28 @@ Deno.serve(async (req: Request) => {
   // afrouxar, e some quando alguém a remove. Nunca o contrário.
   const OBSERVAR = Deno.env.get("WEBHOOK_OBSERVAR") === "1";
 
+  // ⚠️ A PORTA ABERTA SE ANUNCIA, mesmo quando nada é recusado.
+  //
+  // Até aqui o modo de observação só deixava rastro QUANDO havia uma recusa. Se
+  // todos os segredos estivessem certos — que é exatamente o estado em que se
+  // deve fechar — a variável ficava ligada produzindo silêncio absoluto, e
+  // silêncio é indistinguível de "já foi removida".
+  //
+  // Ou seja: o sinal aparecia só no caso em que a pessoa ainda NÃO devia fechar,
+  // e sumia justamente no caso em que ela DEVIA. É o incentivo invertido, e é
+  // assim que provisório vira definitivo — o próprio comentário abaixo avisa
+  // disso, e mesmo assim não havia como responder "está ligado?" sem abrir o
+  // painel do Supabase.
+  //
+  // Agora `grep PORTA_ABERTA` nos logs responde em segundos, e a resposta existe
+  // mesmo num dia sem nenhuma recusa.
+  if (OBSERVAR) {
+    console.warn(
+      `[${platform}] PORTA_ABERTA — WEBHOOK_OBSERVAR=1: assinatura inválida NÃO recusa. ` +
+      `Provisório de diagnóstico; remova o secret e faça deploy para fechar.`,
+    );
+  }
+
   const valid = await validators[platform](req, body);
   if (!valid) {
     if (OBSERVAR) {
