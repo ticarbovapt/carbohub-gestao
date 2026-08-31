@@ -413,6 +413,51 @@ carbo_ecommerce_deduzir_estoque / _estornar_estoque    cron 8-59/10
    Envio (Mercado Envios, logística da Amazon, SPX). `0 de 102` é limpo demais
    para ser comportamento comercial — é um teste que não se aplica.
 
+### ⚠️ Três armadilhas medidas em 31/08, todas silenciosas
+
+**1. Procurar CHECK não é procurar restrição.** A dedução ficou TRÊS DIAS
+abortando a cada 10 min com `Origem de movimento inválida: ecommerce`. Eu tinha
+procurado um CHECK na coluna `origem`, não achei nenhum, e concluí que não havia
+restrição — ela era um TRIGGER (`validate_stock_movement`). Cheguei a ler a
+função, vi que validava `tipo`, e presumi que era só isso. Trigger, RULE e
+domínio fazem o mesmo trabalho por outros meios; pergunte por
+`pg_get_functiondef` nos gatilhos da tabela, não só por `pg_constraint`.
+⚠️ E o sintoma foi mudo do jeito conhecido: `cron.job_run_details` marcando
+`failed` de 10 em 10 minutos, e ninguém olha aquilo.
+
+**2. Campo que vem da plataforma NÃO se corrige no banco.** Preenchemos o SKU
+da Shopee com `update` e ele sumiu: o `ecommerce-sync` faz upsert a cada 5 min e
+regrava o vazio por cima. As linhas de 21/08 mantiveram o valor (fora da janela
+que ele relê) e as de 26 e 27 voltaram a nulo — o padrão prova o mecanismo.
+Correção que dura é na ORIGEM (preencher o SKU no anúncio).
+O gatilho `ecommerce_nao_apaga_com_vazio` passou a impedir que vazio apague dado
+bom em `product_sku`, `product_name`, `cliente_nome`, `cliente_fone`,
+`cliente_email` e `platform_order_number` — é a MESMA regra que a carga de PDV
+por planilha já seguia (`coalesce(planilha, banco)`), que existia no repo e não
+tinha sido aplicada aqui.
+
+**3. Marco zero precisa ANDAR quando o ponto de partida muda.** Com o gatilho
+corrigido, a primeira rodada deduziu os 3 dias acumulados — em cima de um saldo
+que tinha acabado de ser ajustado à mão pela contagem física da LogHouse. A
+mesma saída foi contada duas vezes. Quando o saldo for corrigido por contagem,
+o marco vai junto, ANTES de religar.
+
+⚠️ **A consulta que guarda as três garantias** (só venda deduz, cancelada
+devolve, pendente não deduz) é uma só, e vale rodar de tempos em tempos:
+
+```sql
+select count(*) as consumos_indevidos
+from public.carbo_estoque_consumo k
+join public.ecommerce_orders o on o.platform || ':' || o.order_id = k.origem_chave
+where k.origem_tipo = 'ecommerce'
+  and not public.ecommerce_status_e_venda(o.status);
+```
+
+`ecommerce_status_e_venda` é a lista branca ÚNICA — o ensaio, o estorno, o
+sininho e o resumo mensal leem dela. A `carbo_estoque_ensaio` já teve uma cópia
+sem `lower()`: um status `Paid` contaria como venda no painel e não baixaria
+estoque.
+
 ### ⚠️ Aviso de webhook não é pedido
 ML e Amazon mandam só "o pedido X mudou", sem itens, valor ou SKU. O código
 gravava mesmo assim uma linha com `quantity 1`, `units_real 1`, `total 0`,
