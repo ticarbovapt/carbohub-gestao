@@ -41,6 +41,12 @@ export interface StockMovement {
    * sabe quem fez" — duas coisas diferentes com a mesma cara.
    */
   executor: string | null;
+  /** Da view `carbo_movimento_ecommerce_card`. ⚠️ `ecomBlingId` nulo com
+   *  `ecomNumero` preenchido é estado ESPERADO: a baixa já aconteceu e o pedido
+   *  ainda não foi faturado no Bling, então o card da esteira não existe. */
+  ecomPlataforma: string | null;
+  ecomNumero: string | null;
+  ecomBlingId: number | null;
 }
 
 /**
@@ -122,6 +128,30 @@ export function useStockMovements(
           ? db.from("production_orders").select("id, op_number").in("id", opIds)
           : Promise.resolve({ data: [], error: null }),
       ]);
+      // ── O card da esteira, para as baixas de e-commerce ──────────────────
+      //
+      // ⚠️ A junção mora no BANCO (`carbo_movimento_ecommerce_card`), não aqui.
+      // São três saltos — ref_externa → platform_order_number → numero_loja →
+      // bling_id — e a mesma regra já existe na `bling2_esteira` e na
+      // `ecommerce_aguardando_bling`. Reescrevê-la no front seria a quarta cópia.
+      const refs = [...new Set(linhas.map((m) => m.ref_externa).filter(Boolean))] as string[];
+      const cards = refs.length
+        ? await db.from("carbo_movimento_ecommerce_card")
+            .select("ref_externa, platform, platform_order_number, bling_id")
+            .in("ref_externa", refs)
+        : { data: [], error: null };
+      // Erro aqui NÃO derruba a tela: sem o card a linha ainda diz o que baixou,
+      // de onde e quanto. Some só o atalho.
+      if (cards.error) console.warn("[movimentacoes] card do e-commerce indisponível:", cards.error.message);
+      const cardPorRef = new Map<string, { platform: string | null; numero: string | null; blingId: number | null }>();
+      for (const c of (cards.data ?? []) as Record<string, unknown>[]) {
+        cardPorRef.set(c.ref_externa as string, {
+          platform: (c.platform as string) ?? null,
+          numero: (c.platform_order_number as string) ?? null,
+          blingId: c.bling_id != null ? Number(c.bling_id) : null,
+        });
+      }
+
       const ordNum = new Map<string, string>();
       for (const o of ords.data ?? []) ordNum.set(o.id, o.order_number ?? "");
       const opNum = new Map<string, string>();
@@ -146,6 +176,11 @@ export function useStockMovements(
           opId: (m.op_id as string) ?? null,
           opNumber: m.op_id ? opNum.get(m.op_id as string) ?? null : null,
           refExterna: (m.ref_externa as string) ?? null,
+          // Da view. `ecomBlingId` nulo com `ecomNumero` preenchido significa
+          // "pedido ainda não faturado no Bling" — estado esperado, não falha.
+          ecomPlataforma: m.ref_externa ? cardPorRef.get(m.ref_externa as string)?.platform ?? null : null,
+          ecomNumero:     m.ref_externa ? cardPorRef.get(m.ref_externa as string)?.numero   ?? null : null,
+          ecomBlingId:    m.ref_externa ? cardPorRef.get(m.ref_externa as string)?.blingId  ?? null : null,
           executor: (m.executor as string) ?? null,
         };
       });

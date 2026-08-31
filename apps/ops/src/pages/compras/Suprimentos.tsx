@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
@@ -13,7 +13,7 @@ import {
 import {
   Package, MapPin, Users, Cloud, Send, AlertCircle, ArrowLeftRight, Settings2, Building2,
   ArrowDownToLine, ArrowUpFromLine, Boxes, Layers, AlertTriangle, Activity, Info, Link2, Truck,
-  CheckCircle, XCircle, FileText, Loader2, Search, Globe,
+  CheckCircle, XCircle, FileText, Loader2, Search, Globe, ArrowUpRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -478,15 +478,43 @@ export default function Suprimentos() {
                         )}
                         {/* Pedido de e-commerce: id de TEXTO, não cabe em
                             `order_id` (uuid, FK de carboze_orders). Vem da
-                            coluna própria `ref_externa`. */}
-                        {m.refExterna && (
-                          <span
-                            className={`inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 font-mono ${m.opNumber || m.orderNumber ? "ml-1" : ""}`}
-                            title="Pedido de e-commerce (plataforma:pedido)"
-                          >
-                            <Globe className="h-3 w-3 shrink-0" />{m.refExterna}
-                          </span>
-                        )}
+                            coluna própria `ref_externa`.
+
+                            ⚠️ O rótulo é o NÚMERO DA LOJA (601), não o
+                            `plataforma:id-interno` que a coluna guarda. O id
+                            interno é longo, não aparece em lugar nenhum que o
+                            operador use, e a pergunta que esta tela responde é
+                            "esta baixa é de qual venda?". O texto cru fica no
+                            `title`, para quem precisar copiar.
+
+                            ⚠️ E vira LINK para o card só quando existe
+                            `bling_id`. Sem ele o pedido ainda não foi faturado
+                            — a baixa já aconteceu e o card ainda não nasceu.
+                            Isso é estado esperado, e um link que cai no vazio
+                            seria pior que nenhum: o catch-all mandaria a pessoa
+                            para a home sem dizer por quê, como aconteceu no
+                            chip "ver pedido" das Conversas. */}
+                        {m.refExterna && (() => {
+                          const rotulo = m.ecomNumero ?? m.refExterna;
+                          const classe = `inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-mono ${m.opNumber || m.orderNumber ? "ml-1" : ""}`;
+                          return m.ecomBlingId ? (
+                            <Link
+                              to={`/logistica/esteira?pedido=${m.ecomBlingId}`}
+                              className={`${classe} bg-carbo-blue/10 text-carbo-blue hover:bg-carbo-blue/20`}
+                              title={`Abrir na Esteira do On-line · ${m.refExterna}`}
+                            >
+                              <Globe className="h-3 w-3 shrink-0" />{rotulo}
+                              <ArrowUpRight className="h-3 w-3 shrink-0" />
+                            </Link>
+                          ) : (
+                            <span
+                              className={`${classe} bg-muted`}
+                              title={`${m.refExterna} · ainda sem card: o pedido só entra na esteira quando é faturado no Bling`}
+                            >
+                              <Globe className="h-3 w-3 shrink-0" />{rotulo}
+                            </span>
+                          );
+                        })()}
                         {/* Ajuste manual e transferência não vêm de card nenhum —
                             e o traço diz isso melhor que célula vazia. */}
                         {!m.opNumber && !m.orderNumber && !m.refExterna && <span className="text-muted-foreground">—</span>}
