@@ -439,8 +439,36 @@ tinha sido aplicada aqui.
 **3. Marco zero precisa ANDAR quando o ponto de partida muda.** Com o gatilho
 corrigido, a primeira rodada deduziu os 3 dias acumulados — em cima de um saldo
 que tinha acabado de ser ajustado à mão pela contagem física da LogHouse. A
-mesma saída foi contada duas vezes. Quando o saldo for corrigido por contagem,
-o marco vai junto, ANTES de religar.
+mesma saída foi contada duas vezes.
+
+⚠️ **Mas a conclusão "o marco vai junto" estava ERRADA, e foi revista em 31/08.**
+Marco zero é filtro por DATA (`ordered_at > deduz_a_partir_de`): ele pergunta se
+a venda é ANTIGA, não se ela já foi contabilizada. As duas coisas coincidem no
+primeiro dia e divergem depois — avançá-lo pega por engano todo pedido feito
+antes da contagem que ainda **não é venda**: a mercadoria estava na prateleira,
+ENTROU na contagem, e quando for paga sai de verdade **sem nunca ser
+descontada**. Medido no dia: 50 pedidos pendentes, 68 itens.
+
+Quem impede a dupla contagem é o **ledger** (`carbo_estoque_consumo`), que
+pergunta a coisa certa: "esta saída já está contabilizada?". Com ele em dia
+— `carbo_ecommerce_deduzir_estoque()` voltando vazio — **o marco não precisa
+andar**, e andar só criaria o vazamento. Ele fica para o que foi feito: impedir
+que religar um canal baixe 90 dias de uma vez.
+
+⚠️ **E o ajuste de saldo precisa do INSTANTE da contagem.** `quantity =
+<contado>` é absoluto, mas a contagem descreve a prateleira num instante e o
+cron deduz a cada 10 min: contar 800 às 16:30, o cron baixar 5 às 16:38 e rodar
+o ajuste às 17:10 **apaga** aquela venda. É a dupla contagem ao contrário. A
+`20260969` desconta sozinha o que saiu depois do instante informado.
+
+⚠️ **Valor de exemplo em bloco destrutivo tem de RECUSAR rodar.** A primeira
+versão da `20260969` trazia `('CZ100', 0)` como exemplo; rodada sem edição,
+zerou 275 e 1.145 sem reclamar — e não podia reclamar, porque `0` é um saldo
+válido (`CARB-SACH-10ML` tem 0 de verdade). Exemplo indistinguível de resposta é
+a mesma doença do `Math.round` inventando `×1`. Hoje o exemplo é `null`, o bloco
+é plpgsql e a primeira coisa que ele faz é abortar dizendo qual produto falta.
+Produto não contado: **apague a linha**, nunca escreva 0 — "não contei" e
+"contei zero" são respostas diferentes.
 
 ⚠️ **A consulta que guarda as três garantias** (só venda deduz, cancelada
 devolve, pendente não deduz) é uma só, e vale rodar de tempos em tempos:
