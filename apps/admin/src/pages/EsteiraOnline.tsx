@@ -1201,6 +1201,11 @@ export default function EsteiraOnline() {
         (x.rastreio ?? "").toLowerCase().includes(t) ||
         (x.nf_numero ?? "").toLowerCase().includes(t) ||
         (x.pedido_loja ?? "").toLowerCase().includes(t) ||
+        // O "Nº do cliente" (CZ2026080285) — é o código que o cliente cita no
+        // WhatsApp e o que aparece no rastreio público, então é por ele que se
+        // procura quando alguém liga. Estava só no detalhe do card: dava para
+        // LER depois de achar o pedido, e não para achar o pedido.
+        (x.pedido_codigo ?? "").toLowerCase().includes(t) ||
         (x.entrega_cidade ?? "").toLowerCase().includes(t));
     }
     if (filtroAviso !== "all") {
@@ -1484,7 +1489,7 @@ export default function EsteiraOnline() {
         <div className="relative max-w-xs flex-1">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input value={busca} onChange={(e) => setBusca(e.target.value)}
-                 placeholder="Cliente, rastreio, NF, cidade…" className="h-9 pl-8" />
+                 placeholder="Cliente, nº CZ, rastreio, NF, cidade…" className="h-9 pl-8" />
         </div>
         <Select value={canal} onValueChange={setCanal}>
           <SelectTrigger className="h-9 w-44"><SelectValue /></SelectTrigger>
