@@ -124,7 +124,48 @@ export function linhasDaPayt(body: unknown): { linhas: LinhaPayt[]; motivo: stri
     return { linhas: [], motivo: status === "lost_cart" ? "carrinho perdido" : "sem transaction_id" };
   }
 
-  const quando = dataDeBrasilia(b.started_at) ?? dataDeBrasilia(b.updated_at) ?? new Date().toISOString();
+  // ⚠️ O CARRINHO é o pedido, não a transação.
+  //
+  // Medido em 01/09 no primeiro pedido PayT que chegou ao Bling: o Bling criou
+  // UM pedido (nº 615, R$ 269,10) para DUAS transações nossas — `PK2279K`
+  // (R$ 149,50) e `2877EQV` (R$ 119,60, o order bump). O bump é transação
+  // separada na PayT e o Bling funde as duas na mesma venda.
+  //
+  // Com `transaction_id` aqui, a coluna "Pago" mostrava DOIS cards para uma
+  // compra só, e casar por transação não resolvia: sairia o `PK2279K` e o
+  // `2877EQV` ficaria órfão para sempre, porque o Bling não o referencia em
+  // lugar nenhum. Trocaria duplicado por órfão permanente.
+  //
+  // `cart_id` é o que agrupa: venda, upsell, bump e carrinho recuperado da mesma
+  // compra o repetem (conferido nos fixtures — `R6VZW4` cobre lost_cart,
+  // cart_recovered e manual_upsell). Assim o card de "Pago" passa a valer os
+  // R$ 269,10 e a bater com o pedido do Bling.
+  //
+  // ⚠️ A transação NÃO se perde: ela continua no `order_id` (`<transacao>-<code>`),
+  // que é a chave do upsert, e é por ela que o `numero_loja` do Bling
+  // (`PAYT_<seller_id>_<transacao>`) vai casar.
+  const carrinho = b.cart_id != null && String(b.cart_id).trim() !== ""
+    ? String(b.cart_id).trim()
+    : transacao;   // sem carrinho, a transação ainda é melhor que nada
+
+  const dataDoPayload = dataDeBrasilia(b.started_at) ?? dataDeBrasilia(b.updated_at);
+  // ⚠️ Inventar a data em SILÊNCIO é a doença que este repo persegue — o
+  // `Math.round` que criava o fator `×1` em vez de admitir que não sabia. E
+  // `ordered_at` não é enfeite: governa a janela de 12 h do sininho, o marco
+  // zero da dedução de estoque e a soma por dia do painel.
+  //
+  // Recusar a venda seria pior (perder o pedido por causa da data), então o
+  // `now()` fica — mas agora ele GRITA. `grep PAYT_SEM_DATA` responde se está
+  // acontecendo, em vez de a suspeita depender de alguém notar timestamps
+  // repetidos numa consulta.
+  if (!dataDoPayload) {
+    console.warn(
+      `[payt] PAYT_SEM_DATA — transação ${transacao}: started_at=${JSON.stringify(b.started_at)} ` +
+      `updated_at=${JSON.stringify(b.updated_at)} não casaram com Y-m-d H:i:s. ` +
+      `ordered_at recebeu a hora ATUAL, que não é a hora da venda.`,
+    );
+  }
+  const quando = dataDoPayload ?? new Date().toISOString();
   const st = statusDaPayt(status);
 
   // O produto principal + cada order bump. ⚠️ `product.items[]` NÃO entra: são
@@ -180,7 +221,10 @@ export function linhasDaPayt(body: unknown): { linhas: LinhaPayt[]; motivo: stri
     total: reais(it.precoCent) * it.qtd,
     status: st,
     ordered_at: quando,
-    platform_order_number: transacao,
+    // ⚠️ O CARRINHO, não a transação — ver o comentário do `carrinho` acima.
+    // É por esta coluna que a `ecommerce_aguardando_bling` agrupa a coluna
+    // "Pago", então ela precisa ser a unidade que o Bling também enxerga.
+    platform_order_number: carrinho,
     raw: body,
   }));
 

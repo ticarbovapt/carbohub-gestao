@@ -496,6 +496,60 @@ para sempre valendo 1 unidade a R$ 0,00 em toda contagem — e no ML,
 `ecommerce_pedido_raiz` corta no primeiro hífen, então uma URL vira um PEDIDO a
 mais. Hoje as duas funções devolvem `[]`.
 
+### PayT — checkout próprio, e o pedido é o CARRINHO
+Entrou em 28/08/2026, substituindo a aba desativada do TikTok. É **push-only**:
+não tem OAuth nem endpoint de consulta, então postback perdido é venda que
+**nunca entra**, para sempre. Por isso `payt_eventos` guarda o corpo cru de todo
+evento (append-only, `body_hash` único) antes de qualquer interpretação.
+
+```
+supabase/functions/_shared/paytPedido.ts   o parser (puro, 61 testes)
+src/test/payt/fixtures/                    payloads REAIS de produção
+supabase/migrations/20260963…              payt_eventos, o log cru
+supabase/migrations/20260970…              o pedido passa a ser o carrinho
+```
+
+⚠️ **`platform_order_number` é o `cart_id`, NUNCA o `transaction_id`.** Medido
+em 01/09 no primeiro pedido que chegou ao Bling: o Bling criou **um** pedido
+(nº 615, R$ 269,10) para **duas** transações nossas — a venda (`PK2279K`,
+R$ 149,50) e o order bump (`2877EQV`, R$ 119,60). O bump é transação separada na
+PayT e o Bling funde as duas. Com a transação ali, a coluna "Pago" mostrava dois
+cards para uma compra só.
+
+E casar por transação **não** resolveria: sairia o `PK2279K` e o `2877EQV`
+ficaria órfão para sempre, porque o Bling não o referencia em lugar nenhum —
+troca de duplicado por órfão permanente, que é pior, porque duplicado alguém vê.
+A transação continua no `order_id` (`<transação>-<code>`), que é a chave do
+upsert.
+
+⚠️ **O elo com o Bling é `numero_loja = 'PAYT_<seller_id>_<transação>'**
+(`seller_id` = `LYK2ZA`), e o id puro aparece também em `observacoes` e em
+`raw_detalhe->numeroPedidoCompra`. A junção **ainda não existe**: há UM caso
+real, e um exemplo não é regra — foi assim que a porta 4 do Melhor Envio nasceu
+com 0 acertos em 36. A consulta candidata está no BLOCO 3 da `20260970`.
+
+⚠️ **Casar por valor + data é lixo, e foi medido.** Com R$ 149,50 sendo o preço
+de quase tudo, a tentativa ligou `Leandro Teodolino` a `Mauro Nishimoto` e um
+carrinho PayT a um pedido do ML. Mesma lição do CPF que servia a vários
+destinatários na conciliação do Melhor Envio.
+
+Três pendências conhecidas, todas medidas:
+1. ⚠️ **`loja_id = 0`** no Bling (venda direta) — a ponte só marca
+   `segmento = 'online'` com loja ≠ 0, então **venda PayT não conta como
+   on-line**. Ou cria-se uma loja "PayT" no Bling, ou a ponte ganha exceção.
+2. ⚠️ **`ordered_at` pode ser inventado.** O parser terminava em
+   `?? new Date()` calado quando a data não parseava — a doença do `Math.round`
+   criando `×1`. Recusar a venda seria pior, então o `now()` fica, mas hoje ele
+   grita: **`grep PAYT_SEM_DATA`** nos logs. E `ordered_at` governa a janela de
+   12 h do sininho, o marco zero do estoque e a soma por dia.
+3. **A PayT não está em `carbo_canal_estoque`** — venda dela não deduz nada.
+   Decisão pendente, não esquecimento.
+
+⚠️ **`total_price` NÃO é faturamento**: inclui os juros do parcelamento (medido:
+296.616 = 12 × 24.718, contra 233.331 de produto). A soma das linhas é que bate
+com o valor dos produtos. E `product.items[]` são os COMPONENTES do kit — contá-
+los multiplica quantidade e receita pelo tamanho do kit.
+
 ### E-commerce: a tabela tem uma linha por ITEM, não por pedido
 `ecommerce_orders` grava `order_id = '<pedido>-<item>'` — de propósito, porque
 (platform, order_id) é a chave do upsert e assim webhook e sync podem rodar em

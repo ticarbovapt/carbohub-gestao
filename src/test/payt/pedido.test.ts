@@ -108,9 +108,23 @@ describe("PayT · o pedido de cartão (payload real)", () => {
     expect(linhas).toHaveLength(1);
   });
 
-  it("a chave é <pedido>-<code>, o que faz o upsert não duplicar", () => {
+  it("a chave é <transação>-<code>, o que faz o upsert não duplicar", () => {
     expect(linhas[0].order_id).toBe("4ZVK7L-2RVDER");
-    expect(linhas[0].platform_order_number).toBe("4ZVK7L");
+  });
+
+  // ⚠️ O número do pedido é o CARRINHO, não a transação. Medido em 01/09: o
+  // Bling criou UM pedido (615, R$ 269,10) para DUAS transações nossas — a
+  // venda e o order bump. Com a transação aqui, a coluna "Pago" mostrava dois
+  // cards para uma compra só.
+  it("o número do pedido é o cart_id, não o transaction_id", () => {
+    expect(linhas[0].platform_order_number).toBe("LGENN4");   // cart_id
+    expect(linhas[0].platform_order_number).not.toBe("4ZVK7L"); // transaction_id
+  });
+
+  // A transação não se perde: é por ela que o `numero_loja` do Bling
+  // (`PAYT_<seller_id>_<transação>`) vai casar.
+  it("a transação continua recuperável a partir do order_id", () => {
+    expect(linhas[0].order_id.split("-")[0]).toBe("4ZVK7L");
   });
 
   it("o SKU vai como TEXTO — zero à esquerda não pode sumir", () => {
@@ -169,12 +183,33 @@ describe("PayT · order bump", () => {
   });
 });
 
-describe("PayT · upsell é pedido próprio", () => {
+describe("PayT · upsell é transação própria, mas do MESMO carrinho", () => {
   it("tem transaction_id próprio, então não colide com a venda original", () => {
     const { linhas } = linhasDaPayt(fx("upsell"));
     expect(linhas).toHaveLength(1);
-    expect(linhas[0].platform_order_number).toBe("L9OEO4");
     expect(linhas[0].order_id).toBe("L9OEO4-BLJOOR");
+  });
+
+  it("o número do pedido é o carrinho dele", () => {
+    const { linhas } = linhasDaPayt(fx("upsell"));
+    expect(linhas[0].platform_order_number).toBe("RW3NPR");
+  });
+
+  // ⚠️ ESTE é o teste que descreve o defeito real. `manual_upsell` e
+  // `cart_recovered` compartilham o carrinho `R6VZW4` com transações
+  // DIFERENTES — que é exatamente o formato do pedido 615 do Bling, onde venda
+  // e bump viraram um pedido só. Agrupando por carrinho, a coluna "Pago" mostra
+  // UM card; agrupando por transação, mostrava dois e um deles nunca sairia.
+  it("transações diferentes do mesmo carrinho compartilham o número do pedido", () => {
+    const a = linhasDaPayt(fx("manual_upsell")).linhas;
+    const b = linhasDaPayt(fx("cart_recovered")).linhas;
+    expect(a.length).toBeGreaterThan(0);
+    expect(b.length).toBeGreaterThan(0);
+    // Transações distintas…
+    expect(a[0].order_id.split("-")[0]).not.toBe(b[0].order_id.split("-")[0]);
+    // …e ainda assim o MESMO pedido.
+    expect(a[0].platform_order_number).toBe("R6VZW4");
+    expect(b[0].platform_order_number).toBe("R6VZW4");
   });
 });
 
