@@ -524,9 +524,20 @@ upsert.
 
 ⚠️ **O elo com o Bling é `numero_loja = 'PAYT_<seller_id>_<transação>'**
 (`seller_id` = `LYK2ZA`), e o id puro aparece também em `observacoes` e em
-`raw_detalhe->numeroPedidoCompra`. A junção **ainda não existe**: há UM caso
-real, e um exemplo não é regra — foi assim que a porta 4 do Melhor Envio nasceu
-com 0 acertos em 36. A consulta candidata está no BLOCO 3 da `20260970`.
+`raw_detalhe->numeroPedidoCompra`. A `ecommerce_aguardando_bling` casa por aí
+(`20260971`), exigindo o prefixo `PAYT_` — sem ele, `split_part` de um número
+comum devolve a string inteira e casa por acaso. O que autorizou aplicar com UM
+caso foi o total FECHAR exato (269,10 = 269,10), que é identidade e não
+semelhança. ⚠️ Se um pedido PayT não sair sozinho da coluna "Pago", o formato
+mudou: **revise a regra, não afrouxe a comparação** — afrouxar sem apertar
+unicidade troca "não casa nunca" por "casa errado".
+
+⚠️ **A view soma SÓ linha que é venda**, e isso não é detalhe da PayT. O CTE
+agrega tudo e só depois filtra pelo `avanco` MÁXIMO, então transação cancelada
+dentro de um pedido pago entrava de carona: medido R$ 418,60 num pedido de
+R$ 269,10. Valia para qualquer canal com item cancelado no meio; só não aparecia
+porque, com um card por transação, a cancelada virava card próprio e era
+descartada inteira. Agrupar por carrinho a trouxe para dentro.
 
 ⚠️ **Casar por valor + data é lixo, e foi medido.** Com R$ 149,50 sendo o preço
 de quase tudo, a tentativa ligou `Leandro Teodolino` a `Mauro Nishimoto` e um
@@ -537,11 +548,15 @@ Três pendências conhecidas, todas medidas:
 1. ⚠️ **`loja_id = 0`** no Bling (venda direta) — a ponte só marca
    `segmento = 'online'` com loja ≠ 0, então **venda PayT não conta como
    on-line**. Ou cria-se uma loja "PayT" no Bling, ou a ponte ganha exceção.
-2. ⚠️ **`ordered_at` pode ser inventado.** O parser terminava em
-   `?? new Date()` calado quando a data não parseava — a doença do `Math.round`
-   criando `×1`. Recusar a venda seria pior, então o `now()` fica, mas hoje ele
-   grita: **`grep PAYT_SEM_DATA`** nos logs. E `ordered_at` governa a janela de
-   12 h do sininho, o marco zero do estoque e a soma por dia.
+2. ✅ **`ordered_at` está CERTO — a suspeita foi descartada com dado cru.**
+   Três transações com o mesmo segundo pareciam fallback; o log mostrou
+   `started_at = 09:13:10` gravado como `12:13:10+00`, exatamente Brasília. Elas
+   coincidem porque são o **mesmo carrinho**, e `started_at` é do checkout, não
+   da transação. O aviso `PAYT_SEM_DATA` fica como guarda e não está disparando.
+   ⚠️ Repetição não é prova de invenção — confira o payload cru em
+   `payt_eventos` antes de concluir, que foi o passo que faltou.
+   ⚠️ Consequência real de usar `started_at`: carrinho recuperado dias depois
+   fica com a data do abandono, não a da venda. Não medido ainda.
 3. **A PayT não está em `carbo_canal_estoque`** — venda dela não deduz nada.
    Decisão pendente, não esquecimento.
 
