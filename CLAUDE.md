@@ -538,6 +538,9 @@ dentro de um pedido pago entrava de carona: medido R$ 418,60 num pedido de
 R$ 269,10. Valia para qualquer canal com item cancelado no meio; só não aparecia
 porque, com um card por transação, a cancelada virava card próprio e era
 descartada inteira. Agrupar por carrinho a trouxe para dentro.
+⚠️ Medido em 01/09: nos 30 dias, **só a PayT** tinha o caso — o risco era de
+todos, o número errado era um. Um canal com cancelamento parcial teria caído
+nele na primeira vez, calado.
 
 ⚠️ **Casar por valor + data é lixo, e foi medido.** Com R$ 149,50 sendo o preço
 de quase tudo, a tentativa ligou `Leandro Teodolino` a `Mauro Nishimoto` e um
