@@ -1229,6 +1229,31 @@ Após o deploy, informar que a nova tela aparece no `/role-matrix` no grupo corr
 - Sempre criar arquivo em `supabase/migrations/` com timestamp sequencial
 - Passar o SQL para o usuário rodar no Supabase SQL Editor quando necessário
 
+### ⚠️ ENTREGAR SQL É MANDAR OS BLOCOS, NÃO AVISAR QUE ELES EXISTEM
+O Claude **não tem acesso ao banco** — não há connection string, `.env` nem
+service role neste ambiente. Quem roda é sempre o usuário, colando no SQL
+Editor. Isso não é detalhe de logística: é o passo em que o trabalho ou vira
+realidade ou não vira.
+
+**Regra:** criou migração, **mande os blocos prontos para colar, na ordem, na
+mesma mensagem.** Não escreva "a migração está no arquivo X, rode quando
+quiser", não pergunte "quer que eu mande?", não mande um bloco e espere pedirem
+o próximo. Já custou tempo mais de uma vez, e o usuário teve de cobrar duas
+vezes com estas palavras: *"vc n mandou as coisas para rodar, n entendi"* e
+*"manda o resto ai de uma vez, pare de me fazer pedir"*.
+
+Cada bloco vai com: **o que ele faz**, **o que esperar de volta**, e **o que
+significa se vier diferente**. Bloco destrutivo diz o que é preciso EDITAR antes.
+
+⚠️ **Valor de exemplo em bloco destrutivo tem de RECUSAR rodar** (ver a
+`20260969`): `0` é um saldo válido, então o exemplo `('CZ100', 0)` zerou 275
+unidades sem reclamar. Use `null` + `plpgsql` que aborta dizendo o que falta.
+
+⚠️ **Ler antes de escrever, sempre.** Todo bloco que altera dado vem depois de
+um bloco que MEDE o estado — e o resultado da medição pode mudar o plano. Já
+mudou três vezes numa tarde: o ensaio vazio apagou metade da `20260969`, e o
+`0.d` (50 pedidos pendentes) inverteu a decisão sobre o marco zero.
+
 ### ⚠️ TDZ no `Vender.tsx`: `useMemo` roda no render
 Derrubou o `/vender` em produção nos seis apps (`Cannot access '$i' before
 initialization`). O callback de `useMemo`/`useCallback` executa **durante o
