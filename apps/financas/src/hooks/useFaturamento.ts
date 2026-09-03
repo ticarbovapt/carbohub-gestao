@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { OrderItem } from "@/hooks/useCarbozeOrders";
+import { STATUS_COM_NF_POSSIVEL } from "@/lib/statusPedido";
 
 // Item do pedido com os campos usados no detalhe (desconto por linha,
 // bonificação, código). Vêm no jsonb `items` de carboze_orders; só faltavam
@@ -167,7 +168,7 @@ export function useFaturamento({ month, search = "", showAll = false }: Faturame
         // mesma que o resto do sistema usa — e regra repetida diverge.
         .from("carbo_vendas_metrica")
         .select("*")
-        .in("status", ["pending", "confirmed", "invoiced", "shipped", "delivered"])
+        .in("status", STATUS_COM_NF_POSSIVEL)   // ⚠️ uma lista só — ver lib/statusPedido.ts
         .order("created_at", { ascending: false });
 
       if (!showAll) {

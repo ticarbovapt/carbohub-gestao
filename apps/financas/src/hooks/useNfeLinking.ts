@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { STATUS_COM_NF_POSSIVEL } from "@/lib/statusPedido";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Vínculo NF ↔ pedido assistido (Finanças). O matcher automático "oficial" casa
@@ -53,7 +54,10 @@ export function useNfeLinkSuggestions() {
         .from("carboze_orders")
         .select("id, order_number, customer_name, total, created_at, sale_date")
         .is("bling_nf_id", null)
-        .in("status", ["confirmed", "invoiced", "shipped", "delivered"])
+        // ⚠️ A MESMA lista da tela de Faturamento. Aqui faltava `pending`, e o
+        // pedido aguardando faturamento — o que mais precisa de NF — nunca era
+        // sugerido. Ver `lib/statusPedido.ts`.
+        .in("status", STATUS_COM_NF_POSSIVEL)
         .limit(500);
       if (oErr) throw oErr;
 
@@ -239,7 +243,10 @@ export function useLinkableOrders(search: string, enabled = true) {
         .from("carboze_orders")
         .select("id, order_number, customer_name, total, status, created_at")
         .is("bling_nf_id", null)
-        .in("status", ["confirmed", "invoiced", "shipped", "delivered"])
+        // ⚠️ A MESMA lista da tela. Com `pending` de fora, o modal respondia
+        // "Nenhum pedido sem NF encontrado" para um pedido que a aba ao lado
+        // estava exibindo — foi o defeito de 03/09 com a NF 000412.
+        .in("status", STATUS_COM_NF_POSSIVEL)
         .order("created_at", { ascending: false })
         .limit(50);
       const term = search.trim();
