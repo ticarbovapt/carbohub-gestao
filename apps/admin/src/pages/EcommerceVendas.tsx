@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePickerInput } from "@/components/ui/date-picker-input";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +22,9 @@ import {
 import {
   useDashEcommerce, useEcommerceComparativo, useEcommerceRawCheck, useCommissionRates,
   useEcommerceHistoricoMensal,
+  // ⚠️ A tela NÃO recalcula intervalo: pede ao `getRange`, o mesmo que os hooks
+  // usam. Uma segunda conta de "últimos 30 dias" aqui divergiria da consulta.
+  getRange,
   type EcommercePlatform, type EcommercePeriod, type RawCheckMetrics, type EcommerceMetrics,
   type ComparativoMetrics,
   type ProdutoVendido,
@@ -1688,27 +1692,118 @@ type ActiveView = EcommercePlatform | "comparativo" | "historico";
 
 const TAB_KEY = "ecommerce_active_tab";
 
+// ═══════════════════════════════════════════════════════════════════════════
+// O estado da tela mora na URL
+//
+// Antes, `period` e `custom` eram `useState` puro: F5 devolvia "Últimos 7 dias"
+// e a aba (que já ficava no localStorage) voltava com OUTRO período — quem
+// atualizava a página achava que o número tinha mudado. Também não dava para
+// mandar "olha agosto" para alguém: o link não carregava nada.
+//
+// Agora `?aba=&periodo=&de=&ate=` descrevem a tela inteira. F5 e link
+// compartilhado mostram exatamente o mesmo.
+//
+// ⚠️ A ABA mantém o `localStorage` como RESERVA, o período não. São coisas
+// diferentes: a aba é preferência ("eu trabalho no Comparativo"), o período é
+// pergunta ("como foi agosto"). Link limpo pelo menu lateral deve voltar à aba
+// de sempre e a um período recente — período grudento traria agosto de 2026
+// meses depois, com cara de dado atual.
+// ═══════════════════════════════════════════════════════════════════════════
+const PARAM_ABA = "aba";
+const PARAM_PERIODO = "periodo";
+const PARAM_DE = "de";
+const PARAM_ATE = "ate";
+
+/** A aba, se ela existir e estiver habilitada HOJE. Senão `null`. */
+function abaValida(v: string | null): ActiveView | null {
+  // ⚠️ A lista sai de PLATFORMS, não é escrita aqui. A versão anterior tinha
+  // "shopee" fixa: quando a aba foi habilitada, quem a escolhia e voltava caía
+  // no Mercado Livre — a aba funcionava e não "colava", sem erro nenhum.
+  const desabilitada = PLATFORMS.some((p) => p.id === v && p.disabled);
+  const conhecida = ACTIVE_PLATFORMS.some((p) => p.id === v)
+    || v === "comparativo" || v === "historico";
+  if (!v || desabilitada || !conhecida) return null;
+  return v as ActiveView;
+}
+
+function lerAba(p: URLSearchParams): ActiveView {
+  return abaValida(p.get(PARAM_ABA))
+    ?? abaValida(localStorage.getItem(TAB_KEY))
+    ?? "mercadolivre";
+}
+
+function lerPeriodo(p: URLSearchParams): EcommercePeriod {
+  const v = p.get(PARAM_PERIODO);
+  return PERIOD_OPTIONS.some((o) => o.value === v) ? (v as EcommercePeriod) : "7d";
+}
+
+/**
+ * ⚠️ INTERVALO PELA METADE NÃO EXISTE — ele é completado aqui.
+ *
+ * Ao escolher "Por período…" os dois campos nasciam VAZIOS, e o `getRange`
+ * completava o que faltava com "hoje" em silêncio: o seletor dizia "Por
+ * período…" e a tela respondia os últimos 30 dias sem avisar. Pior, ao digitar
+ * só a data inicial a consulta já disparava com `de → hoje`, mostrando um
+ * número errado no meio do caminho.
+ *
+ * Preenchendo as duas pontas na hora da troca, o estado incompleto deixa de
+ * existir: os campos mostram exatamente o intervalo que a tela está usando, e
+ * toda edição parte de um par completo. (`DatePickerInput` é `clearable={false}`,
+ * então não há como esvaziar um deles pela interface.)
+ */
+function normalizarCustom(periodo: EcommercePeriod, c: EcommerceCustom): EcommerceCustom {
+  if (periodo === "mes") {
+    // Só o `from` ancora o mês; qualquer dia dele serve.
+    return { from: c.from ?? `${getRange("today").from.slice(0, 7)}-01` };
+  }
+  if (periodo === "custom") {
+    if (c.from && c.to) return c;
+    const padrao = getRange("30d");   // o mesmo que a tela já mostrava calada
+    return { from: c.from ?? padrao.from, to: c.to ?? padrao.to };
+  }
+  return c;
+}
+
 export default function EcommerceVendas() {
-  const [period, setPeriod] = useState<EcommercePeriod>("7d");
+  const [params, setParams] = useSearchParams();
+
+  // Estado inicial LIDO DA URL (com as reservas descritas acima). Só a leitura
+  // inicial usa `params`: daqui em diante o estado manda e a URL o espelha.
+  const [period, setPeriod] = useState<EcommercePeriod>(() => lerPeriodo(params));
   // Período personalizado. Fica fora do `period` de propósito: trocar para
   // "Hoje" e voltar para "Por período" preserva as datas escolhidas.
-  const [custom, setCustom] = useState<EcommerceCustom>({});
-  const [active, setActive] = useState<ActiveView>(() => {
-    const saved = localStorage.getItem(TAB_KEY) as ActiveView | null;
-    // ⚠️ A lista sai de PLATFORMS, não é escrita aqui. A versão anterior tinha
-    // "shopee" fixa nesta linha: quando a aba foi habilitada, quem a escolhia e
-    // voltava à tela caía no Mercado Livre — a aba funcionava e não "colava",
-    // sem erro nenhum. Aba desabilitada volta a valer sozinha por esta regra.
-    // "lps" (Vindi) foi descontinuado e não está mais em PLATFORMS.
-    const desabilitada = PLATFORMS.some((p) => p.id === saved && p.disabled);
-    const conhecida = ACTIVE_PLATFORMS.some((p) => p.id === saved)
-      || saved === "comparativo" || saved === "historico";
-    if (!saved || desabilitada || !conhecida) return "mercadolivre";
-    return saved;
-  });
+  const [custom, setCustom] = useState<EcommerceCustom>(
+    () => normalizarCustom(lerPeriodo(params), {
+      from: params.get(PARAM_DE) || undefined,
+      to:   params.get(PARAM_ATE) || undefined,
+    }),
+  );
+  const [active, setActive] = useState<ActiveView>(() => lerAba(params));
+
+  // ⚠️ `replace: true`: trocar de período não empilha entrada no histórico.
+  // Sem isso, o "voltar" do navegador percorreria cada clique de filtro antes
+  // de sair da tela — o mesmo incômodo que a Esteira já evita.
+  // As deps são só o ESTADO; `setParams` é estável e `params` fica de fora de
+  // propósito, senão o efeito se realimentaria.
+  useEffect(() => {
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set(PARAM_ABA, active);
+      next.set(PARAM_PERIODO, period);
+      // `de` serve aos DOIS modos: intervalo livre e âncora do mês.
+      if (custom.from) next.set(PARAM_DE, custom.from); else next.delete(PARAM_DE);
+      // `ate` só existe no intervalo livre — em "mês fechado" ele é derivado, e
+      // deixá-lo na URL criaria um segundo lugar dizendo qual é o fim.
+      if (period === "custom" && custom.to) next.set(PARAM_ATE, custom.to);
+      else next.delete(PARAM_ATE);
+      return next;
+    }, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, period, custom.from, custom.to]);
 
   const handleSetActive = (v: ActiveView) => {
     setActive(v);
+    // Reserva para quando o link vier limpo (menu lateral, favorito antigo).
     localStorage.setItem(TAB_KEY, v);
   };
 
@@ -1737,14 +1832,11 @@ export default function EcommerceVendas() {
                 onValueChange={(v) => {
                   const p = v as EcommercePeriod;
                   setPeriod(p);
-                  // Ao entrar em "Mês fechado…" sem mês escolhido, ancora no mês
-                  // ATUAL. Sem isto o `getRange` cairia no mês corrente por
-                  // acaso e a tela mostraria o certo pelo motivo errado — e
-                  // trocar de aba depois mudaria o número sem ninguém tocar no
-                  // seletor.
-                  if (p === "mes" && !custom.from) {
-                    setCustom({ from: `${new Date().toISOString().slice(0, 7)}-01` });
-                  }
+                  // ⚠️ UMA função decide o que "datas escolhidas" significa em
+                  // cada modo — a mesma que lê a URL. Duas regras aqui e lá
+                  // divergiriam, e o sintoma seria o link abrir diferente do
+                  // que a tela mostrava quando foi copiado.
+                  setCustom((c) => normalizarCustom(p, c));
                 }}
               >
                 <SelectTrigger className="h-9 w-48">

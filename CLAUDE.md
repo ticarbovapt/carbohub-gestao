@@ -590,6 +590,29 @@ mês âncora vira o ANTERIOR, o mesmo erro de fuso do `ordered_at::date`.
 congelada e nem expõe `custom`; `apps/ops/src/pages/ecommerce/VendasOnline.tsx`
 é mock NÃO roteado. Não há espelho a manter aqui.
 
+⚠️ **O estado da tela mora na URL**: `?aba=&periodo=&de=&ate=`. Antes era
+`useState` puro e o F5 devolvia "Últimos 7 dias" — com a ABA voltando do
+`localStorage`, ou seja, a mesma aba com outro período, e o número "mudando"
+sozinho para quem atualizava. Também não dava para mandar "olha agosto" a
+alguém.
+
+A **aba** mantém o `localStorage` como reserva, o **período não**, e a diferença
+é proposital: aba é preferência ("eu trabalho no Comparativo"), período é
+pergunta ("como foi agosto"). Período grudento traria agosto meses depois com
+cara de dado atual. O `de` serve aos dois modos (intervalo livre e âncora do
+mês); o `ate` só existe no intervalo livre, senão haveria dois lugares dizendo
+qual é o fim do mês.
+
+⚠️ **Intervalo pela metade não existe**: `normalizarCustom()` completa as duas
+pontas na troca de modo, e é a MESMA função que lê a URL. Antes os campos
+nasciam vazios, o `getRange` completava com "hoje" calado (o seletor dizia "Por
+período…" e a tela respondia 30 dias), e digitar só a data inicial já disparava
+uma consulta `de → hoje` com número errado no meio do caminho.
+
+⚠️ O mês corrente é derivado de `getRange("today")`, que é hora LOCAL — nunca
+de `new Date().toISOString()`, que é UTC: às 21h do dia 31 o mês âncora viraria
+o seguinte.
+
 ### ⚠️ `Select` do shadcn tem DOIS `max-h`, e a menor manda
 Em `components/ui/select.tsx` a altura aparece no `SelectContent` **e** no
 `Viewport`. Estavam `max-h-60` (240px) e `max-h-48` (192px): com item de ~32px,
