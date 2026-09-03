@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { subDays, startOfMonth, format, startOfDay } from "date-fns";
+import { subDays, startOfMonth, endOfMonth, format, startOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
@@ -19,12 +19,21 @@ import {
 
 export type EcommercePlatform = "mercadolivre" | "amazon" | "nuvemshop" | "payt" | "shopee";
 export type EcommercePeriod   =
-  | "today" | "yesterday" | "7d" | "30d" | "month" | "custom";
+  | "today" | "yesterday" | "7d" | "30d" | "month" | "mes" | "custom";
 
 /** Início e fim do período, em YYYY-MM-DD e ambos INCLUSIVOS. */
 export interface EcommerceRange { from: string; to: string }
 
-/** Datas de um período personalizado. Ignorado fora de period="custom". */
+/**
+ * Datas escolhidas à mão.
+ *
+ * Em `period="custom"` são as duas pontas do intervalo.
+ * ⚠️ Em `period="mes"` só o `from` é lido, e ele ANCORA o mês (qualquer dia
+ * dele serve — `getRange` expande para o 1º e o último). Reusar este campo, em
+ * vez de criar um `mes?: string` ao lado, mantém UMA porta de entrada para data
+ * escolhida: os quatro hooks já dependem de `custom?.from`/`custom?.to`, então
+ * o mês refaz a consulta pelo caminho que já existia e foi testado.
+ */
 export interface EcommerceCustom { from?: string; to?: string }
 
 export interface CommissionRate {
@@ -178,7 +187,20 @@ export function getRange(period: EcommercePeriod, custom?: EcommerceCustom): Eco
     case "today":     return { from: ymd(today), to: ymd(today) };
     case "yesterday": { const d = subDays(today, 1); return { from: ymd(d), to: ymd(d) }; }
     case "7d":        return { from: ymd(subDays(today, 6)),  to: ymd(today) };
+    // "Este mês" é PARCIAL de propósito: do dia 1 até HOJE. É a pergunta "como
+    // vai o mês corrente", e fechá-lo no dia 30 traria dias que ainda não
+    // aconteceram, com o painel dizendo que a venda caiu.
     case "month":     return { from: ymd(startOfMonth(today)), to: ymd(today) };
+    // ⭐ Mês FECHADO — do dia 1 ao último, inclusive. `custom.from` ancora o
+    //    mês; qualquer dia dele serve. É o que faltava: antes, ver agosto
+    //    inteiro exigia "Por período…" + saber que agosto tem 31 dias.
+    //    ⚠️ `T12:00:00` (meio-dia, hora local) e não `T00:00:00`: à meia-noite
+    //    um fuso negativo joga a data para o dia anterior e o mês âncora vira o
+    //    ANTERIOR — o mesmo erro de fuso que o `ordered_at::date` já pagou.
+    case "mes": {
+      const base = custom?.from ? new Date(`${custom.from.slice(0, 7)}-01T12:00:00`) : today;
+      return { from: ymd(startOfMonth(base)), to: ymd(endOfMonth(base)) };
+    }
     case "custom": {
       // Sem data escolhida, cai nos 30 dias — melhor que devolver vazio e
       // parecer que não há venda nenhuma.

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DatePickerInput } from "@/components/ui/date-picker-input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -108,12 +109,21 @@ const fmtBRL = (v: number) =>
 const fmtNum = (v: number) => v.toLocaleString("pt-BR");
 const pct = (a: number, b: number) => b > 0 ? ((a / b) * 100).toFixed(1) + "%" : "0%";
 
+/**
+ * ⚠️ "Este mês" e "Mês fechado" NÃO são a mesma coisa, e o rótulo diz isso.
+ *
+ * `month` vai do dia 1 até HOJE (mês corrente, parcial); `mes` vai do dia 1 ao
+ * ÚLTIMO dia do mês escolhido. Chamar os dois de "mês" faria a mesma palavra
+ * valer dois números — comparar agosto fechado com setembro-até-agora e achar
+ * que setembro caiu 60%.
+ */
 const PERIOD_OPTIONS: { value: EcommercePeriod; label: string }[] = [
   { value: "today",     label: "Hoje" },
   { value: "yesterday", label: "Ontem" },
   { value: "7d",        label: "Últimos 7 dias" },
   { value: "30d",       label: "Últimos 30 dias" },
-  { value: "month",     label: "Este mês" },
+  { value: "month",     label: "Este mês (até hoje)" },
+  { value: "mes",       label: "Mês fechado…" },
   { value: "custom",    label: "Por período…" },
 ];
 
@@ -1718,8 +1728,26 @@ export default function EcommerceVendas() {
           </div>
           {active !== "historico" && (
             <div className="flex flex-wrap items-center gap-2">
-              <Select value={period} onValueChange={v => setPeriod(v as EcommercePeriod)}>
-                <SelectTrigger className="w-44">
+              {/* ⚠️ `h-9`, como a barra da Esteira. Sem altura declarada o
+                  trigger cai no `h-10` do primitivo e fica mais alto que todo o
+                  resto da casa — a mesma tela tinha `h-10` aqui e `h-9` na aba
+                  Histórico. */}
+              <Select
+                value={period}
+                onValueChange={(v) => {
+                  const p = v as EcommercePeriod;
+                  setPeriod(p);
+                  // Ao entrar em "Mês fechado…" sem mês escolhido, ancora no mês
+                  // ATUAL. Sem isto o `getRange` cairia no mês corrente por
+                  // acaso e a tela mostraria o certo pelo motivo errado — e
+                  // trocar de aba depois mudaria o número sem ninguém tocar no
+                  // seletor.
+                  if (p === "mes" && !custom.from) {
+                    setCustom({ from: `${new Date().toISOString().slice(0, 7)}-01` });
+                  }
+                }}
+              >
+                <SelectTrigger className="h-9 w-48">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1728,24 +1756,45 @@ export default function EcommerceVendas() {
                   ))}
                 </SelectContent>
               </Select>
+
+              {/* ⭐ O mês, quando o modo é "Mês fechado…".
+                  Reusa `generateMonthOptions()` — a MESMA lista que a aba
+                  Histórico Mensal já usa neste arquivo. Inventar um segundo
+                  gerador de meses seria a cópia que diverge sozinha. */}
+              {period === "mes" && (
+                <Select
+                  value={(custom.from ?? "").slice(0, 7)}
+                  onValueChange={(ym) => setCustom({ from: `${ym}-01` })}
+                >
+                  <SelectTrigger className="h-9 w-32">
+                    <SelectValue placeholder="Escolha o mês" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {/* Mais recente primeiro: ninguém procura janeiro de 2024
+                        antes do mês passado. */}
+                    {[...generateMonthOptions()].reverse().map(o => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+
+              {/* ⚠️ `DatePickerInput`, não `<input type="date">` cru: é o que a
+                  Esteira usa (popover com calendário em pt-BR), e o input nativo
+                  entregava um seletor diferente em cada navegador, com altura
+                  `h-10` destoando da barra. */}
               {period === "custom" && (
                 <div className="flex items-center gap-1.5">
-                  <input
-                    type="date"
+                  <DatePickerInput
                     value={custom.from ?? ""}
-                    max={custom.to || undefined}
-                    onChange={e => setCustom(c => ({ ...c, from: e.target.value }))}
-                    className="h-10 rounded-md border border-input bg-background px-2.5 text-sm"
-                    aria-label="Data inicial"
+                    onChange={(v) => setCustom(c => ({ ...c, from: v }))}
+                    clearable={false} disableFuture className="h-9 w-36"
                   />
                   <span className="text-muted-foreground text-sm">até</span>
-                  <input
-                    type="date"
+                  <DatePickerInput
                     value={custom.to ?? ""}
-                    min={custom.from || undefined}
-                    onChange={e => setCustom(c => ({ ...c, to: e.target.value }))}
-                    className="h-10 rounded-md border border-input bg-background px-2.5 text-sm"
-                    aria-label="Data final"
+                    onChange={(v) => setCustom(c => ({ ...c, to: v }))}
+                    clearable={false} disableFuture className="h-9 w-36"
                   />
                 </div>
               )}

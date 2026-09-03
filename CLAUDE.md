@@ -568,6 +568,38 @@ Três pendências conhecidas, todas medidas:
 com o valor dos produtos. E `product.items[]` são os COMPONENTES do kit — contá-
 los multiplica quantidade e receita pelo tamanho do kit.
 
+### Seletor de período do e-commerce — "este mês" ≠ "mês fechado"
+`EcommercePeriod` tem os dois, e a diferença NÃO é detalhe:
+
+```
+month  dia 1 → HOJE            mês corrente, parcial ("como vai o mês")
+mes    dia 1 → ÚLTIMO dia      mês fechado, ancorado em `custom.from`
+```
+
+Chamar os dois de "mês" faz a mesma palavra valer dois números — comparar agosto
+fechado com setembro-até-agora e concluir que setembro caiu 60%. Por isso o
+rótulo na tela é **"Este mês (até hoje)"**, não "Este mês".
+
+⚠️ **`mes` reusa `custom.from` como âncora** em vez de ganhar campo próprio: os
+quatro hooks já dependem de `custom?.from`/`custom?.to`, então o mês refaz a
+consulta pelo caminho que já existia. E a âncora é montada com `T12:00:00`, não
+`T00:00:00` — à meia-noite um fuso negativo joga a data para o dia anterior e o
+mês âncora vira o ANTERIOR, o mesmo erro de fuso do `ordered_at::date`.
+
+⚠️ **A tela viva é só `apps/admin`.** A raiz (`DashEcommerceVendas.tsx`) é
+congelada e nem expõe `custom`; `apps/ops/src/pages/ecommerce/VendasOnline.tsx`
+é mock NÃO roteado. Não há espelho a manter aqui.
+
+### ⚠️ `Select` do shadcn tem DOIS `max-h`, e a menor manda
+Em `components/ui/select.tsx` a altura aparece no `SelectContent` **e** no
+`Viewport`. Estavam `max-h-60` (240px) e `max-h-48` (192px): com item de ~32px,
+o teto real era **seis opções**, e ninguém sabia disso. Um menu de 6 itens media
+200px e rolava por **8 pixels** — o Radix ligava as duas setas de scroll e o
+menu parecia cortado sem ter o que mostrar.
+
+Hoje as duas são `min(22rem,60vh)`. Ao mexer numa, mexa na outra: deixá-las
+diferentes recria o teto invisível.
+
 ### E-commerce: a tabela tem uma linha por ITEM, não por pedido
 `ecommerce_orders` grava `order_id = '<pedido>-<item>'` — de propósito, porque
 (platform, order_id) é a chave do upsert e assim webhook e sync podem rodar em
