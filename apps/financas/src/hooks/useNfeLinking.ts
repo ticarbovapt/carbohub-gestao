@@ -258,6 +258,29 @@ export function useLinkableOrders(search: string, enabled = true) {
   });
 }
 
+/**
+ * Toda consulta que muda de resposta quando uma NF é vinculada a um pedido.
+ *
+ * ⚠️ ESTA LISTA É A REGRA. `all-nfes` faltava, e a aba "Todas as NFs" continuava
+ * mostrando a nota como **"Sem vínculo"** depois do toast de sucesso — só o F5
+ * a tirava de lá. O vínculo tinha funcionado; a tela é que não sabia.
+ *
+ * As quatro invalidações eram escritas à mão, uma por linha, e consulta nova
+ * entrava sem ninguém lembrar de acrescentá-la aqui. Não dá erro: dá tela
+ * mostrando o passado, que é pior, porque quem opera confia no que está vendo e
+ * tenta vincular de novo.
+ *
+ * ⚠️ Consulta nova que leia `bling_nfe.order_id`, `bling_nfe.match_status` ou
+ * `carboze_orders.bling_nf_id` entra AQUI na mesma tarefa em que é criada.
+ */
+export const CHAVES_DO_VINCULO = [
+  "faturamento",           // as abas de pedido (Vendas do sistema / Do Bling)
+  "nfe-link-suggestions",  // o painel de sugestões
+  "orphan-nfes",           // a aba Vincular NFs
+  "all-nfes",              // a aba Todas as NFs  ← era a que faltava
+  "linkable-orders",       // a busca de pedido dentro do diálogo
+] as const;
+
 /** Vincula manualmente a NF ao pedido (o humano confirmou a sugestão). */
 export function useLinkNFeToOrder() {
   const qc = useQueryClient();
@@ -295,10 +318,7 @@ export function useLinkNFeToOrder() {
       if (e2) throw e2;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["faturamento"] });
-      qc.invalidateQueries({ queryKey: ["nfe-link-suggestions"] });
-      qc.invalidateQueries({ queryKey: ["orphan-nfes"] });
-      qc.invalidateQueries({ queryKey: ["linkable-orders"] });
+      for (const chave of CHAVES_DO_VINCULO) qc.invalidateQueries({ queryKey: [chave] });
       toast.success("NF vinculada ao pedido!");
     },
     onError: (err: Error) => toast.error("Erro ao vincular NF: " + err.message),
