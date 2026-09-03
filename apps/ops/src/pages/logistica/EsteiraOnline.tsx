@@ -1589,13 +1589,13 @@ export default function EsteiraOnline() {
       {/* ── Quadro da recuperação de carrinho ───────────────────────────── */}
       {pipeline === "carrinho" ? (
         <>
-          <div className="flex min-h-0 flex-1 items-start justify-center gap-3 overflow-x-auto overscroll-x-contain pb-2">
+          <div className="flex min-h-0 flex-1 items-start gap-3 overflow-x-auto overscroll-x-contain pb-2 snap-x snap-mandatory sm:snap-none">
             {COLUNAS_CARRINHO.map((col) => {
               const cards = porColunaCarrinho.get(col.key) ?? [];
               const valor = cards.reduce((s, r) => s + (r.total || 0), 0);
               return (
                 <div key={col.key}
-                     className="flex max-h-full min-w-[240px] max-w-[400px] shrink-0 grow basis-0 flex-col overflow-hidden rounded-xl border bg-muted/20">
+                     className="flex max-h-full min-w-[86vw] max-w-[92vw] snap-start shrink-0 grow basis-0 sm:min-w-[240px] sm:max-w-[400px] flex-col overflow-hidden rounded-xl border bg-muted/20">
                   <div className="shrink-0 border-b bg-muted/40 px-3 py-2">
                     <div className="flex items-center justify-between gap-2">
                       <span className="flex min-w-0 items-center gap-1.5">
@@ -1698,13 +1698,13 @@ export default function EsteiraOnline() {
         </>
       ) : pipeline === "recompra" ? (
         <>
-          <div className="flex min-h-0 flex-1 items-start justify-center gap-3 overflow-x-auto overscroll-x-contain pb-2">
+          <div className="flex min-h-0 flex-1 items-start gap-3 overflow-x-auto overscroll-x-contain pb-2 snap-x snap-mandatory sm:snap-none">
             {COLUNAS_RECOMPRA.map((col) => {
               const cards = porColunaRecompra.get(col.key) ?? [];
               const valor = cards.reduce((s, r) => s + (r.total || 0), 0);
               return (
                 <div key={col.key}
-                     className="flex max-h-full min-w-[240px] max-w-[400px] shrink-0 grow basis-0 flex-col overflow-hidden rounded-xl border bg-muted/20">
+                     className="flex max-h-full min-w-[86vw] max-w-[92vw] snap-start shrink-0 grow basis-0 sm:min-w-[240px] sm:max-w-[400px] flex-col overflow-hidden rounded-xl border bg-muted/20">
                   <div className="shrink-0 border-b bg-muted/40 px-3 py-2">
                     <div className="flex items-center justify-between gap-2">
                       <span className="flex min-w-0 items-center gap-1.5">
@@ -1780,31 +1780,35 @@ export default function EsteiraOnline() {
       ) : error ? (
         <p className="text-sm text-red-500">Não consegui carregar: {(error as Error).message}</p>
       ) : (
-        /* PISO + TETO, não uma regra só.
+        /* LARGURA que se adapta, e um quadro que NUNCA corta.
 
-           "Esticado" e "sobra à direita" eram o mesmo defeito: largura fixa
-           deixava vazio em tela larga, `flex-1` puro esticava a coluna até o
-           card ficar oco no meio. Com `basis-0 grow` entre 264 e 360px, a soma
-           dos tetos (4 × 360 + gaps) passa da largura da tela — então nada
-           estica —, e o `grow` divide o que existe — então nada sobra.
+           ⚠️ O `justify-center` de antes tinha um furo medido em 03/09: ele não
+           agia "só quando o teto morde". Quando as colunas ESTOURAM a largura
+           (laptop com a sidebar aberta, ou seis colunas em 1366), centralizar
+           empurra a PRIMEIRA coluna para fora da borda esquerda — e não há como
+           rolar de volta até ela. Era isso que fatiava o card "Pago" e fazia a
+           tela parecer quebrada. Centralizar conteúdo que rola é a armadilha
+           clássica do `overflow-x` com `justify-content: center`.
 
-           Limites MEDIDOS, não chutados (harness com o CSS compilado, de 1280
-           a 2560):
+           A regra agora, sem centralizar:
+             • `grow basis-0` continua dividindo o espaço — em telas que cabem,
+               as colunas preenchem de ponta a ponta (lê como cheio, não como
+               "sobra à direita"); o `max` só segura o card oco no ultrawide.
+             • quando ESTOURA, `justify-start` (o padrão) rola a partir da
+               PRIMEIRA coluna, que fica sempre visível. Sem corte, em qualquer
+               monitor.
 
-             1366 → 243px   1440 → 258px   1920 → 354px   ← preenche exato
-             2560 → 400px (teto) e o quadro centraliza
-             1280 → 226px seria estreito demais, então o piso força rolagem
+           No CELULAR a coluna passa a ocupar ~86vw e o quadro ganha
+           `snap-mandatory`: cada arraste encaixa UMA coluna cheia na tela, com
+           uma fresta da próxima para dizer que há mais. Antes eram seis colunas
+           de 240px espremidas, com meia coluna aparecendo e nenhum encaixe — o
+           que tornava difícil achar a informação. Acima de `sm` o snap sai e
+           volta o comportamento medido de 240–400px.
 
-           O teto de 400 existe só para o ultrawide: sem ele a coluna iria a
-           481px em 2560 e o card ficaria oco. O piso de 240 é o limite em que
-           o nome do cliente ainda cabe. `justify-center` só age quando o teto
-           morde — folga simétrica lê como intenção, buraco de um lado só não.
-
-           `items-start` + `max-h-full` na coluna: ela ABRAÇA o conteúdo e só
-           cresce até o limite da tela. Com altura fixa, "Confirmado" com um
-           card virava uma caixa de 700px quase toda vazia — e era isso que
-           continuava parecendo esticado depois de a largura já estar certa. */
-        <div className="flex min-h-0 flex-1 items-start justify-center gap-3 overflow-x-auto overscroll-x-contain pb-2">
+           `items-start` + `max-h-full`: a coluna ABRAÇA o conteúdo e só cresce
+           até o limite da tela — "Confirmado" com um card não vira uma caixa
+           de 700px quase vazia. */
+        <div className="flex min-h-0 flex-1 items-start gap-3 overflow-x-auto overscroll-x-contain pb-2 snap-x snap-mandatory sm:snap-none">
           {/* "Pago" só existe quando tem alguém dentro.
               As cinco colunas seguintes têm largura MEDIDA (240–400px) para
               caber sem rolagem de 1366 a 2560. Uma sexta fixa quebraria essa
@@ -1814,7 +1818,7 @@ export default function EsteiraOnline() {
               exatamente ao que já estava medido; quando uma venda cai, a coluna
               aparece e ela é justamente a novidade que se quer ver. */}
           {pagos.length > 0 && (
-            <div className="flex max-h-full min-w-[240px] max-w-[400px] shrink-0 grow basis-0 flex-col overflow-hidden rounded-xl border border-amber-500/30 bg-amber-500/[0.04]">
+            <div className="flex max-h-full min-w-[86vw] max-w-[92vw] snap-start shrink-0 grow basis-0 sm:min-w-[240px] sm:max-w-[400px] flex-col overflow-hidden rounded-xl border border-amber-500/30 bg-amber-500/[0.04]">
               <div className="shrink-0 border-b bg-muted/40 px-3 py-2">
                 <div className="flex items-center justify-between gap-2">
                   <span className="flex min-w-0 items-center gap-1.5">
@@ -1847,7 +1851,7 @@ export default function EsteiraOnline() {
             const valor = cards.reduce((s, r) => s + (r.total || 0), 0);
             return (
               <div key={etapa.key}
-                   className="flex max-h-full min-w-[240px] max-w-[400px] shrink-0 grow basis-0 flex-col overflow-hidden rounded-xl border bg-muted/20">
+                   className="flex max-h-full min-w-[86vw] max-w-[92vw] snap-start shrink-0 grow basis-0 sm:min-w-[240px] sm:max-w-[400px] flex-col overflow-hidden rounded-xl border bg-muted/20">
                 <div className="shrink-0 border-b bg-muted/40 px-3 py-2">
                   <div className="flex items-center justify-between gap-2">
                     <span className="flex min-w-0 items-center gap-1.5">

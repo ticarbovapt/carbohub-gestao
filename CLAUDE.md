@@ -662,6 +662,16 @@ qualquer um dos cinco, copie para o outro app na mesma tarefa.
 A tela não calcula etapa: quem calcula é a view `public.bling2_esteira`. Regra
 nova entra lá, e as duas telas mudam juntas.
 
+⚠️ **`justify-center` num quadro que rola CORTA a primeira coluna** (medido em
+03/09, com a sidebar aberta em 1366/1440). Quando as colunas estouram a largura,
+centralizar empurra a primeira para fora da borda esquerda e não há como rolar
+de volta — foi isso que fatiava o card "Pago" e parecia "tela quebrada". O
+quadro usa `grow basis-0` (preenche quando cabe) + `justify-start` (rola da
+primeira quando estoura), NUNCA `justify-center`. No celular a coluna vai a
+`~86vw` com `snap-mandatory` (uma coluna cheia por arraste); acima de `sm` volta
+aos 240–400px. Os três pipelines (entrega, recompra, carrinho) compartilham
+essas classes — mude os três, e a tela é espelhada nos três apps.
+
 **Três pipelines no mesmo seletor**, e cada uma tem a SUA view de coluna:
 
 ```
