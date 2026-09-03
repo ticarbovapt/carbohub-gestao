@@ -95,7 +95,14 @@ export interface ComparativoMetrics {
   platform: EcommercePlatform;
   totalOrders: number;
   saleOrders: number;
-  totalUnitsSold: number;
+  /**
+   * ⚠️ Unidades de VENDA (paid|shipped|delivered), não de tudo que chegou.
+   * Chamava-se `totalUnitsSold` e somava pedido cancelado — o cartão dizia
+   * "entregues ao cliente" contando o que ninguém recebeu. A aba de cada
+   * plataforma já usava `saleUnits`; só o Comparativo tinha ficado para trás,
+   * e o mesmo rótulo virava dois números conforme a aba.
+   */
+  saleUnits: number;
   totalRevenue: number;
   avgTicket: number;
   cancelledOrders: number;
@@ -346,11 +353,16 @@ function buildMetrics(
     skuMap.set(key, {
       name,
       sku,
-      orders:  prev.orders  + r.quantity,         // packs sold
-      txns:    prev.txns    + 1,                  // unique orders (kept for reference)
-      units:   prev.units   + displayUnits(r),
-      // Contagens acima somam todo pedido; receita só soma o que foi pago,
-      // para bater com o total dos cartões.
+      // ⚠️ SÓ VENDA, nas três colunas. Antes packs e unidades somavam todo
+      // pedido e só a receita filtrava — a tabela dizia "Unidades" contando
+      // CANCELADO, e o Comparativo ao lado passou a contar só venda: a mesma
+      // palavra com dois números conforme a aba, que é o defeito que este
+      // arquivo já pagou entre o Comparativo e a aba do ML.
+      // A lista branca é a mesma que a dedução de estoque usa para decidir o
+      // que saiu do galpão.
+      orders:  prev.orders  + (isSale(r.status) ? r.quantity : 0),   // packs vendidos
+      txns:    prev.txns    + 1,                  // linhas recebidas, venda ou não
+      units:   prev.units   + (isSale(r.status) ? displayUnits(r) : 0),
       revenue: prev.revenue + (isSale(r.status) ? Number(r.total) : 0),
     });
   }
@@ -717,10 +729,19 @@ function somarPorProduto(
     };
 
     if (sku && !prev.skus.includes(sku)) prev.skus.push(sku);
+    // ⚠️ SÓ VENDA DE VERDADE, nas três colunas. Antes packs e unidades somavam
+    // todas as linhas e só a receita filtrava — então o card dizia "entregues
+    // ao cliente" contando pedido CANCELADO. Medido em 03/09: 67 packs de 596
+    // (11%) nunca foram entregues a ninguém.
+    //
+    // Não era rótulo incompleto, era rótulo FALSO — e é a mesma lista branca
+    // (`isSale` → paid|shipped|delivered) que a dedução de estoque usa para
+    // decidir o que saiu do galpão. Contar aqui o que o estoque não deduz lá
+    // era o painel discordando do próprio sistema.
+    if (!isSale(r.status)) continue;
     prev.packs    += Number(r.quantity) || 0;
     prev.unidades += unidadesExibidas(mapaUnidades, r);
-    // Receita só do que foi PAGO, para o rodapé bater com os cartões do topo.
-    prev.receita  += isSale(r.status) ? Number(r.total) : 0;
+    prev.receita  += Number(r.total) || 0;
     acc.set(key, prev);
   }
 
@@ -968,7 +989,7 @@ export function useEcommerceComparativo(
             platform:        m.platform,
             totalOrders:     m.totalOrders,
             saleOrders:      m.saleOrders,
-            totalUnitsSold:  m.totalUnitsSold,
+            saleUnits:       m.saleUnits,
             totalRevenue:    m.totalRevenue,
             avgTicket:       m.avgTicket,
             cancelledOrders: m.cancelledOrders,

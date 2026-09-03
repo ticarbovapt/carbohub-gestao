@@ -782,7 +782,7 @@ function PlatformView({ platform, period, custom }: { platform: EcommercePlatfor
                     {fmtNum(m.products.reduce((s, p) => s + p.orders, 0))}
                   </td>
                   <td />
-                  <td className="px-4 py-3 text-right" style={{ color: cfg.color }}>{fmtNum(m.totalUnitsSold)}</td>
+                  <td className="px-4 py-3 text-right" style={{ color: cfg.color }}>{fmtNum(m.saleUnits)}</td>
                   <td className="px-5 py-3 text-right">{fmtBRL(m.totalRevenue)}</td>
                 </tr>
               </tfoot>
@@ -836,7 +836,7 @@ function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?:
   const totalRevenue = data.reduce((s, c) => s + c.totalRevenue, 0);
   const totalOrders  = data.reduce((s, c) => s + c.totalOrders, 0);
   const totalSales   = data.reduce((s, c) => s + c.saleOrders, 0);
-  const totalUnits   = data.reduce((s, c) => s + c.totalUnitsSold, 0);
+  const totalUnits   = data.reduce((s, c) => s + c.saleUnits, 0);
   const totalCancel  = data.reduce((s, c) => s + c.cancelledOrders, 0);
   // ⚠️ Divide pelas VENDAS, não por todos os pedidos. Com `totalOrders` o
   // rodapé da tabela imprimia um ticket menor que o de TODAS as linhas acima
@@ -941,7 +941,7 @@ function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?:
           />
           <MetricCard
             label="Unidades" value={fmtNum(totalUnits)}
-            sub="entregues ao cliente, já com o multiplicador do pack"
+            sub="entregues ao cliente · só pedido pago, já com o multiplicador do pack"
             icon={<Boxes className="h-4 w-4" />} accent="#38bdf8"
           />
           <MetricCard
@@ -1008,7 +1008,7 @@ function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?:
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums font-semibold">{fmtNum(c.saleOrders)}</td>
                       <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{fmtNum(c.totalOrders)}</td>
-                      <td className="px-4 py-3 text-right tabular-nums">{fmtNum(c.totalUnitsSold)}</td>
+                      <td className="px-4 py-3 text-right tabular-nums">{fmtNum(c.saleUnits)}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <span className="tabular-nums w-20 shrink-0">{fmtBRL(c.totalRevenue)}</span>
@@ -1596,7 +1596,7 @@ function HistoricoMensalView() {
                               <span className={cn("text-xs font-semibold", cfg.textClass)}>{cfg.emoji} {cfg.label}</span>
                             </td>
                             <td className="px-4 py-2.5 text-right">{fmtNum(r.totalOrders)}</td>
-                            <td className="px-4 py-2.5 text-right">{fmtNum(r.totalUnitsSold)}</td>
+                            <td className="px-4 py-2.5 text-right">{fmtNum(r.saleUnits)}</td>
                             <td className={cn("px-4 py-2.5 text-right font-semibold", isTop && "text-green-600")}>
                               {fmtBRL(r.totalRevenue)}
                               {isTop && <span className="ml-1 text-xs">🏆</span>}
