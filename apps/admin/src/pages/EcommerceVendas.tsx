@@ -22,6 +22,7 @@ import {
   useEcommerceHistoricoMensal,
   type EcommercePlatform, type EcommercePeriod, type RawCheckMetrics, type EcommerceMetrics,
   type ComparativoMetrics,
+  type ProdutoVendido,
   type EcommerceCustom,
   MINUTOS_ATE_ALERTAR,
 } from "@/hooks/useDashEcommerce";
@@ -106,6 +107,102 @@ const fmtBRL = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const fmtNum = (v: number) => v.toLocaleString("pt-BR");
 const pct = (a: number, b: number) => b > 0 ? ((a / b) * 100).toFixed(1) + "%" : "0%";
+
+/**
+ * Quanto de cada produto saiu, somando as plataformas selecionadas.
+ *
+ * ⚠️ O número grande é o que o CLIENTE recebeu — kit de sachês entrega 10
+ * sachês, kit de 100 ml entrega 5 frascos. NÃO é o que sai da prateleira (lá o
+ * kit de sachês tira 1 kit fechado). São duas perguntas diferentes, e a desta
+ * tela é a primeira; ver `lib/skuUnidades.ts`.
+ *
+ * ⚠️ Produto SEM mapeamento aparece marcado, nunca somado a outro nem
+ * escondido: sem cadastro o multiplicador é desconhecido, o número exibido é um
+ * PISO, e apagar essa distinção tira a única pista de que falta cadastrar.
+ */
+function UnidadesPorProduto({ produtos, totalUnidades }: {
+  produtos: ProdutoVendido[];
+  totalUnidades: number;
+}) {
+  if (produtos.length === 0) return null;
+  const semMapa = produtos.filter(p => !p.mapeado).length;
+
+  return (
+    <Card className="rounded-2xl border-0 shadow-sm">
+      <CardHeader className="pb-2 pt-5 px-5 flex-row items-center justify-between space-y-0">
+        <CardTitle className="text-sm font-semibold">Unidades por produto</CardTitle>
+        <span className="text-xs text-muted-foreground">
+          o que o cliente recebeu · soma das plataformas marcadas
+        </span>
+      </CardHeader>
+      <CardContent className="p-0 pb-2">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-y border-border/50 bg-muted/30 text-muted-foreground text-xs">
+                <th className="text-left  px-5 py-2.5 font-medium">Produto</th>
+                {/* "Vendas" aqui é PACK: o que a plataforma vendeu. Chamar de
+                    unidade os dois seria repetir o erro que a tela de
+                    mapeamento do Ops já pagou. */}
+                <th className="text-right px-3 py-2.5 font-medium">Packs vendidos</th>
+                <th className="text-right px-3 py-2.5 font-medium">Unidades ao cliente</th>
+                <th className="text-right px-3 py-2.5 font-medium">Participação</th>
+                <th className="text-right px-5 py-2.5 font-medium">Faturamento</th>
+              </tr>
+            </thead>
+            <tbody>
+              {produtos.map(p => (
+                <tr key={p.key} className="border-b border-border/30 last:border-0">
+                  <td className="px-5 py-2.5">
+                    <div className="font-medium">{p.nome}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {p.productCode && <span className="font-mono">{p.productCode}</span>}
+                      {p.productCode && p.skus.length > 0 && " · "}
+                      {p.skus.length > 0 && <>SKU {p.skus.join(", ")}</>}
+                      {!p.mapeado && (
+                        <span className="ml-1 text-amber-600 dark:text-amber-400">
+                          ⚠️ sem mapeamento — número é o mínimo
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{fmtNum(p.packs)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums font-semibold">
+                    {fmtNum(p.unidades)}
+                  </td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">
+                    {pct(p.unidades, totalUnidades)}
+                  </td>
+                  <td className="px-5 py-2.5 text-right tabular-nums">{fmtBRL(p.receita)}</td>
+                </tr>
+              ))}
+              <tr className="border-t border-border/50 bg-muted/20 font-semibold">
+                <td className="px-5 py-2.5">Total</td>
+                <td className="px-3 py-2.5 text-right tabular-nums">
+                  {fmtNum(produtos.reduce((s, p) => s + p.packs, 0))}
+                </td>
+                <td className="px-3 py-2.5 text-right tabular-nums">
+                  {fmtNum(produtos.reduce((s, p) => s + p.unidades, 0))}
+                </td>
+                <td className="px-3 py-2.5" />
+                <td className="px-5 py-2.5 text-right tabular-nums">
+                  {fmtBRL(produtos.reduce((s, p) => s + p.receita, 0))}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        {semMapa > 0 && (
+          <p className="px-5 pt-2 text-xs text-amber-600 dark:text-amber-400">
+            ⚠️ {semMapa === 1 ? "1 linha sem mapeamento de SKU" : `${semMapa} linhas sem mapeamento de SKU`}:
+            {" "}sem cadastro não há multiplicador, então o total de unidades está SUBESTIMADO.
+            Cadastre em Ops → Suprimentos → CD SP → Mapeamento SKU.
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 const PERIOD_OPTIONS: { value: EcommercePeriod; label: string }[] = [
   { value: "today",     label: "Hoje" },
@@ -758,7 +855,7 @@ function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?:
   // seleção por `["mercadolivre","amazon"]` por baixo do pano — mostrava dados
   // de plataformas que a pessoa tinha DESMARCADO, sem dizer nada. Como o toggle
   // impede desmarcar a última, `selected` nunca fica vazio.
-  const { data } = useEcommerceComparativo(selected, period, custom);
+  const { data, porProduto } = useEcommerceComparativo(selected, period, custom);
 
   // ⚠️ Sem teto. O antigo era `prev.length >= 4`, e com cinco plataformas a
   // quinta simplesmente não entrava — o clique não fazia nada e nada explicava
@@ -884,6 +981,9 @@ function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?:
           />
         </div>
       )}
+
+      {/* ── Unidades por produto ────────────────────────────────────────────── */}
+      <UnidadesPorProduto produtos={porProduto} totalUnidades={totalUnits} />
 
       {/* ── Tabela rica ─────────────────────────────────────────────────────── */}
       <Card className="rounded-2xl border-0 shadow-sm">

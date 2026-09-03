@@ -102,6 +102,43 @@ export interface ComparativoMetrics {
   dailySales: EcommerceDailySale[];
 }
 
+/**
+ * Quanto de CADA PRODUTO saiu, somando as plataformas selecionadas.
+ *
+ * ⚠️ O agrupamento é pelo PRODUTO DO CADASTRO (`sku_product_mappings.product_id`
+ * → `mrp_products`), nunca por dois nomes escritos no código. "Sachê e frasco
+ * 100 ml" é a resposta de hoje; produto novo entra pelo cadastro, sem deploy —
+ * e uma lista fixa aqui o deixaria de fora em silêncio, que é a doença que este
+ * repositório persegue.
+ *
+ * ⚠️ SKU sem mapeamento vira linha PRÓPRIA, com `mapeado: false`. Somá-lo a um
+ * produto qualquer, ou escondê-lo, apagaria a única pista de que falta cadastro
+ * — e é o mesmo motivo pelo qual `units_per_pack` devolve `null` em vez de 1.
+ */
+export interface ProdutoVendido {
+  /** `prod:<uuid>` quando mapeado; `sku:<sku>` ou `nome:<nome>` quando não. */
+  key: string;
+  nome: string;
+  /** Código do cadastro (`CZ100`, `KIT-CARB-SACH-10ML`). `null` sem mapa. */
+  productCode: string | null;
+  /** Os SKUs das plataformas que caem neste produto. */
+  skus: string[];
+  /** `false` = nenhum SKU desta linha resolve para produto do cadastro. */
+  mapeado: boolean;
+  /** Packs vendidos: a soma de `quantity`, que é o que a plataforma vendeu. */
+  packs: number;
+  /**
+   * O que o CLIENTE levou — `display_units_per_pack`, o multiplicador de
+   * exibição. ⚠️ NÃO é `unidades_por_venda`: um kit de sachês entrega 10
+   * sachês e tira 1 kit da prateleira. Trocar os dois faz a venda de kit
+   * aparecer como 1 unidade aqui.
+   * ⚠️ Sem mapa isto vale `units_real ?? quantity` — é PISO, não medida.
+   */
+  unidades: number;
+  /** Só pedido pago, para bater com os cartões do topo. */
+  receita: number;
+}
+
 // Path 1 — raw DB aggregation (no business logic transformation)
 export interface RawCheckMetrics {
   totalOrders: number;
@@ -563,6 +600,135 @@ async function carregarMapaUnidades(
   return construirMapaUnidades(data ?? []);
 }
 
+/** Identidade do produto para o qual um (plataforma, SKU) aponta. */
+interface ProdutoDoSku { productId: string; productCode: string; nome: string }
+
+/**
+ * De (plataforma, SKU) para o PRODUTO do cadastro.
+ *
+ * ⚠️ Consulta separada da `carregarMapaUnidades` de propósito: aquela responde
+ * "quantas unidades", esta responde "de qual produto". Juntá-las faria uma
+ * falha na segunda derrubar a primeira — e a contagem de unidades não pode
+ * depender de o nome do produto estar disponível.
+ *
+ * ⚠️ A chave repete a precedência da `carbo_ecommerce_sku_resolve`: a linha da
+ * PLATAFORMA vence a genérica (`platform = null`). Indexar só pelo SKU faria o
+ * produto de um canal ser atribuído a outro, que foi o defeito que o
+ * `lib/skuUnidades.ts` existe para fechar.
+ */
+async function carregarProdutosDoSku(
+  rows: Pick<DBOrder, "product_sku">[],
+): Promise<Map<string, ProdutoDoSku>> {
+  const skus = [...new Set(rows.map(r => normalizarSku(r.product_sku)).filter(Boolean))] as string[];
+  if (skus.length === 0) return new Map();
+
+  const { data: maps, error } = await supabase
+    .from("sku_product_mappings" as never)
+    .select("platform_sku, platform, product_id")
+    .in("platform_sku", skus)
+    .eq("is_active", true) as {
+      data: { platform_sku: string; platform: string | null; product_id: string | null }[] | null;
+      error: { message: string } | null;
+    };
+
+  if (error) {
+    // Cai para agrupamento por SKU. A tela DIZ que não está mapeado, em vez de
+    // inventar um produto — ausência disfarçada de resposta é pior que ausência.
+    console.error("[useDashEcommerce] produto do SKU indisponível:", error.message);
+    return new Map();
+  }
+
+  const ids = [...new Set((maps ?? []).map(m => m.product_id).filter(Boolean))] as string[];
+  if (ids.length === 0) return new Map();
+
+  const { data: prods, error: erroProd } = await supabase
+    .from("mrp_products" as never)
+    .select("id, product_code, name")
+    .in("id", ids) as {
+      data: { id: string; product_code: string | null; name: string | null }[] | null;
+      error: { message: string } | null;
+    };
+
+  if (erroProd) {
+    console.error("[useDashEcommerce] mrp_products indisponível:", erroProd.message);
+    return new Map();
+  }
+
+  const porId = new Map<string, ProdutoDoSku>();
+  for (const p of prods ?? []) {
+    porId.set(p.id, {
+      productId:   p.id,
+      productCode: p.product_code ?? "",
+      nome:        p.name ?? p.product_code ?? "Produto sem nome",
+    });
+  }
+
+  const saida = new Map<string, ProdutoDoSku>();
+  for (const m of maps ?? []) {
+    const sku = normalizarSku(m.platform_sku);
+    const prod = m.product_id ? porId.get(m.product_id) : undefined;
+    if (!sku || !prod) continue;
+    saida.set(`${m.platform ?? "*"} ${sku}`, prod);
+  }
+  return saida;
+}
+
+/** O produto daquele SKU naquela plataforma — específico vence genérico. */
+function produtoDoSku(
+  mapa: Map<string, ProdutoDoSku>,
+  platform: string,
+  sku: string | null | undefined,
+): ProdutoDoSku | null {
+  const s = normalizarSku(sku);
+  if (!s) return null;
+  return mapa.get(`${platform} ${s}`) ?? mapa.get(`* ${s}`) ?? null;
+}
+
+/**
+ * Soma por produto, atravessando as plataformas selecionadas.
+ *
+ * ⚠️ Unidades usam `unidadesExibidas` — a MESMA função dos cartões do topo.
+ * Uma segunda conta aqui daria dois totais diferentes na mesma tela, que é
+ * como o Comparativo e a aba do ML já divergiram uma vez.
+ */
+function somarPorProduto(
+  rows: DBOrder[],
+  mapaUnidades: MapaUnidades,
+  mapaProdutos: Map<string, ProdutoDoSku>,
+): ProdutoVendido[] {
+  const acc = new Map<string, ProdutoVendido>();
+
+  for (const r of rows) {
+    const sku  = normalizarSku(r.product_sku);
+    const prod = produtoDoSku(mapaProdutos, r.platform, sku);
+    // Sem produto no cadastro a linha NÃO some e NÃO se mistura: ela vira uma
+    // linha própria, pelo SKU, ou pelo nome quando nem SKU existe (Shopee).
+    const key = prod ? `prod:${prod.productId}` : sku ? `sku:${sku}` : `nome:${r.product_name ?? "?"}`;
+
+    const prev = acc.get(key) ?? {
+      key,
+      nome:        prod?.nome ?? r.product_name ?? sku ?? "Produto desconhecido",
+      productCode: prod?.productCode ?? null,
+      skus:        [] as string[],
+      mapeado:     !!prod,
+      packs:       0,
+      unidades:    0,
+      receita:     0,
+    };
+
+    if (sku && !prev.skus.includes(sku)) prev.skus.push(sku);
+    prev.packs    += Number(r.quantity) || 0;
+    prev.unidades += unidadesExibidas(mapaUnidades, r);
+    // Receita só do que foi PAGO, para o rodapé bater com os cartões do topo.
+    prev.receita  += isSale(r.status) ? Number(r.total) : 0;
+    acc.set(key, prev);
+  }
+
+  return [...acc.values()]
+    .map(p => ({ ...p, receita: Math.round(p.receita * 100) / 100 }))
+    .sort((a, b) => b.unidades - a.unidades || b.receita - a.receita);
+}
+
 async function fetchOrders(
   platform: EcommercePlatform,
   period: EcommercePeriod,
@@ -747,9 +913,10 @@ export function useEcommerceComparativo(
   platforms: EcommercePlatform[],
   period: EcommercePeriod,
   custom?: EcommerceCustom,
-): { data: ComparativoMetrics[]; isLoading: boolean } {
-  const [data, setData]         = useState<ComparativoMetrics[]>([]);
-  const [isLoading, setLoading] = useState(true);
+): { data: ComparativoMetrics[]; porProduto: ProdutoVendido[]; isLoading: boolean } {
+  const [data, setData]             = useState<ComparativoMetrics[]>([]);
+  const [porProduto, setPorProduto] = useState<ProdutoVendido[]>([]);
+  const [isLoading, setLoading]     = useState(true);
   const platformsKey = platforms.join(",");
 
   useEffect(() => {
@@ -779,15 +946,22 @@ export function useEcommerceComparativo(
     // unidades" do Mercado Livre com kits de 5 e de 10 no meio.
     supabase
       .from("ecommerce_orders" as never)
-      .select("platform,order_id,product_sku,quantity,units_real,total,status,ordered_at")
+      // ⚠️ `product_name` entrou junto: sem ele a linha SEM SKU (Shopee) não tem
+      // como se identificar na soma por produto, e viraria "Produto
+      // desconhecido" para todas — juntando produtos diferentes numa linha só.
+      .select("platform,order_id,product_sku,product_name,quantity,units_real,total,status,ordered_at")
       .in("platform", platforms)
       .gte("ordered_at", from)
       .lte("ordered_at", to)
       .then(async ({ data: rows }) => {
         if (cancelled) return;
         const allRows = (rows ?? []) as DBOrder[];
-        const mapa = await carregarMapaUnidades(allRows);
+        const [mapa, mapaProdutos] = await Promise.all([
+          carregarMapaUnidades(allRows),
+          carregarProdutosDoSku(allRows),
+        ]);
         if (cancelled) return;
+        setPorProduto(somarPorProduto(allRows, mapa, mapaProdutos));
         const result: ComparativoMetrics[] = platforms.map(p => {
           const m = buildMetrics(p, allRows.filter(r => r.platform === p), [], mapa);
           return {
@@ -807,7 +981,7 @@ export function useEcommerceComparativo(
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [platformsKey, period, custom?.from, custom?.to]);
 
-  return { data, isLoading };
+  return { data, porProduto, isLoading };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
