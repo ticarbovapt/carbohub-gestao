@@ -1039,9 +1039,23 @@ function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?:
                   {/* ⚠️ Duas colunas onde havia uma. "Pedidos" sozinho contava
                       cancelado e não pago junto, e era esse número que o dono
                       lia como venda. Agora o que chegou e o que virou venda
-                      ficam lado a lado, e a diferença entre eles é visível. */}
-                  <th className="text-right px-2.5 py-2.5 font-medium w-px whitespace-nowrap">Vendas</th>
-                  <th className="text-right px-2.5 py-2.5 font-medium w-px whitespace-nowrap">Recebidos</th>
+                      ficam lado a lado, e a diferença entre eles é visível.
+
+                      ⚠️ "Recebidos" NÃO é carrinho aberto. Carrinho abandonado
+                      nunca vira linha em `ecommerce_orders` — ele mora em
+                      `nuvemshop_carrinhos`, noutra pipeline, e só existe na
+                      loja própria. Aqui são PEDIDOS que entraram, em qualquer
+                      status. Foi essa leitura ("recebidos = carrinhos, logo a
+                      diferença são os perdidos") que pediu o `title` abaixo:
+                      a coluna estava certa e não dizia o que era. */}
+                  <th className="text-right px-2.5 py-2.5 font-medium w-px whitespace-nowrap"
+                      title="Pedidos que viraram VENDA: pago, enviado ou entregue. É a base do ticket médio.">
+                    Vendas
+                  </th>
+                  <th className="text-right px-2.5 py-2.5 font-medium w-px whitespace-nowrap"
+                      title="Pedidos que ENTRARAM no período, em qualquer status — não são carrinhos abandonados, que vivem noutra tela. Recebidos − Vendas é o que não converteu, e hoje isso é exatamente a coluna Cancel. É também o denominador da % de cancelamento.">
+                    Recebidos
+                  </th>
                   {/* ⚠️ Uma coluna por PRODUTO DO CADASTRO, geradas de
                       `porProduto` — não existe "coluna do sachê" e "coluna do
                       100 ml" escritas aqui. Produto novo ganha coluna sozinho,
@@ -1064,7 +1078,10 @@ function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?:
                   {/* Sem `w-px`: é ela que fica com a folga toda. */}
                   <th className="text-left px-3 py-2.5 font-medium">Faturamento · participação</th>
                   <th className="text-right px-2.5 py-2.5 font-medium w-px whitespace-nowrap">Ticket médio</th>
-                  <th className="text-right px-4 py-2.5 font-medium w-px whitespace-nowrap">Cancel.</th>
+                  <th className="text-right px-4 py-2.5 font-medium w-px whitespace-nowrap"
+                      title="Pedidos cancelados e quanto representam dos Recebidos. É a medida do que NÃO converteu — por isso não existe uma coluna 'Perdidos' ao lado: seria este mesmo número com outro nome.">
+                    Cancel.
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/30">
