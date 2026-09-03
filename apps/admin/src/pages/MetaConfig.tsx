@@ -148,21 +148,30 @@ export default function MetaConfigPage() {
   const handleClose = () => { setDialog(false); setEdit(null); };
 
   // ── Itens distribuíveis de cada aba ────────────────────────────────────────
-  // ⚠️ A lista sai de `activeMembers`, não de `targets`: quem ainda não tem meta
-  // PRECISA aparecer para receber uma. Montar a partir de `targets` faria o
-  // vendedor sem meta ficar invisível justamente na tela que existe para dar
-  // meta a ele.
+  //
+  // ⚠️ A lista sai de `targets`, NÃO de `activeMembers`.
+  //
+  // A primeira versão usava `activeMembers`, e o card nascia dizendo "Nada para
+  // distribuir neste escopo" mesmo com nove vendedores logo abaixo na tela. O
+  // motivo é que `activeMembers` filtra por `m.status` e `m.is_vendedor`, e a
+  // RPC `carbo_team_members` NÃO retorna nenhum dos dois campos — o filtro é
+  // sempre falso e a lista, sempre vazia. O TypeScript avisava
+  // ("Property 'status' does not exist on type 'TeamMember'") e o aviso foi
+  // lido como ruído pré-existente.
+  //
+  // `useSalesTargetsWithProgress` já resolve isto: monta a partir de `profiles`
+  // com `is_vendedor = true` ("aparecem no dashboard mesmo zerados") e devolve
+  // `target_amount` já resolvido — exceção do mês vence, senão a meta padrão,
+  // senão zero. É a mesma lista que a tela mostra logo abaixo, então o card e
+  // as metas individuais não podem divergir.
   const itensVendedores: ItemDistribuivel[] = useMemo(
-    () => activeMembers.map((m) => {
-      const t = targets.find((x) => x.vendedor_id === m.id);
-      return {
-        id: m.id,
-        nome: m.full_name || "(sem nome)",
-        metaAtual: Number(t?.target_amount ?? 0),
-        realizado: Number(t?.actual_amount ?? 0),
-      };
-    }),
-    [activeMembers, targets],
+    () => targets.map((t) => ({
+      id: t.vendedor_id,
+      nome: t.vendedor?.full_name || "(sem nome)",
+      metaAtual: Number(t.target_amount ?? 0),
+      realizado: Number(t.actual_amount ?? 0),
+    })),
+    [targets],
   );
 
   const itensEcommerce: ItemDistribuivel[] = useMemo(
