@@ -111,6 +111,29 @@ const PMAP = Object.fromEntries(PLATFORMS.map(p => [p.id, p])) as Record<Ecommer
 const fmtBRL = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const fmtNum = (v: number) => v.toLocaleString("pt-BR");
+
+/**
+ * Apelido CURTO de produto, só para caber em cabeçalho de coluna.
+ *
+ * `KIT-CARB-SACH-10ML` come meia tabela e ainda vem truncado
+ * (`KIT-CARB-SACH…`), roubando a largura das colunas da direita, que são as
+ * que têm barra e porcentagem para desenhar.
+ *
+ * ⚠️ É DECORAÇÃO, e a chave é o `product_code` do cadastro. Produto que não
+ * estiver aqui mostra o CÓDIGO — ausência visível, nunca um apelido inventado
+ * nem uma coluna sem nome. O nome completo continua no `title`.
+ *
+ * ⚠️ Isto NÃO é lugar de regra: nada além do rótulo pode depender deste mapa.
+ * O dia em que a lista de produtos crescer, o certo é uma coluna `nome_curto`
+ * em `mrp_products` — cadastro, não código, como já vale para o mapa de SKU.
+ */
+const APELIDO_CURTO: Record<string, string> = {
+  "KIT-CARB-SACH-10ML": "Sachê",
+  "CARB-SACH-10ML":     "Sachê avulso",
+  "CZ100":              "100 ml",
+};
+const rotuloCurto = (p: ProdutoVendido) =>
+  (p.productCode && APELIDO_CURTO[p.productCode]) || p.productCode || p.nome;
 const pct = (a: number, b: number) => b > 0 ? ((a / b) * 100).toFixed(1) + "%" : "0%";
 
 /**
@@ -1005,13 +1028,20 @@ function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?:
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-y border-border/50 bg-muted/30 text-muted-foreground text-xs">
-                  <th className="text-left px-5 py-2.5 font-medium">Plataforma</th>
+                  {/* ⚠️ A LARGURA É DISTRIBUÍDA DE PROPÓSITO.
+                      As colunas de número só precisam caber no número, então
+                      andam com `px-2.5` e `w-px` (que em tabela significa "o
+                      mínimo que couber"). Toda a folga sobra para
+                      "Faturamento · participação", que é a única com BARRA para
+                      desenhar — foi ela que encolheu quando as colunas de
+                      produto entraram, e barra curta deixa de comparar. */}
+                  <th className="text-left px-4 py-2.5 font-medium">Plataforma</th>
                   {/* ⚠️ Duas colunas onde havia uma. "Pedidos" sozinho contava
                       cancelado e não pago junto, e era esse número que o dono
                       lia como venda. Agora o que chegou e o que virou venda
                       ficam lado a lado, e a diferença entre eles é visível. */}
-                  <th className="text-right px-4 py-2.5 font-medium">Vendas</th>
-                  <th className="text-right px-4 py-2.5 font-medium">Recebidos</th>
+                  <th className="text-right px-2.5 py-2.5 font-medium w-px whitespace-nowrap">Vendas</th>
+                  <th className="text-right px-2.5 py-2.5 font-medium w-px whitespace-nowrap">Recebidos</th>
                   {/* ⚠️ Uma coluna por PRODUTO DO CADASTRO, geradas de
                       `porProduto` — não existe "coluna do sachê" e "coluna do
                       100 ml" escritas aqui. Produto novo ganha coluna sozinho,
@@ -1024,17 +1054,17 @@ function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?:
                       produtos. Sem a palavra, quem lê soma e acha que sumiu
                       venda. */}
                   {porProduto.map(p => (
-                    <th key={p.key} className="text-right px-3 py-2.5 font-medium">
-                      <span className="block max-w-[7rem] truncate ml-auto" title={p.nome}>
-                        {p.productCode ?? p.nome}
-                      </span>
+                    <th key={p.key} className="text-right px-2.5 py-2.5 font-medium w-px whitespace-nowrap"
+                        title={p.nome}>
+                      {rotuloCurto(p)}
                       <span className="block text-[10px] font-normal opacity-70">packs</span>
                     </th>
                   ))}
-                  <th className="text-right px-4 py-2.5 font-medium">Unidades</th>
-                  <th className="text-left px-4 py-2.5 font-medium">Faturamento · participação</th>
-                  <th className="text-right px-4 py-2.5 font-medium">Ticket médio</th>
-                  <th className="text-right px-5 py-2.5 font-medium">Cancel.</th>
+                  <th className="text-right px-2.5 py-2.5 font-medium w-px whitespace-nowrap">Unidades</th>
+                  {/* Sem `w-px`: é ela que fica com a folga toda. */}
+                  <th className="text-left px-3 py-2.5 font-medium">Faturamento · participação</th>
+                  <th className="text-right px-2.5 py-2.5 font-medium w-px whitespace-nowrap">Ticket médio</th>
+                  <th className="text-right px-4 py-2.5 font-medium w-px whitespace-nowrap">Cancel.</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/30">
@@ -1044,14 +1074,14 @@ function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?:
                   const isLeader = leaderRevenue?.platform === c.platform && c.totalRevenue > 0;
                   return (
                     <tr key={c.platform} className={cn("hover:bg-muted/20", isLeader && "bg-muted/10")}>
-                      <td className="px-5 py-3">
+                      <td className="px-4 py-3">
                         <span className="inline-flex items-center gap-1.5">
                           <span className={cn("font-semibold", cfg.textClass)}>{cfg.emoji} {cfg.label}</span>
                           {isLeader && <Trophy className="h-3.5 w-3.5 text-amber-500" />}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-right tabular-nums font-semibold">{fmtNum(c.saleOrders)}</td>
-                      <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{fmtNum(c.totalOrders)}</td>
+                      <td className="px-2.5 py-3 text-right tabular-nums font-semibold">{fmtNum(c.saleOrders)}</td>
+                      <td className="px-2.5 py-3 text-right tabular-nums text-muted-foreground">{fmtNum(c.totalOrders)}</td>
                       {/* Zero fica APAGADO, não sumido: "esta plataforma não
                           vendeu este produto" é resposta, e célula vazia
                           parece dado que faltou carregar. */}
@@ -1059,24 +1089,24 @@ function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?:
                         const n = p.packsPorPlataforma[c.platform] ?? 0;
                         return (
                           <td key={p.key}
-                              className={cn("px-3 py-3 text-right tabular-nums",
+                              className={cn("px-2.5 py-3 text-right tabular-nums",
                                             n === 0 && "text-muted-foreground/40")}>
                             {fmtNum(n)}
                           </td>
                         );
                       })}
-                      <td className="px-4 py-3 text-right tabular-nums">{fmtNum(c.saleUnits)}</td>
-                      <td className="px-4 py-3">
+                      <td className="px-2.5 py-3 text-right tabular-nums">{fmtNum(c.saleUnits)}</td>
+                      <td className="px-3 py-3">
                         <div className="flex items-center gap-2">
-                          <span className="tabular-nums w-20 shrink-0">{fmtBRL(c.totalRevenue)}</span>
-                          <div className="flex-1 min-w-[60px] h-1.5 rounded-full bg-muted overflow-hidden">
+                          <span className="tabular-nums w-24 shrink-0">{fmtBRL(c.totalRevenue)}</span>
+                          <div className="flex-1 min-w-[90px] h-1.5 rounded-full bg-muted overflow-hidden">
                             <div className="h-full rounded-full" style={{ width: `${share}%`, background: cfg.color }} />
                           </div>
                           <span className="text-xs text-muted-foreground tabular-nums w-10 text-right">{share.toFixed(0)}%</span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-right tabular-nums">{fmtBRL(c.avgTicket)}</td>
-                      <td className="px-5 py-3 text-right tabular-nums">
+                      <td className="px-2.5 py-3 text-right tabular-nums">{fmtBRL(c.avgTicket)}</td>
+                      <td className="px-4 py-3 text-right tabular-nums">
                         <span className={cn(c.cancelledOrders > 0 ? "text-destructive" : "text-muted-foreground")}>
                           {fmtNum(c.cancelledOrders)}
                           <span className="text-xs text-muted-foreground ml-1">({pct(c.cancelledOrders, c.totalOrders)})</span>
@@ -1088,18 +1118,18 @@ function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?:
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-border/60 bg-muted/20 font-semibold">
-                  <td className="px-5 py-3">Total</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{fmtNum(totalSales)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{fmtNum(totalOrders)}</td>
+                  <td className="px-4 py-3">Total</td>
+                  <td className="px-2.5 py-3 text-right tabular-nums">{fmtNum(totalSales)}</td>
+                  <td className="px-2.5 py-3 text-right tabular-nums text-muted-foreground">{fmtNum(totalOrders)}</td>
                   {/* O total de cada produto é o `packs` que os cards já
                       mostram — mesmo número, mesma origem. */}
                   {porProduto.map(p => (
-                    <td key={p.key} className="px-3 py-3 text-right tabular-nums">{fmtNum(p.packs)}</td>
+                    <td key={p.key} className="px-2.5 py-3 text-right tabular-nums">{fmtNum(p.packs)}</td>
                   ))}
-                  <td className="px-4 py-3 text-right tabular-nums">{fmtNum(totalUnits)}</td>
-                  <td className="px-4 py-3 tabular-nums">{fmtBRL(totalRevenue)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{fmtBRL(overallTicket)}</td>
-                  <td className="px-5 py-3 text-right tabular-nums">
+                  <td className="px-2.5 py-3 text-right tabular-nums">{fmtNum(totalUnits)}</td>
+                  <td className="px-3 py-3 tabular-nums">{fmtBRL(totalRevenue)}</td>
+                  <td className="px-2.5 py-3 text-right tabular-nums">{fmtBRL(overallTicket)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">
                     {fmtNum(totalCancel)}
                     <span className="text-xs text-muted-foreground ml-1">({pct(totalCancel, totalOrders)})</span>
                   </td>
