@@ -165,7 +165,7 @@ function MetricCard({
  * de sachês = 10 sachês). NÃO é o que sai da prateleira, onde o mesmo kit vale
  * 1. Ver `lib/skuUnidades.ts`.
  */
-function ProdutoCard({ p, totalUnidades }: { p: ProdutoVendido; totalUnidades: number }) {
+function ProdutoCard({ p, totalPacks }: { p: ProdutoVendido; totalPacks: number }) {
   // Sem mapeamento o multiplicador é desconhecido e o número é um PISO. O card
   // diz isso na cara — some-lo aos outros apagaria a pista de que falta cadastro.
   const accent = p.mapeado ? "#a78bfa" : "#f59e0b";
@@ -173,7 +173,7 @@ function ProdutoCard({ p, totalUnidades }: { p: ProdutoVendido; totalUnidades: n
     <div
       className="rounded-xl border bg-card p-3 flex flex-col gap-1 transition-all hover:-translate-y-0.5 hover:shadow-md"
       style={{ borderLeftColor: accent, borderLeftWidth: 3 }}
-      title={`${p.nome}${p.productCode ? ` · ${p.productCode}` : ""}${p.skus.length ? ` · SKU ${p.skus.join(", ")}` : ""}\n${fmtNum(p.packs)} packs vendidos → ${fmtNum(p.unidades)} unidades ao cliente\nFaturamento ${fmtBRL(p.receita)}`}
+      title={`${p.nome}${p.productCode ? ` · ${p.productCode}` : ""}${p.skus.length ? ` · SKU ${p.skus.join(", ")}` : ""}\n${fmtNum(p.packs)} packs vendidos (${pct(p.packs, totalPacks)} dos packs) → ${fmtNum(p.unidades)} unidades ao cliente\nFaturamento ${fmtBRL(p.receita)}`}
     >
       <div className="flex items-start justify-between gap-1.5">
         <p className="text-[11px] font-medium text-muted-foreground leading-tight line-clamp-2">
@@ -188,14 +188,21 @@ function ProdutoCard({ p, totalUnidades }: { p: ProdutoVendido; totalUnidades: n
       {/* ⚠️ O número grande é o PACK — o que a plataforma vendeu. As unidades
           vêm logo abaixo, com a palavra escrita: os dois são verdadeiros e
           medem coisas diferentes, e um número solto de "350" ao lado de
-          "Vendas 71" faria parecer contagem de pedido. A porcentagem é sobre
-          UNIDADES, e por isso fica colada nelas. */}
+          "Vendas 71" faria parecer contagem de pedido. */}
       <p className="text-lg font-bold leading-none">
         {fmtNum(p.packs)}
         <span className="text-[11px] font-medium text-muted-foreground ml-1">packs</span>
       </p>
+      {/* ⚠️ A porcentagem é sobre PACKS, e diz isso por escrito.
+          Sobre UNIDADES ela não comparava produto com produto: o pack de sachês
+          entrega 10 e o de 100 ml entrega 5, então a mesma quantidade de
+          compras dava 66,7% × 33,3% — o dobro para quem tem o pack maior, por
+          construção. Medido em 03/09 com 6 packs de cada, que é empate e
+          aparecia como 2 para 1.
+          Base diferente do número grande engana calado, então o rótulo "dos
+          packs" fica na tela e não só neste comentário. */}
       <p className="text-[11px] text-muted-foreground leading-snug">
-        {fmtNum(p.unidades)} un. · {pct(p.unidades, totalUnidades)} · {fmtBRL(p.receita)}
+        {pct(p.packs, totalPacks)} dos packs · {fmtNum(p.unidades)} un. · {fmtBRL(p.receita)}
         {!p.mapeado && (
           <span className="text-amber-600 dark:text-amber-400"> · sem mapa, é o mínimo</span>
         )}
@@ -837,6 +844,10 @@ function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?:
   const totalOrders  = data.reduce((s, c) => s + c.totalOrders, 0);
   const totalSales   = data.reduce((s, c) => s + c.saleOrders, 0);
   const totalUnits   = data.reduce((s, c) => s + c.saleUnits, 0);
+  // ⚠️ Base da porcentagem dos cards de produto. Sai de `porProduto`, NUNCA de
+  // `totalUnits`: unidade não compara produto com produto quando os packs têm
+  // tamanhos diferentes (sachê 10, CZ100 5) — ver o comentário no ProdutoCard.
+  const totalPacksProdutos = porProduto.reduce((s, p) => s + p.packs, 0);
   const totalCancel  = data.reduce((s, c) => s + c.cancelledOrders, 0);
   // ⚠️ Divide pelas VENDAS, não por todos os pedidos. Com `totalOrders` o
   // rodapé da tabela imprimia um ticket menor que o de TODAS as linhas acima
@@ -951,7 +962,7 @@ function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?:
             icon={<Trophy className="h-4 w-4" />} accent={leaderRevenue ? PMAP[leaderRevenue.platform].color : "#94a3b8"}
           />
           {porProduto.map(p => (
-            <ProdutoCard key={p.key} p={p} totalUnidades={totalUnits} />
+            <ProdutoCard key={p.key} p={p} totalPacks={totalPacksProdutos} />
           ))}
         </div>
       )}
