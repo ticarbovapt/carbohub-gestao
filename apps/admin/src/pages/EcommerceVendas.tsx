@@ -108,102 +108,6 @@ const fmtBRL = (v: number) =>
 const fmtNum = (v: number) => v.toLocaleString("pt-BR");
 const pct = (a: number, b: number) => b > 0 ? ((a / b) * 100).toFixed(1) + "%" : "0%";
 
-/**
- * Quanto de cada produto saiu, somando as plataformas selecionadas.
- *
- * ⚠️ O número grande é o que o CLIENTE recebeu — kit de sachês entrega 10
- * sachês, kit de 100 ml entrega 5 frascos. NÃO é o que sai da prateleira (lá o
- * kit de sachês tira 1 kit fechado). São duas perguntas diferentes, e a desta
- * tela é a primeira; ver `lib/skuUnidades.ts`.
- *
- * ⚠️ Produto SEM mapeamento aparece marcado, nunca somado a outro nem
- * escondido: sem cadastro o multiplicador é desconhecido, o número exibido é um
- * PISO, e apagar essa distinção tira a única pista de que falta cadastrar.
- */
-function UnidadesPorProduto({ produtos, totalUnidades }: {
-  produtos: ProdutoVendido[];
-  totalUnidades: number;
-}) {
-  if (produtos.length === 0) return null;
-  const semMapa = produtos.filter(p => !p.mapeado).length;
-
-  return (
-    <Card className="rounded-2xl border-0 shadow-sm">
-      <CardHeader className="pb-2 pt-5 px-5 flex-row items-center justify-between space-y-0">
-        <CardTitle className="text-sm font-semibold">Unidades por produto</CardTitle>
-        <span className="text-xs text-muted-foreground">
-          o que o cliente recebeu · soma das plataformas marcadas
-        </span>
-      </CardHeader>
-      <CardContent className="p-0 pb-2">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-y border-border/50 bg-muted/30 text-muted-foreground text-xs">
-                <th className="text-left  px-5 py-2.5 font-medium">Produto</th>
-                {/* "Vendas" aqui é PACK: o que a plataforma vendeu. Chamar de
-                    unidade os dois seria repetir o erro que a tela de
-                    mapeamento do Ops já pagou. */}
-                <th className="text-right px-3 py-2.5 font-medium">Packs vendidos</th>
-                <th className="text-right px-3 py-2.5 font-medium">Unidades ao cliente</th>
-                <th className="text-right px-3 py-2.5 font-medium">Participação</th>
-                <th className="text-right px-5 py-2.5 font-medium">Faturamento</th>
-              </tr>
-            </thead>
-            <tbody>
-              {produtos.map(p => (
-                <tr key={p.key} className="border-b border-border/30 last:border-0">
-                  <td className="px-5 py-2.5">
-                    <div className="font-medium">{p.nome}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {p.productCode && <span className="font-mono">{p.productCode}</span>}
-                      {p.productCode && p.skus.length > 0 && " · "}
-                      {p.skus.length > 0 && <>SKU {p.skus.join(", ")}</>}
-                      {!p.mapeado && (
-                        <span className="ml-1 text-amber-600 dark:text-amber-400">
-                          ⚠️ sem mapeamento — número é o mínimo
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">{fmtNum(p.packs)}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums font-semibold">
-                    {fmtNum(p.unidades)}
-                  </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">
-                    {pct(p.unidades, totalUnidades)}
-                  </td>
-                  <td className="px-5 py-2.5 text-right tabular-nums">{fmtBRL(p.receita)}</td>
-                </tr>
-              ))}
-              <tr className="border-t border-border/50 bg-muted/20 font-semibold">
-                <td className="px-5 py-2.5">Total</td>
-                <td className="px-3 py-2.5 text-right tabular-nums">
-                  {fmtNum(produtos.reduce((s, p) => s + p.packs, 0))}
-                </td>
-                <td className="px-3 py-2.5 text-right tabular-nums">
-                  {fmtNum(produtos.reduce((s, p) => s + p.unidades, 0))}
-                </td>
-                <td className="px-3 py-2.5" />
-                <td className="px-5 py-2.5 text-right tabular-nums">
-                  {fmtBRL(produtos.reduce((s, p) => s + p.receita, 0))}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        {semMapa > 0 && (
-          <p className="px-5 pt-2 text-xs text-amber-600 dark:text-amber-400">
-            ⚠️ {semMapa === 1 ? "1 linha sem mapeamento de SKU" : `${semMapa} linhas sem mapeamento de SKU`}:
-            {" "}sem cadastro não há multiplicador, então o total de unidades está SUBESTIMADO.
-            Cadastre em Ops → Suprimentos → CD SP → Mapeamento SKU.
-          </p>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
 const PERIOD_OPTIONS: { value: EcommercePeriod; label: string }[] = [
   { value: "today",     label: "Hoje" },
   { value: "yesterday", label: "Ontem" },
@@ -225,17 +129,69 @@ function MetricCard({
 }) {
   return (
     <div
-      className="rounded-xl border bg-card p-4 flex flex-col gap-1.5 transition-all hover:-translate-y-0.5 hover:shadow-md"
+      className="rounded-xl border bg-card p-3 flex flex-col gap-1 transition-all hover:-translate-y-0.5 hover:shadow-md"
       style={{ borderLeftColor: accent, borderLeftWidth: 3 }}
     >
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide leading-tight">{label}</p>
-        <div className="p-1.5 rounded-lg shrink-0" style={{ background: accent + "20" }}>
+      <div className="flex items-start justify-between gap-1.5">
+        <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide leading-tight">{label}</p>
+        <div className="p-1 rounded-lg shrink-0" style={{ background: accent + "20" }}>
           <div style={{ color: accent }}>{icon}</div>
         </div>
       </div>
-      <p className="text-xl font-bold leading-none">{value}</p>
-      {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
+      <p className="text-lg font-bold leading-none truncate" title={value}>{value}</p>
+      {/* ⚠️ `line-clamp-2` + `title`: a legenda encolhe mas NÃO se perde. Ela
+          carrega o que o número significa ("unidades entregues ao cliente"), e
+          rótulo que nomeia a coisa errada ensina uma leitura falsa do painel —
+          foi por isso que "frascos" saiu daqui. Cortar o texto é aceitável;
+          cortar o sentido, não. */}
+      {sub && (
+        <p className="text-[11px] text-muted-foreground leading-snug line-clamp-2" title={sub}>
+          {sub}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Um produto, um card — quanto o CLIENTE levou daquele item.
+ *
+ * ⚠️ Os cards saem do array `porProduto`, um por produto do cadastro: NÃO há
+ * "card do sachê" e "card do 100 ml" escritos aqui. Produto novo entra pelo
+ * cadastro de SKU e ganha card sozinho; uma dupla fixa o deixaria de fora em
+ * silêncio.
+ *
+ * ⚠️ O número grande é `display_units_per_pack` — o que o cliente recebeu (kit
+ * de sachês = 10 sachês). NÃO é o que sai da prateleira, onde o mesmo kit vale
+ * 1. Ver `lib/skuUnidades.ts`.
+ */
+function ProdutoCard({ p, totalUnidades }: { p: ProdutoVendido; totalUnidades: number }) {
+  // Sem mapeamento o multiplicador é desconhecido e o número é um PISO. O card
+  // diz isso na cara — some-lo aos outros apagaria a pista de que falta cadastro.
+  const accent = p.mapeado ? "#a78bfa" : "#f59e0b";
+  return (
+    <div
+      className="rounded-xl border bg-card p-3 flex flex-col gap-1 transition-all hover:-translate-y-0.5 hover:shadow-md"
+      style={{ borderLeftColor: accent, borderLeftWidth: 3 }}
+      title={`${p.nome}${p.productCode ? ` · ${p.productCode}` : ""}${p.skus.length ? ` · SKU ${p.skus.join(", ")}` : ""}\n${fmtNum(p.packs)} packs vendidos → ${fmtNum(p.unidades)} unidades ao cliente\nFaturamento ${fmtBRL(p.receita)}`}
+    >
+      <div className="flex items-start justify-between gap-1.5">
+        <p className="text-[11px] font-medium text-muted-foreground leading-tight line-clamp-2">
+          {p.nome}
+        </p>
+        <div className="p-1 rounded-lg shrink-0" style={{ background: accent + "20" }}>
+          <div style={{ color: accent }}>
+            {p.mapeado ? <Package className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+          </div>
+        </div>
+      </div>
+      <p className="text-lg font-bold leading-none">{fmtNum(p.unidades)}</p>
+      <p className="text-[11px] text-muted-foreground leading-snug">
+        {fmtNum(p.packs)} packs · {pct(p.unidades, totalUnidades)} · {fmtBRL(p.receita)}
+        {!p.mapeado && (
+          <span className="text-amber-600 dark:text-amber-400"> · sem mapa, é o mínimo</span>
+        )}
+      </p>
     </div>
   );
 }
@@ -956,8 +912,15 @@ function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?:
       )}
 
       {/* ── Destaques ───────────────────────────────────────────────────────── */}
+      {/* ⚠️ Os quatro cartões do período e os cards por PRODUTO moram na MESMA
+          grade de propósito: são a mesma pergunta em dois cortes ("quanto
+          saiu"), e a soma das unidades dos produtos tem de bater com o cartão
+          "Unidades". Duas grades separadas convidariam a duas contas — foi
+          assim que o Comparativo e a aba do ML já mostraram números
+          diferentes para o mesmo dado.
+          A grade cresce sozinha: produto novo vira card e a linha quebra. */}
       {anyConnected && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
           <MetricCard
             label="Vendas" value={fmtNum(totalSales)}
             sub={`de ${fmtNum(totalOrders)} pedidos recebidos`}
@@ -970,7 +933,7 @@ function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?:
           />
           <MetricCard
             label="Unidades" value={fmtNum(totalUnits)}
-            sub="unidades entregues ao cliente, já com o multiplicador do pack"
+            sub="entregues ao cliente, já com o multiplicador do pack"
             icon={<Boxes className="h-4 w-4" />} accent="#38bdf8"
           />
           <MetricCard
@@ -979,11 +942,25 @@ function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?:
             sub={leaderRevenue ? `${fmtBRL(leaderRevenue.totalRevenue)} · ${pct(leaderRevenue.totalRevenue, totalRevenue)} do total` : undefined}
             icon={<Trophy className="h-4 w-4" />} accent={leaderRevenue ? PMAP[leaderRevenue.platform].color : "#94a3b8"}
           />
+          {porProduto.map(p => (
+            <ProdutoCard key={p.key} p={p} totalUnidades={totalUnits} />
+          ))}
         </div>
       )}
 
-      {/* ── Unidades por produto ────────────────────────────────────────────── */}
-      <UnidadesPorProduto produtos={porProduto} totalUnidades={totalUnits} />
+      {/* ⚠️ O aviso sobrevive à mudança de tabela para card. Sem mapeamento não
+          há multiplicador, o total de unidades fica SUBESTIMADO, e esconder isso
+          tiraria a única pista de que falta cadastrar — mesmo motivo pelo qual
+          `units_per_pack` devolve `null` em vez de 1. */}
+      {anyConnected && porProduto.some(p => !p.mapeado) && (
+        <p className="text-xs text-amber-600 dark:text-amber-400 -mt-1">
+          ⚠️ {porProduto.filter(p => !p.mapeado).length === 1
+            ? "1 produto sem mapeamento de SKU"
+            : `${porProduto.filter(p => !p.mapeado).length} produtos sem mapeamento de SKU`}:
+          {" "}sem cadastro não há multiplicador, então o total de unidades está subestimado.
+          Cadastre em Ops → Suprimentos → CD SP → Mapeamento SKU.
+        </p>
+      )}
 
       {/* ── Tabela rica ─────────────────────────────────────────────────────── */}
       <Card className="rounded-2xl border-0 shadow-sm">
