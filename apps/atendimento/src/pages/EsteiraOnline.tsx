@@ -1898,12 +1898,28 @@ export default function EsteiraOnline() {
           passou dos 30 dias — e um pedido travado não fica menos travado por
           envelhecer. Fechado por padrão para não competir com o quadro, mas
           com a contagem sempre visível. */}
-      {pipeline === "entrega" && travadosAntigos.length > 0 && (
-        <details className="shrink-0 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
+      {/* ⚠️ UMA FITA, não três blocos empilhados.
+          Antes eram três elementos `shrink-0` em sequência — travados,
+          cancelados e o rodapé explicativo — e o container tem `gap-4`. Só de
+          espaçamento iam 48px, e com as caixas o conjunto comia ~190px de
+          altura ANTES de qualquer card aparecer. Numa tela de notebook isso é o
+          quadro inteiro encolhendo por causa de informação que quase ninguém
+          abre; no celular, o quadro sumia.
+          Agora são chips numa linha só, que embrulham quando não cabem. E o que
+          for ABERTO vira largura total (`[&[open]]:w-full`), porque aí os cards
+          de dentro precisam de espaço — fechado é atalho, aberto é conteúdo. */}
+      {pipeline === "entrega" && (
+        <div className="flex shrink-0 flex-wrap items-start gap-2">
+      {travadosAntigos.length > 0 && (
+        <details className="[&[open]]:w-full rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-1.5">
           <summary className="flex cursor-pointer items-center gap-1.5 text-xs font-medium">
-            <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
-            {travadosAntigos.length} travados antes do período —{" "}
-            {brl(travadosAntigos.reduce((s, r) => s + (r.total || 0), 0))}
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+            {travadosAntigos.length} travados
+            {/* O detalhe some no celular: a contagem é o que faz alguém abrir,
+                o valor é consequência. */}
+            <span className="hidden sm:inline">
+              {" "}antes do período — {brl(travadosAntigos.reduce((s, r) => s + (r.total || 0), 0))}
+            </span>
           </summary>
           <p className="mt-2 text-[11px] text-muted-foreground">
             Pedidos anteriores a {de.split("-").reverse().join("/")} que ainda não
@@ -1925,11 +1941,14 @@ export default function EsteiraOnline() {
         </details>
       )}
 
-      {pipeline === "entrega" && cancelados.length > 0 && (
-        <details className="shrink-0 rounded-xl border p-3">
+      {cancelados.length > 0 && (
+        <details className="[&[open]]:w-full rounded-xl border px-3 py-1.5">
           <summary className="flex cursor-pointer items-center gap-1.5 text-xs font-medium">
-            <XCircle className="h-3.5 w-3.5 text-red-500" />
-            {cancelados.length} cancelados — {brl(cancelados.reduce((s, r) => s + (r.total || 0), 0))}
+            <XCircle className="h-3.5 w-3.5 shrink-0 text-red-500" />
+            {cancelados.length} cancelados
+            <span className="hidden sm:inline">
+              {" "}— {brl(cancelados.reduce((s, r) => s + (r.total || 0), 0))}
+            </span>
           </summary>
           <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3 xl:grid-cols-5">
             {cancelados.map((r) => (
@@ -1940,13 +1959,21 @@ export default function EsteiraOnline() {
         </details>
       )}
 
-      {pipeline === "entrega" && (
-      <p className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground">
-        <Clock className="h-3 w-3" />
-        "Pago" vem direto da loja e aparece segundos depois da compra; as etapas seguintes
-        vêm do Bling (pedido, nota, etiqueta) e das plataformas (envio, entrega).
-        A tela atualiza sozinha; nenhum card é arrastável de propósito.
-      </p>
+      {/* O rodapé explicativo virou chip: é texto que se lê UMA vez e depois
+          ocupa altura para sempre. Nada foi cortado — só deixou de ser
+          permanente. */}
+      <details className="[&[open]]:w-full rounded-xl border px-3 py-1.5">
+        <summary className="flex cursor-pointer items-center gap-1.5 text-xs font-medium text-muted-foreground">
+          <Clock className="h-3.5 w-3.5 shrink-0" />
+          Como ler esta tela
+        </summary>
+        <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+          "Pago" vem direto da loja e aparece segundos depois da compra; as etapas seguintes
+          vêm do Bling (pedido, nota, etiqueta) e das plataformas (envio, entrega).
+          A tela atualiza sozinha; nenhum card é arrastável de propósito.
+        </p>
+      </details>
+        </div>
       )}
 
       {aberto && (
