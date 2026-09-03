@@ -5,7 +5,10 @@ import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Lock, LockOpen, Scale, TrendingUp, Save, AlertTriangle, Check } from "lucide-react";
+import {
+  Lock, LockOpen, Scale, TrendingUp, Save, AlertTriangle, Check,
+  SlidersHorizontal, ChevronDown,
+} from "lucide-react";
 import {
   useMetaGeral, useDistribuirMeta,
   distribuirIgual, distribuirProporcional, redistribuirDestravados,
@@ -44,6 +47,11 @@ export function DistribuirMetaCard({
   const [valores, setValores] = useState<Record<string, number>>({});
   const [travados, setTravados] = useState<Set<string>>(new Set());
   const [mexeu, setMexeu] = useState(false);
+  // ⚠️ Nasce FECHADO, sempre — e de propósito não é lembrado em localStorage
+  // (como faz a sidebar). "Só abrir quando tiver necessidade" quer dizer que o
+  // padrão é fechado toda vez; guardar a preferência devolveria o bloco aberto
+  // para quem mexeu nele uma vez no mês passado.
+  const [aberto, setAberto] = useState(false);
 
   const chaveDoMes = `${escopo}-${format(mes, "yyyy-MM")}`;
 
@@ -55,6 +63,7 @@ export function DistribuirMetaCard({
     setValores(Object.fromEntries(itens.map((i) => [i.id, i.metaAtual])));
     setTravados(new Set());
     setMexeu(false);
+    setAberto(false);   // trocar de mês ou de aba recolhe de novo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chaveDoMes, metaSalva, itens.length]);
 
@@ -100,18 +109,83 @@ export function DistribuirMetaCard({
   const pctBarra = total > 0 ? Math.min(100, (distribuido / total) * 100) : 0;
 
   if (carregando || carregandoMeta) {
-    return <div className="h-40 rounded-xl bg-muted/40 animate-pulse" />;
+    return <div className="h-20 rounded-xl bg-muted/40 animate-pulse" />;
   }
+
+  // O selo de situação aparece nos DOIS estados — recolhido e aberto. É ele que
+  // justifica o bloco existir fechado: sem abrir nada, a pessoa já sabe se a
+  // meta do mês está reservada, sobrando ou estourada.
+  const selo = total > 0 && (
+    residual === 0 ? (
+      <span className="flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+        <Check className="h-3.5 w-3.5" /> a soma fecha
+      </span>
+    ) : residual > 0 ? (
+      <span className="flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400">
+        <AlertTriangle className="h-3.5 w-3.5" /> faltam {fmtBRL(residual)}
+      </span>
+    ) : (
+      <span className="flex items-center gap-1 text-xs font-medium text-red-600 dark:text-red-400">
+        <AlertTriangle className="h-3.5 w-3.5" /> passou {fmtBRL(Math.abs(residual))} do total
+      </span>
+    )
+  );
 
   return (
     <CarboCard>
       <CarboCardContent className="space-y-4 py-4">
 
-        {/* ── A meta geral ── */}
-        <div className="flex flex-wrap items-end justify-between gap-4">
+        {/* ── Cabeçalho: o único trecho sempre visível ──────────────────────
+            ⚠️ Recolhido por PADRÃO. Distribuir meta é ato raro — acontece uma
+            vez por mês — e o bloco aberto empurrava as metas individuais, que
+            são o que se consulta todo dia, para fora da primeira dobra. */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-xs font-medium text-muted-foreground">
+              Meta geral de {format(mes, "MMMM", { locale: ptBR })}
+            </div>
+            <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+              <span className="text-xl font-bold tabular-nums">
+                {total > 0 ? fmtBRL(total) : "não definida"}
+              </span>
+              {total > 0 && (
+                <span className="text-xs text-muted-foreground">
+                  · {fmtBRL(distribuido)} distribuídos
+                </span>
+              )}
+              {selo}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {/* ⚠️ Recolher NÃO descarta edição — o estado vive neste componente
+                e sobrevive ao fechar. Mas some da vista, então o aviso é o que
+                impede alguém de fechar e esquecer de salvar. */}
+            {!aberto && mexeu && (
+              <Badge variant="outline" className="border-amber-500/50 text-xs text-amber-600 dark:text-amber-400">
+                alterações não salvas
+              </Badge>
+            )}
+            <Button
+              variant={aberto ? "ghost" : "outline"}
+              size="sm"
+              onClick={() => setAberto((a) => !a)}
+              aria-expanded={aberto}
+            >
+              <SlidersHorizontal className="mr-1.5 h-4 w-4" />
+              {aberto ? "Fechar" : "Ajustar distribuição"}
+              <ChevronDown className={cn("ml-1.5 h-4 w-4 transition-transform", aberto && "rotate-180")} />
+            </Button>
+          </div>
+        </div>
+
+        {aberto && (<>
+
+        {/* ── A meta geral (editável) ── */}
+        <div className="flex flex-wrap items-end justify-between gap-4 border-t pt-4">
           <div>
             <label className="text-xs font-medium text-muted-foreground">
-              Meta geral de {format(mes, "MMMM", { locale: ptBR })}
+              Valor da meta geral
             </label>
             <div className="mt-1 flex items-center gap-2">
               <span className="text-muted-foreground">R$</span>
@@ -155,21 +229,9 @@ export function DistribuirMetaCard({
             <span className="text-muted-foreground">
               {fmtBRL(distribuido)} distribuídos de {fmtBRL(total)}
             </span>
-            {total > 0 && (
-              residual === 0 ? (
-                <span className="flex items-center gap-1 font-medium text-emerald-600 dark:text-emerald-400">
-                  <Check className="h-3.5 w-3.5" /> a soma fecha
-                </span>
-              ) : residual > 0 ? (
-                <span className="flex items-center gap-1 font-medium text-amber-600 dark:text-amber-400">
-                  <AlertTriangle className="h-3.5 w-3.5" /> faltam {fmtBRL(residual)}
-                </span>
-              ) : (
-                <span className="flex items-center gap-1 font-medium text-red-600 dark:text-red-400">
-                  <AlertTriangle className="h-3.5 w-3.5" /> passou {fmtBRL(Math.abs(residual))} do total
-                </span>
-              )
-            )}
+            {/* Mesmo selo do cabeçalho — uma definição só, para os dois
+                estados não poderem divergir. */}
+            {selo}
           </div>
         </div>
 
@@ -239,6 +301,8 @@ export function DistribuirMetaCard({
             {distribuir.isPending ? "Salvando…" : "Salvar distribuição"}
           </Button>
         </div>
+
+        </>)}
 
       </CarboCardContent>
     </CarboCard>
