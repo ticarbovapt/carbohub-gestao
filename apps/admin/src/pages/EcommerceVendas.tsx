@@ -185,9 +185,17 @@ function ProdutoCard({ p, totalUnidades }: { p: ProdutoVendido; totalUnidades: n
           </div>
         </div>
       </div>
-      <p className="text-lg font-bold leading-none">{fmtNum(p.unidades)}</p>
+      {/* ⚠️ O número grande é o PACK — o que a plataforma vendeu. As unidades
+          vêm logo abaixo, com a palavra escrita: os dois são verdadeiros e
+          medem coisas diferentes, e um número solto de "350" ao lado de
+          "Vendas 71" faria parecer contagem de pedido. A porcentagem é sobre
+          UNIDADES, e por isso fica colada nelas. */}
+      <p className="text-lg font-bold leading-none">
+        {fmtNum(p.packs)}
+        <span className="text-[11px] font-medium text-muted-foreground ml-1">packs</span>
+      </p>
       <p className="text-[11px] text-muted-foreground leading-snug">
-        {fmtNum(p.packs)} packs · {pct(p.unidades, totalUnidades)} · {fmtBRL(p.receita)}
+        {fmtNum(p.unidades)} un. · {pct(p.unidades, totalUnidades)} · {fmtBRL(p.receita)}
         {!p.mapeado && (
           <span className="text-amber-600 dark:text-amber-400"> · sem mapa, é o mínimo</span>
         )}
