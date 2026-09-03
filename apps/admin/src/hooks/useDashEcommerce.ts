@@ -153,6 +153,15 @@ export interface ProdutoVendido {
   unidades: number;
   /** Só pedido pago, para bater com os cartões do topo. */
   receita: number;
+  /**
+   * Packs deste produto EM CADA plataforma — a quebra que o Resumo Comparativo
+   * mostra por linha ("quantas dessas vendas foram de sachê").
+   *
+   * ⚠️ São PACKS, não pedidos: a soma das colunas de produto NÃO fecha com a
+   * coluna "Vendas", porque um pedido pode levar dois packs ou os dois
+   * produtos. Quem lê precisa disso escrito, senão soma e acha que falta.
+   */
+  packsPorPlataforma: Record<string, number>;
 }
 
 // Path 1 — raw DB aggregation (no business logic transformation)
@@ -748,6 +757,7 @@ function somarPorProduto(
       packs:       0,
       unidades:    0,
       receita:     0,
+      packsPorPlataforma: {} as Record<string, number>,
     };
 
     if (sku && !prev.skus.includes(sku)) prev.skus.push(sku);
@@ -761,9 +771,13 @@ function somarPorProduto(
     // decidir o que saiu do galpão. Contar aqui o que o estoque não deduz lá
     // era o painel discordando do próprio sistema.
     if (!isSale(r.status)) continue;
-    prev.packs    += Number(r.quantity) || 0;
+    const qtd = Number(r.quantity) || 0;
+    prev.packs    += qtd;
     prev.unidades += unidadesExibidas(mapaUnidades, r);
     prev.receita  += Number(r.total) || 0;
+    // A MESMA linha que entrou no total entra na quebra por plataforma — um
+    // laço só, então os dois números não têm como divergir.
+    prev.packsPorPlataforma[r.platform] = (prev.packsPorPlataforma[r.platform] ?? 0) + qtd;
     acc.set(key, prev);
   }
 

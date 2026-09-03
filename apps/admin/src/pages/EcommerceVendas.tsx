@@ -1012,6 +1012,25 @@ function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?:
                       ficam lado a lado, e a diferença entre eles é visível. */}
                   <th className="text-right px-4 py-2.5 font-medium">Vendas</th>
                   <th className="text-right px-4 py-2.5 font-medium">Recebidos</th>
+                  {/* ⚠️ Uma coluna por PRODUTO DO CADASTRO, geradas de
+                      `porProduto` — não existe "coluna do sachê" e "coluna do
+                      100 ml" escritas aqui. Produto novo ganha coluna sozinho,
+                      pelo mesmo caminho dos cards.
+                      Ficam entre "Recebidos" e "Unidades" de propósito: a
+                      leitura fecha da esquerda para a direita — quantos packs
+                      de cada → quantas unidades no total.
+                      ⚠️ O cabeçalho diz "packs" porque a soma delas NÃO fecha
+                      com "Vendas": um pedido pode levar dois packs ou os dois
+                      produtos. Sem a palavra, quem lê soma e acha que sumiu
+                      venda. */}
+                  {porProduto.map(p => (
+                    <th key={p.key} className="text-right px-3 py-2.5 font-medium">
+                      <span className="block max-w-[7rem] truncate ml-auto" title={p.nome}>
+                        {p.productCode ?? p.nome}
+                      </span>
+                      <span className="block text-[10px] font-normal opacity-70">packs</span>
+                    </th>
+                  ))}
                   <th className="text-right px-4 py-2.5 font-medium">Unidades</th>
                   <th className="text-left px-4 py-2.5 font-medium">Faturamento · participação</th>
                   <th className="text-right px-4 py-2.5 font-medium">Ticket médio</th>
@@ -1033,6 +1052,19 @@ function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?:
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums font-semibold">{fmtNum(c.saleOrders)}</td>
                       <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{fmtNum(c.totalOrders)}</td>
+                      {/* Zero fica APAGADO, não sumido: "esta plataforma não
+                          vendeu este produto" é resposta, e célula vazia
+                          parece dado que faltou carregar. */}
+                      {porProduto.map(p => {
+                        const n = p.packsPorPlataforma[c.platform] ?? 0;
+                        return (
+                          <td key={p.key}
+                              className={cn("px-3 py-3 text-right tabular-nums",
+                                            n === 0 && "text-muted-foreground/40")}>
+                            {fmtNum(n)}
+                          </td>
+                        );
+                      })}
                       <td className="px-4 py-3 text-right tabular-nums">{fmtNum(c.saleUnits)}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
@@ -1059,6 +1091,11 @@ function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?:
                   <td className="px-5 py-3">Total</td>
                   <td className="px-4 py-3 text-right tabular-nums">{fmtNum(totalSales)}</td>
                   <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{fmtNum(totalOrders)}</td>
+                  {/* O total de cada produto é o `packs` que os cards já
+                      mostram — mesmo número, mesma origem. */}
+                  {porProduto.map(p => (
+                    <td key={p.key} className="px-3 py-3 text-right tabular-nums">{fmtNum(p.packs)}</td>
+                  ))}
                   <td className="px-4 py-3 text-right tabular-nums">{fmtNum(totalUnits)}</td>
                   <td className="px-4 py-3 tabular-nums">{fmtBRL(totalRevenue)}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{fmtBRL(overallTicket)}</td>
