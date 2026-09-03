@@ -1,3 +1,7 @@
+-- ✅ JA APLICADA EM PRODUCAO em 2026-09-03 (via MCP do Supabase, com autorizacao
+--    do usuario). O BLOCO 3 (fechar as policies frouxas) NAO foi aplicado — segue
+--    comentado, aguardando decisao. Reaplicar e inofensivo (create or replace).
+
 -- ═══════════════════════════════════════════════════════════════════════════
 -- Distribuir meta: um comando só, ou nenhum
 --

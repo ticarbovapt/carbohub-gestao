@@ -1,3 +1,9 @@
+-- ✅ JA APLICADA EM PRODUCAO em 2026-09-03 (via MCP do Supabase, com autorizacao
+--    do usuario). Os BLOCOS DE CRON NAO foram aplicados: so fazem sentido depois
+--    de cadastrar as contas act_... em meta_ads_accounts, e precisam do
+--    CRON_SECRET real no lugar do placeholder. Rode-os quando as contas entrarem.
+--    Reaplicar o resto e inofensivo (create ... if not exists / or replace).
+
 -- ═══════════════════════════════════════════════════════════════════════════
 -- Meta Ads: o gasto entra pelo GRÃO DO ANÚNCIO, e a janela é móvel
 --

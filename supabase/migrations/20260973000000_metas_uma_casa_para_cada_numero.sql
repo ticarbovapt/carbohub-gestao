@@ -1,3 +1,9 @@
+-- ✅ JA APLICADA EM PRODUCAO em 2026-09-03 (via MCP do Supabase, com autorizacao
+--    do usuario). O BLOCO 3 opcional (apertar RLS) NAO foi aplicado.
+-- ⚠️ NAO REAPLIQUE: esta migracao NAO e idempotente. O bloco de guarda consulta
+--    meta_insights / meta_sync_runs / meta_creatives, que ela mesma dropou, e o
+--    ALTER ... ADD CONSTRAINT falha por ja existir.
+
 -- ═══════════════════════════════════════════════════════════════════════════
 -- Metas: uma casa para cada número
 --
@@ -97,7 +103,7 @@ drop table if exists public.meta_creatives;
 drop table if exists public.meta_insights;
 drop table if exists public.meta_sync_runs;
 
--- A integração viva da Meta é a `meta_ads_*` (migração 20260970), alimentada
+-- A integração viva da Meta é a `meta_ads_*` (migração 20260972), alimentada
 -- pela edge function `meta-ads-sync`.
 
 

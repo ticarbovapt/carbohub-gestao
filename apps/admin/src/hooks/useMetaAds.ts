@@ -270,7 +270,7 @@ export function useMetaAdsUltimoSync() {
  *
  * ⚠️ 30 dias por padrão, e não "só hoje": a Meta ainda vai atribuir compras aos
  * cliques dos últimos 7 dias, então reler a janela é o que corrige o passado
- * recente. Ver o comentário da migração 20260970.
+ * recente. Ver o comentário da migração 20260972.
  */
 export interface MetaSyncResultado { linhas?: number; contas?: number; aviso?: string }
 

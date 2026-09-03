@@ -19,7 +19,7 @@ import { toast } from "sonner";
 // diferença, nunca corrigindo sozinha.
 //
 // A gravação inteira é uma chamada de RPC (`carbo_distribuir_meta`): total e
-// linhas na MESMA transação. Ver a migração 20260972.
+// linhas na MESMA transação. Ver a migração 20260974.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const db = supabase as unknown as {
