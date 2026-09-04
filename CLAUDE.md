@@ -528,7 +528,9 @@ upsert.
 (`20260971`), exigindo o prefixo `PAYT_` — sem ele, `split_part` de um número
 comum devolve a string inteira e casa por acaso. O que autorizou aplicar com UM
 caso foi o total FECHAR exato (269,10 = 269,10), que é identidade e não
-semelhança. ⚠️ Se um pedido PayT não sair sozinho da coluna "Pago", o formato
+semelhança. ✅ **Corroborado em 04/09 com TRÊS pedidos** (`PK2279K`, `O96XVN9`,
+`ZYG6M5M`), todos `situacao_id = 9` e todos casando pela terceira posição do
+`split_part`. ⚠️ Se um pedido PayT não sair sozinho da coluna "Pago", o formato
 mudou: **revise a regra, não afrouxe a comparação** — afrouxar sem apertar
 unicidade troca "não casa nunca" por "casa errado".
 
