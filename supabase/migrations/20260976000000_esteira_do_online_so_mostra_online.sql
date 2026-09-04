@@ -76,7 +76,7 @@ select e.canal, e.etapa,
        count(*) filter (where coalesce(btrim(e.cliente_fone), '') <> '') as com_telefone
 from public.bling2_esteira e
 where e.canal = 'Venda direta (sem canal)'
-  and e.pedido_loja not like 'PAYT!_%' escape '!'
+  and coalesce(e.pedido_loja, '') not like 'PAYT!_%' escape '!'
 group by 1, 2
 order by 3 desc;
 
@@ -110,7 +110,7 @@ with (security_invoker = true) as
     -- ("Venda direta (sem canal)"). O `numero_loja` é o que a distingue de uma
     -- venda de balcão, que também é loja 0.
     CASE
-        WHEN bo.numero_loja LIKE 'PAYT!_%' ESCAPE '!' THEN 'PayT'::text
+        WHEN COALESCE(bo.numero_loja, ''::text) LIKE 'PAYT!_%' ESCAPE '!' THEN 'PayT'::text
         ELSE COALESCE(NULLIF(l.nome, ''::text), 'Canal '::text || bo.loja_id::text)
     END AS canal,
     bo.loja_id,
@@ -165,7 +165,12 @@ with (security_invoker = true) as
     -- ⚠️ Ela NÃO filtra nada aqui: quem filtra é a tela. A `carbo_msg_fila` lê
     -- esta view e continua vendo todos os pedidos, então nenhum cliente deixa
     -- de ser avisado por causa desta migração.
-    (bo.numero_loja LIKE 'PAYT!_%' ESCAPE '!'
+    -- ⚠️ `coalesce(numero_loja, '')` NAO e estilo. Medido no BLOCO 0: os tres
+    -- pedidos de venda direta tem `numero_loja = null`, e `null like '...'` e
+    -- NULL, nao false. `NULL or false` continua NULL, o campo chegaria NULL a
+    -- tela, e o filtro `e_online !== false` MOSTRA a ausencia — ou seja, nada
+    -- teria mudado, sem erro nenhum. Mesma armadilha do `= any(null)`.
+    (COALESCE(bo.numero_loja, ''::text) LIKE 'PAYT!_%' ESCAPE '!'
      OR (COALESCE(bo.loja_id, 0) <> 0 AND NOT COALESCE(l.ignorar, false))) AS e_online
    FROM bling2_orders bo
      LEFT JOIN bling2_nfe nf ON nf.bling_id = bo.nf_bling_id
@@ -194,6 +199,12 @@ select canal, e_online, count(*) as pedidos
 from public.bling2_esteira
 group by 1, 2
 order by 3 desc;
+
+-- (2.a2) ⚠️ `e_online` NUNCA pode vir NULL — NULL passa pelo filtro da tela
+--        (`!== false`) e o pedido continuaria aparecendo, calado.
+--        Tem de vir ZERO.
+select count(*) as e_online_nulo
+from public.bling2_esteira where e_online is null;
 
 -- (2.b) Os seis da loja 0, um a um: os 3 da PayT viram canal 'PayT' e
 --       `e_online = true`; os 3 de balcão ficam `false`.
