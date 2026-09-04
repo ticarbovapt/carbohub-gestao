@@ -532,6 +532,19 @@ semelhança. ⚠️ Se um pedido PayT não sair sozinho da coluna "Pago", o form
 mudou: **revise a regra, não afrouxe a comparação** — afrouxar sem apertar
 unicidade troca "não casa nunca" por "casa errado".
 
+⚠️ **DINHEIRO filtra por status; IDENTIDADE, nunca.** A `20260971` pôs
+`ecommerce_status_e_venda` no CTE que agrega o pedido — certo para a soma — mas
+o array `transacoes`, que é a CHAVE do elo com o Bling, era calculado DENTRO
+desse mesmo CTE. Resultado: o carrinho `32BXNEP` ficou **100 h travado em
+"Pago"** com a nota já emitida, porque o pedido no Bling se chama
+`PAYT_LYK2ZA_PK2279K` e a transação `PK2279K` **foi cancelada depois** — saiu do
+array, o `= any(...)` virou falso e o vínculo evaporou.
+
+Um pedido não deixa de ser o mesmo pedido porque uma transação dele foi
+cancelada. A `20260975` move o array para um CTE PRÓPRIO, sem filtro de status;
+a soma continua só com linha de venda. ⚠️ Vínculo que depende de status evapora
+no dia do estorno — que é justamente o dia em que alguém está olhando.
+
 ⚠️ **A view soma SÓ linha que é venda**, e isso não é detalhe da PayT. O CTE
 agrega tudo e só depois filtra pelo `avanco` MÁXIMO, então transação cancelada
 dentro de um pedido pago entrava de carona: medido R$ 418,60 num pedido de
