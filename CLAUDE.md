@@ -743,24 +743,33 @@ A PayT **é** on-line e fica, apesar de chegar com `loja_id = 0` — é a pendê
 nº 1 dela, e o que a distingue de uma venda de balcão é o `numero_loja`
 (`PAYT_<seller_id>_<transação>`).
 
-⚠️ **A regra vale para a TELA. A fila de WhatsApp é outra decisão**, e continua
-em aberto: `carbo_msg_fila` lê a mesma view e não filtra canal, então o cliente
-de balcão segue recebendo "nota fiscal emitida" e "saiu para entrega". Medido em
-04/09: 1 pedido nessa situação. Sumir da tela e parar de avisar o cliente são
-coisas diferentes — não junte as duas sem pedir.
+⚠️ **E a regra alcança o WhatsApp junto** (`20260978`). Eu tinha separado as
+duas — "sumir da tela" e "parar de avisar o cliente" — e escolhido só a
+primeira, por conta própria. O dono do processo decidiu as duas: *"não é para ir
+para esteira essas vendas diretas, logo, não devem receber whatsapp"*. Como
+`carbo_msg_fila` lê a `bling2_esteira`, o filtro mora no **`WHERE` da view** e
+as duas coisas andam juntas — que é o oposto do que a `20260976` fez.
 
-⚠️ **A view NÃO filtra canal, e o corte de "só on-line" é na TELA** (`20260976`).
+⚠️ Isso NÃO revoga a lição da `20260976`: tirar linha do `WHERE` de uma view que
+alimenta fila de mensagens **para o envio**, e ali seria acidente. Aqui é o
+objetivo. A regra que sobrevive é *saber* que o `WHERE` decide as duas coisas —
+não "nunca filtrar ali".
+
+⚠️ **O corte de "só on-line" mora no `WHERE` da view** (`20260976` + `20260978`).
 Venda de balcão (loja 0 no Bling) aparecia na Esteira do On-line como "Venda
 direta (sem canal)", e a PayT ia junto — ela também chega com `loja_id = 0`
-(pendência #1 da PayT), então herdava o nome da loja 0. A view ganhou duas
-coisas: `canal` passa a dizer **PayT** quando `numero_loja like 'PAYT_%'`, e uma
-coluna `e_online` no fim.
-Filtrar no `WHERE` da view seria mais simples e está **errado**: `carbo_msg_fila`
-lê dela, e tirar a venda direta de lá pararia o WhatsApp desses clientes **em
-silêncio** — quem compra no balcão continua recebendo "nota fiscal emitida" e
-"saiu para entrega". Por isso o hook filtra `e_online !== false`, e o `!== false`
-não é estilo: enquanto a migração não roda, a coluna não existe e o campo vem
-`undefined` — ausência tem de MOSTRAR, nunca esvaziar a tela.
+(pendência #1 da PayT), então herdava o nome da loja 0. A view ganhou `canal`
+dizendo **PayT** quando `numero_loja like 'PAYT_%'`, e a coluna `e_online`.
+
+A `20260976` filtrou só na TELA, para não mexer na `carbo_msg_fila`; a `20260978`
+levou a MESMA expressão para o `WHERE`, por decisão do dono do processo — some
+da esteira e da fila juntas. A coluna `e_online` ficou (hoje sempre `true`)
+porque o hook dos três apps filtra por ela e `create or replace` não remove
+coluna.
+
+⚠️ O `e_online !== false` do hook não é estilo: numa ordem em que o front suba
+antes da migração, a coluna não existe e o campo vem `undefined` — ausência tem
+de MOSTRAR, nunca esvaziar a tela.
 
 ⚠️ **`justify-center` num quadro que rola CORTA a primeira coluna** (medido em
 03/09, com a sidebar aberta em 1366/1440). Quando as colunas estouram a largura,
