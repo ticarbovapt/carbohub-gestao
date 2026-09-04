@@ -883,6 +883,42 @@ a porta 1 nunca gravara porque `'bling_id_ref'` faltava no CHECK — a `20260918
 já o acrescenta, e produção tinha 391 envios casados por ela. Use
 `pg_get_constraintdef`, não a definição de nascimento.
 
+### Cancelamento da LOJA — a esteira não enxergava, e o card não tinha saída
+`avanco` é uma escada que só SOBE (`delivered` 3 · `shipped` 2 · `paid` 1 ·
+resto 0), então `cancelled` cai no mesmo **0** de `pending` — indistinguíveis. E
+o CASE só sabia cancelar por `situacao_id = 12` (no BLING) ou por NF inválida,
+e nenhum dos dois acontece quando quem cancela é a **loja**. Pedido cancelado na
+Nuvemshop ficava em "Confirmado" **para sempre**, igual ao `32BXNEP`. Medido em
+04/09: 5 cards, o mais velho de 30/06, um deles já com etiqueta gerada.
+
+A `20260977` exporta `cancelado_na_loja` do CTE `plataforma`. Três decisões, e
+as três foram medidas:
+
+1. ⚠️ **A POSIÇÃO no CASE é a regra inteira.** A condição entra DEPOIS de
+   `entregue` e `em_transito`: carimbo de postagem e de entrega é FATO e não
+   deixa de ser verdade porque cancelaram depois — a mesma lição da etiqueta
+   morta (`20260947`). Medido: **2 entregues e 1 em trânsito** estão cancelados
+   na Nuvemshop; subir a linha apagaria a entrega dos três.
+2. ⚠️ **Lista EXPLÍCITA, nunca `not ecommerce_status_e_venda(...)`.** Aquela
+   função devolve false também para `pending` — a regra marcaria como cancelado
+   todo pedido ainda não pago. Medido: o vocabulário é UMA palavra (`cancelled`)
+   nas cinco plataformas; `refunded`/`voided`/`estornado` ficam como rede.
+3. ⚠️ **`bool_and`, nunca `bool_or`.** A tabela tem uma linha por ITEM: com
+   `bool_or`, um item cancelado dentro de um pedido pago cancelaria o card
+   inteiro — a mesma armadilha dos R$ 418,60 num pedido de R$ 269,10 da PayT.
+
+⚠️ **O que isto NÃO resolve, e não pode:** pedido que o cliente refez por fora e
+que ninguém cancelou na loja continua `paid` e continua na esteira (o 480, do
+Miramon). Não é falha de leitura — o dado não existe. Cancelar na loja é o que o
+tira daqui. É o caso "premissa, não dado".
+
+⚠️ **Ao medir isso, `left join` com `platform_order_number` MENTE para a PayT**
+(o `pedido_loja` é `PAYT_..._...` e o `platform_order_number` é o carrinho — o
+join nunca casa) e para venda direta (`numero_loja` null). `not e_venda(null)`
+foi contado como cancelado e inflou a primeira medição: 3 de 3 na PayT, todos
+falsos. Separe `sem_correspondencia` de `cancelado` — ausência disfarçada de
+resposta é a doença do `Math.round` inventando `×1`.
+
 ### Etiqueta morta na esteira — a tela mostra, a MENSAGEM não promete
 A `20260946` tirou `and e.ativo` da `melhorenvio_envio_vigente` (etiqueta vencida
 parou de sumir). Mas a `bling2_esteira` decide etapa por **carimbo cru**, então a
