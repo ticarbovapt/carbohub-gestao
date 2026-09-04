@@ -732,6 +732,19 @@ qualquer um dos cinco, copie para o outro app na mesma tarefa.
 A tela não calcula etapa: quem calcula é a view `public.bling2_esteira`. Regra
 nova entra lá, e as duas telas mudam juntas.
 
+⚠️ **A view NÃO filtra canal, e o corte de "só on-line" é na TELA** (`20260976`).
+Venda de balcão (loja 0 no Bling) aparecia na Esteira do On-line como "Venda
+direta (sem canal)", e a PayT ia junto — ela também chega com `loja_id = 0`
+(pendência #1 da PayT), então herdava o nome da loja 0. A view ganhou duas
+coisas: `canal` passa a dizer **PayT** quando `numero_loja like 'PAYT_%'`, e uma
+coluna `e_online` no fim.
+Filtrar no `WHERE` da view seria mais simples e está **errado**: `carbo_msg_fila`
+lê dela, e tirar a venda direta de lá pararia o WhatsApp desses clientes **em
+silêncio** — quem compra no balcão continua recebendo "nota fiscal emitida" e
+"saiu para entrega". Por isso o hook filtra `e_online !== false`, e o `!== false`
+não é estilo: enquanto a migração não roda, a coluna não existe e o campo vem
+`undefined` — ausência tem de MOSTRAR, nunca esvaziar a tela.
+
 ⚠️ **`justify-center` num quadro que rola CORTA a primeira coluna** (medido em
 03/09, com a sidebar aberta em 1366/1440). Quando as colunas estouram a largura,
 centralizar empurra a primeira para fora da borda esquerda e não há como rolar

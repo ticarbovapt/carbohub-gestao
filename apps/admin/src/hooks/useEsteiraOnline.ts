@@ -48,6 +48,16 @@ export interface EsteiraRow {
   pedido_loja: string | null;
   canal: string | null;
   loja_id: number | null;
+  /**
+   * Veio de canal ON-LINE? (`20260976`)
+   *
+   * ⚠️ Opcional de propósito. A coluna nasce na migração, e o deploy do front
+   * pode chegar antes de alguém rodá-la — aí `select("*")` devolve a linha SEM
+   * o campo. Tipando como obrigatório, o filtro trataria `undefined` como
+   * "não é on-line" e a esteira apareceria VAZIA. O filtro é
+   * `e_online !== false`: ausência mostra, como era antes.
+   */
+  e_online?: boolean | null;
   data_pedido: string | null;
   total: number;
   cliente: string | null;
@@ -147,7 +157,15 @@ export function useEsteiraOnline(de: string, ate: string) {
         .order("data_pedido", { ascending: false })
         .limit(1000);
       if (error) throw error;
-      return (data ?? []) as EsteiraRow[];
+      // ⚠️ A Esteira do ON-LINE só mostra pedido on-line. Venda de balcão
+      // (loja 0 sem marca da PayT) entrava aqui só porque a view não filtra
+      // canal — e a view não filtra de propósito: `carbo_msg_fila` lê dela, e
+      // excluir venda direta lá pararia o WhatsApp desses clientes em silêncio.
+      // Por isso o corte é AQUI, na tela.
+      // ⚠️ `!== false`, não `=== true`: enquanto a migração 20260976 não rodar,
+      // a coluna não existe e o campo vem `undefined` — ausência tem de MOSTRAR
+      // (comportamento de antes), nunca esvaziar a tela.
+      return (data ?? []).filter((r: EsteiraRow) => r.e_online !== false) as EsteiraRow[];
     },
     // A esteira anda sozinha e agora é ao vivo: sync de 1 min, ponte de 2 min,
     // disparo de mensagem de 1 min. Um painel que recarrega mais devagar que a
@@ -187,7 +205,15 @@ export function useEsteiraTravadosAntigos(de: string) {
         .order("data_pedido", { ascending: true })
         .limit(200);
       if (error) throw error;
-      return (data ?? []) as EsteiraRow[];
+      // ⚠️ A Esteira do ON-LINE só mostra pedido on-line. Venda de balcão
+      // (loja 0 sem marca da PayT) entrava aqui só porque a view não filtra
+      // canal — e a view não filtra de propósito: `carbo_msg_fila` lê dela, e
+      // excluir venda direta lá pararia o WhatsApp desses clientes em silêncio.
+      // Por isso o corte é AQUI, na tela.
+      // ⚠️ `!== false`, não `=== true`: enquanto a migração 20260976 não rodar,
+      // a coluna não existe e o campo vem `undefined` — ausência tem de MOSTRAR
+      // (comportamento de antes), nunca esvaziar a tela.
+      return (data ?? []).filter((r: EsteiraRow) => r.e_online !== false) as EsteiraRow[];
     },
     refetchInterval: 60_000,
   });
