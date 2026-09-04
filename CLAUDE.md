@@ -732,6 +732,23 @@ qualquer um dos cinco, copie para o outro app na mesma tarefa.
 A tela não calcula etapa: quem calcula é a view `public.bling2_esteira`. Regra
 nova entra lá, e as duas telas mudam juntas.
 
+### ⚠️ REGRA PERMANENTE: a Esteira do On-line mostra SÓ venda on-line
+Dito pelo dono do processo mais de uma vez, e ficou meses sem estar escrito
+aqui — por isso voltou. **Venda de balcão / venda direta (loja 0 no Bling) NÃO
+aparece na esteira.** Não é preferência de tela: a esteira é o painel do
+comércio eletrônico, e pedido que não veio de canal on-line ali é ruído que
+compete com o que precisa de ação.
+
+A PayT **é** on-line e fica, apesar de chegar com `loja_id = 0` — é a pendência
+nº 1 dela, e o que a distingue de uma venda de balcão é o `numero_loja`
+(`PAYT_<seller_id>_<transação>`).
+
+⚠️ **A regra vale para a TELA. A fila de WhatsApp é outra decisão**, e continua
+em aberto: `carbo_msg_fila` lê a mesma view e não filtra canal, então o cliente
+de balcão segue recebendo "nota fiscal emitida" e "saiu para entrega". Medido em
+04/09: 1 pedido nessa situação. Sumir da tela e parar de avisar o cliente são
+coisas diferentes — não junte as duas sem pedir.
+
 ⚠️ **A view NÃO filtra canal, e o corte de "só on-line" é na TELA** (`20260976`).
 Venda de balcão (loja 0 no Bling) aparecia na Esteira do On-line como "Venda
 direta (sem canal)", e a PayT ia junto — ela também chega com `loja_id = 0`
