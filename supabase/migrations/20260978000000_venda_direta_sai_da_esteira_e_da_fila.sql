@@ -171,9 +171,11 @@ with (security_invoker = true) as
     -- "Este pedido veio de canal on-line?" — a mesma regra da ponte do Bling 2
     -- (loja ≠ 0 e não ignorada), MAIS a exceção da PayT, que é on-line e chega
     -- com loja 0.
-    -- ⚠️ Ela NÃO filtra nada aqui: quem filtra é a tela. A `carbo_msg_fila` lê
-    -- esta view e continua vendo todos os pedidos, então nenhum cliente deixa
-    -- de ser avisado por causa desta migração.
+    -- ⚠️ 20260978: a MESMA expressao passou a valer no WHERE abaixo, entao
+    -- esta coluna e sempre `true` a partir daqui. Ela fica porque o hook dos
+    -- tres apps filtra por ela e `create or replace` nao remove coluna.
+    -- Mudou uma, mude a outra — deixa-las diferentes traria de volta a linha
+    -- que a tela esconde e a fila envia.
     -- ⚠️ `coalesce(numero_loja, '')` NAO e estilo. Medido no BLOCO 0: os tres
     -- pedidos de venda direta tem `numero_loja = null`, e `null like '...'` e
     -- NULL, nao false. `NULL or false` continua NULL, o campo chegaria NULL a
