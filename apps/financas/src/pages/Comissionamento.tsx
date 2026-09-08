@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Percent, DollarSign, Wallet, Receipt, CheckCircle2 } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
@@ -28,6 +29,41 @@ const fmtDate = (s: string) => { const d = (s || "").slice(0, 10).split("-"); re
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const monthStart = () => { const d = new Date(); return iso(new Date(d.getFullYear(), d.getMonth(), 1)); };
 const monthEnd = () => { const d = new Date(); return iso(new Date(d.getFullYear(), d.getMonth() + 1, 0)); };
+
+/* ─── O estado da tela mora na URL ──────────────────────────────────────────
+ *
+ * `?aba=&de=&ate=&vendedor=`. Antes era `useState` puro: trocar para
+ * "Pagamentos", dar F5 e voltar para "Calcular" — e o período digitado ia
+ * junto. Também não dava para mandar "olha a comissão de julho" a alguém.
+ *
+ * ⚠️ NÃO há `localStorage` aqui, de propósito. Duas fontes para o mesmo estado
+ * é como o Comparativo do admin passou a abrir com a aba de uma sessão e o
+ * período de outra. A URL é a única fonte.
+ */
+const PARAM_ABA = "aba";
+const PARAM_DE = "de";
+const PARAM_ATE = "ate";
+const PARAM_VENDEDOR = "vendedor";
+
+const ABAS = ["calcular", "pagamentos"] as const;
+type Aba = (typeof ABAS)[number];
+
+/**
+ * ⚠️ Valor desconhecido volta para `calcular`, nunca passa adiante. O `Tabs` do
+ * Radix com um `value` que nenhum `TabsContent` casa renderiza **nada** — a
+ * página abriria em branco, sem erro, para quem tivesse um link antigo ou
+ * digitasse errado.
+ */
+function lerAba(sp: URLSearchParams): Aba {
+  const v = (sp.get(PARAM_ABA) ?? "").toLowerCase();
+  return (ABAS as readonly string[]).includes(v) ? (v as Aba) : "calcular";
+}
+
+/** `YYYY-MM-DD` ou o padrão. Data inválida na URL não vira consulta. */
+function lerData(sp: URLSearchParams, chave: string, padrao: string): string {
+  const v = sp.get(chave) ?? "";
+  return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : padrao;
+}
 
 const STATUS: Record<string, { label: string; variant: "success" | "warning" | "secondary" }> = {
   pago:    { label: "Pago",    variant: "success" },
@@ -112,9 +148,40 @@ function RegrasDialog({ open, onClose, vendedores, defaultRate, defaultRateDesc,
 
 // ── Aba: calcular e gerar comissões ──────────────────────────────────────────
 function CalcularTab() {
-  const [from, setFrom] = useState(monthStart());
-  const [to, setTo] = useState(monthEnd());
-  const [vendFilter, setVendFilter] = useState("__all__");
+  const [sp, setSp] = useSearchParams();
+
+  const from = lerData(sp, PARAM_DE, monthStart());
+  const to = lerData(sp, PARAM_ATE, monthEnd());
+  const vendFilter = sp.get(PARAM_VENDEDOR) || "__all__";
+
+  /**
+   * ⚠️ `replace: true`: trocar aba ou data é refinar a pergunta, não navegar.
+   * Com `push`, o botão Voltar percorreria cada clique em vez de sair da tela.
+   *
+   * ⚠️ E a atualização é FUNCIONAL (`prev => ...`): a aba mora na mesma URL, e
+   * sobrescrever com um objeto novo apagaria `?aba=pagamentos` ao mexer numa
+   * data.
+   */
+  const setParam = (patch: Record<string, string | null>) => {
+    setSp((prev) => {
+      const next = new URLSearchParams(prev);
+      for (const [k, v] of Object.entries(patch)) {
+        if (v === null || v === "") next.delete(k);
+        else next.set(k, v);
+      }
+      return next;
+    }, { replace: true });
+  };
+
+  /**
+   * ⚠️ As duas pontas do intervalo são gravadas JUNTAS, mesmo mudando uma só.
+   * Meio intervalo na URL faria a outra ponta cair no padrão do mês corrente
+   * calado — a tela mostrando uma data e a consulta respondendo outra pergunta.
+   */
+  const setFrom = (v: string) => setParam({ [PARAM_DE]: v, [PARAM_ATE]: to });
+  const setTo = (v: string) => setParam({ [PARAM_DE]: from, [PARAM_ATE]: v });
+  const setVendFilter = (v: string) =>
+    setParam({ [PARAM_VENDEDOR]: v === "__all__" ? null : v });
   const [pcts, setPcts] = useState<Record<string, number>>({});        // produto (com NF)
   const [pctsDesc, setPctsDesc] = useState<Record<string, number>>({}); // descarbonização
   const [showRegras, setShowRegras] = useState(false);
@@ -580,6 +647,8 @@ function MemoriaDialog({ st, onClose }: { st: CommissionStatement | null; onClos
 
 export default function Comissionamento() {
   const { gestor } = useAuth();
+  const [sp, setSp] = useSearchParams();
+  const aba = lerAba(sp);
   if (!gestor) {
     return (
       <div className="space-y-6">
@@ -594,7 +663,16 @@ export default function Comissionamento() {
   return (
     <div className="space-y-6">
       <CarboPageHeader title="Comissionamento" description="Calcule a comissão sobre as vendas faturadas do período e controle os pagamentos." icon={Percent} />
-      <Tabs defaultValue="calcular">
+      <Tabs
+        value={aba}
+        onValueChange={(v) =>
+          setSp((prev) => {
+            const next = new URLSearchParams(prev);
+            next.set(PARAM_ABA, v);
+            return next;
+          }, { replace: true })
+        }
+      >
         <TabsList>
           <TabsTrigger value="calcular" className="gap-2"><Percent className="h-4 w-4" /> Calcular</TabsTrigger>
           <TabsTrigger value="pagamentos" className="gap-2"><Wallet className="h-4 w-4" /> Pagamentos</TabsTrigger>
