@@ -59,6 +59,28 @@ function lerAba(sp: URLSearchParams): Aba {
   return (ABAS as readonly string[]).includes(v) ? (v as Aba) : "calcular";
 }
 
+/* ⚠️ A aba Pagamentos tem parâmetros PRÓPRIOS (`pg_`), e não reaproveita o
+ * `vendedor` da aba Calcular. As duas dividem a mesma URL, e o mesmo nome com
+ * dois significados é o erro do `bling_nf_id`: quem filtrasse um vendedor aqui
+ * mudaria o cálculo lá, e o link mandado a alguém abriria outra coisa. */
+const PARAM_PG_VENDEDOR = "pg_vendedor";
+const PARAM_PG_STATUS = "pg_status";
+const PARAM_PG_ORDEM = "pg_ordem";
+const PARAM_MEMORIA = "memoria";
+
+const ORDENS = {
+  periodo: { label: "Período (mais recente)", cmp: (a: CommissionStatement, b: CommissionStatement) => b.period_start.localeCompare(a.period_start) },
+  vendedor: { label: "Vendedor (A-Z)", cmp: (a: CommissionStatement, b: CommissionStatement) => (a.vendedor_name ?? "").localeCompare(b.vendedor_name ?? "", "pt-BR") },
+  devido: { label: "Maior devido", cmp: (a: CommissionStatement, b: CommissionStatement) => Number(b.amount_due) - Number(a.amount_due) },
+  saldo: { label: "Maior saldo", cmp: (a: CommissionStatement, b: CommissionStatement) => (Number(b.amount_due) - Number(b.amount_paid)) - (Number(a.amount_due) - Number(a.amount_paid)) },
+} as const;
+type Ordem = keyof typeof ORDENS;
+
+function lerOrdem(sp: URLSearchParams): Ordem {
+  const v = (sp.get(PARAM_PG_ORDEM) ?? "") as Ordem;
+  return v in ORDENS ? v : "periodo";
+}
+
 /** `YYYY-MM-DD` ou o padrão. Data inválida na URL não vira consulta. */
 function lerData(sp: URLSearchParams, chave: string, padrao: string): string {
   const v = sp.get(chave) ?? "";
@@ -468,19 +490,104 @@ function PayDialog({ st, onClose }: { st: CommissionStatement | null; onClose: (
 // ── Aba: pagamentos das comissões geradas ────────────────────────────────────
 function PagamentosTab() {
   const { data: statements = [], isLoading } = useCommissionStatements();
-  const [paying, setPaying] = useState<CommissionStatement | null>(null);
-  const [memoria, setMemoria] = useState<CommissionStatement | null>(null);
+  const [sp, setSp] = useSearchParams();
 
-  const totalDevido = statements.reduce((s, x) => s + Number(x.amount_due), 0);
-  const totalPago = statements.reduce((s, x) => s + Number(x.amount_paid), 0);
+  /**
+   * ⚠️ O "Registrar pagamento" continua em `useState`, e isso é decisão.
+   * A Memória só LÊ; o pagamento ESCREVE. Um diálogo de escrita reaberto por
+   * link deixaria alguém receber uma URL já apontada para o botão de pagar um
+   * fechamento específico — e, no F5, o formulário voltaria vazio por baixo de
+   * um diálogo que parece continuar de onde parou.
+   */
+  const [paying, setPaying] = useState<CommissionStatement | null>(null);
+
+  const vendFiltro = sp.get(PARAM_PG_VENDEDOR) || "__all__";
+  const statusFiltro = sp.get(PARAM_PG_STATUS) || "__all__";
+  const ordem = lerOrdem(sp);
+
+  const setParam = (chave: string, valor: string | null) => {
+    setSp((prev) => {
+      const next = new URLSearchParams(prev);
+      if (valor === null || valor === "" || valor === "__all__") next.delete(chave);
+      else next.set(chave, valor);
+      return next;
+    }, { replace: true });
+  };
+
+  /**
+   * A Memória sai da URL (`?memoria=<id>`), como o `?card=` da Esteira.
+   * ⚠️ Enquanto a lista carrega ela é `null` e o diálogo abre sozinho quando os
+   * dados chegam — de propósito. Id que não existe mais simplesmente não abre
+   * nada, em vez de deixar um diálogo vazio na tela.
+   */
+  const memoriaId = sp.get(PARAM_MEMORIA);
+  const memoria = memoriaId ? statements.find((x) => x.id === memoriaId) ?? null : null;
+
+  const vendedores = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const x of statements) m.set(x.vendedor_id, x.vendedor_name || "—");
+    return [...m].sort((a, b) => a[1].localeCompare(b[1], "pt-BR"));
+  }, [statements]);
+
+  const visiveis = useMemo(() => {
+    const lista = statements.filter(
+      (x) =>
+        (vendFiltro === "__all__" || x.vendedor_id === vendFiltro) &&
+        (statusFiltro === "__all__" || x.status === statusFiltro),
+    );
+    return [...lista].sort(ORDENS[ordem].cmp);
+  }, [statements, vendFiltro, statusFiltro, ordem]);
+
+  /**
+   * ⚠️ Os KPIs somam o que está FILTRADO, não a tabela inteira.
+   * Cabeçalho que ignora o filtro faz o número de cima brigar com as linhas de
+   * baixo, e quem lê acredita no maior. O rótulo diz quando há recorte.
+   */
+  const filtrado = vendFiltro !== "__all__" || statusFiltro !== "__all__";
+  const totalDevido = visiveis.reduce((s, x) => s + Number(x.amount_due), 0);
+  const totalPago = visiveis.reduce((s, x) => s + Number(x.amount_paid), 0);
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <CarboKPI title="Comissões geradas" value={statements.length} icon={Receipt} iconColor="blue" />
-        <CarboKPI title="Total devido" value={brl(totalDevido)} icon={DollarSign} iconColor="warning" />
-        <CarboKPI title="Total pago" value={brl(totalPago)} icon={CheckCircle2} iconColor="green" />
+        <CarboKPI title={filtrado ? "Comissões (filtrado)" : "Comissões geradas"} value={visiveis.length} icon={Receipt} iconColor="blue" />
+        <CarboKPI title={filtrado ? "Devido (filtrado)" : "Total devido"} value={brl(totalDevido)} icon={DollarSign} iconColor="warning" />
+        <CarboKPI title={filtrado ? "Pago (filtrado)" : "Total pago"} value={brl(totalPago)} icon={CheckCircle2} iconColor="green" />
       </div>
+
+      <CarboCard>
+        <CarboCardContent className="pt-6 flex flex-col sm:flex-row sm:flex-wrap gap-3">
+          <div className="flex-1 min-w-[180px]">
+            <Label className="text-xs text-muted-foreground">Vendedor</Label>
+            <Select value={vendFiltro} onValueChange={(v) => setParam(PARAM_PG_VENDEDOR, v)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">Todos</SelectItem>
+                {vendedores.map(([id, nome]) => <SelectItem key={id} value={id}>{nome}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex-1 min-w-[160px]">
+            <Label className="text-xs text-muted-foreground">Status</Label>
+            <Select value={statusFiltro} onValueChange={(v) => setParam(PARAM_PG_STATUS, v)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">Todos</SelectItem>
+                {Object.entries(STATUS).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex-1 min-w-[200px]">
+            <Label className="text-xs text-muted-foreground">Ordenar por</Label>
+            <Select value={ordem} onValueChange={(v) => setParam(PARAM_PG_ORDEM, v === "periodo" ? null : v)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {Object.entries(ORDENS).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        </CarboCardContent>
+      </CarboCard>
 
       <CarboCard>
         <CarboCardContent className="pt-6">
@@ -488,6 +595,13 @@ function PagamentosTab() {
             <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <CarboSkeleton key={i} className="h-12 w-full" />)}</div>
           ) : statements.length === 0 ? (
             <CarboEmptyState icon={Wallet} title="Nenhuma comissão gerada" description="Gere comissões na aba Calcular." />
+          ) : visiveis.length === 0 ? (
+            /* ⚠️ "não existe" e "o filtro escondeu" têm a MESMA cara numa tela
+               vazia, e causas opostas. Sem esta distinção alguém conclui que as
+               comissões sumiram — e o filtro veio da URL, então pode nem ter
+               sido essa pessoa que o escolheu. */
+            <CarboEmptyState icon={Wallet} title="Nada com esse filtro"
+              description="Existem comissões geradas, mas nenhuma casa com o vendedor/status selecionado." />
           ) : (
             <CarboTable>
               <CarboTableHeader>
@@ -504,7 +618,7 @@ function PagamentosTab() {
                 </CarboTableRow>
               </CarboTableHeader>
               <CarboTableBody>
-                {statements.map((s) => {
+                {visiveis.map((s) => {
                   const saldo = Math.max(0, Number(s.amount_due) - Number(s.amount_paid));
                   const st = STATUS[s.status] ?? STATUS.aberto;
                   return (
@@ -533,7 +647,7 @@ function PagamentosTab() {
                       <CarboTableCell><CarboBadge variant={st.variant}>{st.label}</CarboBadge></CarboTableCell>
                       <CarboTableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
-                          <CarboButton size="sm" variant="ghost" onClick={() => setMemoria(s)}>Memória</CarboButton>
+                          <CarboButton size="sm" variant="ghost" onClick={() => setParam(PARAM_MEMORIA, s.id)}>Memória</CarboButton>
                           <CarboButton size="sm" variant={s.status === "pago" ? "outline" : "default"} disabled={s.status === "pago"} onClick={() => setPaying(s)}>
                             {s.status === "pago" ? "Quitado" : "Registrar pagamento"}
                           </CarboButton>
@@ -549,7 +663,7 @@ function PagamentosTab() {
       </CarboCard>
 
       <PayDialog st={paying} onClose={() => setPaying(null)} />
-      <MemoriaDialog st={memoria} onClose={() => setMemoria(null)} />
+      <MemoriaDialog st={memoria} onClose={() => setParam(PARAM_MEMORIA, null)} />
     </div>
   );
 }
