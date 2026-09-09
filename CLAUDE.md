@@ -325,6 +325,29 @@ src/lib/skuUnidades.ts             cópia na raiz — fonte da verdade é o admi
    já multiplica na ESCRITA (`enrichUnitsReal`, em `_shared/nuvemshop.ts`);
    reusar aquele valor daria ×25 num kit de 5. `units_real` só entra quando não
    há fator.
+⚠️ **O ENSAIO tem de aplicar as MESMAS travas da função** (`20260979`). Ele
+nasceu perguntando "esta linha resolve para um produto?" e chamando a resposta
+de "o que a dedução faria" — sem o marco zero e sem o ledger. Medido em 09/09:
+**718 linhas como `deduziria`, das quais 135 já estavam no ledger e 582 eram
+anteriores ao marco. 717 das 718 eram ficção.** O cron rodava havia onze dias e
+deduzia uma.
+
+Lista de trabalho que nunca esvazia é lista que ninguém abre — e é o inverso da
+doença da `20260941`: em vez de só concordar consigo mesma, ela discordava para
+sempre do que o sistema faz.
+
+⚠️ **`anterior ao marco zero` e `já deduzido` são vereditos SEPARADOS**, e
+juntá-los recria o erro de 31/08: um pergunta se a venda é ANTIGA (data), o
+outro se a saída já foi CONTADA (ledger). Coincidem no primeiro dia e divergem
+depois.
+
+⚠️ **`deduziria` não precisa ser ZERO**: o cron roda a cada 10 min, então venda
+recém-chegada aparece ali legitimamente. O que se confere é se a pendente é
+RECENTE — uma de dias atrás é que é sinal.
+
+⚠️ O texto `SEM MAPEAMENTO` é CONTRATO com a aba do Ops, que filtra por
+`ilike '%SEM MAPEAMENTO%'`. Mudar a string esvazia a aba sem erro nenhum.
+
 4. **`ecommerce_raw_summary` NÃO recebe a regra.** Ela é a visão crua do que está
    gravado, e é a **divergência** entre ela e o Histórico que denuncia mapa
    faltando. Um relatório que só sabe concordar consigo mesmo é a doença da
