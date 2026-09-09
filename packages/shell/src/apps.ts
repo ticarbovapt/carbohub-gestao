@@ -35,7 +35,8 @@ export const HUB_APPS: EcoApp[] = [
   { key: "atendimento", name: "Carbo Atendimento", tag: "Atendimento · Clientes",      href: "https://atendimento.carbohub.com.br", icon: MessagesSquare, accent: "#9333EA" },
 ];
 
-// Admin não depende de interface — aparece só p/ quem "manda" (ver seesEverything).
+// ⚠️ O Admin segue a flag `carbo_admin` (ver `temFlagAdmin`), como o proprio app.
+// Ate 09/09/2026 dependia do perfil e discordava do `ProtectedRoute` de la.
 export const ADMIN_APP: EcoApp = {
   key: "admin", name: "Carbo Admin", tag: "Identidades e acessos",
   href: "https://admin.carbohub.com.br", icon: ShieldCheck, accent: "#64748B",
@@ -55,6 +56,9 @@ const INTERFACE_TO_APPS: Record<string, AppKey[]> = {
   // APARECE no seletor de apps de nenhum dos sete — sem erro em lugar nenhum. A
   // resolucao abaixo e estrita: interface sem entrada aqui nao vira app.
   carbo_atendimento: ["atendimento"],
+  // ⚠️ `carbo_admin` NAO entra aqui: o Admin nao esta em `HUB_APPS` (e o
+  // `ADMIN_APP`, somado a parte no `buildSwitcherApps`). Quem decide e a flag,
+  // conferida la — ver o comentario daquela funcao.
 };
 
 export function resolveAllowedApps(allowedInterfaces?: string[] | null): EcoApp[] {
@@ -76,7 +80,13 @@ export interface Identity {
 const MANDA_FUNCOES = new Set(["head", "ceo", "command"]);
 const MANDA_DEPARTAMENTOS = new Set(["command", "ti_suporte"]);
 
-/** "Manda" no ecossistema (command / head / TI)? → enxerga o Admin. */
+/**
+ * "Manda" no ecossistema (command / head / TI)? Derivado do perfil.
+ *
+ * ⚠️ NAO governa mais quem enxerga o Admin — isso e a flag (`temFlagAdmin`).
+ * Se for usar isto para decidir acesso, confira antes se o app do outro lado
+ * concorda: foi a discordancia entre as duas pontas que criou o problema.
+ */
 export function seesEverything(id?: Identity | null): boolean {
   if (!id) return false;
   return (
@@ -107,14 +117,32 @@ export const HUB_HOME: SwitcherApp = {
 
 export type SwitcherProfile = Identity & { allowed_interfaces?: string[] | null };
 
+/** A MESMA pergunta que o `ProtectedRoute` do app Admin faz para deixar entrar. */
+export function temFlagAdmin(allowedInterfaces?: string[] | null): boolean {
+  const list = Array.isArray(allowedInterfaces) ? allowedInterfaces : [];
+  return list.some((i) => i.toLowerCase() === "carbo_admin");
+}
+
 /**
  * Monta a lista do switcher para um perfil: [Início, ...apps liberados
- * (+ Admin se "manda")], mantendo a ordem do catálogo e marcando o app atual.
- * O app atual sempre aparece (mesmo que a flag não esteja no perfil).
+ * (+ Admin se tiver a flag)], mantendo a ordem do catálogo e marcando o app
+ * atual. O app atual sempre aparece (mesmo que a flag não esteja no perfil).
+ *
+ * ⚠️ O Admin segue a FLAG `carbo_admin`, não o perfil (corrigido em
+ * 09/09/2026). Aqui estava `seesEverything(profile)` — department
+ * command/ti_suporte ou funcao head/ceo —, que é regra DIFERENTE da que o
+ * próprio app Admin usa para deixar entrar (`hasAdminInterface`, só a flag).
+ * Duas regras para a mesma porta erram nos dois sentidos, sempre em silêncio:
+ * quem tinha a flag não via o Admin no seletor, e quem tinha só o perfil via
+ * um item que levava a "Acesso restrito".
+ *
+ * ⚠️ São TRÊS lugares com a mesma pergunta — este, o `mostraAdmin` do
+ * carbohub-landing (azulejo do Hub) e o `hasAdminInterface` do apps/admin
+ * (entrada). Mudou um, confira os outros dois.
  */
 export function buildSwitcherApps(profile: SwitcherProfile | null | undefined, currentKey: string): SwitcherApp[] {
   const wanted = new Set<string>(resolveAllowedApps(profile?.allowed_interfaces).map((a) => a.key));
-  if (seesEverything(profile)) wanted.add("admin");
+  if (temFlagAdmin(profile?.allowed_interfaces)) wanted.add("admin");
   if (currentKey) wanted.add(currentKey); // garante o app atual na lista
 
   const registry: EcoApp[] = [...HUB_APPS, ADMIN_APP];

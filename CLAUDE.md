@@ -1363,10 +1363,20 @@ perfil sem flag → o azulejo aparece e o clique dá "Acesso restrito"
 ```
 
 Medido: Leticia (`ops`/`estagiario`) e Lígia (`ops`/`gerente`), as duas com
-`carbo_admin` gravado e sem entrada nenhuma. Hoje o Hub usa `mostraAdmin(allowed)`
-e as duas pontas dizem a mesma coisa. ⚠️ Mudou uma, mude a outra —
-`hasAdminInterface` (`apps/admin/src/contexts/AuthContext.tsx`) e `mostraAdmin`
-(`carbohub-landing/src/lib/apps.ts`).
+`carbo_admin` gravado e sem entrada nenhuma.
+
+⚠️ E eram **TRÊS** cópias da mesma pergunta, não duas — o seletor de apps do
+`packages/shell` tinha o MESMO `seesEverything`, então o Admin também não
+aparecia no switcher de nenhum dos sete. Hoje as três leem a flag:
+
+```
+apps/admin/src/contexts/AuthContext.tsx   hasAdminInterface   ENTRADA no app
+packages/shell/src/apps.ts                temFlagAdmin        seletor de apps
+carbohub-landing/src/lib/apps.ts          mostraAdmin         azulejo do Hub
+```
+
+Mudou uma, confira as outras duas. ⚠️ E `seesEverything` continua existindo nos
+três arquivos para outras perguntas — ela **não** governa mais o Admin.
 
 ⚠️ E o comentário do `apps/admin/src/lib/interfaces.ts` afirmava o OPOSTO do
 código: dizia que a flag "controla APENAS a exibição do card" e que a entrada
