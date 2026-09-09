@@ -1351,6 +1351,28 @@ carbo_interface_e_interna()  (migração)        quem é "time interno"
    e **só nega** quando cai na rede local — rede que abre transforma falha de
    rede em porta destrancada.
 
+⚠️ **O azulejo do ADMIN era a EXCEÇÃO do mapa, e ninguém sabia** (corrigido em
+09/09/2026). Ele não estava em `INTERFACE_TO_APPS`: o Hub o mostrava por PERFIL
+(`seesEverything` — department `command`/`ti_suporte`, funcao `head`/`ceo`),
+enquanto o `ProtectedRoute` do app Admin exige só a flag `carbo_admin`. Duas
+regras para a MESMA porta, discordando nos dois sentidos e sempre calado:
+
+```
+flag sem perfil → o azulejo nunca aparece; liberar no Admin não adianta nada
+perfil sem flag → o azulejo aparece e o clique dá "Acesso restrito"
+```
+
+Medido: Leticia (`ops`/`estagiario`) e Lígia (`ops`/`gerente`), as duas com
+`carbo_admin` gravado e sem entrada nenhuma. Hoje o Hub usa `mostraAdmin(allowed)`
+e as duas pontas dizem a mesma coisa. ⚠️ Mudou uma, mude a outra —
+`hasAdminInterface` (`apps/admin/src/contexts/AuthContext.tsx`) e `mostraAdmin`
+(`carbohub-landing/src/lib/apps.ts`).
+
+⚠️ E o comentário do `apps/admin/src/lib/interfaces.ts` afirmava o OPOSTO do
+código: dizia que a flag "controla APENAS a exibição do card" e que a entrada
+vinha do perfil. Descrevia um `ProtectedRoute` que já não existia. Quem foi
+liberar acesso leu na própria tela que marcar não adiantava.
+
 **A cor do app aparece em quatro lugares** (acento do app, chip do
 `interfaces.ts` nas três cópias, `packages/shell`, azulejo do Hub) e os quatro
 têm de concordar. Escolha por MEDIDA, não por gosto: laranja `#F97316` foi
