@@ -7,8 +7,8 @@
 //   carbo_crm         → Carbo Sales
 //   carbo_ops_app     → Carbo Ops
 //   portal_licenciado → Carbo Licenciados
-//   portal_pdv        → Portal de Vendas (ex-"Carbo Loja") E o Portal de
-//                       Microdistribuidores (md.carbohub.com.br)
+//   portal_pdv        → Portal de Vendas (ex-"Carbo Loja")
+//   portal_micro      → Portal de Microdistribuidores (md.carbohub.com.br)
 //   carbo_admin       → Carbo Admin
 //   carbo_atendimento → Carbo Atendimento (atendimento.carbohub.com.br)
 //
@@ -39,12 +39,24 @@ export const SYSTEMS: SystemOption[] = [
   { iface: "carbo_crm",         label: "Carbo Sales",       hint: "Comercial · funis, leads e vendas" },
   { iface: "carbo_ops_app",     label: "Carbo Ops",         hint: "Operação, logística e estoque" },
   { iface: "portal_licenciado", label: "Carbo Licenciados", hint: "Portal do licenciado" },
-  // ⚠️ Esta caixinha abre DOIS sistemas, e o rótulo precisa dizer isso: o
-  // md não tem flag própria. Quem é interno entra lá por
-  // `produtos.is_carbo_admin()`, que lê exatamente `portal_pdv`. Marcar
-  // aqui libera o Portal de Vendas E o Portal de Microdistribuidores; dá
-  // para conferir no Hub, onde os dois azulejos aparecem juntos.
-  { iface: "portal_pdv",        label: "Portal de Vendas",  hint: "Portal de Vendas (lojas/PDV) e Portal de Microdistribuidores (md)" },
+  { iface: "portal_pdv",        label: "Portal de Vendas",  hint: "Portal de Vendas — lojas e PDVs do Grupo Carbo (lojas.carbohub.com.br)" },
+  // ⚠️ O md ganhou chave PRÓPRIA em 10/09/2026. Até então ele não tinha
+  // nenhuma: quem é interno entrava lá por `produtos.is_carbo_admin()`,
+  // que lê `portal_pdv` — ou seja, liberar o Portal de Vendas para alguém
+  // liberava TAMBÉM o Portal de Microdistribuidores, e o azulejo aparecia
+  // no Hub sem ninguém ter decidido isso. Agora são duas caixinhas.
+  //
+  // Do lado do banco quem responde é `produtos.is_carbo_md()`
+  // (`20260930120000` do carbohub-produtos), e ela AINDA aceita
+  // `portal_pdv` por legado, para ninguém perder acesso no dia do deploy.
+  // Ou seja: o azulejo (que segue só esta caixinha) mostra MENOS gente do
+  // que a porta aceita — a assimetria segura. O contrário é que é ruim:
+  // azulejo que aparece e não abre.
+  //
+  // ⚠️ NÃO entra em `carbo_interface_e_interna()`. Ela é a lista do TIME
+  // INTERNO (sininho e RLS), e o md é portal EXTERNO — a mesma razão pela
+  // qual `portal_pdv` e `portal_licenciado` ficam de fora.
+  { iface: "portal_micro",      label: "Portal de Microdistribuidores", hint: "Funil, clientes, depósito e vendas do microdistribuidor (md.carbohub.com.br)" },
   { iface: "carbo_financas",    label: "Carbo Finanças",    hint: "Financeiro — contas a pagar, NF, faturamento" },
   { iface: "carbo_mkt",         label: "Carbo Marketing",   hint: "Marketing — campanhas e ações" },
   { iface: "carbo_ti",          label: "Carbo TI",          hint: "Central de demandas do TI — bugs, sugestões e execução (ti.carbohub.com.br)" },
@@ -63,6 +75,10 @@ export const SYSTEM_BRAND: Record<string, SystemBrand> = {
   carbo_ops_app:     { short: "Ops",         chip: "bg-blue-500/10 text-blue-600 ring-1 ring-inset ring-blue-500/20", dot: "bg-blue-500" },
   portal_licenciado: { short: "Licenciados", chip: "bg-violet-500/10 text-violet-600 ring-1 ring-inset ring-violet-500/20", dot: "bg-violet-500" },
   portal_pdv:        { short: "Vendas",      chip: "bg-amber-500/10 text-amber-600 ring-1 ring-inset ring-amber-500/20",     dot: "bg-amber-500" },
+  // ⚠️ A cor é a MESMA do azulejo do Hub e do switcher (#C2410C, terracota).
+  // Laranja de marca foi descartado: ao lado do âmbar do Ops, a um metro,
+  // são a mesma cor — a medida já registrada no `atendimento`.
+  portal_micro:      { short: "Micro",       chip: "bg-orange-700/10 text-orange-700 ring-1 ring-inset ring-orange-700/20", dot: "bg-orange-700" },
   carbo_financas:    { short: "Finanças",    chip: "bg-teal-500/10 text-teal-600 ring-1 ring-inset ring-teal-500/20",       dot: "bg-teal-500" },
   carbo_mkt:         { short: "Marketing",   chip: "bg-pink-500/10 text-pink-600 ring-1 ring-inset ring-pink-500/20",       dot: "bg-pink-500" },
   carbo_ti:          { short: "TI",          chip: "bg-sky-500/10 text-sky-600 ring-1 ring-inset ring-sky-500/20",         dot: "bg-sky-500" },

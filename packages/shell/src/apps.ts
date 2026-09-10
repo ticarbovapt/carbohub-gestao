@@ -49,11 +49,19 @@ const INTERFACE_TO_APPS: Record<string, AppKey[]> = {
   carbo_ops_app: ["ops"],
   carbo_crm: ["crm"],
   portal_licenciado: ["licenciados"],
-  // ⚠️ `portal_pdv` abre DOIS apps. É a mesma chave que o md exige de
-  // verdade: interno não tem linha em `produtos.profiles` e entra lá por
-  // `produtos.is_carbo_admin()`, que lê exatamente esta flag. O md nunca
-  // ganhou uma própria — quando ganhar, muda aqui e no Hub no mesmo dia.
-  portal_pdv: ["lojas", "md"],
+  portal_pdv: ["lojas"],
+  // ⚠️ O md ganhou chave PRÓPRIA em 10/09/2026 e esta linha É a mudança.
+  // Antes ele vinha junto do `portal_pdv`, porque não tinha nenhuma: quem
+  // é interno entrava lá por `produtos.is_carbo_admin()`, que lê aquela
+  // flag. Consequência que o dono do processo apontou: liberar o Portal
+  // de Vendas para alguém fazia o md aparecer também, sem decisão.
+  //
+  // ⚠️ Do lado do banco (`produtos.is_carbo_md`, migração 20260930120000
+  // do carbohub-produtos) o `portal_pdv` AINDA é aceito como entrada, por
+  // legado — ninguém perde acesso no deploy. Então quem só tem
+  // `portal_pdv` continua conseguindo abrir o md pelo endereço, mas não
+  // vê o atalho. A assimetria segura é essa; a perigosa é a oposta.
+  portal_micro: ["md"],
   carbo_financas: ["financas"],
   carbo_mkt: ["mkt"],
   carbo_ti: ["ti"],
