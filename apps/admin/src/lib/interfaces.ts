@@ -7,7 +7,8 @@
 //   carbo_crm         → Carbo Sales
 //   carbo_ops_app     → Carbo Ops
 //   portal_licenciado → Carbo Licenciados
-//   portal_pdv        → Portal de Vendas (ex-"Carbo Loja")
+//   portal_pdv        → Portal de Vendas (ex-"Carbo Loja") E o Portal de
+//                       Microdistribuidores (md.carbohub.com.br)
 //   carbo_admin       → Carbo Admin
 //   carbo_atendimento → Carbo Atendimento (atendimento.carbohub.com.br)
 //
@@ -38,7 +39,12 @@ export const SYSTEMS: SystemOption[] = [
   { iface: "carbo_crm",         label: "Carbo Sales",       hint: "Comercial · funis, leads e vendas" },
   { iface: "carbo_ops_app",     label: "Carbo Ops",         hint: "Operação, logística e estoque" },
   { iface: "portal_licenciado", label: "Carbo Licenciados", hint: "Portal do licenciado" },
-  { iface: "portal_pdv",        label: "Portal de Vendas",  hint: "Portal de Vendas (lojas/PDV)" },
+  // ⚠️ Esta caixinha abre DOIS sistemas, e o rótulo precisa dizer isso: o
+  // md não tem flag própria. Quem é interno entra lá por
+  // `produtos.is_carbo_admin()`, que lê exatamente `portal_pdv`. Marcar
+  // aqui libera o Portal de Vendas E o Portal de Microdistribuidores; dá
+  // para conferir no Hub, onde os dois azulejos aparecem juntos.
+  { iface: "portal_pdv",        label: "Portal de Vendas",  hint: "Portal de Vendas (lojas/PDV) e Portal de Microdistribuidores (md)" },
   { iface: "carbo_financas",    label: "Carbo Finanças",    hint: "Financeiro — contas a pagar, NF, faturamento" },
   { iface: "carbo_mkt",         label: "Carbo Marketing",   hint: "Marketing — campanhas e ações" },
   { iface: "carbo_ti",          label: "Carbo TI",          hint: "Central de demandas do TI — bugs, sugestões e execução (ti.carbohub.com.br)" },
