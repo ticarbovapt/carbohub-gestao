@@ -1173,6 +1173,38 @@ carbo_interface_e_interna()  (migração)        quem é "time interno"
    e **só nega** quando cai na rede local — rede que abre transforma falha de
    rede em porta destrancada.
 
+### O md entrou no Hub em 10/09/2026 — e por que só em TRÊS dos quatro
+
+O `md.carbohub.com.br` estava no ar desde 02/09 sem azulejo em lugar
+nenhum. O custo apareceu ao investigar por que o Peterson não acessava:
+ele tem `portal_pdv`, passa em TODAS as portas do banco, e mesmo assim
+não tinha por onde chegar — o `LoginPage` do md barra interno de
+propósito ("entre pelo Hub") e o Hub não mostrava o md. Chave no bolso,
+nenhuma fechadura.
+
+Feitos: `packages/shell/src/apps.ts`, `carbohub-landing/src/lib/apps.ts`
+e o rótulo da caixinha nas duas cópias do `interfaces.ts`.
+
+⚠️ **O quarto lugar NÃO foi feito, e é decisão.** Não existe flag
+`portal_micro`, e não se criou uma: o md nunca ganhou chave própria —
+quem não tem linha em `produtos.profiles` entra lá por
+`produtos.is_carbo_admin()`, que lê exatamente `portal_pdv`. Uma
+caixinha nova no Admin abriria porta nenhuma, que é o defeito descrito
+no comentário do `mostraAdmin` do Hub. **O azulejo espelha o portão**;
+quando o md ganhar chave própria, os dois mudam no mesmo dia.
+
+⚠️ E `carbo_interface_e_interna()` continua sem o md pelo mesmo motivo
+que exclui `portal_pdv` e `portal_licenciado`: são portais de PARCEIRO,
+não interfaces internas. Microdistribuidor não é time interno.
+
+⚠️ **A cor do md é `#C2410C`, e NÃO o `#F97316` do app.** É o mesmo
+tropeço registrado abaixo, e desta vez foi medido em duas rodadas: na
+grade de três colunas do Hub o Ops e o md caem um EM CIMA do outro, e
+com `#EA580C` ainda liam como o mesmo laranja. Com `#C2410C` o Ops fica
+dourado e o md, terracota. Precedente de que a cor do azulejo não
+precisa ser a do app: o Portal de Vendas é verde no Hub e laranja
+dentro dele.
+
 **A cor do app aparece em quatro lugares** (acento do app, chip do
 `interfaces.ts` nas três cópias, `packages/shell`, azulejo do Hub) e os quatro
 têm de concordar. Escolha por MEDIDA, não por gosto: laranja `#F97316` foi

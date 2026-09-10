@@ -3,14 +3,14 @@
 // acesso = coluna profiles.allowed_interfaces (text[]) + regra "vê tudo" (Admin).
 // Mantido sem dependências além de lucide-react (só ícones).
 import {
-  Home, Building2, TrendingUp, Boxes, Handshake, Store, Wallet, ShieldCheck, Megaphone, LifeBuoy,
+  Home, Building2, TrendingUp, Boxes, Handshake, Store, Warehouse, Wallet, ShieldCheck, Megaphone, LifeBuoy,
   MessagesSquare,
   type LucideIcon,
 } from "lucide-react";
 
 export const HUB_URL = "https://carbohub.com.br";
 
-export type AppKey = "controle" | "crm" | "ops" | "licenciados" | "lojas" | "financas" | "mkt" | "admin" | "ti" | "atendimento";
+export type AppKey = "controle" | "crm" | "ops" | "licenciados" | "lojas" | "md" | "financas" | "mkt" | "admin" | "ti" | "atendimento";
 
 export interface EcoApp {
   key: AppKey;
@@ -29,6 +29,7 @@ export const HUB_APPS: EcoApp[] = [
   { key: "ops",         name: "Carbo Ops",         tag: "Operação · Logística",        href: "https://ops.carbohub.com.br",         icon: Boxes,       accent: "#F59E0B" },
   { key: "licenciados", name: "Carbo Licenciados", tag: "Portal do Licenciado",        href: "https://licenciados.carbohub.com.br", icon: Handshake,   accent: "#38BDF8" },
   { key: "lojas",       name: "Portal de Vendas",  tag: "Lojas",                       href: "https://lojas.carbohub.com.br",       icon: Store,       accent: "#22C55E" },
+  { key: "md",          name: "Portal de Microdistribuidores", tag: "Microdistribuidor · Carteira e depósito", href: "https://md.carbohub.com.br", icon: Warehouse, accent: "#C2410C" },
   { key: "financas",    name: "Carbo Finanças",    tag: "Financeiro · NF e faturamento", href: "https://finance.carbohub.com.br",   icon: Wallet,      accent: "#14B8A6" },
   { key: "mkt",         name: "Carbo Marketing",   tag: "Marketing · Campanhas",       href: "https://mkt.carbohub.com.br",         icon: Megaphone,   accent: "#EC4899" },
   { key: "ti",          name: "Carbo TI",          tag: "Suporte · Demandas",          href: "https://ti.carbohub.com.br",          icon: LifeBuoy,    accent: "#0EA5E9" },
@@ -47,7 +48,11 @@ const INTERFACE_TO_APPS: Record<string, AppKey[]> = {
   carbo_ops_app: ["ops"],
   carbo_crm: ["crm"],
   portal_licenciado: ["licenciados"],
-  portal_pdv: ["lojas"],
+  // ⚠️ `portal_pdv` abre DOIS apps. É a mesma chave que o md exige de
+  // verdade: interno não tem linha em `produtos.profiles` e entra lá por
+  // `produtos.is_carbo_admin()`, que lê exatamente esta flag. O md nunca
+  // ganhou uma própria — quando ganhar, muda aqui e no Hub no mesmo dia.
+  portal_pdv: ["lojas", "md"],
   carbo_financas: ["financas"],
   carbo_mkt: ["mkt"],
   carbo_ti: ["ti"],
