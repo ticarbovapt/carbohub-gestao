@@ -221,8 +221,34 @@ meses com a bonificação como sufixo no nome do produto (`(+2 bonif.)`) enquant
 os outros cinco já mostravam linha separada a R$ 0,00. Ninguém percebeu porque
 divergir aqui não dá erro — dá um PDF diferente na mão do cliente.
 
-O desconto do orçamento é do **pedido**, não do item (`QuoteItem` não tem campo
-de desconto): ele é rateado por linha na proporção do valor. ⚠️ O arredondamento
+⚠️ **São SETE cópias desde 28/08/2026** — o `atendimento` entrou e o texto acima
+dizia seis. Conferido em 10/09: as sete estavam idênticas.
+
+⚠️ **O desconto tem DOIS modos, e o rateio é o de reserva** (corrigido em
+10/09/2026). O item SEMPRE teve desconto próprio — `discount_type`,
+`discount_value`, `discount_amount`, gravados no ato da venda e visíveis em
+`VendaItem` —, e o PDF ignorava os três: pegava o desconto do PEDIDO e rateava
+por todas as linhas. Medido no `V2026090056`: R$ 416,00 dados **só** no CarboZé
+100ml saíram no papel como R$ 230,40 no 1 Litro e R$ 185,60 no 100ml. **O total
+fechava e a realidade não** — e o cliente lê o papel, não o total.
+
+Hoje: se as linhas declaram desconto e a soma delas **fecha com o do pedido**,
+usa o valor de cada linha; senão, rateia. A conferência não é firula — pedido
+antigo só tem desconto no cabeçalho, e sem o rateio o PDF do histórico mostraria
+linha sem desconto e rodapé com desconto, que é o defeito oposto e pior.
+
+⚠️ **O elo que faltava não estava no PDF, e sim no `Vendas.tsx`**: o mapeamento
+que remonta o pedido para regerar o papel **descartava** `discount_amount` — e
+`is_bonificacao` junto, o que também jogava a linha de brinde de volta na base
+de rateio. Campo que o PDF passou a ler tem de atravessar esse `map`.
+
+⚠️ **A sobra de centavo não pode cair em linha SEM desconto.** Ela ia para a de
+menor quantidade; no modo por item isso inventaria centavos de desconto num
+produto que não recebeu nenhum — o mesmo defeito em miniatura. Hoje a sobra só
+escolhe entre linhas que já têm desconto.
+
+O desconto rateado (modo de reserva) é do **pedido**, não do item: distribuído
+por linha na proporção do valor. ⚠️ O arredondamento
 é do **unitário**, nunca do total da linha — ratear pelo total faz o "Unit. c/
 desc." sair de uma divisão e não fechar com a própria linha (R$ 133,68 × 10 =
 1.336,80 contra um total impresso de 1.336,78). E sobra centavo: o desconto de

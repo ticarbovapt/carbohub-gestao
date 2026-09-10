@@ -26,6 +26,12 @@ interface QuoteItem {
   /** Modelo ANTIGO de bonificação: quantidade extra na própria linha do produto
    *  pago. Continua sendo lido porque o histórico está gravado assim. */
   bonus_quantity?: number;
+  /** ⭐ Desconto DESTA linha, em R$, como o vendedor deu na tela.
+   *  ⚠️ Ele existe no dado desde sempre (`discount_type`/`discount_value`/
+   *  `discount_amount` no item), e o PDF o IGNORAVA: rateava o desconto do
+   *  pedido por todas as linhas. Num pedido com desconto em UM item só, o
+   *  papel mostrava desconto nos dois — total certo, realidade errada. */
+  discount_amount?: number;
   /** Modelo NOVO: a linha inteira é bonificação — o "gêmeo" do catálogo,
    *  entregue de graça a 100% de desconto.
    *  ⚠️ Ela NÃO entra na base de rateio do desconto do pedido: já é grátis, e
@@ -239,10 +245,26 @@ export async function generateQuotePdf(order: QuotePdfData, opts?: { download?: 
 
   /* ── O desconto, linha a linha ──────────────────────────────────────────
    *
-   * O desconto é do PEDIDO, não do item — `QuoteItem` não tem campo de
-   * desconto. Para mostrá-lo por produto ele é distribuído na proporção do
-   * valor de cada linha, que é a única divisão defensável: quem pesa mais no
-   * pedido absorve mais desconto.
+   * ⭐ DOIS modos, e o primeiro é o certo quando o dado existe:
+   *
+   *   POR ITEM   o desconto vem de `discount_amount` de cada linha — é
+   *              exatamente o que o vendedor digitou e o que a tela mostra.
+   *   RATEIO     só quando as linhas NÃO trazem desconto (histórico antigo):
+   *              distribui o desconto do pedido na proporção do valor.
+   *
+   * ⚠️ O rateio era o único modo, e mentia em pedido com desconto em UM item:
+   * medido no V2026090056 — R$ 416,00 dados só no CarboZé 100ml apareciam no
+   * papel como R$ 230,40 no 1 Litro e R$ 185,60 no 100ml. O total fechava e a
+   * realidade não, e o cliente lê o papel, não o total.
+   *
+   * ⚠️ O rateio NÃO foi removido: pedido antigo tem desconto só no cabeçalho, e
+   * sem ele o PDF do histórico mostraria linhas sem desconto e um total com
+   * desconto — que é o defeito oposto, e pior.
+   *
+   * ⚠️ A escolha é por CONFERÊNCIA, não por confiança: só usa o modo por item
+   * se a soma dos descontos das linhas fechar com o desconto do pedido. Se
+   * discordarem, o rateio volta — linha que não soma com o rodapé é orçamento
+   * que volta para o vendedor explicar.
    *
    * ⚠️ O que se arredonda é o UNITÁRIO, não o total da linha. Distribuindo
    * pelo total, o "Unit. c/ desc." vinha de uma divisão e não fechava com a
@@ -268,23 +290,49 @@ export async function generateQuotePdf(order: QuotePdfData, opts?: { download?: 
   const temDesconto = descontoPedido > 0 && brutoTotal > 0;
 
   const centavos = (n: number) => Math.round(n * 100) / 100;
+
+  // O desconto que cada linha declara. Soma-se para decidir o modo.
+  const porItem = pagos.map((it) => Math.max(0, Number(it.discount_amount ?? 0)));
+  const somaPorItem = centavos(porItem.reduce((s, d) => s + d, 0));
+  // ⚠️ Tolerância de 2 centavos: o dado vem de `round2` do lado da venda, e
+  // exigir igualdade exata jogaria de volta no rateio por um centavo de
+  // arredondamento — trocando a verdade por um detalhe invisível.
+  const usaPorItem = temDesconto && somaPorItem > 0
+    && Math.abs(somaPorItem - descontoPedido) <= 0.02;
+
   const descUnit: number[] = [];   // desconto de UMA unidade, já em centavos redondos
   const descLinha: number[] = [];  // desconto da linha inteira
   if (temDesconto) {
-    const fator = descontoPedido / brutoTotal;
-    pagos.forEach((it) => {
-      const du = Math.min(it.unit_price ?? 0, centavos((it.unit_price ?? 0) * fator));
-      descUnit.push(du);                                   // nunca abaixo de zero
-      descLinha.push(centavos(du * (it.quantity ?? 0)));
-    });
-    // A linha que absorve a sobra: a de menor quantidade.
-    let absorve = 0;
     pagos.forEach((it, i) => {
-      if ((it.quantity ?? 0) < (pagos[absorve].quantity ?? 0)) absorve = i;
+      const qty = it.quantity ?? 0;
+      const unit = it.unit_price ?? 0;
+      // No modo por item o alvo é o desconto da própria linha; no rateio, a
+      // fatia proporcional. Daí para baixo o tratamento é o MESMO — inclusive
+      // o arredondamento do unitário, que é o que faz unit × qtd fechar exato.
+      const alvo = usaPorItem ? porItem[i] : unit * qty * (descontoPedido / brutoTotal);
+      const du = qty > 0 ? Math.min(unit, centavos(alvo / qty)) : 0;
+      descUnit.push(du);                                   // nunca abaixo de zero
+      descLinha.push(centavos(du * qty));
     });
-    const sobra = centavos(descontoPedido - descLinha.reduce((s, d) => s + d, 0));
-    const bruto = (pagos[absorve].quantity ?? 0) * (pagos[absorve].unit_price ?? 0);
-    descLinha[absorve] = Math.min(bruto, Math.max(0, centavos(descLinha[absorve] + sobra)));
+
+    /* A sobra tem de cair em alguma linha (ver o comentário acima).
+     *
+     * ⚠️ No modo por item ela só pode cair numa linha que JÁ TEM desconto.
+     * Jogá-la na menor quantidade em geral inventaria um desconto de centavos
+     * num produto que não recebeu nenhum — que é, em miniatura, exatamente o
+     * defeito que esta correção conserta. */
+    const candidatos = pagos
+      .map((_, i) => i)
+      .filter((i) => !usaPorItem || descLinha[i] > 0);
+    if (candidatos.length) {
+      let absorve = candidatos[0];
+      for (const i of candidatos) {
+        if ((pagos[i].quantity ?? 0) < (pagos[absorve].quantity ?? 0)) absorve = i;
+      }
+      const sobra = centavos(descontoPedido - descLinha.reduce((s, d) => s + d, 0));
+      const bruto = (pagos[absorve].quantity ?? 0) * (pagos[absorve].unit_price ?? 0);
+      descLinha[absorve] = Math.min(bruto, Math.max(0, centavos(descLinha[absorve] + sobra)));
+    }
   }
 
   // Quais linhas do corpo levam preço riscado — o índice muda por causa das
@@ -302,7 +350,15 @@ export async function generateQuotePdf(order: QuotePdfData, opts?: { download?: 
     if (temDesconto) {
       const d = descLinha[i];
       const unitCom = unit - descUnit[i];
-      body.push([nome, String(qty), brl(unit), `- ${brl(d)}`, brl(unitCom), brl(centavos(bruto - d))]);
+      // ⚠️ Linha SEM desconto mostra "—", não "- R$ 0,00": num pedido com
+      // desconto em um item só, escrever zero nas outras sugere que houve
+      // negociação nelas e ela não pegou.
+      body.push([
+        nome, String(qty), brl(unit),
+        d > 0 ? `- ${brl(d)}` : "—",
+        d > 0 ? brl(unitCom) : brl(unit),
+        brl(centavos(bruto - d)),
+      ]);
       riscar.push(d > 0);
     } else {
       body.push([nome, String(qty), brl(unit), brl(bruto)]);
