@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DatePickerInput } from "@/components/ui/date-picker-input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -20,8 +22,12 @@ import {
 import {
   useDashEcommerce, useEcommerceComparativo, useEcommerceRawCheck, useCommissionRates,
   useEcommerceHistoricoMensal,
+  // ⚠️ A tela NÃO recalcula intervalo: pede ao `getRange`, o mesmo que os hooks
+  // usam. Uma segunda conta de "últimos 30 dias" aqui divergiria da consulta.
+  getRange,
   type EcommercePlatform, type EcommercePeriod, type RawCheckMetrics, type EcommerceMetrics,
   type ComparativoMetrics,
+  type ProdutoVendido,
   type EcommerceCustom,
   MINUTOS_ATE_ALERTAR,
 } from "@/hooks/useDashEcommerce";
@@ -105,14 +111,46 @@ const PMAP = Object.fromEntries(PLATFORMS.map(p => [p.id, p])) as Record<Ecommer
 const fmtBRL = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const fmtNum = (v: number) => v.toLocaleString("pt-BR");
+
+/**
+ * Apelido CURTO de produto, só para caber em cabeçalho de coluna.
+ *
+ * `KIT-CARB-SACH-10ML` come meia tabela e ainda vem truncado
+ * (`KIT-CARB-SACH…`), roubando a largura das colunas da direita, que são as
+ * que têm barra e porcentagem para desenhar.
+ *
+ * ⚠️ É DECORAÇÃO, e a chave é o `product_code` do cadastro. Produto que não
+ * estiver aqui mostra o CÓDIGO — ausência visível, nunca um apelido inventado
+ * nem uma coluna sem nome. O nome completo continua no `title`.
+ *
+ * ⚠️ Isto NÃO é lugar de regra: nada além do rótulo pode depender deste mapa.
+ * O dia em que a lista de produtos crescer, o certo é uma coluna `nome_curto`
+ * em `mrp_products` — cadastro, não código, como já vale para o mapa de SKU.
+ */
+const APELIDO_CURTO: Record<string, string> = {
+  "KIT-CARB-SACH-10ML": "Sachê",
+  "CARB-SACH-10ML":     "Sachê avulso",
+  "CZ100":              "100 ml",
+};
+const rotuloCurto = (p: ProdutoVendido) =>
+  (p.productCode && APELIDO_CURTO[p.productCode]) || p.productCode || p.nome;
 const pct = (a: number, b: number) => b > 0 ? ((a / b) * 100).toFixed(1) + "%" : "0%";
 
+/**
+ * ⚠️ "Este mês" e "Mês fechado" NÃO são a mesma coisa, e o rótulo diz isso.
+ *
+ * `month` vai do dia 1 até HOJE (mês corrente, parcial); `mes` vai do dia 1 ao
+ * ÚLTIMO dia do mês escolhido. Chamar os dois de "mês" faria a mesma palavra
+ * valer dois números — comparar agosto fechado com setembro-até-agora e achar
+ * que setembro caiu 60%.
+ */
 const PERIOD_OPTIONS: { value: EcommercePeriod; label: string }[] = [
   { value: "today",     label: "Hoje" },
   { value: "yesterday", label: "Ontem" },
   { value: "7d",        label: "Últimos 7 dias" },
   { value: "30d",       label: "Últimos 30 dias" },
-  { value: "month",     label: "Este mês" },
+  { value: "month",     label: "Este mês (até hoje)" },
+  { value: "mes",       label: "Mês fechado…" },
   { value: "custom",    label: "Por período…" },
 ];
 
@@ -128,17 +166,84 @@ function MetricCard({
 }) {
   return (
     <div
-      className="rounded-xl border bg-card p-4 flex flex-col gap-1.5 transition-all hover:-translate-y-0.5 hover:shadow-md"
+      className="rounded-xl border bg-card p-3 flex flex-col gap-1 transition-all hover:-translate-y-0.5 hover:shadow-md"
       style={{ borderLeftColor: accent, borderLeftWidth: 3 }}
     >
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide leading-tight">{label}</p>
-        <div className="p-1.5 rounded-lg shrink-0" style={{ background: accent + "20" }}>
+      <div className="flex items-start justify-between gap-1.5">
+        <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide leading-tight">{label}</p>
+        <div className="p-1 rounded-lg shrink-0" style={{ background: accent + "20" }}>
           <div style={{ color: accent }}>{icon}</div>
         </div>
       </div>
-      <p className="text-xl font-bold leading-none">{value}</p>
-      {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
+      <p className="text-lg font-bold leading-none truncate" title={value}>{value}</p>
+      {/* ⚠️ `line-clamp-2` + `title`: a legenda encolhe mas NÃO se perde. Ela
+          carrega o que o número significa ("unidades entregues ao cliente"), e
+          rótulo que nomeia a coisa errada ensina uma leitura falsa do painel —
+          foi por isso que "frascos" saiu daqui. Cortar o texto é aceitável;
+          cortar o sentido, não. */}
+      {sub && (
+        <p className="text-[11px] text-muted-foreground leading-snug line-clamp-2" title={sub}>
+          {sub}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Um produto, um card — quanto o CLIENTE levou daquele item.
+ *
+ * ⚠️ Os cards saem do array `porProduto`, um por produto do cadastro: NÃO há
+ * "card do sachê" e "card do 100 ml" escritos aqui. Produto novo entra pelo
+ * cadastro de SKU e ganha card sozinho; uma dupla fixa o deixaria de fora em
+ * silêncio.
+ *
+ * ⚠️ O número grande é `display_units_per_pack` — o que o cliente recebeu (kit
+ * de sachês = 10 sachês). NÃO é o que sai da prateleira, onde o mesmo kit vale
+ * 1. Ver `lib/skuUnidades.ts`.
+ */
+function ProdutoCard({ p, totalPacks }: { p: ProdutoVendido; totalPacks: number }) {
+  // Sem mapeamento o multiplicador é desconhecido e o número é um PISO. O card
+  // diz isso na cara — some-lo aos outros apagaria a pista de que falta cadastro.
+  const accent = p.mapeado ? "#a78bfa" : "#f59e0b";
+  return (
+    <div
+      className="rounded-xl border bg-card p-3 flex flex-col gap-1 transition-all hover:-translate-y-0.5 hover:shadow-md"
+      style={{ borderLeftColor: accent, borderLeftWidth: 3 }}
+      title={`${p.nome}${p.productCode ? ` · ${p.productCode}` : ""}${p.skus.length ? ` · SKU ${p.skus.join(", ")}` : ""}\n${fmtNum(p.packs)} packs vendidos (${pct(p.packs, totalPacks)} dos packs) → ${fmtNum(p.unidades)} unidades ao cliente\nFaturamento ${fmtBRL(p.receita)}`}
+    >
+      <div className="flex items-start justify-between gap-1.5">
+        <p className="text-[11px] font-medium text-muted-foreground leading-tight line-clamp-2">
+          {p.nome}
+        </p>
+        <div className="p-1 rounded-lg shrink-0" style={{ background: accent + "20" }}>
+          <div style={{ color: accent }}>
+            {p.mapeado ? <Package className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+          </div>
+        </div>
+      </div>
+      {/* ⚠️ O número grande é o PACK — o que a plataforma vendeu. As unidades
+          vêm logo abaixo, com a palavra escrita: os dois são verdadeiros e
+          medem coisas diferentes, e um número solto de "350" ao lado de
+          "Vendas 71" faria parecer contagem de pedido. */}
+      <p className="text-lg font-bold leading-none">
+        {fmtNum(p.packs)}
+        <span className="text-[11px] font-medium text-muted-foreground ml-1">packs</span>
+      </p>
+      {/* ⚠️ A porcentagem é sobre PACKS, e diz isso por escrito.
+          Sobre UNIDADES ela não comparava produto com produto: o pack de sachês
+          entrega 10 e o de 100 ml entrega 5, então a mesma quantidade de
+          compras dava 66,7% × 33,3% — o dobro para quem tem o pack maior, por
+          construção. Medido em 03/09 com 6 packs de cada, que é empate e
+          aparecia como 2 para 1.
+          Base diferente do número grande engana calado, então o rótulo "dos
+          packs" fica na tela e não só neste comentário. */}
+      <p className="text-[11px] text-muted-foreground leading-snug">
+        {pct(p.packs, totalPacks)} dos packs · {fmtNum(p.unidades)} un. · {fmtBRL(p.receita)}
+        {!p.mapeado && (
+          <span className="text-amber-600 dark:text-amber-400"> · sem mapa, é o mínimo</span>
+        )}
+      </p>
     </div>
   );
 }
@@ -721,7 +826,7 @@ function PlatformView({ platform, period, custom }: { platform: EcommercePlatfor
                     {fmtNum(m.products.reduce((s, p) => s + p.orders, 0))}
                   </td>
                   <td />
-                  <td className="px-4 py-3 text-right" style={{ color: cfg.color }}>{fmtNum(m.totalUnitsSold)}</td>
+                  <td className="px-4 py-3 text-right" style={{ color: cfg.color }}>{fmtNum(m.saleUnits)}</td>
                   <td className="px-5 py-3 text-right">{fmtBRL(m.totalRevenue)}</td>
                 </tr>
               </tfoot>
@@ -758,7 +863,7 @@ function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?:
   // seleção por `["mercadolivre","amazon"]` por baixo do pano — mostrava dados
   // de plataformas que a pessoa tinha DESMARCADO, sem dizer nada. Como o toggle
   // impede desmarcar a última, `selected` nunca fica vazio.
-  const { data } = useEcommerceComparativo(selected, period, custom);
+  const { data, porProduto } = useEcommerceComparativo(selected, period, custom);
 
   // ⚠️ Sem teto. O antigo era `prev.length >= 4`, e com cinco plataformas a
   // quinta simplesmente não entrava — o clique não fazia nada e nada explicava
@@ -775,7 +880,11 @@ function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?:
   const totalRevenue = data.reduce((s, c) => s + c.totalRevenue, 0);
   const totalOrders  = data.reduce((s, c) => s + c.totalOrders, 0);
   const totalSales   = data.reduce((s, c) => s + c.saleOrders, 0);
-  const totalUnits   = data.reduce((s, c) => s + c.totalUnitsSold, 0);
+  const totalUnits   = data.reduce((s, c) => s + c.saleUnits, 0);
+  // ⚠️ Base da porcentagem dos cards de produto. Sai de `porProduto`, NUNCA de
+  // `totalUnits`: unidade não compara produto com produto quando os packs têm
+  // tamanhos diferentes (sachê 10, CZ100 5) — ver o comentário no ProdutoCard.
+  const totalPacksProdutos = porProduto.reduce((s, p) => s + p.packs, 0);
   const totalCancel  = data.reduce((s, c) => s + c.cancelledOrders, 0);
   // ⚠️ Divide pelas VENDAS, não por todos os pedidos. Com `totalOrders` o
   // rodapé da tabela imprimia um ticket menor que o de TODAS as linhas acima
@@ -859,8 +968,15 @@ function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?:
       )}
 
       {/* ── Destaques ───────────────────────────────────────────────────────── */}
+      {/* ⚠️ Os quatro cartões do período e os cards por PRODUTO moram na MESMA
+          grade de propósito: são a mesma pergunta em dois cortes ("quanto
+          saiu"), e a soma das unidades dos produtos tem de bater com o cartão
+          "Unidades". Duas grades separadas convidariam a duas contas — foi
+          assim que o Comparativo e a aba do ML já mostraram números
+          diferentes para o mesmo dado.
+          A grade cresce sozinha: produto novo vira card e a linha quebra. */}
       {anyConnected && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
           <MetricCard
             label="Vendas" value={fmtNum(totalSales)}
             sub={`de ${fmtNum(totalOrders)} pedidos recebidos`}
@@ -873,7 +989,7 @@ function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?:
           />
           <MetricCard
             label="Unidades" value={fmtNum(totalUnits)}
-            sub="unidades entregues ao cliente, já com o multiplicador do pack"
+            sub="entregues ao cliente · só pedido pago, já com o multiplicador do pack"
             icon={<Boxes className="h-4 w-4" />} accent="#38bdf8"
           />
           <MetricCard
@@ -882,7 +998,24 @@ function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?:
             sub={leaderRevenue ? `${fmtBRL(leaderRevenue.totalRevenue)} · ${pct(leaderRevenue.totalRevenue, totalRevenue)} do total` : undefined}
             icon={<Trophy className="h-4 w-4" />} accent={leaderRevenue ? PMAP[leaderRevenue.platform].color : "#94a3b8"}
           />
+          {porProduto.map(p => (
+            <ProdutoCard key={p.key} p={p} totalPacks={totalPacksProdutos} />
+          ))}
         </div>
+      )}
+
+      {/* ⚠️ O aviso sobrevive à mudança de tabela para card. Sem mapeamento não
+          há multiplicador, o total de unidades fica SUBESTIMADO, e esconder isso
+          tiraria a única pista de que falta cadastrar — mesmo motivo pelo qual
+          `units_per_pack` devolve `null` em vez de 1. */}
+      {anyConnected && porProduto.some(p => !p.mapeado) && (
+        <p className="text-xs text-amber-600 dark:text-amber-400 -mt-1">
+          ⚠️ {porProduto.filter(p => !p.mapeado).length === 1
+            ? "1 produto sem mapeamento de SKU"
+            : `${porProduto.filter(p => !p.mapeado).length} produtos sem mapeamento de SKU`}:
+          {" "}sem cadastro não há multiplicador, então o total de unidades está subestimado.
+          Cadastre em Ops → Suprimentos → CD SP → Mapeamento SKU.
+        </p>
       )}
 
       {/* ── Tabela rica ─────────────────────────────────────────────────────── */}
@@ -895,17 +1028,60 @@ function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?:
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-y border-border/50 bg-muted/30 text-muted-foreground text-xs">
-                  <th className="text-left px-5 py-2.5 font-medium">Plataforma</th>
+                  {/* ⚠️ A LARGURA É DISTRIBUÍDA DE PROPÓSITO.
+                      As colunas de número só precisam caber no número, então
+                      andam com `px-2.5` e `w-px` (que em tabela significa "o
+                      mínimo que couber"). Toda a folga sobra para
+                      "Faturamento · participação", que é a única com BARRA para
+                      desenhar — foi ela que encolheu quando as colunas de
+                      produto entraram, e barra curta deixa de comparar. */}
+                  <th className="text-left px-4 py-2.5 font-medium">Plataforma</th>
                   {/* ⚠️ Duas colunas onde havia uma. "Pedidos" sozinho contava
                       cancelado e não pago junto, e era esse número que o dono
                       lia como venda. Agora o que chegou e o que virou venda
-                      ficam lado a lado, e a diferença entre eles é visível. */}
-                  <th className="text-right px-4 py-2.5 font-medium">Vendas</th>
-                  <th className="text-right px-4 py-2.5 font-medium">Recebidos</th>
-                  <th className="text-right px-4 py-2.5 font-medium">Unidades</th>
-                  <th className="text-left px-4 py-2.5 font-medium">Faturamento · participação</th>
-                  <th className="text-right px-4 py-2.5 font-medium">Ticket médio</th>
-                  <th className="text-right px-5 py-2.5 font-medium">Cancel.</th>
+                      ficam lado a lado, e a diferença entre eles é visível.
+
+                      ⚠️ "Recebidos" NÃO é carrinho aberto. Carrinho abandonado
+                      nunca vira linha em `ecommerce_orders` — ele mora em
+                      `nuvemshop_carrinhos`, noutra pipeline, e só existe na
+                      loja própria. Aqui são PEDIDOS que entraram, em qualquer
+                      status. Foi essa leitura ("recebidos = carrinhos, logo a
+                      diferença são os perdidos") que pediu o `title` abaixo:
+                      a coluna estava certa e não dizia o que era. */}
+                  <th className="text-right px-2.5 py-2.5 font-medium w-px whitespace-nowrap"
+                      title="Pedidos que viraram VENDA: pago, enviado ou entregue. É a base do ticket médio.">
+                    Vendas
+                  </th>
+                  <th className="text-right px-2.5 py-2.5 font-medium w-px whitespace-nowrap"
+                      title="Pedidos que ENTRARAM no período, em qualquer status — não são carrinhos abandonados, que vivem noutra tela. Recebidos − Vendas é o que não converteu, e hoje isso é exatamente a coluna Cancel. É também o denominador da % de cancelamento.">
+                    Recebidos
+                  </th>
+                  {/* ⚠️ Uma coluna por PRODUTO DO CADASTRO, geradas de
+                      `porProduto` — não existe "coluna do sachê" e "coluna do
+                      100 ml" escritas aqui. Produto novo ganha coluna sozinho,
+                      pelo mesmo caminho dos cards.
+                      Ficam entre "Recebidos" e "Unidades" de propósito: a
+                      leitura fecha da esquerda para a direita — quantos packs
+                      de cada → quantas unidades no total.
+                      ⚠️ O cabeçalho diz "packs" porque a soma delas NÃO fecha
+                      com "Vendas": um pedido pode levar dois packs ou os dois
+                      produtos. Sem a palavra, quem lê soma e acha que sumiu
+                      venda. */}
+                  {porProduto.map(p => (
+                    <th key={p.key} className="text-right px-2.5 py-2.5 font-medium w-px whitespace-nowrap"
+                        title={p.nome}>
+                      {rotuloCurto(p)}
+                      <span className="block text-[10px] font-normal opacity-70">packs</span>
+                    </th>
+                  ))}
+                  <th className="text-right px-2.5 py-2.5 font-medium w-px whitespace-nowrap">Unidades</th>
+                  {/* Sem `w-px`: é ela que fica com a folga toda. */}
+                  <th className="text-left px-3 py-2.5 font-medium">Faturamento · participação</th>
+                  <th className="text-right px-2.5 py-2.5 font-medium w-px whitespace-nowrap">Ticket médio</th>
+                  <th className="text-right px-4 py-2.5 font-medium w-px whitespace-nowrap"
+                      title="Pedidos cancelados e quanto representam dos Recebidos. É a medida do que NÃO converteu — por isso não existe uma coluna 'Perdidos' ao lado: seria este mesmo número com outro nome.">
+                    Cancel.
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/30">
@@ -915,26 +1091,39 @@ function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?:
                   const isLeader = leaderRevenue?.platform === c.platform && c.totalRevenue > 0;
                   return (
                     <tr key={c.platform} className={cn("hover:bg-muted/20", isLeader && "bg-muted/10")}>
-                      <td className="px-5 py-3">
+                      <td className="px-4 py-3">
                         <span className="inline-flex items-center gap-1.5">
                           <span className={cn("font-semibold", cfg.textClass)}>{cfg.emoji} {cfg.label}</span>
                           {isLeader && <Trophy className="h-3.5 w-3.5 text-amber-500" />}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-right tabular-nums font-semibold">{fmtNum(c.saleOrders)}</td>
-                      <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{fmtNum(c.totalOrders)}</td>
-                      <td className="px-4 py-3 text-right tabular-nums">{fmtNum(c.totalUnitsSold)}</td>
-                      <td className="px-4 py-3">
+                      <td className="px-2.5 py-3 text-right tabular-nums font-semibold">{fmtNum(c.saleOrders)}</td>
+                      <td className="px-2.5 py-3 text-right tabular-nums text-muted-foreground">{fmtNum(c.totalOrders)}</td>
+                      {/* Zero fica APAGADO, não sumido: "esta plataforma não
+                          vendeu este produto" é resposta, e célula vazia
+                          parece dado que faltou carregar. */}
+                      {porProduto.map(p => {
+                        const n = p.packsPorPlataforma[c.platform] ?? 0;
+                        return (
+                          <td key={p.key}
+                              className={cn("px-2.5 py-3 text-right tabular-nums",
+                                            n === 0 && "text-muted-foreground/40")}>
+                            {fmtNum(n)}
+                          </td>
+                        );
+                      })}
+                      <td className="px-2.5 py-3 text-right tabular-nums">{fmtNum(c.saleUnits)}</td>
+                      <td className="px-3 py-3">
                         <div className="flex items-center gap-2">
-                          <span className="tabular-nums w-20 shrink-0">{fmtBRL(c.totalRevenue)}</span>
-                          <div className="flex-1 min-w-[60px] h-1.5 rounded-full bg-muted overflow-hidden">
+                          <span className="tabular-nums w-24 shrink-0">{fmtBRL(c.totalRevenue)}</span>
+                          <div className="flex-1 min-w-[90px] h-1.5 rounded-full bg-muted overflow-hidden">
                             <div className="h-full rounded-full" style={{ width: `${share}%`, background: cfg.color }} />
                           </div>
                           <span className="text-xs text-muted-foreground tabular-nums w-10 text-right">{share.toFixed(0)}%</span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-right tabular-nums">{fmtBRL(c.avgTicket)}</td>
-                      <td className="px-5 py-3 text-right tabular-nums">
+                      <td className="px-2.5 py-3 text-right tabular-nums">{fmtBRL(c.avgTicket)}</td>
+                      <td className="px-4 py-3 text-right tabular-nums">
                         <span className={cn(c.cancelledOrders > 0 ? "text-destructive" : "text-muted-foreground")}>
                           {fmtNum(c.cancelledOrders)}
                           <span className="text-xs text-muted-foreground ml-1">({pct(c.cancelledOrders, c.totalOrders)})</span>
@@ -946,13 +1135,18 @@ function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?:
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-border/60 bg-muted/20 font-semibold">
-                  <td className="px-5 py-3">Total</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{fmtNum(totalSales)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{fmtNum(totalOrders)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{fmtNum(totalUnits)}</td>
-                  <td className="px-4 py-3 tabular-nums">{fmtBRL(totalRevenue)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{fmtBRL(overallTicket)}</td>
-                  <td className="px-5 py-3 text-right tabular-nums">
+                  <td className="px-4 py-3">Total</td>
+                  <td className="px-2.5 py-3 text-right tabular-nums">{fmtNum(totalSales)}</td>
+                  <td className="px-2.5 py-3 text-right tabular-nums text-muted-foreground">{fmtNum(totalOrders)}</td>
+                  {/* O total de cada produto é o `packs` que os cards já
+                      mostram — mesmo número, mesma origem. */}
+                  {porProduto.map(p => (
+                    <td key={p.key} className="px-2.5 py-3 text-right tabular-nums">{fmtNum(p.packs)}</td>
+                  ))}
+                  <td className="px-2.5 py-3 text-right tabular-nums">{fmtNum(totalUnits)}</td>
+                  <td className="px-3 py-3 tabular-nums">{fmtBRL(totalRevenue)}</td>
+                  <td className="px-2.5 py-3 text-right tabular-nums">{fmtBRL(overallTicket)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">
                     {fmtNum(totalCancel)}
                     <span className="text-xs text-muted-foreground ml-1">({pct(totalCancel, totalOrders)})</span>
                   </td>
@@ -1511,7 +1705,7 @@ function HistoricoMensalView() {
                               <span className={cn("text-xs font-semibold", cfg.textClass)}>{cfg.emoji} {cfg.label}</span>
                             </td>
                             <td className="px-4 py-2.5 text-right">{fmtNum(r.totalOrders)}</td>
-                            <td className="px-4 py-2.5 text-right">{fmtNum(r.totalUnitsSold)}</td>
+                            <td className="px-4 py-2.5 text-right">{fmtNum(r.saleUnits)}</td>
                             <td className={cn("px-4 py-2.5 text-right font-semibold", isTop && "text-green-600")}>
                               {fmtBRL(r.totalRevenue)}
                               {isTop && <span className="ml-1 text-xs">🏆</span>}
@@ -1582,27 +1776,118 @@ type ActiveView = EcommercePlatform | "comparativo" | "historico";
 
 const TAB_KEY = "ecommerce_active_tab";
 
+// ═══════════════════════════════════════════════════════════════════════════
+// O estado da tela mora na URL
+//
+// Antes, `period` e `custom` eram `useState` puro: F5 devolvia "Últimos 7 dias"
+// e a aba (que já ficava no localStorage) voltava com OUTRO período — quem
+// atualizava a página achava que o número tinha mudado. Também não dava para
+// mandar "olha agosto" para alguém: o link não carregava nada.
+//
+// Agora `?aba=&periodo=&de=&ate=` descrevem a tela inteira. F5 e link
+// compartilhado mostram exatamente o mesmo.
+//
+// ⚠️ A ABA mantém o `localStorage` como RESERVA, o período não. São coisas
+// diferentes: a aba é preferência ("eu trabalho no Comparativo"), o período é
+// pergunta ("como foi agosto"). Link limpo pelo menu lateral deve voltar à aba
+// de sempre e a um período recente — período grudento traria agosto de 2026
+// meses depois, com cara de dado atual.
+// ═══════════════════════════════════════════════════════════════════════════
+const PARAM_ABA = "aba";
+const PARAM_PERIODO = "periodo";
+const PARAM_DE = "de";
+const PARAM_ATE = "ate";
+
+/** A aba, se ela existir e estiver habilitada HOJE. Senão `null`. */
+function abaValida(v: string | null): ActiveView | null {
+  // ⚠️ A lista sai de PLATFORMS, não é escrita aqui. A versão anterior tinha
+  // "shopee" fixa: quando a aba foi habilitada, quem a escolhia e voltava caía
+  // no Mercado Livre — a aba funcionava e não "colava", sem erro nenhum.
+  const desabilitada = PLATFORMS.some((p) => p.id === v && p.disabled);
+  const conhecida = ACTIVE_PLATFORMS.some((p) => p.id === v)
+    || v === "comparativo" || v === "historico";
+  if (!v || desabilitada || !conhecida) return null;
+  return v as ActiveView;
+}
+
+function lerAba(p: URLSearchParams): ActiveView {
+  return abaValida(p.get(PARAM_ABA))
+    ?? abaValida(localStorage.getItem(TAB_KEY))
+    ?? "mercadolivre";
+}
+
+function lerPeriodo(p: URLSearchParams): EcommercePeriod {
+  const v = p.get(PARAM_PERIODO);
+  return PERIOD_OPTIONS.some((o) => o.value === v) ? (v as EcommercePeriod) : "7d";
+}
+
+/**
+ * ⚠️ INTERVALO PELA METADE NÃO EXISTE — ele é completado aqui.
+ *
+ * Ao escolher "Por período…" os dois campos nasciam VAZIOS, e o `getRange`
+ * completava o que faltava com "hoje" em silêncio: o seletor dizia "Por
+ * período…" e a tela respondia os últimos 30 dias sem avisar. Pior, ao digitar
+ * só a data inicial a consulta já disparava com `de → hoje`, mostrando um
+ * número errado no meio do caminho.
+ *
+ * Preenchendo as duas pontas na hora da troca, o estado incompleto deixa de
+ * existir: os campos mostram exatamente o intervalo que a tela está usando, e
+ * toda edição parte de um par completo. (`DatePickerInput` é `clearable={false}`,
+ * então não há como esvaziar um deles pela interface.)
+ */
+function normalizarCustom(periodo: EcommercePeriod, c: EcommerceCustom): EcommerceCustom {
+  if (periodo === "mes") {
+    // Só o `from` ancora o mês; qualquer dia dele serve.
+    return { from: c.from ?? `${getRange("today").from.slice(0, 7)}-01` };
+  }
+  if (periodo === "custom") {
+    if (c.from && c.to) return c;
+    const padrao = getRange("30d");   // o mesmo que a tela já mostrava calada
+    return { from: c.from ?? padrao.from, to: c.to ?? padrao.to };
+  }
+  return c;
+}
+
 export default function EcommerceVendas() {
-  const [period, setPeriod] = useState<EcommercePeriod>("7d");
+  const [params, setParams] = useSearchParams();
+
+  // Estado inicial LIDO DA URL (com as reservas descritas acima). Só a leitura
+  // inicial usa `params`: daqui em diante o estado manda e a URL o espelha.
+  const [period, setPeriod] = useState<EcommercePeriod>(() => lerPeriodo(params));
   // Período personalizado. Fica fora do `period` de propósito: trocar para
   // "Hoje" e voltar para "Por período" preserva as datas escolhidas.
-  const [custom, setCustom] = useState<EcommerceCustom>({});
-  const [active, setActive] = useState<ActiveView>(() => {
-    const saved = localStorage.getItem(TAB_KEY) as ActiveView | null;
-    // ⚠️ A lista sai de PLATFORMS, não é escrita aqui. A versão anterior tinha
-    // "shopee" fixa nesta linha: quando a aba foi habilitada, quem a escolhia e
-    // voltava à tela caía no Mercado Livre — a aba funcionava e não "colava",
-    // sem erro nenhum. Aba desabilitada volta a valer sozinha por esta regra.
-    // "lps" (Vindi) foi descontinuado e não está mais em PLATFORMS.
-    const desabilitada = PLATFORMS.some((p) => p.id === saved && p.disabled);
-    const conhecida = ACTIVE_PLATFORMS.some((p) => p.id === saved)
-      || saved === "comparativo" || saved === "historico";
-    if (!saved || desabilitada || !conhecida) return "mercadolivre";
-    return saved;
-  });
+  const [custom, setCustom] = useState<EcommerceCustom>(
+    () => normalizarCustom(lerPeriodo(params), {
+      from: params.get(PARAM_DE) || undefined,
+      to:   params.get(PARAM_ATE) || undefined,
+    }),
+  );
+  const [active, setActive] = useState<ActiveView>(() => lerAba(params));
+
+  // ⚠️ `replace: true`: trocar de período não empilha entrada no histórico.
+  // Sem isso, o "voltar" do navegador percorreria cada clique de filtro antes
+  // de sair da tela — o mesmo incômodo que a Esteira já evita.
+  // As deps são só o ESTADO; `setParams` é estável e `params` fica de fora de
+  // propósito, senão o efeito se realimentaria.
+  useEffect(() => {
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set(PARAM_ABA, active);
+      next.set(PARAM_PERIODO, period);
+      // `de` serve aos DOIS modos: intervalo livre e âncora do mês.
+      if (custom.from) next.set(PARAM_DE, custom.from); else next.delete(PARAM_DE);
+      // `ate` só existe no intervalo livre — em "mês fechado" ele é derivado, e
+      // deixá-lo na URL criaria um segundo lugar dizendo qual é o fim.
+      if (period === "custom" && custom.to) next.set(PARAM_ATE, custom.to);
+      else next.delete(PARAM_ATE);
+      return next;
+    }, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, period, custom.from, custom.to]);
 
   const handleSetActive = (v: ActiveView) => {
     setActive(v);
+    // Reserva para quando o link vier limpo (menu lateral, favorito antigo).
     localStorage.setItem(TAB_KEY, v);
   };
 
@@ -1622,8 +1907,23 @@ export default function EcommerceVendas() {
           </div>
           {active !== "historico" && (
             <div className="flex flex-wrap items-center gap-2">
-              <Select value={period} onValueChange={v => setPeriod(v as EcommercePeriod)}>
-                <SelectTrigger className="w-44">
+              {/* ⚠️ `h-9`, como a barra da Esteira. Sem altura declarada o
+                  trigger cai no `h-10` do primitivo e fica mais alto que todo o
+                  resto da casa — a mesma tela tinha `h-10` aqui e `h-9` na aba
+                  Histórico. */}
+              <Select
+                value={period}
+                onValueChange={(v) => {
+                  const p = v as EcommercePeriod;
+                  setPeriod(p);
+                  // ⚠️ UMA função decide o que "datas escolhidas" significa em
+                  // cada modo — a mesma que lê a URL. Duas regras aqui e lá
+                  // divergiriam, e o sintoma seria o link abrir diferente do
+                  // que a tela mostrava quando foi copiado.
+                  setCustom((c) => normalizarCustom(p, c));
+                }}
+              >
+                <SelectTrigger className="h-9 w-48">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1632,24 +1932,45 @@ export default function EcommerceVendas() {
                   ))}
                 </SelectContent>
               </Select>
+
+              {/* ⭐ O mês, quando o modo é "Mês fechado…".
+                  Reusa `generateMonthOptions()` — a MESMA lista que a aba
+                  Histórico Mensal já usa neste arquivo. Inventar um segundo
+                  gerador de meses seria a cópia que diverge sozinha. */}
+              {period === "mes" && (
+                <Select
+                  value={(custom.from ?? "").slice(0, 7)}
+                  onValueChange={(ym) => setCustom({ from: `${ym}-01` })}
+                >
+                  <SelectTrigger className="h-9 w-32">
+                    <SelectValue placeholder="Escolha o mês" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {/* Mais recente primeiro: ninguém procura janeiro de 2024
+                        antes do mês passado. */}
+                    {[...generateMonthOptions()].reverse().map(o => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+
+              {/* ⚠️ `DatePickerInput`, não `<input type="date">` cru: é o que a
+                  Esteira usa (popover com calendário em pt-BR), e o input nativo
+                  entregava um seletor diferente em cada navegador, com altura
+                  `h-10` destoando da barra. */}
               {period === "custom" && (
                 <div className="flex items-center gap-1.5">
-                  <input
-                    type="date"
+                  <DatePickerInput
                     value={custom.from ?? ""}
-                    max={custom.to || undefined}
-                    onChange={e => setCustom(c => ({ ...c, from: e.target.value }))}
-                    className="h-10 rounded-md border border-input bg-background px-2.5 text-sm"
-                    aria-label="Data inicial"
+                    onChange={(v) => setCustom(c => ({ ...c, from: v }))}
+                    clearable={false} disableFuture className="h-9 w-36"
                   />
                   <span className="text-muted-foreground text-sm">até</span>
-                  <input
-                    type="date"
+                  <DatePickerInput
                     value={custom.to ?? ""}
-                    min={custom.from || undefined}
-                    onChange={e => setCustom(c => ({ ...c, to: e.target.value }))}
-                    className="h-10 rounded-md border border-input bg-background px-2.5 text-sm"
-                    aria-label="Data final"
+                    onChange={(v) => setCustom(c => ({ ...c, to: v }))}
+                    clearable={false} disableFuture className="h-9 w-36"
                   />
                 </div>
               )}

@@ -221,8 +221,34 @@ meses com a bonificação como sufixo no nome do produto (`(+2 bonif.)`) enquant
 os outros cinco já mostravam linha separada a R$ 0,00. Ninguém percebeu porque
 divergir aqui não dá erro — dá um PDF diferente na mão do cliente.
 
-O desconto do orçamento é do **pedido**, não do item (`QuoteItem` não tem campo
-de desconto): ele é rateado por linha na proporção do valor. ⚠️ O arredondamento
+⚠️ **São SETE cópias desde 28/08/2026** — o `atendimento` entrou e o texto acima
+dizia seis. Conferido em 10/09: as sete estavam idênticas.
+
+⚠️ **O desconto tem DOIS modos, e o rateio é o de reserva** (corrigido em
+10/09/2026). O item SEMPRE teve desconto próprio — `discount_type`,
+`discount_value`, `discount_amount`, gravados no ato da venda e visíveis em
+`VendaItem` —, e o PDF ignorava os três: pegava o desconto do PEDIDO e rateava
+por todas as linhas. Medido no `V2026090056`: R$ 416,00 dados **só** no CarboZé
+100ml saíram no papel como R$ 230,40 no 1 Litro e R$ 185,60 no 100ml. **O total
+fechava e a realidade não** — e o cliente lê o papel, não o total.
+
+Hoje: se as linhas declaram desconto e a soma delas **fecha com o do pedido**,
+usa o valor de cada linha; senão, rateia. A conferência não é firula — pedido
+antigo só tem desconto no cabeçalho, e sem o rateio o PDF do histórico mostraria
+linha sem desconto e rodapé com desconto, que é o defeito oposto e pior.
+
+⚠️ **O elo que faltava não estava no PDF, e sim no `Vendas.tsx`**: o mapeamento
+que remonta o pedido para regerar o papel **descartava** `discount_amount` — e
+`is_bonificacao` junto, o que também jogava a linha de brinde de volta na base
+de rateio. Campo que o PDF passou a ler tem de atravessar esse `map`.
+
+⚠️ **A sobra de centavo não pode cair em linha SEM desconto.** Ela ia para a de
+menor quantidade; no modo por item isso inventaria centavos de desconto num
+produto que não recebeu nenhum — o mesmo defeito em miniatura. Hoje a sobra só
+escolhe entre linhas que já têm desconto.
+
+O desconto rateado (modo de reserva) é do **pedido**, não do item: distribuído
+por linha na proporção do valor. ⚠️ O arredondamento
 é do **unitário**, nunca do total da linha — ratear pelo total faz o "Unit. c/
 desc." sair de uma divisão e não fechar com a própria linha (R$ 133,68 × 10 =
 1.336,80 contra um total impresso de 1.336,78). E sobra centavo: o desconto de
@@ -325,6 +351,29 @@ src/lib/skuUnidades.ts             cópia na raiz — fonte da verdade é o admi
    já multiplica na ESCRITA (`enrichUnitsReal`, em `_shared/nuvemshop.ts`);
    reusar aquele valor daria ×25 num kit de 5. `units_real` só entra quando não
    há fator.
+⚠️ **O ENSAIO tem de aplicar as MESMAS travas da função** (`20260979`). Ele
+nasceu perguntando "esta linha resolve para um produto?" e chamando a resposta
+de "o que a dedução faria" — sem o marco zero e sem o ledger. Medido em 09/09:
+**718 linhas como `deduziria`, das quais 135 já estavam no ledger e 582 eram
+anteriores ao marco. 717 das 718 eram ficção.** O cron rodava havia onze dias e
+deduzia uma.
+
+Lista de trabalho que nunca esvazia é lista que ninguém abre — e é o inverso da
+doença da `20260941`: em vez de só concordar consigo mesma, ela discordava para
+sempre do que o sistema faz.
+
+⚠️ **`anterior ao marco zero` e `já deduzido` são vereditos SEPARADOS**, e
+juntá-los recria o erro de 31/08: um pergunta se a venda é ANTIGA (data), o
+outro se a saída já foi CONTADA (ledger). Coincidem no primeiro dia e divergem
+depois.
+
+⚠️ **`deduziria` não precisa ser ZERO**: o cron roda a cada 10 min, então venda
+recém-chegada aparece ali legitimamente. O que se confere é se a pendente é
+RECENTE — uma de dias atrás é que é sinal.
+
+⚠️ O texto `SEM MAPEAMENTO` é CONTRATO com a aba do Ops, que filtra por
+`ilike '%SEM MAPEAMENTO%'`. Mudar a string esvazia a aba sem erro nenhum.
+
 4. **`ecommerce_raw_summary` NÃO recebe a regra.** Ela é a visão crua do que está
    gravado, e é a **divergência** entre ela e o Histórico que denuncia mapa
    faltando. Um relatório que só sabe concordar consigo mesmo é a doença da
@@ -528,9 +577,24 @@ upsert.
 (`20260971`), exigindo o prefixo `PAYT_` — sem ele, `split_part` de um número
 comum devolve a string inteira e casa por acaso. O que autorizou aplicar com UM
 caso foi o total FECHAR exato (269,10 = 269,10), que é identidade e não
-semelhança. ⚠️ Se um pedido PayT não sair sozinho da coluna "Pago", o formato
+semelhança. ✅ **Corroborado em 04/09 com TRÊS pedidos** (`PK2279K`, `O96XVN9`,
+`ZYG6M5M`), todos `situacao_id = 9` e todos casando pela terceira posição do
+`split_part`. ⚠️ Se um pedido PayT não sair sozinho da coluna "Pago", o formato
 mudou: **revise a regra, não afrouxe a comparação** — afrouxar sem apertar
 unicidade troca "não casa nunca" por "casa errado".
+
+⚠️ **DINHEIRO filtra por status; IDENTIDADE, nunca.** A `20260971` pôs
+`ecommerce_status_e_venda` no CTE que agrega o pedido — certo para a soma — mas
+o array `transacoes`, que é a CHAVE do elo com o Bling, era calculado DENTRO
+desse mesmo CTE. Resultado: o carrinho `32BXNEP` ficou **100 h travado em
+"Pago"** com a nota já emitida, porque o pedido no Bling se chama
+`PAYT_LYK2ZA_PK2279K` e a transação `PK2279K` **foi cancelada depois** — saiu do
+array, o `= any(...)` virou falso e o vínculo evaporou.
+
+Um pedido não deixa de ser o mesmo pedido porque uma transação dele foi
+cancelada. A `20260975` move o array para um CTE PRÓPRIO, sem filtro de status;
+a soma continua só com linha de venda. ⚠️ Vínculo que depende de status evapora
+no dia do estorno — que é justamente o dia em que alguém está olhando.
 
 ⚠️ **A view soma SÓ linha que é venda**, e isso não é detalhe da PayT. O CTE
 agrega tudo e só depois filtra pelo `avanco` MÁXIMO, então transação cancelada
@@ -567,6 +631,61 @@ Três pendências conhecidas, todas medidas:
 296.616 = 12 × 24.718, contra 233.331 de produto). A soma das linhas é que bate
 com o valor dos produtos. E `product.items[]` são os COMPONENTES do kit — contá-
 los multiplica quantidade e receita pelo tamanho do kit.
+
+### Seletor de período do e-commerce — "este mês" ≠ "mês fechado"
+`EcommercePeriod` tem os dois, e a diferença NÃO é detalhe:
+
+```
+month  dia 1 → HOJE            mês corrente, parcial ("como vai o mês")
+mes    dia 1 → ÚLTIMO dia      mês fechado, ancorado em `custom.from`
+```
+
+Chamar os dois de "mês" faz a mesma palavra valer dois números — comparar agosto
+fechado com setembro-até-agora e concluir que setembro caiu 60%. Por isso o
+rótulo na tela é **"Este mês (até hoje)"**, não "Este mês".
+
+⚠️ **`mes` reusa `custom.from` como âncora** em vez de ganhar campo próprio: os
+quatro hooks já dependem de `custom?.from`/`custom?.to`, então o mês refaz a
+consulta pelo caminho que já existia. E a âncora é montada com `T12:00:00`, não
+`T00:00:00` — à meia-noite um fuso negativo joga a data para o dia anterior e o
+mês âncora vira o ANTERIOR, o mesmo erro de fuso do `ordered_at::date`.
+
+⚠️ **A tela viva é só `apps/admin`.** A raiz (`DashEcommerceVendas.tsx`) é
+congelada e nem expõe `custom`; `apps/ops/src/pages/ecommerce/VendasOnline.tsx`
+é mock NÃO roteado. Não há espelho a manter aqui.
+
+⚠️ **O estado da tela mora na URL**: `?aba=&periodo=&de=&ate=`. Antes era
+`useState` puro e o F5 devolvia "Últimos 7 dias" — com a ABA voltando do
+`localStorage`, ou seja, a mesma aba com outro período, e o número "mudando"
+sozinho para quem atualizava. Também não dava para mandar "olha agosto" a
+alguém.
+
+A **aba** mantém o `localStorage` como reserva, o **período não**, e a diferença
+é proposital: aba é preferência ("eu trabalho no Comparativo"), período é
+pergunta ("como foi agosto"). Período grudento traria agosto meses depois com
+cara de dado atual. O `de` serve aos dois modos (intervalo livre e âncora do
+mês); o `ate` só existe no intervalo livre, senão haveria dois lugares dizendo
+qual é o fim do mês.
+
+⚠️ **Intervalo pela metade não existe**: `normalizarCustom()` completa as duas
+pontas na troca de modo, e é a MESMA função que lê a URL. Antes os campos
+nasciam vazios, o `getRange` completava com "hoje" calado (o seletor dizia "Por
+período…" e a tela respondia 30 dias), e digitar só a data inicial já disparava
+uma consulta `de → hoje` com número errado no meio do caminho.
+
+⚠️ O mês corrente é derivado de `getRange("today")`, que é hora LOCAL — nunca
+de `new Date().toISOString()`, que é UTC: às 21h do dia 31 o mês âncora viraria
+o seguinte.
+
+### ⚠️ `Select` do shadcn tem DOIS `max-h`, e a menor manda
+Em `components/ui/select.tsx` a altura aparece no `SelectContent` **e** no
+`Viewport`. Estavam `max-h-60` (240px) e `max-h-48` (192px): com item de ~32px,
+o teto real era **seis opções**, e ninguém sabia disso. Um menu de 6 itens media
+200px e rolava por **8 pixels** — o Radix ligava as duas setas de scroll e o
+menu parecia cortado sem ter o que mostrar.
+
+Hoje as duas são `min(22rem,60vh)`. Ao mexer numa, mexa na outra: deixá-las
+diferentes recria o teto invisível.
 
 ### E-commerce: a tabela tem uma linha por ITEM, não por pedido
 `ecommerce_orders` grava `order_id = '<pedido>-<item>'` — de propósito, porque
@@ -661,6 +780,55 @@ qualquer um dos cinco, copie para o outro app na mesma tarefa.
 
 A tela não calcula etapa: quem calcula é a view `public.bling2_esteira`. Regra
 nova entra lá, e as duas telas mudam juntas.
+
+### ⚠️ REGRA PERMANENTE: a Esteira do On-line mostra SÓ venda on-line
+Dito pelo dono do processo mais de uma vez, e ficou meses sem estar escrito
+aqui — por isso voltou. **Venda de balcão / venda direta (loja 0 no Bling) NÃO
+aparece na esteira.** Não é preferência de tela: a esteira é o painel do
+comércio eletrônico, e pedido que não veio de canal on-line ali é ruído que
+compete com o que precisa de ação.
+
+A PayT **é** on-line e fica, apesar de chegar com `loja_id = 0` — é a pendência
+nº 1 dela, e o que a distingue de uma venda de balcão é o `numero_loja`
+(`PAYT_<seller_id>_<transação>`).
+
+⚠️ **E a regra alcança o WhatsApp junto** (`20260978`). Eu tinha separado as
+duas — "sumir da tela" e "parar de avisar o cliente" — e escolhido só a
+primeira, por conta própria. O dono do processo decidiu as duas: *"não é para ir
+para esteira essas vendas diretas, logo, não devem receber whatsapp"*. Como
+`carbo_msg_fila` lê a `bling2_esteira`, o filtro mora no **`WHERE` da view** e
+as duas coisas andam juntas — que é o oposto do que a `20260976` fez.
+
+⚠️ Isso NÃO revoga a lição da `20260976`: tirar linha do `WHERE` de uma view que
+alimenta fila de mensagens **para o envio**, e ali seria acidente. Aqui é o
+objetivo. A regra que sobrevive é *saber* que o `WHERE` decide as duas coisas —
+não "nunca filtrar ali".
+
+⚠️ **O corte de "só on-line" mora no `WHERE` da view** (`20260976` + `20260978`).
+Venda de balcão (loja 0 no Bling) aparecia na Esteira do On-line como "Venda
+direta (sem canal)", e a PayT ia junto — ela também chega com `loja_id = 0`
+(pendência #1 da PayT), então herdava o nome da loja 0. A view ganhou `canal`
+dizendo **PayT** quando `numero_loja like 'PAYT_%'`, e a coluna `e_online`.
+
+A `20260976` filtrou só na TELA, para não mexer na `carbo_msg_fila`; a `20260978`
+levou a MESMA expressão para o `WHERE`, por decisão do dono do processo — some
+da esteira e da fila juntas. A coluna `e_online` ficou (hoje sempre `true`)
+porque o hook dos três apps filtra por ela e `create or replace` não remove
+coluna.
+
+⚠️ O `e_online !== false` do hook não é estilo: numa ordem em que o front suba
+antes da migração, a coluna não existe e o campo vem `undefined` — ausência tem
+de MOSTRAR, nunca esvaziar a tela.
+
+⚠️ **`justify-center` num quadro que rola CORTA a primeira coluna** (medido em
+03/09, com a sidebar aberta em 1366/1440). Quando as colunas estouram a largura,
+centralizar empurra a primeira para fora da borda esquerda e não há como rolar
+de volta — foi isso que fatiava o card "Pago" e parecia "tela quebrada". O
+quadro usa `grow basis-0` (preenche quando cabe) + `justify-start` (rola da
+primeira quando estoura), NUNCA `justify-center`. No celular a coluna vai a
+`~86vw` com `snap-mandatory` (uma coluna cheia por arraste); acima de `sm` volta
+aos 240–400px. Os três pipelines (entrega, recompra, carrinho) compartilham
+essas classes — mude os três, e a tela é espelhada nos três apps.
 
 **Três pipelines no mesmo seletor**, e cada uma tem a SUA view de coluna:
 
@@ -789,6 +957,42 @@ valores agora, com unicidade sobre o conjunto.
 a porta 1 nunca gravara porque `'bling_id_ref'` faltava no CHECK — a `20260918`
 já o acrescenta, e produção tinha 391 envios casados por ela. Use
 `pg_get_constraintdef`, não a definição de nascimento.
+
+### Cancelamento da LOJA — a esteira não enxergava, e o card não tinha saída
+`avanco` é uma escada que só SOBE (`delivered` 3 · `shipped` 2 · `paid` 1 ·
+resto 0), então `cancelled` cai no mesmo **0** de `pending` — indistinguíveis. E
+o CASE só sabia cancelar por `situacao_id = 12` (no BLING) ou por NF inválida,
+e nenhum dos dois acontece quando quem cancela é a **loja**. Pedido cancelado na
+Nuvemshop ficava em "Confirmado" **para sempre**, igual ao `32BXNEP`. Medido em
+04/09: 5 cards, o mais velho de 30/06, um deles já com etiqueta gerada.
+
+A `20260977` exporta `cancelado_na_loja` do CTE `plataforma`. Três decisões, e
+as três foram medidas:
+
+1. ⚠️ **A POSIÇÃO no CASE é a regra inteira.** A condição entra DEPOIS de
+   `entregue` e `em_transito`: carimbo de postagem e de entrega é FATO e não
+   deixa de ser verdade porque cancelaram depois — a mesma lição da etiqueta
+   morta (`20260947`). Medido: **2 entregues e 1 em trânsito** estão cancelados
+   na Nuvemshop; subir a linha apagaria a entrega dos três.
+2. ⚠️ **Lista EXPLÍCITA, nunca `not ecommerce_status_e_venda(...)`.** Aquela
+   função devolve false também para `pending` — a regra marcaria como cancelado
+   todo pedido ainda não pago. Medido: o vocabulário é UMA palavra (`cancelled`)
+   nas cinco plataformas; `refunded`/`voided`/`estornado` ficam como rede.
+3. ⚠️ **`bool_and`, nunca `bool_or`.** A tabela tem uma linha por ITEM: com
+   `bool_or`, um item cancelado dentro de um pedido pago cancelaria o card
+   inteiro — a mesma armadilha dos R$ 418,60 num pedido de R$ 269,10 da PayT.
+
+⚠️ **O que isto NÃO resolve, e não pode:** pedido que o cliente refez por fora e
+que ninguém cancelou na loja continua `paid` e continua na esteira (o 480, do
+Miramon). Não é falha de leitura — o dado não existe. Cancelar na loja é o que o
+tira daqui. É o caso "premissa, não dado".
+
+⚠️ **Ao medir isso, `left join` com `platform_order_number` MENTE para a PayT**
+(o `pedido_loja` é `PAYT_..._...` e o `platform_order_number` é o carrinho — o
+join nunca casa) e para venda direta (`numero_loja` null). `not e_venda(null)`
+foi contado como cancelado e inflou a primeira medição: 3 de 3 na PayT, todos
+falsos. Separe `sem_correspondencia` de `cancelado` — ausência disfarçada de
+resposta é a doença do `Math.round` inventando `×1`.
 
 ### Etiqueta morta na esteira — a tela mostra, a MENSAGEM não promete
 A `20260946` tirou `and e.ativo` da `melhorenvio_envio_vigente` (etiqueta vencida
@@ -1172,6 +1376,38 @@ carbo_interface_e_interna()  (migração)        quem é "time interno"
    RPC. Hoje as três usam `_shared/interfacesInternas.ts`, que pergunta ao banco
    e **só nega** quando cai na rede local — rede que abre transforma falha de
    rede em porta destrancada.
+
+⚠️ **O azulejo do ADMIN era a EXCEÇÃO do mapa, e ninguém sabia** (corrigido em
+09/09/2026). Ele não estava em `INTERFACE_TO_APPS`: o Hub o mostrava por PERFIL
+(`seesEverything` — department `command`/`ti_suporte`, funcao `head`/`ceo`),
+enquanto o `ProtectedRoute` do app Admin exige só a flag `carbo_admin`. Duas
+regras para a MESMA porta, discordando nos dois sentidos e sempre calado:
+
+```
+flag sem perfil → o azulejo nunca aparece; liberar no Admin não adianta nada
+perfil sem flag → o azulejo aparece e o clique dá "Acesso restrito"
+```
+
+Medido: Leticia (`ops`/`estagiario`) e Lígia (`ops`/`gerente`), as duas com
+`carbo_admin` gravado e sem entrada nenhuma.
+
+⚠️ E eram **TRÊS** cópias da mesma pergunta, não duas — o seletor de apps do
+`packages/shell` tinha o MESMO `seesEverything`, então o Admin também não
+aparecia no switcher de nenhum dos sete. Hoje as três leem a flag:
+
+```
+apps/admin/src/contexts/AuthContext.tsx   hasAdminInterface   ENTRADA no app
+packages/shell/src/apps.ts                temFlagAdmin        seletor de apps
+carbohub-landing/src/lib/apps.ts          mostraAdmin         azulejo do Hub
+```
+
+Mudou uma, confira as outras duas. ⚠️ E `seesEverything` continua existindo nos
+três arquivos para outras perguntas — ela **não** governa mais o Admin.
+
+⚠️ E o comentário do `apps/admin/src/lib/interfaces.ts` afirmava o OPOSTO do
+código: dizia que a flag "controla APENAS a exibição do card" e que a entrada
+vinha do perfil. Descrevia um `ProtectedRoute` que já não existia. Quem foi
+liberar acesso leu na própria tela que marcar não adiantava.
 
 ### O md entrou no Hub em 10/09/2026 — e por que só em TRÊS dos quatro
 

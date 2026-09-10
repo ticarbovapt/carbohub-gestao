@@ -224,9 +224,15 @@ export default function Vendas() {
       const { data, error } = await (supabase as any).from("carboze_orders").select("*").eq("id", id).maybeSingle();
       if (error || !data) throw error ?? new Error("Pedido não encontrado");
       const snap = data.quote_form_snapshot as Record<string, any> | null;
+      // ⚠️ `discount_amount` e `is_bonificacao` PRECISAM atravessar. Sem o
+      // primeiro, o PDF regerado cai no rateio e espalha por todas as linhas um
+      // desconto que foi dado em UMA — total certo, realidade errada (medido no
+      // V2026090056). Sem o segundo, a linha de bonificação entra na base de
+      // rateio e encolhe o desconto de todas as outras.
       const items = (Array.isArray(data.items) ? data.items : []).map((it: any) => ({
         name: it.name, product_code: it.product_code, quantity: it.quantity,
         unit_price: it.unit_price, bonus_quantity: it.bonificacao,
+        discount_amount: it.discount_amount, is_bonificacao: it.is_bonificacao,
       }));
       await generateQuotePdf({
         order_number: data.order_number ?? undefined,

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { format, startOfMonth, addMonths, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
@@ -26,6 +26,8 @@ import {
   ALL_PLATFORMS,
   type MetaPlatform,
 } from "@/hooks/useMetaEcommerce";
+import { DistribuirMetaCard } from "@/components/DistribuirMetaCard";
+import type { ItemDistribuivel } from "@/hooks/useDistribuicaoMeta";
 
 function fmtBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -145,6 +147,47 @@ export default function MetaConfigPage() {
 
   const handleClose = () => { setDialog(false); setEdit(null); };
 
+  // ── Itens distribuíveis de cada aba ────────────────────────────────────────
+  //
+  // ⚠️ A lista sai de `targets`, NÃO de `activeMembers`.
+  //
+  // A primeira versão usava `activeMembers`, e o card nascia dizendo "Nada para
+  // distribuir neste escopo" mesmo com nove vendedores logo abaixo na tela. O
+  // motivo é que `activeMembers` filtra por `m.status` e `m.is_vendedor`, e a
+  // RPC `carbo_team_members` NÃO retorna nenhum dos dois campos — o filtro é
+  // sempre falso e a lista, sempre vazia. O TypeScript avisava
+  // ("Property 'status' does not exist on type 'TeamMember'") e o aviso foi
+  // lido como ruído pré-existente.
+  //
+  // `useSalesTargetsWithProgress` já resolve isto: monta a partir de `profiles`
+  // com `is_vendedor = true` ("aparecem no dashboard mesmo zerados") e devolve
+  // `target_amount` já resolvido — exceção do mês vence, senão a meta padrão,
+  // senão zero. É a mesma lista que a tela mostra logo abaixo, então o card e
+  // as metas individuais não podem divergir.
+  const itensVendedores: ItemDistribuivel[] = useMemo(
+    () => targets.map((t) => ({
+      id: t.vendedor_id,
+      nome: t.vendedor?.full_name || "(sem nome)",
+      metaAtual: Number(t.target_amount ?? 0),
+      realizado: Number(t.actual_amount ?? 0),
+    })),
+    [targets],
+  );
+
+  const itensEcommerce: ItemDistribuivel[] = useMemo(
+    () => platformStats
+      // `platform: null` é o card de Total Geral — ele não é um destino de
+      // distribuição, é o próprio total.
+      .filter((s) => s.platform !== null)
+      .map((s) => ({
+        id: String(s.platform),
+        nome: s.label,
+        metaAtual: Number(s.target ?? 0),
+        realizado: Number(s.actual ?? 0),
+      })),
+    [platformStats],
+  );
+
   const targetAmountNum = parseInt(targetDigits.replace(/\D/g, "") || "0", 10);
   const targetDisplay   = targetAmountNum > 0
     ? targetAmountNum.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 0, maximumFractionDigits: 0 })
@@ -218,6 +261,17 @@ export default function MetaConfigPage() {
 
         {tab === "vendedores" && (
           <>
+            <DistribuirMetaCard
+              escopo="vendedores"
+              mes={month}
+              itens={itensVendedores}
+              carregando={isLoading}
+            />
+
+            <p className="px-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Metas individuais
+            </p>
+
             <div className="flex items-center justify-end gap-3 flex-wrap">
               <Button size="sm" className="gap-1.5 bg-carbo-green hover:bg-carbo-green/90 text-white"
                 onClick={openNew}>
@@ -296,12 +350,24 @@ export default function MetaConfigPage() {
         {/* ── Tab: E-commerce ─────────────────────────────────────────────── */}
         {tab === "ecommerce" && (
           <div className="space-y-3">
-            {/* ⚠️ A regra, escrita na tela. Sem esta frase, quem procurar a
-                engrenagem do Total Geral vai achar que ela quebrou. */}
+            <DistribuirMetaCard
+              escopo="ecommerce"
+              mes={month}
+              itens={itensEcommerce}
+              carregando={ecoLoading}
+            />
+
+            {/* ⚠️ Esta frase dizia o CONTRÁRIO até 01/09/2026: "o Total Geral é
+                a soma das metas por plataforma; não existe meta total separada".
+                A regra foi revertida a pedido — agora o total é definido
+                primeiro, no bloco acima, e a distribuição vive por plataforma.
+                A frase ficou porque a pergunta que ela responde não mudou: quem
+                abre a tela precisa saber qual dos dois números manda. */}
             <div className="rounded-lg bg-muted/30 border border-border px-3 py-2 text-xs text-muted-foreground">
-              O <strong className="text-foreground">Total Geral</strong> é a{" "}
-              <strong className="text-foreground">soma</strong> das metas por plataforma.
-              Não existe meta total separada — para subir o total, suba a meta de algum canal.
+              A <strong className="text-foreground">meta geral</strong> é definida
+              acima e guardada separadamente. A soma por plataforma{" "}
+              <strong className="text-foreground">não precisa fechar</strong> com
+              ela — a diferença aparece na barra, para você decidir.
             </div>
 
             {/* ⚠️ Enquanto carrega, NÃO diga "Não definida".

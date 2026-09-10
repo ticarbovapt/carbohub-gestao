@@ -4,7 +4,7 @@ export { AppSwitcher } from "./AppSwitcher";
 export { useAppSwitcher } from "./useAppSwitcher";
 export {
   HUB_APPS, ADMIN_APP, HUB_HOME, HUB_URL,
-  resolveAllowedApps, seesEverything, buildSwitcherApps,
+  resolveAllowedApps, seesEverything, temFlagAdmin, buildSwitcherApps,
   appKeyAtual,
 } from "./apps";
 export type { AppKey, EcoApp, SwitcherApp, Identity, SwitcherProfile } from "./apps";

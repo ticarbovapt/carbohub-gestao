@@ -15,10 +15,16 @@
 // IMPORTANTE: esta lista espelha 1:1 os azulejos do Hub — assim dá pra liberar
 // qualquer sistema, antecipando (mesmo os "em breve").
 //
-// Carbo Admin: a flag `carbo_admin` controla APENAS a exibição do card de Admin
-// na tela inicial (carbohub.com.br). O ACESSO ao app Admin continua derivado do
-// perfil (command / head / TI) no ProtectedRoute — marcar/desmarcar aqui não
-// concede nem revoga entrada no Admin, só mostra/esconde o atalho no Hub.
+// ⚠️ Carbo Admin: a flag `carbo_admin` É O ACESSO, e não só o atalho.
+// Este comentário dizia o contrário — que a entrada vinha do perfil
+// (command/head/TI) — e descrevia uma versão antiga do `ProtectedRoute`. Hoje o
+// gate é uma linha só:
+//
+//     hasAdminInterface: (profile?.allowed_interfaces ?? []).includes("carbo_admin")
+//
+// Marcar aqui CONCEDE entrada; desmarcar REVOGA. Comentário que descreve a
+// versão anterior é pior que nenhum: quem foi liberar acesso leu que marcar não
+// adiantava.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface SystemOption {
@@ -43,7 +49,7 @@ export const SYSTEMS: SystemOption[] = [
   { iface: "carbo_mkt",         label: "Carbo Marketing",   hint: "Marketing — campanhas e ações" },
   { iface: "carbo_ti",          label: "Carbo TI",          hint: "Central de demandas do TI — bugs, sugestões e execução (ti.carbohub.com.br)" },
   { iface: "carbo_atendimento", label: "Carbo Atendimento", hint: "Atendimento ao cliente — conversas do WhatsApp e pós-venda (atendimento.carbohub.com.br)" },
-  { iface: "carbo_admin",       label: "Carbo Admin",       hint: "Identidades e acessos — só mostra o card no Hub (entrada é por perfil)" },
+  { iface: "carbo_admin",       label: "Carbo Admin",       hint: "Identidades e acessos — marcar aqui LIBERA a entrada no Admin" },
 ];
 
 export const DEFAULT_INTERFACES = ["carbo_ops"];

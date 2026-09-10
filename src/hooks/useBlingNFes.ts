@@ -117,7 +117,21 @@ export function useLinkableOrders(search: string, enabled = true) {
         .from("carboze_orders")
         .select("id, order_number, customer_name, total, status, created_at")
         .is("bling_nf_id", null)
-        .in("status", ["confirmed", "invoiced", "shipped", "delivered"])
+        // ⚠️ `pending` FALTAVA aqui, e o `useFaturamento` da raiz sempre o teve
+        // (`src/hooks/useFaturamento.ts`). Duas listas para a mesma pergunta: a
+        // tela LISTAVA o pedido aguardando faturamento e este buscador NEGAVA a
+        // existência dele — "Nenhum pedido sem NF encontrado" com o número
+        // digitado inteiro. Medido em 03/09 no `apps/financas`, com a NF 000412
+        // e o pedido V2026080116; a raiz tinha o defeito idêntico.
+        //
+        // `pending` é o pedido AGUARDANDO faturamento — justamente o que mais
+        // precisa de NF. A lista é "tudo menos `cancelled`", que é o único
+        // status onde vincular nota não faz sentido.
+        //
+        // ⚠️ Correção crítica em app congelado: uma linha, sem estrutura nova.
+        // A versão com lista compartilhada está em
+        // `apps/financas/src/lib/statusPedido.ts`.
+        .in("status", ["pending", "confirmed", "invoiced", "shipped", "delivered"])
         .order("created_at", { ascending: false })
         .limit(50);
 

@@ -350,7 +350,7 @@ export function SkuMapeamento() {
                 const semSku = !s.product_sku;
                 return (
                   <div
-                    key={`${s.platform}::${s.product_sku ?? " sem-sku"}`}
+                    key={`${s.platform}::${s.product_sku ?? "sem-sku"}`}
                     className="flex items-center gap-3 px-4 py-2.5 flex-wrap"
                   >
                     {semSku ? (
