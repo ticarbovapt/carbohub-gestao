@@ -677,6 +677,29 @@ uma consulta `de → hoje` com número errado no meio do caminho.
 de `new Date().toISOString()`, que é UTC: às 21h do dia 31 o mês âncora viraria
 o seguinte.
 
+### ⚠️ Ordem ASCENDENTE com `.limit()` devolve o COMEÇO, não o fim
+O Carbo Chat mostrava o grupo Suporte TI parado em 02/09, com a lista lateral
+exibindo a mensagem das 09:30 do mesmo dia. A consulta era:
+
+```ts
+.order("created_at", { ascending: true }).limit(200)   // as 200 MAIS ANTIGAS
+```
+
+⚠️ **E o defeito é invisível até o canal passar do teto.** Abaixo de 200
+mensagens vem tudo e parece certo; o grupo mais movimentado congela numa data e
+**nunca mais mostra mensagem nova** — nem ao vivo, porque o Realtime invalida o
+cache e o refetch traz as mesmas 200 velhas. Só um canal aparece quebrado, o que
+faz procurar defeito naquele canal em vez de na consulta.
+
+O certo é `ascending: false` + `.limit()` + `reverse()` na tela — que é o que o
+ramo do `focusAt`, logo acima no mesmo arquivo, sempre fez. ⚠️ E um segundo
+critério (`id`): com duas mensagens no mesmo instante, `order` de coluna única
+não é estável e a janela pode cortar no meio do empate.
+
+⚠️ A contradição entre DUAS consultas da mesma tela (a lista lateral trazia a
+última, o corpo não) é o sinal — quando duas visões do mesmo dado discordam, a
+errada é quase sempre a que tem teto.
+
 ### ⚠️ `Select` do shadcn tem DOIS `max-h`, e a menor manda
 Em `components/ui/select.tsx` a altura aparece no `SelectContent` **e** no
 `Viewport`. Estavam `max-h-60` (240px) e `max-h-48` (192px): com item de ~32px,

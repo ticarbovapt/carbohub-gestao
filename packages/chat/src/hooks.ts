@@ -106,13 +106,30 @@ export function useMessages(channelId: string | null, focusAt?: string | null) {
         if (after.error) throw after.error;
         return [...((before.data ?? []) as ChatMessage[]).reverse(), ...((after.data ?? []) as ChatMessage[])];
       }
+      // ⚠️ DESCENDENTE + reverse, nunca ascendente com limite.
+      //
+      // `ascending: true` com `.limit(200)` devolve as 200 mensagens MAIS
+      // ANTIGAS do canal — o oposto do que esta função promete ("as 200
+      // recentes", no comentário do topo). Em canal com menos de 200 ninguém
+      // nota: vem tudo. No grupo mais movimentado (Suporte TI) a tela congelava
+      // numa data e NUNCA mostrava mensagem nova — nem ao vivo, porque o
+      // Realtime invalidava o cache e o refetch trazia as mesmas 200 velhas.
+      // A lista lateral, que é outra consulta, mostrava a última mensagem, e a
+      // contradição entre as duas era o sintoma.
+      //
+      // `id` como segundo critério: com duas mensagens no mesmo instante, a
+      // ordem de um `order` de coluna única não é estável, e a janela de 200
+      // podia cortar no meio do empate e variar entre execuções.
       const { data, error } = await supabase
         .from("chat_messages").select(MSG_SELECT)
         .eq("channel_id", channelId)
-        .order("created_at", { ascending: true })
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
         .limit(200);
       if (error) throw error;
-      return (data ?? []) as ChatMessage[];
+      // A tela renderiza do mais antigo para o mais novo, como o ramo do
+      // `focusAt` logo acima já devolve.
+      return ((data ?? []) as ChatMessage[]).reverse();
     },
   });
 
