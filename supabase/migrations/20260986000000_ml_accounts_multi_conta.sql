@@ -315,12 +315,20 @@ where a.platform_key = 'mercadolivre';
 select count(*) as system_tokens_intacto
 from public.system_tokens where id = 'mercadolivre';
 
--- (c) A view do front não vaza token. Esperado: ZERO colunas com 'token' no
---     nome. Se vier qualquer linha, a view está expondo credencial.
+-- (c) A view do front não vaza credencial. Esperado: ZERO linhas.
+--
+-- ⚠️ A primeira versão desta consulta procurava qualquer coluna com 'token' no
+-- nome e ACUSOU `token_expirado` — um booleano derivado de `expires_at`, que
+-- não é segredo nenhum. Falso positivo, e do tipo pior: conferência que grita
+-- sem motivo ensina a ignorar conferência, exatamente como o alerta diário que
+-- a 20260952 teve de matar.
+--
+-- A pergunta certa nomeia as colunas que de fato carregam segredo, em vez de
+-- adivinhar por substring.
 select column_name
 from information_schema.columns
 where table_schema = 'public' and table_name = 'ml_accounts_public'
-  and (column_name ilike '%token%' or column_name ilike '%secret%');
+  and column_name in ('access_token', 'refresh_token', 'scopes');
 
 -- (d) A troca condicional funciona nos DOIS sentidos.
 --     Esperado: `com_token_certo` = true, `com_token_errado` = false.
@@ -334,6 +342,18 @@ select
   ) as com_token_errado
 from public.ml_accounts a
 where a.platform_key = 'mercadolivre';
+
+-- (d2) ⚠️ `rastreio_envios_fonte_check` aparece na varredura de plataformas e
+--      NÃO deve receber 'mercadolivre_full' — confirmado em 21/09/2026. A
+--      coluna ali é `fonte`, que identifica a origem do RASTREIO (Mercado
+--      Envios), não a conta vendedora. As duas contas despacham por Mercado
+--      Envios; acrescentar o Full criaria uma fonte de rastreio inexistente.
+--      Esperado: false, e false é o certo.
+select pg_get_constraintdef(con.oid) ilike '%mercadolivre_full%' as tem_o_full
+from pg_constraint con
+join pg_class c on c.oid = con.conrelid
+where c.relname = 'rastreio_envios' and con.conname = 'rastreio_envios_fonte_check';
+
 
 -- (e) O canal do Full já existe em carbo_canal_estoque e NÃO deduz?
 --     Esperado: mercadolivre ativo=true · mercadolivre_full ativo=false e
