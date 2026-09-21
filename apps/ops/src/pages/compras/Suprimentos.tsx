@@ -6,6 +6,7 @@ import { CarboBadge } from "@/components/ui/carbo-badge";
 import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { MlFullPainel } from "@/components/suprimentos/MlFullPainel";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -50,13 +51,16 @@ import { SkuMapeamento } from "@/components/suprimentos/SkuMapeamento";
 // CD Bling nenhuma migração chega a criar a linha em `warehouses` — o link
 // existe e leva a uma tela naturalmente vazia.
 // ─────────────────────────────────────────────────────────────────────────────
-type HubId = "rn" | "sp" | "spv" | "bling" | "esc";
+type HubId = "rn" | "sp" | "spv" | "bling" | "esc" | "mlfull";
 const HUB_PADRAO: HubId = "rn";
 // slug (URL) → id de UI, e id → código do warehouse. Só estas duas traduções.
 const hubIdBySlug = (slug?: string): HubId | null =>
   (HUBS.find((h) => h.slug === slug)?.id as HubId | undefined) ?? null;
 const slugOf = (id: HubId) => HUBS.find((h) => h.id === id)?.slug ?? "hub-natal";
-const HUB_CODE: Record<HubId, string> = { rn: "HUB-RN", sp: "HUB-SP", spv: "HUB-SP-VENDAS", bling: "CD-BLING", esc: "HUB-ESCRITORIO" };
+// ⚠️ `mlfull` recebe um código que NÃO existe em `warehouses`, de propósito:
+// ele não é galpão nosso. O `useStock` ignora código desconhecido, então a
+// aba não puxa `warehouse_stock` nenhum — quem desenha ela é o MlFullPainel.
+const HUB_CODE: Record<HubId, string> = { rn: "HUB-RN", sp: "HUB-SP", spv: "HUB-SP-VENDAS", bling: "CD-BLING", esc: "HUB-ESCRITORIO", mlfull: "ML-FULL" };
 
 // Ordem, rótulo, ícone e RESTRIÇÃO DE HUB das abas num lugar só — é daqui que
 // sai a TabsList e é contra esta lista que a URL é validada.
@@ -86,7 +90,14 @@ const ABA_PADRAO = ABAS[0].id;
 // seguro quando a URL pede uma combinação impossível.
 const abaValeNoHub = (abaId: string, hub: HubId) => {
   const a = ABAS.find((x) => x.id === abaId);
-  return !!a && (!("hubs" in a) || (a.hubs as readonly string[]).includes(hub));
+  if (!a) return false;
+  // ⚠️ O ML Full é ESPELHO: só a aba "estoque" faz sentido. As abas sem `hubs`
+  // valem em todos os hubs, então sem esta exceção ele herdaria Movimentações,
+  // Envios, Recebimento e Política — telas que escreveriam num galpão que não
+  // é nosso, ou mostrariam vazio para sempre. Lista explícita em vez de marcar
+  // `hubs` em cada aba: são seis edições contra uma, e seis lugares divergem.
+  if (hub === "mlfull") return abaId === "estoque";
+  return !("hubs" in a) || (a.hubs as readonly string[]).includes(hub);
 };
 
 // ⚠️ `capitalize` no CSS transformava `ecommerce` em "Ecommerce" — palavra que
@@ -200,7 +211,7 @@ export default function Suprimentos() {
   }, []);
   const periodLabel = periodo === "7d" ? "7 dias" : periodo === "30d" ? "30 dias" : periodo === "mes" ? "este mês"
     : periodo === "custom" ? "período" : (monthOptions.find((m) => m.v === periodo)?.label ?? "período");
-  const isRN = hub === "rn", isSP = hub === "sp", isVendas = hub === "spv", isBling = hub === "bling", isEsc = hub === "esc";
+  const isRN = hub === "rn", isSP = hub === "sp", isVendas = hub === "spv", isBling = hub === "bling", isEsc = hub === "esc", isMlFull = hub === "mlfull";
   const stockHub = HUBS.find((h) => h.id === hub) ?? HUBS[0];
 
   useStockLive(); // atualiza ao vivo quando outro usuário mexe no estoque (produção ou manual)
@@ -353,7 +364,12 @@ export default function Suprimentos() {
               o estoque da aba. O CD Bling fica de fora: o saldo dele vem da
               integração, e um envio manual dali criaria um número que a
               próxima sincronização apaga sem avisar. */}
-          {!isBling && <Button size="sm" variant="outline" className="gap-2 ml-auto border-blue-500/30 text-blue-400 hover:bg-blue-500/10" onClick={() => setEnvioOpen(true)}><Send className="h-4 w-4" /> Registrar Envio</Button>}
+          <Button variant={isMlFull ? "default" : "outline"} size="sm" className={cn("gap-2", isMlFull && "bg-violet-600 hover:bg-violet-600/90 text-white")} onClick={() => changeHub("mlfull")}><Boxes className="h-4 w-4" /> ML Full</Button>
+          {/* ⚠️ O ML Full fica de fora pelo MESMO motivo do CD Bling, e mais um:
+              o envio para lá tem botão próprio na aba, porque ele deduz daqui e
+              NÃO credita lá — quem credita é o Mercado Livre. Usar o diálogo
+              genérico criaria um crédito num galpão que não é nosso. */}
+          {!isBling && !isMlFull && <Button size="sm" variant="outline" className="gap-2 ml-auto border-blue-500/30 text-blue-400 hover:bg-blue-500/10" onClick={() => setEnvioOpen(true)}><Send className="h-4 w-4" /> Registrar Envio</Button>}
         </div>
 
         {/* Alerta reposição — SP */}
@@ -419,6 +435,11 @@ export default function Suprimentos() {
           </TabsList>
 
           <TabsContent value="estoque" className="mt-4 space-y-3">
+            {/* ⚠️ O ML Full desvia ANTES de tudo: a tela inteira dele vem de
+                `ml_estoque_full_tela` (espelho do Mercado Livre), não de
+                `warehouse_stock`. Deixar cair no corpo comum mostraria uma
+                grade vazia com botões de editar um galpão que não é nosso. */}
+            {isMlFull ? <MlFullPainel /> : (<>
             {isSP && (
               <div className="flex items-start gap-2 px-3 py-2 rounded-md bg-blue-500/10 border border-blue-500/20 text-sm text-blue-500">
                 <Info className="h-4 w-4 shrink-0 mt-0.5" />
@@ -426,6 +447,7 @@ export default function Suprimentos() {
               </div>
             )}
             <StockView hub={stockHub} editable />
+            </>)}
           </TabsContent>
 
           {/* Movimentações */}

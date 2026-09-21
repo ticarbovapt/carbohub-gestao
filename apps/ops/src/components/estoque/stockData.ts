@@ -16,6 +16,13 @@ export const HUBS: Hub[] = [
   // traduções são espelhos: atualizar só uma faz a tela LER o estoque e não
   // conseguir GRAVAR.
   { id: "esc", slug: "escritorio", label: "Escritório", city: "Natal", state: "RN" },
+  // ⚠️ ML Full NÃO é um galpão nosso, e por isso NÃO tem linha em `warehouses`
+  // nem entra em CODE_TO_HUB/HUB_TO_CODE. É espelho do que o Mercado Livre
+  // guarda, e a aba dele renderiza de `ml_estoque_full_tela`, não de
+  // `warehouse_stock`. Está nesta lista só para existir o botão — o `useStock`
+  // ignora código desconhecido (`if (!hubId) continue`), então ele não vira
+  // coluna na grade, exatamente como as caixas dos vendedores.
+  { id: "mlfull", slug: "ml-full", label: "ML Full", city: "—", state: "—" },
 ];
 export const hubBySlug = (slug?: string) => HUBS.find((h) => h.slug === slug);
 
