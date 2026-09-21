@@ -1840,6 +1840,39 @@ galpão do ML, e quem tira da LogHouse é a REMESSA de reposição. Sob a mesma
 chave `mercadolivre`, a venda e a remessa contariam a mesma saída duas vezes —
 o erro de 31/08.
 
+### ⚠️ Plataforma nova entra em TRÊS CHECKs, não um
+Medido em 21/09/2026: acrescentei `mercadolivre_full` ao CHECK de
+`ecommerce_orders`, presumi que era o único, e o bloco seguinte falhou com
+`23514 … carbo_canal_estoque_platform_check`. São três tabelas, e **cada uma
+falha num momento diferente**:
+
+```
+ecommerce_orders      ecommerce_orders_platform_check   o pedido nao entra    → na hora
+carbo_canal_estoque   carbo_canal_estoque_platform_check o canal nao cadastra → na hora
+sku_product_mappings  sku_platform_valida                o mapa nao salva     → MESES depois
+```
+
+⚠️ **A terceira é a perigosa.** Ninguém mapeia SKU no dia em que abre o canal: o
+erro apareceria em Ops → Suprimentos → Mapeamento SKU, semanas depois, sem
+ligação visível com a migração que o causou.
+
+⚠️ E a busca certa procura pelo **VALOR**, não pelo nome da coluna — o nome do
+constraint e o da coluna mudam de tabela para tabela:
+
+```sql
+select c.relname, con.conname, pg_get_constraintdef(con.oid)
+from pg_constraint con
+join pg_class c on c.oid = con.conrelid
+join pg_namespace n on n.oid = c.relnamespace
+where n.nspname = 'public' and con.contype = 'c'
+  and pg_get_constraintdef(con.oid) ilike '%mercadolivre%'
+order by 1;
+```
+
+⚠️ Ao reescrever o de `sku_product_mappings`, **mantenha `platform is null or …`**:
+mapa com plataforma nula vale para TODAS as plataformas e foi ele que zerou 111
+linhas órfãs de uma vez. Perder essa cláusula quebraria todo mapa genérico.
+
 ### Mercado Livre são DUAS contas — LogHouse e Full (21/09/2026)
 `mercadolivre` = despacho NOSSO, sai da LogHouse. `mercadolivre_full` = a
 mercadoria já está no galpão do ML.

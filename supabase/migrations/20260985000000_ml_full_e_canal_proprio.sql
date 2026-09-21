@@ -73,6 +73,68 @@ alter table public.ecommerce_orders
   check (platform in ('mercadolivre', 'mercadolivre_full', 'amazon',
                       'tiktok', 'shopee', 'nuvemshop', 'payt'));
 
+
+-- ╔═══════════════════════════════════════════════════════════════════════╗
+-- ║ BLOCO 1b — ⚠️ SÃO TRÊS TABELAS, NÃO UMA                               ║
+-- ╚═══════════════════════════════════════════════════════════════════════╝
+-- Medido em 21/09/2026, e doeu na hora: o BLOCO 3 abaixo falhou com
+--
+--     23514: new row for relation "carbo_canal_estoque" violates check
+--            constraint "carbo_canal_estoque_platform_check"
+--
+-- Eu tinha corrigido o CHECK de `ecommerce_orders` e presumido que era o
+-- único. São TRÊS tabelas que enumeram plataforma, e cada uma falha num
+-- momento diferente:
+--
+--   ecommerce_orders        o pedido não entra          → falha na hora
+--   carbo_canal_estoque     o canal não se cadastra     → falhou aqui
+--   sku_product_mappings    o mapa de SKU não salva     → falharia MESES depois
+--
+-- ⚠️ A terceira é a perigosa: ninguém mapeia SKU no dia em que abre o canal.
+-- O erro apareceria quando alguém fosse cadastrar o mapa do Full em Ops →
+-- Suprimentos, sem nenhuma ligação visível com esta migração.
+--
+-- ⚠️ E a lição de método é a mesma da conciliação do Melhor Envio, escrita no
+-- CLAUDE.md e que eu mesmo repeti no cabeçalho deste arquivo: **pergunte ao
+-- BANCO**. Só que procurar "o CHECK da coluna platform" numa tabela não
+-- encontra os das outras. A consulta certa procura pelo VALOR, porque o nome
+-- da coluna e o do constraint mudam de tabela para tabela:
+
+-- (rode esta primeiro — tem de listar as TRÊS)
+select c.relname            as tabela,
+       con.conname          as constraint_nome,
+       pg_get_constraintdef(con.oid) as definicao
+from pg_constraint con
+join pg_class     c on c.oid = con.conrelid
+join pg_namespace n on n.oid = c.relnamespace
+where n.nspname = 'public'
+  and con.contype = 'c'
+  and pg_get_constraintdef(con.oid) ilike '%mercadolivre%'
+order by 1;
+
+
+-- ── carbo_canal_estoque ───────────────────────────────────────────────────
+alter table public.carbo_canal_estoque
+  drop constraint if exists carbo_canal_estoque_platform_check;
+
+alter table public.carbo_canal_estoque
+  add constraint carbo_canal_estoque_platform_check
+  check (platform in ('mercadolivre', 'mercadolivre_full', 'amazon',
+                      'tiktok', 'shopee', 'nuvemshop', 'payt'));
+
+-- ── sku_product_mappings ──────────────────────────────────────────────────
+-- ⚠️ `platform is null` CONTINUA valendo, e não é detalhe: mapa com plataforma
+-- nula vale para TODAS, e foi ele que zerou 111 linhas órfãs de uma vez. Tirar
+-- essa cláusula ao reescrever o CHECK quebraria todo mapa genérico existente.
+alter table public.sku_product_mappings
+  drop constraint if exists sku_platform_valida;
+
+alter table public.sku_product_mappings
+  add constraint sku_platform_valida
+  check (platform is null
+         or platform in ('mercadolivre', 'mercadolivre_full', 'amazon',
+                         'tiktok', 'shopee', 'nuvemshop', 'payt'));
+
 comment on column public.ecommerce_orders.platform is
   'Canal da venda. mercadolivre = conta com despacho NOSSO (LogHouse); mercadolivre_full = conta no Fulfillment do ML, onde a mercadoria ja esta no galpao deles. Sao chaves separadas de proposito: o que as distingue e o ESTOQUE (o Full nao deduz da LogHouse — quem deduz e a remessa de reposicao).';
 
