@@ -119,7 +119,30 @@ async function pullMercadoLivre(conta: ContaML = "mercadolivre"): Promise<Record
   const url = `https://api.mercadolibre.com/orders/search?seller=${sellerId}`
     + `&sort=date_desc&order.date_last_updated.from=${since.toISOString()}`;
   const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
-  if (!res.ok) { console.error(`[${conta}] API error`, res.status); return []; }
+  if (!res.ok) {
+    // ⚠️ Registra o erro NA CONTA, não só no console.
+    //
+    // Antes daqui saía um `return []` mudo — e como o `marcarSync` fica no fim
+    // desta função, a conta ficava com `last_synced_at` nulo E `last_error`
+    // nulo. Ou seja: "nunca tentou" e "tentou e a API recusou" tinham a MESMA
+    // cara, e a única forma de distinguir era abrir o log da Edge Function.
+    //
+    // Isso quase custou um diagnóstico errado em 21/09/2026, no primeiro dia
+    // do Full: os dois nulos pareciam falha de integração quando a conta
+    // simplesmente ainda não tinha tido um ciclo de sync.
+    //
+    // `p_fatal: false` de propósito: 429, 500 e blip de rede não são motivo
+    // para exigir OAuth manual. Só `invalid_grant` é, e quem decide isso é o
+    // getMlToken.
+    const corpo = await res.text().catch(() => "");
+    console.error(`[${conta}] API error`, res.status, corpo.slice(0, 200));
+    await supabase.rpc("ml_conta_marcar_erro", {
+      p_seller_id: Number(sellerId),
+      p_erro: `orders/search ${res.status}: ${corpo.slice(0, 300)}`,
+      p_fatal: false,
+    });
+    return [];
+  }
   const json = await res.json() as { results: Record<string, unknown>[] };
 
   // Status do envio, um por pedido (não por item: o envio é do pedido inteiro).

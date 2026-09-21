@@ -1973,6 +1973,26 @@ A correção (`20260986` + `_shared/ml.ts`):
    o diagnóstico virava duplo: "por que o sync parou" e "por que desconectou",
    sendo a segunda consequência da primeira.
 
+### ⚠️ "Nunca tentou" e "a API recusou" tinham a MESMA cara
+Primeiro dia do ML Full (21/09/2026): a conta recém-conectada aparecia com
+`last_synced_at` **nulo** e `last_error` **nulo**, e eu li isso como falha de
+integração. Não era — ela tinha conectado 38 s DEPOIS da rodada das 15:15, e
+simplesmente ainda não tivera um ciclo. Na rodada seguinte sincronizou.
+
+⚠️ **O erro de método foi comparar um retrato contra um relógio que eu não
+tinha.** Só vejo o que é colado no chat; `now()` tem de vir na MESMA consulta,
+senão "o carimbo está em 15:15" vira "está congelado desde 15:15" sem base.
+
+Mas o susto expôs um defeito verdadeiro: `pullMercadoLivre` fazia `return []`
+mudo quando a API recusava, e o `marcarSync` fica no FIM da função — então
+falha de API deixava exatamente os mesmos dois nulos. **Ausência disfarçada de
+resposta**, a doença do `Math.round` inventando `×1`. Hoje o erro grava
+`last_error` na conta, com `p_fatal: false` (429/500/rede não pedem OAuth
+manual — só `invalid_grant`, e quem decide isso é o `getMlToken`).
+
+**A prova de que a API respondeu é o próprio `last_synced_at`**: ele só é
+gravado depois da chamada dar certo. Carimbo preenchido ⇒ o ML respondeu.
+
 ### `ml_accounts` — multi-conta, e por que NÃO uma coluna em `ecommerce_orders`
 `system_tokens.id` é chave de texto com uma linha por plataforma. Conectar a
 segunda conta pelo fluxo antigo **sobrescrevia a primeira**, calada.
