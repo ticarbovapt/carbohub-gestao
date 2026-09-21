@@ -77,6 +77,9 @@ const MOTIVO_FORA: Record<string, string> = {
   excluido_manualmente: "Excluído das métricas manualmente",
   nf_invalida: "NF cancelada/rejeitada — não vale como faturamento",
   aguardando_nf: "Aguardando emissão da NF",
+  // Nota com natureza "Remessa em bonificação" — brinde, não receita. Não é
+  // "aguardando NF": a nota existe e é válida. Ver 20260981.
+  bonificacao: "Bonificação — nota de remessa, não é receita",
 };
 
 const canalBadge = (s: string | null) =>

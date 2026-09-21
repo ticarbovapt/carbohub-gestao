@@ -1609,6 +1609,64 @@ confira se algum identificador usado no corpo é um `const` declarado depois.
 `ehBonificacao` fica logo após `useProdutos()` por esse motivo, e
 `faltaNaCaixa` fica depois de `validItems`.
 
+### ⚠️ Nota de BONIFICAÇÃO não é faturamento — e a marca `-BON` não alcança tudo
+Medido em 21/09/2026: **4 pedidos, R$ 5.523,00** somando dentro do faturamento
+desde 06/11/2025. Sobre os R$ 894.017,38 que contavam, é **0,62%** — pequeno o
+bastante para nunca chamar atenção, que é por que durou dez meses.
+
+A `20260903` montou a arquitetura certa (pedido e NF próprios, nota em
+`bling_nf_bonificacao_id`, gatilho `trg_bloqueia_remessa_bonificacao`). ⚠️ Mas a
+marca daquela guarda é o **sufixo `-BON`**, e ela só alcança o que o NOSSO
+sistema criou: não pega o que é anterior a 03/09/2026, nem pedido faturado
+direto no painel do Bling — o `V2026090052` entrou em **11/09**, oito dias
+DEPOIS do gatilho. Nos quatro, a nota de bonificação foi parar em `bling_nf_id`,
+a coluna da nota PRINCIPAL, e por isso o valor contava.
+
+**A régua passou a perguntar à NATUREZA** (`20260981`), via
+`carbo_natureza_e_bonificacao(text)` + `carbo_config_fiscal`:
+
+1. ⚠️ **O CFOP foi cogitado primeiro e o dado o descartou**: `naturezaOperacao`
+   vem em **828/828** e **369/369** das notas; `itens` (onde mora o CFOP), em
+   **219/828** e **11/369**. Sinal que falta em 3 de cada 4 notas não é sinal.
+2. ⚠️ **A natureza SEPARA sem zona cinzenta**: dos 1.170 pedidos que contavam,
+   **zero** usavam a natureza de bonificação. Foi essa medição que autorizou
+   aplicar a regra a todos, e não só aos quatro conhecidos.
+3. **Na VIEW, não marcando `excluir_metricas`.** A coluna existe (`20260630`) e
+   as sete cópias de `useCarbozeVendas.ts` já a respeitam — marcar resolveria
+   hoje. Não amanhã: a nota chega DEPOIS do pedido, então o gatilho moraria em
+   `bling_nfe`, mais uma peça móvel que falha calada. Em `conta_metrica` a regra
+   é calculada na LEITURA: vale para o passado e o futuro, sem nada rodar.
+4. ⚠️ **A função é `SECURITY DEFINER` e isso não é folga.** `carbo_config_fiscal`
+   tem RLS e a view é `security_invoker` — em invoker, um perfil sem leitura da
+   config receberia "nenhuma natureza configurada" e veria o faturamento
+   **inflado**, enquanto o gestor veria o certo. Dois valores para o mesmo
+   número, conforme quem olha, é pior que o furo original.
+5. ⚠️ **Casa por PADRÃO de chave** (`%natureza_bonificacao%`), nunca por lista de
+   nomes: já são três chaves nessa família (`bling_`, `bling1_`, `bling2_`) e a
+   quarta conta entraria com nome novo. Lista escrita no código é mais uma cópia
+   de cadastro, e divergir dela não dá erro — dá bonificação contando receita.
+6. ⚠️ **Aqui NÃO existe "ausência FECHA".** Sem natureza cadastrada a função
+   devolve `false` e tudo continua contando; fechar significaria tratar toda
+   nota como bonificação e **zerar o faturamento**. Quem protege é a conferência
+   `(a)` da migração, que conta quantas naturezas estão configuradas — uma
+   migração que não fez nada, sem erro, é o modo de falhar mais caro deste repo.
+7. **A POSIÇÃO no `motivo_fora`**: depois de `orcamento`/`cancelado` (estado do
+   PEDIDO) e antes de `nf_invalida`/`aguardando_nf` (estado da NOTA). Nota de
+   bonificação válida não tem nada de inválida, e "aguardando emissão" mandaria
+   alguém emitir a segunda.
+8. ⚠️ **O número do PASSADO muda** — nov/25 −510, jan −1.950, mar −975, set
+   −2.088. É o objetivo, mas quem fechou aqueles meses vê outro número. Nada é
+   apagado: `total` fica, o pedido fica na lista, reverter é republicar a view.
+9. ⚠️ **`motivo_fora` novo precisa de rótulo em DUAS telas** (`ComercialDados.tsx`
+   do `admin` e do `ti`). O render tem fallback (`MOTIVO_FORA[x] ?? x`), então
+   não quebra nem some — aparece cru, em linguagem de banco.
+
+⚠️ Republicar `carbo_vendas_metrica` exige **DROP + recreate** (o `o.*` expandido
+na criação) e derruba junto `carbo_vendas_busca` e `carbo_pdv_pedidos`, que
+declaram `returns setof` dela. `CASCADE` as apagaria em silêncio e a busca
+global do Sales sumiria sem motivo aparente. E **repita o `with (security_invoker
+= true)`** — `CREATE VIEW` sem `WITH` apaga as reloptions.
+
 ### Duas contas Bling na emissão — matriz e filial SP
 `bling-sync` emite nas DUAS contas. O mapa `CONTAS` (no topo da função) resolve
 tabela de apoio, token, natureza e colunas de destino por conta. Bling 1 =
