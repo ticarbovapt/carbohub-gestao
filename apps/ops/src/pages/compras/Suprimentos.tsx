@@ -386,7 +386,14 @@ export default function Suprimentos() {
         )}
 
         {/* KPIs + período */}
-        {!isBling && (
+        {/* ⚠️ O ML Full fica de fora pelo MESMO motivo do CD Bling, e a razão é
+            mais forte aqui: estes KPIs saem de `warehouse_stock` e de
+            `stock_movements`, e o ML Full não tem linha em nenhum dos dois.
+            Apareciam "Total Produtos 58" (a contagem geral, de outro contexto)
+            e zeros em Entradas/Saídas/Movimentações — números que existem e não
+            querem dizer nada ali. Número sem significado é pior que campo
+            ausente: ele convida a ser lido. */}
+        {!isBling && !isMlFull && (
           <div className="space-y-2">
             <div className="flex items-center gap-2 justify-end flex-wrap">
               <span className="text-xs text-muted-foreground">Período dos KPIs:</span>
