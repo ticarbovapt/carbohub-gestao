@@ -20,6 +20,31 @@ const supabase = createClient(
 const ML_TOKEN_URL = "https://api.mercadolibre.com/oauth/token";
 const ML_API_URL   = "https://api.mercadolibre.com";
 
+// ─── As DUAS contas de Mercado Livre ─────────────────────────────────────────
+//
+// `mercadolivre`      = conta com despacho NOSSO (LogHouse)
+// `mercadolivre_full` = conta no Fulfillment do ML
+//
+// A chave e a mesma em system_tokens.id e em ecommerce_orders.platform — sem
+// mapa intermediario para divergir.
+type ContaML = "mercadolivre" | "mercadolivre_full";
+const CONTAS: ContaML[] = ["mercadolivre", "mercadolivre_full"];
+
+// ⚠️ A conta viaja no `state` do OAuth, NUNCA no redirect_uri.
+//
+// O ML exige que o `redirect_uri` da troca de codigo seja IDENTICO ao do
+// authorize. Pendurar `?conta=full` nele quebraria a troca com um erro
+// generico do ML, e o sintoma seria "conectar nao funciona" sem dizer por que.
+// `state` existe exatamente para carregar contexto e volta intacto.
+//
+// ⚠️ E o padrao e a conta ANTIGA: link de autorizacao ja salvo por alguem, sem
+// `state`, continua conectando a conta que sempre conectou. Um padrao novo
+// faria um link velho reconectar a conta errada, calado.
+function contaDoState(state: string | null): ContaML {
+  const v = (state ?? "").trim();
+  return (CONTAS as string[]).includes(v) ? (v as ContaML) : "mercadolivre";
+}
+
 async function exchangeCode(code: string): Promise<{
   access_token: string;
   refresh_token: string;
@@ -51,18 +76,41 @@ async function exchangeCode(code: string): Promise<{
   return res.json();
 }
 
-async function saveTokens(tokens: {
+async function saveTokens(conta: ContaML, tokens: {
   access_token: string;
   refresh_token: string;
   expires_in: number;
   user_id: number;
 }) {
+  // ⚠️ GUARDA: o mesmo vendedor nao pode ocupar os dois slots.
+  //
+  // Um app do ML pode ser autorizado por varios vendedores, entao as duas
+  // contas usam o MESMO client_id — o que nao protege nada contra alguem
+  // autorizar a conta LogHouse na tela do Full. Sem esta checagem, todo pedido
+  // dela passaria a ser gravado como `mercadolivre_full`: faturamento no canal
+  // errado e, pior, estoque deixando de ser deduzido, porque o Full nao deduz.
+  // O sintoma seria uma conta "que parou de vender" e outra "que dobrou".
+  const seller = String(tokens.user_id);
+  const { data: conflito } = await supabase
+    .from("system_tokens")
+    .select("id")
+    .eq("seller_id", seller)
+    .neq("id", conta)
+    .maybeSingle();
+
+  if (conflito) {
+    throw new Error(
+      `Este vendedor do ML (${seller}) ja esta conectado como "${conflito.id}". ` +
+      `Conectar a MESMA conta em dois canais faria as vendas contarem no lugar errado. ` +
+      `Desconecte o outro slot antes, ou autorize a conta correta.`,
+    );
+  }
   const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
 
   const { error } = await supabase
     .from("system_tokens")
     .upsert({
-      id:            "mercadolivre",
+      id:            conta,
       access_token:  tokens.access_token,
       refresh_token: tokens.refresh_token,
       expires_at:    expiresAt,
@@ -74,19 +122,20 @@ async function saveTokens(tokens: {
 }
 
 Deno.serve(async (req: Request) => {
-  const url  = new URL(req.url);
-  const code = url.searchParams.get("code");
+  const url   = new URL(req.url);
+  const code  = url.searchParams.get("code");
+  const conta = contaDoState(url.searchParams.get("state"));
 
   // Live connection status check (no code = status probe)
   if (!code) {
     const { data } = await supabase
       .from("system_tokens")
       .select("access_token,refresh_token,expires_at,seller_id,updated_at")
-      .eq("id", "mercadolivre")
+      .eq("id", conta)
       .maybeSingle();
 
     if (!data?.access_token) {
-      return new Response(JSON.stringify({ ok: false, connected: false, reason: "no_token" }), {
+      return new Response(JSON.stringify({ ok: false, connected: false, conta, reason: "no_token" }), {
         headers: { "Content-Type": "application/json" },
       });
     }
@@ -110,7 +159,7 @@ Deno.serve(async (req: Request) => {
           const t = await res.json() as { access_token: string; refresh_token: string; expires_in: number };
           token = t.access_token;
           await supabase.from("system_tokens").upsert({
-            id:            "mercadolivre",
+            id:            conta,
             access_token:  t.access_token,
             refresh_token: t.refresh_token,
             expires_at:    new Date(Date.now() + t.expires_in * 1000).toISOString(),
@@ -119,8 +168,8 @@ Deno.serve(async (req: Request) => {
           }, { onConflict: "id" });
         } else {
           // Refresh failed — mark as disconnected
-          await supabase.from("system_tokens").delete().eq("id", "mercadolivre");
-          return new Response(JSON.stringify({ ok: false, connected: false, reason: "refresh_failed" }), {
+          await supabase.from("system_tokens").delete().eq("id", conta);
+          return new Response(JSON.stringify({ ok: false, connected: false, conta, reason: "refresh_failed" }), {
             headers: { "Content-Type": "application/json" },
           });
         }
@@ -138,8 +187,8 @@ Deno.serve(async (req: Request) => {
 
     if (!verify.ok) {
       // Token invalid — clean up so dashboard shows disconnected
-      await supabase.from("system_tokens").delete().eq("id", "mercadolivre");
-      return new Response(JSON.stringify({ ok: false, connected: false, reason: "token_invalid", status: verify.status }), {
+      await supabase.from("system_tokens").delete().eq("id", conta);
+      return new Response(JSON.stringify({ ok: false, connected: false, conta, reason: "token_invalid", status: verify.status }), {
         headers: { "Content-Type": "application/json" },
       });
     }
@@ -156,9 +205,9 @@ Deno.serve(async (req: Request) => {
 
   try {
     const tokens = await exchangeCode(code);
-    await saveTokens(tokens);
+    await saveTokens(conta, tokens);
 
-    console.log(`[ml-auth] Connected seller_id=${tokens.user_id}`);
+    console.log(`[ml-auth] Conectado: conta=${conta} seller_id=${tokens.user_id}`);
 
     return new Response(`
 <!DOCTYPE html>

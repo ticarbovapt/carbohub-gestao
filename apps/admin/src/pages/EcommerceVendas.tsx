@@ -51,11 +51,34 @@ interface PlatformConfig {
 
 const PLATFORMS: PlatformConfig[] = [
   {
-    id: "mercadolivre", label: "Mercado Livre",
+    // ⚠️ Rotulo com SOBRENOME desde 21/09/2026. Sao duas contas de Mercado
+    // Livre, e "Mercado Livre" puro nos dois faria o comparativo mostrar dois
+    // cards com o mesmo nome — e a diferenca entre eles e de onde a mercadoria
+    // sai, que e o que alguem precisa saber ao olhar.
+    id: "mercadolivre", label: "ML LogHouse",
     color: "#FFD700", gradient: "from-yellow-500 to-yellow-400",
     textClass: "text-yellow-600 dark:text-yellow-300",
     bgClass: "bg-yellow-500/10", borderClass: "border-yellow-500/50",
     emoji: "🛒",
+  },
+  {
+    // Mercado Livre Full — a mercadoria fica no galpao do ML.
+    //
+    // ⚠️ Cor por MEDIDA, nao por gosto, e a regra deste arquivo ja custou caro
+    // (ver o comentario da PayT). Violeta e o unico ponto livre que sobra: o
+    // amarelo do ML (#FFD700), o laranja da Amazon (#FF9900), o azul da
+    // Nuvemshop (#2D7FF9), o teal da PayT (#14B8A6) e o vermelho-alaranjado da
+    // Shopee (#EE4D2D) ja ocupam o resto.
+    //
+    // ⚠️ E NAO e um tom de amarelo "da familia do ML" de proposito: lado a lado
+    // no comparativo, dois amarelos leem como a mesma cor a um metro — foi por
+    // isso que o laranja do `atendimento` foi descartado contra o ambar do Ops.
+    // Quem diz que os dois sao Mercado Livre e o ROTULO, nao a cor.
+    id: "mercadolivre_full", label: "ML Full",
+    color: "#8B5CF6", gradient: "from-violet-500 to-purple-400",
+    textClass: "text-violet-600 dark:text-violet-300",
+    bgClass: "bg-violet-500/10", borderClass: "border-violet-500/50",
+    emoji: "📮",
   },
   {
     id: "amazon", label: "Amazon",

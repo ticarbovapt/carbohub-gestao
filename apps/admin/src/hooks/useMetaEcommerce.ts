@@ -30,7 +30,12 @@ const VENDA_STATUSES = ["paid", "shipped", "delivered"];
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type MetaPlatform = "mercadolivre" | "nuvemshop" | "amazon" | "shopee" | "payt" | null;
+// ⚠️ Tipo PARALELO ao `EcommercePlatform` do useDashEcommerce, e essa
+// duplicacao ja mordeu: ao acrescentar `mercadolivre_full` la, o tsc NAO
+// acusou nada aqui — as Metas simplesmente ficariam sem o canal, caladas.
+// Canal novo entra nos DOIS arquivos, na mesma tarefa.
+export type MetaPlatform =
+  | "mercadolivre" | "mercadolivre_full" | "nuvemshop" | "amazon" | "shopee" | "payt" | null;
 
 export interface MetaEcommerce {
   id: string;
@@ -64,7 +69,11 @@ export const PLATFORM_META: Record<
   string,
   { label: string; emoji: string; color: string }
 > = {
-  mercadolivre: { label: "Mercado Livre", emoji: "🛒", color: "#FFD700" },
+  mercadolivre:      { label: "ML LogHouse", emoji: "🛒", color: "#FFD700" },
+  // ⚠️ Mesmo rotulo, emoji e hex do EcommerceVendas.tsx — ver o aviso da
+  // Shopee logo abaixo. Violeta porque e o unico ponto livre do circulo, e
+  // NAO um segundo amarelo: dois amarelos lado a lado leem como a mesma cor.
+  mercadolivre_full: { label: "ML Full",     emoji: "📮", color: "#8B5CF6" },
   nuvemshop:    { label: "Nuvemshop",     emoji: "🛍️", color: "#2D9CDB" },
   amazon:       { label: "Amazon",        emoji: "📦", color: "#FF9900" },
   // ⚠️ Mesmo emoji e mesmo hex da tela de Vendas Online
@@ -86,7 +95,7 @@ export const PLATFORM_META: Record<
 // `meta_ecommerce` e sem pedido em `ecommerce_orders` soma 0 nos dois lados.
 // A PayT entrou em 28/08/2026 e, por isso, nenhum mês anterior mudou de número.
 export const ALL_PLATFORMS: MetaPlatform[] = [
-  "mercadolivre", "nuvemshop", "amazon", "shopee", "payt",
+  "mercadolivre", "mercadolivre_full", "nuvemshop", "amazon", "shopee", "payt",
 ];
 
 /**

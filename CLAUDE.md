@@ -1840,6 +1840,57 @@ galpão do ML, e quem tira da LogHouse é a REMESSA de reposição. Sob a mesma
 chave `mercadolivre`, a venda e a remessa contariam a mesma saída duas vezes —
 o erro de 31/08.
 
+### Mercado Livre são DUAS contas — LogHouse e Full (21/09/2026)
+`mercadolivre` = despacho NOSSO, sai da LogHouse. `mercadolivre_full` = a
+mercadoria já está no galpão do ML.
+
+**`platform` própria, não coluna de conta.** Todas as telas de e-commerce são
+chaveadas por `platform` (`useDashEcommerce(platform, …)`, `PLATFORMS`,
+`useMetaEcommerce`, mapas de taxa e rótulo); coluna de conta obrigaria a
+agrupar por `(platform, conta)` em todas elas. ⚠️ O que se PERDE: o sistema
+deixa de saber sozinho que os dois são o mesmo marketplace — somar "tudo que é
+ML" exige listar as duas chaves. Numa terceira conta, reconsidere.
+
+1. ⚠️ **O Full NÃO deduz estoque, e é essa a razão de ser canal separado.** A
+   venda no Full não tira nada da LogHouse: quem tira é a REMESSA de reposição.
+   Sob a mesma chave, venda e remessa contam a mesma saída duas vezes — o erro
+   de 31/08. Nasce `ativo = false` **e** `deduz_a_partir_de` nulo em
+   `carbo_canal_estoque` (duas travas independentes, de propósito).
+2. ⚠️ **A taxa do Full é `null`, NUNCA o 0,16 do ML.** O Full cobra fulfillment
+   além da comissão, e número plausível aparece na tela como comissão apurada —
+   é literalmente o erro do `shopee: 0.12` que já foi corrigido. Entra pelo
+   cartão "Comissão da Plataforma", que guarda a data de vigência.
+3. ⚠️ **`MetaPlatform` é tipo PARALELO a `EcommercePlatform`**, e isso já mordeu:
+   ao acrescentar o canal no `useDashEcommerce`, o `tsc` **não acusou nada** no
+   `useMetaEcommerce` — as Metas ficariam sem o canal, caladas. Canal novo entra
+   nos dois, na mesma tarefa, mais o `ROTULO_CURTO` do `EcommerceMetas.tsx`.
+4. ⚠️ **A conta viaja no `state` do OAuth, nunca no `redirect_uri`.** O ML exige
+   que o `redirect_uri` da troca de código seja idêntico ao do authorize;
+   pendurar `?conta=` ali quebra a troca com erro genérico. E o padrão do
+   `state` é a conta ANTIGA, para link já salvo não reconectar a conta errada.
+5. ⚠️ **Guarda de vendedor duplicado no `saveTokens`.** Um app do ML aceita
+   vários vendedores, então o mesmo `client_id` serve às duas contas — e nada
+   impede autorizar a LogHouse na tela do Full. Sem a guarda, as vendas dela
+   passariam a gravar como `mercadolivre_full`: canal errado e estoque deixando
+   de ser deduzido. Sintoma: uma conta "parou de vender", a outra "dobrou".
+6. **Checkpoint por conta** (`last_synced_at` em `system_tokens`, por `id`).
+   Compartilhado, a conta que sincroniza primeiro avança o relógio da outra e a
+   segunda perde a janela — pedido nunca buscado, sem erro.
+7. **Conta não conectada não é erro**: o puller devolve `[]` e loga. Falhar ali
+   derrubaria a rodada e levaria junto a conta que funciona.
+8. **`ecommerce_pedido_raiz` não muda** — o Full cai no `else` (corte no 1º
+   hífen), que já é a regra do ML. E `fonte: 'mercadolivre'` no rastreio também
+   fica: ele identifica Mercado Envios, não a conta vendedora.
+9. **Cor `#8B5CF6` (violeta), não um segundo amarelo.** Dois amarelos lado a
+   lado leem como a mesma cor a um metro — a lição do laranja do `atendimento`
+   contra o âmbar do Ops. Quem diz que os dois são ML é o RÓTULO.
+
+⚠️ **PENDENTE e medido: a esteira só enxerga o Bling 2.** A coluna "Pago" vem de
+`ecommerce_aguardando_bling` (lê a plataforma direto) e funciona para o Full
+assim que ele sincronizar. O RESTO da esteira vem de `bling2_esteira`, que lê
+`bling2_orders` — se o Full faturar no Bling **1**, o card fica preso em "Pago"
+para sempre, exatamente como a Shopee. Decidir antes de prometer a tela.
+
 ### Duas contas Bling na emissão — matriz e filial SP
 `bling-sync` emite nas DUAS contas. O mapa `CONTAS` (no topo da função) resolve
 tabela de apoio, token, natureza e colunas de destino por conta. Bling 1 =

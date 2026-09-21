@@ -192,7 +192,11 @@ type ChartFilter = "all" | MetaPlatform;
 // cards e não no filtro do gráfico: ele existia na tela e não dava para
 // isolá-lo — e o "Total" passava a incluir vendas que ninguém conseguia ver
 // separadas. É a mesma divergência silenciosa do quotePdf.ts no mkt.
-const ROTULO_CURTO: Record<string, string> = { mercadolivre: "ML" };
+// ⚠️ As duas contas de ML precisam de abreviacoes DIFERENTES: "ML" nos dois
+// faria a tela de metas mostrar duas colunas com o mesmo nome.
+const ROTULO_CURTO: Record<string, string> = {
+  mercadolivre: "ML LH", mercadolivre_full: "ML Full",
+};
 
 const FILTER_OPTIONS: { value: ChartFilter; emoji: string; label: string }[] = [
   { value: "all", emoji: "🎯", label: "Total" },

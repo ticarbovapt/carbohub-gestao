@@ -13,19 +13,35 @@ const supabase = createClient(
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
 );
 
-type Platform = "mercadolivre" | "amazon" | "tiktok" | "shopee" | "nuvemshop";
+// ⚠️ DUAS contas de Mercado Livre desde 21/09/2026, e o nome da plataforma e
+// tambem a CHAVE em system_tokens — e por isso que `mercadolivre_full` serve
+// para as duas coisas sem mapa intermediario.
+//
+// No `mercadolivre` (LogHouse) o despacho e nosso e a venda deduz estoque; no
+// `mercadolivre_full` a mercadoria ja esta no galpao do ML e a venda NAO tira
+// nada daqui — quem tira e a remessa de reposicao. Ver a migracao 20260985.
+type Platform =
+  | "mercadolivre" | "mercadolivre_full"
+  | "amazon" | "tiktok" | "shopee" | "nuvemshop";
+
+// Contas de Mercado Livre. A chave e o `id` em system_tokens E o `platform`
+// gravado em ecommerce_orders.
+type ContaML = "mercadolivre" | "mercadolivre_full";
 
 // ─── Token helper ─────────────────────────────────────────────────────────────
 
-async function getMercadoLivreToken(): Promise<{ accessToken: string; sellerId: string; lastSyncedAt: Date } | null> {
+async function getMercadoLivreToken(conta: ContaML = "mercadolivre"): Promise<{ accessToken: string; sellerId: string; lastSyncedAt: Date } | null> {
   const { data, error } = await supabase
     .from("system_tokens")
     .select("access_token,refresh_token,expires_at,seller_id,last_synced_at")
-    .eq("id", "mercadolivre")
+    .eq("id", conta)
     .maybeSingle();
 
   if (error || !data) {
-    console.warn("[mercadolivre] Token not found in system_tokens — skipping sync");
+    // ⚠️ Conta nao conectada NAO e erro: ate a segunda passar pelo OAuth, ela
+    // simplesmente nao sincroniza. Falhar aqui derrubaria a rodada inteira e
+    // levaria a conta que FUNCIONA junto.
+    console.warn(`[${conta}] Token not found in system_tokens — skipping sync`);
     return null;
   }
 
@@ -46,7 +62,7 @@ async function getMercadoLivreToken(): Promise<{ accessToken: string; sellerId: 
       if (res.ok) {
         const t = await res.json() as { access_token: string; refresh_token: string; expires_in: number };
         await supabase.from("system_tokens").upsert({
-          id:            "mercadolivre",
+          id:            conta,
           access_token:  t.access_token,
           refresh_token: t.refresh_token,
           expires_at:    new Date(Date.now() + t.expires_in * 1000).toISOString(),
@@ -56,7 +72,7 @@ async function getMercadoLivreToken(): Promise<{ accessToken: string; sellerId: 
         return { accessToken: t.access_token, sellerId: data.seller_id, lastSyncedAt: data.last_synced_at ? new Date(data.last_synced_at) : new Date(Date.now() - 48 * 60 * 60 * 1000) };
       }
     } catch (e) {
-      console.error("[mercadolivre] Token refresh failed:", e);
+      console.error(`[${conta}] Token refresh failed:`, e);
     }
     return null;
   }
@@ -71,8 +87,8 @@ async function getMercadoLivreToken(): Promise<{ accessToken: string; sellerId: 
 
 // ─── Platform pullers ─────────────────────────────────────────────────────────
 
-async function pullMercadoLivre(): Promise<Record<string, unknown>[]> {
-  const creds = await getMercadoLivreToken();
+async function pullMercadoLivre(conta: ContaML = "mercadolivre"): Promise<Record<string, unknown>[]> {
+  const creds = await getMercadoLivreToken(conta);
   if (!creds) return [];
   const { accessToken, sellerId, lastSyncedAt } = creds;
 
@@ -81,7 +97,7 @@ async function pullMercadoLivre(): Promise<Record<string, unknown>[]> {
   const maxLookback = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const since = lastSyncedAt < maxLookback ? maxLookback : lastSyncedAt;
 
-  console.log(`[mercadolivre] Syncing from ${since.toISOString()}`);
+  console.log(`[${conta}] Syncing from ${since.toISOString()}`);
   // ⚠️ Filtra por ATUALIZAÇÃO, não por criação.
   //
   // Era `date_created.from`. Com ele, o pedido só é buscado na janela em que
@@ -94,7 +110,7 @@ async function pullMercadoLivre(): Promise<Record<string, unknown>[]> {
   const url = `https://api.mercadolibre.com/orders/search?seller=${sellerId}`
     + `&sort=date_desc&order.date_last_updated.from=${since.toISOString()}`;
   const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
-  if (!res.ok) { console.error("[mercadolivre] API error", res.status); return []; }
+  if (!res.ok) { console.error(`[${conta}] API error`, res.status); return []; }
   const json = await res.json() as { results: Record<string, unknown>[] };
 
   // Status do envio, um por pedido (não por item: o envio é do pedido inteiro).
@@ -118,7 +134,7 @@ async function pullMercadoLivre(): Promise<Record<string, unknown>[]> {
     // nunca se encontra, e o card não avança na esteira.
     const numeroDaLoja = String((order as any).pack_id ?? order.id);
     return items.map((item) => ({
-      platform:     "mercadolivre",
+      platform:     conta,
       order_id:     `${order.id}-${(item.item as Record<string, unknown>)?.id}`,
       product_sku:  (item.item as Record<string, unknown>)?.seller_sku ?? null,
       product_name: (item.item as Record<string, unknown>)?.title ?? null,
@@ -135,9 +151,12 @@ async function pullMercadoLivre(): Promise<Record<string, unknown>[]> {
   });
 
   // Update checkpoint so next run starts from now (no gaps, no double-fetching unnecessarily)
+  // ⚠️ Checkpoint POR CONTA. Um checkpoint compartilhado faria a conta que
+  // sincroniza primeiro avancar o relogio da outra, e a segunda perderia a
+  // janela — pedido nunca buscado, sem erro nenhum.
   await supabase.from("system_tokens")
     .update({ last_synced_at: new Date().toISOString() })
-    .eq("id", "mercadolivre");
+    .eq("id", conta);
 
   return rows;
 }
@@ -799,7 +818,8 @@ Deno.serve(async (req: Request) => {
   const since = new Date(Date.now() - 2 * 60 * 60 * 1000); // kept for Amazon/TikTok/Shopee stubs
 
   const pullers: Record<Platform, (d: Date) => Promise<Record<string, unknown>[]>> = {
-    mercadolivre: () => pullMercadoLivre(),
+    mercadolivre:      () => pullMercadoLivre("mercadolivre"),
+    mercadolivre_full: () => pullMercadoLivre("mercadolivre_full"),
     amazon:       pullAmazon,
     tiktok:       pullTikTok,
     shopee:       pullShopee,

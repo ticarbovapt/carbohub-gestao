@@ -17,7 +17,13 @@ import {
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type EcommercePlatform = "mercadolivre" | "amazon" | "nuvemshop" | "payt" | "shopee";
+// ⚠️ DUAS contas de Mercado Livre, e elas sao chaves SEPARADAS de proposito.
+// O que as distingue nao e cosmetico: no `mercadolivre` (LogHouse) o despacho
+// e nosso e a venda tira da LogHouse; no `mercadolivre_full` a mercadoria ja
+// esta no galpao do ML e a venda NAO tira nada daqui — quem tira e a remessa
+// de reposicao. Ver a migracao 20260985.
+export type EcommercePlatform =
+  | "mercadolivre" | "mercadolivre_full" | "amazon" | "nuvemshop" | "payt" | "shopee";
 export type EcommercePeriod   =
   | "today" | "yesterday" | "7d" | "30d" | "month" | "mes" | "custom";
 
@@ -480,6 +486,12 @@ function buildMetrics(
  */
 export const PLATFORM_FEE_DEFAULT: Record<EcommercePlatform, number | null> = {
   mercadolivre: 0.16,
+  // ⚠️ NAO MEDIDA, e NAO e 0.16. Copiar a taxa da conta LogHouse seria repetir
+  // exatamente o erro do `shopee: 0.12` descrito acima: numero plausivel
+  // aparecendo como comissao apurada e mexendo na margem do canal. O Full cobra
+  // tarifa de fulfillment alem da comissao. Cadastre pelo cartao "Comissao da
+  // Plataforma", que guarda a data a partir da qual ela vale.
+  mercadolivre_full: null,
   amazon:       0.15,
   nuvemshop:    0,      // loja própria — sem comissão de marketplace
   payt:         null,   // ⚠️ NÃO MEDIDA — checkout próprio, taxa ainda desconhecida
@@ -839,7 +851,10 @@ async function fetchOrders(
 }
 
 const PLATFORM_LABEL: Record<EcommercePlatform, string> = {
-  mercadolivre: "Mercado Livre",
+  // ⚠️ "Mercado Livre" sem sobrenome nao serve mais: sao duas contas, e a
+  // diferenca entre elas e de ONDE a mercadoria sai.
+  mercadolivre:      "ML LogHouse",
+  mercadolivre_full: "ML Full",
   amazon:       "Amazon",
   nuvemshop:    "Nuvemshop",
   payt:         "PayT",
