@@ -881,6 +881,55 @@ qualquer um dos cinco, copie para o outro app na mesma tarefa.
 A tela não calcula etapa: quem calcula é a view `public.bling2_esteira`. Regra
 nova entra lá, e as duas telas mudam juntas.
 
+### A Esteira enxerga DUAS contas Bling desde 21/09/2026
+`bling2_esteira` virou UNIÃO: o ramo do Bling 2 (filial) mais o que é **on-line
+no Bling 1** (matriz). Existe porque o **ML Full fatura na matriz** — confirmado
+por IDENTIDADE, não semelhança: 12 dos 14 `platform_order_number` batem exato
+com `numero_loja` da loja `206270703`.
+
+Sintoma antes: **14 cards presos na coluna "Pago"**, todos do Full, o mais antigo
+de 14/09, e ZERO dele em qualquer outra etapa — enquanto os outros canais não
+apareciam em "Pago". Crescia ~13 por semana.
+✅ Depois: 10 confirmado · 7 em_transito · 4 entregue, **andando sozinhos**.
+
+⚠️ **Quatro coisas que NÃO se copiam de um ramo para o outro**, e cada uma foi
+medida antes de escrever:
+
+1. **`situacao_id in (9,12)` esconderia TODOS.** No Bling 1 o Full está em
+   **15** ("Em andamento", ver `mapBlingStatus`). Id de situação é cadastro de
+   CADA conta — a mesma suposição que já custou caro com `bling_id` de produto.
+   O ramo da conta 1 **não filtra por situação**.
+2. ⚠️ **`carbo_pedido_codigo` e `melhorenvio_envio_vigente` casam por
+   `bling_id`, e as duas contas numeram do zero.** O join traria rastreio do
+   pedido de OUTRA empresa para dentro do card. No ramo 1 esses campos são
+   **nulos** — e nulo é honesto.
+3. ⚠️ **`bling_id` é chave de `carbo_msg_envios`** (`bling_id:etapa`), do card e
+   do `?card=`. Colisão hoje é ZERO (medido), mas vai acontecer. Por isso o
+   Bling 1 entra **NEGATIVO**: `abs()` recupera o original, e consulta que o
+   leve à tabela errada não acha nada em vez de achar o pedido alheio.
+4. **Lista branca de NF por conta**: `carbo_nf_valida` no ramo 1,
+   `bling2_nf_e_valida` no ramo 2.
+
+**`bling_orders` não tem `raw_detalhe`** (o `bling-sync` guarda só a listagem),
+então endereço, transportadora, volumes e peso vêm nulos no ramo 1. **O card
+anda mesmo assim**: quem o move é o CTE `plataforma` — o status do
+`ecommerce_orders`. Foi essa a aposta do desenho, e ela se confirmou.
+
+⚠️ **O corte é `join` (não `left`) em `bling_lojas` com `e_online is true`.**
+Balcão (loja 0) e venda da equipe (`206071309`, `206071288`) estão `false` e
+ficam fora; loja NOVA sem classificação também — o lado seguro.
+
+⚠️ **PENDENTE, e é decisão do dono do processo, não de código:** os pedidos do
+Full estão sem NF (**21 pedidos, R$ 3.215,22**, `conta_metrica = false`, motivo
+`aguardando_nf`). Isso faz `/ecommerce/vendas-online` e `/comercial/dashboard`
+**discordarem sobre as mesmas vendas** — nenhuma tela está com defeito, o dado
+fiscal é que não existe. Ou o pedido avança para Atendido no Bling, ou a
+`carbo_vendas_metrica` aprende a contar o canal sem exigir NF.
+
+⚠️ A coluna **"Pago"** NÃO esvazia com isso: ela vem de
+`ecommerce_aguardando_bling`, outra view. Os pedidos passam a aparecer nos DOIS
+lugares até alguém decidir tirá-los de lá.
+
 ### ⚠️ REGRA PERMANENTE: a Esteira do On-line mostra SÓ venda on-line
 Dito pelo dono do processo mais de uma vez, e ficou meses sem estar escrito
 aqui — por isso voltou. **Venda de balcão / venda direta (loja 0 no Bling) NÃO
