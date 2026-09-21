@@ -107,6 +107,7 @@ jobs:
           # da empresa não pode depender de um segredo que anda na URL.
           dep evolution-instancia
           dep ml-auth --no-verify-jwt
+          dep ml-token-refresh --no-verify-jwt
           dep nuvemshop-auth --no-verify-jwt
           dep nuvemshop-lgpd --no-verify-jwt
           # Shopee. ⚠️ Estava no repo e no config.toml desde que foi escrita, e

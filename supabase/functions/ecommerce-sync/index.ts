@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { contasAtivas, getMlToken, marcarSync, type ContaML as ContaMLRow } from "../_shared/ml.ts";
 import {
   getNuvemshopCreds, fetchNuvemshopOrdersSince, mapNuvemshopOrder, enrichUnitsReal,
 } from "../_shared/nuvemshop.ts";
@@ -24,13 +25,43 @@ type Platform =
   | "mercadolivre" | "mercadolivre_full"
   | "amazon" | "tiktok" | "shopee" | "nuvemshop";
 
-// Contas de Mercado Livre. A chave e o `id` em system_tokens E o `platform`
-// gravado em ecommerce_orders.
+// Contas de Mercado Livre. A chave e o `platform` gravado em
+// ecommerce_orders — e, na tabela `ml_accounts`, o `platform_key`.
 type ContaML = "mercadolivre" | "mercadolivre_full";
 
 // ─── Token helper ─────────────────────────────────────────────────────────────
 
 async function getMercadoLivreToken(conta: ContaML = "mercadolivre"): Promise<{ accessToken: string; sellerId: string; lastSyncedAt: Date } | null> {
+  // ⚠️ `ml_accounts` primeiro, `system_tokens` como RESERVA.
+  //
+  // A reserva nao e zelo excessivo: enquanto a migracao 20260986 nao rodar, a
+  // tabela nova nao existe — e sem ela esta funcao devolveria null e o ML
+  // pararia de sincronizar no instante do deploy. Com a reserva, a ordem entre
+  // migracao e push deixa de importar.
+  //
+  // ⚠️ E a renovacao NAO mora mais aqui. Ela esta em `_shared/ml.ts`, porque o
+  // refresh_token do ML e de USO UNICO: duas implementacoes do mesmo refresh
+  // queimam o token uma da outra. Era exatamente o que acontecia entre esta
+  // funcao e a `ml-auth`.
+  const contas = await contasAtivas(supabase as never);
+  const encontrada = (contas as ContaMLRow[]).find((c) => c.platform_key === conta);
+
+  if (encontrada) {
+    const token = await getMlToken(supabase as never, encontrada);
+    if (!token) {
+      console.warn(`[${conta}] sem token valido (status=${encontrada.status}) — pulando`);
+      return null;
+    }
+    return {
+      accessToken: token,
+      sellerId: String(encontrada.seller_id),
+      lastSyncedAt: encontrada.last_synced_at
+        ? new Date(encontrada.last_synced_at)
+        : new Date(Date.now() - 48 * 60 * 60 * 1000),
+    };
+  }
+
+  // ── RESERVA: o mundo antes da 20260986 ──────────────────────────────────
   const { data, error } = await supabase
     .from("system_tokens")
     .select("access_token,refresh_token,expires_at,seller_id,last_synced_at")
@@ -40,49 +71,27 @@ async function getMercadoLivreToken(conta: ContaML = "mercadolivre"): Promise<{ 
   if (error || !data) {
     // ⚠️ Conta nao conectada NAO e erro: ate a segunda passar pelo OAuth, ela
     // simplesmente nao sincroniza. Falhar aqui derrubaria a rodada inteira e
-    // levaria a conta que FUNCIONA junto.
-    console.warn(`[${conta}] Token not found in system_tokens — skipping sync`);
+    // levaria junto a conta que FUNCIONA.
+    console.warn(`[${conta}] sem conta em ml_accounts nem em system_tokens — pulando`);
     return null;
   }
 
-  // Refresh if expired (or within 5 min of expiry)
-  const expiresAt = data.expires_at ? new Date(data.expires_at).getTime() : 0;
-  if (Date.now() >= expiresAt - 5 * 60 * 1000) {
-    try {
-      const res = await fetch("https://api.mercadolibre.com/oauth/token", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          grant_type:    "refresh_token",
-          client_id:     Deno.env.get("ML_CLIENT_ID")!,
-          client_secret: Deno.env.get("ML_CLIENT_SECRET")!,
-          refresh_token: data.refresh_token,
-        }),
-      });
-      if (res.ok) {
-        const t = await res.json() as { access_token: string; refresh_token: string; expires_in: number };
-        await supabase.from("system_tokens").upsert({
-          id:            conta,
-          access_token:  t.access_token,
-          refresh_token: t.refresh_token,
-          expires_at:    new Date(Date.now() + t.expires_in * 1000).toISOString(),
-          seller_id:     data.seller_id,
-          updated_at:    new Date().toISOString(),
-        }, { onConflict: "id" });
-        return { accessToken: t.access_token, sellerId: data.seller_id, lastSyncedAt: data.last_synced_at ? new Date(data.last_synced_at) : new Date(Date.now() - 48 * 60 * 60 * 1000) };
-      }
-    } catch (e) {
-      console.error(`[${conta}] Token refresh failed:`, e);
-    }
+  // ⚠️ Na reserva NAO renovamos: renovar aqui seria a segunda implementacao do
+  // refresh, que e o defeito que estamos corrigindo. Token vencido nesta janela
+  // significa que a migracao precisa rodar — e o log diz isso.
+  const expiraEm = data.expires_at ? new Date(data.expires_at).getTime() : 0;
+  if (Date.now() >= expiraEm) {
+    console.warn(`[${conta}] token de system_tokens vencido. Rode a migracao 20260986 para a renovacao voltar a funcionar.`);
     return null;
   }
 
-  // last_synced_at: from where to pick up. If never synced before, go back 48h as safety net.
-  const lastSyncedAt = data.last_synced_at
-    ? new Date(data.last_synced_at)
-    : new Date(Date.now() - 48 * 60 * 60 * 1000);
-
-  return { accessToken: data.access_token, sellerId: data.seller_id, lastSyncedAt };
+  return {
+    accessToken: data.access_token as string,
+    sellerId: String(data.seller_id),
+    lastSyncedAt: data.last_synced_at
+      ? new Date(data.last_synced_at as string)
+      : new Date(Date.now() - 48 * 60 * 60 * 1000),
+  };
 }
 
 // ─── Platform pullers ─────────────────────────────────────────────────────────
@@ -154,6 +163,11 @@ async function pullMercadoLivre(conta: ContaML = "mercadolivre"): Promise<Record
   // ⚠️ Checkpoint POR CONTA. Um checkpoint compartilhado faria a conta que
   // sincroniza primeiro avancar o relogio da outra, e a segunda perderia a
   // janela — pedido nunca buscado, sem erro nenhum.
+  //
+  // Gravado nos DOIS lugares enquanto a reserva existir: se alguem voltar para
+  // system_tokens, o checkpoint nao anda para tras e a rodada seguinte nao
+  // rele 48 h de pedidos.
+  await marcarSync(supabase as never, Number(creds.sellerId));
   await supabase.from("system_tokens")
     .update({ last_synced_at: new Date().toISOString() })
     .eq("id", conta);

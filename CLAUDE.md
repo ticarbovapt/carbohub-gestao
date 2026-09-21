@@ -1891,6 +1891,82 @@ assim que ele sincronizar. O RESTO da esteira vem de `bling2_esteira`, que lê
 `bling2_orders` — se o Full faturar no Bling **1**, o card fica preso em "Pago"
 para sempre, exatamente como a Shopee. Decidir antes de prometer a tela.
 
+### ⚠️ O `refresh_token` do ML é de USO ÚNICO — e isso derrubava a conta
+Achado em 21/09/2026 a partir de um briefing externo, e **era um defeito vivo
+com UMA conta só**. Cada renovação devolve um `refresh_token` novo e invalida o
+anterior. Duas funções renovavam sem coordenação nenhuma:
+
+```
+ecommerce-sync   cron de 5 min, renova faltando < 5 min para expirar
+ml-auth          renova a cada vez que alguém abre a tela de integrações
+```
+
+Lendo a linha antes de qualquer uma gravar, a segunda manda um token queimado e
+recebe `invalid_grant`. ⚠️ E o desfecho era pior que a falha: o `ml-auth`
+reagia **apagando a linha** (`// Refresh failed — mark as disconnected`). Uma
+corrida de segundos desconectava a integração, e só voltava com OAuth manual.
+
+A correção (`20260986` + `_shared/ml.ts`):
+
+1. **Troca CONDICIONAL** (`ml_token_trocar`): o update só acerta a linha se ela
+   ainda tiver o `refresh_token` que o chamador leu. Quem perde recebe `false` e
+   **relê** — nunca tenta renovar de novo.
+   ⚠️ Não é `advisory lock` de propósito: o lock exigiria manter uma transação
+   ABERTA durante uma chamada HTTP ao ML, prendendo conexão do pool por dezenas
+   de segundos — e isso só se descobre no dia do pico.
+2. **Falha MARCA, nunca apaga** (`ml_conta_marcar_erro`). O `refresh_token` é a
+   única coisa capaz de recuperar a conexão sozinha; apagá-lo troca "tente de
+   novo" por "refaça o OAuth". E `invalid_grant` pode ser só a corrida — por
+   isso o helper **relê antes de desistir**: se a linha já tem token novo e
+   válido, não houve problema nenhum.
+3. **`reauth_required` existe para PARAR de tentar.** Sem esse estado, conta com
+   refresh morto bate na API a cada 5 min para sempre e o log vira ruído que
+   ninguém lê — o mesmo mecanismo que escondeu o `CRON_SECRET` ausente por 25 h.
+4. **Uma implementação só do refresh**, em `_shared/ml.ts`. Duas eram o defeito.
+5. **`ml-token-refresh` (cron 30 min, janela de 90 min)** para o token não
+   depender do sync estar rodando. Antes, sync parado = token vencendo calado, e
+   o diagnóstico virava duplo: "por que o sync parou" e "por que desconectou",
+   sendo a segunda consequência da primeira.
+
+### `ml_accounts` — multi-conta, e por que NÃO uma coluna em `ecommerce_orders`
+`system_tokens.id` é chave de texto com uma linha por plataforma. Conectar a
+segunda conta pelo fluxo antigo **sobrescrevia a primeira**, calada.
+
+⚠️ A proposta alternativa (manter `platform = 'mercadolivre'` e distinguir por
+`seller_account`) **quebra o estoque**: `carbo_canal_estoque` é chaveada por
+`platform`, então a venda do Full deduziria da LogHouse — e como a REMESSA
+também deduz, a mesma saída contaria duas vezes (o erro de 31/08). Para ela
+funcionar, `carbo_canal_estoque`, `carbo_estoque_consumo`, o ensaio e o estorno
+teriam TODOS de virar `(platform, seller_account)`.
+
+A síntese: `ml_accounts` governa CONTA e TOKEN; `platform_key` (UNIQUE) liga
+cada conta ao CANAL que o resto do sistema já entende.
+
+1. ⚠️ **`ml_accounts` NÃO tem policy de SELECT para `authenticated`.** Ela
+   guarda `access_token` e `refresh_token`: qualquer leitura ali entregaria a
+   credencial do ML pelo PostgREST — e lojista e licenciado usam a MESMA tabela
+   `profiles`. O front lê `ml_accounts_public`.
+2. ⚠️ **A view lista as colunas UMA A UMA, nunca `select *`.** Com `*`, coluna
+   de credencial criada amanhã entra sozinha e vaza sem ninguém escrever código.
+3. **A migração só LÊ `system_tokens`** — a linha antiga fica como rollback — e
+   o `_shared/ml.ts` tem **reserva** para ela. Assim a ordem entre rodar a
+   migração e fazer o push não desconecta nada.
+   ⚠️ Mas a reserva **não renova**: renovar ali seria a segunda implementação do
+   refresh outra vez. Token vencido nessa janela significa "rode a migração", e
+   o log diz isso com essas palavras.
+4. **`on conflict do nothing` na cópia**: rodar de novo não sobrescreve um token
+   já renovado pelo código novo com um mais velho da tabela antiga. Migração
+   idempotente que anda para trás é pior que migração que falha.
+
+⚠️ **A grade real de cron tem 29 jobs** (conferida em 21/09/2026 por
+`select … from cron.job`) e a tabela de "Cadência" acima lista só parte dela.
+Dois que faltavam e importam: **`bling-sync-morning 0 10 * * *` e
+`bling-sync-afternoon 0 16 * * *`** — ou seja, **o Bling 1 sincroniza DUAS VEZES
+POR DIA**. Toda NF de ML que chega pela matriz (inclusive a classificação de
+canal da `20260983`) tem até 6 h de atraso. Não é defeito: era um sync de
+faturamento. Vira defeito no dia em que alguém esperar a esteira ao vivo a
+partir dele.
+
 ### Duas contas Bling na emissão — matriz e filial SP
 `bling-sync` emite nas DUAS contas. O mapa `CONTAS` (no topo da função) resolve
 tabela de apoio, token, natureza e colunas de destino por conta. Bling 1 =
