@@ -1662,10 +1662,27 @@ a coluna da nota PRINCIPAL, e por isso o valor contava.
    não quebra nem some — aparece cru, em linguagem de banco.
 
 ⚠️ Republicar `carbo_vendas_metrica` exige **DROP + recreate** (o `o.*` expandido
-na criação) e derruba junto `carbo_vendas_busca` e `carbo_pdv_pedidos`, que
-declaram `returns setof` dela. `CASCADE` as apagaria em silêncio e a busca
-global do Sales sumiria sem motivo aparente. E **repita o `with (security_invoker
-= true)`** — `CREATE VIEW` sem `WITH` apaga as reloptions.
+na criação) e derruba junto as dependentes. `CASCADE` as apagaria em silêncio e a
+busca global do Sales sumiria sem motivo aparente. E **repita o
+`with (security_invoker = true)`** — `CREATE VIEW` sem `WITH` apaga as reloptions.
+
+⚠️ **São TRÊS dependentes, e a lista da `20260911` diz duas.** A
+`carbo_vendas_nf_cancelada` nasceu na `20260912`, depois dela, e derrubou a
+primeira tentativa da `20260981` com `2BP01`. Erro barato — a transação abortou
+inteira — mas ele só aconteceu porque a lista foi lida do REPOSITÓRIO.
+**Pergunte ao banco** (`pg_depend` + `pg_rewrite`, e `prorettype` para as funções
+`returns setof`); o BLOCO 0 da `20260981` é essa consulta, pronta.
+⚠️ E um `join` dentro de uma view **É** dependência: procurar só por
+`create/replace view <alvo>` nas migrações posteriores deixa passar quem apenas
+a lê — foi exatamente assim que essa escapou.
+
+⚠️ **`motivo_fora` é RÓTULO de tela, não chave de filtro em SQL.** Ele é um CASE
+com PRECEDÊNCIA: a `carbo_vendas_nf_cancelada` filtrava
+`motivo_fora = 'nf_invalida'`, e inserir `'bonificacao'` acima disso tiraria
+dela, calado, todo pedido de bonificação com nota cancelada — mudando o que
+aquela lista significa por causa de um caso vizinho. A view expõe `nf_invalida`
+como **coluna booleana própria**, calculada fora do CASE e imune à ordem; é por
+ela que se filtra. Caso novo no CASE ⇒ confira quem filtra por string.
 
 ### Duas contas Bling na emissão — matriz e filial SP
 `bling-sync` emite nas DUAS contas. O mapa `CONTAS` (no topo da função) resolve

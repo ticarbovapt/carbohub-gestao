@@ -84,11 +84,23 @@
 -- E duas funções declaram `returns setof carbo_vendas_metrica`, então
 -- dependem do TIPO da view e travam o DROP. `CASCADE` as apagaria em silêncio
 -- e a busca global do Sales sumiria sem ninguém saber por quê. Por isso:
--- dropa as duas explicitamente, recria a view, recria as duas — numa
--- transação só.
+-- dropa as dependentes explicitamente, recria a view, recria as dependentes —
+-- numa transação só.
 --
--- Os corpos das duas funções abaixo são cópia LITERAL da `20260911`, sem uma
--- alteração sequer.
+-- ⚠️ SÃO TRÊS DEPENDENTES, NÃO DUAS. A lista da `20260911` está desatualizada:
+-- a view `carbo_vendas_nf_cancelada` nasceu na `20260912`, depois dela, e
+-- deu `2BP01: cannot drop view ... because other objects depend on it` na
+-- primeira tentativa desta migração. O erro foi barato (a transação inteira
+-- abortou, nada ficou pela metade) — mas ele só apareceu porque a lista foi
+-- lida do REPOSITÓRIO. A pergunta certa é ao banco, e ela está no BLOCO 0.
+--
+-- ⚠️ E um `join` dentro de uma view É dependência. Ao conferir "quem mexeu na
+-- view depois", procurar só por `create/replace view carbo_vendas_metrica`
+-- deixa passar quem apenas a lê — que é o caso desta.
+--
+-- Os corpos das três dependentes abaixo são cópia LITERAL da `20260911` e da
+-- `20260912`, com UMA alteração, explicada no lugar: a `nf_cancelada` passa a
+-- filtrar pela coluna `nf_invalida` em vez da string `motivo_fora`.
 --
 -- ⚠️ RODE EM BLOCOS, na ordem.
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -149,6 +161,42 @@ grant execute on function public.carbo_natureza_e_bonificacao(text) to authentic
 
 
 -- ╔═══════════════════════════════════════════════════════════════════════╗
+-- ║ BLOCO 0 — QUEM depende da view, segundo o BANCO                       ║
+-- ╚═══════════════════════════════════════════════════════════════════════╝
+-- ⚠️ Rode ANTES do Bloco 2, sempre que for republicar esta view. Leitura pura.
+--
+-- Hoje espera-se TRÊS linhas: carbo_vendas_busca, carbo_pdv_pedidos e
+-- carbo_vendas_nf_cancelada. Se aparecer uma QUARTA, o Bloco 2 vai abortar com
+-- 2BP01 — e a saída é acrescentá-la ao drop/recreate, com o corpo que
+-- `pg_get_viewdef`/`pg_get_functiondef` devolve, NUNCA `DROP ... CASCADE`:
+-- cascade apaga a dependente em silêncio e ela some do sistema sem erro.
+
+select distinct
+  dependente.relkind,
+  dependente.relname as depende_de_carbo_vendas_metrica
+from pg_depend d
+join pg_rewrite r     on r.oid = d.objid
+join pg_class dependente on dependente.oid = r.ev_class
+join pg_class alvo    on alvo.oid = d.refobjid
+where alvo.relname = 'carbo_vendas_metrica'
+  and dependente.relname <> 'carbo_vendas_metrica'
+order by 2;
+
+-- E as funções que declaram `returns setof carbo_vendas_metrica` (elas
+-- dependem do TIPO da view, não das colunas, e não aparecem na consulta acima
+-- em toda versão do Postgres):
+select p.oid::regprocedure as assinatura
+from pg_proc p
+join pg_namespace n on n.oid = p.pronamespace
+where n.nspname = 'public'
+  and p.prorettype = (
+    select c.reltype from pg_class c
+    join pg_namespace cn on cn.oid = c.relnamespace
+    where cn.nspname = 'public' and c.relname = 'carbo_vendas_metrica'
+  );
+
+
+-- ╔═══════════════════════════════════════════════════════════════════════╗
 -- ║ BLOCO 2 — a régua aprende a diferença                                 ║
 -- ╚═══════════════════════════════════════════════════════════════════════╝
 -- Transação única: se qualquer passo falhar, nada fica pela metade.
@@ -156,6 +204,7 @@ grant execute on function public.carbo_natureza_e_bonificacao(text) to authentic
 begin;
 
 -- ── 1. As dependentes saem (recriadas idênticas no passo 3) ───────────────
+drop view     if exists public.carbo_vendas_nf_cancelada;
 drop function if exists public.carbo_vendas_busca(text, integer);
 drop function if exists public.carbo_pdv_pedidos(text);
 
@@ -325,6 +374,47 @@ comment on function public.carbo_pdv_pedidos is
 
 grant execute on function public.carbo_pdv_pedidos(text) to authenticated;
 
+
+-- Corpo da `20260912`, com UMA alteração — o `where`.
+--
+-- ⚠️ Ela filtrava por `m.motivo_fora = 'nf_invalida'`, e `motivo_fora` é um
+-- CASE com PRIORIDADE: agora que `'bonificacao'` entra antes de
+-- `'nf_invalida'`, um pedido de bonificação com a nota cancelada sairia desta
+-- lista sem ninguém ter pedido isso. Ele continua não sendo faturamento — mas
+-- a pergunta desta view é outra ("a nota deixou de valer, alguém decide se
+-- cancela ou reemite"), e ela não deve mudar de resposta porque eu mexi no
+-- rótulo de um caso vizinho.
+--
+-- A view já expõe `nf_invalida` como COLUNA PRÓPRIA, calculada fora do CASE e
+-- imune à ordem dele. Filtrar por ela é exatamente o comportamento anterior:
+-- a expressão da coluna é idêntica à soma dos dois ramos `nf_invalida` do
+-- CASE, e os status `quote`/`cancelled` já são excluídos no próprio `where`
+-- daqui.
+--
+-- ⚠️ A lição geral: `motivo_fora` é RÓTULO, para a tela. Quem filtra em SQL
+-- usa a coluna booleana — string de exibição com ordem de precedência muda de
+-- significado toda vez que alguém acrescenta um caso.
+create view public.carbo_vendas_nf_cancelada
+with (security_invoker = true) as
+select
+  o.order_number,
+  o.customer_name,
+  o.total,
+  o.bling_conta,
+  coalesce(o.invoice_number, o.invoice2_number) as nf_numero,
+  m.nf_situacao,
+  o.sale_date,
+  o.updated_at
+from public.carboze_orders o
+join public.carbo_vendas_metrica m on m.id = o.id
+where m.nf_invalida                                  -- era: m.motivo_fora = 'nf_invalida'
+  and o.status not in ('quote', 'cancelled');
+
+grant select on public.carbo_vendas_nf_cancelada to authenticated;
+
+comment on view public.carbo_vendas_nf_cancelada is
+  'Vendas cuja NF deixou de ser documento válido (cancelada/denegada) mas que continuam abertas no sistema. Sair do faturamento é automático; APARECER aqui é o que faz alguém decidir se cancela a venda ou reemite. Filtra pela COLUNA nf_invalida, nunca por motivo_fora: aquele é um CASE com precedência e muda de significado a cada caso novo (foi o que a 20260981 quase provocou ao inserir bonificacao antes de nf_invalida).';
+
 commit;
 
 
@@ -341,12 +431,24 @@ from public.carbo_config_fiscal
 where chave like '%natureza_bonificacao%'
   and valor is not null and btrim(valor) <> '';
 
--- (b) As duas funções voltaram? Tem de trazer DUAS linhas. Se vier menos, a
---     busca global do Sales está fora do ar.
-select p.oid::regprocedure as assinatura
+-- (b) As TRÊS dependentes voltaram? Tem de trazer TRÊS linhas. Se vier menos,
+--     a busca global do Sales ou a lista de NF cancelada está fora do ar.
+select 'funcao'::text as tipo, p.oid::regprocedure::text as objeto
 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
 where n.nspname = 'public'
-  and p.proname in ('carbo_vendas_busca', 'carbo_pdv_pedidos');
+  and p.proname in ('carbo_vendas_busca', 'carbo_pdv_pedidos')
+union all
+select 'view', c.relname
+from pg_class c join pg_namespace n on n.oid = c.relnamespace
+where n.nspname = 'public' and c.relname = 'carbo_vendas_nf_cancelada'
+order by 1, 2;
+
+-- (b2) ⚠️ A nf_cancelada manteve o security_invoker? Ela é recriada junto, e
+--      `create view` sem `WITH` apaga as reloptions. Tem de vir
+--      {security_invoker=true}.
+select relname, reloptions
+from pg_class
+where relname = 'carbo_vendas_nf_cancelada';
 
 -- (c) ⚠️ A view manteve o security_invoker? `CREATE VIEW` sem `WITH` apaga as
 --     reloptions, e foi assim que a bling2_esteira vazou a esteira inteira
