@@ -1021,6 +1021,26 @@ entrega" para meia hora depois.
 são exclusivas desta pipeline. É o oposto do erro do `bling_nf_id`, onde duas
 coisas disputavam a MESMA coluna com o MESMO significado.
 
+⚠️ **"Sai de Pago" e "entra na esteira" são a MESMA condição** (`20260991`).
+`ecommerce_aguardando_bling` é o COMPLEMENTO da `bling2_esteira`, e complemento
+só funciona com a mesma régua. Divergir erra dos dois lados:
+
+```
+condicao de Pago mais FROUXA   -> pedido nas DUAS colunas
+condicao de Pago mais APERTADA -> pedido em NENHUMA, e some do painel
+```
+
+Aconteceu em 21/09/2026, minutos depois da `20260990`: os mesmos pedidos do ML
+Full em "Pago" (14) e em "Confirmado" (5), com o contador do topo somando os
+dois. Por isso o `not exists` da conta 1 é **cópia literal** do `join` do ramo 1
+da esteira — e, pelo mesmo motivo, **não** herda o `situacao_id in (9,12)` do
+teste do Bling 2, que é justamente o filtro que esconderia o Full (situação 15).
+
+⚠️ **Coluna "Pago" VAZIA é resposta, não defeito.** Depois da `20260991` ela
+ficou em zero — porque os 14 cards eram todos do Full e os outros canais já
+casavam no Bling 2. Vazio ali significa "todo pedido pago chegou ao Bling";
+encher de novo é que é sinal.
+
 ⚠️ A **primeira** coluna ("Pago") é a exceção: ela NÃO vem da `bling2_esteira`,
 e sim de `ecommerce_aguardando_bling`, que lê a plataforma direto. Existe porque
 a esteira só enxerga pedido `situacao_id in (9,12)` — Atendido — e pedido novo
