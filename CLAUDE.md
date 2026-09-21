@@ -2092,6 +2092,30 @@ cada conta ao CANAL que o resto do sistema já entende.
    já renovado pelo código novo com um mais velho da tabela antiga. Migração
    idempotente que anda para trás é pior que migração que falha.
 
+⚠️ **Criar a tabela nova é METADE do trabalho — a outra metade é quem lia a
+antiga** (medido em 21/09/2026, `20260992`). A aba ML Full mostrava
+**"Aguardando integração"** com 13 vendas e R$ 1.944 exibidos logo abaixo, na
+mesma tela. `platform_connection_status` é view sobre `system_tokens`, e a conta
+Full **nunca passou pelo fluxo antigo** — sem linha lá, a plataforma não aparece
+na view, e o front lê **ausência como desconectado**. A LogHouse não expôs isso
+porque a linha velha dela continua existindo.
+
+1. ⚠️ **O ramo antigo passou a EXCLUIR o que já está em `ml_accounts`.** Sem
+   isso o `mercadolivre` viria nos dois ramos, e duplicata não deixa o selo
+   errado — faz o `maybeSingle()` do front devolver **erro**, e o selo some nos
+   DOIS canais de ML de uma vez. É o mesmo `where not exists` da `20260964`,
+   na direção oposta.
+2. ⚠️ **`status` entra na conta, não só o token.** `reauth_required` tem
+   `access_token` ainda dentro da validade e está morta — o `refresh_token` é
+   que queimou. Olhar só o token diria "Conectado" até o access vencer, que é
+   exatamente o engano das 20 h de 401 da `20260954`.
+3. ⚠️ **A view roda como DONO de propósito, e isso virou garantia.**
+   `ml_accounts` não tem policy de SELECT para `authenticated` porque guarda
+   credencial; é por rodar como dono que a view consegue lê-la. Por isso ela
+   lista as colunas **uma a uma** — com `select *`, coluna de credencial criada
+   amanhã entra sozinha. Ligar `security_invoker` aqui esvaziaria o selo para
+   todo mundo (ver `20260954`/`20260964`).
+
 ⚠️ **A grade real de cron tem 29 jobs** (conferida em 21/09/2026 por
 `select … from cron.job`) e a tabela de "Cadência" acima lista só parte dela.
 Dois que faltavam e importam: **`bling-sync-morning 0 10 * * *` e
