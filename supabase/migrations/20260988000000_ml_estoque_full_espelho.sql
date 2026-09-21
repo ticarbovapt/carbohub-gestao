@@ -153,7 +153,61 @@ grant select on public.ml_estoque_full_tela to authenticated;
 
 
 -- ╔═══════════════════════════════════════════════════════════════════════╗
--- ║ BLOCO 3 — CONFERÊNCIA (rode depois do primeiro sync)                  ║
+-- ║ BLOCO 3 — o cron que alimenta o espelho                               ║
+-- ╚═══════════════════════════════════════════════════════════════════════╝
+-- ⚠️ De HORA em hora, não de 5 em 5 min. Estoque de fulfillment muda devagar e
+-- cada rodada é um `scan` + uma chamada a cada 20 anúncios: rodar de minuto em
+-- minuto gastaria cota da API relendo o que não mudou, exatamente como o
+-- carrinho abandonado, que é de 15 min e não de 1.
+--
+-- ⚠️ Minuto :21 — ímpar e fora da grade cheia. Ocupados: `:00` e todos os
+-- PARES (`bling2-bridge` é `*/2`), `:05` e múltiplos (os três `*/5`), `:03`
+-- order_details, `:04` carrinhos, `:06` melhor-envio, `:07` nfe_recheck, `:08`
+-- deduz-estoque, `:09`/`:39` ml-token-refresh.
+--
+-- O segredo é LIDO do job que já existe, não digitado: segredo errado daria
+-- 401 de hora em hora com o `pg_cron` marcando `succeeded`, porque o sucesso
+-- dele é ter POSTADO. Foi esse disfarce que custou 20 h no `ecommerce-sync`.
+
+do $$
+declare
+  v_segredo text;
+  v_url     text := 'https://wpkfirmapxevzpxjovjr.supabase.co/functions/v1/ml-estoque-full';
+begin
+  select (regexp_match(j.command, '''X-Cron-Secret''\s*,\s*''([^'']+)'''))[1]
+    into v_segredo
+  from cron.job j
+  where j.jobname = 'ecommerce-sync-5min';
+
+  -- ABORTA em vez de agendar sem segredo. Ausência FECHA.
+  if v_segredo is null or btrim(v_segredo) = '' then
+    raise exception
+      'Nao consegui ler o CRON_SECRET do job ecommerce-sync-5min. Confira o nome do job e o header X-Cron-Secret.';
+  end if;
+
+  if exists (select 1 from cron.job where jobname = 'ml-estoque-full-1h') then
+    perform cron.unschedule('ml-estoque-full-1h');
+  end if;
+
+  perform cron.schedule(
+    'ml-estoque-full-1h',
+    '21 * * * *',
+    format($cmd$
+      select net.http_post(
+        url     := %L,
+        headers := jsonb_build_object('Content-Type','application/json','X-Cron-Secret', %L),
+        body    := '{"source":"cron"}'::jsonb,
+        timeout_milliseconds := 120000
+      );
+    $cmd$, v_url, v_segredo)
+  );
+
+  raise notice 'ml-estoque-full-1h agendado para o minuto :21 de cada hora.';
+end $$;
+
+
+-- ╔═══════════════════════════════════════════════════════════════════════╗
+-- ║ BLOCO 4 — CONFERÊNCIA (rode depois do primeiro sync)                  ║
 -- ╚═══════════════════════════════════════════════════════════════════════╝
 
 -- (a) A tabela existe e a RLS está ligada? Esperado: 1 linha, rls = true.
