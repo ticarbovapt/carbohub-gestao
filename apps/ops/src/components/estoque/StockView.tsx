@@ -57,7 +57,7 @@ export function StockView({ hub, editable }: { hub: Hub; editable: boolean }) {
   // ── Agrupamento por categoria (Insumo, Produto Final, …) ───────────────────
   // Mesmas categorias do catálogo MRP (MrpProductFormDialog). "Matéria-Prima" não
   // existe — categorias fora desta lista caem no fim, em ordem alfabética.
-  const CAT_ORDER = ["Produto Final", "Semi-acabado", "Insumo", "Embalagem", "Carbonatação", "Outro"];
+  const CAT_ORDER = ["Produto Final", "Semi-acabado", "Insumo", "Embalagem", "Carbonatação", "Trade Marketing", "Outro"];
   const grupos = useMemo(() => {
     const m = new Map<string, typeof filtered>();
     for (const p of filtered) {
@@ -105,6 +105,7 @@ export function StockView({ hub, editable }: { hub: Hub; editable: boolean }) {
             <SelectItem value="Insumo">Insumo</SelectItem>
             <SelectItem value="Embalagem">Embalagem</SelectItem>
             <SelectItem value="Carbonatação">Carbonatação</SelectItem>
+            <SelectItem value="Trade Marketing">Trade Marketing</SelectItem>
           </SelectContent>
         </Select>
         <Button

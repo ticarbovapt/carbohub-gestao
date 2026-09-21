@@ -24,6 +24,7 @@ const CATEGORY_FILTER_TABS = [
   { key: "Insumo", label: "Insumos" },
   { key: "Embalagem", label: "Embalagem" },
   { key: "Carbonatação", label: "Carbonatação" },
+  { key: "Trade Marketing", label: "Trade Marketing" },
 ];
 const CATEGORY_CLS: Record<string, string> = {
   "Produto Final": "bg-emerald-700 text-white border-0",
@@ -31,6 +32,11 @@ const CATEGORY_CLS: Record<string, string> = {
   "Insumo": "bg-blue-600 text-white border-0",
   "Embalagem": "bg-amber-500 text-white border-0",
   "Carbonatação": "bg-purple-600 text-white border-0",
+  // ⚠️ Rosa, e NÃO laranja: `Embalagem` já é âmbar, e lado a lado na mesma
+  // tabela os dois leem como a mesma cor a um metro — a lição do laranja do
+  // `atendimento` contra o âmbar do Ops. Roxo também está tomado
+  // (Carbonatação), então a escolha é a família que ainda não existe aqui.
+  "Trade Marketing": "bg-rose-600 text-white border-0",
   "Outro": "bg-gray-500 text-white border-0",
 };
 // Categorias que têm ficha técnica (BOM) própria — Produto Final e Semi-acabado.

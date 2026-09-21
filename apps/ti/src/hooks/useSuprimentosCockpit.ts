@@ -36,7 +36,10 @@ export const SALES_HUBS = ["HUB-SP", "HUB-SP-VENDAS", "CD-BLING"];
 // aqui (a seção "Estado da Rede" e "A Remanejar" voltam a aparecer sozinhas).
 export const FOCO_HUBS = ["HUB-RN"];
 
-export const CATEGORY_LIST = ["Produto Final", "Semi-acabado", "Insumo", "Embalagem", "Carbonatação"];
+// ⚠️ Categoria que NÃO estiver aqui vira "Outro" no `categoryOf` abaixo — calado.
+// Foi por isso que "Trade Marketing" (21/09/2026) entrou nas DUAS cópias deste
+// arquivo (admin e ti, byte a byte idênticas) junto com a tela do Ops.
+export const CATEGORY_LIST = ["Produto Final", "Semi-acabado", "Insumo", "Embalagem", "Carbonatação", "Trade Marketing"];
 export const categoryOf = (c: string | null | undefined): string =>
   c && CATEGORY_LIST.includes(c) ? c : "Outro";
 

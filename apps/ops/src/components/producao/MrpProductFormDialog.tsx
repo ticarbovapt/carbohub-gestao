@@ -17,7 +17,18 @@ import { useEffect } from "react";
 
 // "Semi-acabado" = etapa intermediária (ex.: garrafa envasada sem rótulo). Tem BOM
 // própria (garrafa+líquido+tampa) e é consumida pelo Produto Final na hora de rotular.
-const CATEGORIES = ["Produto Final", "Semi-acabado", "Insumo", "Embalagem", "Carbonatação", "Outro"];
+// ⚠️ "Trade Marketing" (21/09/2026) = material de ponto de venda — panfleto,
+// expositor, adesivo. NÃO é produzido, não tem BOM e não entra no MRP: os
+// caminhos de produção (`OPFormDialog`, `useProducibility`, `BomDialog`) filtram
+// por INCLUSÃO de `Produto Final`/`Semi-acabado`, então a categoria é inerte
+// para eles. Ela existe para o material ter cadastro e saldo por hub.
+//
+// ⚠️ A lista de categorias vive em CINCO lugares e nenhum deles dá erro quando
+// diverge: aqui, `ProdutosMrp.tsx` (chips + cor), `StockView.tsx` (ordem +
+// filtro) e `useSuprimentosCockpit.ts` do `admin` E do `ti` — nesse último,
+// categoria ausente da lista vira **"Outro"** calado (`categoryOf`). Acrescentou
+// aqui, acrescente nos outros quatro na MESMA tarefa.
+const CATEGORIES = ["Produto Final", "Semi-acabado", "Insumo", "Embalagem", "Carbonatação", "Trade Marketing", "Outro"];
 const UNITS = ["un", "L", "ml", "kg", "g", "cx"];
 
 // Gera o código a partir do nome: maiúsculas, sem acento, cada palavra abreviada
