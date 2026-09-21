@@ -68,8 +68,19 @@ export function useMlFullEstoque() {
       if (error) throw new Error(error.message);
       return (data ?? []) as LinhaMlFull[];
     },
-    // O espelho anda de hora em hora; refetch agressivo só gastaria requisição.
-    staleTime: 5 * 60 * 1000,
+    // ⚠️ "Ao vivo" aqui são DUAS coisas, e só uma mora nesta linha.
+    //
+    //   o CRON busca no ML          15 min   (20260993) ← o que torna o dado fresco
+    //   a TELA relê o nosso banco    1 min   (isto)     ← o que faz o número mudar sozinho
+    //
+    // Recarregar a tela de segundo em segundo não deixaria o saldo mais novo:
+    // ele só muda quando o espelho roda. O minuto existe para que, quando o
+    // espelho rodar, quem estiver com a aba aberta veja — sem F5 e sem ficar
+    // olhando um número velho com cara de atual.
+    refetchInterval: 60 * 1000,
+    // Voltou para a aba depois do almoço: relê antes de mostrar.
+    refetchOnWindowFocus: true,
+    staleTime: 30 * 1000,
   });
 }
 

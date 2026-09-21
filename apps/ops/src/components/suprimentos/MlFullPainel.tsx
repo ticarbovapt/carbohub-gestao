@@ -34,12 +34,15 @@ function idade(iso: string | null): { texto: string; velho: boolean } {
   if (!iso) return { texto: "nunca sincronizado", velho: true };
   const min = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
   if (min < 2) return { texto: "agora há pouco", velho: false };
-  if (min < 60) return { texto: `há ${min} min`, velho: false };
+  // ⚠️ O cron é de 15 em 15 min (ver 20260993), então 45 min sem sincronizar já
+  // é sinal de que ele parou. Espelho parado mostra número velho com cara de
+  // atual — pior que tela vazia, porque ninguém desconfia.
+  //
+  // ⚠️ O limiar e o agendamento andam JUNTOS. Deixá-lo em 3 h depois de acelerar
+  // o cron faria a tela levar duas horas e meia para acusar uma parada.
+  if (min < 60) return { texto: `há ${min} min`, velho: min >= 45 };
   const h = Math.round(min / 60);
-  // ⚠️ O cron é de hora em hora, então 3 h sem sincronizar é sinal de que ele
-  // parou. Espelho parado mostra número velho com cara de atual — pior que
-  // tela vazia, porque ninguém desconfia.
-  return { texto: `há ${h} h`, velho: h >= 3 };
+  return { texto: `há ${h} h`, velho: true };
 }
 
 export function MlFullPainel() {
@@ -81,7 +84,7 @@ export function MlFullPainel() {
         </Badge>
         {sync.velho && (
           <span className="text-destructive text-xs">
-            O espelho atualiza de hora em hora — este número pode estar velho.
+            O espelho atualiza a cada 15 min — este número pode estar velho.
           </span>
         )}
         <Button size="sm" variant="ghost" className="ml-auto gap-1.5"
@@ -121,7 +124,16 @@ export function MlFullPainel() {
                     <th className="text-left p-3">Produto</th>
                     <th className="text-right p-3">No ML</th>
                     <th className="text-right p-3">Em trânsito</th>
-                    <th className="text-right p-3">CD SP</th>
+                    {/* ⚠️ NÃO existe coluna do saldo da LogHouse aqui, e é decisão
+                        do dono do processo (21/09/2026). Esta tela responde UMA
+                        pergunta — "preciso mandar mais para o Full?" — e quem a
+                        responde é o saldo NO ML mais o que já está a caminho.
+
+                        O saldo do CD SP é outra pergunta, tem tela própria, e
+                        ali competia por atenção com o número que importa. A
+                        `ml_estoque_full_tela` continua expondo `saldo_loghouse`:
+                        tirar da view obrigaria a recriá-la no dia em que alguém
+                        quiser cruzar os dois. */}
                     <th className="p-3" />
                   </tr>
                 </thead>
@@ -142,7 +154,7 @@ export function MlFullPainel() {
                               ao lado e vale; o que falta é só poder despachar. */}
                           {!l.product_id && (
                             <div className="text-[11px] text-muted-foreground/70">
-                              sem mapa de SKU · saldo do ML vale, remessa indisponível
+                              sem mapa de SKU · remessa indisponível
                             </div>
                           )}
                         </td>
@@ -155,9 +167,6 @@ export function MlFullPainel() {
                           {l.em_transito > 0
                             ? <span className="text-blue-400">{fmt(l.em_transito)}</span>
                             : <span className="text-muted-foreground">—</span>}
-                        </td>
-                        <td className="p-3 text-right tabular-nums text-muted-foreground">
-                          {fmt(l.saldo_loghouse)}
                         </td>
                         <td className="p-3 text-right">
                           <Button
