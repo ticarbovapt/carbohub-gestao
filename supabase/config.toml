@@ -60,6 +60,9 @@ verify_jwt = false
 [functions.ml-token-refresh]
 verify_jwt = false
 
+[functions.ml-estoque-full]
+verify_jwt = false
+
 [functions.amazon-auth]
 verify_jwt = false
 

@@ -108,6 +108,7 @@ jobs:
           dep evolution-instancia
           dep ml-auth --no-verify-jwt
           dep ml-token-refresh --no-verify-jwt
+          dep ml-estoque-full --no-verify-jwt
           dep nuvemshop-auth --no-verify-jwt
           dep nuvemshop-lgpd --no-verify-jwt
           # Shopee. ⚠️ Estava no repo e no config.toml desde que foi escrita, e
