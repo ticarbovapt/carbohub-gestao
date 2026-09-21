@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { lerTudo } from "@/lib/lerTudo";
 
 const db = supabase as unknown as { from: (t: string) => any };
 
@@ -80,11 +81,22 @@ export function useComercialCanais(filters: CanaisFilters = {}) {
     queryKey: ["comercial-canais", vendedorId ?? "all", from ?? "", to ?? ""],
     queryFn: async (): Promise<ComercialCanaisData> => {
       const year = new Date().getFullYear();
-      const { data, error } = await db
-        .from("carbo_vendas_metrica")
-        .select("total, status, created_at, sale_date, customer_name, cnpj, segmento, vendedor_id, excluir_metricas, conta_metrica")
-        .order("created_at", { ascending: true });
-      if (error) throw error;
+      // ⚠️ `lerTudo` (páginas), NUNCA a consulta solta. Sem `.range()` o
+      // PostgREST corta em 1.000 linhas e não avisa — e aqui a ordem é
+      // ASCENDENTE, então o que vinha eram as 1.000 mais ANTIGAS: esta tela
+      // perdia justamente os meses recentes, o oposto do Dashboard Comercial,
+      // que perdia os antigos. Mesma causa, sintomas invertidos, nenhum erro.
+      //
+      // ⚠️ Segundo critério (`id`) porque paginar sobre ordem não-determinística
+      // repete linha numa página e perde outra.
+      const data = await lerTudo<any>((de, ate) =>
+        db
+          .from("carbo_vendas_metrica")
+          .select("total, status, created_at, sale_date, customer_name, cnpj, segmento, vendedor_id, excluir_metricas, conta_metrica")
+          .order("created_at", { ascending: true })
+          .order("id", { ascending: true })
+          .range(de, ate),
+      );
 
       // A linha PDV do gráfico NÃO sai de pedido: sai da tabela `pdvs`, com a
       // data de abertura real. Contar "cliente com pedido revenda" dava 110

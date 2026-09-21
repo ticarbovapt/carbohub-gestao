@@ -709,6 +709,51 @@ com dia de Brasília. `data_efetiva` é DATE — não há hora para deslocar.
 CRM tem `FILTRO_VENDA_DO_TIME`). A mesma alteração mínima nas sete, nunca
 sobrescrever — como já está escrito na seção do `/vender`.
 
+### ⚠️ Consulta SEM `.limit()` não devolve tudo — devolve 1.000 e não avisa
+O Dashboard Comercial (`/comercial/dashboard`) mostrava **865 pedidos de 1.170**,
+com **out/25 até jun/26 zerados**, e parecia que o histórico da empresa tinha
+sumido. A consulta era:
+
+```ts
+.from("carbo_vendas_metrica")
+.select(...)
+.order("data_efetiva", { ascending: false });   // sem .limit(), sem .range()
+```
+
+O PostgREST aplica um teto de **1.000 linhas** e **não sinaliza**: não há erro,
+não há campo "truncado", a resposta parece completa. Com `ascending: false`, o
+que chega são as 1.000 **mais recentes** — o histórico cai fora em silêncio.
+
+⚠️ **O defeito é invisível até a tabela passar do teto**, e é por isso que
+ninguém sabe dizer "quando quebrou". Nasceu sem teto em 31/08/2026; enquanto
+havia ~500 linhas vinha tudo e a tela estava certa **por coincidência**. Os 541
+pedidos de ago/26 cruzaram as 1.000 e os meses antigos começaram a cair um a um,
+do mais velho para o mais novo.
+
+A correção é `lib/lerTudo.ts` (páginas via `.range()`), replicado em `admin` e
+`ti`. Três coisas para não desfazer:
+
+1. ⚠️ **Ordem ESTÁVEL é obrigatória ao paginar.** `data_efetiva` é DATE e tem
+   dezenas de empates por dia; sem um desempate único (`.order("id")`) a mesma
+   linha volta em duas páginas e outra não volta nenhuma. O erro sairia como
+   número **ligeiramente** errado — pior que tela vazia, porque ninguém nota.
+2. ⚠️ **`ascending: true` sem teto é a MESMA doença ao contrário**, e estava no
+   `useComercialCanais` (admin e ti): traz as 1.000 mais ANTIGAS, então aquela
+   tela perdia os meses recentes. Mesma causa, sintomas invertidos, nenhum erro.
+   Quando duas telas do mesmo dado discordam, suspeite do teto.
+3. **`lerTudo` não é filtro.** Ele lê tudo o que a consulta seleciona; conjunto
+   grande se encolhe no `where`. O teto de sanidade (200 mil linhas) existe para
+   filtro esquecido falhar alto em vez de travar a aba.
+
+⚠️ Continuam sem teto e são da mesma família — medir antes de mexer:
+`useFaturamento` (financas), `useCeoCockpit`, `useDashEstrategico`. Não caíram
+ainda porque filtram por status ou por data, mas o teto não sabe disso.
+
+⚠️ **Autoria: o rodapé `Claude-Session:` distingue SESSÕES, o nome do autor não.**
+Todo commit do Claude sai como `Claude <noreply@anthropic.com>`, então "foi outra
+sessão?" não se responde por `%an`. Responde-se por
+`git log --format="%(trailers:key=Claude-Session,valueonly)"`.
+
 ### ⚠️ Ordem ASCENDENTE com `.limit()` devolve o COMEÇO, não o fim
 O Carbo Chat mostrava o grupo Suporte TI parado em 02/09, com a lista lateral
 exibindo a mensagem das 09:30 do mesmo dia. A consulta era:

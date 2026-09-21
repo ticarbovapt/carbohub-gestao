@@ -12,6 +12,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { lerTudo } from "@/lib/lerTudo";
 
 const MES_ABBR = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 const monthLabel = (d: Date) => `${MES_ABBR[d.getMonth()]}/${String(d.getFullYear()).slice(2)}`;
@@ -98,15 +99,31 @@ export function useDashComercial(vendedorId: string | null = null, months = 12, 
       const year = new Date().getFullYear();
 
       // ── Pedidos (carboze_orders) — mesma base do CRM (useVendas), todos os vendedores.
-      const { data: ordersData, error: ordersErr } = await supabase
-        .from("carbo_vendas_metrica" as never)
-        .select("total, status, created_at, customer_name, vendedor_id, segmento, conta_metrica, data_efetiva")
-        .order("created_at", { ascending: false });
-      if (ordersErr) throw new Error(ordersErr.message);
+      // ⚠️ `lerTudo` (páginas), NUNCA a consulta solta. Sem `.range()` o PostgREST
+      // corta em 1.000 linhas e não avisa: em 21/09/2026 a mesma tela no Admin
+      // mostrava 865 pedidos de 1.170, com out/25 até jun/26 ZERADOS, porque
+      // `ascending: false` traz as 1.000 MAIS RECENTES. Nada quebrava — o
+      // histórico só deixava de existir.
+      //
+      // ⚠️ E o defeito dormiu desde 31/08/2026 (quando este hook nasceu, já sem
+      // teto): enquanto a tabela teve menos de 1.000 linhas vinha tudo. Os 541
+      // pedidos de ago/26 a empurraram para cima do teto, e aí os meses antigos
+      // começaram a cair um a um, do mais velho para o mais novo.
+      //
+      // ⚠️ O segundo `.order("id")` não é enfeite: paginar sobre ordem
+      // não-determinística repete linha numa página e perde outra — o erro
+      // sairia como número ligeiramente errado, que é pior que tela vazia.
+      const rows = await lerTudo<CarbozeOrderRow>((de, ate) =>
+        supabase
+          .from("carbo_vendas_metrica" as never)
+          .select("total, status, created_at, customer_name, vendedor_id, segmento, conta_metrica, data_efetiva")
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: false })
+          .range(de, ate) as never,
+      );
 
       const fromTs = from ? new Date(from + "T00:00:00").getTime() : null;
       const toTs = to ? new Date(to + "T23:59:59").getTime() : null;
-      const rows = (ordersData ?? []) as unknown as CarbozeOrderRow[];
       // "pedido" (status efetivo) + filtros: vendedor, período, canal.
       const pedidos = rows.filter((v) => {
         // A REGRA vem da view. Antes este hook usava só "status != quote/cancelled":
