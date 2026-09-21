@@ -8,7 +8,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
-import { AlertTriangle, Truck, PackageCheck, Ban, RefreshCw, Send } from "lucide-react";
+import { Truck, PackageCheck, Ban, RefreshCw, Send } from "lucide-react";
 import {
   useMlFullEstoque, useMlFullRemessas, useRegistrarRemessa,
   useReceberRemessa, useCancelarRemessa, type LinhaMlFull,
@@ -59,7 +59,6 @@ export function MlFullPainel() {
     return idade(maior);
   }, [linhas]);
 
-  const semMapa = linhas.filter((l) => !l.product_id);
   const emTransito = remessas.filter((r) => r.status === "em_transito");
 
   const abrirRemessa = (l: LinhaMlFull) => { setAlvo(l); setQtd(""); setObs(""); };
@@ -92,29 +91,19 @@ export function MlFullPainel() {
         </Button>
       </div>
 
-      {/* ⚠️ Anúncio sem mapa aparece, não some. Sem mapa é trabalho a fazer. */}
-      {semMapa.length > 0 && (
-        <Card className="border-amber-500/40 bg-amber-500/5">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2 text-amber-500">
-              <AlertTriangle className="h-4 w-4" />
-              {semMapa.length} anúncio(s) sem mapa de SKU
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-xs text-muted-foreground space-y-1">
-            <p>
-              Sem o mapa não dá para ligar ao nosso produto — e sem isso não dá para
-              registrar remessa. Cadastre em <strong>CD SP LogHouse → Mapeamento SKU</strong>.
-            </p>
-            {semMapa.slice(0, 5).map((l) => (
-              <div key={`${l.item_id}-${l.variation_id ?? ""}`} className="font-mono">
-                {l.seller_sku ?? "(sem SKU no anúncio)"} · {l.titulo_anuncio ?? l.item_id}
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
+      {/* ⚠️ NÃO existe alarme de "sem mapa de SKU" aqui, e isso é decisão —
+          dito pelo dono do processo em 21/09/2026, depois que o cartão âmbar
+          entrou e apontou para um anúncio que não tinha problema nenhum.
 
+          O Full NÃO deduz estoque nosso: a venda lá não tira nada da LogHouse.
+          Esta tela existe para VER o número que o ML informa e antecipar
+          ruptura — e esse número aparece com mapa ou sem mapa.
+
+          O mapa serve a duas coisas, e só elas: o botão Remessa (é preciso
+          saber qual produto NOSSO sai do galpão) e a coluna CD SP. As duas se
+          anunciam sozinhas na própria linha — botão desabilitado e "—". Um
+          cartão de alerta para isso é ruído, e ruído nesta tela ensina a
+          ignorá-la, que é justamente o que ela não pode virar. */}
       {isLoading ? (
         <CarboEmptyState title="Carregando…" description="Buscando o espelho do Mercado Livre." />
       ) : linhas.length === 0 ? (
@@ -149,6 +138,13 @@ export function MlFullPainel() {
                             {l.product_code ?? l.seller_sku ?? "—"}
                             {l.variation_id ? ` · var ${l.variation_id}` : ""}
                           </div>
+                          {/* Dito na linha, baixinho: o número do ML está ali
+                              ao lado e vale; o que falta é só poder despachar. */}
+                          {!l.product_id && (
+                            <div className="text-[11px] text-muted-foreground/70">
+                              sem mapa de SKU · saldo do ML vale, remessa indisponível
+                            </div>
+                          )}
                         </td>
                         <td className={`p-3 text-right font-semibold tabular-nums ${zerado ? "text-destructive" : ""}`}>
                           {fmt(l.disponivel)}
