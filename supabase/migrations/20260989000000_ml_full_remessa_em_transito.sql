@@ -333,13 +333,46 @@ select c.relname, c.reloptions,
          as tem_em_transito
 from pg_class c where c.relname = 'ml_estoque_full_tela';
 
--- (c) ⚠️ TESTE de ponta a ponta, sem deixar rastro. Registra uma remessa de 1
---     unidade, confere que o saldo caiu, cancela e confere que voltou.
---     Esperado: NOTICE dizendo "ok". Qualquer exception = não use a tela ainda.
+-- (c) ⚠️ TESTE de ponta a ponta, sem deixar rastro: registra 1 unidade, confere
+--     que deduziu, cancela e confere que voltou.
+--
+--     ⚠️ ELE ASSUME A IDENTIDADE DE UM USUÁRIO INTERNO, e isso é obrigatório:
+--     o SQL Editor roda como `postgres`, onde `auth.uid()` é NULO — e aí
+--     `carbo_e_time_interno()` devolve false e a própria guarda da RPC barra
+--     com "Sem permissao para registrar remessa".
+--
+--     A primeira versão deste teste não fazia isso e falhou na produção em
+--     21/09/2026. O defeito era do TESTE, não da guarda: escrever um teste que
+--     não roda no lugar onde ele vai ser rodado é o mesmo tipo de erro do
+--     número de conferência que testa a aritmética de quem o escreveu.
+--
+--     `set local` vale só até o fim da transação do bloco — não deixa a sessão
+--     impersonando ninguém depois.
+--     Esperado: NOTICE "ok: ... Saldo intacto." Qualquer exception = NÃO use a
+--     tela ainda.
 do $$
 declare
   v_prod uuid; v_wh uuid; v_antes int; v_depois int; v_fim int; v_rem uuid;
+  v_user uuid;
 begin
+  -- Um usuário com ALGUMA interface interna — a mesma lista que a guarda usa.
+  select p.id into v_user
+  from public.profiles p
+  where p.allowed_interfaces is not null
+    and exists (
+      select 1 from unnest(p.allowed_interfaces) x
+      where lower(x) in ('carbo_admin','carbo_crm','carbo_ops','carbo_ops_app',
+                         'carbo_financas','carbo_mkt','carbo_ti')
+    )
+  limit 1;
+
+  if v_user is null then
+    raise exception 'Nenhum usuario com interface interna — a guarda barraria qualquer teste.';
+  end if;
+
+  perform set_config('request.jwt.claims',
+                     json_build_object('sub', v_user::text)::text, true);
+
   select w.id into v_wh from public.warehouses w where w.code = 'HUB-RN';
   select ws.product_id, ws.quantity into v_prod, v_antes
   from public.warehouse_stock ws
