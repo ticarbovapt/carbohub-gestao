@@ -2116,6 +2116,44 @@ porque a linha velha dela continua existindo.
    amanhã entra sozinha. Ligar `security_invoker` aqui esvaziaria o selo para
    todo mundo (ver `20260954`/`20260964`).
 
+⚠️ **Canal novo nasce SEM HISTÓRICO, e o card para sem erro nenhum** (medido em
+21/09/2026). Sete cards do ML Full ficaram em "Confirmado" por até 24 dias —
+28/08 a 12/09 — enquanto os outros 14 andavam normalmente. Não era a esteira: o
+`ecommerce_orders` do Full **começava em 14/09**, que é quando a conta foi
+conectada. Sem linha na plataforma, o CTE `plataforma` não casa, o card não tem
+o que o mova, e fica. É o mesmo mecanismo da Shopee, com outra origem.
+
+⚠️ **"Não tem linha" e "tem linha e está `paid`" têm a MESMA cara na tela** e
+pedem coisas opostas — uma é buraco de sincronismo, a outra é o ML ainda não ter
+despachado. A consulta que separa é um `left join` de `bling2_esteira` com
+`ecommerce_orders` por `platform_order_number`, contando `sem_linha`. Medido: 7
+sem linha, 3 legitimamente `paid`.
+
+A correção é **rebobinar o checkpoint da conta**, sem deploy e sem código:
+
+```sql
+update public.ml_accounts set last_synced_at = '<data>'
+where platform_key = 'mercadolivre_full';
+```
+
+✅ Resultado: 14 → 21 pedidos, e os cards se redistribuíram sozinhos
+(confirmado 10 → 4, em_transito 7 → 8, entregue 4 → 9, `sem_linha` a zero).
+
+1. **Ele se restaura sozinho**: o `pullMercadoLivre` grava `last_synced_at =
+   now()` no fim da própria rodada. Não há o que desfazer.
+2. ⚠️ **O teto é de 30 dias** (`maxLookback`), então isso NÃO recupera canal
+   parado há mais tempo — ali seria paginação por data, outro caminho.
+3. ⚠️ **Sem rajada de notificação**: `trg_ecommerce_sale_notify` tem janela de
+   12 h sobre `ordered_at`, então pedido antigo não toca som nem enche o
+   sininho — que é ×30 pessoas. Conferir essa janela é **obrigatório** antes de
+   rebobinar qualquer canal; num canal sem essa guarda, o backfill vira spam.
+4. ⚠️ **Sem dedução de estoque** porque o Full tem `ativo = false` e
+   `deduz_a_partir_de` nulo. Num canal que DEDUZ, rebobinar o checkpoint baixa
+   o histórico inteiro de uma vez — é o erro de 31/08 esperando acontecer.
+5. ⚠️ **`/orders/search` é chamado SEM paginação** (teto de 50 pedidos do ML).
+   21 cabe; canal com mais movimento perde o excedente **em silêncio**. Ao
+   rebobinar, confira se a contagem fecha com o esperado.
+
 ⚠️ **A grade real de cron tem 29 jobs** (conferida em 21/09/2026 por
 `select … from cron.job`) e a tabela de "Cadência" acima lista só parte dela.
 Dois que faltavam e importam: **`bling-sync-morning 0 10 * * *` e
