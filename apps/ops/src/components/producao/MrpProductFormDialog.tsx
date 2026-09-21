@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useMrpProductMutations } from "@/hooks/useMrpProductMutations";
-import { useProdutoHubs, useSalvarProdutoHubs } from "@/hooks/useProdutoHubs";
+import { useProdutoHubs, useSalvarProdutoHubs, useHubsComGalpao } from "@/hooks/useProdutoHubs";
 import { HUBS } from "@/components/estoque/stockData";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useEffect } from "react";
@@ -88,6 +88,7 @@ export function MrpProductFormDialog({ open, onOpenChange, mode, id, initial }: 
    * toda a operação — e o cadastro pareceria ter funcionado. */
   const hubsSalvos = useProdutoHubs(mode === "edit" ? id : undefined);
   const salvarHubs = useSalvarProdutoHubs();
+  const { data: hubsComGalpao = new Set<string>() } = useHubsComGalpao();
   const [hubsMarcados, setHubsMarcados] = useState<Record<string, boolean>>(
     () => Object.fromEntries(HUBS.map((h) => [h.id, true])),
   );
@@ -190,7 +191,11 @@ export function MrpProductFormDialog({ open, onOpenChange, mode, id, initial }: 
           <div className="space-y-2">
             <Label>Onde este produto existe</Label>
             <div className="grid grid-cols-2 gap-2 rounded-lg border p-3 sm:grid-cols-3">
-              {HUBS.map((h) => (
+              {/* ⚠️ Só os hubs que a gravação ALCANÇA. CD Bling e ML Full não
+                  têm linha em `warehouses` — o `useSalvarProdutoHubs` os pula,
+                  então a caixinha deles não gravava nada e voltava marcada na
+                  abertura seguinte, calada. Ver `useHubsComGalpao`. */}
+              {HUBS.filter((h) => hubsComGalpao.has(h.id)).map((h) => (
                 <label key={h.id} className="flex cursor-pointer items-center gap-2 text-sm">
                   <Checkbox
                     checked={hubsMarcados[h.id] !== false}

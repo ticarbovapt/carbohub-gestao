@@ -38,6 +38,42 @@ const HUB_TO_CODE: Record<string, string> = Object.fromEntries(
   Object.entries(CODE_TO_HUB).map(([code, id]) => [id, code]),
 );
 
+/**
+ * Os hubs que a gravação ALCANÇA — os que têm linha em `warehouses`.
+ *
+ * ⚠️ Existe porque `HUBS` (a lista da UI) é MAIOR que o conjunto de galpões
+ * reais: o **CD Bling** nunca teve linha, e o **ML Full** também não — ele é
+ * espelho do galpão do Mercado Livre, não um galpão nosso. O
+ * `useSalvarProdutoHubs` pula os dois (`if (!warehouse_id) return null`), então
+ * a caixinha deles **não gravava nada**: desmarcar não fazia efeito e ela
+ * voltava marcada na próxima abertura, sem erro nenhum.
+ *
+ * Caixinha que não pode ser salva é pior que caixinha nenhuma — ela promete uma
+ * curadoria que o banco não guarda.
+ *
+ * ⚠️ E a pergunta é feita ao BANCO, não a uma lista escrita aqui. Uma constante
+ * nova seria a terceira cópia do mapa de hubs (já há `CODE_TO_HUB` em dois
+ * arquivos) e divergiria no dia em que o CD Bling ganhasse um galpão de
+ * verdade — calada, como sempre.
+ */
+export function useHubsComGalpao() {
+  return useQuery({
+    queryKey: ["hubs-com-galpao"],
+    // O cadastro de galpões quase não muda; relê a cada 5 min é de sobra.
+    staleTime: 5 * 60 * 1000,
+    queryFn: async (): Promise<Set<string>> => {
+      const { data, error } = await db.from("warehouses").select("code");
+      if (error) throw error;
+      const ids = new Set<string>();
+      for (const w of data ?? []) {
+        const hubId = CODE_TO_HUB[(w as { code: string }).code];
+        if (hubId) ids.add(hubId);
+      }
+      return ids;
+    },
+  });
+}
+
 /** Estado marcado de cada hub para um produto. Todos ligados por padrão. */
 export function useProdutoHubs(productId?: string) {
   return useQuery({
