@@ -1611,8 +1611,18 @@ confira se algum identificador usado no corpo é um `const` declarado depois.
 
 ### ⚠️ Nota de BONIFICAÇÃO não é faturamento — e a marca `-BON` não alcança tudo
 Medido em 21/09/2026: **4 pedidos, R$ 5.523,00** somando dentro do faturamento
-desde 06/11/2025. Sobre os R$ 894.017,38 que contavam, é **0,62%** — pequeno o
+desde 06/11/2025. Sobre os R$ 899.540,38 que contavam, é **0,61%** — pequeno o
 bastante para nunca chamar atenção, que é por que durou dez meses.
+✅ Aplicada em 21/09: de 1.174 pedidos / R$ 899.540,38 para **1.170 /
+R$ 894.017,38**.
+
+⚠️ **E o número de conferência que eu escrevi estava errado** — dizia esperar
+1.166 / R$ 888.494,38, porque subtraí os 4 de 1.170 sem notar que aquele 1.170
+era o grupo `e_bonificacao = false` da medição inicial, que já os excluía. A
+conferência voltou certa e eu quase a li como "não mudou nada". **Número de
+referência copiado de um agrupamento tem de vir com o que aquele grupo
+continha**, senão a conferência passa a testar a minha aritmética em vez do
+sistema.
 
 A `20260903` montou a arquitetura certa (pedido e NF próprios, nota em
 `bling_nf_bonificacao_id`, gatilho `trg_bloqueia_remessa_bonificacao`). ⚠️ Mas a

@@ -9,8 +9,10 @@
 --   BLING-61      30/01/2026   NF 000150   R$ 1.950,00
 --   BLING-21      06/11/2025   NF 000105   R$   510,00
 --
--- Em cima dos R$ 894.017,38 que contam, é 0,62% — pequeno o bastante para
+-- Em cima dos R$ 899.540,38 que contavam, é 0,61% — pequeno o bastante para
 -- nunca ter chamado atenção, que é exatamente por que durou tanto.
+--
+-- ✅ APLICADA em 21/09/2026. Depois: 1.170 pedidos, R$ 894.017,38.
 --
 -- ═══════════════════════════════════════════════════════════════════════════
 -- POR QUE ESCAPARAM, E POR QUE A GUARDA EXISTENTE NÃO PEGA
@@ -464,10 +466,20 @@ from public.carbo_vendas_metrica
 where e_bonificacao
 order by data_efetiva desc;
 
--- (e) O total que conta. Esperado: 1.166 pedidos e R$ 888.494,38
---     (eram 1.170 e R$ 894.017,38 — a diferença é exatamente os 5.523,00).
---     ⚠️ Os números de referência são de 21/09/2026; venda nova entra aqui,
---     então confira a DIFERENÇA, não o valor absoluto.
+-- (e) O total que conta. ✅ CONFERIDO em 21/09/2026: 1.170 pedidos e
+--     R$ 894.017,38 — eram 1.174 e R$ 899.540,38.
+--
+--     ⚠️ A primeira versão deste comentário dizia "esperado 1.166 e
+--     R$ 888.494,38", e estava ERRADA: eu subtraí os 4 pedidos de 1.170, mas
+--     1.170 já era o grupo `e_bonificacao = false` na medição inicial, ou
+--     seja, já os excluía. O total que contava era 1.174.
+--     Consequência: a conferência devolveu o número CERTO e eu quase o li
+--     como "não mudou nada". Número de referência copiado de um agrupamento
+--     sem reconferir o que aquele grupo continha é a mesma doença do
+--     relatório que só sabe concordar consigo mesmo.
+--
+--     ⚠️ Venda nova entra aqui todo dia: confira a DIFERENÇA de 4 pedidos e
+--     R$ 5.523,00, nunca o valor absoluto.
 select count(*) as pedidos_que_contam, sum(total) as faturamento
 from public.carbo_vendas_metrica
 where conta_metrica and not excluir_metricas;
