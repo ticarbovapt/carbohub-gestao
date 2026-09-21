@@ -1739,6 +1739,57 @@ aquela lista significa por causa de um caso vizinho. A view expõe `nf_invalida`
 como **coluna booleana própria**, calculada fora do CASE e imune à ordem; é por
 ela que se filtra. Caso novo no CASE ⇒ confira quem filtra por string.
 
+### ⚠️ A COMISSÃO tem definição PRÓPRIA de "pedido faturado"
+`/comissionamento` não lê `carbo_vendas_metrica`. As duas RPCs
+(`crm_comissao_agregado`, `crm_comissao_detalhe`) leem `carboze_orders` direto:
+
+```sql
+where o.vendedor_id is not null
+  and o.bling_nf_id is not null          -- ⚠️ é ISTO que significa "faturado"
+  and o.status not in ('quote','cancelled')
+  and coalesce(o.excluir_metricas,false) = false
+```
+
+Consequência medida em 21/09/2026: a `20260981` tirou a bonificação do
+faturamento e **não alcançou a comissão**. Nos quatro pedidos, a nota de
+bonificação ocupa `bling_nf_id` — a coluna da nota PRINCIPAL —, e para a
+comissão isso lê como venda faturada. Um deles comissionava de verdade
+(`V2026090052`, Anderson Bruno, R$ 2.088,00); os outros três não têm vendedor.
+Corrigido na `20260982`, com a MESMA regra nas duas funções.
+
+1. ⚠️ **As DUAS, sempre.** O agregado alimenta os cartões e o detalhe vira
+   `commission_statement_items` no fechamento. Filtrar só num faz o cartão e o
+   extrato mostrarem números diferentes — e quem fecha o mês não sabe qual vale.
+2. ⚠️ **`left join` no espelho de NF, nunca `join`.** A nota pode ainda não ter
+   chegado ao espelho; join interno tiraria da comissão todo pedido cujo sync
+   está atrasado. Aqui ausência tem de DEIXAR PASSAR — o oposto do CRON_SECRET,
+   porque "fechar" aqui é não pagar quem vendeu.
+3. **Só `bling_nfe` (conta 1)**, porque a função exige `bling_nf_id is not
+   null`: pedido faturado só na filial nunca entra nessa base. Acrescentar
+   `bling2_nfe` seria código morto disfarçado de cuidado.
+
+⚠️ **PENDÊNCIA MEDIDA, não resolvida: a comissão paga sobre NF CANCELADA.** Ela
+só testa se `bling_nf_id` está preenchido, nunca se a nota vale — enquanto o
+faturamento tem `carbo_vendas_nf_cancelada` justamente para isso. Trocar a base
+da comissão para a view resolveria os dois de uma vez, mas mexeria em comissão
+já paga; é decisão do dono do processo, não efeito colateral de outra tarefa.
+
+### ⚠️ Pedido `BLING-*` nasce SEM canal, e o Sales não consegue filtrá-lo
+`FILTRO_VENDA_DO_TIME` (`apps/crm/src/lib/vendaDoTime.ts`) tira da tela do
+vendedor o que é `segmento = 'online'` **E** sem `vendedor_id`. A guarda do
+vendedor existe por um motivo bom (ver o próprio arquivo).
+
+⚠️ Mas `supabase/functions/bling-sync/index.ts` **não grava `segmento` em lugar
+nenhum** — zero ocorrências. Então todo pedido importado da conta 1 nasce com
+canal NULO, e venda on-line que passe por ali é invisível para o filtro: ela
+aparece no `/vendas` do vendedor como se fosse venda do time, sem cidade, sem
+vendedor e sem nada que diga de onde veio. Só a ponte do Bling **2**
+(`20260856`) resolve canal, a partir de `bling2_lojas`.
+
+Antes de "arrumar a tela", meça: o canal desses pedidos é o que está faltando,
+e o lugar de corrigir é a ORIGEM (quem importa), não um filtro novo na tela —
+seriam sete cópias para divergir.
+
 ### Duas contas Bling na emissão — matriz e filial SP
 `bling-sync` emite nas DUAS contas. O mapa `CONTAS` (no topo da função) resolve
 tabela de apoio, token, natureza e colunas de destino por conta. Bling 1 =
