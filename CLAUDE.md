@@ -1814,9 +1814,17 @@ A `20260983` faz o canal ser **DECLARADO** em `public.bling_lojas`:
    silêncio.
 4. ⚠️ **`raw_data` guarda o payload inteiro da listagem** (`raw_data: order`),
    então o id da loja **já está em todo pedido, inclusive nos antigos**. Não
-   precisa re-sincronizar, e dá para classificar o histórico — mas isso MUDA
-   faturamento de mês fechado (tira do time, põe no on-line) e é decisão do dono
-   do processo, não efeito colateral.
+   precisou re-sincronizar nada.
+   ✅ **Histórico classificado em 21/09/2026** (`20260984`): 18 pedidos,
+   R$ 2.766,72 — ago/26 −R$ 632,64 e set/26 −R$ 2.134,08, saindo do faturamento
+   do TIME para o on-line. Total do canal ML na matriz: 19 pedidos /
+   R$ 2.916,22.
+   ⚠️ **Um deles já estava `online` antes**, e não foi a ponte: veio da herança
+   de canal pelo histórico do CNPJ. É por isso que o backfill exige
+   `segmento is null` — a mesma regra que a `20260814100000` já avisava ser
+   OBRIGATÓRIA. Havia classificação viva nesses dados.
+   ⚠️ E ele aborta se achar pedido **com vendedor**: marcar `online` tiraria a
+   venda da tela de quem a fez. Medido: zero nos dois meses.
 5. ⚠️ **O canal é gravado só no INSERT da ponte.** Regravar a cada rodada
    atropelaria classificação manual. E `null` ali é o valor certo: é ele que
    deixa `carbo_set_segmento_pdv` (BEFORE INSERT, só preenche quando nulo)
