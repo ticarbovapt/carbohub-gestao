@@ -1329,7 +1329,26 @@ bling2-nfe-recheck-20min     7-59/20 * * * *  nota cancelada some da listagem
 melhor-envio-envios-15min    6-59/15 * * * *  espelho das etiquetas do painel
 melhorenvio-conciliar-5min   */5 * * * *      SQL puro — sem vínculo, card parado
 ml-token-refresh-30min       9-59/30 * * * *  token do ML, independente do sync
+ml-estoque-full-15min        11-59/15 * * * * espelho do Fulfillment do ML
 ```
+
+⚠️ **O `ml-estoque-full` nasceu de hora em hora e virou 15 min** (`20260993`),
+a pedido do dono do processo. E a lição não é o número: **"ao vivo" são DUAS
+coisas**, e acelerar só uma piora.
+
+```
+o CRON busca no ML          ← o que torna o dado FRESCO
+a TELA relê o nosso banco   ← o que faz o número MUDAR sozinho
+```
+
+Acelerar só a tela dá sensação de tempo real sobre um número de uma hora atrás
+— pior que não acelerar nada, porque a pessoa passa a confiar mais num dado que
+não melhorou. O `useMlFull.ts` ganhou `refetchInterval` de 1 min na MESMA tarefa.
+
+⚠️ **O limiar de "espelho velho" vai JUNTO com o agendamento.** Ele era 3 h,
+calibrado para o cron de 1 h; mantido, a tela levaria duas horas e meia para
+acusar um espelho parado. Hoje é 45 min. Mudou a cadência, mude o limiar — é a
+mesma doença dos comentários de cron que já não valem.
 
 ⚠️ **Esta tabela é PARCIAL.** A grade real tinha **29 jobs** em 21/09/2026 —
 `select jobid, jobname, schedule, active from cron.job order by jobname`. Dois
