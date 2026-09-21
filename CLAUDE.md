@@ -1259,7 +1259,19 @@ whatsapp-meta-1min           * * * * *        Meta oficial: as seis da esteira
 bling2-nfe-recheck-20min     7-59/20 * * * *  nota cancelada some da listagem
 melhor-envio-envios-15min    6-59/15 * * * *  espelho das etiquetas do painel
 melhorenvio-conciliar-5min   */5 * * * *      SQL puro — sem vínculo, card parado
+ml-token-refresh-30min       9-59/30 * * * *  token do ML, independente do sync
 ```
+
+⚠️ **Esta tabela é PARCIAL.** A grade real tinha **29 jobs** em 21/09/2026 —
+`select jobid, jobname, schedule, active from cron.job order by jobname`. Dois
+que faltavam e importam: **`bling-sync-morning 0 10 * * *` e
+`bling-sync-afternoon 0 16 * * *`** — o Bling 1 sincroniza **duas vezes por
+dia**, então toda NF de ML que chega pela matriz tem até 6 h de atraso.
+
+⚠️ **Minuto ÍMPAR e fora da grade cheia** para job novo. Ocupados hoje: `:00` e
+todos os **pares** (`bling2-bridge` é `*/2`), `:05` e múltiplos (os três `*/5`),
+`:03` order_details, `:04` carrinhos, `:06` melhor-envio, `:07` nfe_recheck,
+`:08` deduz-estoque. Empilhar não dá erro — dá dois picos que ninguém liga a nada.
 
 ⚠️ **O carrinho é de 15 min, não de 1.** A menor janela dessa pipeline é de 60
 min; sincronizar de minuto em minuto só gastaria cota de API relendo carrinho
