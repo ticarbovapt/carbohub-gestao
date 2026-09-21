@@ -210,6 +210,58 @@ async function espelharConta(conta: ContaML): Promise<Record<string, unknown>> {
   };
 }
 
+/**
+ * `?diag=1` — o que o ML responde, endpoint por endpoint.
+ *
+ * ⚠️ Existe porque `PA_UNAUTHORIZED_RESULT_FROM_POLICIES` não diz QUAL política
+ * recusou, e as causas plausíveis pedem ações opostas:
+ *
+ *   token de outro vendedor   → reconectar a conta certa (o `state` do OAuth)
+ *   escopo `read` não dado    → reautorizar o app com a permissão
+ *   `search_type=scan` vetado → trocar de endpoint no código
+ *   conta sem anúncio nenhum  → não há nada a espelhar, e nada a corrigir
+ *
+ * Cada linha da resposta separa uma dessas. NÃO escreve nada: é leitura pura.
+ */
+async function diagnosticar(conta: ContaML): Promise<Record<string, unknown>> {
+  const passo = async (nome: string, caminho: string) => {
+    const res = await mlFetch(supabase as never, conta, caminho, {}, 1);
+    if (!res) return [nome, { erro: "sem token" }] as const;
+    const corpo = await res.text().catch(() => "");
+    return [nome, { status: res.status, corpo: corpo.slice(0, 400) }] as const;
+  };
+
+  const s = conta.seller_id;
+  const passos = [
+    // Quem é o dono do token? ⚠️ Se `id` ≠ `seller_id`, a política recusa por
+    // estar pedindo os anúncios de OUTRO vendedor — e aí o defeito é a conta
+    // conectada, não o escopo.
+    await passo("users_me", "/users/me"),
+    // O mesmo endpoint, sem `scan`. Passar aqui e falhar lá isola o modo scan.
+    await passo("items_offset", `/users/${s}/items/search?limit=1`),
+    await passo("items_scan", `/users/${s}/items/search?search_type=scan&limit=1`),
+  ];
+
+  // ⚠️ Público, SEM token: quantos anúncios o vendedor tem visíveis. É o único
+  // passo que responde "existe o que espelhar?" sem depender de permissão —
+  // zero aqui transformaria todo o resto numa discussão sobre nada.
+  let publico: unknown;
+  try {
+    const r = await fetch(`https://api.mercadolibre.com/sites/MLB/search?seller_id=${s}&limit=1`);
+    const j = await r.json().catch(() => ({}));
+    publico = { status: r.status, total: (j as { paging?: { total?: number } }).paging?.total ?? null };
+  } catch (e) {
+    publico = { erro: (e as Error).message };
+  }
+
+  return {
+    seller_id: s,
+    platform_key: conta.platform_key,
+    ...Object.fromEntries(passos),
+    anuncios_publicos: publico,
+  };
+}
+
 Deno.serve(async (req: Request) => {
   // ⚠️ AUSÊNCIA FECHA. Sem o segredo, 500 com mensagem explícita — nunca
   // aceita. E 401 separado para chave errada: um 401 para os dois faz falha de
@@ -228,6 +280,17 @@ Deno.serve(async (req: Request) => {
 
   const contas = await contasAtivas(supabase as never);
   const resultado: Record<string, unknown> = {};
+
+  // ⚠️ O diagnóstico roda para as DUAS contas, de propósito: o que a LogHouse
+  // responde no MESMO endpoint é o controle. Se ela passar e o Full não, a
+  // causa é da conta; se as duas falharem, é do app (escopo/endpoint).
+  if (new URL(req.url).searchParams.get("diag") === "1") {
+    for (const conta of contas as ContaML[]) {
+      resultado[conta.platform_key] = await diagnosticar(conta);
+    }
+    return new Response(JSON.stringify({ ok: true, diag: true, ...resultado }, null, 2),
+      { headers: { "Content-Type": "application/json" } });
+  }
 
   for (const conta of contas as ContaML[]) {
     // ⚠️ Só a conta do FULL. A LogHouse despacha daqui e o estoque dela é o
