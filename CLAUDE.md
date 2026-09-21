@@ -1077,6 +1077,23 @@ etapa**: `nf_emitida` conta da emissão da NF, `etiqueta` de quando foi gerada,
 `em_transito` da postagem. Contar da data do pedido mistura demora de
 faturamento com demora de expedição.
 
+### ⚠️ O destino é sempre a `main` — mergear é parte da tarefa, não um passo à parte
+Dito pelo dono do processo em 21/09/2026, com estas palavras: *"manda o merge na
+main, já deveria ter feito inclusive sem eu pedir — sempre na main"*.
+
+Trabalho que fica na branch **não existe para quem usa o sistema**. É a mesma
+doença do SQL que fica no arquivo em vez de ir para o chat: a tela continua a de
+ontem, o app compila, builda e sobe, e ninguém vê erro nenhum. Aconteceu nesta
+mesma tarefa — a aba do ML Full seguiu mostrando o cartão âmbar que eu já tinha
+removido, e eu escrevi "está corrigido" sobre código que não estava no ar.
+
+**Terminou e conferiu, mergeia.** Não pergunte, não deixe para depois, não
+entregue com "falta subir para a main".
+
+⚠️ **E isso torna a conferência OBRIGATÓRIA antes**, não opcional: o push em
+`main` deploya as edge functions (abaixo). Mergear cedo é o modo de ir ao ar com
+o que não foi medido.
+
 ### ⚠️ Push em `main` DEPLOYA as edge functions — não existe "só commitei"
 `.github/workflows/deploy-functions.yml` roda em `push: [main]`. Toda função da
 lista `dep` sobe, em sequência, com 3 tentativas. Função que **não** está na
