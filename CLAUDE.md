@@ -677,6 +677,38 @@ uma consulta `de → hoje` com número errado no meio do caminho.
 de `new Date().toISOString()`, que é UTC: às 21h do dia 31 o mês âncora viraria
 o seguinte.
 
+### ⚠️ Duas datas para "quando foi a venda" — e a lista escondia pedido
+O filtro de `/vendas` (mês e "por período") perdia vendas, e o defeito era a
+tela e o banco olharem datas DIFERENTES:
+
+```ts
+.gte("created_at", qStart)                 // o BANCO recortava por CRIAÇÃO
+...
+const eff = row.sale_date ?? row.created_at.substring(0,10);
+return eff >= rangeStart && eff <= rangeEnd;   // a TELA, por data da VENDA
+```
+
+Enquanto as duas coincidiam, ninguém via. Desde que `sale_date` passou a
+seguir o **faturamento**, elas se separaram — e o pedido que nasceu fora da
+janela do banco **nunca chegava** para ser recortado. Sumia do mês em que foi
+faturado *e* do mês em que foi criado.
+
+⚠️ **No modo "por período" não havia colchão nenhum**: `qStart`/`qEnd` eram as
+datas digitadas, então todo pedido criado antes do início e faturado dentro do
+intervalo desaparecia. No modo mês havia ±1 mês, que só adiava o problema.
+
+Hoje o filtro é `data_efetiva` (`coalesce(sale_date, created_at::date)`, coluna
+da `carbo_vendas_metrica`) — a MESMA data nos dois lados, e o recorte em
+memória foi REMOVIDO. Refiltrar no front não protegia de nada: o que faltava
+nunca chegava; só mantinha viva a segunda definição de "data da venda".
+
+⚠️ Some junto um erro de fuso: comparava `"2026-09-01T00:00:00.000Z"` (UTC)
+com dia de Brasília. `data_efetiva` é DATE — não há hora para deslocar.
+
+⚠️ São **SETE** cópias de `useCarbozeVendas.ts` e elas NÃO são idênticas (só o
+CRM tem `FILTRO_VENDA_DO_TIME`). A mesma alteração mínima nas sete, nunca
+sobrescrever — como já está escrito na seção do `/vender`.
+
 ### ⚠️ Ordem ASCENDENTE com `.limit()` devolve o COMEÇO, não o fim
 O Carbo Chat mostrava o grupo Suporte TI parado em 02/09, com a lista lateral
 exibindo a mensagem das 09:30 do mesmo dia. A consulta era:

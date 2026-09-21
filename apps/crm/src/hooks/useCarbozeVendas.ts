@@ -115,19 +115,21 @@ export function useCarbozeVendas({ month, customFrom, customTo, vendedorFilter, 
         return ((data ?? []) as any[]).filter(ehVendaDoTime).map(mapVenda);
       }
 
-      let rangeStart: string, rangeEnd: string, qStart: string, qEnd: string;
+      // ⚠️ Só DUAS datas agora, as duas em `AAAA-MM-DD`. Antes havia quatro:
+      // `rangeStart`/`rangeEnd` (o recorte, por data da venda) e
+      // `qStart`/`qEnd` (a janela do banco, por data de criação, com um
+      // colchão de ±1 mês no modo mês e NENHUM no modo período). Eram duas
+      // perguntas diferentes sobre "quando foi essa venda", e foi a segunda
+      // que escondeu pedido faturado fora do mês em que nasceu.
+      let rangeStart: string, rangeEnd: string;
       if (hasCustom) {
         rangeStart = customFrom || "2000-01-01";
         rangeEnd = customTo || "2099-12-31";
-        qStart = rangeStart + "T00:00:00.000Z";
-        qEnd = rangeEnd + "T23:59:59.999Z";
       } else {
         const yr = month.getFullYear(), mo = month.getMonth() + 1;
         const lastDay = new Date(yr, mo, 0).getDate();
         rangeStart = `${yr}-${String(mo).padStart(2, "0")}-01`;
         rangeEnd = `${yr}-${String(mo).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
-        qStart = new Date(yr, mo - 2, 1).toISOString();
-        qEnd = new Date(yr, mo + 1, 0, 23, 59, 59).toISOString();
       }
 
       let query = db
@@ -148,8 +150,27 @@ export function useCarbozeVendas({ month, customFrom, customTo, vendedorFilter, 
         // Marketplace do Bling 2 não é venda do time — ver lib/vendaDoTime.
         .or(FILTRO_VENDA_DO_TIME)
         .neq("excluir_metricas", true)
-        .gte("created_at", qStart)
-        .lte("created_at", qEnd)
+        // ⚠️ Filtra por `data_efetiva` (= coalesce(sale_date, created_at::date)),
+        // a MESMA data que o recorte de baixo usa — e NÃO por `created_at`.
+        //
+        // Eram duas datas diferentes: o banco mandava uma janela por data de
+        // CRIAÇÃO e a tela recortava por data EFETIVA da venda. Enquanto as
+        // duas coincidiam ninguém via; desde que `sale_date` passou a seguir o
+        // faturamento elas se separaram, e o que nasceu fora da janela nunca
+        // chegava para ser recortado — sumia dos dois meses, calado.
+        //
+        // No modo "por período" não havia nem colchão: `qStart`/`qEnd` eram as
+        // datas digitadas, então todo pedido criado antes do início e faturado
+        // dentro dele desaparecia.
+        //
+        // ⚠️ E `data_efetiva` é DATE, não timestamp: some junto o erro de fuso
+        // de comparar `"2026-09-01T00:00:00.000Z"` (UTC) com um dia de
+        // Brasília, que jogava as vendas depois das 21h para o dia seguinte.
+        .gte("data_efetiva", rangeStart)
+        .lte("data_efetiva", rangeEnd)
+        // Ordena pela mesma data que filtra; `created_at` desempata dentro do
+        // dia. É a ordem que a RPC `carbo_vendas_busca` já usava.
+        .order("data_efetiva", { ascending: false })
         .order("created_at", { ascending: false });
 
       if (!isGestor) {
@@ -161,12 +182,11 @@ export function useCarbozeVendas({ month, customFrom, customTo, vendedorFilter, 
       const { data, error } = await query;
       if (error) throw error;
 
-      return ((data ?? []) as any[])
-        .filter((row) => {
-          const eff = (row.sale_date as string | null) ?? (row.created_at as string).substring(0, 10);
-          return eff >= rangeStart && eff <= rangeEnd;
-        })
-        .map(mapVenda);
+      // O recorte por data saiu daqui: quem filtra é o banco, pela MESMA
+      // coluna. Refiltrar em memória não protegia de nada — o que faltava
+      // nunca chegava — e mantinha viva a segunda definição de "data da
+      // venda", que era o defeito.
+      return ((data ?? []) as any[]).map(mapVenda);
     },
   });
 }
