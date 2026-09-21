@@ -1948,12 +1948,42 @@ async function bridgeOrdersToCarbohub(
   logId: string
 ): Promise<{ synced: number; failed: number }> {
   // Load reference data
-  const [{ data: blingOrders }, { data: skus }, { data: licensees }, { data: contacts }] = await Promise.all([
+  const [{ data: blingOrders }, { data: skus }, { data: licensees }, { data: contacts }, { data: lojas }] = await Promise.all([
     supabaseAdmin.from("bling_orders").select("*").order("data", { ascending: false }),
     supabaseAdmin.from("sku").select("id, code, name"),
     supabaseAdmin.from("licensees").select("id, name, trade_name, cnpj"),
     supabaseAdmin.from("bling_contacts").select("bling_id, cpf_cnpj, ie, email, telefone, celular, raw_data"),
+    supabaseAdmin.from("bling_lojas").select("bling_id, e_online, ignorar"),
   ]);
+
+  // ── Canal de venda: a LOJA do Bling decide ────────────────────────────────
+  //
+  // Desde 28/08/2026 a matriz vende no Mercado Livre, e este insert nunca
+  // gravou `segmento` — nem errado: o campo não existia. Canal nulo é
+  // invisível para o FILTRO_VENDA_DO_TIME do Sales (que só tira `segmento =
+  // 'online'` sem vendedor), então venda de marketplace aparecia no /vendas do
+  // vendedor e somava no faturamento do time.
+  //
+  // ⚠️ A regra do Bling 2 (`loja ≠ 0 → online`) NÃO serve aqui, e isso foi
+  // medido: a conta 1 tem a loja 206071309 com 145 pedidos e R$ 398.081,88 de
+  // venda da EQUIPE (clientes PJ, numeroLoja nulo). "≠ 0" marcaria R$ 441 mil
+  // como on-line e sumiria com eles da tela de quem vendeu.
+  //
+  // Por isso o canal é DECLARADO em `bling_lojas` (migração 20260983), não
+  // derivado do id. Loja desconhecida ou ainda não classificada NÃO vira
+  // on-line: fica como está hoje e aparece em `bling_lojas_pendentes`.
+  const lojasOnline = new Set(
+    (lojas || [])
+      .filter((l: any) => l.e_online === true && l.ignorar !== true)
+      .map((l: any) => String(l.bling_id)),
+  );
+  // `raw_data` guarda o payload inteiro da listagem, então o id da loja já está
+  // gravado em todo pedido — inclusive nos antigos. Não precisa re-sincronizar.
+  const canalDoPedido = (bo: any): string | null => {
+    const lojaId = bo?.raw_data?.loja?.id;
+    if (lojaId === undefined || lojaId === null) return null;
+    return lojasOnline.has(String(lojaId)) ? "online" : null;
+  };
   // Contato completo por bling_id → enriquece o pedido (doc, IE, contato, endereço).
   const contatoMap = new Map((contacts || []).map((c: any) => [c.bling_id, c]));
   // Extrai o endereço do contato (Bling v3: raw_data.endereco.geral) → campos de entrega.
@@ -2101,6 +2131,12 @@ async function bridgeOrdersToCarbohub(
           fulfillment_stage: estagioDoStatus(status),
           licensee_id: licenseeId,
           external_ref: externalRef,
+          // ⚠️ Só no INSERT, nunca no update acima: regravar canal a cada
+          // rodada atropelaria classificação feita à mão. E `null` aqui não é
+          // "não sei ainda" para o banco — é o valor que deixa o gatilho
+          // `carbo_set_segmento_pdv` (BEFORE INSERT, só preenche quando está
+          // nulo) continuar inferindo revenda pelo CNPJ, como sempre fez.
+          segmento: canalDoPedido(bo),
           notes: bo.observacoes || null,
           source_file: "bling_sync",
           created_at: orderDate,

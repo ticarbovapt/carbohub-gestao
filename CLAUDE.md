@@ -1774,21 +1774,63 @@ faturamento tem `carbo_vendas_nf_cancelada` justamente para isso. Trocar a base
 da comissão para a view resolveria os dois de uma vez, mas mexeria em comissão
 já paga; é decisão do dono do processo, não efeito colateral de outra tarefa.
 
-### ⚠️ Pedido `BLING-*` nasce SEM canal, e o Sales não consegue filtrá-lo
-`FILTRO_VENDA_DO_TIME` (`apps/crm/src/lib/vendaDoTime.ts`) tira da tela do
-vendedor o que é `segmento = 'online'` **E** sem `vendedor_id`. A guarda do
-vendedor existe por um motivo bom (ver o próprio arquivo).
+### Bling 1 também vende on-line (ML) — e a regra do Bling 2 NÃO serve aqui
+Desde 28/08/2026 a matriz vende no Mercado Livre. O `bling-sync` **não gravava
+`segmento`** — não errado: o campo não existia no insert. Canal nulo é
+invisível para o `FILTRO_VENDA_DO_TIME` (`apps/crm/src/lib/vendaDoTime.ts`), que
+só tira da tela o que é `segmento = 'online'` **E** sem vendedor. Resultado:
+venda de marketplace aparecia no `/vendas` do vendedor, sem cidade e sem
+vendedor, e somava no faturamento do TIME em vez de no do on-line.
 
-⚠️ Mas `supabase/functions/bling-sync/index.ts` **não grava `segmento` em lugar
-nenhum** — zero ocorrências. Então todo pedido importado da conta 1 nasce com
-canal NULO, e venda on-line que passe por ali é invisível para o filtro: ela
-aparece no `/vendas` do vendedor como se fosse venda do time, sem cidade, sem
-vendedor e sem nada que diga de onde veio. Só a ponte do Bling **2**
-(`20260856`) resolve canal, a partir de `bling2_lojas`.
+⚠️ **Meu plano era copiar `loja ≠ 0 → online` do Bling 2, e a medição matou.**
+Censo de `bling_orders.raw_data->'loja'->>'id'` em 21/09/2026:
 
-Antes de "arrumar a tela", meça: o canal desses pedidos é o que está faltando,
-e o lugar de corrigir é a ORIGEM (quem importa), não um filtro novo na tela —
-seriam sete cópias para divergir.
+```
+0            176 ped.  R$ 437.217,80  numero_loja nulo   venda direta
+206071309    145 ped.  R$ 398.081,88  numero_loja nulo   NAO e marketplace (PJ)
+206071288     15 ped.  R$  43.078,40  numero_loja nulo   NAO e marketplace
+206270703     19 ped.  R$   2.916,22  2000014753124269   Mercado Livre
+206097294      2 ped.  R$     308,98  2000016905854286   formato de ML
+206097284      1 ped.  R$      59,90  701-5334182-4091438 formato de Amazon
+206093728     20 ped.  R$   3.059,91  100                nao classificada
+```
+
+`≠ 0` teria marcado **R$ 441 mil de venda da equipe** como on-line, sumindo com
+ela da tela de quem vendeu. As duas contas numeram lojas do zero e têm cadastros
+diferentes — "a regra que funciona lá funciona aqui" é a mesma suposição que já
+custou caro com `bling_id` de produto e de contato.
+
+A `20260983` faz o canal ser **DECLARADO** em `public.bling_lojas`:
+
+1. **`e_online` tem TRÊS estados.** `true` vira `'online'`; `false` e `null` não
+   mexem no canal — mas significam coisas diferentes: `false` é "olhei, não é",
+   `null` é "ninguém olhou". Colapsar os dois faria loja nova nascer parecendo
+   decidida, e é a loja nova que precisa aparecer na lista de trabalho.
+2. ⚠️ **O lado seguro aqui é NÃO classificar.** Errar para on-line esconde venda
+   do time da tela de quem a fez; errar para "não sei" gera ruído visível.
+   Ruído se vê, venda sumida não. Por isso loja desconhecida segue como hoje.
+3. **`bling_lojas_pendentes` parte de `bling_orders`, não do cadastro** — loja
+   nova entra sozinha. Sem isso, canal novo repetiria este mesmo problema em
+   silêncio.
+4. ⚠️ **`raw_data` guarda o payload inteiro da listagem** (`raw_data: order`),
+   então o id da loja **já está em todo pedido, inclusive nos antigos**. Não
+   precisa re-sincronizar, e dá para classificar o histórico — mas isso MUDA
+   faturamento de mês fechado (tira do time, põe no on-line) e é decisão do dono
+   do processo, não efeito colateral.
+5. ⚠️ **O canal é gravado só no INSERT da ponte.** Regravar a cada rodada
+   atropelaria classificação manual. E `null` ali é o valor certo: é ele que
+   deixa `carbo_set_segmento_pdv` (BEFORE INSERT, só preenche quando nulo)
+   continuar inferindo revenda pelo CNPJ.
+6. **`bling-sync` está na lista `dep`** — o push em `main` deploya. A função é
+   INERTE sem a tabela (`select` falha, `lojas` vem null, nada é classificado),
+   então a ordem entre migração e deploy não quebra nada.
+
+⚠️ **ML Full é outro canal, e não pode deduzir estoque.** Ao integrar a segunda
+conta do Mercado Livre, ela precisa de `platform` PRÓPRIA em
+`carbo_canal_estoque`, nascendo `ativo = false`: no Full a mercadoria já está no
+galpão do ML, e quem tira da LogHouse é a REMESSA de reposição. Sob a mesma
+chave `mercadolivre`, a venda e a remessa contariam a mesma saída duas vezes —
+o erro de 31/08.
 
 ### Duas contas Bling na emissão — matriz e filial SP
 `bling-sync` emite nas DUAS contas. O mapa `CONTAS` (no topo da função) resolve
