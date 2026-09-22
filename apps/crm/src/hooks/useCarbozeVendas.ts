@@ -73,6 +73,17 @@ export interface CarbozeVendaRow {
   vendedor_name: string | null;
   invoice_number: string | null;
   bling_nf_id: number | null;
+  /** A SEGUNDA nota: a remessa de bonificação.
+   *
+   * ⚠️ Venda com brinde gera DUAS notas — a de venda, com valor cheio, e a de
+   * remessa em bonificação, que não é receita. Elas moram em colunas separadas
+   * (`20260903`) e a tela precisa das duas: quem confere quer ver o documento
+   * do que foi dado, e a logística despacha com as duas em mãos.
+   *
+   * O `select("*")` sempre trouxe estas colunas; era este mapeamento que as
+   * descartava — e campo descartado aqui some da tela sem erro nenhum. */
+  invoice_bonificacao_number: string | null;
+  bling_nf_bonificacao_id: number | null;
   external_ref: string | null;    // "bling-<id>" quando o pedido já foi enviado ao Bling
 }
 
@@ -234,6 +245,8 @@ function mapVenda(row: any): CarbozeVendaRow {
           vendedor_name: row.vendedor_name ?? null,
           invoice_number: row.invoice_number ?? null,
           bling_nf_id: row.bling_nf_id ?? null,
+          invoice_bonificacao_number: row.invoice_bonificacao_number ?? null,
+          bling_nf_bonificacao_id: row.bling_nf_bonificacao_id ?? null,
           external_ref: row.external_ref ?? null,
   });
 }

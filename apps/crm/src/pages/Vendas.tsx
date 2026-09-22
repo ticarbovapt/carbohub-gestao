@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   ChevronLeft, ChevronRight, Search, ShoppingBag, TrendingUp,
   Package, Users, ArrowRightCircle, CalendarDays, X, Trash2, Loader2, FileDown,
-  ChevronDown, Pencil, FileText, Lock, Ban,
+  ChevronDown, Pencil, FileText, Lock, Ban, Gift,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
@@ -145,11 +145,22 @@ export default function Vendas() {
 
   // Baixa a NF já vinculada (o faturamento/emissão é no Finanças). Abre o PDF;
   // se só houver XML, abre o XML; se ainda não sincronizou, avisa.
-  async function baixarNF(venda: CarbozeVendaRow) {
-    if (!venda.bling_nf_id) return;
-    setNfLoadingId(venda.id);
+  /**
+   * Baixa UMA das notas do pedido (o faturamento/emissão é no Finanças).
+   *
+   * ⚠️ O parâmetro `qual` existe porque venda com brinde tem DUAS notas: a de
+   * venda e a remessa em bonificação. Sem ele o botão abriria sempre a
+   * primeira, e quem clicasse em "NF bonificação" receberia a nota errada —
+   * pior que não ter o botão, porque o arquivo abre e parece certo.
+   */
+  async function baixarNF(venda: CarbozeVendaRow, qual: "venda" | "bonificacao" = "venda") {
+    const nfId = qual === "bonificacao" ? venda.bling_nf_bonificacao_id : venda.bling_nf_id;
+    const nfNumero = qual === "bonificacao"
+      ? venda.invoice_bonificacao_number : venda.invoice_number;
+    if (!nfId) return;
+    setNfLoadingId(venda.id + qual);
     try {
-      const f = await fetchNfFiles(venda.bling_nf_id);
+      const f = await fetchNfFiles(nfId);
       if (f?.pdf_url) {
         window.open(f.pdf_url, "_blank", "noopener");
       } else if (f?.xml_url) {
@@ -157,7 +168,7 @@ export default function Vendas() {
         toast.message("NF sem PDF sincronizado — abrindo o XML.");
       } else {
         toast.error(
-          `NF ${venda.invoice_number ?? venda.bling_nf_id} vinculada, mas o arquivo ainda não sincronizou do Bling.`,
+          `NF ${nfNumero ?? nfId} vinculada, mas o arquivo ainda não sincronizou do Bling.`,
         );
       }
     } catch (e) {
@@ -508,13 +519,28 @@ export default function Vendas() {
                                 <>
                                   {venda.bling_nf_id && (
                                     <button
-                                      onClick={() => baixarNF(venda)}
-                                      disabled={nfLoadingId === venda.id}
+                                      onClick={() => baixarNF(venda, "venda")}
+                                      disabled={nfLoadingId === venda.id + "venda"}
                                       className="h-8 px-2.5 inline-flex items-center gap-1 rounded-md text-xs font-medium whitespace-nowrap bg-carbo-green/10 text-carbo-green hover:bg-carbo-green/20 border border-carbo-green/30 transition-colors disabled:opacity-50"
                                       title={`Baixar NF ${venda.invoice_number ?? venda.bling_nf_id}`}
                                     >
-                                      {nfLoadingId === venda.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileDown className="h-3 w-3" />}
+                                      {nfLoadingId === venda.id + "venda" ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileDown className="h-3 w-3" />}
                                       <span className="hidden sm:inline">Baixar NF</span>
+                                    </button>
+                                  )}
+                                  {/* ⚠️ Botão PRÓPRIO, âmbar, e não um segundo "Baixar NF".
+                                      As duas notas têm significados opostos — uma é receita,
+                                      a outra é produto dado — e dois botões iguais lado a
+                                      lado fariam a pessoa baixar a errada sem perceber. */}
+                                  {venda.bling_nf_bonificacao_id && (
+                                    <button
+                                      onClick={() => baixarNF(venda, "bonificacao")}
+                                      disabled={nfLoadingId === venda.id + "bonificacao"}
+                                      className="h-8 px-2.5 inline-flex items-center gap-1 rounded-md text-xs font-medium whitespace-nowrap bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border border-amber-500/30 transition-colors disabled:opacity-50"
+                                      title={`Baixar NF de bonificação ${venda.invoice_bonificacao_number ?? venda.bling_nf_bonificacao_id}`}
+                                    >
+                                      {nfLoadingId === venda.id + "bonificacao" ? <Loader2 className="h-3 w-3 animate-spin" /> : <Gift className="h-3 w-3" />}
+                                      <span className="hidden sm:inline">NF bonif.</span>
                                     </button>
                                   )}
                                   <button onClick={() => baixarPdf(venda.id)} title="Baixar orçamento (PDF)"
@@ -552,11 +578,28 @@ export default function Vendas() {
                                 </div>
                               </div>
 
-                              {/* NF */}
+                              {/* ── As notas do pedido ────────────────────────────
+                                  ⚠️ Quando há bonificação são DUAS, e cada uma é
+                                  rotulada: "Nota Fiscal" sozinho, com duas notas
+                                  emitidas, não diz qual está ali. */}
                               {(venda.invoice_number || venda.bling_nf_id) && (
                                 <div className="text-xs">
-                                  <span className="text-muted-foreground">Nota Fiscal: </span>
+                                  <span className="text-muted-foreground">
+                                    {venda.bling_nf_bonificacao_id ? "NF da venda: " : "Nota Fiscal: "}
+                                  </span>
                                   <span className="font-medium">{venda.invoice_number || `#${venda.bling_nf_id}`}</span>
+                                </div>
+                              )}
+                              {venda.bling_nf_bonificacao_id && (
+                                <div className="text-xs">
+                                  <span className="text-muted-foreground">NF de bonificação: </span>
+                                  <span className="font-medium text-amber-500">
+                                    {venda.invoice_bonificacao_number || `#${venda.bling_nf_bonificacao_id}`}
+                                  </span>
+                                  {/* Dito em uma linha: a segunda nota não é receita.
+                                      Sem isto, duas notas num pedido de R$ 2.088 fazem
+                                      quem confere somar os dois valores. */}
+                                  <span className="text-muted-foreground"> · remessa, não gera receita</span>
                                 </div>
                               )}
 
