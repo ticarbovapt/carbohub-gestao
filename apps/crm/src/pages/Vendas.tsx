@@ -12,6 +12,7 @@ import {
   ChevronLeft, ChevronRight, Search, ShoppingBag, TrendingUp,
   Package, Users, ArrowRightCircle, CalendarDays, X, Trash2, Loader2, FileDown,
   ChevronDown, Pencil, FileText, Lock, Ban, Gift,
+  Store, Factory, Globe, HelpCircle, Repeat,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
@@ -103,6 +104,37 @@ const effectiveDate = (r: CarbozeVendaRow) => r.sale_date ?? r.created_at.substr
 // ⚠️ Por que NÃO `confirmed_at`/`invoiced_at`, que seriam os campos exatos:
 // `confirmed_at` tem 43 linhas de 1.376 (3%, nada antes de 13/07/2026) e
 // `invoiced_at` está 100% vazio. Este par aqui existe em todas as linhas.
+
+// ── Unidades de negócio ──────────────────────────────────────────────────────
+//
+// ⚠️ O BANCO SÓ ACEITA TRÊS. O CHECK de `carboze_orders` é:
+//     segmento IS NULL OR segmento = ANY ('consumo','revenda','online')
+// `microdistribuidor` NÃO é valor válido — pedir para gravá-lo hoje dá erro de
+// constraint. Ele entra aqui no dia em que a migração o permitir E existir
+// regra de classificação; até lá, uma opção vazia no filtro só faria o usuário
+// achar que não vendeu nada para o canal.
+//
+// A lista é a fonte única: acrescentar o quarto segmento é acrescentar uma
+// linha aqui e um valor no CHECK — a tabela, os cards e o filtro seguem juntos.
+const SEGMENTOS = [
+  { id: "revenda",  label: "Revenda",  icone: Store,      cor: "text-sky-400",    bg: "bg-sky-500/15" },
+  { id: "consumo",  label: "Consumo",  icone: Factory,    cor: "text-emerald-400", bg: "bg-emerald-500/15" },
+  { id: "online",   label: "On-line",  icone: Globe,      cor: "text-violet-400", bg: "bg-violet-500/15" },
+  // ⚠️ `null` é 123 pedidos hoje — um nono da base. Sem balde próprio eles
+  // sumiriam ao filtrar por qualquer segmento e ninguém saberia que existem.
+  { id: "__sem__",  label: "Sem classificação", icone: HelpCircle, cor: "text-muted-foreground", bg: "bg-muted" },
+] as const;
+
+type SegmentoId = typeof SEGMENTOS[number]["id"];
+
+const segmentoDe = (v: CarbozeVendaRow): SegmentoId =>
+  (SEGMENTOS.find((s) => s.id === v.segmento)?.id ?? "__sem__") as SegmentoId;
+
+/** Pedido de recorrência — `order_type` é o canônico, `is_recurring` é a flag
+ *  que a rotina de recorrência usa. Aceita as duas: depender de uma só faria a
+ *  marca sumir conforme o caminho que criou o pedido. */
+const ehRecorrente = (v: CarbozeVendaRow) =>
+  v.order_type === "recorrente" || v.is_recurring === true;
 
 /** Mês (YYYY-MM) de uma data ISO. */
 const mesDe = (iso: string) => iso.substring(0, 7);
@@ -201,6 +233,9 @@ export default function Vendas() {
   // cidade (a ponte não atribui), então enchem a tabela de linhas que ninguém
   // desta tela fez. Fica visível e reversível — ver o chip abaixo dos KPIs.
   const [ocultarBling, setOcultarBling] = useState(true);
+  // Segmentos selecionados. Vazio = todos — e não "nenhum": filtro que começa
+  // escondendo tudo faz a tela parecer quebrada no primeiro carregamento.
+  const [segsAtivos, setSegsAtivos] = useState<Set<SegmentoId>>(new Set());
 
   const hasCustomRange = !!(customFrom || customTo);
   const clearCustomRange = () => { setCustomFrom(""); setCustomTo(""); };
@@ -367,10 +402,30 @@ export default function Vendas() {
   // ⚠️ `filtered` alimenta TODOS os cards. Esconder Bling muda os totais, e é
   // por isso que o chip logo abaixo dos KPIs diz quantos e quanto estão fora —
   // total que muda sem explicação na tela é como se estivesse errado.
-  const filtered = useMemo(
+  // Contagem por segmento, do recorte ANTES do filtro de segmento — é o que
+  // permite o botão mostrar quantos existem em cada um sem zerar a si mesmo
+  // assim que é clicado.
+  const semSegFiltro = useMemo(
     () => (ocultarBling ? porVendedor.filter((v) => !ehPedidoBling(v)) : porVendedor),
     [porVendedor, ocultarBling],
   );
+  const contagemPorSeg = useMemo(() => {
+    const m = new Map<SegmentoId, number>();
+    for (const v of semSegFiltro) m.set(segmentoDe(v), (m.get(segmentoDe(v)) ?? 0) + 1);
+    return m;
+  }, [semSegFiltro]);
+
+  const filtered = useMemo(
+    () => (segsAtivos.size === 0 ? semSegFiltro : semSegFiltro.filter((v) => segsAtivos.has(segmentoDe(v)))),
+    [semSegFiltro, segsAtivos],
+  );
+
+  const alternarSeg = (id: SegmentoId) =>
+    setSegsAtivos((cur) => {
+      const n = new Set(cur);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
 
   const sum = (list: CarbozeVendaRow[]) => list.reduce((s, v) => s + v.total, 0);
 
@@ -585,6 +640,40 @@ export default function Vendas() {
           </label>
         </div>
 
+        {/* ── Unidade de negócio ──
+            Botões, não um <select>: são quatro, combinam entre si (dá para ver
+            Revenda + Consumo juntos) e cada um carrega a contagem — coisas que
+            um select de escolha única não faz. */}
+        <div className="flex flex-wrap items-center gap-2 -mt-1">
+          <span className="text-xs text-muted-foreground">Unidade de negócio:</span>
+          {SEGMENTOS.map((s) => {
+            const Icone = s.icone;
+            const ativo = segsAtivos.has(s.id);
+            const qtd = contagemPorSeg.get(s.id) ?? 0;
+            return (
+              <button
+                key={s.id}
+                onClick={() => alternarSeg(s.id)}
+                disabled={qtd === 0 && !ativo}
+                title={qtd === 0 ? `Nenhum pedido em ${s.label} neste período` : `Filtrar por ${s.label}`}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition
+                  ${ativo ? `${s.bg} border-current ${s.cor} font-medium` : "border-border text-muted-foreground hover:bg-muted/40"}
+                  ${qtd === 0 && !ativo ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
+              >
+                <Icone className="h-3.5 w-3.5" />
+                {s.label}
+                <span className="tabular-nums opacity-70">{qtd}</span>
+              </button>
+            );
+          })}
+          {segsAtivos.size > 0 && (
+            <button className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+              onClick={() => setSegsAtivos(new Set())}>
+              <X className="h-3 w-3" /> limpar
+            </button>
+          )}
+        </div>
+
         {/* Filtros */}
         <div className="flex gap-2 flex-wrap">
           <div className="relative flex-1 min-w-[200px]">
@@ -696,7 +785,33 @@ export default function Vendas() {
                             </td>
                           )}
                           <td className="p-3">{(() => { const b = statusBadge(venda); return <CarboBadge variant={b.variant} size="sm">{b.label}</CarboBadge>; })()}</td>
-                          <td className="p-3 font-mono text-xs font-medium">{venda.order_number}</td>
+                          {/* Número + as duas marcas do pedido: unidade de
+                              negócio e recorrência. Ficam aqui, coladas no
+                              número, porque é a coluna que o olho procura
+                              primeiro ao varrer a lista. */}
+                          <td className="p-3 font-mono text-xs font-medium">
+                            <span className="inline-flex items-center gap-1.5">
+                              {venda.order_number}
+                              {(() => {
+                                const s = SEGMENTOS.find((x) => x.id === segmentoDe(venda))!;
+                                const Icone = s.icone;
+                                return (
+                                  <span className="inline-flex shrink-0" title={`Unidade de negócio: ${s.label}`} aria-label={s.label}>
+                                    <Icone className={`h-3.5 w-3.5 ${s.cor}`} />
+                                  </span>
+                                );
+                              })()}
+                              {ehRecorrente(venda) && (
+                                <span
+                                  className="inline-flex items-center rounded bg-teal-500/15 p-0.5 text-teal-400"
+                                  title="Pedido recorrente"
+                                  aria-label="Pedido recorrente"
+                                >
+                                  <Repeat className="h-3 w-3" />
+                                </span>
+                              )}
+                            </span>
+                          </td>
                           {/* ⚠️ Duas marcas DIFERENTES, e a distinção importa:
                               ✱ (âmbar) = `sale_date` foi corrigida — pode ser
                                   dentro do mesmo mês, não diz nada de caixa;

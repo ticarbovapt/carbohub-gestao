@@ -85,6 +85,18 @@ export interface CarbozeVendaRow {
   invoice_bonificacao_number: string | null;
   bling_nf_bonificacao_id: number | null;
   external_ref: string | null;    // "bling-<id>" quando o pedido já foi enviado ao Bling
+  /** Unidade de negócio: `revenda` | `consumo` | `online`, ou null.
+   *
+   * ⚠️ O CHECK de `carboze_orders` só aceita estes três (mais null):
+   * `microdistribuidor` NÃO é valor válido hoje — acrescentá-lo exige migração.
+   * O `select("*")` já trazia a coluna; era este mapeamento que a descartava. */
+  segmento: string | null;
+  /** `spot` | `recorrente`. */
+  order_type: string | null;
+  /** Redundante com `order_type='recorrente'`, mas é a flag que a recorrência
+   *  usa de fato. A marca da tela aceita as duas para não depender de qual
+   *  delas o caminho de criação preencheu. */
+  is_recurring: boolean;
 }
 
 interface Params {
@@ -248,6 +260,9 @@ function mapVenda(row: any): CarbozeVendaRow {
           invoice_bonificacao_number: row.invoice_bonificacao_number ?? null,
           bling_nf_bonificacao_id: row.bling_nf_bonificacao_id ?? null,
           external_ref: row.external_ref ?? null,
+          segmento: row.segmento ?? null,
+          order_type: row.order_type ?? null,
+          is_recurring: row.is_recurring === true,
   });
 }
 
