@@ -165,7 +165,7 @@ export default function Vendas() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   // Filtro por KPI (clicar no card): mostra na tabela só o que alimenta o card.
-  const [kpiFilter, setKpiFilter] = useState<"faturado" | "aguardando" | "orcamento" | "cancelado" | null>(null);
+  const [kpiFilter, setKpiFilter] = useState<"vendido" | "faturado" | "aguardando" | "orcamento" | "cancelado" | null>(null);
 
   const hasCustomRange = !!(customFrom || customTo);
   const clearCustomRange = () => { setCustomFrom(""); setCustomTo(""); };
@@ -351,9 +351,37 @@ export default function Vendas() {
   const totalOrcamento = sum(quotes);
   const cancelled = filtered.filter(estaCancelada).length;
 
+  // ── TOTAL VENDIDO e o BACKLOG ──────────────────────────────────────────────
+  //
+  // "Vendido" é o que virou VENDA no mês — faturado ou não. É `active`, o mesmo
+  // conjunto que já alimenta os outros dois cards, então por construção:
+  //
+  //     Total vendido = Total faturado + Aguardando faturamento
+  //
+  // e o BACKLOG (o transbordo financeiro para o mês seguinte) é a diferença:
+  //
+  //     Backlog = Total vendido − Total faturado = Aguardando faturamento
+  //
+  // Somar `active` de novo em vez de `totalFaturado + totalAguardando` é de
+  // propósito: se um dia a regra de `isAguardando` mudar e deixar de ser o
+  // complemento exato de `isFaturada`, a conta aqui continua sendo "tudo que é
+  // venda" — e a diferença aparece na tela em vez de somar certo por acidente.
+  //
+  // ⚠️ DATA: usa `data_efetiva` (= coalesce(sale_date, created_at)), a MESMA que
+  // filtra o mês e que os outros quatro cards usam. NÃO usa `confirmed_at`, que
+  // seria o campo semanticamente exato de "conversão em venda": ele só tem 43
+  // linhas de 1.376 (3%, e nenhuma antes de 13/07/2026), e `invoiced_at` está
+  // 100% vazio. Um card sobre `confirmed_at` mostraria 7 vendas em setembro
+  // onde os outros mostram 370 — cinco cards que não conversam entre si.
+  const vendidas = active;
+  const totalVendido = sum(active);
+  // Quanto do que foi vendido no mês ainda não virou nota — o transbordo.
+  const pctBacklog = totalVendido > 0 ? (totalAguardando / totalVendido) * 100 : 0;
+
   // Filtro do card clicado — só sobre a TABELA (os totais dos KPIs seguem no total).
   const tableRows = filtered.filter((v) => {
     if (!kpiFilter) return true;
+    if (kpiFilter === "vendido") return isActive(v);
     if (kpiFilter === "faturado") return isFaturada(v);
     if (kpiFilter === "aguardando") return isAguardando(v);
     if (kpiFilter === "orcamento") return v.status === "quote";
@@ -361,7 +389,7 @@ export default function Vendas() {
   });
   const toggleKpi = (k: NonNullable<typeof kpiFilter>) => setKpiFilter((cur) => (cur === k ? null : k));
   const KPI_LABEL: Record<NonNullable<typeof kpiFilter>, string> = {
-    faturado: "Total faturado", aguardando: "Aguardando faturamento", orcamento: "Em orçamento", cancelado: "Canceladas",
+    vendido: "Total vendido", faturado: "Total faturado", aguardando: "Aguardando faturamento", orcamento: "Em orçamento", cancelado: "Canceladas",
   };
 
   return (
@@ -397,9 +425,21 @@ export default function Vendas() {
           </div>
         </div>
 
-        {/* KPIs — totais em R$ por situação de faturamento (+ orçamentos e canceladas).
-            Para colaborador (vê só o próprio), a query já limita ao vendedor logado. */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {/* KPIs — o mês inteiro em uma equação que fecha:
+              Total vendido = Total faturado + Aguardando faturamento
+            e o que está "Aguardando" É o backlog que transborda para o mês que
+            vem. Orçamento e Cancelada ficam de fora da conta de propósito:
+            orçamento ainda não é venda, cancelada deixou de ser.
+            Para colaborador (vê só o próprio), a query já limita ao vendedor. */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+          <CarboCard onClick={() => toggleKpi("vendido")}
+            className={`cursor-pointer transition ${kpiFilter === "vendido" ? "ring-2 ring-violet-400/60" : "hover:bg-muted/20"}`}>
+            <CarboCardContent className="p-3 text-center">
+              <p className="text-xl font-bold text-violet-400 tabular-nums">{fmtBRL(totalVendido)}</p>
+              <p className="text-xs text-muted-foreground">Total vendido</p>
+              <p className="text-[10px] text-muted-foreground/70 mt-0.5">{vendidas.length} venda(s) no mês</p>
+            </CarboCardContent>
+          </CarboCard>
           <CarboCard onClick={() => toggleKpi("faturado")}
             className={`cursor-pointer transition ${kpiFilter === "faturado" ? "ring-2 ring-carbo-green/60" : "hover:bg-muted/20"}`}>
             <CarboCardContent className="p-3 text-center">
@@ -413,7 +453,13 @@ export default function Vendas() {
             <CarboCardContent className="p-3 text-center">
               <p className="text-xl font-bold text-amber-400 tabular-nums">{fmtBRL(totalAguardando)}</p>
               <p className="text-xs text-muted-foreground">Aguardando faturamento</p>
-              <p className="text-[10px] text-muted-foreground/70 mt-0.5">{aguardando.length} venda(s) a faturar</p>
+              {/* É esta linha que responde "quanto transborda": o card sozinho
+                  dá o valor, mas é a fração do vendido que diz se o mês fechou
+                  o próprio caixa ou empurrou metade para o seguinte. */}
+              <p className="text-[10px] text-muted-foreground/70 mt-0.5">
+                {aguardando.length} venda(s) a faturar
+                {totalVendido > 0 && ` · ${pctBacklog.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}% do vendido`}
+              </p>
             </CarboCardContent>
           </CarboCard>
           <CarboCard onClick={() => toggleKpi("orcamento")}
