@@ -1780,9 +1780,31 @@ async function matchNFesToOrders(
 ): Promise<{ matched: number; invalid: number }> {
   const { data: nfes } = await supabaseAdmin
     .from("bling_nfe")
-    .select("id, bling_id, chave_acesso, numero, informacoes_adicionais")
+    .select("id, bling_id, chave_acesso, numero, informacoes_adicionais, raw_data")
     .in("match_status", ["pending", "invalid_code"])
     .not("informacoes_adicionais", "is", null);
+
+  // ── Quais naturezas são de bonificação ────────────────────────────────────
+  //
+  // ⚠️ Casa por PADRÃO de chave (`%natureza_bonificacao%`), nunca por lista de
+  // nomes: já são duas contas (`bling1_`, `bling2_`) e a terceira entraria com
+  // nome novo. Lista escrita no código é mais uma cópia de cadastro, e divergir
+  // dela não dá erro — dá nota caindo na coluna errada. É a mesma régua que o
+  // `carbo_natureza_e_bonificacao` usa para o faturamento: UM sinal para as
+  // duas decisões, em vez de dois que podem discordar.
+  const { data: cfgBon } = await supabaseAdmin
+    .from("carbo_config_fiscal")
+    .select("valor")
+    .like("chave", "%natureza_bonificacao%");
+  const NATUREZAS_BONIFICACAO = new Set(
+    (cfgBon ?? []).map((c: { valor: string }) => String(c.valor).trim()).filter(Boolean),
+  );
+  if (NATUREZAS_BONIFICACAO.size === 0) {
+    // ⚠️ Não aborta. Sem natureza configurada a detecção volta a ser só o
+    // sufixo — o comportamento de antes, que é ruim mas conhecido. Falhar aqui
+    // pararia o casamento de TODAS as notas por causa de um cadastro faltando.
+    console.warn("[bling-sync] nenhuma natureza de bonificacao configurada — detecção cai no sufixo -BON");
+  }
 
   let matched = 0, invalid = 0;
   // Regex tolerante (case-insensitive), em qualquer posição da observação:
@@ -1829,13 +1851,40 @@ async function matchNFesToOrders(
       updated_at: new Date().toISOString(),
     }).eq("id", nf.id);
 
-    // ⚠️ Qual das duas notas é esta?
+    // ⚠️ Qual das duas notas é esta? A NATUREZA responde — não a observação.
     //
-    // O pedido de bonificação leva `<numero>-BON` na observação, e a NF herda
-    // essa observação. Sem esta distinção as duas notas cairiam nas MESMAS
-    // colunas e a segunda processada sobrescreveria a primeira — qual delas
-    // ficaria registrada dependeria da ordem em que o sync as encontrasse.
-    const ehNotaBonificacao = new RegExp(`${orderNumber}-BON`, "i").test(obs);
+    // ── Por que o sufixo `-BON` foi abandonado (medido em 22/09/2026) ───────
+    //
+    // O desenho original mandava `<numero>-BON` na observação do pedido de
+    // remessa e esperava que a NF herdasse o texto. **Ele não herda.** O Bling
+    // substitui a observação pelo texto fiscal padrão da natureza e o número do
+    // pedido reaparece no fim, em formatos variados, sem o sufixo:
+    //
+    //   REMESSA DE MERCADORIA EM BONIFICACAO,CONCEDIDA…COBRANCA.V2026090052 -
+    //   …COBRANCA. V2026090044 Vendedor: Weider Moura
+    //   …COBRANCA. <br />V2026080089-Vendedor: Weider Moura
+    //
+    // Resultado medido: em 14 pedidos com remessa criada, `-BON` apareceu em
+    // ZERO notas. A detecção nunca disparou, `bling_nf_bonificacao_id` ficou
+    // nulo em 100% dos casos — e, pior, quando as duas notas casavam com o
+    // mesmo pedido, **qual delas ficava em `bling_nf_id` virava sorteio**,
+    // decidido pela ordem em que o sync as encontrava. Sete pedidos deram
+    // sorte; no `V2026090052` a nota de bonificação (R$ 208,80) substituiu a
+    // de venda (R$ 2.088,00) — e o pedido inteiro caiu do faturamento, porque
+    // a régua da natureza, corretamente, exclui nota de bonificação.
+    //
+    // O próprio comentário anterior previa esse modo de falha. O que faltava
+    // era um sinal que não dependesse de o Bling repassar texto nosso.
+    //
+    // ⚠️ A natureza é esse sinal: vem em 100% das notas (medido: 828/828 e
+    // 369/369), é cadastro do Bling e já está configurada nas duas contas.
+    // O sufixo fica como REDE — se um dia voltar a chegar, continua valendo.
+    const naturezaId = String(
+      (nf.raw_data as Record<string, any> | null)?.naturezaOperacao?.id ?? "",
+    ).trim();
+    const ehNotaBonificacao =
+      (naturezaId !== "" && NATUREZAS_BONIFICACAO.has(naturezaId)) ||
+      new RegExp(`${orderNumber}-BON`, "i").test(obs);
 
     // A regra de qual coluna preencher mora no BANCO (carbo_vincula_nf), perto
     // das colunas que ela governa.
