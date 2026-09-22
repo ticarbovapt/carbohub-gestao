@@ -87,6 +87,37 @@ const num = (v: unknown) => (v == null ? 0 : Number(v) || 0);
 const fmtDate = (s: string) => format(parseISO(s.length === 10 ? s + "T00:00:00" : s), "dd/MM/yyyy", { locale: ptBR });
 const effectiveDate = (r: CarbozeVendaRow) => r.sale_date ?? r.created_at.substring(0, 10);
 
+// ── Transbordo entre meses ───────────────────────────────────────────────────
+//
+// O par de datas que mede o transbordo é `created_at` × `data_efetiva`:
+//
+//   created_at    — quando a venda FOI FEITA (nasce com o pedido, nunca muda)
+//   data_efetiva  — coalesce(sale_date, created_at), e `sale_date` SEGUE O
+//                   FATURAMENTO (ver a nota em useCarbozeVendas)
+//
+// Quando o mês de criação é MENOR que o mês efetivo, a venda foi fechada num
+// mês e faturada no seguinte. É o caso do V2026080084 (Vonixx PB): criado em
+// 24/08, `sale_date` 01/09, NF 000407 — vendido em agosto por decisão
+// comercial, faturado em setembro.
+//
+// ⚠️ Por que NÃO `confirmed_at`/`invoiced_at`, que seriam os campos exatos:
+// `confirmed_at` tem 43 linhas de 1.376 (3%, nada antes de 13/07/2026) e
+// `invoiced_at` está 100% vazio. Este par aqui existe em todas as linhas.
+
+/** Mês (YYYY-MM) de uma data ISO. */
+const mesDe = (iso: string) => iso.substring(0, 7);
+
+/** Pedido importado da ponte do Bling (BLING-123) — não nasceu nesta tela. */
+const ehPedidoBling = (v: CarbozeVendaRow) => /^BLING-/i.test(v.order_number ?? "");
+
+/** Vendido num mês, faturado/efetivado no seguinte: o transbordo que ENTROU. */
+const veioDeMesAnterior = (v: CarbozeVendaRow) =>
+  mesDe(v.created_at) < mesDe(effectiveDate(v));
+
+/** Rótulo curto do mês de origem ("ago/26"), para marcar a linha. */
+const mesOrigemCurto = (v: CarbozeVendaRow) =>
+  format(parseISO(v.created_at.substring(0, 10) + "T00:00:00"), "MMM/yy", { locale: ptBR });
+
 // Endereço de entrega (colunas texto) → linha legível.
 function fmtEntrega(r: CarbozeVendaRow): string | null {
   const cityUf = [r.delivery_city, r.delivery_state].filter(Boolean).join("/");
@@ -165,7 +196,11 @@ export default function Vendas() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   // Filtro por KPI (clicar no card): mostra na tabela só o que alimenta o card.
-  const [kpiFilter, setKpiFilter] = useState<"vendido" | "faturado" | "aguardando" | "orcamento" | "cancelado" | null>(null);
+  const [kpiFilter, setKpiFilter] = useState<"vendido" | "faturado" | "aguardando" | "entrou" | "orcamento" | "cancelado" | null>(null);
+  // Pedidos da ponte do Bling saem da lista por padrão: não têm vendedor nem
+  // cidade (a ponte não atribui), então enchem a tabela de linhas que ninguém
+  // desta tela fez. Fica visível e reversível — ver o chip abaixo dos KPIs.
+  const [ocultarBling, setOcultarBling] = useState(true);
 
   const hasCustomRange = !!(customFrom || customTo);
   const clearCustomRange = () => { setCustomFrom(""); setCustomTo(""); };
@@ -317,13 +352,25 @@ export default function Vendas() {
     }
   }
 
-  const filtered = useMemo(() => {
+  const porVendedor = useMemo(() => {
     // Com busca ativa o banco já devolveu o resultado certo (histórico inteiro,
     // todos os campos). Refiltrar aqui por vendedor desfaria justamente o que
     // a busca global promete.
     if (buscaAtiva) return rows;
     return rows.filter((v) => vendedorFilter === "__all__" || v.vendedor_id === vendedorFilter);
   }, [rows, vendedorFilter, buscaAtiva]);
+
+  // Quantos pedidos Bling o recorte tem — contado ANTES de escondê-los, senão
+  // o chip não teria como dizer o que está fora.
+  const blingNoRecorte = useMemo(() => porVendedor.filter(ehPedidoBling), [porVendedor]);
+
+  // ⚠️ `filtered` alimenta TODOS os cards. Esconder Bling muda os totais, e é
+  // por isso que o chip logo abaixo dos KPIs diz quantos e quanto estão fora —
+  // total que muda sem explicação na tela é como se estivesse errado.
+  const filtered = useMemo(
+    () => (ocultarBling ? porVendedor.filter((v) => !ehPedidoBling(v)) : porVendedor),
+    [porVendedor, ocultarBling],
+  );
 
   const sum = (list: CarbozeVendaRow[]) => list.reduce((s, v) => s + v.total, 0);
 
@@ -378,18 +425,35 @@ export default function Vendas() {
   // Quanto do que foi vendido no mês ainda não virou nota — o transbordo.
   const pctBacklog = totalVendido > 0 ? (totalAguardando / totalVendido) * 100 : 0;
 
+  // ── O BACKLOG QUE ENTROU ───────────────────────────────────────────────────
+  //
+  // O card "Aguardando" mede o que SAI: vendido neste mês, ainda sem nota, vai
+  // pesar no mês que vem. Faltava o outro lado — o que ENTROU: venda fechada
+  // em mês anterior que só apareceu no resultado deste.
+  //
+  // Sem os dois, o mês parece ter vendido o que faturou. Em setembro/2026,
+  // R$ 74.432 dos R$ 196.033 (38%) foram fechados em agosto ou antes.
+  //
+  // ⚠️ Estes pedidos JÁ ESTÃO dentro de "Total vendido" — o card é um recorte
+  // dele, não uma parcela a somar. Somar os seis daria o mês duas vezes.
+  const veioAntes = active.filter(veioDeMesAnterior);
+  const totalVeioAntes = sum(veioAntes);
+  const pctVeioAntes = totalVendido > 0 ? (totalVeioAntes / totalVendido) * 100 : 0;
+
   // Filtro do card clicado — só sobre a TABELA (os totais dos KPIs seguem no total).
   const tableRows = filtered.filter((v) => {
     if (!kpiFilter) return true;
     if (kpiFilter === "vendido") return isActive(v);
     if (kpiFilter === "faturado") return isFaturada(v);
     if (kpiFilter === "aguardando") return isAguardando(v);
+    if (kpiFilter === "entrou") return isActive(v) && veioDeMesAnterior(v);
     if (kpiFilter === "orcamento") return v.status === "quote";
     return estaCancelada(v);
   });
   const toggleKpi = (k: NonNullable<typeof kpiFilter>) => setKpiFilter((cur) => (cur === k ? null : k));
   const KPI_LABEL: Record<NonNullable<typeof kpiFilter>, string> = {
-    vendido: "Total vendido", faturado: "Total faturado", aguardando: "Aguardando faturamento", orcamento: "Em orçamento", cancelado: "Canceladas",
+    vendido: "Total vendido", faturado: "Total faturado", aguardando: "Aguardando faturamento",
+    entrou: "Veio de meses anteriores", orcamento: "Em orçamento", cancelado: "Canceladas",
   };
 
   return (
@@ -431,7 +495,7 @@ export default function Vendas() {
             vem. Orçamento e Cancelada ficam de fora da conta de propósito:
             orçamento ainda não é venda, cancelada deixou de ser.
             Para colaborador (vê só o próprio), a query já limita ao vendedor. */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           <CarboCard onClick={() => toggleKpi("vendido")}
             className={`cursor-pointer transition ${kpiFilter === "vendido" ? "ring-2 ring-violet-400/60" : "hover:bg-muted/20"}`}>
             <CarboCardContent className="p-3 text-center">
@@ -462,6 +526,17 @@ export default function Vendas() {
               </p>
             </CarboCardContent>
           </CarboCard>
+          <CarboCard onClick={() => toggleKpi("entrou")}
+            className={`cursor-pointer transition ${kpiFilter === "entrou" ? "ring-2 ring-cyan-400/60" : "hover:bg-muted/20"}`}>
+            <CarboCardContent className="p-3 text-center">
+              <p className="text-xl font-bold text-cyan-400 tabular-nums">{fmtBRL(totalVeioAntes)}</p>
+              <p className="text-xs text-muted-foreground">Veio de meses anteriores</p>
+              <p className="text-[10px] text-muted-foreground/70 mt-0.5">
+                {veioAntes.length} venda(s) transbordada(s)
+                {totalVendido > 0 && ` · ${pctVeioAntes.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}% do vendido`}
+              </p>
+            </CarboCardContent>
+          </CarboCard>
           <CarboCard onClick={() => toggleKpi("orcamento")}
             className={`cursor-pointer transition ${kpiFilter === "orcamento" ? "ring-2 ring-sky-400/60" : "hover:bg-muted/20"}`}>
             <CarboCardContent className="p-3 text-center">
@@ -478,14 +553,37 @@ export default function Vendas() {
             </CarboCardContent>
           </CarboCard>
         </div>
-        {kpiFilter && (
-          <div className="flex items-center gap-2 text-xs text-muted-foreground -mt-2">
-            <span>Filtrando por <strong className="text-foreground">{KPI_LABEL[kpiFilter]}</strong> ({tableRows.length})</span>
-            <button className="inline-flex items-center gap-1 text-primary hover:underline" onClick={() => setKpiFilter(null)}>
-              <X className="h-3 w-3" /> limpar
-            </button>
-          </div>
-        )}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground -mt-2">
+          {kpiFilter && (
+            <span className="flex items-center gap-2">
+              Filtrando por <strong className="text-foreground">{KPI_LABEL[kpiFilter]}</strong> ({tableRows.length})
+              <button className="inline-flex items-center gap-1 text-primary hover:underline" onClick={() => setKpiFilter(null)}>
+                <X className="h-3 w-3" /> limpar
+              </button>
+            </span>
+          )}
+
+          {/* ⚠️ O chip aparece mesmo com zero Bling no recorte, de propósito:
+              é ele que explica por que o total desta tela pode não bater com
+              outra. Escondido quando não há nada escondido, a pessoa procuraria
+              a diferença no lugar errado. */}
+          <label className="flex cursor-pointer items-center gap-1.5 select-none">
+            <input
+              type="checkbox"
+              className="h-3.5 w-3.5 accent-current cursor-pointer"
+              checked={ocultarBling}
+              onChange={(e) => setOcultarBling(e.target.checked)}
+            />
+            <span>
+              Ocultar pedidos Bling
+              {blingNoRecorte.length > 0 && (
+                <strong className="text-foreground">
+                  {" "}({blingNoRecorte.length} · {fmtBRL(blingNoRecorte.reduce((s, v) => s + v.total, 0))})
+                </strong>
+              )}
+            </span>
+          </label>
+        </div>
 
         {/* Filtros */}
         <div className="flex gap-2 flex-wrap">
@@ -599,7 +697,28 @@ export default function Vendas() {
                           )}
                           <td className="p-3">{(() => { const b = statusBadge(venda); return <CarboBadge variant={b.variant} size="sm">{b.label}</CarboBadge>; })()}</td>
                           <td className="p-3 font-mono text-xs font-medium">{venda.order_number}</td>
-                          <td className="p-3 text-muted-foreground whitespace-nowrap">{fmtDate(effectiveDate(venda))}{venda.sale_date && venda.sale_date !== venda.created_at.substring(0, 10) && <span className="ml-1 text-[10px] text-amber-500 font-medium">✱</span>}</td>
+                          {/* ⚠️ Duas marcas DIFERENTES, e a distinção importa:
+                              ✱ (âmbar) = `sale_date` foi corrigida — pode ser
+                                  dentro do mesmo mês, não diz nada de caixa;
+                              ↩ mês (ciano) = a venda MUDOU DE MÊS, foi fechada
+                                  num mês e faturada no seguinte. É o transbordo.
+                              Só o ✱ existia, e ele acende nos dois casos — quem
+                              procurasse transbordo por ele acharia o dobro. */}
+                          <td className="p-3 text-muted-foreground whitespace-nowrap">
+                            {fmtDate(effectiveDate(venda))}
+                            {veioDeMesAnterior(venda) ? (
+                              <span
+                                className="ml-1.5 rounded bg-cyan-500/15 px-1 py-0.5 text-[9px] font-semibold uppercase text-cyan-400"
+                                title={`Vendido em ${mesOrigemCurto(venda)} e faturado neste mês — transbordo`}
+                              >
+                                ↩ {mesOrigemCurto(venda)}
+                              </span>
+                            ) : (
+                              venda.sale_date && venda.sale_date !== venda.created_at.substring(0, 10) && (
+                                <span className="ml-1 text-[10px] text-amber-500 font-medium" title="Data da venda corrigida">✱</span>
+                              )
+                            )}
+                          </td>
                           <td className="p-3 font-medium max-w-[180px] truncate">{venda.customer_name}</td>
                           <td className="p-3 text-muted-foreground whitespace-nowrap">{[venda.delivery_city, venda.delivery_state].filter(Boolean).join("/") || "—"}</td>
                           {isHead && (
