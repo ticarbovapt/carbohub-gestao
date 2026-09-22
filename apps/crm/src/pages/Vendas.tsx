@@ -1,4 +1,5 @@
 import { useState, useMemo, Fragment } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { format, startOfMonth, addMonths, subMonths, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
@@ -102,6 +103,56 @@ function fmtFaturamento(e: Record<string, unknown> | null): string | null {
   return [l1, l2, cep].filter(Boolean).join(" — ") || null;
 }
 
+/**
+ * Quem CRIOU cada pedido — id → nome.
+ *
+ * ⚠️ Por que uma consulta À PARTE, e não mais um campo no `useCarbozeVendas`:
+ * aquele hook tem SETE cópias e elas NÃO são idênticas (só o CRM tem o
+ * `FILTRO_VENDA_DO_TIME`). Esta tela existe só no `apps/crm`, e um export novo
+ * lá dentro aumentaria a divergência entre as sete por uma coluna que só uma
+ * delas mostra. Aqui o custo fica contido.
+ *
+ * ⚠️ E lê `created_by_name`, não `created_by`: `public.profiles` tem RLS por
+ * departamento, então resolver o uuid na tela daria o nome para o gestor e um
+ * travessão para o vendedor — o mesmo dado valendo duas coisas conforme quem
+ * olha. O nome é gravado no ato da criação pelo gatilho
+ * `trg_carboze_orders_marca_criador` (`20260997`), como `vendedor_name` já era.
+ *
+ * ⚠️ Nulo é ESPERADO no histórico: o `/vender` não gravava criador até
+ * 22/09/2026, e ponte/sync (service role) não têm `auth.uid()`. A tela mostra
+ * "—" — nunca o vendedor no lugar, que apagaria a distinção inteira.
+ */
+function useCriadorDasVendas(rows: CarbozeVendaRow[]) {
+  const ids = useMemo(
+    () => Array.from(new Set(rows.map((r) => r.id))).sort(),
+    [rows],
+  );
+  const { data } = useQuery({
+    // A chave é o CONJUNTO de ids: rolar o mês refaz a consulta, reabrir o
+    // mesmo mês reaproveita.
+    queryKey: ["carboze_criador", ids],
+    enabled: ids.length > 0,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async (): Promise<Record<string, string>> => {
+      const m: Record<string, string> = {};
+      // Em fatias: `in(...)` vira querystring, e uma lista longa estoura o
+      // limite de URL do PostgREST — que devolve 414, não uma lista curta.
+      for (let i = 0; i < ids.length; i += 200) {
+        const { data: parte, error } = await (supabase as any)
+          .from("carboze_orders")
+          .select("id, created_by_name")
+          .in("id", ids.slice(i, i + 200));
+        if (error) throw error;
+        for (const r of (parte ?? []) as { id: string; created_by_name: string | null }[]) {
+          if (r.created_by_name) m[r.id] = r.created_by_name;
+        }
+      }
+      return m;
+    },
+  });
+  return data ?? {};
+}
+
 export default function Vendas() {
   const { user, isGestor } = useAuth();
   const isHead = isGestor;
@@ -130,6 +181,7 @@ export default function Vendas() {
     month, customFrom, customTo, vendedorFilter, isGestor, userId: user?.id, search,
   });
   const { data: dir = [] } = useVendedoresDir();
+  const criadoPorId = useCriadorDasVendas(rows);
   const convert = useConvertQuote();
   const navigate = useNavigate();
   const bulkAssign = useBulkAssignVendedor();
@@ -455,7 +507,13 @@ export default function Vendas() {
                     <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Data</th>
                     <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Cliente</th>
                     <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Cidade/UF</th>
+                    {/* ⚠️ "Vendedor" e "Criado por" são perguntas DIFERENTES e
+                        andam juntas: a primeira é de quem é a venda (e a
+                        comissão), a segunda é quem digitou. Elas coincidem na
+                        maioria das linhas — e é justamente por isso que a
+                        divergência precisa aparecer, em vez de ser presumida. */}
                     {isHead && <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Vendedor</th>}
+                    {isHead && <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide whitespace-nowrap">Criado por</th>}
                     <th className="text-right p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Total</th>
                     <th className="text-right p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide whitespace-nowrap">Ações</th>
                   </tr>
@@ -472,6 +530,12 @@ export default function Vendas() {
                       ? num(venda.discount_percent)
                       : (subtotalDet && subtotalDet > 0 ? Math.round((descontoDet / subtotalDet) * 10000) / 100 : 0);
                     const vendedorNome = (venda.vendedor_id && nomeById[venda.vendedor_id]) || venda.vendedor_name || null;
+                    const criadorNome = criadoPorId[venda.id] ?? null;
+                    // Compara NOME contra NOME porque é o que os dois lados têm:
+                    // `vendedorNome` já vem resolvido do diretório, e o criador é
+                    // desnormalizado. Homônimo empataria — e empatar aqui só deixa
+                    // de destacar uma linha, nunca inventa uma divergência.
+                    const criadorDiferente = !!criadorNome && !!vendedorNome && criadorNome !== vendedorNome;
                     const buyerNotes = venda.buyer_notes && venda.buyer_notes !== venda.notes ? venda.buyer_notes : null;
                     const generalNotes = venda.general_notes && venda.general_notes !== venda.notes && venda.general_notes !== venda.buyer_notes ? venda.general_notes : null;
                     return (
@@ -495,6 +559,23 @@ export default function Vendas() {
                           {isHead && (
                             <td className="p-3 text-muted-foreground">
                               <span>{(venda.vendedor_id && nomeById[venda.vendedor_id]) || venda.vendedor_name || "—"}</span>
+                            </td>
+                          )}
+                          {isHead && (
+                            <td className="p-3 text-muted-foreground">
+                              {criadorNome ? (
+                                <span className={criadorDiferente ? "font-medium text-amber-500" : undefined}
+                                  title={criadorDiferente
+                                    ? "Lançada por uma pessoa e atribuída a outra"
+                                    : "Quem lançou é o próprio vendedor"}>
+                                  {criadorNome}
+                                </span>
+                              ) : (
+                                // ⚠️ "—" e não o nome do vendedor: venda anterior a
+                                // 22/09/2026 não tem criador gravado, e chutar que foi
+                                // ele apagaria exatamente o que esta coluna mostra.
+                                <span title="Não registrado — venda anterior ao registro de autoria, ou criada por integração">—</span>
+                              )}
                             </td>
                           )}
                           <td className="p-3 text-right font-bold tabular-nums">{fmtBRL(venda.total)}</td>
@@ -559,7 +640,10 @@ export default function Vendas() {
                         </tr>
                         {expandedId === venda.id && (
                           <tr className="border-b bg-muted/10">
-                            <td colSpan={isHead ? 9 : 7} className="px-6 py-4 space-y-4">
+                            {/* ⚠️ +1 no ramo `isHead`: entrou a coluna "Criado por".
+                                colSpan errado não dá erro — desalinha a faixa de
+                                detalhe e some com a borda da última coluna. */}
+                            <td colSpan={isHead ? 10 : 7} className="px-6 py-4 space-y-4">
                               {/* Cliente */}
                               <div>
                                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Cliente</p>
@@ -682,10 +766,22 @@ export default function Vendas() {
                                 </div>
                               )}
 
-                              {/* Vendedor / Nº pedido de compra do cliente */}
-                              {(vendedorNome || venda.po_number) && (
+                              {/* Vendedor / Criado por / Nº pedido de compra do cliente */}
+                              {(vendedorNome || criadorNome || venda.po_number) && (
                                 <div className="grid sm:grid-cols-2 gap-x-6 gap-y-1 text-xs">
                                   {vendedorNome && <div><span className="text-muted-foreground">Vendedor:</span> <span className="font-medium">{vendedorNome}</span></div>}
+                                  {/* ⚠️ Só aparece quando DIFERE do vendedor. Repetir o
+                                      mesmo nome duas linhas abaixo não informa nada e
+                                      esconde o caso que importa no meio do ruído — a
+                                      faixa de detalhe já é longa. Na TABELA ela aparece
+                                      sempre, porque lá a coluna precisa existir para
+                                      poder ser comparada linha a linha. */}
+                                  {criadorDiferente && (
+                                    <div>
+                                      <span className="text-muted-foreground">Criado por:</span>{" "}
+                                      <span className="font-medium text-amber-500">{criadorNome}</span>
+                                    </div>
+                                  )}
                                   {venda.po_number && <div><span className="text-muted-foreground">Nº pedido de compra (cliente):</span> <span className="font-medium">{venda.po_number}</span></div>}
                                 </div>
                               )}
