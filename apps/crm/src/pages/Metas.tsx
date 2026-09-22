@@ -68,7 +68,7 @@ type PeriodView = "mensal" | "semanal";
 
 // ── Top3Card (mensal) ────────────────────────────────────────────────────
 function Top3Card({ entries, label, canSeeValues }: {
-  entries: Array<{ rank: number; vendedor_id: string; total: number; profile: VendedorProfile | null }>;
+  entries: Array<{ rank: number; vendedor_id: string; total: number; pct: number | null; profile: VendedorProfile | null }>;
   label: string; canSeeValues: boolean;
 }) {
   if (entries.length === 0) return null;
@@ -100,7 +100,9 @@ function Top3Card({ entries, label, canSeeValues }: {
                     <ProfileAvatar avatarUrl={e.profile?.avatar_url} fullName={e.profile?.full_name} userId={e.vendedor_id} size={place === 1 ? 76 : 56} square />
                   </div>
                   <p className="text-xs font-semibold text-center max-w-[88px] truncate mt-1.5">{e.profile?.full_name?.split(" ")[0] || "—"}</p>
-                  {canSeeValues && <p className="text-[11px] text-muted-foreground tabular-nums">{fmtBRL(e.total)}</p>}
+                  {canSeeValues
+                    ? <p className="text-[11px] text-muted-foreground tabular-nums">{fmtBRL(e.total)}</p>
+                    : e.pct != null && <p className="text-[11px] text-muted-foreground tabular-nums">{e.pct.toFixed(0)}%</p>}
                   <div className={`mt-1.5 w-full ${stepH[place]} rounded-t-lg border-t-2 ${stepBg[place]} flex items-start justify-center pt-1`}>
                     <span className="text-lg font-black text-foreground/60">{place}º</span>
                   </div>
@@ -194,9 +196,27 @@ export default function Metas() {
   const [periodView, setPeriodView] = useState<PeriodView>("mensal");
   const [weekStart, setWeekStart] = useState(() => commercialWeekStartOf(new Date()));
 
-  // Só gestor (head/command/ti) vê valores em R$. Vendedor vê apenas % da própria meta.
   const { isGestor } = useAuth();
-  const canSeeValues = isGestor;
+
+  // ⚠️ VALOR EM R$ NÃO APARECE NESTA TELA — para NINGUÉM, nem gestor.
+  //
+  // Esta é a tela que o time de vendas abre o dia inteiro, e ela fica exposta
+  // em reunião, em tela compartilhada e no celular de quem está em campo. O
+  // que ela precisa responder é "estamos na meta?", e isso é percentual.
+  //
+  // O número em R$ continua existindo e explícito no Carbo Admin, em
+  // Dashboards → Metas (Placar). A regra é de TELA, não de dado: a mesma
+  // fonte (`useMetasVendedores`) alimenta as duas, e o Admin mostra o valor.
+  //
+  // Era `isGestor`. Virou `false` fixo, e não foi apagado junto com os `&&`
+  // que dependem dele de propósito: um dia isto pode voltar a ser uma regra
+  // por perfil, e o caminho do valor continua montado e testado.
+  const canSeeValues: boolean = false;
+
+  // ⚠️ `isGestor` continua decidindo o ESCOPO — time inteiro × meta própria —
+  // e os rótulos. Eram a MESMA flag, e por isso desligar o valor trocaria
+  // "Total do Time" por "Sua meta do mês" na tela do gestor, que continua
+  // vendo o time. Duas perguntas diferentes, duas variáveis.
 
   // ── Dados reais ──
   const { data: metas = [] } = useMetasVendedores(month, weekStart);
@@ -255,7 +275,16 @@ export default function Metas() {
   const teamProjKey = (teamProjPct === null ? "gray" : teamProjPct >= 100 ? "green" : teamProjPct >= 85 ? "yellow" : "red") as keyof typeof COLOR_MAP;
   const teamProjColors = COLOR_MAP[teamProjKey];
 
-  const monthlyTop3 = filteredTargets.slice(0, 3).map((t, idx) => ({ rank: idx + 1, vendedor_id: t.vendedor_id, total: t.actual_amount || 0, profile: t.vendedor || null }));
+  // `pct` entrou junto com `total`: sem valor em R$ na tela, o pódio ficaria
+  // com nome e medalha e nenhum número — o semanal já mostrava percentual, e
+  // os dois pódios da mesma tela não podem falar línguas diferentes.
+  const monthlyTop3 = filteredTargets.slice(0, 3).map((t, idx) => ({
+    rank: idx + 1,
+    vendedor_id: t.vendedor_id,
+    total: t.actual_amount || 0,
+    pct: t.target_amount > 0 ? ((t.actual_amount || 0) / t.target_amount) * 100 : null,
+    profile: t.vendedor || null,
+  }));
 
   return (
     <div className="p-4 md:p-6 space-y-5 max-w-4xl mx-auto">
@@ -330,7 +359,7 @@ export default function Metas() {
             <CarboCardContent className="p-4">
               <div className="flex items-center justify-between gap-4 mb-3">
                 <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wider">{canSeeValues ? "Total do Time" : "Sua meta do mês"}</p>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider">{isGestor ? "Total do Time" : "Sua meta do mês"}</p>
                   {canSeeValues ? (
                     <div className="flex items-end gap-2 mt-0.5">
                       <p className={`text-2xl font-bold tabular-nums ${totalColors.text}`}>{fmtBRL(totalActual)}</p>
@@ -353,7 +382,8 @@ export default function Metas() {
                       <p className="text-[10px] text-muted-foreground">precisa/dia</p>
                     </div>
                   )}
-                  {canSeeValues && (
+                  {/* Contagem, não valor — fica para o gestor mesmo sem R$. */}
+                  {isGestor && (
                     <div className="text-center">
                       <p className="text-lg font-bold tabular-nums">{hitting}/{targetsData.length}</p>
                       <p className="text-[10px] text-muted-foreground">na meta</p>
@@ -369,7 +399,7 @@ export default function Metas() {
               {teamProjPct !== null && (
                 <div className="flex items-center gap-1.5 text-xs mt-2 pt-2 border-t border-border/50">
                   <TrendingUp className="h-3 w-3 text-muted-foreground shrink-0" />
-                  <span className="text-muted-foreground">Projeção {canSeeValues ? "do time " : ""}ao fim do mês:</span>
+                  <span className="text-muted-foreground">Projeção {isGestor ? "do time " : ""}ao fim do mês:</span>
                   {canSeeValues && <span className={`font-bold ${teamProjColors.text}`}>{fmtBRL(teamProjected)}</span>}
                   <CarboBadge variant={teamProjColors.badge} size="sm">{fmtPct(teamProjPct)}</CarboBadge>
                 </div>
