@@ -1856,6 +1856,62 @@ aquela lista significa por causa de um caso vizinho. A view expõe `nf_invalida`
 como **coluna booleana própria**, calculada fora do CASE e imune à ordem; é por
 ela que se filtra. Caso novo no CASE ⇒ confira quem filtra por string.
 
+### ⚠️ O Bling NÃO devolve a observação que mandamos — e isso quebrou as DUAS notas
+Medido em 22/09/2026, investigando por que a logística não conseguia imprimir a
+nota de remessa no Rastreio.
+
+Venda com brinde gera **duas notas**: a de venda, com valor cheio, e a remessa
+em bonificação, que acompanha a caixa separada. A `20260903` desenhou o fluxo
+certo — pedido `-BON` próprio no Bling, e o `bling-sync` lendo esse sufixo na
+observação da NF para decidir em qual coluna gravar.
+
+**O Bling não herda a observação.** Ele a substitui pelo texto fiscal padrão da
+natureza, e o número do pedido reaparece no fim, em formatos variados:
+
+```
+REMESSA DE MERCADORIA EM BONIFICACAO,CONCEDIDA…COBRANCA.V2026090052 -
+…COBRANCA. V2026090044 Vendedor: Weider Moura
+…COBRANCA. <br />V2026080089-Vendedor: Weider Moura
+```
+
+Medição: **14 pedidos com remessa criada, `-BON` em ZERO notas.**
+
+⚠️ **Um defeito, dois erros OPOSTOS, e qual aparecia era sorte.**
+`bling_nf_bonificacao_id` ficou nulo em 100% dos casos (a logística nunca teve a
+segunda nota) — e, quando as duas notas casavam com o mesmo pedido, **qual
+ficava em `bling_nf_id` dependia da ordem em que o sync as encontrava**. Sete
+pedidos deram sorte; no `V2026090052` a nota de bonificação (R$ 208,80) tomou o
+lugar da de venda (R$ 2.088,00) e o pedido **caiu do faturamento** — porque a
+régua da natureza, corretamente, exclui bonificação. O comentário do próprio
+código previa esse modo de falha e ninguém tinha medido se ele acontecia.
+
+Hoje quem decide é a **NATUREZA** (`bling-sync` + `20260996`): ela vem em 100%
+das notas, é cadastro do Bling e **já governava o faturamento**. Um sinal para as
+duas decisões, em vez de dois que podem discordar. O sufixo fica como rede.
+
+1. ⚠️ **Sinal que depende de o terceiro devolver texto NOSSO é frágil por
+   construção.** Não havia como o `-BON` sobreviver: ele competia com o campo que
+   o próprio Bling preenche a partir do cadastro fiscal.
+2. ✅ **A `20260996` corrigiu o passado e o faturamento SUBIU**: 1.196 →
+   **1.197 pedidos**, R$ 897.977,02 → **R$ 900.065,02** (+R$ 2.088,00, o
+   `V2026090052`). Migração de bonificação que aumenta faturamento parece
+   contraditória — e é o sinal de que o defeito tinha dois lados.
+3. ⚠️ **Ela só age onde há UMA nota de cada tipo.** Pedido com duas notas de
+   venda é ambiguidade, e escolher uma enterraria a dúvida — a mesma regra da
+   carga de PDV que não insere quando o nome bate com duas linhas.
+4. ⚠️ **"ESPERADO: ZERO" na conferência estava errado** e voltaram três
+   (`BLING-21`, `BLING-61`, `BLING-72`): pedidos **só de bonificação**, com uma
+   nota e nenhuma de venda. Não há o que devolver, e eles seguem fora do
+   faturamento corretamente. Número esperado escrito sem enumerar os casos vira
+   falso alarme.
+5. **A tela era a terceira vítima, não a causa.** `usePosVenda` monta a lista de
+   colunas à mão e não trazia as três de bonificação — coluna ausente ali não dá
+   erro, dá campo vazio. Hoje o Rastreio mostra as duas notas com DANFE e XML, e
+   **diz em âmbar** quando o pedido tem item bonificado e a nota de remessa não
+   está vinculada: despachar assim manda a caixa sem documento.
+   ⚠️ O código de barras da etiqueta continua sendo o da nota de **venda** — a
+   etiqueta identifica a carga faturada, a bonificação viaja junto.
+
 ### ⚠️ A COMISSÃO tem definição PRÓPRIA de "pedido faturado"
 `/comissionamento` não lê `carbo_vendas_metrica`. As duas RPCs
 (`crm_comissao_agregado`, `crm_comissao_detalhe`) leem `carboze_orders` direto:

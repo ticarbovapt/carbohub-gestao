@@ -95,6 +95,20 @@ export interface PosVendaOrder {
   linha: string | null;
   bling_nf_id: number | null;      // NF vinculada (Faturamento/Bling) → NF finalizada
   invoice_number: string | null;   // nº da NF-e, quando emitida
+  // ── A SEGUNDA nota: a remessa de bonificação ──────────────────────────────
+  //
+  // ⚠️ Venda com brinde gera DUAS notas, e a logística precisa das duas para
+  // despachar — a de venda e a de remessa em bonificação, que acompanha a caixa
+  // separada. Sem estas colunas a tela avisava "caixa separada de bonificação"
+  // e não tinha como entregar o documento dela.
+  //
+  // Elas só passaram a ter valor em 22/09/2026: até ali o `bling-sync`
+  // procurava o sufixo `-BON` na observação da NF, que o Bling nunca devolve —
+  // `bling_nf_bonificacao_id` era nulo em 100% dos pedidos. Hoje quem decide é
+  // a natureza da operação.
+  bling_nf_bonificacao_id: number | null;
+  invoice_bonificacao_number: string | null;
+  nf_bonificacao_access_key: string | null;
   shipment_volumes: number | null;    // volumes informados na expedição (etiqueta)
   shipment_weight_kg: number | null;  // peso bruto (kg) informado na expedição (etiqueta)
   shipment_carrier: string | null;    // transportadora do envio (etiqueta)
@@ -112,7 +126,11 @@ const SELECT_BASE =
   "delivery_state, delivery_zip, vendedor_name, vendedor_id, subtotal, shipping_cost, discount, total, " +
   "notes, items, created_at, updated_at, stage_changed_at, fulfillment_stage, linha, bling_nf_id, invoice_number, " +
   "shipment_volumes, shipment_weight_kg, shipment_carrier, shipment_quote_value, status, " +
-  "nf_access_key, scheduled_month, recurrence_index, recurrence_total";
+  "nf_access_key, scheduled_month, recurrence_index, recurrence_total, " +
+  // ⚠️ A lista é escrita À MÃO: coluna que não estiver aqui simplesmente não
+  // chega, e o campo aparece vazio na tela sem erro nenhum. Foi assim que a
+  // segunda nota ficou invisível para a logística.
+  "bling_nf_bonificacao_id, invoice_bonificacao_number, nf_bonificacao_access_key";
 const SELECT_COLS = SELECT_BASE + ", production_done";
 
 // Etapas terminais do rastreio (colunas que só acumulam).

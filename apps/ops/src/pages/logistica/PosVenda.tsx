@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import {
   usePosVendaOrders, usePosVendaRealtime, useUpdateFulfillmentStage, useUpdateShipmentInfo,
-  useHubRnStock, useOpsBySource, fetchNfFiles,
+  useHubRnStock, useOpsBySource, fetchNfFiles, type NfFiles,
   POSVENDA_STAGES, type FulfillmentStage, type PosVendaOrder,
 } from "@/hooks/usePosVenda";
 import { gerarEtiquetaPDF, type EtiquetaData } from "@/lib/etiquetaPdf";
@@ -215,14 +215,32 @@ export default function PosVenda() {
   // ── Emitir etiqueta (SÓ LEITURA — dados vêm do card; edição é no detalhe) ──
   const [etiquetaOrder, setEtiquetaOrder] = useState<PosVendaOrder | null>(null);
   const [etqChave, setEtqChave] = useState<string | null>(null);
+  // ⚠️ As DUAS notas do pedido. Venda com brinde despacha com a nota de venda
+  // MAIS a remessa de bonificação, que acompanha a caixa separada — sem as duas
+  // o transporte recusa a carga. A tela já avisava da caixa; faltava o papel.
+  const [etqNfs, setEtqNfs] = useState<{ venda: NfFiles | null; bonificacao: NfFiles | null }>(
+    { venda: null, bonificacao: null },
+  );
   const [gerando, setGerando] = useState(false);
   useEffect(() => {
-    if (etiquetaOrder) {
-      setEtqChave(null);
-      // Busca best-effort a chave de acesso da NF (código de barras). Não bloqueia.
-      if (etiquetaOrder.bling_nf_id) {
-        fetchNfFiles(etiquetaOrder.bling_nf_id).then((nf) => setEtqChave(nf?.chave_acesso ?? null)).catch(() => {});
-      }
+    if (!etiquetaOrder) return;
+    setEtqChave(null);
+    setEtqNfs({ venda: null, bonificacao: null });
+
+    // Busca best-effort. Nenhuma das duas bloqueia a emissão da etiqueta: NF
+    // indisponível cai para o nº do pedido no código de barras, como sempre.
+    if (etiquetaOrder.bling_nf_id) {
+      fetchNfFiles(etiquetaOrder.bling_nf_id).then((nf) => {
+        // ⚠️ O código de barras é o da nota de VENDA, nunca o da remessa. A
+        // etiqueta identifica a carga faturada; a bonificação viaja junto.
+        setEtqChave(nf?.chave_acesso ?? null);
+        setEtqNfs((a) => ({ ...a, venda: nf }));
+      }).catch(() => {});
+    }
+    if (etiquetaOrder.bling_nf_bonificacao_id) {
+      fetchNfFiles(etiquetaOrder.bling_nf_bonificacao_id)
+        .then((nf) => setEtqNfs((a) => ({ ...a, bonificacao: nf })))
+        .catch(() => {});
     }
   }, [etiquetaOrder]);
 
@@ -705,10 +723,47 @@ export default function PosVenda() {
                     {etiquetaOrder.delivery_zip ? ` · CEP ${etiquetaOrder.delivery_zip}` : ""}
                   </p>
                 )}
+                {/* ── As notas que viajam com a carga ──────────────────────
+                    ⚠️ Venda com bonificação despacha com DUAS: a de venda e a
+                    remessa em bonificação, que acompanha a caixa separada. O
+                    transporte recusa a carga sem a segunda. */}
                 <p className="flex items-center gap-1.5">
                   <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-                  NF: <span className="font-medium">{etiquetaOrder.invoice_number || (etiquetaOrder.bling_nf_id ? `#${etiquetaOrder.bling_nf_id}` : "—")}</span>
+                  NF venda: <span className="font-medium">{etiquetaOrder.invoice_number || (etiquetaOrder.bling_nf_id ? `#${etiquetaOrder.bling_nf_id}` : "—")}</span>
+                  {etqNfs.venda?.pdf_url && (
+                    <a href={etqNfs.venda.pdf_url} target="_blank" rel="noopener noreferrer"
+                       className="underline text-primary">DANFE</a>
+                  )}
+                  {etqNfs.venda?.xml_url && (
+                    <a href={etqNfs.venda.xml_url} target="_blank" rel="noopener noreferrer"
+                       className="underline text-muted-foreground">XML</a>
+                  )}
                 </p>
+                {etiquetaOrder.bling_nf_bonificacao_id ? (
+                  <p className="flex items-center gap-1.5">
+                    <Gift className="h-3.5 w-3.5 text-amber-500" />
+                    NF bonificação: <span className="font-medium">
+                      {etiquetaOrder.invoice_bonificacao_number || `#${etiquetaOrder.bling_nf_bonificacao_id}`}
+                    </span>
+                    {etqNfs.bonificacao?.pdf_url && (
+                      <a href={etqNfs.bonificacao.pdf_url} target="_blank" rel="noopener noreferrer"
+                         className="underline text-primary">DANFE</a>
+                    )}
+                    {etqNfs.bonificacao?.xml_url && (
+                      <a href={etqNfs.bonificacao.xml_url} target="_blank" rel="noopener noreferrer"
+                         className="underline text-muted-foreground">XML</a>
+                    )}
+                  </p>
+                ) : itensBonificados(etiquetaOrder.items).length > 0 ? (
+                  /* ⚠️ Item bonificado no pedido e NENHUMA nota de remessa.
+                     Dizer isto é o ponto: despachar assim manda a caixa sem
+                     documento, e o silêncio faria o conferente presumir que
+                     não havia segunda nota. */
+                  <p className="flex items-center gap-1.5 text-amber-500">
+                    <Gift className="h-3.5 w-3.5" />
+                    Tem bonificação e a NF de remessa não está vinculada — confira no Bling antes de despachar.
+                  </p>
+                ) : null}
                 <p className="text-[11px] text-muted-foreground">
                   Código de barras: {etqChave ? "chave de acesso da NF" : "nº do pedido (chave da NF indisponível)"}
                 </p>
