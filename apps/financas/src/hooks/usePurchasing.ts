@@ -49,12 +49,18 @@ export function useCreatePurchaseRequest() {
       operational_impact?: string;
       items: PurchaseRequestItem[];
       status?: string;
+      /** Solicitante escolhido. Vazio/ausente = a RC é de quem está logado. */
+      requested_by?: string;
     }) => {
       const { data, error } = await supabase
         .from("purchase_requests")
         .insert({
           rc_number: "TEMP",
-          requested_by: user!.id,
+          // De QUEM é a necessidade (pode ser um colega) …
+          requested_by: values.requested_by || user!.id,
+          // … e quem CLICOU, sempre. Sem esta linha, registrar em nome de outro
+          // apagaria o autor do registro — o oposto de auditoria.
+          created_by: user!.id,
           cost_center: values.cost_center,
           purchase_type: values.purchase_type as any,
           suggested_supplier: values.suggested_supplier || null,

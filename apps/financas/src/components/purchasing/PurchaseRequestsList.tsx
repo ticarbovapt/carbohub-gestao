@@ -80,6 +80,13 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
 
   const setorOf = (rc: PurchaseRequest) => requesterById?.get(rc.requested_by)?.department ?? null;
   const requesterName = (rc: PurchaseRequest) => requesterById?.get(rc.requested_by)?.full_name ?? "—";
+  // Quem CLICOU em criar. Só interessa mostrar quando difere do solicitante —
+  // na RC normal os dois são a mesma pessoa e repetir o nome seria ruído.
+  const registradoPor = (rc: PurchaseRequest) => {
+    const autor = (rc as any).created_by as string | null | undefined;
+    if (!autor || autor === rc.requested_by) return null;
+    return requesterById?.get(autor)?.full_name ?? "—";
+  };
 
   // Setores presentes (pra montar o filtro).
   const setores = Array.from(new Set((allRequests ?? []).map(setorOf).filter(Boolean) as string[]))
@@ -277,6 +284,9 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div><span className="text-muted-foreground">Solicitante:</span> <strong>{requesterName(selectedRC)}</strong></div>
+                {registradoPor(selectedRC) && (
+                  <div><span className="text-muted-foreground">Registrado por:</span> <strong>{registradoPor(selectedRC)}</strong></div>
+                )}
                 <div><span className="text-muted-foreground">Setor:</span> <strong>{setorOf(selectedRC) ? (deptLabel[setorOf(selectedRC)!] ?? setorOf(selectedRC)) : "—"}</strong></div>
                 <div><span className="text-muted-foreground">Escopo:</span> <strong>{escopoOf(selectedRC) === "setor" ? "Do setor" : "Individual"}</strong></div>
                 {(selectedRC as any).motivo && (

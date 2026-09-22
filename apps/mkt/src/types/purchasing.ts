@@ -22,7 +22,10 @@ export interface PurchaseRequest {
   id: string;
   rc_number: string;
   service_order_id: string | null;
+  /** De quem é a necessidade (o solicitante mostrado na lista). */
   requested_by: string;
+  /** Quem clicou em criar. Difere de requested_by na RC feita em nome de outro. */
+  created_by?: string | null;
   cost_center: string;
   purchase_type: PurchaseRequestType;
   escopo?: 'setor' | 'individual' | null;

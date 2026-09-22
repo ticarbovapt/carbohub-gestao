@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, UserCog, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CarboCard, CarboCardContent, CarboCardHeader, CarboCardTitle } from "@/components/ui/carbo-card";
 import { useCreatePurchaseRequest } from "@/hooks/usePurchasing";
 import { useSuppliers } from "@/hooks/useSuppliers";
+import { useTimeInterno } from "@/hooks/useTimeInterno";
+import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import type { PurchaseRequestItem } from "@/types/purchasing";
 
@@ -38,6 +40,13 @@ const COST_CENTERS = [
 export function PurchaseRequestForm({ serviceOrderId, onClose }: PurchaseRequestFormProps) {
   const createRC = useCreatePurchaseRequest();
   const { data: suppliers } = useSuppliers();
+  const { profile } = useAuth();
+  const { data: pessoas = [] } = useTimeInterno();
+  // "" = a RC é de quem está logado. Guarda o ID, nunca o nome: nome não é chave.
+  const [requesterId, setRequesterId] = useState<string>("");
+  const meuNome = profile?.full_name ?? profile?.username ?? "";
+  const nomeDoSolicitante =
+    pessoas.find((p) => p.id === requesterId)?.full_name ?? "—";
   const [costCenter, setCostCenter] = useState("");
   const [purchaseType, setPurchaseType] = useState("uso_direto");
   const [supplier, setSupplier] = useState("");
@@ -73,6 +82,7 @@ export function PurchaseRequestForm({ serviceOrderId, onClose }: PurchaseRequest
       justification,
       operational_impact: impact,
       items,
+      requested_by: requesterId || undefined,
       service_order_id: serviceOrderId,
       status: asDraft ? "rascunho" : "aguardando_aprovacao",
     });
@@ -88,6 +98,73 @@ export function PurchaseRequestForm({ serviceOrderId, onClose }: PurchaseRequest
         <CarboCardTitle>Nova Requisição de Compra</CarboCardTitle>
       </CarboCardHeader>
       <CarboCardContent className="space-y-4">
+        {/* Solicitante — mesmo padrão do seletor "em nome de" do /vender.
+            Quem clicou continua gravado em created_by; o que muda é de QUEM é a
+            necessidade, que é o que a lista mostra e por onde o Setor é filtrado. */}
+        <div
+          className={`rounded-xl border px-3 py-2.5 transition-colors sm:px-4 ${
+            requesterId !== "" ? "border-amber-500/40 bg-amber-500/10" : "border-border bg-card"
+          }`}
+        >
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+            <div className="flex items-center gap-2">
+              <span
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                  requesterId !== ""
+                    ? "bg-amber-500/20 text-amber-700 dark:text-amber-300"
+                    : "bg-muted text-muted-foreground"
+                }`}
+              >
+                <UserCog className="h-4 w-4" />
+              </span>
+              <span
+                className={`text-sm font-medium ${
+                  requesterId !== "" ? "text-amber-700 dark:text-amber-300" : "text-foreground"
+                }`}
+              >
+                {requesterId !== "" ? "Abrindo RC em nome de" : "Solicitante"}
+              </span>
+            </div>
+
+            <div className="flex flex-1 items-center gap-2 sm:justify-end">
+              <Select
+                value={requesterId || "__self__"}
+                onValueChange={(v) => setRequesterId(v === "__self__" ? "" : v)}
+              >
+                <SelectTrigger
+                  className={`h-9 w-full sm:w-72 ${
+                    requesterId !== ""
+                      ? "border-amber-500/40 bg-amber-500/5 text-amber-700 focus:ring-amber-500/30 dark:text-amber-300"
+                      : ""
+                  }`}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__self__">Eu ({meuNome || "—"}) — para mim</SelectItem>
+                  {pessoas
+                    .filter((p) => p.id !== profile?.id)
+                    .map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.full_name || p.username || "—"}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {requesterId !== "" && (
+            <div className="mt-2 flex items-center gap-1.5 text-sm font-semibold text-amber-700 dark:text-amber-300">
+              <Users className="h-3.5 w-3.5" />
+              <span>
+                A RC sai como <strong>{nomeDoSolicitante}</strong> — e fica registrado que quem
+                lançou foi você{meuNome ? ` (${meuNome})` : ""}.
+              </span>
+            </div>
+          )}
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <Label>Centro de Custo *</Label>
