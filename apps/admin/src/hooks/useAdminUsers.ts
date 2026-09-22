@@ -213,6 +213,60 @@ export function useSetIsVendedor() {
   });
 }
 
+/**
+ * Quem está com o acesso BLOQUEADO agora — conjunto de ids.
+ *
+ * ⚠️ Vem de `carbo_usuarios_bloqueados`, view sobre `auth.users.banned_until`,
+ * e NÃO de uma coluna em `profiles`. O estado do bloqueio mora no Auth porque
+ * é lá que ele morde — guardar uma cópia aqui criaria o par que diverge: a
+ * tela dizendo bloqueado e o login deixando entrar, sem erro nenhum.
+ *
+ * ⚠️ `auth.users` não é exposta pelo PostgREST, então a view é o ÚNICO caminho.
+ * Ela roda como dono e se guarda no próprio `WHERE` (ver `20260999`).
+ */
+export function useUsuariosBloqueados() {
+  return useQuery({
+    queryKey: ["admin", "bloqueados"],
+    queryFn: async (): Promise<Set<string>> => {
+      const { data, error } = await (supabase as unknown as { from: (t: string) => any })
+        .from("carbo_usuarios_bloqueados")
+        .select("user_id");
+      if (error) throw error;
+      return new Set<string>(((data ?? []) as { user_id: string }[]).map((r) => r.user_id));
+    },
+  });
+}
+
+/**
+ * Bloqueia ou desbloqueia o acesso — sem apagar nada.
+ *
+ * ⚠️ NÃO confunda com `useDeleteUser`: aquele é irreversível e leva junto
+ * `profiles`, `user_roles` e `org_chart_nodes`. Este só fecha a porta; a senha
+ * nem é tocada, então desbloquear devolve o acesso com a senha de sempre.
+ */
+export function useBloquearUsuario() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ userId, bloquear, motivo }: { userId: string; bloquear: boolean; motivo?: string }): Promise<void> => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Sessão expirada. Faça login novamente.");
+
+      const res = await supabase.functions.invoke("create-team-member", {
+        body: {
+          action: bloquear ? "block_user" : "unblock_user",
+          userId, motivo, platformUrl: window.location.origin,
+        },
+      });
+      if (res.error) throw new Error(res.error.message || "Erro ao alterar o bloqueio");
+      if (!res.data?.success) throw new Error(res.data?.error || "Erro ao alterar o bloqueio");
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "bloqueados"] });
+      qc.invalidateQueries({ queryKey: ["admin", "profiles"] });
+    },
+  });
+}
+
 /** Apaga um usuário e libera a vaga (action delete_user na edge function). */
 export function useDeleteUser() {
   const qc = useQueryClient();

@@ -96,7 +96,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error ? new Error(error.message) : null };
+    // ⚠️ Usuário bloqueado no Admin: o GoTrue recusa com "User is banned" —
+    // inglês e linguagem de infraestrutura. A tradução mora AQUI, e não na tela
+    // de login, porque a mensagem tem de ser a mesma venha o login de onde
+    // vier; e o teste olha `code` E `message` porque o código (`user_banned`)
+    // só existe nas versões novas do supabase-js e os sete apps não estão na
+    // mesma. Ausente, cai no texto — nunca fica sem resposta.
+    const codigo = (error as { code?: string } | null)?.code ?? "";
+    const bloqueado = !!error && /banned/i.test(`${codigo} ${error.message}`);
+    return {
+      error: error
+        ? new Error(bloqueado ? "Usuário bloqueado. Contate o suporte." : error.message)
+        : null,
+    };
   };
 
   const signOut = async () => {

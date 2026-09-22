@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   UserPlus, Loader2, Copy, CheckCircle2, KeyRound, Users as UsersIcon, Pencil, Search, Crown,
+  Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import { SYSTEMS, DEFAULT_INTERFACES, brandOf } from "@/lib/interfaces";
-import { useProfiles, useCreateUser, useDeptFunctions, useAllDeptFunctions, type AdminProfile } from "@/hooks/useAdminUsers";
+import { useProfiles, useCreateUser, useDeptFunctions, useAllDeptFunctions, useUsuariosBloqueados, type AdminProfile } from "@/hooks/useAdminUsers";
 import { useDepartments } from "@/hooks/useStructure";
 import { EditUserDialog } from "@/components/EditUserDialog";
 import { isManager, fnKey, type FnAccessMap } from "@/lib/access";
@@ -46,6 +47,7 @@ function NivelBadge({ gestor }: { gestor: boolean }) {
 
 export default function Users() {
   const { data: profiles = [], isLoading: loadingList } = useProfiles();
+  const { data: bloqueados = new Set<string>() } = useUsuariosBloqueados();
   const { data: departments = [] } = useDepartments();
   const createUser = useCreateUser();
 
@@ -62,6 +64,7 @@ export default function Users() {
   const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [deptFilter, setDeptFilter] = useState("");
+  const [soBloqueados, setSoBloqueados] = useState(false);
 
   const deptLabel = useMemo<Record<string, string>>(() => {
     const m: Record<string, string> = {};
@@ -91,12 +94,17 @@ export default function Users() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return profiles.filter((p) => {
+      // ⚠️ Bloqueado NÃO some da lista por padrão — ele fica, marcado. Esconder
+      // quem perdeu o acesso é como se descobre meses depois que a pessoa
+      // continuava com tudo liberado: some da tela e some da cabeça de quem
+      // revisa. O chip "Bloqueados" é um FILTRO, não uma gaveta.
+      if (soBloqueados && !bloqueados.has(p.id)) return false;
       // Filtro por departamento considera o 1º E o 2º departamento.
       if (deptFilter && p.department !== deptFilter && p.secondary_department !== deptFilter) return false;
       if (!q) return true;
       return (p.full_name ?? "").toLowerCase().includes(q) || (p.username ?? "").toLowerCase().includes(q);
     });
-  }, [profiles, search, deptFilter]);
+  }, [profiles, search, deptFilter, soBloqueados, bloqueados]);
 
   // Linhas enriquecidas (reaproveitadas pela tabela e pelos cartões do mobile).
   const rows = useMemo(() => filtered.map((p) => ({
@@ -182,6 +190,23 @@ export default function Users() {
           <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-600 border border-amber-500/20">
             <Crown className="h-3.5 w-3.5" /> {gestoresCount} gestores
           </span>
+          {/* ⚠️ O chip só aparece quando HÁ bloqueado — e some quando o último
+              é liberado. Um "0 bloqueados" permanente vira paisagem, e aí o dia
+              em que aparecer um ninguém vê. */}
+          {(bloqueados.size > 0 || soBloqueados) && (
+            <button
+              type="button"
+              onClick={() => setSoBloqueados((v) => !v)}
+              title="Mostrar só quem está com o acesso bloqueado"
+              className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border transition-colors ${
+                soBloqueados
+                  ? "bg-destructive text-white border-destructive"
+                  : "bg-destructive/10 text-destructive border-destructive/20 hover:bg-destructive/20"
+              }`}
+            >
+              <Lock className="h-3.5 w-3.5" /> Bloqueados · {bloqueados.size}
+            </button>
+          )}
           <span className="h-4 w-px bg-border mx-1 hidden sm:block" />
           {SYSTEMS.filter((s) => appCounts[s.iface]).map((s) => {
             const b = brandOf(s.iface);
@@ -255,7 +280,18 @@ export default function Users() {
                             <ProfileAvatar userId={p.id} avatarUrl={p.avatar_url} fullName={p.full_name} size={40}
                               className={gestor ? "ring-2 ring-amber-400/70" : "ring-1 ring-border"} />
                             <div className="min-w-0">
-                              <p className="font-medium truncate">{p.full_name ?? "—"}</p>
+                              {/* ⚠️ A marca vai no NOME, não numa coluna no fim da
+                                  linha: bloqueado é o que muda o significado da
+                                  linha inteira, e quem varre a lista lê o nome. */}
+                              <p className="font-medium truncate flex items-center gap-1.5">
+                                {p.full_name ?? "—"}
+                                {bloqueados.has(p.id) && (
+                                  <span title="Acesso bloqueado — os dados continuam no sistema"
+                                    className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-destructive/15 text-destructive shrink-0">
+                                    <Lock className="h-2.5 w-2.5" /> Bloqueado
+                                  </span>
+                                )}
+                              </p>
                               <p className="font-mono text-xs text-muted-foreground">{p.username ?? "—"}</p>
                             </div>
                           </div>
@@ -295,7 +331,14 @@ export default function Users() {
                       className={gestor ? "ring-2 ring-amber-400/70" : "ring-1 ring-border"} />
                     <div className="flex-1 min-w-0 space-y-1.5">
                       <div className="flex items-center justify-between gap-2">
-                        <p className="font-medium truncate">{p.full_name ?? "—"}</p>
+                        <p className="font-medium truncate flex items-center gap-1.5">
+                          {p.full_name ?? "—"}
+                          {bloqueados.has(p.id) && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-destructive/15 text-destructive shrink-0">
+                              <Lock className="h-2.5 w-2.5" /> Bloqueado
+                            </span>
+                          )}
+                        </p>
                         <NivelBadge gestor={gestor} />
                       </div>
                       <p className="font-mono text-xs text-muted-foreground">{p.username ?? "—"}</p>

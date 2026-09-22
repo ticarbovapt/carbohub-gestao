@@ -258,6 +258,73 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
     // ─────────────────────────────────────────────────────────────────────────
 
+    // ── Block / unblock — tira o acesso SEM apagar nada (gestão) ─────────────
+    //
+    // ⚠️ A trava é `auth.users.banned_until` (Admin API, `ban_duration`), não
+    // uma coluna nossa em `profiles`. Uma coluna de perfil exigiria que os SETE
+    // apps, o Hub e os dois portais lembrassem de checá-la — e o que esquecer
+    // deixa entrar, calado. Banido no GoTrue é recusado ANTES de existir
+    // sessão, em todo o ecossistema, sem nenhum app saber da regra.
+    //
+    // ⚠️ NADA é apagado e a SENHA não é tocada: `profiles`, `user_roles`,
+    // `org_chart_nodes`, vendas, leads e OS ficam onde estão, e desbloquear
+    // devolve o acesso com a mesma senha de sempre. É a diferença inteira para
+    // o `delete_user` logo abaixo, que é irreversível.
+    //
+    // ⚠️ SESSÃO JÁ ABERTA morre em até 1 h, não na hora — o GoTrue confere o
+    // banimento no login e na RENOVAÇÃO do token, então o access token que a
+    // pessoa já tem vale até expirar. Para o caso urgente, some um
+    // `reset_password` ao bloqueio.
+    if (body.action === "block_user" || body.action === "unblock_user") {
+      const bloquear = body.action === "block_user";
+      const { userId, motivo } = body as { userId?: string; motivo?: string };
+      if (!userId) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Missing userId" }),
+          { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+      // Bloquear a si mesmo tranca quem tem a chave para fora da própria casa:
+      // só outro gestor conseguiria desfazer. Mesma guarda do delete_user.
+      if (bloquear && userId === callingUser.id) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Você não pode bloquear o seu próprio usuário." }),
+          { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+
+      // 100 anos ≈ "para sempre". O GoTrue não tem banimento sem prazo, e uma
+      // data curta faria o acesso VOLTAR sozinho, sem ninguém decidir isso —
+      // que é o oposto do pedido.
+      const { error: banErr } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+        ban_duration: bloquear ? "876000h" : "none",
+      });
+      if (banErr) {
+        return new Response(
+          JSON.stringify({ success: false, error: banErr.message }),
+          { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+
+      // O log é HISTÓRICO, não estado — quem responde "está bloqueado?" é o
+      // `banned_until`. Falhar aqui não desfaz o bloqueio: o acesso já está
+      // fechado, e perder a linha de auditoria é menos grave que deixar a
+      // pessoa entrar porque o insert caiu.
+      const { error: logErr } = await supabaseAdmin.from("carbo_usuario_bloqueio_log").insert({
+        user_id: userId,
+        acao: bloquear ? "bloqueado" : "desbloqueado",
+        motivo: (motivo ?? "").trim() || null,
+        por: callingUser.id,
+      });
+      if (logErr) console.error("[bloqueio] falhou ao gravar o log:", logErr.message);
+
+      return new Response(
+        JSON.stringify({ success: true, bloqueado: bloquear }),
+        { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     // ── Delete user action — apaga o usuário e libera a vaga (gestão) ─────────
     // Reusa o gate acima (command/head/TI). Remove auth + profile + vínculos,
     // soltando as referências (subordinados / org chart) pra não orfanar FKs.
