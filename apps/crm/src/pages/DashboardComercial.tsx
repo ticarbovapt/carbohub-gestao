@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import {
   TrendingUp, ShoppingCart, DollarSign, Trophy, BarChart3, Repeat2,
   ArrowUpRight, ArrowDownRight, Minus, CalendarRange, User,
+  Store, Factory, Globe, HelpCircle, CalendarClock, Layers,
 } from "lucide-react";
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
@@ -87,6 +88,54 @@ export default function DashboardComercial() {
     return out;
   }, [pedidos]);
 
+  // ── Unidades de negócio ────────────────────────────────────────────────────
+  //
+  // ⚠️ TRÊS, não quatro. O CHECK de `carboze_orders` é
+  //     segmento IS NULL OR segmento = ANY ('consumo','revenda','online')
+  // e `microdistribuidor` NÃO é valor válido — o banco recusaria a gravação.
+  // Ele entra aqui no dia em que houver migração do CHECK e regra de
+  // classificação; uma faixa sempre zerada só ensinaria a ignorar o painel.
+  //
+  // `null` tem faixa própria: são ~123 pedidos na base, e sem ela a soma das
+  // faixas não fecharia com o total do topo — a diferença apareceria como erro.
+  const porSegmento = useMemo(() => {
+    const defs = [
+      { id: "revenda", label: "Revenda", icon: Store, cor: "#38bdf8" },
+      { id: "consumo", label: "Consumo", icon: Factory, cor: "#34d399" },
+      { id: "online", label: "On-line", icon: Globe, cor: "#a78bfa" },
+      { id: "__sem__", label: "Sem classificação", icon: HelpCircle, cor: "#64748b" },
+    ];
+    const totalGeral = pedidos.reduce((s, v) => s + (Number(v.total) || 0), 0);
+    return defs.map((d) => {
+      const lista = pedidos.filter((v) =>
+        d.id === "__sem__" ? !["revenda", "consumo", "online"].includes(v.segmento ?? "") : v.segmento === d.id);
+      const faturado = lista.reduce((s, v) => s + (Number(v.total) || 0), 0);
+      return {
+        ...d,
+        pedidos: lista.length,
+        faturado,
+        ticket: lista.length > 0 ? faturado / lista.length : 0,
+        share: totalGeral > 0 ? (faturado / totalGeral) * 100 : 0,
+      };
+    });
+  }, [pedidos]);
+
+  // ── Transbordo entre meses ─────────────────────────────────────────────────
+  //
+  // Mesmo par de datas da tela de Vendas: `created_at` (quando a venda foi
+  // feita, nunca muda) × `sale_date` (que SEGUE O FATURAMENTO). Mês de criação
+  // menor que mês efetivo = vendeu num mês, faturou em outro.
+  //
+  // ⚠️ Aqui o período costuma ser o ano inteiro, então o número responde
+  // "quanto do faturamento do período foi vendido num mês e faturado noutro" —
+  // não "quanto entrou de fora do período". São perguntas diferentes, e é por
+  // isso que o rótulo diz "atravessou o mês", não "veio de antes".
+  const transbordo = useMemo(() => {
+    const mes = (iso: string) => iso.substring(0, 7);
+    const cruzou = pedidos.filter((v) => v.sale_date && mes(v.created_at) < mes(v.sale_date));
+    return { qtd: cruzou.length, valor: cruzou.reduce((s, v) => s + (Number(v.total) || 0), 0) };
+  }, [pedidos]);
+
   // KPIs (sobre o conjunto filtrado).
   const kpis = useMemo(() => {
     const totalBRL = pedidos.reduce((s, v) => s + (Number(v.total) || 0), 0);
@@ -151,6 +200,7 @@ export default function DashboardComercial() {
     { title: "Maior Venda", value: fmtK(kpis.maiorVenda), sub: kpis.maiorCliente, icon: Trophy, accent: "border-l-amber-400", iconBg: "bg-amber-400/10 text-amber-500" },
     { title: "Top Recorrência", value: kpis.topCliente, sub: kpis.topQtd > 0 ? `${kpis.topQtd} pedidos · mais frequente` : "—", icon: Repeat2, accent: "border-l-blue-400", iconBg: "bg-blue-400/10 text-blue-500" },
     { title: "Ticket Médio", value: fmtK(kpis.ticketMedio), sub: "Por pedido (período)", icon: TrendingUp, accent: "border-l-violet-400", iconBg: "bg-violet-400/10 text-violet-500" },
+    { title: "Atravessou o mês", value: fmtK(transbordo.valor), sub: transbordo.qtd > 0 ? `${transbordo.qtd} pedido(s) · vendido num mês, faturado noutro` : "nenhum no período", icon: CalendarClock, accent: "border-l-cyan-400", iconBg: "bg-cyan-400/10 text-cyan-500" },
   ], [kpis]);
 
   const growthGroups = [
@@ -214,7 +264,7 @@ export default function DashboardComercial() {
         </div>
 
         {/* KPIs */}
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           {kpiCards.map(({ title, value, sub, icon: Icon, accent, iconBg }) => {
             const valLen = String(value).length;
             const valSize = valLen <= 6 ? "text-3xl" : valLen <= 10 ? "text-2xl" : valLen <= 16 ? "text-xl" : "text-base";
@@ -233,6 +283,62 @@ export default function DashboardComercial() {
               </div>
             );
           })}
+        </div>
+
+        {/* ── Por unidade de negócio ──
+            Barra proporcional + linha por segmento. A soma das faixas fecha com
+            o "R$ Total Vendido" do topo — por isso "Sem classificação" tem faixa
+            própria em vez de ser omitida: o que falta vira suspeita de erro. */}
+        <div className="rounded-xl border border-border bg-board-surface overflow-hidden">
+          <div className="flex items-center justify-between gap-3 px-4 pt-4 pb-3">
+            <h2 className="text-base font-bold text-board-text flex items-center gap-2">
+              <Layers className="h-4 w-4 text-sky-500" /> Por Unidade de Negócio
+            </h2>
+            <span className="text-xs text-board-muted">{fmtK(kpis.totalBRL)} · {kpis.totalVendas} pedidos</span>
+          </div>
+
+          {/* A barra empilhada dá a leitura de 1 segundo; a tabela dá o número. */}
+          <div className="px-4">
+            <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted">
+              {porSegmento.filter((s) => s.share > 0).map((s) => (
+                <div key={s.id} style={{ width: `${s.share}%`, backgroundColor: s.cor }}
+                  title={`${s.label}: ${s.share.toFixed(1)}%`} />
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-3 divide-y divide-border">
+            {porSegmento.map((s) => {
+              const Icone = s.icon;
+              return (
+                <div key={s.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5">
+                  <span className="flex min-w-[9.5rem] items-center gap-2 text-sm font-medium text-board-text">
+                    <Icone className="h-4 w-4 shrink-0" style={{ color: s.cor }} />
+                    {s.label}
+                  </span>
+                  <span className="min-w-[5.5rem] text-sm font-bold tabular-nums text-board-text">{fmtK(s.faturado)}</span>
+                  <span className="min-w-[4.5rem] text-xs tabular-nums text-board-muted">{s.pedidos} ped.</span>
+                  <span className="min-w-[6rem] text-xs tabular-nums text-board-muted">
+                    ticket {fmtK(s.ticket)}
+                  </span>
+                  <span className="ml-auto text-xs font-semibold tabular-nums" style={{ color: s.cor }}>
+                    {s.share.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* ⚠️ A nota fica NA TELA, não só no código: quem procurar
+              Microdistribuidor precisa saber por que não está aqui, senão vai
+              concluir que o canal não vendeu nada. */}
+          <p className="px-4 pb-3 pt-1 text-[11px] leading-relaxed text-board-muted">
+            <strong className="text-board-text">On-line aparece zerado aqui de propósito:</strong>{" "}
+            esta é a tela do time de vendas e o marketplace fica fora dela — o e-commerce tem painel
+            próprio no Carbo Admin.{" "}
+            <strong className="text-board-text">Microdistribuidor</strong> ainda não é uma unidade
+            cadastrada no banco; hoje um pedido só pode ser Revenda, Consumo ou On-line.
+          </p>
         </div>
 
         {/* Cards de Crescimento */}

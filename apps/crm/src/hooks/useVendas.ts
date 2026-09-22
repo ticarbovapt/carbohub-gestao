@@ -60,6 +60,11 @@ export interface VendaRow {
   is_licenciado: boolean; endereco: Record<string, unknown> | null; endereco_faturamento: Record<string, unknown> | null;
   payment_terms: string | null; freight_type: string | null; total: number; notes: string | null;
   sale_date: string | null; extra: Record<string, unknown> | null; created_at: string; updated_at: string; itens?: VendaItemRow[];
+  /** Unidade de negócio: `revenda` | `consumo` | `online`, ou null.
+   *  ⚠️ O CHECK de `carboze_orders` só aceita esses três — `microdistribuidor`
+   *  ainda não é valor válido. O `select("*")` já trazia a coluna; era este
+   *  mapeamento que a descartava. */
+  segmento: string | null;
   /** Pedido 100% descarbonização: não tem NF, nem produção, nem expedição. */
   so_servico: boolean;
   /** OS de descarbonização vinculada (fase 2/3). */
@@ -93,6 +98,7 @@ function toVenda(row: any): VendaRow {
     is_licenciado: false, endereco: e, endereco_faturamento: (row.billing_address ?? null),
     payment_terms: row.payment_terms ?? null, freight_type: row.freight_type ?? null,
     total: Number(row.total || 0), notes: row.notes ?? null, sale_date: row.sale_date ?? null,
+    segmento: row.segmento ?? null,
     // Preserva o status carboze CRU (7 estados) p/ o EditPedido exibir/gravar sem rebaixar.
     extra: { status_detalhado: row.status },
     created_at: row.created_at, updated_at: row.updated_at,
