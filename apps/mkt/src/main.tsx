@@ -5,6 +5,7 @@ import { BrowserRouter } from "react-router-dom";
 import { Toaster } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "./contexts/AuthContext";
+import { BloqueioAoVivo } from "./components/BloqueioAoVivo";
 import App from "./App";
 import "./index.css";
 
@@ -17,6 +18,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         <AuthProvider>
           <TooltipProvider delayDuration={200}>
             <App />
+            <BloqueioAoVivo />
           </TooltipProvider>
           <Toaster richColors position="top-right" offset={72} />
         </AuthProvider>

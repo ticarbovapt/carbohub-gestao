@@ -274,6 +274,66 @@ em vez de esperar saída vazia.
 `npm run build` NÃO substitui o `tsc`: o esbuild não checa tipos e deixa passar
 identificador inexistente numa boa.
 
+### Bloquear usuário — a trava é o AUTH, o popup é só o aviso
+Pedido do dono do processo em 22/09/2026: tirar o acesso de quem saiu **sem
+apagar os dados**, e devolver depois **com a mesma senha**. Antes só existia
+`delete_user`, irreversível, e ele era usado por falta de outro.
+
+```
+auth.users.banned_until               a TRAVA  (Admin API, `ban_duration`)
+carbo_usuario_bloqueio_log            o HISTÓRICO — e o SINAL do Realtime
+carbo_usuarios_bloqueados (view)      quem está bloqueado AGORA, para a tela
+create-team-member  block_user/unblock_user
+apps/*/src/components/BloqueioAoVivo.tsx   o popup — REPLICADO nos SETE
+```
+
+1. ⚠️ **A trava mora no Auth, nunca numa coluna de `profiles`.** Coluna de
+   perfil exigiria que os sete apps, o Hub e os dois portais lembrassem de
+   checá-la — e o que esquecer deixa entrar, calado. Banido no GoTrue é
+   recusado ANTES de existir sessão, em todo o ecossistema. Mesma razão da
+   dedução de estoque morar na RPC e não no `/vender`.
+2. **A senha não é tocada**, e é isso que faz desbloquear devolver o acesso
+   como era. Nada é apagado: `profiles`, `user_roles`, `org_chart_nodes`,
+   vendas, leads e OS ficam onde estão.
+3. ⚠️ **O log é HISTÓRICO, não estado.** Quem responde "está bloqueado?" é o
+   `banned_until`. Guardar o estado ali também criaria o par que diverge — a
+   tela dizendo bloqueado e o login deixando entrar, sem erro. E ele é
+   append-only: **nenhuma** policy de INSERT/UPDATE/DELETE, senão dá para
+   forjar auditoria (e forjar um `desbloqueado` que o Auth não tem).
+4. ⚠️ **A view roda como DONO** — é como ela alcança `auth.users`, que o
+   PostgREST não expõe. Por isso lista as colunas UMA A UMA (com `*` sairiam
+   `encrypted_password` e tokens de recuperação) e se guarda no próprio
+   `WHERE`. Ligar `security_invoker` a esvazia e a tela passa a dizer "ninguém
+   bloqueado" para sempre. Mesmo molde da `ml_accounts_public`.
+5. ⚠️ **O Auth NÃO avisa ninguém** — essa é a origem da janela de 1 h. O GoTrue
+   só confere o banimento quando alguém bate na porta (login ou renovação de
+   token), e `auth.users` não é publicada no Realtime. Por isso o aviso sai da
+   tabela NOSSA, que a mesma função já escrevia no mesmo instante (`20261000`
+   publicou a tabela e abriu a própria linha a cada um, com
+   `user_id = auth.uid()`). Tabela separada só para avisar seria uma segunda
+   verdade sobre o mesmo fato.
+6. ⚠️ **O sinal NÃO substitui a trava.** Realtime fora do ar ⇒ a aba cai na
+   renovação do token, como antes: o pior caso volta a ser o de ontem, nunca
+   "continua entrando". Aviso que falha ABERTO é pior que aviso nenhum.
+7. ⚠️ **O `BloqueioAoVivo` monta ao lado do `<App />`, dentro do
+   `AuthProvider`** (`main.tsx`), NUNCA dentro do `Layout` ou de uma rota: o
+   `signOut` troca a tela para o login, e lá dentro o componente desmontaria
+   junto — o aviso sumiria no instante em que aparece.
+8. ⚠️ **Ele escuta `onAuthStateChange`, não o `useAuth()` do app.** Os sete
+   `AuthContext` divergem entre si; amarrar um deles faria as sete cópias do
+   arquivo deixarem de ser idênticas.
+9. ⚠️ **Realtime não reentrega o que passou.** Aba dormindo, notebook fechado
+   ou queda de rede perdem o evento PARA SEMPRE — daí a conferência na volta do
+   foco (`focus` **e** `visibilitychange`, porque nem todo navegador dispara os
+   dois). E ela lê a ÚLTIMA linha: "existe algum bloqueio?" derrubaria quem já
+   foi desbloqueado, para sempre.
+10. **Bloqueado NÃO some da lista de Usuários** — fica marcado no nome, e o chip
+   "Bloqueados" é filtro, não gaveta. Esconder quem perdeu o acesso é como se
+   descobre meses depois que ele continuava liberado.
+11. ⚠️ **Os dois PORTAIS ficaram de fora** (outro repo): login deles ainda
+   mostraria `User is banned` em inglês, e não têm o popup. A trava vale lá
+   igual — o que falta é a tradução e o aviso.
+
 ### Notificação de venda online — nos sete
 Venda do e-commerce toca som e mostra toast em QUALQUER app que a pessoa esteja
 usando. Três arquivos, replicados: `public/sounds/venda-online.mp3`,
