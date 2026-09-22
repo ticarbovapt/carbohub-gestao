@@ -314,7 +314,12 @@ export default function Vendas() {
 
   return (
     <div className="p-4 md:p-6">
-      <div className="space-y-5 max-w-6xl mx-auto">
+      {/* ⚠️ 1500px, o mesmo teto do `CRM.tsx` e do `Pdvs.tsx` — as telas de
+          lista irmãs neste app. Estava em `max-w-6xl` (1152px), o mais estreito
+          de todas, e a coluna de ações ("Editar / Confirmar") saía cortada
+          enquanto sobrava margem vazia dos dois lados. O `p-4 md:p-6` de fora é
+          quem dá as bordas; teto e borda são coisas diferentes. */}
+      <div className="space-y-5 max-w-[1500px] mx-auto">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
           <div>
