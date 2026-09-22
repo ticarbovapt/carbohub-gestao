@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useVendas, useVendedoresDir } from "@/hooks/useVendas";
 import { useMetasAno } from "@/hooks/useMetas";
+import { useEcommerceUnidade } from "@/hooks/useEcommerceUnidade";
 import { useAuth } from "@/contexts/AuthContext";
 
 // Dashboard Comercial — agrega as VENDAS salvas (crm_vendas, status "pedido").
@@ -98,27 +99,55 @@ export default function DashboardComercial() {
   //
   // `null` tem faixa própria: são ~123 pedidos na base, e sem ela a soma das
   // faixas não fecharia com o total do topo — a diferença apareceria como erro.
+  // ⚠️ O ON-LINE VEM DE OUTRA FONTE, e tem de vir.
+  //
+  // O marketplace existe em `carboze_orders`, mas o `FILTRO_VENDA_DO_TIME`
+  // corta esses pedidos da tela do vendedor — com razão. O efeito colateral
+  // era este painel mostrar On-line ZERADO enquanto o Admin mostrava R$ 40 mil
+  // no mesmo mês. Linha zerada é pior que linha ausente: parece que o canal
+  // não vendeu. Então o on-line é lido de `ecommerce_raw_summary`, a mesma
+  // fonte (e a mesma regra de banco) que a tela Vendas Online do Admin usa.
+  const { data: online } = useEcommerceUnidade();
+
   const porSegmento = useMemo(() => {
-    const defs = [
+    const doTime = [
       { id: "revenda", label: "Revenda", icon: Store, cor: "#38bdf8" },
       { id: "consumo", label: "Consumo", icon: Factory, cor: "#34d399" },
-      { id: "online", label: "On-line", icon: Globe, cor: "#a78bfa" },
       { id: "__sem__", label: "Sem classificação", icon: HelpCircle, cor: "#64748b" },
-    ];
-    const totalGeral = pedidos.reduce((s, v) => s + (Number(v.total) || 0), 0);
-    return defs.map((d) => {
+    ].map((d) => {
       const lista = pedidos.filter((v) =>
         d.id === "__sem__" ? !["revenda", "consumo", "online"].includes(v.segmento ?? "") : v.segmento === d.id);
       const faturado = lista.reduce((s, v) => s + (Number(v.total) || 0), 0);
-      return {
-        ...d,
-        pedidos: lista.length,
-        faturado,
-        ticket: lista.length > 0 ? faturado / lista.length : 0,
-        share: totalGeral > 0 ? (faturado / totalGeral) * 100 : 0,
-      };
+      return { ...d, pedidos: lista.length, faturado, fonte: "time" as const };
     });
-  }, [pedidos]);
+
+    const linhaOnline = {
+      id: "online", label: "On-line", icon: Globe, cor: "#a78bfa",
+      pedidos: online?.pedidos ?? 0,
+      faturado: online?.faturado ?? 0,
+      fonte: "ecommerce" as const,
+    };
+
+    // On-line entra na posição de sempre (3ª), não no fim: a ordem da lista é
+    // a que o time lê em voz alta, e mudá-la por causa da origem do dado seria
+    // deixar um detalhe técnico vazar para a leitura.
+    const linhas = [doTime[0], doTime[1], linhaOnline, doTime[2]];
+
+    // ⚠️ O share é sobre o total DO PAINEL, não sobre o "R$ Total Vendido" do
+    // topo — aquele card é só venda do time e não inclui marketplace. Usar o
+    // card como denominador faria as fatias somarem mais de 100%.
+    const totalPainel = linhas.reduce((s, l) => s + l.faturado, 0);
+    return linhas.map((l) => ({
+      ...l,
+      ticket: l.pedidos > 0 ? l.faturado / l.pedidos : 0,
+      share: totalPainel > 0 ? (l.faturado / totalPainel) * 100 : 0,
+    }));
+  }, [pedidos, online]);
+
+  const totalPainel = useMemo(
+    () => porSegmento.reduce((s, l) => ({ faturado: s.faturado + l.faturado, pedidos: s.pedidos + l.pedidos }), { faturado: 0, pedidos: 0 }),
+    [porSegmento],
+  );
 
   // ── Transbordo entre meses ─────────────────────────────────────────────────
   //
@@ -294,7 +323,13 @@ export default function DashboardComercial() {
             <h2 className="text-base font-bold text-board-text flex items-center gap-2">
               <Layers className="h-4 w-4 text-sky-500" /> Por Unidade de Negócio
             </h2>
-            <span className="text-xs text-board-muted">{fmtK(kpis.totalBRL)} · {kpis.totalVendas} pedidos</span>
+            {/* ⚠️ Total PRÓPRIO, e maior que o "R$ Total Vendido" do topo:
+                aquele card é só venda do time, este inclui o e-commerce. Dois
+                números diferentes na mesma tela precisam dizer por quê. */}
+            <span className="text-xs text-board-muted">
+              {fmtK(totalPainel.faturado)} · {totalPainel.pedidos} pedidos
+              <span className="ml-1 opacity-70">(inclui e-commerce)</span>
+            </span>
           </div>
 
           {/* A barra empilhada dá a leitura de 1 segundo; a tabela dá o número. */}
@@ -321,6 +356,14 @@ export default function DashboardComercial() {
                   <span className="min-w-[6rem] text-xs tabular-nums text-board-muted">
                     ticket {fmtK(s.ticket)}
                   </span>
+                  {/* A origem do número fica visível na linha: quem conferir
+                      o On-line contra a tela do Admin precisa saber que é ela
+                      mesma a fonte, e não uma segunda contagem. */}
+                  {s.fonte === "ecommerce" && (
+                    <span className="rounded bg-violet-500/15 px-1.5 py-0.5 text-[10px] text-violet-400">
+                      via e-commerce
+                    </span>
+                  )}
                   <span className="ml-auto text-xs font-semibold tabular-nums" style={{ color: s.cor }}>
                     {s.share.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%
                   </span>
@@ -333,9 +376,9 @@ export default function DashboardComercial() {
               Microdistribuidor precisa saber por que não está aqui, senão vai
               concluir que o canal não vendeu nada. */}
           <p className="px-4 pb-3 pt-1 text-[11px] leading-relaxed text-board-muted">
-            <strong className="text-board-text">On-line aparece zerado aqui de propósito:</strong>{" "}
-            esta é a tela do time de vendas e o marketplace fica fora dela — o e-commerce tem painel
-            próprio no Carbo Admin.{" "}
+            <strong className="text-board-text">On-line vem do e-commerce</strong> — mesma fonte e
+            mesma regra da tela Vendas Online do Carbo Admin —, por isso o total deste painel é
+            maior que o “R$ Total Vendido” do topo, que conta só venda do time.{" "}
             <strong className="text-board-text">Microdistribuidor</strong> ainda não é uma unidade
             cadastrada no banco; hoje um pedido só pode ser Revenda, Consumo ou On-line.
           </p>
