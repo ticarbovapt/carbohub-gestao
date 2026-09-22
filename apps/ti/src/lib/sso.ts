@@ -81,7 +81,40 @@ export const crossSubdomainStorage = {
   },
 };
 
+/**
+ * ⚠️ Trava de SAÍDA para o Hub — existe por um motivo só, e ele foi medido.
+ *
+ * Quando o acesso é bloqueado ao vivo (`BloqueioAoVivo`), o `signOut` deixa o
+ * app sem sessão, o `ProtectedRoute` chama `goToHubLogin()` e a página INTEIRA
+ * navega para o Hub — levando junto o aviso que tinha acabado de aparecer.
+ * Medido em 22/09/2026: *"apareceu a mensagem e já redirecionou rapidão"*.
+ *
+ * Nenhum truque de DOM resolve: `location.replace` destrói o documento. Quem
+ * tem de ceder é a navegação, e ela passa TODA por esta função — nos sete
+ * apps, tanto no `ProtectedRoute` quanto no `LoginRoute`. Guardar aqui cobre
+ * os dois sem tocar em nenhum deles.
+ *
+ * Quem trava é o aviso de bloqueio, e ele NUNCA destrava: o único caminho dali
+ * em diante é o botão do próprio aviso, que usa `irParaOHubAgora()`.
+ */
+let saidaTravada = false;
+
+export function travarSaidaParaOHub(): void {
+  saidaTravada = true;
+}
+
 /** Manda o usuário não-logado para o login único do Hub (apenas em produção). */
 export function goToHubLogin(): void {
+  if (saidaTravada) return;
+  if (typeof location !== "undefined") location.replace(HUB_URL);
+}
+
+/**
+ * Sai para o Hub IGNORANDO a trava.
+ *
+ * ⚠️ Só o botão do aviso de bloqueio usa isto. Em qualquer outro lugar,
+ * use `goToHubLogin()` — senão a trava deixa de significar alguma coisa.
+ */
+export function irParaOHubAgora(): void {
   if (typeof location !== "undefined") location.replace(HUB_URL);
 }

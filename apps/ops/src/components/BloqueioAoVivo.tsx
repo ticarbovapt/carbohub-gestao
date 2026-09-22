@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ShieldX } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { travarSaidaParaOHub, irParaOHubAgora } from "@/lib/sso";
 
 /**
  * Derruba a pessoa NA HORA quando o acesso dela é bloqueado no Admin.
@@ -36,7 +37,13 @@ import { supabase } from "@/integrations/supabase/client";
  *    faria as sete cópias deixarem de ser idênticas. Assim ele não depende de
  *    nada além do cliente Supabase.
  *
- * 3. ⚠️ **Há uma rede de segurança na volta do foco.** Realtime não reentrega
+ * 3. ⚠️ **A saída para o Hub é TRAVADA antes do `signOut`** (`travarSaidaParaOHub`
+ *    em `lib/sso.ts`). Sem isso o aviso piscava e sumia: sem sessão, o
+ *    `ProtectedRoute` manda a página inteira para o Hub e leva o aviso junto.
+ *    A sessão, essa, morre na hora — é o que faz F5 e URL de outra tela
+ *    caírem no login em vez de devolverem o sistema.
+ *
+ * 4. ⚠️ **Há uma rede de segurança na volta do foco.** Realtime não reentrega
  *    o que passou: aba dormindo, notebook fechado ou queda de rede perdem o
  *    evento PARA SEMPRE. Ao voltar o foco, o componente pergunta ao banco se a
  *    última linha da própria pessoa é `bloqueado`. Sem isso, "ao vivo"
@@ -51,10 +58,25 @@ export function BloqueioAoVivo() {
   function disparar() {
     if (jaDisparou.current) return;
     jaDisparou.current = true;
+
+    // ⚠️ A ORDEM AQUI É A CORREÇÃO INTEIRA, e ela foi medida.
+    //
+    // Na primeira versão o aviso aparecia e SUMIA em seguida — *"apareceu a
+    // mensagem e já redirecionou rapidão"*. O `signOut` deixa o app sem sessão,
+    // o `ProtectedRoute` chama `goToHubLogin()` e a página inteira navega para
+    // o Hub, levando junto o aviso. Nenhum truque de DOM resolveria:
+    // `location.replace` destrói o documento.
+    //
+    // Travar ANTES do `signOut` é o que faz o aviso ficar até alguém ler. E a
+    // trava não é só cosmética: ela não destrava, então o único caminho dali em
+    // diante é o botão do próprio aviso.
+    travarSaidaParaOHub();
     setBloqueado(true);
-    // Mata a sessão local JUNTO com o aviso. A ordem não importa para a trava
-    // (o Auth já recusa tudo), importa para o que está na tela: sem isto, a
-    // pessoa ficaria com a aba viva atrás do aviso até fechá-lo.
+
+    // ⚠️ A sessão morre AGORA, não no clique do "Entendi". É isso que faz F5 e
+    // URL de outra tela caírem no login em vez de devolverem o sistema — e
+    // deixar a sessão viva "até clicar OK" daria exatamente a brecha que este
+    // recurso existe para fechar.
     void supabase.auth.signOut();
   }
 
@@ -151,12 +173,15 @@ export function BloqueioAoVivo() {
           O seu acesso foi bloqueado e a sessão foi encerrada agora.
           Se você acha que isso é um engano, fale com o suporte.
         </p>
+        {/* ⚠️ `irParaOHubAgora`, não `goToHubLogin`: a saída está TRAVADA desde
+            o instante do bloqueio — é o que mantém este aviso na tela. Este
+            botão é o único caminho que a atravessa, e é de propósito. */}
         <button
           type="button"
-          onClick={() => window.location.replace("/")}
+          onClick={() => irParaOHubAgora()}
           className="mt-5 w-full rounded-lg bg-destructive px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 transition-opacity"
         >
-          Ir para o login
+          Entendi, ir para o login
         </button>
       </div>
     </div>
