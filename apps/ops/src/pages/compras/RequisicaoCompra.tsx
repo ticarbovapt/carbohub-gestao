@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "react-router-dom";
-import { Plus, Trash2, ShoppingCart, Info, Loader2, Boxes, User, ChevronRight, ChevronDown } from "lucide-react";
+import { Plus, Trash2, ShoppingCart, Info, Loader2, Boxes, User, UserCog, Users, ChevronRight, ChevronDown } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent, CarboCardHeader, CarboCardTitle } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
@@ -15,6 +15,8 @@ import { useMyPurchaseRequestsPaged, useCreatePurchaseRequest, type ReqItem } fr
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { CotacoesPanel } from "@/components/compras/CotacoesPanel";
 import { persistDraftQuotes, type DraftQuote } from "@/hooks/useCotacoes";
+import { useTimeInterno } from "@/hooks/useTimeInterno";
+import { useAuth } from "@/contexts/AuthContext";
 
 const COST_CENTERS = [
   "Produção", "Operações", "Manutenção", "Logística", "Qualidade",
@@ -80,6 +82,20 @@ export default function RequisicaoCompra() {
   // Vindo da Central de Alertas com "Requisitar" → já abre com o item preenchido.
   const pref = (useLocation().state as { prefill?: RCPrefill } | null)?.prefill;
 
+  const { profile } = useAuth();
+  const { data: pessoas = [] } = useTimeInterno();
+  // "" = a RC é de quem está logado. Guarda o ID, nunca o nome: nome não é chave.
+  const [requesterId, setRequesterId] = useState<string>("");
+  const meuNome = profile?.full_name ?? profile?.username ?? "";
+  const nomeDoSolicitante = pessoas.find((p) => p.id === requesterId)?.full_name ?? "—";
+  // id → nome, para a coluna Solicitante da lista.
+  const nomePorId = (id?: string | null) =>
+    (id ? pessoas.find((p) => p.id === id)?.full_name : null) ?? "—";
+
+  // A lista deixou de ser só "minhas": inclui o que eu lancei para colegas.
+  // A coluna só aparece quando há alguma — senão seria uma coluna de "Eu".
+  const temDeOutro = minhas.some((r) => r.requested_by && r.requested_by !== profile?.id);
+
   const [escopo, setEscopo] = useState<"setor" | "individual">("setor");
   const [motivo, setMotivo] = useState(pref?.motivo ?? "");
   const [priority, setPriority] = useState(pref?.priority ?? "normal");
@@ -111,6 +127,7 @@ export default function RequisicaoCompra() {
 
   const reset = () => {
     setEscopo("setor"); setMotivo(""); setPriority("normal"); setNeededBy("");
+    setRequesterId("");
     setCostCenter(""); setReferenceUrl(""); setObs(""); setItems([emptyItem()]);
     setDraftQuotes([]); setShowCot(false);
   };
@@ -126,6 +143,7 @@ export default function RequisicaoCompra() {
 
     try {
       const created: any = await create.mutateAsync({
+        requested_by: requesterId || undefined,
         escopo,
         motivo,
         purchase_type,
@@ -164,11 +182,84 @@ export default function RequisicaoCompra() {
         <CarboCard>
           <CarboCardHeader><CarboCardTitle>Nova Requisição</CarboCardTitle></CarboCardHeader>
           <CarboCardContent className="space-y-5">
+            {/* Solicitante — mesmo padrão do seletor "em nome de" do /vender e do
+                Carbo Finanças. Quem clicou continua gravado em created_by; o que
+                muda é de QUEM é a necessidade. */}
+            <div
+              className={`rounded-xl border px-3 py-2.5 transition-colors sm:px-4 ${
+                requesterId !== "" ? "border-amber-500/40 bg-amber-500/10" : "border-border bg-card"
+              }`}
+            >
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                      requesterId !== ""
+                        ? "bg-amber-500/20 text-amber-700 dark:text-amber-300"
+                        : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    <UserCog className="h-4 w-4" />
+                  </span>
+                  <span
+                    className={`text-sm font-medium ${
+                      requesterId !== "" ? "text-amber-700 dark:text-amber-300" : "text-foreground"
+                    }`}
+                  >
+                    {requesterId !== "" ? "Abrindo RC em nome de" : "Solicitante"}
+                  </span>
+                </div>
+
+                <div className="flex flex-1 items-center gap-2 sm:justify-end">
+                  <Select
+                    value={requesterId || "__self__"}
+                    onValueChange={(v) => setRequesterId(v === "__self__" ? "" : v)}
+                  >
+                    <SelectTrigger
+                      className={`h-9 w-full sm:w-72 ${
+                        requesterId !== ""
+                          ? "border-amber-500/40 bg-amber-500/5 text-amber-700 focus:ring-amber-500/30 dark:text-amber-300"
+                          : ""
+                      }`}
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__self__">Eu ({meuNome || "—"}) — para mim</SelectItem>
+                      {pessoas
+                        .filter((p) => p.id !== profile?.id)
+                        .map((p) => (
+                          <SelectItem key={p.id} value={p.id}>
+                            {p.full_name || p.username || "—"}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {requesterId !== "" && (
+                <div className="mt-2 flex items-center gap-1.5 text-sm font-semibold text-amber-700 dark:text-amber-300">
+                  <Users className="h-3.5 w-3.5" />
+                  <span>
+                    A RC sai como <strong>{nomeDoSolicitante}</strong> — e fica registrado que quem
+                    lançou foi você{meuNome ? ` (${meuNome})` : ""}.
+                  </span>
+                </div>
+              )}
+            </div>
+
             {/* Escopo — define o formulário inteiro */}
             <div className="grid sm:grid-cols-2 gap-3">
               {([
                 { key: "setor", icon: Boxes, title: "Compra do setor", desc: "Insumo / operação — reposição de estoque, produção." },
-                { key: "individual", icon: User, title: "Compra individual", desc: "Material de trabalho seu — uso pessoal." },
+                {
+                  key: "individual", icon: User, title: "Compra individual",
+                  // O texto acompanha o solicitante: "seu" mente quando a RC é de outro.
+                  desc: requesterId
+                    ? `Material de trabalho de ${nomeDoSolicitante} — uso pessoal.`
+                    : "Material de trabalho seu — uso pessoal.",
+                },
               ] as const).map((opt) => {
                 const active = escopo === opt.key;
                 return (
@@ -333,18 +424,19 @@ export default function RequisicaoCompra() {
 
         {/* Minhas requisições */}
         <CarboCard>
-          <CarboCardHeader><CarboCardTitle>Minhas Requisições</CarboCardTitle></CarboCardHeader>
+          <CarboCardHeader><CarboCardTitle>Requisições que eu abri</CarboCardTitle></CarboCardHeader>
           <CarboCardContent>
             {isLoading ? (
               <p className="py-8 text-center text-sm text-muted-foreground">Carregando…</p>
             ) : total === 0 ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">Você ainda não criou requisições.</p>
+              <p className="py-8 text-center text-sm text-muted-foreground">Você ainda não abriu requisições.</p>
             ) : (
               <>
                 <CarboTable>
                   <CarboTableHeader>
                     <CarboTableRow>
                       <CarboTableHead>Nº RC</CarboTableHead>
+                      {temDeOutro && <CarboTableHead>Solicitante</CarboTableHead>}
                       <CarboTableHead>Escopo</CarboTableHead>
                       <CarboTableHead className="text-right">Valor</CarboTableHead>
                       <CarboTableHead>Status</CarboTableHead>
@@ -358,6 +450,15 @@ export default function RequisicaoCompra() {
                       return (
                         <CarboTableRow key={r.id}>
                           <CarboTableCell className="font-medium">{r.rc_number === "TEMP" ? "—" : r.rc_number}</CarboTableCell>
+                          {temDeOutro && (
+                            <CarboTableCell>
+                              {r.requested_by && r.requested_by !== profile?.id ? (
+                                <span className="text-amber-700 dark:text-amber-300">{nomePorId(r.requested_by)}</span>
+                              ) : (
+                                <span className="text-muted-foreground">Eu</span>
+                              )}
+                            </CarboTableCell>
+                          )}
                           <CarboTableCell><CarboBadge variant={(r as any).escopo === "setor" ? "info" : "secondary"}>{esc}</CarboBadge></CarboTableCell>
                           <CarboTableCell className="text-right">{brl(Number(r.estimated_value))}</CarboTableCell>
                           <CarboTableCell><CarboBadge variant={st.variant}>{st.label}</CarboBadge></CarboTableCell>

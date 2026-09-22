@@ -20,6 +20,10 @@ export interface ReqItem {
 export interface PurchaseRequest {
   id: string;
   rc_number: string;
+  /** De quem é a necessidade. Pode ser um colega, quando a RC foi aberta em nome dele. */
+  requested_by?: string;
+  /** Quem clicou em criar. Difere de requested_by na RC aberta em nome de outro. */
+  created_by?: string | null;
   cost_center: string;
   purchase_type: string;
   suggested_supplier: string | null;
@@ -44,7 +48,10 @@ export function useMyPurchaseRequestsPaged(page: number, pageSize: number) {
         .select("*", { count: "exact" })
         .order("created_at", { ascending: false })
         .range(from, to);
-      if (uid) q = q.eq("requested_by", uid);
+      // ⚠️ requested_by OU created_by. Só por requested_by, a RC que eu abri em
+      // nome de um colega SUMIRIA desta lista no instante em que fosse criada —
+      // quem lançou perderia o rastro do próprio trabalho.
+      if (uid) q = q.or(`requested_by.eq.${uid},created_by.eq.${uid}`);
       const { data, error, count } = await q;
       if (error) throw error;
       return { rows: (data || []) as PurchaseRequest[], total: count ?? 0 };
@@ -55,6 +62,8 @@ export function useMyPurchaseRequestsPaged(page: number, pageSize: number) {
 }
 
 export interface CreatePRInput {
+  /** Solicitante escolhido. Vazio/ausente = a RC é de quem está logado. */
+  requested_by?: string;
   cost_center: string;
   purchase_type: string;
   escopo?: string;               // "setor" | "individual"
@@ -79,7 +88,11 @@ export function useCreatePurchaseRequest() {
         .from("purchase_requests")
         .insert({
           rc_number: "TEMP", // numeração final gerada no fluxo do Finanças
-          requested_by: u?.user?.id ?? null,
+          // De QUEM é a necessidade (pode ser um colega) …
+          requested_by: v.requested_by || (u?.user?.id ?? null),
+          // … e quem CLICOU, sempre. Sem esta linha, abrir em nome de outro
+          // apagaria o autor do registro — o oposto de auditoria.
+          created_by: u?.user?.id ?? null,
           cost_center: v.cost_center,
           purchase_type: v.purchase_type,
           escopo: v.escopo || "individual",
