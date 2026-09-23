@@ -2338,3 +2338,143 @@ matriz, Bling 2 = filial SP.
    Depende do `bling2-order-details-10min`, que é quem traz `raw_detalhe`.
 5. **A conta é sempre EXPLÍCITA**, no front e no servidor. Errar emite no CNPJ
    errado, e só se desfaz com cancelamento depois de o documento circular.
+
+### NFS-e Nacional (ADN gov.br) — nota de serviço, emitida E recebida
+Pedido do dono do processo em 23/09/2026: *"preciso integrar o portal nacional
+com o sistema, fica no finanças igual com o bling"*, com as duas pontas.
+
+```
+supabase/functions/nfse-nacional      sonda + ingestão (o ÚNICO que escreve é ?ingerir=1)
+carbo_nfse_dfe                        o log CRU, append-only, uma linha por NSU
+carbo_nfse_notas / _eventos           leitura do XML (xpath com namespace do SPED)
+carbo_nfse_visao                      papel + cancelamento + par de substituição
+carbo_nfse_eventos_tipos              lista de trabalho: tipo de evento desconhecido
+carbo_nfse_sync_log · _saude          a rodada, inclusive quando FALHA
+apps/financas/src/pages/integracoes/NfseNacional.tsx    /integracoes/nfse
+cron `nfse-nacional-1h`  13 * * * *
+```
+
+⚠️ **NÃO é webhook — é NSU, e isso muda tudo.** O ADN guarda uma fila por
+interessado e devolve o que veio DEPOIS do número pedido. Quem guarda o último
+lido é a gente, e aqui isso é `max(nsu)` do próprio log: tabela de checkpoint
+à parte criaria o par que diverge, mudo nos DOIS sentidos — atrás reprocessa,
+à frente **pula documento para sempre**.
+
+⚠️ **A autenticação é o CERTIFICADO A1** (mTLS), não chave de API.
+`NFSE_KEY_PEM` é a chave privada **sem senha** — quem a tem assina documento
+fiscal no CNPJ da empresa. Ela mora só em Supabase → Edge Functions → Secrets.
+O Deno não abre chave cifrada, e o sintoma disso é erro de TLS genérico que
+manda procurar no ADN em vez de aqui; por isso a função testa `ENCRYPTED` e
+recusa dizendo o que fazer.
+
+Seis coisas que o XML REAL desmentiu, e cada uma mudou o desenho (medidas em
+23/09 antes de existir qualquer tabela — foi para isso que a sonda existiu):
+
+1. ⚠️ **O EVENTO não diz de quem é a nota.** Só tem `CNPJAutor` e `chNFSe` —
+   sem `emit`, sem `toma`. Ele não se julga sozinho; só ganha sentido ligado à
+   NFS-e pela chave. Logo, evento cuja nota não chegou é ÓRFÃO e é guardado
+   assim mesmo (`carbo_nfse_eventos_orfaos`). Descartá-lo deixaria a nota
+   valendo na tela depois de cancelada.
+2. ⚠️ **`ChaveAcesso` NÃO é única** — o evento repete a chave da nota. Quem
+   identifica a linha é o NSU. Índice único na chave recusaria o cancelamento.
+3. ⚠️ **NSU não é ordem de emissão**: o NSU 1 é nota de fev/23 que o ADN gerou
+   em mai/23. Checkpoint por DATA pularia documento antigo que chega hoje.
+4. ⚠️ **Nome não identifica a empresa, CNPJ sim.** O `toma` vem com a razão
+   social ANTIGA (`PPDB ASSESSORIA ADMINISTRATIVA LTDA`) enquanto o certificado
+   diz `CARBO SOLUCOES LTDA` — e não é histórico: um fornecedor emitiu assim em
+   **21/09/2026**. Mesma lição já paga no cadastro de PDV.
+5. ⚠️ **São DOIS valores**: `vLiq` (líquido da nota) e `vServ` (do serviço).
+   Divergem em **7 das 696**, com R$ 6.541,77 de retenção — coincidem no resto,
+   e é a coincidência que convida a unificá-los, como no
+   `display_units_per_pack`. Ficam separados.
+6. ⚠️ **`ambGer` não separa produção de teste** (1 numa nota, 2 num evento, as
+   duas com `TipoAmbiente: PRODUCAO`). Quem responde isso é o ambiente da
+   CONSULTA.
+
+⚠️ **São TRÊS tipos de evento, e DOIS cancelam.** Censo de 23/09:
+`CONFIRMACAO_TOMADOR` 31 · `CANCELAMENTO` 27 · `CANCELAMENTO_POR_SUBSTITUICAO`
+8. A primeira versão só conhecia o segundo — **8 notas apareciam válidas depois
+de canceladas**, sem erro nenhum, e a mais recente era **do mesmo dia**.
+
+O sinal que denunciou foi uma **aritmética que não fechou**: 66 eventos para 27
+notas marcadas. Dois números que deveriam bater e não batiam. Sem essa
+conferência a tela nasceria mostrando nota cancelada como boa.
+
+⚠️ **Lista BRANCA explícita** (`carbo_nfse_evento_cancela`), nunca "tudo que não
+é CONFIRMACAO_TOMADOR": a regra negativa faria tipo de evento novo cancelar nota
+sozinho, calado — a lição de `cancelado_na_loja`. Tipo desconhecido não faz nada
+e aparece em `carbo_nfse_eventos_tipos` com `conhecido = false`.
+⚠️ E `CONFIRMACAO_TOMADOR` é o **oposto** de cancelamento; tratá-lo como um
+inverteria o significado de 31 notas boas.
+
+⚠️ **O erro da substituição era DUPLA CONTAGEM, não "contar algo cancelado".**
+Substituição gera nota NOVA, e o ADN entrega as duas: a view antiga somava o par.
+Medido — 6 das 8 tinham a substituta na base:
+
+```
+dupla contagem real      R$ 32.005,84   (o mesmo serviço, duas vezes)
+cancelada sem substituta R$ 10.951,50   (1543 e 1544, de 16/04)
+                         ────────────
+                         R$ 42.957,34
+```
+
+⚠️ **O elo NÃO está no evento** — está na nota SUBSTITUTA, em `subst/chSubstda`,
+apontando para trás. A alternativa seria casar por valor + data, que é lixo já
+medido neste projeto (ligou `Leandro Teodolino` a `Mauro Nishimoto`).
+⚠️ O xpath é `//n:subst`, não caminho fixo: o schema é nacional, mas cada
+prefeitura preenche o que usa, e caminho fixo errado devolve null **sem erro** —
+a coluna ficaria vazia parecendo "não houve substituição".
+
+⚠️ **Emitida e recebida se comportam DIFERENTE na substituição** (medido):
+emitida mantém o valor (5.000→5.000, 400→400) — corrige dado; recebida **abaixa**
+(22.121,00→20.193,00 · 884,84→807,72), R$ 2.005,12 a menos em duas notas de
+fornecedor. **Se alguém pagou o valor original, pagou a mais** — pendente de
+cruzar com o contas a pagar.
+
+⚠️ **As EMITIDAS só existem a partir de 07/01/2026**; as recebidas vão a
+03/02/2023. Não é a empresa que não faturava — é quando ela passou a emitir pelo
+sistema nacional. A tela AVISA isso ao filtrar ano anterior, porque zero se lê
+como "não vendemos" e não como "o dado não existe no portal". Consequência: esta
+tela **não serve** para comparar faturamento de serviço ano a ano.
+
+Outras decisões que não se desfazem sem entender:
+1. **Guarda o CRU, interpreta na LEITURA** (molde do `conta_metrica`): corrigir
+   um entendimento é republicar view, sem rebuscar nada no gov.br — e o ADN
+   entrega por NSU, que é justamente o que ele não facilita.
+2. ⚠️ **HTTP 404 do ADN é FIM DA FILA, não falha** (`NENHUM_DOCUMENTO_LOCALIZADO`
+   / `E2220` no corpo). Tratá-lo como erro geraria 24 linhas de erro por dia num
+   log que existe para ser olhado quando algo quebra — o mecanismo que escondeu
+   o `CRON_SECRET` ausente por 25 h. E o que separa isso de "o endereço mudou"
+   é o CORPO, nunca o status.
+3. ⚠️ **Teto de 20 lotes por rodada.** Não é medo de laço: a fila tem anos de
+   histórico e o ADN pune consulta repetida. A fila se completa sozinha nas
+   rodadas seguintes.
+4. ⚠️ **Próximo NSU = o MAIOR do lote**, nunca `nsu + lote.length`: o ADN pula
+   números, e somar o tamanho travaria o ponteiro antes do buraco — a integração
+   pararia de avançar sem erro nenhum.
+5. **`xml_ok`, não coluna do tipo `xml`**: documento malformado abortaria o lote
+   e travaria o NSU naquele ponto, calado. Ele entra, sai das views, e é
+   ANUNCIADO no cartão de saúde.
+6. **`on conflict do nothing`**, nunca `do update`: documento fiscal não é
+   reescrito; correção vem como evento, em linha nova.
+7. ⚠️ **RLS: SELECT só para o time interno, e NENHUMA policy de escrita.** A nota
+   traz CNPJ, endereço e telefone; o portal de lojas e o de licenciados usam a
+   MESMA `profiles`. Quem grava é a service role, que passa por cima da RLS —
+   sem policy não existe caminho pelo PostgREST para forjar documento fiscal.
+8. ⚠️ **`carbo_nfse_cnpj()` é SECURITY DEFINER** pela razão da
+   `carbo_natureza_e_bonificacao`: em invoker, quem não lê `carbo_config_fiscal`
+   veria TODA nota como `indefinido` e o total mudaria conforme quem olha.
+9. **`papel` tem TRÊS estados** — `indefinido` aparece. Colapsá-lo em "recebida"
+   (o palpite natural) inventaria nota de fornecedor a partir de ausência. Hoje
+   é zero em 696, e foi essa medição que autorizou confiar na régua.
+10. ⚠️ **`lerTudo` desde o primeiro dia**, com 696 linhas — abaixo do teto de
+   1.000 do PostgREST. São ~700 notas/ano: cruza em meses, e o defeito dessa
+   família é invisível até cruzar.
+11. **Nota cancelada sai do TOTAL mas FICA na lista.** Escondê-la faria o número
+   fechar e a conferência ficar impossível — a razão de o usuário bloqueado não
+   sumir da tela de Usuários.
+
+⚠️ **PENDENTE:** a raiz (`controle`) tem `/admin/nfse` com importação MANUAL de
+XML (`nfse_imports`). Agora há duas telas sobre nota de serviço, com conjuntos
+diferentes — nenhuma com defeito, e é o caso conhecido de duas telas discordando
+sobre o mesmo dado. Decidir qual manda antes que alguém feche um mês por uma.
