@@ -50,6 +50,13 @@
 //   &ambiente=restrita   → produção restrita (notas de TESTE)
 //   &ambiente=producao   → produção (o padrão; é onde estão as notas reais)
 //   &caminho=…           → sobrescreve a rota, para sondar variação sem deploy
+//   &abrir=1             → descompacta os `ArquivoXml` do lote e devolve o XML
+//   &so=<n>              → com `abrir`, devolve só esse NSU (o lote inteiro é grande)
+//
+// ⚠️ O `abrir` existe porque o `ArquivoXml` é GZip+Base64 e uma linha dessas tem
+// milhares de caracteres: copiá-la para fora e descompactar do outro lado
+// corrompe o payload em silêncio (o cabeçalho gzip sobrevive, o primeiro bloco
+// deflate não). Descompactar AQUI é o mesmo código que a ingestão vai usar.
 // ═══════════════════════════════════════════════════════════════════════════
 
 const BASES: Record<string, string> = {
@@ -59,6 +66,15 @@ const BASES: Record<string, string> = {
   producao: "https://adn.nfse.gov.br",
   restrita: "https://adn.producaorestrita.nfse.gov.br",
 };
+
+// GZip+Base64 → texto. `DecompressionStream` é nativo do Deno; não há
+// dependência externa para instalar, e é o mesmo caminho que a ingestão usará.
+async function abrirGzipB64(b64: string): Promise<string> {
+  const limpo = b64.replace(/\s+/g, "");
+  const bin = Uint8Array.from(atob(limpo), (c) => c.charCodeAt(0));
+  const fluxo = new Blob([bin]).stream().pipeThrough(new DecompressionStream("gzip"));
+  return await new Response(fluxo).text();
+}
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body, null, 2), {
@@ -149,6 +165,32 @@ Deno.serve(async (req: Request) => {
     // eu ACHO que vem, que é exatamente o que ela veio evitar.
     let corpo: unknown = texto;
     try { corpo = JSON.parse(texto); } catch { /* fica como texto */ }
+
+    // ── &abrir=1 — descompacta o XML de cada documento do lote ───────────────
+    // ⚠️ Substitui o `ArquivoXml` pelo XML aberto em vez de acrescentar campo:
+    // devolver os dois dobraria o tamanho da resposta sem acrescentar nada.
+    // Erro de um documento NÃO derruba os outros — ele vira `_erro` naquela
+    // linha, porque "um documento estranho" e "o lote inteiro falhou" são
+    // diagnósticos diferentes e misturá-los manda procurar no lugar errado.
+    if (url.searchParams.get("abrir") === "1" && corpo && typeof corpo === "object") {
+      const so = url.searchParams.get("so");
+      const lote = (corpo as Record<string, unknown>).LoteDFe;
+      if (Array.isArray(lote)) {
+        const filtrado = so ? lote.filter((d) => String(d?.NSU) === so) : lote;
+        for (const doc of filtrado) {
+          if (!doc || typeof doc !== "object") continue;
+          const b64 = (doc as Record<string, unknown>).ArquivoXml;
+          if (typeof b64 !== "string") continue;
+          try {
+            (doc as Record<string, unknown>).ArquivoXml = await abrirGzipB64(b64);
+          } catch (e) {
+            (doc as Record<string, unknown>).ArquivoXml = null;
+            (doc as Record<string, unknown>)._erro = String(e);
+          }
+        }
+        (corpo as Record<string, unknown>).LoteDFe = filtrado;
+      }
+    }
 
     return json({
       ok: res.ok,
