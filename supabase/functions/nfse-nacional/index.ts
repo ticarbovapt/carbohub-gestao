@@ -49,6 +49,7 @@
 //   curl -s "https://<projeto>.supabase.co/functions/v1/nfse-nacional?secret=<CRON_SECRET>&nsu=0"
 //   &ambiente=restrita   → produção restrita (notas de TESTE)
 //   &ambiente=producao   → produção (o padrão; é onde estão as notas reais)
+//   &caminho=…           → sobrescreve a rota, para sondar variação sem deploy
 // ═══════════════════════════════════════════════════════════════════════════
 
 const BASES: Record<string, string> = {
@@ -109,6 +110,18 @@ Deno.serve(async (req: Request) => {
   const base = BASES[ambiente];
   const nsu = url.searchParams.get("nsu") ?? "0";
 
+  // ⚠️ O caminho é `/contribuintes/DFe/{NSU}`, com o `DFe` em maiúsculas.
+  //
+  // A primeira versão chamava `/dfe/{NSU}` — escrito de memória — e levou 404.
+  // O 404 foi o desfecho BOM: veio em 46 ms, com status HTTP, o que só
+  // acontece depois do handshake TLS. Ou seja, ele provou que o certificado
+  // funciona e isolou o problema no caminho. Fosse o certificado, a falha
+  // seria de TLS e não teria status nenhum.
+  //
+  // `caminho` fica sobrescrevível pela query de propósito: sondar variação de
+  // endereço não pode exigir um deploy por tentativa.
+  const caminho = url.searchParams.get("caminho") ?? `contribuintes/DFe/${nsu}`;
+
   let cliente: Deno.HttpClient;
   try {
     cliente = Deno.createHttpClient({ cert, key });
@@ -121,7 +134,7 @@ Deno.serve(async (req: Request) => {
     }, 500);
   }
 
-  const alvo = `${base}/dfe/${nsu}`;
+  const alvo = `${base}/${caminho.replace(/^\/+/, "")}`;
   try {
     const t0 = Date.now();
     const res = await fetch(alvo, {
