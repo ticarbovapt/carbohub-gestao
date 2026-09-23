@@ -4,7 +4,7 @@ import {
   DragOverlay, type DragStartEvent, type DragEndEvent,
 } from "@dnd-kit/core";
 import { toast } from "sonner";
-import { ShoppingBag, Loader2, User, Calendar, MapPin, Phone, Mail, Package, FileText, CreditCard, Truck, Boxes, Weight, Tag, Pencil, CheckCircle2, Gift } from "lucide-react";
+import { ShoppingBag, Loader2, User, Calendar, MapPin, Phone, Mail, Package, FileText, CreditCard, Truck, Boxes, Weight, Tag, Pencil, CheckCircle2, Gift, Download } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -78,6 +78,85 @@ function itensBonificados(items: PosVendaOrder["items"] | null | undefined) {
       : i.legado > 0 ? [{ nome: i.nome, qtd: i.legado }]
       : [],
     );
+}
+
+/**
+ * O número da NF no card, agora CLICÁVEL — abre o DANFE.
+ *
+ * Pedido da logística em 23/09/2026: o papel precisa acompanhar a carga, e até
+ * aqui o número era só informação. Baixá-lo exigia abrir a modal de etiqueta,
+ * que nem sempre é a etapa em que a pessoa está.
+ *
+ * ⚠️ TRÊS armadilhas, e as três produzem silêncio em vez de erro:
+ *
+ * 1. **A aba abre ANTES do `await`.** O navegador só permite `window.open` de
+ *    dentro do gesto do usuário; depois de uma chamada assíncrona o clique já
+ *    "gastou" e o bloqueador de pop-up recusa — sem exceção, sem nada na tela.
+ *    Por isso a aba nasce em branco no próprio clique e só depois recebe a URL.
+ *
+ * 2. **Aba bloqueada é DITA.** `window.open` devolve `null` quando o
+ *    bloqueador atua. Ignorar esse null deixaria o clique sem efeito nenhum, e
+ *    a pessoa clicaria de novo achando que o sistema travou.
+ *
+ * 3. **Sem PDF, cai no XML; sem os dois, avisa.** O DANFE só existe no detalhe
+ *    `GET /nfe/{id}` do Bling, e o `fetchNfFiles` busca ao vivo quando falta —
+ *    mas nota recém-emitida pode não ter link ainda. Fechar a aba em branco e
+ *    dizer o motivo é melhor que deixar uma aba `about:blank` aberta.
+ *
+ * ⚠️ `stopPropagation` nos dois: o card inteiro abre o detalhe no clique e o
+ * kanban é arrastável (`onPointerDown`). Sem isso, baixar a nota arrastaria o
+ * card de coluna.
+ */
+function ChipNf({ nfId, numero, variant, rotulo }: {
+  nfId: number | null;
+  numero: string | null;
+  variant: "success" | "info" | "warning";
+  rotulo: string;
+}) {
+  const [baixando, setBaixando] = useState(false);
+  const texto = `${rotulo} ${numero || (nfId ? `#${nfId}` : "emitida")}`;
+
+  async function baixar(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!nfId || baixando) return;
+    // A aba PRECISA nascer aqui, dentro do gesto — ver (1) acima.
+    const aba = window.open("", "_blank", "noopener,noreferrer");
+    if (!aba) {
+      toast.error("O navegador bloqueou a aba. Libere pop-ups para este site e tente de novo.");
+      return;
+    }
+    setBaixando(true);
+    try {
+      const nf = await fetchNfFiles(nfId);
+      const url = nf?.pdf_url || nf?.xml_url;
+      if (!url) {
+        aba.close();
+        toast.error("A nota ainda não tem arquivo no Bling. Tente de novo em alguns minutos.");
+        return;
+      }
+      aba.location.href = url;
+    } catch {
+      aba.close();
+      toast.error("Não consegui buscar o arquivo da nota.");
+    } finally {
+      setBaixando(false);
+    }
+  }
+
+  // Sem id da nota não há o que baixar — segue como etiqueta, não como botão.
+  // Botão que não faz nada é pior que texto: ele promete.
+  if (!nfId) return <CarboBadge variant={variant} className="gap-1">🧾 {texto}</CarboBadge>;
+
+  return (
+    <button type="button" onClick={baixar} onPointerDown={(e) => e.stopPropagation()}
+      disabled={baixando} title="Baixar a NF (DANFE) para enviar com a carga"
+      className="inline-flex items-center gap-1 disabled:opacity-60">
+      <CarboBadge variant={variant} className="gap-1 cursor-pointer hover:brightness-125 transition-[filter]">
+        {baixando ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
+        {texto}
+      </CarboBadge>
+    </button>
+  );
 }
 
 /** "set/26" — mês devido da parcela. */
@@ -528,12 +607,29 @@ export default function PosVenda() {
                           {o.fulfillment_stage === "gerar_nf" && (
                             <CarboBadge variant="warning" className="gap-1">🧾 Liberado no Faturamento — aguardando NF</CarboBadge>
                           )}
+                          {/* ⚠️ As DUAS notas quando houver bonificação: a de venda e a
+                              remessa. Elas viajam juntas com a carga — mostrar só a
+                              primeira é como a logística ficou sem a segunda até 22/09. */}
                           {o.fulfillment_stage === "nf_finalizada" && (
-                            <CarboBadge variant="success" className="gap-1">🧾 NF {o.invoice_number || o.bling_nf_id || "emitida"}</CarboBadge>
+                            <div className="flex flex-wrap gap-1.5">
+                              <ChipNf nfId={o.bling_nf_id} numero={o.invoice_number} variant="success"
+                                rotulo={o.bling_nf_bonificacao_id ? "NF venda" : "NF"} />
+                              {o.bling_nf_bonificacao_id && (
+                                <ChipNf nfId={o.bling_nf_bonificacao_id} numero={o.invoice_bonificacao_number}
+                                  variant="warning" rotulo="NF bonif." />
+                              )}
+                            </div>
                           )}
                           {o.fulfillment_stage === "emitir_etiqueta" && (
                             <div onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-                              <CarboBadge variant="info" className="gap-1 mb-2">🧾 NF {o.invoice_number || o.bling_nf_id || "emitida"}</CarboBadge>
+                              <div className="flex flex-wrap gap-1.5 mb-2">
+                                <ChipNf nfId={o.bling_nf_id} numero={o.invoice_number} variant="info"
+                                  rotulo={o.bling_nf_bonificacao_id ? "NF venda" : "NF"} />
+                                {o.bling_nf_bonificacao_id && (
+                                  <ChipNf nfId={o.bling_nf_bonificacao_id} numero={o.invoice_bonificacao_number}
+                                    variant="warning" rotulo="NF bonif." />
+                                )}
+                              </div>
                               <Button size="sm" variant="outline" className="w-full h-9 text-xs gap-1.5"
                                 onClick={() => setEtiquetaOrder(o)}>
                                 <Tag className="h-3.5 w-3.5" /> Emitir etiqueta

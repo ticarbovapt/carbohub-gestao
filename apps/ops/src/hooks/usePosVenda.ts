@@ -22,20 +22,62 @@ export type { FulfillmentStage, PosVendaStage } from "@carbo/posvenda";
 import { POSVENDA_STAGES } from "@carbo/posvenda";
 import type { FulfillmentStage } from "@carbo/posvenda";
 
-// Arquivos/metadados da NF vinculada (Bling) — best-effort para a etiqueta.
-// A chave de acesso vira o código de barras da etiqueta quando disponível.
+// Arquivos/metadados da NF vinculada (Bling). A chave de acesso vira o código
+// de barras da etiqueta quando disponível.
 export interface NfFiles { pdf_url: string | null; xml_url: string | null; chave_acesso: string | null; numero: string | null; }
+
+/**
+ * ⚠️ O CACHE NÃO BASTA, e esta função lia só o cache até 23/09/2026.
+ *
+ * A **listagem** do Bling não traz o link do DANFE — só o detalhe `GET /nfe/{id}`
+ * traz. Como o `bling-sync` guarda a listagem, `bling_nfe.pdf_url` vem nulo na
+ * maioria das notas. Lendo só o cache, o resultado era um `null` educado: sem
+ * erro, sem arquivo, e quem chamasse concluiria "esta nota não tem PDF".
+ *
+ * É a ausência disfarçada de resposta — e aqui ela tinha consequência física:
+ * a logística precisa do papel para despachar a carga.
+ *
+ * Quando falta link, busca AO VIVO na edge function `bling-sync`
+ * (`entity: 'nfe_links'`), que consulta o Bling e cacheia para a próxima vez.
+ * Mesmo caminho que o Sales (`useCarbozeVendas.fetchNfFiles`) e o Finanças
+ * (`useNfeLinks`) já usavam — este era o único que não usava.
+ *
+ * ⚠️ Falha da chamada ao vivo DEVOLVE O CACHE em vez de `null`: `chave_acesso`
+ * e `numero` podem estar lá, e é a chave que vira o código de barras da
+ * etiqueta. Perder a etiqueta porque o link do PDF não veio seria trocar um
+ * problema por outro maior.
+ */
 export async function fetchNfFiles(blingNfId: number): Promise<NfFiles | null> {
   const { data, error } = await db
     .from("bling_nfe").select("pdf_url, xml_url, chave_acesso, numero")
     .eq("bling_id", blingNfId).maybeSingle();
-  if (error || !data) return null;
-  return {
-    pdf_url: data.pdf_url ?? null,
-    xml_url: data.xml_url ?? null,
-    chave_acesso: data.chave_acesso ?? null,
-    numero: data.numero ?? null,
-  };
+  if (error) return null;
+
+  const cache: NfFiles | null = data
+    ? {
+        pdf_url: data.pdf_url ?? null,
+        xml_url: data.xml_url ?? null,
+        chave_acesso: data.chave_acesso ?? null,
+        numero: data.numero ?? null,
+      }
+    : null;
+
+  if (cache?.pdf_url || cache?.xml_url) return cache;
+
+  try {
+    const res = await supabase.functions.invoke("bling-sync", {
+      body: { entity: "nfe_links", bling_nf_id: blingNfId },
+    });
+    if (!res.data?.success) return cache;
+    return {
+      pdf_url: res.data.pdf ?? cache?.pdf_url ?? null,
+      xml_url: res.data.xml ?? cache?.xml_url ?? null,
+      chave_acesso: cache?.chave_acesso ?? null,
+      numero: cache?.numero ?? null,
+    };
+  } catch {
+    return cache;
+  }
 }
 
 export interface PosVendaItem { name?: string; quantity?: number; unit_price?: number; total?: number; product_id?: string | null; product_code?: string | null; }
