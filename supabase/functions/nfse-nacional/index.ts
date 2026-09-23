@@ -113,6 +113,11 @@ async function ingerir(base: string, ambiente: string, cli: Deno.HttpClient) {
 
   const t0 = Date.now();
   let nsu = 0;
+  // ⚠️ Declarado FORA do try: no caminho de falha o log precisa dizer de ONDE
+  // a rodada partiu. Na primeira rodada real ele ficou dentro, e a linha saiu
+  // com `nsu_antes = nsu_depois = 762` — uma rodada que trouxe 762 documentos
+  // registrada como se não tivesse andado.
+  let nsuInicial = 0;
   let lotes = 0, gravados = 0, repetidos = 0, malformados = 0;
   let status = "";
   let erro: string | null = null;
@@ -123,19 +128,39 @@ async function ingerir(base: string, ambiente: string, cli: Deno.HttpClient) {
     });
     if (eNsu) throw new Error(`carbo_nfse_ultimo_nsu: ${eNsu.message}`);
     nsu = Number(ultimo ?? 0);
-    const nsuInicial = nsu;
+    nsuInicial = nsu;
 
     while (lotes < MAX_LOTES) {
       const alvo = `${base}/contribuintes/DFe/${nsu}`;
       const res = await fetch(alvo, { client: cli, headers: { Accept: "application/json" } });
       const texto = await res.text();
+      let corpo: Record<string, unknown> = {};
+      try { corpo = JSON.parse(texto); } catch { /* fica vazio */ }
+
+      // ⚠️ O ADN responde HTTP **404** quando não há mais documento — o fim
+      // NORMAL da fila, não uma falha. Medido na primeira rodada real: ela
+      // trouxe 762 documentos e terminou com `ok: false` e um 502.
+      //
+      // Tratar isso como erro é caro de um jeito específico: são 24 linhas de
+      // erro por dia num log que existe justamente para ser olhado quando algo
+      // quebra. Erro que aparece todo dia sem nada estar errado é o mecanismo
+      // que fez o `CRON_SECRET` ausente passar 25 h despercebido.
+      //
+      // E o que separa os dois NÃO é o status HTTP, é o corpo: o próprio 404
+      // vem com `NENHUM_DOCUMENTO_LOCALIZADO` / `E2220`. Um 404 sem isso
+      // continua sendo erro — seria o endereço do ADN tendo mudado.
+      const semDocumento =
+        String(corpo?.StatusProcessamento ?? "") === "NENHUM_DOCUMENTO_LOCALIZADO" ||
+        (Array.isArray((corpo as { Erros?: { Codigo?: string }[] })?.Erros) &&
+          (corpo as { Erros: { Codigo?: string }[] }).Erros.some((x) => x?.Codigo === "E2220"));
+      if (semDocumento) { status = "FIM_DA_FILA"; break; }
+
       if (!res.ok) {
         // ⚠️ Para a rodada e DIZ o corpo. `return []` mudo aqui repetiria o
         // defeito do `pullMercadoLivre`: falha de API ficando idêntica a
         // "não havia documento".
         throw new Error(`ADN ${res.status} em ${alvo}: ${texto.slice(0, 400)}`);
       }
-      const corpo = JSON.parse(texto);
       status = String(corpo?.StatusProcessamento ?? "");
 
       const lote = Array.isArray(corpo?.LoteDFe) ? corpo.LoteDFe : [];
@@ -189,7 +214,7 @@ async function ingerir(base: string, ambiente: string, cli: Deno.HttpClient) {
     // o mesmo rastro de uma rodada sem documento — e o `pg_cron` marca
     // `succeeded` nos dois casos, porque o sucesso dele é ter POSTADO.
     await sb.from("carbo_nfse_sync_log").insert({
-      ambiente, nsu_antes: nsu, nsu_depois: nsu, lotes,
+      ambiente, nsu_antes: nsuInicial, nsu_depois: nsu, lotes,
       gravados, repetidos, malformados, status, erro, ms: Date.now() - t0,
     });
     return json({ ok: false, ambiente, nsu, lotes, gravados, erro }, 502);
