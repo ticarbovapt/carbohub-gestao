@@ -58,13 +58,20 @@ order by pr.product_code;
 --     ⚠️ Transferência aberta NÃO é tocada por este ajuste: ela credita a caixa
 --     quando for confirmada, e o saldo volta do nada. Vindo linha aqui,
 --     resolva a transferência ANTES.
+--
+--     ⚠️ A coluna é `to_hub`, não `to_warehouse_id` — e o vocabulário de status
+--     é `approved` (em trânsito, já debitado do HUB-RN) → `executed`
+--     (confirmado, creditado) / `cancelled` (estornado). Escrevi os dois
+--     errados na primeira versão e o erro foi ALTO (42703), que é o modo bom
+--     de falhar: nome de coluna inventado numa cláusula de GUARDA que voltasse
+--     vazia seria lido como "não há nada em trânsito".
 select t.id, t.status, t.created_at, pr.product_code, t.quantity
 from public.stock_transfers t
-join public.warehouses w on w.id = t.to_warehouse_id
+join public.warehouses w on w.id = t.to_hub
 join public.profiles p   on p.id = w.owner_id
 left join public.mrp_products pr on pr.id = t.product_id
 where w.kind = 'vendedor' and p.full_name ilike '%rodrigo%'
-  and t.status not in ('confirmado', 'cancelado')
+  and t.status = 'approved'
 order by t.created_at desc;
 
 
