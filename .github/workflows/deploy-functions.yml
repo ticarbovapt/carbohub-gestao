@@ -109,6 +109,10 @@ jobs:
           dep ml-auth --no-verify-jwt
           dep ml-token-refresh --no-verify-jwt
           dep ml-estoque-full --no-verify-jwt
+          # NFS-e Nacional (ADN) — fase 0, a SONDA: só LÊ, não grava nada.
+          # --no-verify-jwt porque quem chama é curl/pg_cron com o X-Cron-Secret,
+          # sem Authorization. A portaria é o CRON_SECRET, validado por dentro.
+          dep nfse-nacional --no-verify-jwt
           dep nuvemshop-auth --no-verify-jwt
           dep nuvemshop-lgpd --no-verify-jwt
           # Shopee. ⚠️ Estava no repo e no config.toml desde que foi escrita, e
