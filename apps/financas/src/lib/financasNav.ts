@@ -1,4 +1,4 @@
-import { LayoutDashboard, Wallet, Package, ClipboardList, Link2, Receipt, Percent, Users, type LucideIcon } from "lucide-react";
+import { LayoutDashboard, Wallet, Package, ClipboardList, Link2, Receipt, Percent, Users, FileSpreadsheet, type LucideIcon } from "lucide-react";
 
 export interface FinNavItem { path: string; label: string; icon: LucideIcon; }
 
@@ -13,4 +13,5 @@ export const FIN_NAV: FinNavItem[] = [
   { path: "/funcionarios", label: "Funcionários", icon: Users },
   { path: "/integracoes/bling", label: "Integração Bling", icon: Link2 },
   { path: "/integracoes/bling2", label: "Integração Bling 2", icon: Link2 },
+  { path: "/integracoes/nfse", label: "NFS-e Nacional", icon: FileSpreadsheet },
 ];
