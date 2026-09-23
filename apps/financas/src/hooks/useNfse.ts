@@ -43,6 +43,13 @@ export interface NfseRow {
   // CONFIRMACAO_TOMADOR é o OPOSTO de cancelamento — o tomador confirmando.
   confirmada_tomador: boolean;
   confirmada_em: string | null;
+  // ⚠️ O elo da substituição mora na nota NOVA (`substitui_chave`), apontando
+  // para trás. `substituida_por_*` é o outro lado, resolvido no banco — sem
+  // ele, "Substituída" informa um fim sem apontar a continuação.
+  substitui_chave: string | null;
+  substituicao_motivo: string | null;
+  substituida_por_chave: string | null;
+  substituida_por_numero: string | null;
 }
 
 export interface NfseSaude {
@@ -61,7 +68,8 @@ const COLUNAS =
   "servico_nacional,emit_cnpj,emit_nome,toma_doc,toma_nome,emitida_em,processada_em," +
   "competencia,valor_liquido,base_calculo,total_retido,valor_servico,descricao," +
   "papel,cancelada,cancelamento_tipo,cancelada_em,cancelamento_motivo," +
-  "confirmada_tomador,confirmada_em";
+  "confirmada_tomador,confirmada_em,substitui_chave,substituicao_motivo," +
+  "substituida_por_chave,substituida_por_numero";
 
 export function useNfse() {
   return useQuery({

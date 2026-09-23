@@ -55,9 +55,26 @@ function contraparte(n: NfseRow): string {
 function selo(n: NfseRow) {
   if (n.cancelada) {
     const sub = (n.cancelamento_tipo ?? "").toUpperCase().includes("SUBSTITU");
-    return sub
-      ? <CarboBadge variant="warning" size="sm"><Repeat className="h-3 w-3 mr-1" />Substituída</CarboBadge>
-      : <CarboBadge variant="cancelled" size="sm"><Ban className="h-3 w-3 mr-1" />Cancelada</CarboBadge>;
+    if (!sub) {
+      return <CarboBadge variant="cancelled" size="sm"><Ban className="h-3 w-3 mr-1" />Cancelada</CarboBadge>;
+    }
+    // ⚠️ O número da substituta vai NO selo. "Substituída" sozinho informa um
+    // fim sem apontar a continuação — e quem confere o mês precisa justamente
+    // saber para onde o valor foi. Quando o elo não existe (a substituta não
+    // chegou pelo ADN), o selo diz "Substituída" e nada mais: ausência
+    // aparecendo como ausência, nunca disfarçada de resposta.
+    return (
+      <CarboBadge variant="warning" size="sm"
+                  title={n.substituicao_motivo ?? n.cancelamento_motivo ?? undefined}>
+        <Repeat className="h-3 w-3 mr-1" />
+        {n.substituida_por_numero ? `Substituída pela ${n.substituida_por_numero}` : "Substituída"}
+      </CarboBadge>
+    );
+  }
+  // A nota NOVA de um par de substituição é válida, e dizer isso evita a
+  // leitura errada de que ela é uma nota a mais no mês.
+  if (n.substitui_chave) {
+    return <CarboBadge variant="info" size="sm"><Repeat className="h-3 w-3 mr-1" />Substitui outra</CarboBadge>;
   }
   if (n.confirmada_tomador) {
     return <CarboBadge variant="success" size="sm"><CheckCircle2 className="h-3 w-3 mr-1" />Confirmada</CarboBadge>;
