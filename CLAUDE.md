@@ -2474,6 +2474,13 @@ Outras decisões que não se desfazem sem entender:
    fechar e a conferência ficar impossível — a razão de o usuário bloqueado não
    sumir da tela de Usuários.
 
+⚠️ **O menu do Finanças tem DOIS lugares, igual ao do Ops** — e eu caí nessa no
+mesmo dia em que escrevi a regra para o Ops. Rota nova precisa de
+`src/lib/financasNav.ts` (ícone e rótulo) **e** da lista de grupos em
+`src/components/Layout.tsx`, que é quem realmente monta o menu. Só o primeiro:
+a tela existe, a rota responde, o build passa — e **ninguém a encontra**. Foi o
+que aconteceu com a `/integracoes/nfse`.
+
 ⚠️ **PENDENTE:** a raiz (`controle`) tem `/admin/nfse` com importação MANUAL de
 XML (`nfse_imports`). Agora há duas telas sobre nota de serviço, com conjuntos
 diferentes — nenhuma com defeito, e é o caso conhecido de duas telas discordando

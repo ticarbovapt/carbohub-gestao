@@ -58,7 +58,11 @@ export function Layout() {
     ] },
     { label: "Financeiro", items: [item("/faturamento"), item("/comissionamento"), item("/pedidos")] },
     { label: "Suprimentos", items: [item("/suprimentos"), item("/compras")] },
-    { label: "Configurações", items: [item("/funcionarios"), item("/integracoes/bling"), item("/integracoes/bling2")] },
+    // ⚠️ O MENU TEM DOIS LUGARES e esquecer este deixa a tela invisível sem erro
+    // nenhum: o registro em `lib/financasNav.ts` (ícone e rótulo) E esta lista,
+    // que é quem monta os grupos. Rota nova entra nos dois, na MESMA tarefa —
+    // a `/integracoes/nfse` nasceu só no primeiro e não apareceu para ninguém.
+    { label: "Configurações", items: [item("/funcionarios"), item("/integracoes/bling"), item("/integracoes/bling2"), item("/integracoes/nfse")] },
   ];
 
   // Mobile: abre a gaveta. Desktop: recolhe/expande a sidebar (rail).
