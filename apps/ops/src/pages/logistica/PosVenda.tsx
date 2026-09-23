@@ -87,24 +87,29 @@ function itensBonificados(items: PosVendaOrder["items"] | null | undefined) {
  * aqui o número era só informação. Baixá-lo exigia abrir a modal de etiqueta,
  * que nem sempre é a etapa em que a pessoa está.
  *
- * ⚠️ TRÊS armadilhas, e as três produzem silêncio em vez de erro:
+ * ⚠️ **BUSCA PRIMEIRO, abre depois** — e as duas tentativas anteriores de ser
+ * mais esperto que isso custaram dois commits.
  *
- * 1. **A aba abre ANTES do `await`.** O navegador só permite `window.open` de
- *    dentro do gesto do usuário; depois de uma chamada assíncrona o clique já
- *    "gastou" e o bloqueador de pop-up recusa — sem exceção, sem nada na tela.
- *    Por isso a aba nasce em branco no próprio clique e só depois recebe a URL.
+ * Eu abria uma aba em branco no clique e só depois a levava até a URL, com medo
+ * de o bloqueador de pop-up recusar um `window.open` feito após o `await`.
+ * Deu duas coisas erradas, nesta ordem:
  *
- * 2. ⚠️ **`noopener` faz o `window.open` devolver `null` por ESPECIFICAÇÃO**,
- *    não por bloqueio — "sem opener" é literalmente não devolver a referência.
- *    A primeira versão passava `noopener,noreferrer`, lia o null como bloqueio
- *    e abandonava a aba que ela mesma tinha acabado de abrir: sobravam
- *    `about:blank` empilhados e nenhum arquivo. O `opener` é anulado à mão
- *    logo depois — mesma proteção, sem perder a referência.
+ *   1ª  `window.open("", "_blank", "noopener")` devolve **null por
+ *       ESPECIFICAÇÃO** — "sem opener" é literalmente não devolver a
+ *       referência. O código leu o null como bloqueio e abandonou a aba que
+ *       ele mesmo tinha aberto: `about:blank` empilhados e nenhum arquivo.
+ *   2ª  Corrigido isso, o arquivo abria — mas a aba em branco ainda piscava
+ *       antes, e quando a busca falha ela sobra na barra.
  *
- * 3. **Sem PDF, cai no XML; sem os dois, avisa.** O DANFE só existe no detalhe
- *    `GET /nfe/{id}` do Bling, e o `fetchNfFiles` busca ao vivo quando falta —
- *    mas nota recém-emitida pode não ter link ainda. Fechar a aba em branco e
- *    dizer o motivo é melhor que deixar uma aba `about:blank` aberta.
+ * O `BaixarNFButton` do Finanças nunca teve nada disso: ele busca e chama
+ * `window.open(pdf, "_blank", "noopener")` no `onSuccess`. Funciona porque o
+ * Chrome libera o pop-up numa janela curta depois do gesto, e uma chamada só
+ * cabe nela. **O padrão que já estava provado no repo era o simples** — eu
+ * inventei um mais defensivo sem medir se o problema existia.
+ *
+ * ⚠️ Sem PDF, cai no XML; sem os dois, avisa. O DANFE só existe no detalhe
+ * `GET /nfe/{id}` do Bling, e o `fetchNfFiles` busca ao vivo quando falta — mas
+ * nota recém-emitida pode não ter link ainda, e isso precisa ser DITO.
  *
  * ⚠️ `stopPropagation` nos dois: o card inteiro abre o detalhe no clique e o
  * kanban é arrastável (`onPointerDown`). Sem isso, baixar a nota arrastaria o
@@ -123,38 +128,20 @@ function ChipNf({ nfId, numero, variant, rotulo }: {
     e.stopPropagation();
     if (!nfId || baixando) return;
 
-    // ⚠️ A aba PRECISA nascer aqui, dentro do gesto — ver (1) acima. E SEM
-    // `noopener`/`noreferrer`: com qualquer um dos dois o `window.open`
-    // devolve **null por especificação** (é o que "sem opener" significa), e
-    // não porque foi bloqueado.
-    //
-    // Medido em 23/09/2026: a aba branca abria, o retorno vinha null, o código
-    // lia isso como bloqueio e ABANDONAVA a aba que ele mesmo tinha acabado de
-    // abrir. Sobravam `about:blank` empilhados e nenhum arquivo.
-    //
-    // O `opener` é anulado logo abaixo, que dá a mesma proteção sem perder a
-    // referência de que precisamos para levar a aba até a URL.
-    const aba = window.open("", "_blank");
-    if (aba) { try { aba.opener = null; } catch { /* nada a fazer */ } }
-
     setBaixando(true);
     try {
       const nf = await fetchNfFiles(nfId);
       const url = nf?.pdf_url || nf?.xml_url;
       if (!url) {
-        aba?.close();
         toast.error("A nota ainda não tem arquivo no Bling. Tente de novo em alguns minutos.");
         return;
       }
-      if (aba) aba.location.href = url;
-      // Reserva para o caso de a aba realmente ter sido bloqueada. Tentar
-      // agora costuma ser recusado (o gesto já passou), então o aviso vem
-      // junto em vez de deixar o clique sem resposta.
-      else if (!window.open(url, "_blank", "noopener,noreferrer")) {
+      // Mesma chamada do `BaixarNFButton` do Finanças. Nenhuma aba nasce antes:
+      // ou abre no arquivo, ou não abre aba nenhuma.
+      if (!window.open(url, "_blank", "noopener")) {
         toast.error("O navegador bloqueou a aba. Libere pop-ups para este site e tente de novo.");
       }
     } catch {
-      aba?.close();
       toast.error("Não consegui buscar o arquivo da nota.");
     } finally {
       setBaixando(false);
