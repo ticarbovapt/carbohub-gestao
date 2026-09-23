@@ -34,6 +34,22 @@ jobs:
           #
           # Três tentativas com espera crescente resolvem a classe inteira
           # desse problema: falha de rede é transitória, falha de código não.
+          #
+          # ⚠️ MAS AS TRÊS TENTATIVAS PODEM NÃO BASTAR, e aconteceu em
+          # 23/09/2026: `toomanyrequests` ao puxar
+          # `ghcr.io/supabase/edge-runtime` — limite de taxa do registro do
+          # GitHub, não nosso. As três tentativas caíram dentro da mesma janela
+          # de bloqueio e a run inteira falhou.
+          #
+          # ⚠️ E ela falhou na PRIMEIRA função da lista, então NENHUMA subiu.
+          # O sintoma na ponta é enganoso: a função nova "não existe" e a
+          # correção recém-empurrada "não pegou" — parece bug de código, e a
+          # causa está num registro de container.
+          #
+          # Antes de investigar uma função que não mudou de comportamento,
+          # olhe a conclusão da run no Actions. `alvo`/versão na própria
+          # resposta da função é o jeito barato de saber qual código respondeu.
+          # Remediar é reempurrar: um push novo refaz a fila inteira.
           dep() {
             local fn="$1"; shift
             local tentativa
