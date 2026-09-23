@@ -52,12 +52,19 @@
 //   &caminho=…           → sobrescreve a rota, para sondar variação sem deploy
 //   &abrir=1             → descompacta os `ArquivoXml` do lote e devolve o XML
 //   &so=<n>              → com `abrir`, devolve só esse NSU (o lote inteiro é grande)
+//   &ingerir=1           → FASE 2: puxa do último NSU gravado em diante e GRAVA
+//
+// ⚠️ `ingerir=1` é o ÚNICO modo que escreve. Sem ele a função continua sendo a
+// sonda de leitura — e é assim que dá para investigar o ADN em produção sem
+// mexer no log fiscal.
 //
 // ⚠️ O `abrir` existe porque o `ArquivoXml` é GZip+Base64 e uma linha dessas tem
 // milhares de caracteres: copiá-la para fora e descompactar do outro lado
 // corrompe o payload em silêncio (o cabeçalho gzip sobrevive, o primeiro bloco
 // deflate não). Descompactar AQUI é o mesmo código que a ingestão vai usar.
 // ═══════════════════════════════════════════════════════════════════════════
+
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const BASES: Record<string, string> = {
   // Endereços do Sistema Nacional NFS-e. `restrita` é o ambiente de homologação
@@ -74,6 +81,119 @@ async function abrirGzipB64(b64: string): Promise<string> {
   const bin = Uint8Array.from(atob(limpo), (c) => c.charCodeAt(0));
   const fluxo = new Blob([bin]).stream().pipeThrough(new DecompressionStream("gzip"));
   return await new Response(fluxo).text();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FASE 2 — a ingestão
+//
+// ⚠️ O ADN entrega por NSU e NÃO tem webhook: ele guarda uma fila por
+// interessado e devolve o que veio DEPOIS do número pedido. Quem guarda o
+// último lido é a gente — e aqui isso é `max(nsu)` do próprio log, nunca uma
+// coluna à parte que possa divergir dele.
+//
+// ⚠️ PAGINAÇÃO COM TETO, e o teto não é medo de loop infinito. O ADN pune
+// consulta repetida sem documento novo ("consumo indevido"), e a fila tem anos
+// de histórico: a primeira rodada percorreria centenas de lotes de uma vez,
+// exatamente o que faz um serviço fiscal fechar a porta. Com o teto ela avança
+// um pedaço por hora e se completa sozinha nas rodadas seguintes — que é a
+// mesma propriedade que torna a rodada interrompida segura de repetir.
+// ═══════════════════════════════════════════════════════════════════════════
+const MAX_LOTES = 20;
+
+async function ingerir(base: string, ambiente: string, cli: Deno.HttpClient) {
+  const urlSb = Deno.env.get("SUPABASE_URL");
+  const chave = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!urlSb || !chave) {
+    // Ausência FECHA: sem service role não há gravação, e tentar assim mesmo
+    // acabaria em RLS recusando linha a linha — erro que se lê como "o ADN não
+    // mandou nada", que é o diagnóstico errado.
+    return json({ ok: false, erro: "SUPABASE_URL/SERVICE_ROLE_KEY ausentes" }, 500);
+  }
+  const sb = createClient(urlSb, chave, { auth: { persistSession: false } });
+
+  const t0 = Date.now();
+  let nsu = 0;
+  let lotes = 0, gravados = 0, repetidos = 0, malformados = 0;
+  let status = "";
+  let erro: string | null = null;
+
+  try {
+    const { data: ultimo, error: eNsu } = await sb.rpc("carbo_nfse_ultimo_nsu", {
+      p_ambiente: ambiente,
+    });
+    if (eNsu) throw new Error(`carbo_nfse_ultimo_nsu: ${eNsu.message}`);
+    nsu = Number(ultimo ?? 0);
+    const nsuInicial = nsu;
+
+    while (lotes < MAX_LOTES) {
+      const alvo = `${base}/contribuintes/DFe/${nsu}`;
+      const res = await fetch(alvo, { client: cli, headers: { Accept: "application/json" } });
+      const texto = await res.text();
+      if (!res.ok) {
+        // ⚠️ Para a rodada e DIZ o corpo. `return []` mudo aqui repetiria o
+        // defeito do `pullMercadoLivre`: falha de API ficando idêntica a
+        // "não havia documento".
+        throw new Error(`ADN ${res.status} em ${alvo}: ${texto.slice(0, 400)}`);
+      }
+      const corpo = JSON.parse(texto);
+      status = String(corpo?.StatusProcessamento ?? "");
+
+      const lote = Array.isArray(corpo?.LoteDFe) ? corpo.LoteDFe : [];
+      if (lote.length === 0) break;
+
+      // Descompacta aqui: o banco recebe o XML já legível. Guardar o GZip
+      // obrigaria toda consulta a saber descompactar, e a view não sabe.
+      for (const doc of lote) {
+        if (typeof doc?.ArquivoXml === "string") {
+          try {
+            doc.ArquivoXml = await abrirGzipB64(doc.ArquivoXml);
+          } catch (e) {
+            // ⚠️ NÃO derruba o lote e NÃO descarta o documento: entra com o
+            // conteúdo cru e o banco o marca `xml_ok = false`. Descartar
+            // perderia o documento para sempre, porque o NSU avança.
+            doc._gzip_erro = String(e);
+          }
+        }
+      }
+
+      const { data: r, error: eGrav } = await sb.rpc("carbo_nfse_gravar_lote", {
+        p_lote: lote,
+        p_ambiente: ambiente,
+      });
+      if (eGrav) throw new Error(`carbo_nfse_gravar_lote: ${eGrav.message}`);
+      const linha = Array.isArray(r) ? r[0] : r;
+      gravados += Number(linha?.gravados ?? 0);
+      repetidos += Number(linha?.repetidos ?? 0);
+      malformados += Number(linha?.malformados ?? 0);
+      lotes++;
+
+      // ⚠️ O próximo NSU sai do MAIOR do lote, não de `nsu + lote.length`: o
+      // ADN pula números (documento que não é nosso consome NSU da fila
+      // geral), e somar o tamanho travaria o ponteiro antes do buraco — a
+      // integração pararia de avançar sem erro nenhum.
+      const maior = Math.max(...lote.map((d: Record<string, unknown>) => Number(d?.NSU ?? 0)));
+      if (!Number.isFinite(maior) || maior <= nsu) break;
+      nsu = maior;
+    }
+
+    await sb.from("carbo_nfse_sync_log").insert({
+      ambiente, nsu_antes: nsuInicial, nsu_depois: nsu, lotes,
+      gravados, repetidos, malformados, status, ms: Date.now() - t0,
+    });
+    return json({ ok: true, ambiente, nsu_antes: nsuInicial, nsu_depois: nsu,
+                  lotes, gravados, repetidos, malformados, status,
+                  ms: Date.now() - t0 });
+  } catch (e) {
+    erro = String(e);
+    // ⚠️ A falha também vira LINHA. Sem isso, rodada que morre no meio deixa
+    // o mesmo rastro de uma rodada sem documento — e o `pg_cron` marca
+    // `succeeded` nos dois casos, porque o sucesso dele é ter POSTADO.
+    await sb.from("carbo_nfse_sync_log").insert({
+      ambiente, nsu_antes: nsu, nsu_depois: nsu, lotes,
+      gravados, repetidos, malformados, status, erro, ms: Date.now() - t0,
+    });
+    return json({ ok: false, ambiente, nsu, lotes, gravados, erro }, 502);
+  }
 }
 
 function json(body: unknown, status = 200) {
@@ -125,6 +245,21 @@ Deno.serve(async (req: Request) => {
   const ambiente = url.searchParams.get("ambiente") === "restrita" ? "restrita" : "producao";
   const base = BASES[ambiente];
   const nsu = url.searchParams.get("nsu") ?? "0";
+
+  // ── &ingerir=1 — a FASE 2: puxa por NSU e grava ──────────────────────────
+  if (url.searchParams.get("ingerir") === "1") {
+    let cli: Deno.HttpClient;
+    try {
+      cli = Deno.createHttpClient({ cert, key });
+    } catch (e) {
+      return json({ ok: false, etapa: "createHttpClient", erro: String(e) }, 500);
+    }
+    try {
+      return await ingerir(base, ambiente, cli);
+    } finally {
+      try { cli.close(); } catch { /* nada a fazer */ }
+    }
+  }
 
   // ⚠️ O caminho é `/contribuintes/DFe/{NSU}`, com o `DFe` em maiúsculas.
   //
