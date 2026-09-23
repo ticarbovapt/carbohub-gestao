@@ -94,9 +94,12 @@ function itensBonificados(items: PosVendaOrder["items"] | null | undefined) {
  *    "gastou" e o bloqueador de pop-up recusa — sem exceção, sem nada na tela.
  *    Por isso a aba nasce em branco no próprio clique e só depois recebe a URL.
  *
- * 2. **Aba bloqueada é DITA.** `window.open` devolve `null` quando o
- *    bloqueador atua. Ignorar esse null deixaria o clique sem efeito nenhum, e
- *    a pessoa clicaria de novo achando que o sistema travou.
+ * 2. ⚠️ **`noopener` faz o `window.open` devolver `null` por ESPECIFICAÇÃO**,
+ *    não por bloqueio — "sem opener" é literalmente não devolver a referência.
+ *    A primeira versão passava `noopener,noreferrer`, lia o null como bloqueio
+ *    e abandonava a aba que ela mesma tinha acabado de abrir: sobravam
+ *    `about:blank` empilhados e nenhum arquivo. O `opener` é anulado à mão
+ *    logo depois — mesma proteção, sem perder a referência.
  *
  * 3. **Sem PDF, cai no XML; sem os dois, avisa.** O DANFE só existe no detalhe
  *    `GET /nfe/{id}` do Bling, e o `fetchNfFiles` busca ao vivo quando falta —
@@ -119,24 +122,39 @@ function ChipNf({ nfId, numero, variant, rotulo }: {
   async function baixar(e: React.MouseEvent) {
     e.stopPropagation();
     if (!nfId || baixando) return;
-    // A aba PRECISA nascer aqui, dentro do gesto — ver (1) acima.
-    const aba = window.open("", "_blank", "noopener,noreferrer");
-    if (!aba) {
-      toast.error("O navegador bloqueou a aba. Libere pop-ups para este site e tente de novo.");
-      return;
-    }
+
+    // ⚠️ A aba PRECISA nascer aqui, dentro do gesto — ver (1) acima. E SEM
+    // `noopener`/`noreferrer`: com qualquer um dos dois o `window.open`
+    // devolve **null por especificação** (é o que "sem opener" significa), e
+    // não porque foi bloqueado.
+    //
+    // Medido em 23/09/2026: a aba branca abria, o retorno vinha null, o código
+    // lia isso como bloqueio e ABANDONAVA a aba que ele mesmo tinha acabado de
+    // abrir. Sobravam `about:blank` empilhados e nenhum arquivo.
+    //
+    // O `opener` é anulado logo abaixo, que dá a mesma proteção sem perder a
+    // referência de que precisamos para levar a aba até a URL.
+    const aba = window.open("", "_blank");
+    if (aba) { try { aba.opener = null; } catch { /* nada a fazer */ } }
+
     setBaixando(true);
     try {
       const nf = await fetchNfFiles(nfId);
       const url = nf?.pdf_url || nf?.xml_url;
       if (!url) {
-        aba.close();
+        aba?.close();
         toast.error("A nota ainda não tem arquivo no Bling. Tente de novo em alguns minutos.");
         return;
       }
-      aba.location.href = url;
+      if (aba) aba.location.href = url;
+      // Reserva para o caso de a aba realmente ter sido bloqueada. Tentar
+      // agora costuma ser recusado (o gesto já passou), então o aviso vem
+      // junto em vez de deixar o clique sem resposta.
+      else if (!window.open(url, "_blank", "noopener,noreferrer")) {
+        toast.error("O navegador bloqueou a aba. Libere pop-ups para este site e tente de novo.");
+      }
     } catch {
-      aba.close();
+      aba?.close();
       toast.error("Não consegui buscar o arquivo da nota.");
     } finally {
       setBaixando(false);
