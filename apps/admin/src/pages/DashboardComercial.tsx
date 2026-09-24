@@ -156,6 +156,34 @@ export default function DashboardComercial() {
   if (!canAdmin) return <main className="mx-auto max-w-6xl px-4 sm:px-6 py-8"><RestrictedNotice /></main>;
 
   const k = data?.kpis, g = data?.growth, monthly = data?.monthly ?? [], seg = canais?.segmentacao;
+
+  // ⚠️ Recorrência juntando as duas bases pelo DOCUMENTO, nunca pelo nome.
+  // Casar por nome misturaria empresas diferentes e separaria a mesma — é a
+  // lição já paga no cadastro de PDV ("Postos RCM (Afogados)" e "Posto RF
+  // Afogados" são a MESMA loja; nomes parecidos costumam ser filiais
+  // distintas). Cliente sem documento fica na própria chave e nunca se funde
+  // com outro por acaso.
+  const topGeral = useMemo(() => {
+    const soma = new Map<string, { nome: string; qtd: number }>();
+    for (const mapa of [data?.porCliente, servicos?.porCliente]) {
+      if (!mapa) continue;
+      for (const [chave, v] of mapa) {
+        const atual = soma.get(chave) ?? { nome: v.nome, qtd: 0 };
+        atual.qtd += v.qtd;
+        soma.set(chave, atual);
+      }
+    }
+    let melhor = { nome: "—", qtd: 0 };
+    for (const v of soma.values()) if (v.qtd > melhor.qtd) melhor = v;
+    return melhor;
+  }, [data?.porCliente, servicos?.porCliente]);
+
+  // Total dividido pelo total — ver a nota no card.
+  const ticketGeral = (() => {
+    const valor = (data?.totalBRL ?? 0) + (servicos?.total ?? 0);
+    const qtd = (data?.totalVendas ?? 0) + (servicos?.notas ?? 0);
+    return qtd > 0 ? valor / qtd : 0;
+  })();
   const hasData = (monthly.reduce((s, m) => s + m.pedidos, 0)) > 0;
 
   return (
@@ -219,7 +247,7 @@ export default function DashboardComercial() {
         )}
 
         {/* 2b. KPIs */}
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
           {/* ⚠️ A unidade NÃO é a mesma nas duas bases: no Bling conta-se
               PEDIDO, na NFS-e conta-se NOTA de serviço. Somar só é honesto com
               a composição escrita embaixo — um "1551" sozinho esconderia que
@@ -228,14 +256,28 @@ export default function DashboardComercial() {
                    value={String((k?.totalVendas ?? 0) + (servicos?.notas ?? 0))}
                    sub={`${data?.qtdOnline ?? 0} on-line · ${data?.qtdNaoOnline ?? 0} equipe · ${servicos?.notas ?? 0} serviço`}
                    Icon={ShoppingCart} accent="border-l-green-500" iconBg="bg-green-500/10 text-green-600" />
-          {/* ⚠️ Este card continua sendo SÓ produto (NF-e). O rótulo passou a
-              dizer isso: antes ele se chamava "Faturamento acumulado" e, ao
-              lado do total novo, dois números diferentes com o mesmo nome
-              fariam alguém escolher o errado. */}
-          <KpiCard title="R$ Vendido (produto)" value={fmtK(k?.totalBRL ?? 0)} sub="Só NF-e do Bling — sem serviço" Icon={DollarSign} accent="border-l-green-500" iconBg="bg-green-500/10 text-green-600" />
-          <KpiCard title="Maior Venda" value={fmtK(k?.maiorVenda ?? 0)} sub={k?.maiorCliente} Icon={Trophy} accent="border-l-amber-400" iconBg="bg-amber-400/10 text-amber-500" />
-          <KpiCard title="Top Recorrência" value={k?.topCliente ?? "—"} sub={`${k?.topQtd ?? 0} pedido(s) · mais frequente`} Icon={Repeat2} accent="border-l-blue-400" iconBg="bg-blue-400/10 text-blue-500" />
-          <KpiCard title="Ticket Médio" value={fmtK(k?.ticketMedio ?? 0)} sub="Por pedido (período)" Icon={TrendingUp} accent="border-l-violet-400" iconBg="bg-violet-400/10 text-violet-500" />
+          {/* O card "R$ Vendido (produto)" saiu: on-line e equipe já estão nos
+              cards de ORIGEM acima, e quem quiser o produto sozinho soma os
+              dois. Um número a menos que repete outros dois. */}
+          {/* ⚠️ "Maior venda" olha as DUAS bases. Antes via só a NF-e do Bling,
+              então uma descarbonização maior que qualquer pedido de produto
+              ficava invisível — e o card afirmava um recorde que não era o
+              recorde. */}
+          <KpiCard title="Maior Venda"
+                   value={fmtK(Math.max(k?.maiorVenda ?? 0, servicos?.maiorNota ?? 0))}
+                   sub={(servicos?.maiorNota ?? 0) > (k?.maiorVenda ?? 0)
+                     ? `${servicos?.maiorNotaCliente ?? "—"} · descarbonização`
+                     : `${k?.maiorCliente ?? "—"} · produto`}
+                   Icon={Trophy} accent="border-l-amber-400" iconBg="bg-amber-400/10 text-amber-500" />
+          <KpiCard title="Top Recorrência" value={topGeral.nome}
+                   sub={`${topGeral.qtd} operação(ões) · produto + serviço`}
+                   Icon={Repeat2} accent="border-l-blue-400" iconBg="bg-blue-400/10 text-blue-500" />
+          {/* ⚠️ O ticket GERAL não é a média das três médias — é o total
+              dividido pelo total. Média de médias daria peso igual a um canal
+              de 320 notas e a outro de 1.100 pedidos. */}
+          <KpiCard title="Ticket Médio" value={fmtK(ticketGeral)}
+                   sub={`on-line ${fmtK(data?.ticketOnline ?? 0)} · equipe ${fmtK(data?.ticketNaoOnline ?? 0)} · descarb. ${fmtK(servicos?.ticketMedio ?? 0)}`}
+                   Icon={TrendingUp} accent="border-l-violet-400" iconBg="bg-violet-400/10 text-violet-500" />
         </div>
 
         {/* 3. Crescimento */}

@@ -48,6 +48,14 @@ export interface ServicosNfse {
   // Contagem separada pela mesma razão do valor: a nota de comissão não é
   // descarbonização, e somá-la na contagem repetiria o erro de rótulo.
   notasDescarbonizacao: number;
+  ticketMedio: number;
+  // A maior nota de serviço do período, para o card "Maior Venda" poder
+  // comparar as duas bases em vez de olhar só a do Bling.
+  maiorNota: number;
+  maiorNotaCliente: string;
+  // ⚠️ Chaveado por DOCUMENTO do tomador, igual ao lado do Bling: é isso que
+  // deixa as duas recorrências serem SOMADAS sem misturar empresas diferentes.
+  porCliente: Map<string, { nome: string; qtd: number }>;
   porMes: ServicoMes[];
   // ⚠️ O mês em que a série COMEÇA. O Bling tem histórico desde out/25, mas o
   // portal nacional só entrega emitidas a partir de jan/26 — os meses
@@ -59,6 +67,8 @@ export interface ServicosNfse {
 
 interface Linha {
   papel: string | null;
+  toma_nome: string | null;
+  toma_doc: string | null;
   cancelada: boolean | null;
   emitida_em: string | null;
   valor_liquido: number | null;
@@ -79,7 +89,7 @@ export function useServicosNfse(filtros: ServicosFiltro = {}) {
       const linhas = await lerTudo<Linha>((de, ate) =>
         supabase
           .from("carbo_nfse_visao" as never)
-          .select("papel, cancelada, emitida_em, valor_liquido, serv_cod_nacional")
+          .select("papel, cancelada, emitida_em, valor_liquido, serv_cod_nacional, toma_nome, toma_doc")
           .order("emitida_em", { ascending: false, nullsFirst: false })
           .order("nsu", { ascending: false })
           .range(de, ate) as never,
@@ -90,6 +100,8 @@ export function useServicosNfse(filtros: ServicosFiltro = {}) {
 
       const porMes = new Map<string, ServicoMes>();
       let descarbonizacao = 0, outros = 0, notas = 0, notasDescarbonizacao = 0;
+      let maiorNota = 0, maiorNotaCliente = "—";
+      const porCliente = new Map<string, { nome: string; qtd: number }>();
       let primeiroMes: string | null = null;
 
       for (const l of linhas) {
@@ -113,6 +125,15 @@ export function useServicosNfse(filtros: ServicosFiltro = {}) {
         porMes.set(mes, atual);
 
         notas++;
+        if (v > maiorNota) { maiorNota = v; maiorNotaCliente = l.toma_nome || "—"; }
+
+        const doc = (l.toma_doc ?? "").replace(/\D/g, "");
+        const nome = l.toma_nome || "—";
+        const chave = doc ? `doc:${doc}` : `nome:${nome.toLocaleLowerCase("pt-BR")}`;
+        const cli = porCliente.get(chave) ?? { nome, qtd: 0 };
+        cli.qtd++;
+        porCliente.set(chave, cli);
+
         if (!primeiroMes || mes < primeiroMes) primeiroMes = mes;
       }
 
@@ -122,6 +143,10 @@ export function useServicosNfse(filtros: ServicosFiltro = {}) {
         total: descarbonizacao + outros,
         notas,
         notasDescarbonizacao,
+        ticketMedio: notas > 0 ? (descarbonizacao + outros) / notas : 0,
+        maiorNota,
+        maiorNotaCliente,
+        porCliente,
         porMes: Array.from(porMes.values()).sort((a, b) => a.mes.localeCompare(b.mes)),
         primeiroMes,
       };

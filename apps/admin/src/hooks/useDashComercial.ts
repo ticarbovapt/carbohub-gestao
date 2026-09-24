@@ -66,6 +66,15 @@ export interface ComercialData {
   totalNaoOnline: number;
   qtdOnline: number;
   qtdNaoOnline: number;
+  ticketOnline: number;
+  ticketNaoOnline: number;
+  // ⚠️ Chaveado por DOCUMENTO, não por nome. É o que permite juntar a
+  // recorrência desta base com a da NFS-e sem misturar empresas diferentes —
+  // a mesma lição do cadastro de PDV, onde "Postos RCM (Afogados)" e "Posto RF
+  // Afogados" são a mesma loja e nomes parecidos são filiais distintas.
+  // Cliente SEM documento entra com a própria chave de nome, prefixada, para
+  // nunca se fundir com outro por acaso.
+  porCliente: Map<string, { nome: string; qtd: number }>;
   totalVendas: number;
   ticketMedio: number;
   maiorVenda: number;
@@ -83,6 +92,7 @@ interface CarbozeOrderRow {
   status: string | null;
   created_at: string | null;
   customer_name: string | null;
+  customer_doc: string | null;
   vendedor_id: string | null;
   segmento: string | null;
   conta_metrica: boolean | null;
@@ -135,7 +145,7 @@ export function useDashComercial(vendedorId: string | null = null, months = 12, 
       const rows = await lerTudo<CarbozeOrderRow>((de, ate) =>
         supabase
           .from("carbo_vendas_metrica" as never)
-          .select("total, status, created_at, customer_name, vendedor_id, segmento, conta_metrica, data_efetiva")
+          .select("total, status, created_at, customer_name, customer_doc, vendedor_id, segmento, conta_metrica, data_efetiva")
           .order("data_efetiva", { ascending: false })
           .order("id", { ascending: false })
           .range(de, ate) as never,
@@ -211,15 +221,24 @@ export function useDashComercial(vendedorId: string | null = null, months = 12, 
       const totalVendas = pedidos.length;
       let maiorVenda = 0, maiorCliente = "—";
       const byCliente = new Map<string, number>();
+      const porCliente = new Map<string, { nome: string; qtd: number }>();
       for (const v of pedidos) {
         const t = Number(v.total) || 0;
         if (t > maiorVenda) { maiorVenda = t; maiorCliente = v.customer_name || "—"; }
         const c = v.customer_name || "—";
         byCliente.set(c, (byCliente.get(c) ?? 0) + 1);
+
+        const doc = (v.customer_doc ?? "").replace(/\D/g, "");
+        const chave = doc ? `doc:${doc}` : `nome:${c.toLocaleLowerCase("pt-BR")}`;
+        const atual = porCliente.get(chave) ?? { nome: c, qtd: 0 };
+        atual.qtd++;
+        porCliente.set(chave, atual);
       }
       let topCliente = "—", topQtd = 0;
       for (const [c, q] of byCliente) if (q > topQtd) { topQtd = q; topCliente = c; }
       const ticketMedio = totalVendas > 0 ? totalBRL / totalVendas : 0;
+      const ticketOnline = qtdOnline > 0 ? totalOnline / qtdOnline : 0;
+      const ticketNaoOnline = qtdNaoOnline > 0 ? totalNaoOnline / qtdNaoOnline : 0;
 
       // ── metaPorMes — Admin = gestor: vendedor selecionado → só a meta dele;
       //    "todos" → soma do time (TODOS os vendedores). Mirror do CRM (metaPorMes).
@@ -253,7 +272,8 @@ export function useDashComercial(vendedorId: string | null = null, months = 12, 
       };
 
       return {
-        totalBRL, totalOnline, totalNaoOnline, qtdOnline, qtdNaoOnline, totalVendas, ticketMedio, maiorVenda, maiorCliente, topCliente, topQtd,
+        totalBRL, totalOnline, totalNaoOnline, qtdOnline, qtdNaoOnline,
+        ticketOnline, ticketNaoOnline, porCliente, totalVendas, ticketMedio, maiorVenda, maiorCliente, topCliente, topQtd,
         monthly, annualGrowth, kpis, growth,
       };
     },
