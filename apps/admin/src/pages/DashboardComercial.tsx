@@ -580,7 +580,12 @@ export default function DashboardComercial() {
               <h2 className="text-base font-bold text-board-text flex items-center gap-2"><BarChart3 className="h-4 w-4 text-blue-400" /> Vendas por Canal</h2>
               <p className="text-xs text-board-muted mt-0.5">Consumo · Revenda · On-line · Descarbonização (NFS-e) · classifique cada pedido em <Link to="/comercial/dados/pedidos" className="font-semibold text-primary hover:underline">Pedidos</Link></p>
             </div>
-            <div className="grid grid-cols-2 gap-3 p-4">
+            {/* ⚠️ LINHAS, não azulejos 2×3. Cinco canais em duas colunas davam
+                três fileiras com a última pela metade — altura de painel de
+                gráfico para cinco números. Em linha, o canal, o valor e a
+                participação ficam alinhados em COLUNA, que é a leitura que
+                essa tela pede: comparar cinco valores entre si. */}
+            <div className="divide-y divide-border/50">
               {/* ⚠️ O percentual é sobre o total COM a descarbonização. Enquanto
                   o denominador era só o Bling, os quatro canais somavam 100% e
                   o serviço ficava de fora — acrescentar o card sem mexer na
@@ -592,14 +597,22 @@ export default function DashboardComercial() {
                 const baseTotal = seg.totalBRL + (servicos?.total ?? 0);
                 const p = baseTotal > 0 ? (b.brl / baseTotal) * 100 : 0;
                 return (
-                  <div key={c.key} className={`rounded-xl bg-board-surface/60 border-l-4 ${c.accent} p-4`}>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-board-muted uppercase tracking-wider">{c.label}</span>
-                      <span className={`text-xs font-bold ${c.text}`}>{p.toFixed(0)}%</span>
+                  <div key={c.key} className={`flex items-center gap-3 border-l-4 ${c.accent} px-4 py-2.5`}>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] font-semibold text-board-muted uppercase tracking-wider truncate">{c.label}</p>
+                      {/* A barra fica sob o rótulo, fina: ela é comparação
+                          visual, não um segundo número. */}
+                      <div className="mt-1.5 h-1 w-full rounded-full bg-muted overflow-hidden">
+                        <div className={`h-full ${c.bar} rounded-full`} style={{ width: `${p}%` }} />
+                      </div>
                     </div>
-                    <p className="mt-1.5 text-2xl font-bold text-board-text tabular-nums leading-none">{fmtK(b.brl)}</p>
-                    <p className="mt-1 text-xs text-board-muted">{b.qtd} {c.key === "descarbonizacao" ? "nota(s)" : "pedido(s)"}</p>
-                    <div className="mt-2 h-1.5 w-full rounded-full bg-muted overflow-hidden"><div className={`h-full ${c.bar} rounded-full`} style={{ width: `${p}%` }} /></div>
+                    <div className="text-right shrink-0">
+                      <p className="text-lg font-bold text-board-text tabular-nums leading-none">{fmtK(b.brl)}</p>
+                      <p className="mt-0.5 text-[11px] text-board-muted tabular-nums">
+                        {b.qtd} {c.key === "descarbonizacao" ? "nota(s)" : "pedido(s)"}
+                      </p>
+                    </div>
+                    <span className={`w-10 text-right text-sm font-bold tabular-nums shrink-0 ${c.text}`}>{p.toFixed(0)}%</span>
                   </div>
                 );
               })}
