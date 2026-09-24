@@ -403,51 +403,85 @@ export default function NfseNacional() {
               description="Troque o ano, a aba ou limpe a busca."
             />
           ) : (
+            // ⚠️ SEIS colunas, não dez. Com dez a tabela estourava a largura e
+            // exigia rolar para ver situação e arquivos — ou seja, o que a
+            // pessoa mais precisa ficava fora da primeira olhada.
+            //
+            // O que foi FUNDIDO, e por quê:
+            //   Nº + Emissão        → mesma identidade do documento
+            //   Contraparte + Município → quem é e onde
+            //   Serviço R$ + Líquido    → o líquido MANDA; o valor do serviço
+            //                              só aparece quando DIVERGE
+            //   Direção             → deixou de ser coluna: a seta vai colada
+            //                          ao valor, que é onde o olho procura
             <CarboTable>
               <CarboTableHeader>
                 <CarboTableRow>
-                  <CarboTableHead>Nº</CarboTableHead>
-                  <CarboTableHead>Emissão</CarboTableHead>
-                  <CarboTableHead>Direção</CarboTableHead>
-                  <CarboTableHead>
+                  <CarboTableHead className="w-[104px]">Nota</CarboTableHead>
+                  <CarboTableHead className="w-[260px]">
                     {papel === "emitida" ? "Tomador" : papel === "recebida" ? "Prestador" : "Contraparte"}
                   </CarboTableHead>
                   <CarboTableHead>Serviço</CarboTableHead>
-                  <CarboTableHead>Município</CarboTableHead>
-                  <CarboTableHead className="text-right">Serviço</CarboTableHead>
-                  <CarboTableHead className="text-right">Líquido</CarboTableHead>
-                  <CarboTableHead>Situação</CarboTableHead>
-                  <CarboTableHead>Arquivos</CarboTableHead>
+                  <CarboTableHead className="w-[150px] text-right">Valor</CarboTableHead>
+                  <CarboTableHead className="w-[150px]">Situação</CarboTableHead>
+                  <CarboTableHead className="w-[112px]">Arquivos</CarboTableHead>
                 </CarboTableRow>
               </CarboTableHeader>
               <CarboTableBody>
                 {lista.map((n) => {
-                  // `valor_servico` e `valor_liquido` são colunas SEPARADAS, e
-                  // isso foi medido: divergem em 7 das 697, com R$ 6.541,77 de
-                  // retenção. Mostrar um só faria a diferença sumir justo nas
-                  // notas com imposto retido.
+                  // ⚠️ `valor_servico` e `valor_liquido` continuam SEPARADOS no
+                  // dado — divergem em 7 das 697, com R$ 6.541,77 de retenção.
+                  // O que mudou é só a APRESENTAÇÃO: mostrar os dois em toda
+                  // linha gastava uma coluna inteira para repetir o mesmo
+                  // número 690 vezes. Agora o serviço aparece **só quando
+                  // difere**, que é exatamente quando ele informa algo.
                   const divergem = num(n.valor_servico) !== num(n.valor_liquido);
+                  const receita = n.papel === "emitida";
+                  const despesa = n.papel === "recebida";
                   return (
                     <CarboTableRow key={`${n.ambiente}-${n.nsu}`}
                                    className={n.cancelada ? "opacity-60" : undefined}>
-                      <CarboTableCell className="font-medium">{n.numero ?? "—"}</CarboTableCell>
-                      <CarboTableCell>{fmtData(n.emitida_em)}</CarboTableCell>
-                      <CarboTableCell>{seloDirecao(n)}</CarboTableCell>
-                      <CarboTableCell className="max-w-[240px] truncate" title={contraparte(n)}>
-                        {contraparte(n)}
+                      <CarboTableCell>
+                        <div className="font-medium leading-tight">{n.numero ?? "—"}</div>
+                        <div className="text-xs text-muted-foreground leading-tight">
+                          {fmtData(n.emitida_em)}
+                        </div>
                       </CarboTableCell>
-                      <CarboTableCell className="max-w-[280px] truncate"
+
+                      <CarboTableCell>
+                        <div className="truncate max-w-[248px] leading-tight" title={contraparte(n)}>
+                          {contraparte(n)}
+                        </div>
+                        <div className="text-xs text-muted-foreground leading-tight truncate max-w-[248px]">
+                          {n.municipio_emissao ?? "—"}
+                        </div>
+                      </CarboTableCell>
+
+                      <CarboTableCell className="max-w-[320px] truncate"
                                       title={n.descricao ?? n.servico_nacional ?? ""}>
                         {n.descricao ?? n.servico_nacional ?? "—"}
                       </CarboTableCell>
-                      <CarboTableCell>{n.municipio_emissao ?? "—"}</CarboTableCell>
-                      <CarboTableCell className="text-right tabular-nums">
-                        {fmtBRL(num(n.valor_servico))}
+
+                      {/* A seta diz a direção do dinheiro SEM coluna própria, e
+                          fica colada ao número que ela qualifica. */}
+                      <CarboTableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1 tabular-nums font-medium">
+                          {receita && <ArrowUpRight className="h-3.5 w-3.5 text-success shrink-0" />}
+                          {despesa && <ArrowDownLeft className="h-3.5 w-3.5 text-warning shrink-0" />}
+                          <span title={receita ? "Receita — a Carbo prestou o serviço"
+                                     : despesa ? "Despesa — a Carbo contratou o serviço"
+                                     : "Direção indefinida"}>
+                            {fmtBRL(num(n.valor_liquido))}
+                          </span>
+                        </div>
+                        {divergem && (
+                          <div className="text-xs text-muted-foreground leading-tight tabular-nums"
+                               title={`Retido: ${fmtBRL(num(n.total_retido))}`}>
+                            serviço {fmtBRL(num(n.valor_servico))}
+                          </div>
+                        )}
                       </CarboTableCell>
-                      <CarboTableCell className={`text-right tabular-nums ${divergem ? "font-semibold" : ""}`}
-                                      title={divergem ? `Retido: ${fmtBRL(num(n.total_retido))}` : undefined}>
-                        {fmtBRL(num(n.valor_liquido))}
-                      </CarboTableCell>
+
                       <CarboTableCell>{selo(n)}</CarboTableCell>
                       <CarboTableCell><Arquivos n={n} /></CarboTableCell>
                     </CarboTableRow>
