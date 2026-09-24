@@ -35,9 +35,10 @@ import { lerTudo } from "@/lib/lerTudo";
 const COD_DESCARBONIZACAO = "140101";
 
 export interface ServicoMes {
-  mes: string;               // YYYY-MM
+  mes: string;               // YYYY-MM — a MESMA chave do `mesIso` do Bling
   descarbonizacao: number;
   outros: number;
+  notas: number;
 }
 
 export interface ServicosNfse {
@@ -119,9 +120,10 @@ export function useServicosNfse(filtros: ServicosFiltro = {}) {
         const v = Number(l.valor_liquido) || 0;
         const eDescarb = (l.serv_cod_nacional ?? "").replace(/\D/g, "") === COD_DESCARBONIZACAO;
 
-        const atual = porMes.get(mes) ?? { mes, descarbonizacao: 0, outros: 0 };
+        const atual = porMes.get(mes) ?? { mes, descarbonizacao: 0, outros: 0, notas: 0 };
         if (eDescarb) { atual.descarbonizacao += v; descarbonizacao += v; notasDescarbonizacao++; }
         else { atual.outros += v; outros += v; }
+        atual.notas++;
         porMes.set(mes, atual);
 
         notas++;

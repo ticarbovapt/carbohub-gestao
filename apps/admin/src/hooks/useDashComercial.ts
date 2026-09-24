@@ -20,9 +20,18 @@ const pct = (cur: number, prev: number) => (prev > 0 ? ((cur - prev) / prev) * 1
 
 export interface MonthRow {
   mes: string;
+  // ⚠️ `YYYY-MM`, e é por ELE que a série do Bling se junta com a da NFS-e.
+  // Casar pelo rótulo (`set/26`) seria frágil: basta alguém mudar a abreviação
+  // para os dois lados deixarem de se encontrar — e o gráfico mostraria a
+  // descarbonização zerada, sem erro nenhum.
+  mesIso: string;
   faturado: number;
   pedidos: number;
   ticketMedio: number;
+  faturadoOnline: number;
+  pedidosOnline: number;
+  faturadoEquipe: number;
+  pedidosEquipe: number;
 }
 
 /** Ponto do Crescimento Anual — real (faturado do mês) vs meta configurada. */
@@ -213,23 +222,33 @@ export function useDashComercial(vendedorId: string | null = null, months = 12, 
 
       // ── monthlyData — últimos 9 meses (faturado + pedidos + ticket médio). Verbatim CRM.
       const now = new Date();
-      const buckets = new Map<string, { faturado: number; pedidos: number }>();
+      type Balde = { faturado: number; pedidos: number; fatOn: number; pedOn: number };
+      const buckets = new Map<string, Balde>();
       for (const v of pedidos) {
         const d = dataDaVenda(v);
         const key = `${d.getFullYear()}-${d.getMonth()}`;
-        const b = buckets.get(key) ?? { faturado: 0, pedidos: 0 };
-        b.faturado += Number(v.total) || 0;
+        const b = buckets.get(key) ?? { faturado: 0, pedidos: 0, fatOn: 0, pedOn: 0 };
+        const t = Number(v.total) || 0;
+        b.faturado += t;
         b.pedidos += 1;
+        // Equipe/balcão é o COMPLEMENTO do on-line, calculado por subtração —
+        // assim as duas partes sempre fecham com o total, por construção.
+        if (v.segmento === "online") { b.fatOn += t; b.pedOn += 1; }
         buckets.set(key, b);
       }
       const monthly: MonthRow[] = [];
       for (let i = months - 1; i >= 0; i--) {
         const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-        const b = buckets.get(`${d.getFullYear()}-${d.getMonth()}`) ?? { faturado: 0, pedidos: 0 };
+        const b = buckets.get(`${d.getFullYear()}-${d.getMonth()}`) ?? { faturado: 0, pedidos: 0, fatOn: 0, pedOn: 0 };
         monthly.push({
           mes: monthLabel(d),
+          mesIso: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
           faturado: b.faturado,
           pedidos: b.pedidos,
+          faturadoOnline: b.fatOn,
+          pedidosOnline: b.pedOn,
+          faturadoEquipe: b.faturado - b.fatOn,
+          pedidosEquipe: b.pedidos - b.pedOn,
           ticketMedio: b.pedidos > 0 ? Math.round(b.faturado / b.pedidos) : 0,
         });
       }
@@ -286,10 +305,14 @@ export function useDashComercial(vendedorId: string | null = null, months = 12, 
       });
 
       // ── growth — Crescimento M/M e vs Janeiro. Verbatim CRM (growth useMemo).
-      const cur = monthly[monthly.length - 1] ?? { mes: "", faturado: 0, pedidos: 0, ticketMedio: 0 };
-      const prev = monthly[monthly.length - 2] ?? { mes: "", faturado: 0, pedidos: 0, ticketMedio: 0 };
+      const mesVazio = (rotulo: string): MonthRow => ({
+        mes: rotulo, mesIso: "", faturado: 0, pedidos: 0, ticketMedio: 0,
+        faturadoOnline: 0, pedidosOnline: 0, faturadoEquipe: 0, pedidosEquipe: 0,
+      });
+      const cur = monthly[monthly.length - 1] ?? mesVazio("");
+      const prev = monthly[monthly.length - 2] ?? mesVazio("");
       const janLbl = monthLabel(new Date(year, 0, 1));
-      const jan = monthly.find((m) => m.mes === janLbl) ?? { mes: janLbl, faturado: 0, pedidos: 0, ticketMedio: 0 };
+      const jan = monthly.find((m) => m.mes === janLbl) ?? mesVazio(janLbl);
       const growth: ComercialGrowth = {
         mom: { brl: pct(cur.faturado, prev.faturado), qty: pct(cur.pedidos, prev.pedidos), curLabel: cur.mes, prevLabel: prev.mes, cur, prev },
         vsJan: { brl: pct(cur.faturado, jan.faturado), qty: pct(cur.pedidos, jan.pedidos), curLabel: cur.mes, janLabel: jan.mes, cur, jan },

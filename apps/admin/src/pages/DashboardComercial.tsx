@@ -108,6 +108,47 @@ const MODO_LABEL: Record<string, string> = {
   acum: "Total acumulado (tamanho da base)", ativos: "Ativos no mês (compraram no mês)", novos: "Novos no mês (1ª compra)",
 };
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Um gráfico de série mensal. Existe porque as três seções (faturado, vendas,
+// ticket) passaram a ter QUATRO recortes cada — doze gráficos escritos à mão
+// seriam doze lugares para divergir em cor, eixo e formatação.
+// ═══════════════════════════════════════════════════════════════════════════
+function SerieMensal({
+  titulo, acumulado, cor, dados, campo, moeda = true,
+}: {
+  titulo: string; acumulado: string; cor: string;
+  dados: Array<Record<string, unknown>>; campo: string; moeda?: boolean;
+}) {
+  return (
+    <div className="rounded-lg border border-border bg-board-surface/40 p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <p className="text-[10px] font-bold text-board-muted uppercase tracking-widest">{titulo}</p>
+          <p className="text-xl font-bold leading-none tabular-nums mt-0.5" style={{ color: cor }}>{acumulado}</p>
+        </div>
+      </div>
+      <ResponsiveContainer width="100%" height={170}>
+        <ComposedChart data={dados} margin={{ top: 22, right: 8, bottom: 0, left: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
+          <XAxis dataKey="mes" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} dy={4} />
+          <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false}
+                 width={moeda ? 44 : 28} tickFormatter={moeda ? kAxis : undefined} />
+          <Tooltip cursor={{ fill: "rgba(148,163,184,0.08)" }}
+                   content={moeda ? <DarkTip fmt={brl} /> : <DarkTip unit=" vendas" />} />
+          <Bar dataKey={campo} name={titulo} fill={`${cor}30`} stroke={cor} strokeWidth={1.4}
+               radius={[4, 4, 0, 0]} maxBarSize={44} isAnimationActive={false}>
+            <LabelList dataKey={campo} position="top"
+                       formatter={(v: any) => (moeda ? (v >= 1000 ? `R$${(v / 1000).toFixed(0)}k` : `R$${Math.round(v)}`) : v)}
+                       style={{ fontSize: 9.5, fill: cor, fontWeight: 700 }} />
+          </Bar>
+          <Line type="monotoneX" dataKey={campo} name={titulo} stroke={cor} strokeWidth={2.2}
+                dot={{ r: 2.5, fill: cor, stroke: "#fff", strokeWidth: 1.5 }} activeDot={{ r: 4.5 }} isAnimationActive={false} />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
 export default function DashboardComercial() {
   const { canAdmin } = useAuth();
   const [filters, setFilters] = useState<DashFilters>(EMPTY_FILTERS);
@@ -155,7 +196,10 @@ export default function DashboardComercial() {
 
   if (!canAdmin) return <main className="mx-auto max-w-6xl px-4 sm:px-6 py-8"><RestrictedNotice /></main>;
 
-  const k = data?.kpis, g = data?.growth, monthly = data?.monthly ?? [], seg = canais?.segmentacao;
+  // ⚠️ `data.growth` deixou de ser lido aqui: o crescimento mês a mês passou a
+  // ser calculado por ORIGEM, em `mom`, sobre a série que já soma o serviço.
+  // O hook continua devolvendo `growth` — outras telas o usam.
+  const k = data?.kpis, monthly = data?.monthly ?? [], seg = canais?.segmentacao;
 
   // ⚠️ Recorrência juntando as duas bases pelo DOCUMENTO, nunca pelo nome.
   // Casar por nome misturaria empresas diferentes e separaria a mesma — é a
@@ -189,6 +233,75 @@ export default function DashboardComercial() {
     const qtd = (data?.totalVendas ?? 0) + (servicos?.notas ?? 0);
     return qtd > 0 ? valor / qtd : 0;
   })();
+  // ⚠️ A junção é pelo `mesIso` (YYYY-MM), nunca pelo rótulo "set/26". Casar
+  // por rótulo é frágil de um jeito silencioso: bastaria alguém mudar a
+  // abreviação para os dois lados deixarem de se encontrar, e o gráfico
+  // mostraria a descarbonização ZERADA, sem erro nenhum.
+  // ⚠️ IIFE, não `useMemo` — pela MESMA razão do `topGeral` logo acima: isto
+  // fica depois do `if (!canAdmin) return`, e hook depois de retorno antecipado
+  // muda a contagem entre renders (React #310, tela branca). Nem o `tsc` nem o
+  // `npm run build` pegam isso; quem pega é abrir a tela com outro perfil.
+  const serie = (() => {
+    const porIso = new Map(
+      (servicos?.porMes ?? []).map((m) => [m.mes, m] as const),
+    );
+    return monthly.map((m) => {
+      const sv = porIso.get(m.mesIso);
+      const descFat = sv?.descarbonizacao ?? 0;
+      const descQtd = sv?.notas ?? 0;
+      const totalFat = m.faturado + descFat + (sv?.outros ?? 0);
+      const totalQtd = m.pedidos + descQtd;
+      return {
+        mes: m.mes,
+        // Total
+        totalFat, totalQtd,
+        totalTicket: totalQtd > 0 ? totalFat / totalQtd : 0,
+        // On-line
+        onFat: m.faturadoOnline, onQtd: m.pedidosOnline,
+        onTicket: m.pedidosOnline > 0 ? m.faturadoOnline / m.pedidosOnline : 0,
+        // Equipe / balcão
+        eqFat: m.faturadoEquipe, eqQtd: m.pedidosEquipe,
+        eqTicket: m.pedidosEquipe > 0 ? m.faturadoEquipe / m.pedidosEquipe : 0,
+        // Descarbonização
+        dsFat: descFat, dsQtd: descQtd,
+        dsTicket: descQtd > 0 ? descFat / descQtd : 0,
+      };
+    });
+  })();
+
+  // Crescimento mês a mês, por ORIGEM. ⚠️ Sem mês anterior não existe
+  // crescimento — devolve `null` em vez de 0%, que se leria como "ficou igual".
+  const mom = (() => {
+    const n = serie.length;
+    if (n < 2) return null;
+    const cur = serie[n - 1], prev = serie[n - 2];
+    const p = (a: number, b: number) => (b > 0 ? ((a - b) / b) * 100 : null);
+    // ⚠️ O valor ANTERIOR viaja junto do percentual. Percentual sozinho engana
+    // em base pequena — +300% sobre R$ 400 e +300% sobre R$ 400 mil têm a mesma
+    // cara, e é a linha de referência que separa as duas.
+    const par = (a: number, b: number, qa: number, qb: number) =>
+      ({ valor: a, valorAnterior: b, pct: p(a, b), qtd: qa, qtdAnterior: qb, qtdPct: p(qa, qb) });
+    return {
+      curLabel: cur.mes, prevLabel: prev.mes,
+      online: par(cur.onFat, prev.onFat, cur.onQtd, prev.onQtd),
+      equipe: par(cur.eqFat, prev.eqFat, cur.eqQtd, prev.eqQtd),
+      descarb: par(cur.dsFat, prev.dsFat, cur.dsQtd, prev.dsQtd),
+      total: par(cur.totalFat, prev.totalFat, cur.totalQtd, prev.totalQtd),
+    };
+  })();
+
+  // Crescimento Anual passa a somar o serviço. ⚠️ A meta NÃO muda: ela foi
+  // configurada contra o faturamento de produto, e mexer nela aqui mudaria o
+  // alvo de quem a definiu sem ninguém decidir isso.
+  const annualGrowth = (() => {
+    const porRotulo = new Map(serie.map((x) => [x.mes, x] as const));
+    return (data?.annualGrowth ?? []).map((pt) => {
+      const x = porRotulo.get(pt.label);
+      const real = x ? x.totalFat : pt.real;
+      return { ...pt, real: real && real > 0 ? real : null };
+    });
+  })();
+
   const hasData = (monthly.reduce((s, m) => s + m.pedidos, 0)) > 0;
 
   return (
@@ -285,31 +398,38 @@ export default function DashboardComercial() {
                    Icon={TrendingUp} accent="border-l-violet-400" iconBg="bg-violet-400/10 text-violet-500" />
         </div>
 
-        {/* 3. Crescimento */}
-        {g && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
-            <div className="rounded-xl border overflow-hidden bg-board-surface border-blue-500/20">
-              <div className="h-1 w-full bg-blue-500" />
-              <div className="px-4 pt-3 pb-2 border-b border-border/50">
-                <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-500">Crescimento Mês a Mês</span>
-                <p className="text-[11px] text-board-muted mt-0.5 font-medium">{g.mom.curLabel} vs {g.mom.prevLabel}</p>
-              </div>
-              <div className="grid grid-cols-2 divide-x divide-border/50">
-                <GrowthSub label="Faturamento" pct={g.mom.brl} value={fmtK(g.mom.cur.faturado)} refLine={`${g.mom.prevLabel}: ${fmtK(g.mom.prev.faturado)}`} />
-                <GrowthSub label="Volume de Vendas" pct={g.mom.qty} value={`${g.mom.cur.pedidos} pedidos`} refLine={`${g.mom.prevLabel}: ${g.mom.prev.pedidos} pedidos`} />
-              </div>
-            </div>
-            <div className="rounded-xl border overflow-hidden bg-board-surface border-green-500/20">
-              <div className="h-1 w-full bg-green-500" />
-              <div className="px-4 pt-3 pb-2 border-b border-border/50">
-                <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-green-500/10 text-green-600">Último Mês vs Janeiro</span>
-                <p className="text-[11px] text-board-muted mt-0.5 font-medium">{g.vsJan.curLabel} vs {g.vsJan.janLabel}</p>
-              </div>
-              <div className="grid grid-cols-2 divide-x divide-border/50">
-                <GrowthSub label="Faturamento" pct={g.vsJan.brl} value={fmtK(g.vsJan.cur.faturado)} refLine={`${g.vsJan.janLabel}: ${fmtK(g.vsJan.jan.faturado)}`} />
-                <GrowthSub label="Volume de Vendas" pct={g.vsJan.qty} value={`${g.vsJan.cur.pedidos} pedidos`} refLine={`${g.vsJan.janLabel}: ${g.vsJan.jan.pedidos} pedidos`} />
-              </div>
-            </div>
+        {/* 3. Crescimento mês a mês, UM CARD POR ORIGEM.
+            ⚠️ O bloco "Último Mês vs Janeiro" foi ABSORVIDO, não perdido: os
+            dois passariam a mostrar a mesma comparação, e duas caixas dizendo
+            o mesmo número fazem quem lê procurar a diferença que não existe.
+            A ordem é a MESMA dos gráficos abaixo (total · on-line · equipe ·
+            descarbonização) — ordem diferente entre blocos do mesmo painel é
+            o que faz comparar a caixa errada. */}
+        {mom && (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 items-start">
+            {([
+              { k: "total",   rotulo: "Total",            borda: "border-amber-400/20", barra: "bg-amber-400", chip: "bg-amber-400/10 text-amber-500", un: "vendas"  },
+              { k: "online",  rotulo: "On-line",          borda: "border-blue-500/20",  barra: "bg-blue-500",  chip: "bg-blue-500/10 text-blue-500",   un: "pedidos" },
+              { k: "equipe",  rotulo: "Equipe / balcão",  borda: "border-green-500/20", barra: "bg-green-500", chip: "bg-green-500/10 text-green-600", un: "pedidos" },
+              { k: "descarb", rotulo: "Descarbonização",  borda: "border-cyan-500/20",  barra: "bg-cyan-500",  chip: "bg-cyan-500/10 text-cyan-500",   un: "notas"   },
+            ] as const).map((c) => {
+              const d = mom[c.k];
+              return (
+                <div key={c.k} className={`rounded-xl border overflow-hidden bg-board-surface ${c.borda}`}>
+                  <div className={`h-1 w-full ${c.barra}`} />
+                  <div className="px-4 pt-3 pb-2 border-b border-border/50">
+                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${c.chip}`}>{c.rotulo}</span>
+                    <p className="text-[11px] text-board-muted mt-0.5 font-medium">{mom.curLabel} vs {mom.prevLabel}</p>
+                  </div>
+                  <div className="grid grid-cols-2 divide-x divide-border/50">
+                    <GrowthSub label="Faturamento" pct={d.pct} value={fmtK(d.valor)}
+                               refLine={`${mom.prevLabel}: ${fmtK(d.valorAnterior)}`} />
+                    <GrowthSub label="Volume" pct={d.qtdPct} value={`${d.qtd} ${c.un}`}
+                               refLine={`${mom.prevLabel}: ${d.qtdAnterior} ${c.un}`} />
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
 
@@ -327,50 +447,32 @@ export default function DashboardComercial() {
           ) : !hasData ? (
             <div className="flex items-center justify-center h-72 text-sm text-board-muted">Nenhum dado encontrado para o período selecionado.</div>
           ) : (
-            <div className="px-4 pt-4 pb-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {/* Faturado */}
-              <div className="rounded-lg border border-border bg-board-surface/40 p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <p className="text-[10px] font-bold text-board-muted uppercase tracking-widest">Total Faturado por Mês</p>
-                    <p className="text-xl font-bold text-green-500 leading-none tabular-nums mt-0.5">{fmtK(k?.totalBRL ?? 0)} <span className="text-xs font-normal text-board-muted ml-1">acumulado</span></p>
-                  </div>
-                  <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold bg-green-500/10 text-green-500">R$</span>
-                </div>
-                <ResponsiveContainer width="100%" height={190}>
-                  <ComposedChart data={monthly} margin={{ top: 22, right: 8, bottom: 0, left: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
-                    <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} dy={4} />
-                    <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={44} tickFormatter={kAxis} />
-                    <Tooltip cursor={{ fill: "rgba(148,163,184,0.08)" }} content={<DarkTip fmt={brl} />} />
-                    <Bar dataKey="faturado" name="Faturado" fill="rgba(26,122,74,0.18)" stroke="#1a7a4a" strokeWidth={1.5} radius={[4, 4, 0, 0]} maxBarSize={48} isAnimationActive={false}>
-                      <LabelList dataKey="faturado" position="top" formatter={(v: any) => (v >= 1000 ? `R$${(v / 1000).toFixed(0)}k` : `R$${v}`)} style={{ fontSize: 10, fill: "#1a7a4a", fontWeight: 700 }} />
-                    </Bar>
-                    <Line type="monotoneX" dataKey="faturado" name="Faturado" stroke="#1a7a4a" strokeWidth={2.5} dot={{ r: 3, fill: "#1a7a4a", stroke: "#fff", strokeWidth: 2 }} activeDot={{ r: 5 }} isAnimationActive={false} />
-                  </ComposedChart>
-                </ResponsiveContainer>
+            <div className="px-4 pt-4 pb-4 space-y-4">
+              {/* ⚠️ QUATRO recortes, e a ordem é a mesma nos três blocos:
+                  Total · On-line · Equipe · Descarbonização. Ordem diferente
+                  entre blocos faria a pessoa comparar o gráfico errado. */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-3">
+                <SerieMensal titulo="Faturado · TOTAL" acumulado={fmtK((k?.totalBRL ?? 0) + (servicos?.total ?? 0))}
+                             cor="#1a7a4a" dados={serie} campo="totalFat" />
+                <SerieMensal titulo="Faturado · on-line" acumulado={fmtK(data?.totalOnline ?? 0)}
+                             cor="#3b82f6" dados={serie} campo="onFat" />
+                <SerieMensal titulo="Faturado · equipe/balcão" acumulado={fmtK(data?.totalNaoOnline ?? 0)}
+                             cor="#22c55e" dados={serie} campo="eqFat" />
+                <SerieMensal titulo="Faturado · descarbonização" acumulado={fmtK(servicos?.descarbonizacao ?? 0)}
+                             cor="#06b6d4" dados={serie} campo="dsFat" />
               </div>
-              {/* Pedidos */}
-              <div className="rounded-lg border border-border bg-board-surface/40 p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <p className="text-[10px] font-bold text-board-muted uppercase tracking-widest">Total de Vendas por Mês</p>
-                    <p className="text-xl font-bold text-[#3b6ea5] leading-none tabular-nums mt-0.5">{k?.totalVendas ?? 0} <span className="text-xs font-normal text-board-muted ml-1">pedidos</span></p>
-                  </div>
-                  <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold bg-blue-500/10 text-blue-400">Qtd</span>
-                </div>
-                <ResponsiveContainer width="100%" height={190}>
-                  <ComposedChart data={monthly} margin={{ top: 22, right: 8, bottom: 0, left: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
-                    <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} dy={4} />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={28} />
-                    <Tooltip cursor={{ fill: "rgba(148,163,184,0.08)" }} content={<DarkTip unit=" vendas" />} />
-                    <Bar dataKey="pedidos" name="Pedidos" fill="rgba(59,110,165,0.75)" radius={[5, 5, 0, 0]} maxBarSize={48} isAnimationActive={false}>
-                      <LabelList dataKey="pedidos" position="top" style={{ fontSize: 11, fill: "#94a3b8", fontWeight: 700 }} />
-                    </Bar>
-                    <Line type="monotoneX" dataKey="pedidos" name="Pedidos" stroke="#3b6ea5" strokeWidth={2.5} strokeDasharray="5 3" dot={{ r: 3, fill: "#3b6ea5", stroke: "#fff", strokeWidth: 2 }} activeDot={{ r: 5 }} isAnimationActive={false} />
-                  </ComposedChart>
-                </ResponsiveContainer>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-3">
+                <SerieMensal titulo="Vendas · TOTAL" moeda={false}
+                             acumulado={String((k?.totalVendas ?? 0) + (servicos?.notas ?? 0))}
+                             cor="#3b6ea5" dados={serie} campo="totalQtd" />
+                <SerieMensal titulo="Vendas · on-line" moeda={false} acumulado={String(data?.qtdOnline ?? 0)}
+                             cor="#3b82f6" dados={serie} campo="onQtd" />
+                <SerieMensal titulo="Vendas · equipe/balcão" moeda={false} acumulado={String(data?.qtdNaoOnline ?? 0)}
+                             cor="#22c55e" dados={serie} campo="eqQtd" />
+                <SerieMensal titulo="Vendas · descarbonização" moeda={false}
+                             acumulado={String(servicos?.notasDescarbonizacao ?? 0)}
+                             cor="#06b6d4" dados={serie} campo="dsQtd" />
               </div>
             </div>
           )}
@@ -382,7 +484,7 @@ export default function DashboardComercial() {
             <div className="flex items-center justify-between border-b border-border px-6 py-3">
               <div>
                 <h2 className="text-base font-bold text-board-text flex items-center gap-2"><TrendingUp className="h-4 w-4 text-orange-400" /> Crescimento Anual</h2>
-                <p className="text-xs text-board-muted mt-0.5">Real (barras) vs <span className="font-semibold text-orange-400">meta configurada</span> · {year}</p>
+                <p className="text-xs text-board-muted mt-0.5">Real (produto + serviço) vs <span className="font-semibold text-orange-400">meta configurada</span> · {year}</p>
               </div>
               <div className="flex items-center gap-3 text-[10px] text-board-muted">
                 <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-emerald-500/70" /> Real</span>
@@ -391,7 +493,7 @@ export default function DashboardComercial() {
             </div>
             <div className="px-4 pt-4 pb-4">
               <ResponsiveContainer width="100%" height={175}>
-                <ComposedChart data={data?.annualGrowth ?? []} margin={{ top: 20, right: 8, bottom: 0, left: 0 }}>
+                <ComposedChart data={annualGrowth} margin={{ top: 20, right: 8, bottom: 0, left: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
                   <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} dy={4} />
                   <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={44} tickFormatter={kAxis} />
@@ -412,19 +514,19 @@ export default function DashboardComercial() {
                 <p className="text-xs text-board-muted mt-0.5">Valor médio por pedido mês a mês · <span className="font-semibold text-violet-500">{fmtK(k?.ticketMedio ?? 0)} média geral</span></p>
               </div>
             </div>
-            <div className="px-4 pt-4 pb-4">
-              <ResponsiveContainer width="100%" height={175}>
-                <ComposedChart data={monthly} margin={{ top: 22, right: 8, bottom: 0, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
-                  <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} dy={4} />
-                  <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={48} tickFormatter={kAxis} />
-                  <Tooltip content={<DarkTip fmt={brl} />} />
-                  <Bar dataKey="ticketMedio" name="Ticket" fill="rgba(139,92,246,0.2)" stroke="#8b5cf6" strokeWidth={1.5} radius={[4, 4, 0, 0]} maxBarSize={48} isAnimationActive={false}>
-                    <LabelList dataKey="ticketMedio" position="top" formatter={(v: any) => (v >= 1000 ? `R$${(v / 1000).toFixed(0)}k` : `R$${v}`)} style={{ fontSize: 10, fill: "#8b5cf6", fontWeight: 700 }} />
-                  </Bar>
-                  <Line type="monotoneX" dataKey="ticketMedio" name="Ticket" stroke="#8b5cf6" strokeWidth={2.5} dot={{ r: 3, fill: "#8b5cf6", stroke: "#fff", strokeWidth: 2 }} activeDot={{ r: 5 }} isAnimationActive={false} />
-                </ComposedChart>
-              </ResponsiveContainer>
+            <div className="px-4 pt-4 pb-4 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-3">
+              {/* ⚠️ O ticket do TOTAL é o faturamento total dividido pelas
+                  vendas totais — não a média das outras três. Média de médias
+                  daria o mesmo peso a um canal de 320 notas e a outro de 1.100
+                  pedidos. */}
+              <SerieMensal titulo="Ticket · TOTAL" acumulado={fmtK(ticketGeral)}
+                           cor="#8b5cf6" dados={serie} campo="totalTicket" />
+              <SerieMensal titulo="Ticket · on-line" acumulado={fmtK(data?.ticketOnline ?? 0)}
+                           cor="#3b82f6" dados={serie} campo="onTicket" />
+              <SerieMensal titulo="Ticket · equipe/balcão" acumulado={fmtK(data?.ticketNaoOnline ?? 0)}
+                           cor="#22c55e" dados={serie} campo="eqTicket" />
+              <SerieMensal titulo="Ticket · descarbonização" acumulado={fmtK(servicos?.ticketMedio ?? 0)}
+                           cor="#06b6d4" dados={serie} campo="dsTicket" />
             </div>
           </div>
         </div>
