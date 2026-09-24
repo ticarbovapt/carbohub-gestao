@@ -83,6 +83,11 @@ export interface UnidadesVendidas {
   semFator: string[];
   /** Linhas cujo par quantidade/preço veio deslocado em duas casas. */
   linhasCorrigidas: number;
+  /** % do valor que deveria contar e conta. `null` quando não há base. */
+  cobertura: number | null;
+  /** Venda real que não entrou por falta de nota válida. */
+  semNotaPedidos: number;
+  semNotaValor: number;
 }
 
 interface LinhaOnline {
@@ -217,10 +222,10 @@ export function useUnidadesVendidas(filtros: UnidadesFiltro = {}) {
       // ⚠️ `segmento !== 'online'`: o corte é o MESMO do resto do dashboard —
       // venda de marketplace já foi contada no lado de cima, e contá-la de
       // novo aqui duplicaria o produto dentro da própria seção.
-      const pedidos = await lerTudo<{ id: string; conta_metrica: boolean | null; segmento: string | null; data_efetiva: string | null; items: ItemVenda[] | null }>(
+      const pedidos = await lerTudo<{ id: string; conta_metrica: boolean | null; segmento: string | null; data_efetiva: string | null; items: ItemVenda[] | null; total: number | null; motivo_fora: string | null }>(
         (de, ate) => {
           let q = db.from("carbo_vendas_metrica")
-            .select("id, conta_metrica, segmento, data_efetiva, items")
+            .select("id, conta_metrica, segmento, data_efetiva, items, total, motivo_fora")
             .order("data_efetiva", { ascending: false })
             .order("id", { ascending: false });
           if (from) q = q.gte("data_efetiva", from);
@@ -229,6 +234,25 @@ export function useUnidadesVendidas(filtros: UnidadesFiltro = {}) {
         },
       );
       const comItens = pedidos.filter((p) => p.conta_metrica === true && p.segmento !== "online");
+
+      // ── Cobertura: quanto do que DEVERIA contar realmente conta ───────────
+      //
+      // ⚠️ O denominador NÃO é todo pedido. Cancelado, orçamento e bonificação
+      // estão fora CORRETAMENTE — jogá-los aqui faria a cobertura parecer ruim
+      // por causa de exclusões que são o comportamento certo, e um número que
+      // sempre acusa problema ensina a ignorá-lo.
+      //
+      // O que fica de fora e NÃO deveria é a venda real sem nota: `aguardando_nf`
+      // e `nf_invalida`. Medido em 24/09/2026 pelo lado do Bling: 327 pedidos
+      // contando e 41 esperando nota — nenhum pedido perdido na ponte.
+      const AUSENCIA_DE_NOTA = new Set(["aguardando_nf", "nf_invalida"]);
+      const internos = pedidos.filter((p) => p.segmento !== "online");
+      const valorConta = internos
+        .filter((p) => p.conta_metrica === true)
+        .reduce((s2, p) => s2 + (Number(p.total) || 0), 0);
+      const semNota = internos.filter((p) => AUSENCIA_DE_NOTA.has(p.motivo_fora ?? ""));
+      const valorSemNota = semNota.reduce((s2, p) => s2 + (Number(p.total) || 0), 0);
+      const baseCobertura = valorConta + valorSemNota;
 
       // ── 3. O cadastro de SKU: unidades por pack E unidades por item ───────
       const { data: mapas, error: errMapa } = await db
@@ -446,6 +470,9 @@ export function useUnidadesVendidas(filtros: UnidadesFiltro = {}) {
         totalUnidades: eqUnidades === null ? null : onUnidades + eqUnidades,
         semFator: [...semFator].sort((a, b) => a.localeCompare(b, "pt-BR")),
         linhasCorrigidas,
+        cobertura: baseCobertura > 0 ? (valorConta / baseCobertura) * 100 : null,
+        semNotaPedidos: semNota.length,
+        semNotaValor: Math.round(valorSemNota * 100) / 100,
       };
     },
   });

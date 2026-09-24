@@ -796,6 +796,22 @@ export default function DashboardComercial() {
           Período: <span className="font-semibold text-board-text">{periodoLabel}</span>
           {" · "}só pedidos que contam métrica (com NF válida) · bonificação incluída · insumo e serviço fora
         </p>
+        {/* ⚠️ A COBERTURA fica na tela, ao lado do número. "Posso confiar
+            nisto?" não pode ser uma investigação de meia hora cada vez que
+            alguém olha — e um total sem cobertura ao lado é a doença do
+            relatório que só sabe concordar consigo mesmo.
+            O denominador exclui cancelado, orçamento e bonificação de
+            propósito: eles ficam de fora CORRETAMENTE, e contá-los faria a
+            cobertura acusar problema sempre — número que sempre acusa ensina
+            a ser ignorado. */}
+        {unidades?.cobertura != null && (
+          <p className={`-mt-2 text-[11px] ${unidades.cobertura >= 95 ? "text-board-muted" : "text-amber-500"}`}>
+            Cobertura: <span className="font-semibold">{unidades.cobertura.toFixed(1)}%</span> do valor que deveria contar
+            {unidades.semNotaPedidos > 0
+              ? ` · faltam ${unidades.semNotaPedidos} pedido(s) sem nota válida (${fmtK(unidades.semNotaValor)}) — venda real, ainda sem NF`
+              : " · nenhuma venda sem nota válida"}
+          </p>
+        )}
         {/* ⚠️ Correção de dado NUNCA é silenciosa. Sem esta linha o painel
             mostraria um número diferente do Bling e ninguém saberia por quê —
             e a correção de verdade é no cadastro de origem, não aqui. */}
