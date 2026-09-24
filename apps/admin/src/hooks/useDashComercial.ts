@@ -88,11 +88,11 @@ export interface ComercialData {
 }
 
 interface CarbozeOrderRow {
+  id: string;
   total: number | null;
   status: string | null;
   created_at: string | null;
   customer_name: string | null;
-  customer_doc: string | null;
   vendedor_id: string | null;
   segmento: string | null;
   conta_metrica: boolean | null;
@@ -145,11 +145,39 @@ export function useDashComercial(vendedorId: string | null = null, months = 12, 
       const rows = await lerTudo<CarbozeOrderRow>((de, ate) =>
         supabase
           .from("carbo_vendas_metrica" as never)
-          .select("total, status, created_at, customer_name, customer_doc, vendedor_id, segmento, conta_metrica, data_efetiva")
+          .select("id, total, status, created_at, customer_name, vendedor_id, segmento, conta_metrica, data_efetiva")
           .order("data_efetiva", { ascending: false })
           .order("id", { ascending: false })
           .range(de, ate) as never,
       );
+
+      // ⚠️ O DOCUMENTO vem de `carboze_orders`, não da view — e isso não é
+      // preferência: `carbo_vendas_metrica` foi criada com o `o.*` EXPANDIDO,
+      // então ela congelou as colunas que existiam no dia e `customer_doc` não
+      // está lá. Pedi-lo à view devolvia **400**, e o sintoma na tela era a
+      // lista inteira sumir — a consulta falha, não degrada.
+      //
+      // Republicar a view por causa de um card exigiria DROP + as três
+      // dependentes + repetir o `security_invoker`: risco desproporcional ao
+      // ganho. Aqui é uma busca por CHAVE PRIMÁRIA, não um segundo agregado —
+      // não há como os dois números discordarem, que é o risco que costuma
+      // desaconselhar uma segunda consulta.
+      const docs = new Map<string, string>();
+      try {
+        const linhasDoc = await lerTudo<{ id: string; customer_doc: string | null }>((de, ate) =>
+          supabase
+            .from("carboze_orders" as never)
+            .select("id, customer_doc")
+            .order("id", { ascending: false })
+            .range(de, ate) as never,
+        );
+        for (const d of linhasDoc) if (d.customer_doc) docs.set(d.id, d.customer_doc);
+      } catch {
+        // ⚠️ Falhar aqui NÃO derruba o dashboard: sem documento, a recorrência
+        // cai para a chave de nome — que agrupa menos, nunca agrupa ERRADO.
+        // Perder precisão é aceitável; perder a tela inteira por causa de um
+        // card não é.
+      }
 
       const fromTs = from ? new Date(from + "T00:00:00").getTime() : null;
       const toTs = to ? new Date(to + "T23:59:59").getTime() : null;
@@ -228,7 +256,7 @@ export function useDashComercial(vendedorId: string | null = null, months = 12, 
         const c = v.customer_name || "—";
         byCliente.set(c, (byCliente.get(c) ?? 0) + 1);
 
-        const doc = (v.customer_doc ?? "").replace(/\D/g, "");
+        const doc = (docs.get(v.id) ?? "").replace(/\D/g, "");
         const chave = doc ? `doc:${doc}` : `nome:${c.toLocaleLowerCase("pt-BR")}`;
         const atual = porCliente.get(chave) ?? { nome: c, qtd: 0 };
         atual.qtd++;
