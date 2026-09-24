@@ -88,6 +88,9 @@ export interface UnidadesVendidas {
   /** Venda real que não entrou por falta de nota válida. */
   semNotaPedidos: number;
   semNotaValor: number;
+  /** Entregas já programadas para datas futuras — não são buraco. */
+  agendadosPedidos: number;
+  agendadosValor: number;
 }
 
 interface LinhaOnline {
@@ -245,8 +248,22 @@ export function useUnidadesVendidas(filtros: UnidadesFiltro = {}) {
       // O que fica de fora e NÃO deveria é a venda real sem nota: `aguardando_nf`
       // e `nf_invalida`. Medido em 24/09/2026 pelo lado do Bling: 327 pedidos
       // contando e 41 esperando nota — nenhum pedido perdido na ponte.
+      // ⚠️ PEDIDO AGENDADO NÃO É VENDA QUE FALTOU — é venda que ainda não
+      // aconteceu. Medido em 24/09/2026: 31 pedidos com `data_efetiva` no
+      // FUTURO (Brisanet mensal até abr/2027, Luck, Riograndense), todos em
+      // `aguardando_nf` porque a nota de uma entrega futura obviamente não
+      // existe. Contá-los como buraco fazia a cobertura acusar um problema que
+      // não é problema — e número que acusa sem motivo ensina a ser ignorado,
+      // exatamente o que esta linha existe para evitar.
+      //
+      // O corte é por DATA, não por `status = 'agendado'`: a data responde "já
+      // aconteceu?", que é a pergunta certa, e não depende do vocabulário de
+      // status (há agendamento gravado como `pending` também — medido).
+      const hoje = new Date().toISOString().slice(0, 10);
       const AUSENCIA_DE_NOTA = new Set(["aguardando_nf", "nf_invalida"]);
-      const internos = pedidos.filter((p) => p.segmento !== "online");
+      const futuro = (p: { data_efetiva: string | null }) => (p.data_efetiva ?? "") > hoje;
+      const internos = pedidos.filter((p) => p.segmento !== "online" && !futuro(p));
+      const agendados = pedidos.filter((p) => p.segmento !== "online" && futuro(p));
       const valorConta = internos
         .filter((p) => p.conta_metrica === true)
         .reduce((s2, p) => s2 + (Number(p.total) || 0), 0);
@@ -473,6 +490,8 @@ export function useUnidadesVendidas(filtros: UnidadesFiltro = {}) {
         cobertura: baseCobertura > 0 ? (valorConta / baseCobertura) * 100 : null,
         semNotaPedidos: semNota.length,
         semNotaValor: Math.round(valorSemNota * 100) / 100,
+        agendadosPedidos: agendados.length,
+        agendadosValor: Math.round(agendados.reduce((s2, p) => s2 + (Number(p.total) || 0), 0) * 100) / 100,
       };
     },
   });

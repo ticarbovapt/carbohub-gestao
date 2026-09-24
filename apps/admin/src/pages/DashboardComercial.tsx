@@ -810,6 +810,15 @@ export default function DashboardComercial() {
             {unidades.semNotaPedidos > 0
               ? ` · faltam ${unidades.semNotaPedidos} pedido(s) sem nota válida (${fmtK(unidades.semNotaValor)}) — venda real, ainda sem NF`
               : " · nenhuma venda sem nota válida"}
+            {/* ⚠️ Dito à parte, e nunca somado ao buraco: entrega programada
+                para o futuro não é venda que faltou, é venda que ainda não
+                aconteceu. Misturar as duas faria a cobertura acusar um
+                problema que não existe. */}
+            {unidades.agendadosPedidos > 0 && (
+              <span className="text-board-muted">
+                {" · "}fora da conta: {unidades.agendadosPedidos} entrega(s) agendada(s) para datas futuras ({fmtK(unidades.agendadosValor)})
+              </span>
+            )}
           </p>
         )}
         {/* ⚠️ Correção de dado NUNCA é silenciosa. Sem esta linha o painel
