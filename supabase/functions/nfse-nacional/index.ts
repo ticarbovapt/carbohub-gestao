@@ -271,6 +271,68 @@ Deno.serve(async (req: Request) => {
   const base = BASES[ambiente];
   const nsu = url.searchParams.get("nsu") ?? "0";
 
+  // ── &danfse=<chave> — CAÇA ao endereço do PDF ────────────────────────────
+  //
+  // ⚠️ O DANFSE NÃO está no ADN, e isso foi medido em 24/09/2026:
+  //   /contribuintes/DANFSE/<chave>  → 404  (o serviço respondeu: rota não existe)
+  //   /danfse/<chave>                → 503  ("No server is available") — veio do
+  //                                          GATEWAY, ou seja, nem há backend
+  //                                          registrado nesse prefixo.
+  // Dois desfechos DIFERENTES, e a diferença é a informação: o segundo não é
+  // "rota errada", é "host errado".
+  //
+  // Este modo tenta os candidatos conhecidos do sistema nacional numa chamada
+  // só e devolve o status de cada um — em vez de um deploy por tentativa.
+  //
+  // ⚠️ A LISTA DE HOSTS É FECHADA, e isso não é zelo: esta função apresenta o
+  // CERTIFICADO A1 DA EMPRESA em cada requisição. Um `&host=` livre a
+  // transformaria num proxy que assina, no CNPJ da Carbo, contra qualquer
+  // servidor que alguém escolher.
+  if (url.searchParams.has("danfse")) {
+    const chave = (url.searchParams.get("danfse") ?? "").replace(/\D/g, "");
+    if (chave.length !== 50) {
+      return json({ ok: false, erro: "chave de acesso deve ter 50 dígitos", recebido: chave.length }, 400);
+    }
+    const candidatos = [
+      `https://sefin.nfse.gov.br/sefinnacional/danfse/${chave}`,
+      `https://adn.nfse.gov.br/contribuintes/danfse/${chave}`,
+      `https://adn.nfse.gov.br/contribuintes/DFe/danfse/${chave}`,
+      `https://www.nfse.gov.br/danfse/${chave}`,
+    ];
+    let cli: Deno.HttpClient;
+    try {
+      cli = Deno.createHttpClient({ cert, key });
+    } catch (e) {
+      return json({ ok: false, etapa: "createHttpClient", erro: String(e) }, 500);
+    }
+    const achados: unknown[] = [];
+    try {
+      for (const alvo of candidatos) {
+        const t = Date.now();
+        try {
+          const r = await fetch(alvo, { client: cli, headers: { Accept: "application/pdf,*/*" } });
+          const tipo = r.headers.get("content-type") ?? "";
+          // ⚠️ NÃO baixa o corpo inteiro: um PDF de vários MB no JSON da
+          // resposta só atrapalha. O que responde "é o PDF?" é o
+          // content-type mais o tamanho, não o conteúdo.
+          const bruto = await r.arrayBuffer();
+          achados.push({
+            alvo, http: r.status, tipo, bytes: bruto.byteLength, ms: Date.now() - t,
+            e_pdf: tipo.includes("pdf") || (bruto.byteLength > 4 &&
+              new TextDecoder().decode(new Uint8Array(bruto.slice(0, 4))) === "%PDF"),
+          });
+        } catch (e) {
+          // Falha de rede/TLS num candidato NÃO derruba os outros: "este host
+          // não existe" e "este caminho não existe" são respostas diferentes.
+          achados.push({ alvo, erro: String(e), ms: Date.now() - t });
+        }
+      }
+    } finally {
+      try { cli.close(); } catch { /* nada a fazer */ }
+    }
+    return json({ ok: true, chave, candidatos: achados });
+  }
+
   // ── &ingerir=1 — a FASE 2: puxa por NSU e grava ──────────────────────────
   if (url.searchParams.get("ingerir") === "1") {
     let cli: Deno.HttpClient;
