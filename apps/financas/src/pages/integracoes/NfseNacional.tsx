@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   FileSpreadsheet, ArrowUpRight, ArrowDownLeft, Ban, AlertTriangle, CheckCircle2,
-  Repeat, FileCode2, Loader2, Scale,
+  Repeat, FileCode2, Loader2, Scale, FileDown, Copy,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/carbo-table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNfse, useNfseSaude, baixarXmlNfse, type NfseRow } from "@/hooks/useNfse";
+import { gerarPdfNfse } from "@/lib/nfsePdf";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // NFS-e Nacional — as notas de serviço do Portal Nacional (ADN gov.br)
@@ -117,28 +118,59 @@ function selo(n: NfseRow) {
   return <CarboBadge variant="outline" size="sm">Válida</CarboBadge>;
 }
 
-function BotaoXml({ n }: { n: NfseRow }) {
+function Arquivos({ n }: { n: NfseRow }) {
   const [baixando, setBaixando] = useState(false);
   return (
-    <CarboButton
-      variant="outline" size="sm" disabled={baixando}
-      title="Baixar o XML da nota (documento fiscal)"
-      onClick={async () => {
-        setBaixando(true);
-        try {
-          await baixarXmlNfse(n);
-        } catch (e) {
-          toast.error((e as Error).message);
-        } finally {
-          setBaixando(false);
-        }
-      }}
-    >
-      {baixando
-        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        : <FileCode2 className="h-3.5 w-3.5" />}
-      <span className="ml-1">XML</span>
-    </CarboButton>
+    <div className="flex items-center gap-1">
+      {/* ⚠️ O XML vem PRIMEIRO de propósito: ele é o documento fiscal. O PDF é
+          uma representação nossa — ver `lib/nfsePdf.ts`. */}
+      <CarboButton
+        variant="outline" size="sm" disabled={baixando}
+        title="Baixar o XML assinado (é ele o documento fiscal)"
+        onClick={async () => {
+          setBaixando(true);
+          try { await baixarXmlNfse(n); }
+          catch (e) { toast.error((e as Error).message); }
+          finally { setBaixando(false); }
+        }}
+      >
+        {baixando
+          ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          : <FileCode2 className="h-3.5 w-3.5" />}
+        <span className="ml-1">XML</span>
+      </CarboButton>
+
+      <CarboButton
+        variant="outline" size="sm"
+        title="Gerar PDF a partir do XML (representação, não é a DANFSE oficial)"
+        onClick={() => {
+          try { gerarPdfNfse(n); }
+          catch (e) { toast.error("Não consegui gerar o PDF: " + (e as Error).message); }
+        }}
+      >
+        <FileDown className="h-3.5 w-3.5" />
+        <span className="ml-1">PDF</span>
+      </CarboButton>
+
+      {/* ⚠️ Copiar a chave é o que dá acesso à DANFSE OFICIAL, na consulta
+          pública do portal. O PDF daqui não substitui aquele layout — e sem
+          este botão a pessoa teria de transcrever 50 dígitos à mão. */}
+      <CarboButton
+        variant="ghost" size="sm"
+        title="Copiar a chave de acesso (para a consulta pública do portal)"
+        disabled={!n.chave_acesso}
+        onClick={async () => {
+          try {
+            await navigator.clipboard.writeText(n.chave_acesso ?? "");
+            toast.success("Chave copiada — cole na consulta pública do gov.br");
+          } catch {
+            toast.error("O navegador bloqueou a cópia.");
+          }
+        }}
+      >
+        <Copy className="h-3.5 w-3.5" />
+      </CarboButton>
+    </div>
   );
 }
 
@@ -385,7 +417,7 @@ export default function NfseNacional() {
                   <CarboTableHead className="text-right">Serviço</CarboTableHead>
                   <CarboTableHead className="text-right">Líquido</CarboTableHead>
                   <CarboTableHead>Situação</CarboTableHead>
-                  <CarboTableHead>Arquivo</CarboTableHead>
+                  <CarboTableHead>Arquivos</CarboTableHead>
                 </CarboTableRow>
               </CarboTableHeader>
               <CarboTableBody>
@@ -417,7 +449,7 @@ export default function NfseNacional() {
                         {fmtBRL(num(n.valor_liquido))}
                       </CarboTableCell>
                       <CarboTableCell>{selo(n)}</CarboTableCell>
-                      <CarboTableCell><BotaoXml n={n} /></CarboTableCell>
+                      <CarboTableCell><Arquivos n={n} /></CarboTableCell>
                     </CarboTableRow>
                   );
                 })}
