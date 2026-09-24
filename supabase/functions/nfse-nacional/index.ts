@@ -293,17 +293,45 @@ Deno.serve(async (req: Request) => {
     if (chave.length !== 50) {
       return json({ ok: false, erro: "chave de acesso deve ter 50 dígitos", recebido: chave.length }, 400);
     }
+    // ⚠️ O peso está no `sefin` porque ele é o único host que se provou VIVO
+    // (recusou o protocolo, não o caminho). Os do `adn` ficam como controle:
+    // se voltarem 404 também em HTTP/1.1, confirma-se que o problema nunca foi
+    // o protocolo lá — e um controle que some deixa de provar qualquer coisa.
     const candidatos = [
       `https://sefin.nfse.gov.br/sefinnacional/danfse/${chave}`,
+      `https://sefin.nfse.gov.br/SefinNacional/danfse/${chave}`,
+      `https://sefin.nfse.gov.br/danfse/${chave}`,
+      `https://sefin.nfse.gov.br/sefinnacional/DANFSE/${chave}`,
+      `https://sefin.nfse.gov.br/sefinnacional/nfse/${chave}`,
       `https://adn.nfse.gov.br/contribuintes/danfse/${chave}`,
-      `https://adn.nfse.gov.br/contribuintes/DFe/danfse/${chave}`,
       `https://www.nfse.gov.br/danfse/${chave}`,
     ];
+    // ⚠️ HTTP/1.1 FORÇADO, e isso foi medido em 24/09/2026.
+    //
+    // O `sefin.nfse.gov.br` NÃO respondeu 404 como os outros — respondeu
+    // `http2 error: endpoint requires HTTP/1.1`. Ou seja: o servidor existe,
+    // está de pé e recusou o protocolo, não o caminho. O Deno negocia h2 por
+    // ALPN e o SEFIN só fala h1.
+    //
+    // A lição é a de sempre neste projeto: **erro que não é 404 não é
+    // ausência**. Ler aquilo como "não achei" teria matado o único candidato
+    // vivo e mandado a tarefa para "gerar o PDF a partir do XML" sem
+    // necessidade.
     let cli: Deno.HttpClient;
     try {
-      cli = Deno.createHttpClient({ cert, key });
-    } catch (e) {
-      return json({ ok: false, etapa: "createHttpClient", erro: String(e) }, 500);
+      // O cast existe porque `http1`/`http2` são opções instáveis e podem não
+      // estar na tipagem desta versão — o comportamento em tempo de execução é
+      // o que importa aqui.
+      cli = Deno.createHttpClient({ cert, key, http1: true, http2: false } as Deno.CreateHttpClientOptions);
+    } catch {
+      // Reserva: se esta build do Deno não aceitar as opções de protocolo, o
+      // cliente comum ainda serve para os candidatos que falam h2 — melhor
+      // sondar parcialmente do que não sondar.
+      try {
+        cli = Deno.createHttpClient({ cert, key });
+      } catch (e) {
+        return json({ ok: false, etapa: "createHttpClient", erro: String(e) }, 500);
+      }
     }
     const achados: unknown[] = [];
     try {
