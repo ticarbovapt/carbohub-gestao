@@ -55,6 +55,35 @@ const cep = (c: string | null) => {
 const endereco = (l: string | null, n: string | null, c: string | null, b: string | null) =>
   vazio([[l, n].filter(Boolean).join(", "), c, b].filter(Boolean).join(" - "));
 
+// O XML guarda cru (`8432075055`); a DANFSE oficial imprime `(84) 3207-5055`.
+const fone = (f: string | null) => {
+  const s = (f ?? "").replace(/\D/g, "");
+  if (s.length === 11) return s.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
+  if (s.length === 10) return s.replace(/(\d{2})(\d{4})(\d{4})/, "($1) $2-$3");
+  return vazio(f);
+};
+
+// `140101` no XML, `14.01.01` no papel — é assim que o item da lista de
+// serviços é procurado na legislação municipal.
+const codServico = (c: string | null) => {
+  const s = (c ?? "").replace(/\D/g, "");
+  return s.length === 6 ? s.replace(/(\d{2})(\d{2})(\d{2})/, "$1.$2.$3") : vazio(c);
+};
+
+// ⚠️ SÓ os códigos CONFIRMADOS pela DANFSE oficial que o dono do processo
+// mandou viram texto: naquela nota `tribISSQN = 1` imprime "Operação
+// Tributável" e `tpRetISSQN = 1` imprime "Não Retido". Os demais valores da
+// tabela eu NÃO vi no papel — e rótulo inventado num documento fiscal é pior
+// que código cru, porque parece informação. Código desconhecido sai como
+// "Código N", que é honesto e continua buscável.
+const ISSQN_TIPO: Record<string, string> = { "1": "Operação Tributável" };
+const ISSQN_RET: Record<string, string> = { "1": "Não Retido" };
+const rotulo = (mapa: Record<string, string>, c: string | null) => {
+  const s = (c ?? "").trim();
+  if (!s) return "-";
+  return mapa[s] ?? `Código ${s}`;
+};
+
 export function gerarPdfNfse(n: NfseRow) {
   const pdf = new jsPDF({ unit: "mm", format: "a4" });
   const L = 10, R = 200, W = R - L;
@@ -177,7 +206,7 @@ export function gerarPdfNfse(n: NfseRow) {
   linha([
     ["CNPJ / CPF / NIF", doc2(n.emit_cnpj)],
     ["Inscrição municipal", vazio(n.emit_im)],
-    ["Telefone", vazio(n.emit_fone)],
+    ["Telefone", fone(n.emit_fone)],
   ], [2, 2, 1.5]);
   linha([["Nome / Nome empresarial", vazio(n.emit_nome)], ["E-mail", vazio(n.emit_email)]], [3, 2]);
   linha([
@@ -191,7 +220,7 @@ export function gerarPdfNfse(n: NfseRow) {
   linha([
     ["CNPJ / CPF / NIF", doc2(n.toma_doc)],
     ["Inscrição municipal", vazio(n.toma_im)],
-    ["Telefone", vazio(n.toma_fone)],
+    ["Telefone", fone(n.toma_fone)],
   ], [2, 2, 1.5]);
   linha([["Nome / Nome empresarial", vazio(n.toma_nome)], ["E-mail", vazio(n.toma_email)]], [3, 2]);
   linha([
@@ -203,7 +232,7 @@ export function gerarPdfNfse(n: NfseRow) {
   // ── Serviço ──────────────────────────────────────────────────────────────
   secao("Serviço prestado");
   linha([
-    ["Cód. tributação nacional", vazio(n.serv_cod_nacional)],
+    ["Cód. tributação nacional", codServico(n.serv_cod_nacional)],
     ["Cód. tributação municipal", vazio(n.serv_cod_municipal)],
     ["Código NBS", vazio(n.serv_cod_nbs)],
     ["Local da prestação", vazio(n.municipio_prestacao)],
@@ -216,8 +245,8 @@ export function gerarPdfNfse(n: NfseRow) {
   // ── Tributação ───────────────────────────────────────────────────────────
   secao("Tributação municipal (ISSQN)");
   linha([
-    ["Tipo de tributação", vazio(n.issqn_tipo)],
-    ["Retenção do ISSQN", vazio(n.issqn_retencao)],
+    ["Tipo de tributação", rotulo(ISSQN_TIPO, n.issqn_tipo)],
+    ["Retenção do ISSQN", rotulo(ISSQN_RET, n.issqn_retencao)],
     ["Base de cálculo", fmtBRL(n.base_calculo)],
     ["Município de incidência", vazio(n.municipio_incidencia)],
   ]);
