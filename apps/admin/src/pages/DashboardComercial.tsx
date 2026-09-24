@@ -127,21 +127,33 @@ function SerieMensal({
           <p className="text-xl font-bold leading-none tabular-nums mt-0.5" style={{ color: cor }}>{acumulado}</p>
         </div>
       </div>
-      <ResponsiveContainer width="100%" height={170}>
-        <ComposedChart data={dados} margin={{ top: 22, right: 8, bottom: 0, left: 0 }}>
+      {/* ⚠️ A altura é FIXA e generosa de propósito. Com quatro gráficos numa
+          linha os rótulos de valor se sobrepunham e o eixo pulava meses — um
+          gráfico que esconde o próprio número não serve para nada. Por isso a
+          grade é de DUAS colunas (ver abaixo) e a altura sobe junto: o espaço
+          vertical é o que dá ar aos rótulos em cima das barras. */}
+      <ResponsiveContainer width="100%" height={260}>
+        <ComposedChart data={dados} margin={{ top: 26, right: 10, bottom: 0, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
-          <XAxis dataKey="mes" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} dy={4} />
-          <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false}
-                 width={moeda ? 44 : 28} tickFormatter={moeda ? kAxis : undefined} />
+          {/* `interval={0}` obriga a mostrar TODOS os meses: deixar o Recharts
+              decidir faz ele pular rótulo quando aperta, e mês faltando num
+              eixo se lê como mês sem venda. */}
+          <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} dy={4} interval={0} />
+          <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false}
+                 width={moeda ? 48 : 32} tickFormatter={moeda ? kAxis : undefined} />
           <Tooltip cursor={{ fill: "rgba(148,163,184,0.08)" }}
                    content={moeda ? <DarkTip fmt={brl} /> : <DarkTip unit=" vendas" />} />
           <Bar dataKey={campo} name={titulo} fill={`${cor}30`} stroke={cor} strokeWidth={1.4}
-               radius={[4, 4, 0, 0]} maxBarSize={44} isAnimationActive={false}>
+               radius={[4, 4, 0, 0]} maxBarSize={56} isAnimationActive={false}>
             <LabelList dataKey={campo} position="top"
                        formatter={(v: any) => (moeda ? (v >= 1000 ? `R$${(v / 1000).toFixed(0)}k` : `R$${Math.round(v)}`) : v)}
-                       style={{ fontSize: 9.5, fill: cor, fontWeight: 700 }} />
+                       style={{ fontSize: 11, fill: cor, fontWeight: 700 }} />
           </Bar>
-          <Line type="monotoneX" dataKey={campo} name={titulo} stroke={cor} strokeWidth={2.2}
+          {/* ⚠️ `tooltipType="none"`: a linha e a barra são o MESMO dataKey, e
+              sem isto o tooltip mostrava o valor DUAS vezes, uma embaixo da
+              outra — parecia que havia duas séries diferentes com o mesmo
+              número. A linha é enfeite de leitura, não uma segunda medida. */}
+          <Line type="monotoneX" dataKey={campo} name={titulo} tooltipType="none" stroke={cor} strokeWidth={2.2}
                 dot={{ r: 2.5, fill: cor, stroke: "#fff", strokeWidth: 1.5 }} activeDot={{ r: 4.5 }} isAnimationActive={false} />
         </ComposedChart>
       </ResponsiveContainer>
@@ -451,7 +463,7 @@ export default function DashboardComercial() {
               {/* ⚠️ QUATRO recortes, e a ordem é a mesma nos três blocos:
                   Total · On-line · Equipe · Descarbonização. Ordem diferente
                   entre blocos faria a pessoa comparar o gráfico errado. */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <SerieMensal titulo="Faturado · TOTAL" acumulado={fmtK((k?.totalBRL ?? 0) + (servicos?.total ?? 0))}
                              cor="#1a7a4a" dados={serie} campo="totalFat" />
                 <SerieMensal titulo="Faturado · on-line" acumulado={fmtK(data?.totalOnline ?? 0)}
@@ -462,7 +474,7 @@ export default function DashboardComercial() {
                              cor="#06b6d4" dados={serie} campo="dsFat" />
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <SerieMensal titulo="Vendas · TOTAL" moeda={false}
                              acumulado={String((k?.totalVendas ?? 0) + (servicos?.notas ?? 0))}
                              cor="#3b6ea5" dados={serie} campo="totalQtd" />
@@ -478,8 +490,12 @@ export default function DashboardComercial() {
           )}
         </div>
 
-        {/* 5. Crescimento Anual + Ticket */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        {/* 5. Crescimento Anual + Ticket
+            ⚠️ Empilhados, não lado a lado. O Ticket virou QUATRO gráficos, e
+            meia largura dividida em dois dava um quarto de tela a cada um —
+            rótulo em cima de rótulo. Painel com vários gráficos ocupa a linha
+            inteira; painel de um gráfico só é que pode dividir. */}
+        <div className="space-y-3">
           <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">
             <div className="flex items-center justify-between border-b border-border px-6 py-3">
               <div>
@@ -492,14 +508,14 @@ export default function DashboardComercial() {
               </div>
             </div>
             <div className="px-4 pt-4 pb-4">
-              <ResponsiveContainer width="100%" height={175}>
-                <ComposedChart data={annualGrowth} margin={{ top: 20, right: 8, bottom: 0, left: 0 }}>
+              <ResponsiveContainer width="100%" height={260}>
+                <ComposedChart data={annualGrowth} margin={{ top: 24, right: 10, bottom: 0, left: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} dy={4} />
-                  <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={44} tickFormatter={kAxis} />
+                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} dy={4} interval={0} />
+                  <YAxis tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={48} tickFormatter={kAxis} />
                   <Tooltip content={<DarkTip fmt={fmtK} />} />
                   <Bar dataKey="real" name="Real" fill="rgba(16,185,129,0.55)" stroke="#10b981" strokeWidth={1.5} radius={[4, 4, 0, 0]} maxBarSize={40} isAnimationActive={false}>
-                    <LabelList dataKey="real" position="top" formatter={(v: any) => (v != null ? fmtK(v) : "")} style={{ fontSize: 9, fill: "#6ee7b7", fontWeight: 700 }} />
+                    <LabelList dataKey="real" position="top" formatter={(v: any) => (v != null ? fmtK(v) : "")} style={{ fontSize: 11, fill: "#6ee7b7", fontWeight: 700 }} />
                   </Bar>
                   <Line dataKey="meta" name="Meta" type="monotone" stroke="#fb923c" strokeWidth={2} strokeDasharray="5 3" dot={false} connectNulls isAnimationActive={false} />
                 </ComposedChart>
@@ -514,7 +530,7 @@ export default function DashboardComercial() {
                 <p className="text-xs text-board-muted mt-0.5">Valor médio por pedido mês a mês · <span className="font-semibold text-violet-500">{fmtK(k?.ticketMedio ?? 0)} média geral</span></p>
               </div>
             </div>
-            <div className="px-4 pt-4 pb-4 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-3">
+            <div className="px-4 pt-4 pb-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* ⚠️ O ticket do TOTAL é o faturamento total dividido pelas
                   vendas totais — não a média das outras três. Média de médias
                   daria o mesmo peso a um canal de 320 notas e a outro de 1.100
