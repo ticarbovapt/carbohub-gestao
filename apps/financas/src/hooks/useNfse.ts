@@ -98,6 +98,34 @@ export function useNfse() {
   });
 }
 
+// ⚠️ O XML CRU vem de `carbo_nfse_dfe`, não das views: as views entregam o
+// parse, e o financeiro precisa do documento fiscal em si — é ele que vale
+// para a contabilidade. Buscar sob demanda (e não trazer junto da lista) é o
+// que impede 697 documentos inteiros de atravessarem a rede a cada abertura.
+export async function baixarXmlNfse(n: { ambiente: string; nsu: number; numero: string | null }) {
+  const { data, error } = await (supabase as any)
+    .from("carbo_nfse_dfe")
+    .select("xml, xml_ok")
+    .eq("ambiente", n.ambiente)
+    .eq("nsu", n.nsu)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  // ⚠️ Ausência é dita, nunca disfarçada de arquivo vazio: baixar um .xml de
+  // 0 byte faria a pessoa achar que tem o documento e descobrir no contador.
+  if (!data?.xml) throw new Error("Esta nota não tem XML guardado.");
+
+  const nome = `NFSe-${n.numero ?? n.nsu}.xml`;
+  const url = URL.createObjectURL(new Blob([data.xml], { type: "application/xml" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = nome;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  // Sem o revoke a aba segura o documento inteiro em memória até fechar.
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
 export function useNfseSaude() {
   return useQuery({
     queryKey: ["nfse_saude"],
