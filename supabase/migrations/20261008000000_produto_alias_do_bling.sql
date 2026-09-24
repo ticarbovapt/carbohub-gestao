@@ -69,3 +69,15 @@ on conflict (codigo) do nothing;
 -- ⚠️ `do nothing`, nunca `do update`: rodar de novo não pode desfazer uma
 -- correção manual feita depois. Migração idempotente que anda para trás é pior
 -- que migração que falha.
+
+-- ── Acréscimo de 24/09/2026: o código 020 ─────────────────────────────────
+-- Confirmado pela equipe comercial contra o histórico de preço: as nove linhas
+-- do 020 são CarboZé 100 ml. Sete delas vêm com a quantidade deslocada em duas
+-- casas (7500 × R$ 0,116 = R$ 870, que são 75 un. a R$ 11,60) e a leitura
+-- corrige isso pelo par preço/quantidade — ver `corrigirEscala` no
+-- `useUnidadesVendidas.ts`. Aqui só o produto.
+insert into public.carbo_produto_alias (codigo, product_id, fonte, observacao)
+select '020', p.id, 'bling1', 'CARBOZÉ - ESTABILIZADOR E OTIMIZADOR DE COMBUSTIVEIS (cadastro antigo)'
+from public.mrp_products p
+where p.product_code = 'CZ100'
+on conflict (codigo) do nothing;

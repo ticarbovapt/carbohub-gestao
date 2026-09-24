@@ -81,6 +81,8 @@ export interface UnidadesVendidas {
   totalUnidades: number | null;
   /** Produtos da equipe sem fator conhecido — a lista de trabalho. */
   semFator: string[];
+  /** Linhas cujo par quantidade/preço veio deslocado em duas casas. */
+  linhasCorrigidas: number;
 }
 
 interface LinhaOnline {
@@ -120,6 +122,7 @@ interface ItemVenda {
   bonus_quantity?: number | null;
   is_bonificacao?: boolean | null;
   kind?: string | null;
+  unit_price?: number | null;
   total?: number | null;
 }
 
@@ -134,6 +137,45 @@ const itemQtd = (i: ItemVenda) => num(i?.quantity ?? i?.quantidade);
 // histórico — e é exatamente o tipo de resto que some quando se lê "o formato
 // atual" em vez de todos.
 const itemBonus = (i: ItemVenda) => num(i?.bonificacao ?? i?.bonus_quantity);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ⚠️ A ESCALA DE CEM — quantidade inflada, total correto
+//
+// Medido em 24/09/2026 no código 020 do Bling (CarboZé 100 ml), confirmado
+// pela equipe comercial contra o histórico de preço:
+//
+//   BLING-3   qtd 7500 × R$ 0,116 = R$ 870   →  são 75 un. a R$ 11,60
+//   BLING-2   qtd 5000 × R$ 0,116 = R$ 580   →  são 50 un. a R$ 11,60
+//   BLING-6   qtd  300 × R$ 0,300 = R$  90   →  são  3 un. a R$ 30,00
+//
+// O TOTAL da linha sempre esteve certo — o que veio errado do cadastro antigo
+// do Bling é a divisão entre quantidade e preço, deslocada em duas casas. As
+// nove linhas somavam 13.405 "unidades" onde foram 139: inflação de 96×.
+//
+// ⚠️ A regra é ESTREITA de propósito, e exige as DUAS condições:
+//
+//   1. preço unitário abaixo de R$ 1,00 — nenhum Produto Final é vendido
+//      assim (o mais barato do catálogo é o sachê, a R$ 1,80);
+//   2. quantidade múltipla de 100 — é o que faz a correção devolver um
+//      número inteiro em vez de inventar uma fração.
+//
+// Uma condição só seria heurística. As duas juntas descrevem exatamente o
+// defeito medido, e as linhas boas do MESMO código (3 un. a R$ 30, 2 un. a
+// R$ 30) passam intactas — prova de que a régua não é "o código 020".
+//
+// ⚠️ E a correção é CONTADA e mostrada na tela. Corrigir em silêncio faria o
+// painel discordar do Bling sem ninguém saber por quê — e a correção de
+// verdade é no cadastro de origem, não aqui.
+// ═══════════════════════════════════════════════════════════════════════════
+const PRECO_MINIMO_PLAUSIVEL = 1;
+const ESCALA = 100;
+
+function corrigirEscala(qtd: number, precoUnit: number): { qtd: number; corrigida: boolean } {
+  if (precoUnit > 0 && precoUnit < PRECO_MINIMO_PLAUSIVEL && qtd >= ESCALA && qtd % ESCALA === 0) {
+    return { qtd: qtd / ESCALA, corrigida: true };
+  }
+  return { qtd, corrigida: false };
+}
 
 /** Chave de nome: sem acento, minúscula, espaços colapsados. */
 const chaveNome = (s: string) =>
@@ -328,6 +370,7 @@ export function useUnidadesVendidas(filtros: UnidadesFiltro = {}) {
       }
 
       const semFator = new Set<string>();
+      let linhasCorrigidas = 0;
       for (const o of comItens) {
         for (const i of o.items ?? []) {
           // Serviço não tem unidade física e não entra numa contagem de frascos.
@@ -350,8 +393,14 @@ export function useUnidadesVendidas(filtros: UnidadesFiltro = {}) {
           // ao cliente. `bonificacao` é o modelo antigo (campo na linha paga) e
           // a linha `is_bonificacao` é o novo (quantidade própria, valor zero).
           // Os dois convivem no histórico — ler só um perde metade dos brindes.
-          const qtd = itemQtd(i);
-          const bonus = itemBonus(i);
+          // ⚠️ A escala é corrigida ANTES de somar, e sobre a quantidade PAGA
+          // e a bonificada separadamente — as duas vêm da mesma linha e do
+          // mesmo cadastro deslocado.
+          const escQtd = corrigirEscala(itemQtd(i), num(i?.unit_price));
+          const escBon = corrigirEscala(itemBonus(i), num(i?.unit_price));
+          const qtd = escQtd.qtd;
+          const bonus = escBon.qtd;
+          if (escQtd.corrigida || escBon.corrigida) linhasCorrigidas++;
           const itens = qtd + bonus;
           linha.eqItens += itens;
           linha.eqBonificadas += bonus + (i?.is_bonificacao ? qtd : 0);
@@ -396,6 +445,7 @@ export function useUnidadesVendidas(filtros: UnidadesFiltro = {}) {
         eqReceita: Math.round(soma((p) => p.eqReceita) * 100) / 100,
         totalUnidades: eqUnidades === null ? null : onUnidades + eqUnidades,
         semFator: [...semFator].sort((a, b) => a.localeCompare(b, "pt-BR")),
+        linhasCorrigidas,
       };
     },
   });

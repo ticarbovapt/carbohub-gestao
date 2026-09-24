@@ -796,6 +796,16 @@ export default function DashboardComercial() {
           Período: <span className="font-semibold text-board-text">{periodoLabel}</span>
           {" · "}só pedidos que contam métrica (com NF válida) · bonificação incluída · insumo e serviço fora
         </p>
+        {/* ⚠️ Correção de dado NUNCA é silenciosa. Sem esta linha o painel
+            mostraria um número diferente do Bling e ninguém saberia por quê —
+            e a correção de verdade é no cadastro de origem, não aqui. */}
+        {!!unidades?.linhasCorrigidas && (
+          <p className="-mt-2 text-[11px] text-amber-500">
+            {unidades.linhasCorrigidas} linha(s) com quantidade deslocada em duas casas no cadastro antigo do Bling
+            (preço abaixo de R$ 1,00 e quantidade múltipla de 100) foram lidas ÷100. O total em R$ da linha não muda —
+            só o par quantidade × preço estava trocado.
+          </p>
+        )}
 
         {erroUnidades && (
           <div className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/[0.06] px-3 py-2.5 text-sm">
