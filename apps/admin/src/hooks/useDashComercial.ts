@@ -59,6 +59,11 @@ export interface ComercialGrowth {
 
 export interface ComercialData {
   totalBRL: number;
+  // ⚠️ O recorte do CANAL sai daqui, já calculado sobre o MESMO conjunto de
+  // pedidos dos outros números. Pedir o split com uma segunda consulta abriria
+  // a porta para os dois discordarem — e discordar aqui é o total não fechar.
+  totalOnline: number;
+  totalNaoOnline: number;
   totalVendas: number;
   ticketMedio: number;
   maiorVenda: number;
@@ -191,6 +196,14 @@ export function useDashComercial(vendedorId: string | null = null, months = 12, 
 
       // ── KPIs (sobre o conjunto de pedidos). Verbatim CRM.
       const totalBRL = pedidos.reduce((s, v) => s + (Number(v.total) || 0), 0);
+      // `segmento = 'online'` é o canal DECLARADO na ponte do Bling. ⚠️ Não é a
+      // soma das plataformas de e-commerce: aquelas vêm de `ecommerce_orders` e
+      // já discordam desta base hoje (os pedidos do ML Full sem NF). Aqui vale
+      // o do Bling, porque é ele que faz o total fechar.
+      const totalOnline = pedidos
+        .filter((v) => v.segmento === "online")
+        .reduce((s, v) => s + (Number(v.total) || 0), 0);
+      const totalNaoOnline = totalBRL - totalOnline;
       const totalVendas = pedidos.length;
       let maiorVenda = 0, maiorCliente = "—";
       const byCliente = new Map<string, number>();
@@ -236,7 +249,7 @@ export function useDashComercial(vendedorId: string | null = null, months = 12, 
       };
 
       return {
-        totalBRL, totalVendas, ticketMedio, maiorVenda, maiorCliente, topCliente, topQtd,
+        totalBRL, totalOnline, totalNaoOnline, totalVendas, ticketMedio, maiorVenda, maiorCliente, topCliente, topQtd,
         monthly, annualGrowth, kpis, growth,
       };
     },

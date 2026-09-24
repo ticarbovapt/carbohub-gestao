@@ -5,8 +5,9 @@ import {
 } from "recharts";
 import {
   TrendingUp, ShoppingCart, DollarSign, Trophy, Repeat2, BarChart3,
-  ArrowUpRight, ArrowDownRight, Minus, Loader2, Pencil, AlertTriangle,
+  ArrowUpRight, ArrowDownRight, Minus, Loader2, Pencil, AlertTriangle, Globe, Wrench,
 } from "lucide-react";
+import { useServicosNfse } from "@/hooks/useServicosNfse";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { useAuth } from "@/contexts/AuthContext";
 import { useDashComercial } from "@/hooks/useDashComercial";
@@ -115,6 +116,12 @@ export default function DashboardComercial() {
 
   const vendedorId = filters.vendedor === "all" ? null : filters.vendedor;
   const { data, isLoading, error } = useDashComercial(vendedorId, 12, { from: filters.from, to: filters.to, segmento: filters.segmento });
+  // ⚠️ Receita de SERVIÇO vem de OUTRA base (NFS-e Nacional), porque serviço não
+  // gera NF-e e por isso NUNCA entrou em `carbo_vendas_metrica`. Medido em
+  // 24/09: zero pedidos com item de serviço contando no Bling — ou seja, somar
+  // as duas NÃO duplica nada. A conferência veio primeiro porque um total
+  // inflado é plausível e ninguém desconfia de número que só cresce.
+  const { data: servicos } = useServicosNfse({ from: filters.from, to: filters.to });
   const { data: canais } = useComercialCanais({ vendedorId, from: filters.from, to: filters.to });
   const year = canais?.year ?? new Date().getFullYear();
   const { data: canalMetas } = useCanalMetas(year);
@@ -177,10 +184,48 @@ export default function DashboardComercial() {
           </div>
         </div>
 
-        {/* 2. KPIs */}
+        {/* 2a. Faturamento por ORIGEM — as três fontes e a soma.
+            ⚠️ São bases DIFERENTES: as duas primeiras vêm da NF-e do Bling
+            (`carbo_vendas_metrica`), a terceira da NFS-e do portal nacional.
+            Elas não se sobrepõem — é por isso que somar é legítimo aqui, e a
+            medição que provou isso está no `useServicosNfse`. */}
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+          <KpiCard title="CarboZé on-line" value={fmtK(data?.totalOnline ?? 0)}
+                   sub="Marketplaces e loja própria · NF-e"
+                   Icon={Globe} accent="border-l-blue-500" iconBg="bg-blue-500/10 text-blue-500" />
+          <KpiCard title="CarboZé equipe / balcão" value={fmtK(data?.totalNaoOnline ?? 0)}
+                   sub="Venda direta e revenda · NF-e"
+                   Icon={ShoppingCart} accent="border-l-green-500" iconBg="bg-green-500/10 text-green-600" />
+          <KpiCard title="Descarbonização" value={fmtK(servicos?.descarbonizacao ?? 0)}
+                   sub={`Serviço CarboVapt · NFS-e${servicos?.outros ? ` · +${fmtK(servicos.outros)} outros serviços` : ""}`}
+                   Icon={Wrench} accent="border-l-cyan-500" iconBg="bg-cyan-500/10 text-cyan-500" />
+          <KpiCard title="Faturamento total"
+                   value={fmtK((data?.totalBRL ?? 0) + (servicos?.total ?? 0))}
+                   sub="Produto (NF-e) + serviço (NFS-e)"
+                   Icon={DollarSign} accent="border-l-amber-400" iconBg="bg-amber-400/10 text-amber-500" />
+        </div>
+
+        {/* ⚠️ A série de serviço COMEÇA em jan/2026 e o Bling vai até out/25.
+            Sem dizer isso, os meses anteriores com zero de descarbonização se
+            leem como "o serviço começou em janeiro" — e é ausência de DADO no
+            portal, não ausência de serviço. */}
+        {servicos && servicos.primeiroMes && (
+          <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+            A receita de serviço vem da NFS-e do Portal Nacional, que só tem notas emitidas
+            a partir de <strong className="text-foreground">{servicos.primeiroMes}</strong>.
+            Meses anteriores aparecem sem descarbonização por falta de dado no portal, não
+            por ausência de serviço. {servicos.notas} nota(s) no período.
+          </div>
+        )}
+
+        {/* 2b. KPIs */}
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
           <KpiCard title="Total de Vendas" value={String(k?.totalVendas ?? 0)} sub="Pedidos ativos (excl. cancelados)" Icon={ShoppingCart} accent="border-l-green-500" iconBg="bg-green-500/10 text-green-600" />
-          <KpiCard title="R$ Total Vendido" value={fmtK(k?.totalBRL ?? 0)} sub="Faturamento acumulado" Icon={DollarSign} accent="border-l-green-500" iconBg="bg-green-500/10 text-green-600" />
+          {/* ⚠️ Este card continua sendo SÓ produto (NF-e). O rótulo passou a
+              dizer isso: antes ele se chamava "Faturamento acumulado" e, ao
+              lado do total novo, dois números diferentes com o mesmo nome
+              fariam alguém escolher o errado. */}
+          <KpiCard title="R$ Vendido (produto)" value={fmtK(k?.totalBRL ?? 0)} sub="Só NF-e do Bling — sem serviço" Icon={DollarSign} accent="border-l-green-500" iconBg="bg-green-500/10 text-green-600" />
           <KpiCard title="Maior Venda" value={fmtK(k?.maiorVenda ?? 0)} sub={k?.maiorCliente} Icon={Trophy} accent="border-l-amber-400" iconBg="bg-amber-400/10 text-amber-500" />
           <KpiCard title="Top Recorrência" value={k?.topCliente ?? "—"} sub={`${k?.topQtd ?? 0} pedido(s) · mais frequente`} Icon={Repeat2} accent="border-l-blue-400" iconBg="bg-blue-400/10 text-blue-500" />
           <KpiCard title="Ticket Médio" value={fmtK(k?.ticketMedio ?? 0)} sub="Por pedido (período)" Icon={TrendingUp} accent="border-l-violet-400" iconBg="bg-violet-400/10 text-violet-500" />
