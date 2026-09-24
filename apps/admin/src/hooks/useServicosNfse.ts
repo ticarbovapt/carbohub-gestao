@@ -45,6 +45,9 @@ export interface ServicosNfse {
   outros: number;
   total: number;
   notas: number;
+  // Contagem separada pela mesma razão do valor: a nota de comissão não é
+  // descarbonização, e somá-la na contagem repetiria o erro de rótulo.
+  notasDescarbonizacao: number;
   porMes: ServicoMes[];
   // ⚠️ O mês em que a série COMEÇA. O Bling tem histórico desde out/25, mas o
   // portal nacional só entrega emitidas a partir de jan/26 — os meses
@@ -86,7 +89,7 @@ export function useServicosNfse(filtros: ServicosFiltro = {}) {
         (!from || iso >= from) && (!to || iso <= to);
 
       const porMes = new Map<string, ServicoMes>();
-      let descarbonizacao = 0, outros = 0, notas = 0;
+      let descarbonizacao = 0, outros = 0, notas = 0, notasDescarbonizacao = 0;
       let primeiroMes: string | null = null;
 
       for (const l of linhas) {
@@ -105,7 +108,7 @@ export function useServicosNfse(filtros: ServicosFiltro = {}) {
         const eDescarb = (l.serv_cod_nacional ?? "").replace(/\D/g, "") === COD_DESCARBONIZACAO;
 
         const atual = porMes.get(mes) ?? { mes, descarbonizacao: 0, outros: 0 };
-        if (eDescarb) { atual.descarbonizacao += v; descarbonizacao += v; }
+        if (eDescarb) { atual.descarbonizacao += v; descarbonizacao += v; notasDescarbonizacao++; }
         else { atual.outros += v; outros += v; }
         porMes.set(mes, atual);
 
@@ -118,6 +121,7 @@ export function useServicosNfse(filtros: ServicosFiltro = {}) {
         outros,
         total: descarbonizacao + outros,
         notas,
+        notasDescarbonizacao,
         porMes: Array.from(porMes.values()).sort((a, b) => a.mes.localeCompare(b.mes)),
         primeiroMes,
       };

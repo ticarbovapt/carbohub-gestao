@@ -191,17 +191,17 @@ export default function DashboardComercial() {
             medição que provou isso está no `useServicosNfse`. */}
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
           <KpiCard title="CarboZé on-line" value={fmtK(data?.totalOnline ?? 0)}
-                   sub="Marketplaces e loja própria · NF-e"
+                   sub={`${data?.qtdOnline ?? 0} pedidos · marketplaces e loja própria`}
                    Icon={Globe} accent="border-l-blue-500" iconBg="bg-blue-500/10 text-blue-500" />
           <KpiCard title="CarboZé equipe / balcão" value={fmtK(data?.totalNaoOnline ?? 0)}
-                   sub="Venda direta e revenda · NF-e"
+                   sub={`${data?.qtdNaoOnline ?? 0} pedidos · venda direta e revenda`}
                    Icon={ShoppingCart} accent="border-l-green-500" iconBg="bg-green-500/10 text-green-600" />
           <KpiCard title="Descarbonização" value={fmtK(servicos?.descarbonizacao ?? 0)}
-                   sub={`Serviço CarboVapt · NFS-e${servicos?.outros ? ` · +${fmtK(servicos.outros)} outros serviços` : ""}`}
+                   sub={`${servicos?.notasDescarbonizacao ?? 0} notas · serviço CarboVapt${servicos?.outros ? ` · +${fmtK(servicos.outros)} em outros serviços` : ""}`}
                    Icon={Wrench} accent="border-l-cyan-500" iconBg="bg-cyan-500/10 text-cyan-500" />
           <KpiCard title="Faturamento total"
                    value={fmtK((data?.totalBRL ?? 0) + (servicos?.total ?? 0))}
-                   sub="Produto (NF-e) + serviço (NFS-e)"
+                   sub={`${(data?.totalVendas ?? 0) + (servicos?.notas ?? 0)} vendas · produto + serviço`}
                    Icon={DollarSign} accent="border-l-amber-400" iconBg="bg-amber-400/10 text-amber-500" />
         </div>
 
@@ -220,7 +220,14 @@ export default function DashboardComercial() {
 
         {/* 2b. KPIs */}
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
-          <KpiCard title="Total de Vendas" value={String(k?.totalVendas ?? 0)} sub="Pedidos ativos (excl. cancelados)" Icon={ShoppingCart} accent="border-l-green-500" iconBg="bg-green-500/10 text-green-600" />
+          {/* ⚠️ A unidade NÃO é a mesma nas duas bases: no Bling conta-se
+              PEDIDO, na NFS-e conta-se NOTA de serviço. Somar só é honesto com
+              a composição escrita embaixo — um "1551" sozinho esconderia que
+              320 daquilo são documentos de outra natureza. */}
+          <KpiCard title="Total de Vendas"
+                   value={String((k?.totalVendas ?? 0) + (servicos?.notas ?? 0))}
+                   sub={`${data?.qtdOnline ?? 0} on-line · ${data?.qtdNaoOnline ?? 0} equipe · ${servicos?.notas ?? 0} serviço`}
+                   Icon={ShoppingCart} accent="border-l-green-500" iconBg="bg-green-500/10 text-green-600" />
           {/* ⚠️ Este card continua sendo SÓ produto (NF-e). O rótulo passou a
               dizer isso: antes ele se chamava "Faturamento acumulado" e, ao
               lado do total novo, dois números diferentes com o mesmo nome

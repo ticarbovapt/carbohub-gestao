@@ -64,6 +64,8 @@ export interface ComercialData {
   // a porta para os dois discordarem — e discordar aqui é o total não fechar.
   totalOnline: number;
   totalNaoOnline: number;
+  qtdOnline: number;
+  qtdNaoOnline: number;
   totalVendas: number;
   ticketMedio: number;
   maiorVenda: number;
@@ -204,6 +206,8 @@ export function useDashComercial(vendedorId: string | null = null, months = 12, 
         .filter((v) => v.segmento === "online")
         .reduce((s, v) => s + (Number(v.total) || 0), 0);
       const totalNaoOnline = totalBRL - totalOnline;
+      const qtdOnline = pedidos.filter((v) => v.segmento === "online").length;
+      const qtdNaoOnline = pedidos.length - qtdOnline;
       const totalVendas = pedidos.length;
       let maiorVenda = 0, maiorCliente = "—";
       const byCliente = new Map<string, number>();
@@ -249,7 +253,7 @@ export function useDashComercial(vendedorId: string | null = null, months = 12, 
       };
 
       return {
-        totalBRL, totalOnline, totalNaoOnline, totalVendas, ticketMedio, maiorVenda, maiorCliente, topCliente, topQtd,
+        totalBRL, totalOnline, totalNaoOnline, qtdOnline, qtdNaoOnline, totalVendas, ticketMedio, maiorVenda, maiorCliente, topCliente, topQtd,
         monthly, annualGrowth, kpis, growth,
       };
     },
