@@ -94,26 +94,50 @@ interface LinhaOnline {
   ordered_at: string | null;
 }
 
-// ⚠️ O item é JSONB e tem DOIS dialetos: o histórico antigo gravou as chaves
-// em português (`produto`, `quantidade`, `preco_unitario`) e o atual grava em
-// inglês. O `toVenda()` do `useVendas` já lê os dois — ler só um aqui faria a
-// venda antiga contar ZERO unidade, calada, e o histórico é justamente o que
-// esta seção existe para mostrar.
+// ⚠️ O item é JSONB e tem SETE formatos no histórico — censo de 24/09/2026:
+//
+//   131 linhas  name · product_code · product_id · bonificacao · is_bonificacao…
+//   120 linhas  product_name · sku_code · quantity · total · unit_price
+//    57 linhas  name · product_code (sem product_id)
+//    49 · 8 · 5 · 1   variações com menos campos, uma com bonus_quantity/has_bonus
+//
+// O segundo formato é o do importador do Bling, e ele NÃO usa `name`: eu lia
+// `name`/`produto` e aquelas 120 linhas — 27.818 unidades, R$ 261 mil, 30% do
+// total — apareciam como um card "(SEM NOME)". A quantidade entrava porque a
+// chave dela coincide; o nome e o código não.
+//
+// ⚠️ Ler só um dialeto não dá erro: dá número menor com cara de certo.
 interface ItemVenda {
   name?: string | null;
   produto?: string | null;
+  product_name?: string | null;
   product_id?: string | null;
   product_code?: string | null;
+  sku_code?: string | null;
   quantity?: number | null;
   quantidade?: number | null;
   bonificacao?: number | null;
+  bonus_quantity?: number | null;
   is_bonificacao?: boolean | null;
   kind?: string | null;
   total?: number | null;
 }
 
-const itemNome = (i: ItemVenda) => (i?.name ?? i?.produto ?? "").trim();
-const itemQtd = (i: ItemVenda) => Number(i?.quantity ?? i?.quantidade ?? 0) || 0;
+const num = (v: unknown) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+};
+const itemNome = (i: ItemVenda) => (i?.name ?? i?.produto ?? i?.product_name ?? "").trim();
+const itemCodigo = (i: ItemVenda) => (i?.product_code ?? i?.sku_code ?? "").trim().toUpperCase();
+const itemQtd = (i: ItemVenda) => num(i?.quantity ?? i?.quantidade);
+// Os dois nomes do mesmo campo. `bonus_quantity` só existe numa linha do
+// histórico — e é exatamente o tipo de resto que some quando se lê "o formato
+// atual" em vez de todos.
+const itemBonus = (i: ItemVenda) => num(i?.bonificacao ?? i?.bonus_quantity);
+
+/** Chave de nome: sem acento, minúscula, espaços colapsados. */
+const chaveNome = (s: string) =>
+  s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLocaleLowerCase("pt-BR").replace(/\s+/g, " ").trim();
 
 export interface UnidadesFiltro { from?: string; to?: string }
 
@@ -189,19 +213,78 @@ export function useUnidadesVendidas(filtros: UnidadesFiltro = {}) {
         else if (atual !== razao) fatorDoProduto.set(m.product_id, null); // conflito
       }
 
-      // product_id → identidade, para o nome e o código serem os do CADASTRO.
-      const idsProduto = new Set<string>();
-      for (const m of linhasMapa) if (m.product_id) idsProduto.add(m.product_id);
-      for (const o of comItens) {
-        for (const i of o.items ?? []) if (i?.product_id) idsProduto.add(i.product_id);
-      }
+      // ── O catálogo inteiro, e o alias do Bling ────────────────────────────
+      //
+      // ⚠️ O catálogo é lido INTEIRO, não filtrado pelos ids que aparecem nos
+      // itens: é justamente o item SEM `product_id` que precisa achar o
+      // produto, e ele só acha se o catálogo estiver todo na mão.
+      const { data: prods } = await db.from("mrp_products")
+        .select("id, name, product_code, bonificacao_de") as {
+          data: { id: string; name: string | null; product_code: string | null; bonificacao_de: string | null }[] | null;
+        };
       const nomePorId = new Map<string, { nome: string; code: string | null }>();
-      if (idsProduto.size > 0) {
-        const { data: prods } = await db.from("mrp_products")
-          .select("id, name, product_code")
-          .in("id", [...idsProduto]) as { data: { id: string; name: string | null; product_code: string | null }[] | null };
-        for (const p of prods ?? []) nomePorId.set(p.id, { nome: p.name ?? p.product_code ?? "Produto sem nome", code: p.product_code });
+      const porCodigo = new Map<string, string>();
+      const porNome = new Map<string, string | null>(); // null = nome ambíguo
+      for (const p of prods ?? []) {
+        // ⚠️ O gêmeo de bonificação resolve para o PAI. Ele é a mesma garrafa
+        // da mesma prateleira, e um card "CarboZé 100ml - bonificação" ao lado
+        // do card do pai partiria o produto de novo — o defeito que esta
+        // correção fecha.
+        const destino = p.bonificacao_de ?? p.id;
+        nomePorId.set(p.id, { nome: p.name ?? p.product_code ?? "Produto sem nome", code: p.product_code });
+        const cod = (p.product_code ?? "").trim().toUpperCase();
+        if (cod && !porCodigo.has(cod)) porCodigo.set(cod, destino);
+        const nk = chaveNome(p.name ?? "");
+        if (nk) porNome.set(nk, porNome.has(nk) && porNome.get(nk) !== destino ? null : destino);
       }
+
+      // Alias: código do catálogo EXTERNO (Bling) → produto daqui. É CADASTRO
+      // (`carbo_produto_alias`), não lista no código — produto novo no Bling
+      // entra com um INSERT, sem deploy.
+      const alias = new Map<string, string>();
+      const { data: aliasRows, error: errAlias } = await db
+        .from("carbo_produto_alias")
+        .select("codigo, product_id") as { data: { codigo: string; product_id: string }[] | null; error: { message: string } | null };
+      if (errAlias) {
+        // Tabela ainda não migrada: o painel continua funcionando e os códigos
+        // do Bling aparecem como produto próprio, marcados "sem mapa". Falha
+        // que ESCONDE o produto seria pior que falha que o mostra separado.
+        console.warn("[useUnidadesVendidas] carbo_produto_alias indisponível:", errAlias.message);
+      }
+      for (const a of aliasRows ?? []) alias.set(a.codigo.trim().toUpperCase(), a.product_id);
+
+      /** A identidade do item, na ordem em que as pistas são confiáveis. */
+      const resolverProduto = (i: ItemVenda): string | null => {
+        // 1. `product_id` é o dado, não um palpite — e no gêmeo de bonificação
+        //    ele já vem resolvido para o pai pelo /vender.
+        if (i?.product_id) {
+          const ident = nomePorId.get(i.product_id);
+          if (ident) {
+            const cod = (ident.code ?? "").trim().toUpperCase();
+            return porCodigo.get(cod) ?? i.product_id;
+          }
+          return i.product_id;
+        }
+        const cod = itemCodigo(i);
+        // 2. Alias do Bling (035, 084…). 3. O código do nosso catálogo.
+        if (cod) {
+          const viaAlias = alias.get(cod);
+          if (viaAlias) return viaAlias;
+          const viaCodigo = porCodigo.get(cod);
+          if (viaCodigo) return viaCodigo;
+        }
+        // 4. Nome EXATO do catálogo (sem acento, minúsculo). ⚠️ Não é busca
+        //    por semelhança: nome que bate com DOIS produtos devolve null e o
+        //    item vira linha própria, em vez de a ambiguidade ser enterrada —
+        //    a mesma regra da carga de PDV que não insere quando o nome casa
+        //    com duas linhas.
+        const nk = chaveNome(itemNome(i));
+        if (nk) {
+          const viaNome = porNome.get(nk);
+          if (viaNome) return viaNome;
+        }
+        return null;
+      };
       const produtoDoSku = new Map<string, string>(); // "<plataforma|*> <sku>" → product_id
       for (const m of linhasMapa) {
         const sku = normalizarSku(m.platform_sku);
@@ -221,7 +304,11 @@ export function useUnidadesVendidas(filtros: UnidadesFiltro = {}) {
       for (const r of online) {
         if (!ehVenda(r.status)) continue;
         const sku = normalizarSku(r.product_sku);
-        const pid = sku ? (produtoDoSku.get(`${r.platform} ${sku}`) ?? produtoDoSku.get(`* ${sku}`)) : undefined;
+        // A MESMA resolução do lado da equipe (gêmeo → pai, código do
+        // catálogo), senão o mesmo produto cairia em duas chaves e os dois
+        // canais não se encontrariam na mesma linha.
+        const bruto = sku ? (produtoDoSku.get(`${r.platform} ${sku}`) ?? produtoDoSku.get(`* ${sku}`)) : undefined;
+        const pid = bruto ? resolverProduto({ product_id: bruto }) ?? bruto : undefined;
         const ident = pid ? nomePorId.get(pid) : undefined;
         // Linha que não resolve NÃO se mistura: vira linha própria, pelo SKU ou
         // pelo nome. Empurrá-la para dentro de um produto conhecido esconderia
@@ -239,17 +326,22 @@ export function useUnidadesVendidas(filtros: UnidadesFiltro = {}) {
         for (const i of o.items ?? []) {
           // Serviço não tem unidade física e não entra numa contagem de frascos.
           if (i?.kind === "service") continue;
-          const pid = i?.product_id ?? null;
+          const pid = resolverProduto(i);
           const ident = pid ? nomePorId.get(pid) : undefined;
-          const key = pid ? `prod:${pid}` : `nome:${(itemNome(i) || "?").toLocaleLowerCase("pt-BR")}`;
-          const linha = acc.get(key) ?? novo(key, ident?.nome ?? itemNome(i) ?? "Produto sem nome", ident?.code ?? i?.product_code ?? null, !!pid);
+          const key = pid ? `prod:${pid}` : `nome:${chaveNome(itemNome(i)) || itemCodigo(i) || "?"}`;
+          const linha = acc.get(key) ?? novo(
+            key,
+            ident?.nome ?? itemNome(i) ?? itemCodigo(i) ?? "Produto sem nome",
+            ident?.code ?? itemCodigo(i) ?? null,
+            !!pid,
+          );
 
           // ⚠️ A bonificação ENTRA na contagem: ela saiu da prateleira e chegou
           // ao cliente. `bonificacao` é o modelo antigo (campo na linha paga) e
           // a linha `is_bonificacao` é o novo (quantidade própria, valor zero).
           // Os dois convivem no histórico — ler só um perde metade dos brindes.
           const qtd = itemQtd(i);
-          const bonus = Number(i?.bonificacao) || 0;
+          const bonus = itemBonus(i);
           const itens = qtd + bonus;
           linha.eqItens += itens;
           linha.eqBonificadas += bonus + (i?.is_bonificacao ? qtd : 0);
