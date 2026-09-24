@@ -72,6 +72,20 @@ const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov"
 // compartilhada que este repo já pagou várias vezes.
 const TAMANHOS = [25, 50, 100, 200];
 
+// O padrão de CADA parâmetro da URL. Só ele sai da URL quando escolhido — é o
+// que mantém o link curto sem transformar um valor legítimo em "apagar".
+const PADRAO: Record<string, string> = {
+  papel: "emitida",
+  sit: "todas",
+  ano: "todos",
+  mes: "todos",
+  q: "",
+  ord: "data",
+  dir: "desc",
+  tam: "50",
+  pg: "1",
+};
+
 // A contraparte é a OUTRA ponta: numa nota emitida é o tomador, numa recebida é
 // o prestador. Coluna fixa repetiria "CARBO SOLUCOES LTDA" em metade da tela.
 function contraparte(n: NfseRow): string {
@@ -200,7 +214,19 @@ export default function NfseNacional() {
 
   const troca = (chave: string, valor: string) => {
     const p = new URLSearchParams(params);
-    if (!valor || valor === "todos" || valor === "todas") p.delete(chave);
+    // ⚠️ O que sai da URL é o valor IGUAL AO PADRÃO DAQUELE parâmetro — nunca
+    // o texto "todas"/"todos".
+    //
+    // O defeito que isto corrige: a aba "Todas" NÃO funcionava. `troca()`
+    // apagava qualquer valor chamado "todas", e o padrão de `papel` é
+    // `emitida` — então clicar em Todas apagava o parâmetro e a tela voltava
+    // para Emitidas. Funcionava em `sit` e `ano` por COINCIDÊNCIA: nesses dois
+    // o padrão é mesmo "todas"/"todos".
+    //
+    // Decidir "isto é o padrão" pelo texto do valor, e não por qual parâmetro
+    // é, é a mesma família de erro do `Math.round` inventando `×1`: uma regra
+    // que acerta enquanto os casos coincidem e erra calada quando divergem.
+    if (valor === PADRAO[chave]) p.delete(chave);
     else p.set(chave, valor);
     // ⚠️ Filtrar SEMPRE volta para a página 1. Sem isso, quem está na página 7
     // e troca o ano cai numa lista de 2 páginas e vê a tela VAZIA — e lê isso
