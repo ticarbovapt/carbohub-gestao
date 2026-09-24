@@ -50,6 +50,52 @@ export interface NfseRow {
   substituicao_motivo: string | null;
   substituida_por_chave: string | null;
   substituida_por_numero: string | null;
+  // ── Campos que a DANFSE mostra (20261007) ────────────────────────────────
+  // ⚠️ Eles já estavam no XML desde a primeira carga. Eu tinha escolhido as
+  // colunas pelo que a LISTA precisava — no dia em que a tela teve de gerar um
+  // papel, a falta apareceu inteira.
+  ambiente_gerador: string | null;
+  versao_aplicativo: string | null;
+  municipio_incidencia: string | null;
+  servico_municipal: string | null;
+  dps_numero: string | null;
+  dps_serie: string | null;
+  dps_tipo_emitente: string | null;
+  emit_im: string | null;
+  emit_fone: string | null;
+  emit_email: string | null;
+  emit_logradouro: string | null;
+  emit_numero: string | null;
+  emit_complemento: string | null;
+  emit_bairro: string | null;
+  emit_municipio_ibge: string | null;
+  emit_uf: string | null;
+  emit_cep: string | null;
+  toma_im: string | null;
+  toma_fone: string | null;
+  toma_email: string | null;
+  toma_logradouro: string | null;
+  toma_numero: string | null;
+  toma_complemento: string | null;
+  toma_bairro: string | null;
+  toma_municipio_ibge: string | null;
+  toma_cep: string | null;
+  serv_cod_nacional: string | null;
+  serv_cod_municipal: string | null;
+  serv_cod_nbs: string | null;
+  info_complementar: string | null;
+  outras_informacoes: string | null;
+  valor_deducao: number | null;
+  desconto_incondicionado: number | null;
+  desconto_condicionado: number | null;
+  issqn_tipo: string | null;
+  issqn_retencao: string | null;
+  vl_pis: number | null;
+  vl_cofins: number | null;
+  vl_ret_cp: number | null;
+  vl_ret_irrf: number | null;
+  vl_ret_csll: number | null;
+  substituicao_motivo_codigo: string | null;
 }
 
 export interface NfseSaude {
@@ -63,13 +109,12 @@ export interface NfseSaude {
   parada: boolean;
 }
 
-const COLUNAS =
-  "ambiente,nsu,chave_acesso,numero,situacao_codigo,municipio_emissao,municipio_prestacao," +
-  "servico_nacional,emit_cnpj,emit_nome,toma_doc,toma_nome,emitida_em,processada_em," +
-  "competencia,valor_liquido,base_calculo,total_retido,valor_servico,descricao," +
-  "papel,cancelada,cancelamento_tipo,cancelada_em,cancelamento_motivo," +
-  "confirmada_tomador,confirmada_em,substitui_chave,substituicao_motivo," +
-  "substituida_por_chave,substituida_por_numero";
+// ⚠️ `*` de propósito. Com 50+ colunas, enumerá-las aqui criaria uma segunda
+// lista para divergir da view — e campo esquecido NÃO dá erro, dá campo vazio
+// no PDF, que é a doença do `usePosVenda` que escondeu as notas de bonificação.
+// O risco de `*` (coluna sensível entrando sozinha) não existe aqui: a view
+// expõe só o que foi escrito nela, e já se guarda com `carbo_e_time_interno()`.
+const COLUNAS = "*";
 
 export function useNfse() {
   return useQuery({

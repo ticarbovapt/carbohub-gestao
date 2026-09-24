@@ -2,154 +2,264 @@ import jsPDF from "jspdf";
 import type { NfseRow } from "@/hooks/useNfse";
 
 // ═══════════════════════════════════════════════════════════════════════════
-// PDF da NFS-e — gerado do NOSSO dado, não baixado do portal
+// Documento Auxiliar da NFS-e — gerado do XML que já está guardado
 //
-// ⚠️ ESTA NÃO É A DANFSE OFICIAL, e o papel diz isso em cima. O motivo está
-// medido: o DANFSE do sistema nacional não é alcançável por chave de acesso.
-// Três rodadas de sonda em 24/09/2026:
+// ⚠️ POR QUE NÃO BAIXAMOS O OFICIAL: o DANFSE do sistema nacional não é
+// alcançável por chave de acesso. Três rodadas de sonda em 24/09/2026:
 //
-//   adn/contribuintes/DANFSE/<chave>   404   o serviço respondeu: rota não existe
-//   adn/danfse/<chave>                 503   veio do GATEWAY — nem há backend
-//   sefin/sefinnacional/<qualquer>     reset connection reset by peer (mTLS ok)
-//   sefin/danfse/<chave>               404   HTML de 1245 bytes…
-//   www.nfse.gov.br/danfse/<chave>     404   …o MESMO HTML de 1245 bytes
+//   adn/contribuintes/DANFSE/<chave>   404    o serviço respondeu: rota não existe
+//   adn/danfse/<chave>                 503    do GATEWAY — nem há backend no prefixo
+//   sefin/sefinnacional/<qualquer>     reset  connection reset by peer (mTLS ok)
+//   sefin/danfse/<chave>               404    HTML de 1245 bytes…
+//   www.nfse.gov.br/danfse/<chave>     404    …o MESMO HTML de 1245 bytes
 //
-// O tamanho idêntico nos dois 404 é o que fecha o diagnóstico: a raiz do
-// `sefin` cai no mesmo front genérico do `www`. E o reset APENAS no prefixo
-// `/sefinnacional/` é recusa na camada de aplicação, não caminho errado.
+// O tamanho IDÊNTICO nos dois 404 fecha o diagnóstico: a raiz do `sefin` cai no
+// mesmo front genérico do `www`. Parar de adivinhar endereço foi a decisão.
 //
-// ⚠️ A decisão foi PARAR de adivinhar endereço. Cada tentativa custava um
-// deploy, e nenhuma convergia. Gerar do XML não depende de o gov.br expor
-// nada e não quebra no dia em que eles mudarem a rota.
+// ⚠️ ESTE LAYOUT IMITA A DANFSE v2.0 DE PROPÓSITO. O dono do processo mandou a
+// oficial ao lado da minha primeira versão, e a comparação matou duas coisas:
 //
-// ⚠️ O que se PERDE, e está escrito no papel: o layout oficial. O que NÃO se
-// perde: o conteúdo — ele vem do mesmo XML assinado que é o documento fiscal.
-// Para o layout oficial existe a consulta pública do portal, e por isso a tela
-// também deixa COPIAR A CHAVE.
+//   1. A tarja âmbar de aviso — *"ta um lixo mt tosco"*. Ela estava certa no
+//      conteúdo e péssima na execução. O aviso continua, numa linha discreta do
+//      cabeçalho, como o próprio oficial faz com "DANFSe v2.0".
+//   2. O formulário espaçado. O oficial é uma GRADE densa, e é assim que quem
+//      confere está acostumado a ler.
+//
+// ⚠️ E havia um DEFEITO de verdade no meu: o texto longo do item da lista
+// nacional transbordava e escrevia POR CIMA da seção de valores. A causa era
+// avançar `y` por um valor fixo depois de um texto de altura variável. Aqui
+// toda escrita devolve a altura que consumiu, e o `y` anda por ela.
 // ═══════════════════════════════════════════════════════════════════════════
 
-const fmtBRL = (v: number | null) =>
+const fmtBRL = (v: unknown) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
     .format(Number(v ?? 0) || 0);
 const fmtData = (s: string | null) => (s ? new Date(s).toLocaleDateString("pt-BR") : "—");
-
-// A chave tem 50 dígitos; em bloco corrido ninguém confere. Grupos de 4 são o
-// que permite ler em voz alta e bater com a tela do portal.
-const chaveLegivel = (c: string | null) =>
-  (c ?? "").replace(/\D/g, "").replace(/(.{4})/g, "$1 ").trim();
+const fmtDataHora = (s: string | null) =>
+  s ? new Date(s).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "medium" }) : "—";
+const vazio = (s: unknown) => {
+  const t = (s ?? "").toString().trim();
+  return t === "" ? "-" : t;
+};
 
 const doc2 = (d: string | null) => {
   const s = (d ?? "").replace(/\D/g, "");
   if (s.length === 14) return s.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
   if (s.length === 11) return s.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
-  return d ?? "—";
+  return vazio(d);
 };
+const cep = (c: string | null) => {
+  const s = (c ?? "").replace(/\D/g, "");
+  return s.length === 8 ? s.replace(/(\d{5})(\d{3})/, "$1-$2") : vazio(c);
+};
+const endereco = (l: string | null, n: string | null, c: string | null, b: string | null) =>
+  vazio([[l, n].filter(Boolean).join(", "), c, b].filter(Boolean).join(" - "));
 
 export function gerarPdfNfse(n: NfseRow) {
   const pdf = new jsPDF({ unit: "mm", format: "a4" });
-  const L = 15;              // margem esquerda
-  const W = 210 - L * 2;     // largura útil
-  let y = 16;
+  const L = 10, R = 200, W = R - L;
+  let y = 10;
 
-  const linha = () => { pdf.setDrawColor(200); pdf.line(L, y, L + W, y); y += 5; };
-  const titulo = (t: string) => {
-    pdf.setFont("helvetica", "bold"); pdf.setFontSize(9); pdf.setTextColor(90);
-    pdf.text(t.toUpperCase(), L, y); y += 5;
-    pdf.setTextColor(20);
+  const cinza = () => { pdf.setFillColor(232, 232, 232); };
+  const borda = () => { pdf.setDrawColor(130); pdf.setLineWidth(0.2); };
+
+  // Faixa de título de seção — o mesmo recurso visual do oficial.
+  const secao = (t: string) => {
+    borda(); cinza();
+    pdf.rect(L, y, W, 5, "FD");
+    pdf.setFont("helvetica", "bold"); pdf.setFontSize(7.5); pdf.setTextColor(30);
+    pdf.text(t.toUpperCase(), L + 1.5, y + 3.5);
+    y += 5;
   };
-  const campo = (rotulo: string, valor: string, x = L, largura = W) => {
-    pdf.setFont("helvetica", "normal"); pdf.setFontSize(7); pdf.setTextColor(120);
-    pdf.text(rotulo, x, y);
-    pdf.setFont("helvetica", "normal"); pdf.setFontSize(9); pdf.setTextColor(20);
-    pdf.text(pdf.splitTextToSize(valor || "—", largura), x, y + 4);
+
+  // Escreve rótulo pequeno + valor, dentro de uma célula de largura fixa, e
+  // DEVOLVE a altura consumida. ⚠️ É esta devolução que impede o
+  // transbordamento: quem chama avança `y` pela maior altura da linha, nunca
+  // por um número escolhido a olho.
+  const celula = (x: number, larg: number, rotulo: string, valor: string, topo: number) => {
+    pdf.setFont("helvetica", "normal"); pdf.setFontSize(5.8); pdf.setTextColor(105);
+    pdf.text(rotulo.toUpperCase(), x + 1.5, topo + 3);
+    pdf.setFontSize(7.5); pdf.setTextColor(20);
+    const linhas = pdf.splitTextToSize(valor || "-", larg - 3);
+    pdf.text(linhas, x + 1.5, topo + 6.6);
+    return 4.2 + linhas.length * 3.2;
+  };
+
+  // Uma linha da grade: N células de larguras proporcionais, com moldura.
+  const linha = (celulas: Array<[string, string]>, pesos?: number[]) => {
+    const p = pesos ?? celulas.map(() => 1);
+    const soma = p.reduce((a, b) => a + b, 0);
+    let x = L;
+    let alt = 0;
+    const larguras = p.map((w) => (W * w) / soma);
+    celulas.forEach(([rot, val], i) => {
+      alt = Math.max(alt, celula(x, larguras[i], rot, val, y));
+      x += larguras[i];
+    });
+    alt = Math.max(alt, 8);
+    borda();
+    pdf.rect(L, y, W, alt);
+    // Divisórias internas: sem elas a grade vira texto solto.
+    let dx = L;
+    for (let i = 0; i < larguras.length - 1; i++) {
+      dx += larguras[i];
+      pdf.line(dx, y, dx, y + alt);
+    }
+    y += alt;
   };
 
   // ── Cabeçalho ────────────────────────────────────────────────────────────
-  pdf.setFont("helvetica", "bold"); pdf.setFontSize(14);
-  pdf.text("NFS-e — Nota Fiscal de Serviço eletrônica", L, y); y += 6;
-  pdf.setFont("helvetica", "normal"); pdf.setFontSize(8); pdf.setTextColor(120);
-  pdf.text(`Nº ${n.numero ?? "—"}  ·  emitida em ${fmtData(n.emitida_em)}  ·  ${n.municipio_emissao ?? "—"}`, L, y);
-  y += 5;
+  borda();
+  pdf.rect(L, y, W, 13);
+  pdf.setFont("helvetica", "bold"); pdf.setFontSize(15); pdf.setTextColor(20, 70, 130);
+  pdf.text("NFS-e", L + 3, y + 8);
+  pdf.setFont("helvetica", "normal"); pdf.setFontSize(5.5); pdf.setTextColor(90);
+  pdf.text("Nota Fiscal de", L + 20, y + 5.5);
+  pdf.text("Serviço eletrônica", L + 20, y + 8);
 
-  // ⚠️ O aviso vai no TOPO, não no rodapé. Quem imprime e arquiva precisa
-  // saber ANTES de usar como documento que este papel é uma representação
-  // nossa — e rodapé é o que ninguém lê.
-  pdf.setFillColor(255, 247, 230); pdf.setDrawColor(230, 190, 120);
-  pdf.roundedRect(L, y, W, 11, 1.5, 1.5, "FD");
-  pdf.setTextColor(120, 80, 10); pdf.setFontSize(7.5);
-  pdf.text(
-    "Representação gerada pelo CarboHub a partir do XML oficial recebido do Portal Nacional da NFS-e.",
-    L + 3, y + 4.5);
-  pdf.text(
-    "NÃO é a DANFSE oficial. O documento fiscal é o XML; use a chave de acesso na consulta pública do portal.",
-    L + 3, y + 8.5);
-  y += 16; pdf.setTextColor(20);
+  pdf.setFont("helvetica", "bold"); pdf.setFontSize(10); pdf.setTextColor(20);
+  pdf.text("Documento Auxiliar da NFS-e", L + W / 2, y + 5.5, { align: "center" });
+  // ⚠️ O aviso vive AQUI, numa linha discreta — não numa tarja. O oficial usa
+  // exatamente este espaço para "DANFSe v2.0", e é onde quem confere olha.
+  pdf.setFont("helvetica", "normal"); pdf.setFontSize(6); pdf.setTextColor(120);
+  pdf.text("Representação do CarboHub gerada a partir do XML oficial · não substitui a DANFSe do portal",
+           L + W / 2, y + 9.5, { align: "center" });
 
-  // ── Situação ─────────────────────────────────────────────────────────────
-  // ⚠️ Nota cancelada tem de gritar no papel. Um PDF impresso sobrevive à
-  // tela, e é justamente ele que alguém anexa a um processo meses depois.
+  pdf.setFontSize(6.5); pdf.setTextColor(30);
+  pdf.text(`Município: ${vazio(n.municipio_emissao)}`, R - 3, y + 5, { align: "right" });
+  pdf.text(`Ambiente Gerador: ${vazio(n.ambiente_gerador)}`, R - 3, y + 8.2, { align: "right" });
+  pdf.text(`Situação: ${vazio(n.situacao_codigo)}`, R - 3, y + 11.4, { align: "right" });
+  y += 13;
+
+  // ── Chave ────────────────────────────────────────────────────────────────
+  borda();
+  pdf.rect(L, y, W, 9);
+  pdf.setFont("helvetica", "bold"); pdf.setFontSize(6); pdf.setTextColor(30);
+  pdf.text("CHAVE DE ACESSO DA NFS-e", L + 1.5, y + 3.2);
+  pdf.setFont("courier", "normal"); pdf.setFontSize(9); pdf.setTextColor(20);
+  pdf.text(vazio(n.chave_acesso), L + 1.5, y + 7.3);
+  y += 9;
+
+  linha([
+    ["Número da NFS-e", vazio(n.numero)],
+    ["Competência", fmtData(n.competencia)],
+    ["Data e hora da emissão", fmtDataHora(n.emitida_em)],
+    ["Data e hora do processamento", fmtDataHora(n.processada_em)],
+  ]);
+
+  linha([
+    ["Número da DPS", vazio(n.dps_numero)],
+    ["Série da DPS", vazio(n.dps_serie)],
+    ["NSU no ADN", String(n.nsu)],
+    ["Versão do aplicativo", vazio(n.versao_aplicativo)],
+  ]);
+
+  // ⚠️ Cancelamento/substituição em FAIXA PRÓPRIA, e continua gritando: papel
+  // impresso sobrevive à tela, e é ele que alguém anexa a um processo meses
+  // depois. O que mudou foi o estilo, não a decisão.
   if (n.cancelada) {
     const sub = (n.cancelamento_tipo ?? "").toUpperCase().includes("SUBSTITU");
-    pdf.setFillColor(sub ? 255 : 254, sub ? 243 : 226, sub ? 205 : 226);
-    pdf.setDrawColor(sub ? 217 : 220, sub ? 150 : 60, sub ? 40 : 60);
-    pdf.roundedRect(L, y, W, 9, 1.5, 1.5, "FD");
-    pdf.setFont("helvetica", "bold"); pdf.setFontSize(9);
-    pdf.setTextColor(sub ? 150 : 170, sub ? 90 : 30, 30);
-    const txt = sub
-      ? `NOTA SUBSTITUÍDA${n.substituida_por_numero ? ` PELA Nº ${n.substituida_por_numero}` : ""} em ${fmtData(n.cancelada_em)}`
-      : `NOTA CANCELADA em ${fmtData(n.cancelada_em)}${n.cancelamento_motivo ? ` — ${n.cancelamento_motivo}` : ""}`;
-    pdf.text(pdf.splitTextToSize(txt, W - 6), L + 3, y + 6);
-    y += 14; pdf.setTextColor(20);
+    borda();
+    pdf.setFillColor(sub ? 253 : 252, sub ? 240 : 226, sub ? 214 : 226);
+    pdf.rect(L, y, W, 7, "FD");
+    pdf.setFont("helvetica", "bold"); pdf.setFontSize(8);
+    pdf.setTextColor(sub ? 150 : 165, sub ? 85 : 30, 30);
+    pdf.text(
+      sub
+        ? `NFS-e SUBSTITUÍDA${n.substituida_por_numero ? ` PELA Nº ${n.substituida_por_numero}` : ""} em ${fmtData(n.cancelada_em)}`
+        : `NFS-e CANCELADA em ${fmtData(n.cancelada_em)}${n.cancelamento_motivo ? ` — ${n.cancelamento_motivo}` : ""}`,
+      L + 1.5, y + 4.7);
+    y += 7; pdf.setTextColor(20);
   }
 
-  // ── Partes ───────────────────────────────────────────────────────────────
-  titulo("Prestador do serviço");
-  campo("Razão social", n.emit_nome ?? "—", L, W / 2 - 4);
-  campo("CNPJ", doc2(n.emit_cnpj), L + W / 2, W / 2);
-  y += 12; linha();
+  // ── Prestador ────────────────────────────────────────────────────────────
+  secao("Prestador / Fornecedor");
+  linha([
+    ["CNPJ / CPF / NIF", doc2(n.emit_cnpj)],
+    ["Inscrição municipal", vazio(n.emit_im)],
+    ["Telefone", vazio(n.emit_fone)],
+  ], [2, 2, 1.5]);
+  linha([["Nome / Nome empresarial", vazio(n.emit_nome)], ["E-mail", vazio(n.emit_email)]], [3, 2]);
+  linha([
+    ["Endereço", endereco(n.emit_logradouro, n.emit_numero, n.emit_complemento, n.emit_bairro)],
+    ["Município / UF", `${vazio(n.municipio_emissao)} / ${vazio(n.emit_uf)}`],
+    ["Cód. IBGE / CEP", `${vazio(n.emit_municipio_ibge)} / ${cep(n.emit_cep)}`],
+  ], [3, 1.5, 1.5]);
 
-  titulo("Tomador do serviço");
-  campo("Razão social / nome", n.toma_nome ?? "—", L, W / 2 - 4);
-  campo("CNPJ / CPF", doc2(n.toma_doc), L + W / 2, W / 2);
-  y += 12; linha();
+  // ── Tomador ──────────────────────────────────────────────────────────────
+  secao("Tomador / Adquirente");
+  linha([
+    ["CNPJ / CPF / NIF", doc2(n.toma_doc)],
+    ["Inscrição municipal", vazio(n.toma_im)],
+    ["Telefone", vazio(n.toma_fone)],
+  ], [2, 2, 1.5]);
+  linha([["Nome / Nome empresarial", vazio(n.toma_nome)], ["E-mail", vazio(n.toma_email)]], [3, 2]);
+  linha([
+    ["Endereço", endereco(n.toma_logradouro, n.toma_numero, n.toma_complemento, n.toma_bairro)],
+    ["Cód. IBGE", vazio(n.toma_municipio_ibge)],
+    ["CEP", cep(n.toma_cep)],
+  ], [3, 1, 1]);
 
   // ── Serviço ──────────────────────────────────────────────────────────────
-  titulo("Serviço");
-  campo("Descrição", n.descricao ?? n.servico_nacional ?? "—");
-  const alturaDesc = pdf.splitTextToSize(n.descricao ?? n.servico_nacional ?? "—", W).length * 4;
-  y += 6 + alturaDesc;
-  campo("Item da lista nacional", n.servico_nacional ?? "—", L, W / 2 - 4);
-  campo("Local da prestação", n.municipio_prestacao ?? "—", L + W / 2, W / 2);
-  y += 12; linha();
+  secao("Serviço prestado");
+  linha([
+    ["Cód. tributação nacional", vazio(n.serv_cod_nacional)],
+    ["Cód. tributação municipal", vazio(n.serv_cod_municipal)],
+    ["Código NBS", vazio(n.serv_cod_nbs)],
+    ["Local da prestação", vazio(n.municipio_prestacao)],
+  ]);
+  // ⚠️ É AQUI que o texto transbordava: o item da lista nacional é um parágrafo
+  // legal inteiro. A `linha()` mede e a moldura acompanha.
+  linha([["Item da lista de serviços", vazio(n.servico_nacional)]]);
+  linha([["Descrição do serviço", vazio(n.descricao)]]);
+
+  // ── Tributação ───────────────────────────────────────────────────────────
+  secao("Tributação municipal (ISSQN)");
+  linha([
+    ["Tipo de tributação", vazio(n.issqn_tipo)],
+    ["Retenção do ISSQN", vazio(n.issqn_retencao)],
+    ["Base de cálculo", fmtBRL(n.base_calculo)],
+    ["Município de incidência", vazio(n.municipio_incidencia)],
+  ]);
+
+  secao("Tributação federal");
+  linha([
+    ["PIS", fmtBRL(n.vl_pis)],
+    ["COFINS", fmtBRL(n.vl_cofins)],
+    ["IRRF retido", fmtBRL(n.vl_ret_irrf)],
+    ["CSLL retida", fmtBRL(n.vl_ret_csll)],
+    ["Contrib. previdenciária", fmtBRL(n.vl_ret_cp)],
+  ]);
 
   // ── Valores ──────────────────────────────────────────────────────────────
-  // ⚠️ Os DOIS valores aparecem sempre, mesmo iguais. Eles divergem em 7 das
-  // 697 notas (R$ 6.541,77 de retenção); mostrar um só faria a diferença sumir
-  // justamente nas notas com imposto retido.
-  titulo("Valores");
-  campo("Valor do serviço", fmtBRL(n.valor_servico), L, 45);
-  campo("Base de cálculo", fmtBRL(n.base_calculo), L + 48, 45);
-  campo("Total retido", fmtBRL(n.total_retido), L + 96, 45);
-  y += 12;
-  pdf.setFont("helvetica", "bold"); pdf.setFontSize(12);
-  pdf.text(`Valor líquido: ${fmtBRL(n.valor_liquido)}`, L, y);
-  y += 8; linha();
-
-  // ── Identificação ────────────────────────────────────────────────────────
-  titulo("Chave de acesso");
-  pdf.setFont("courier", "normal"); pdf.setFontSize(9);
-  pdf.text(pdf.splitTextToSize(chaveLegivel(n.chave_acesso), W), L, y);
+  secao("Valor total da NFS-e");
+  linha([
+    ["Valor do serviço", fmtBRL(n.valor_servico)],
+    ["Desconto incondicionado", fmtBRL(n.desconto_incondicionado)],
+    ["Desconto condicionado", fmtBRL(n.desconto_condicionado)],
+    ["Total das retenções", fmtBRL(n.total_retido)],
+  ]);
+  borda(); cinza();
+  pdf.rect(L, y, W, 10, "FD");
+  pdf.setFont("helvetica", "normal"); pdf.setFontSize(5.8); pdf.setTextColor(105);
+  pdf.text("VALOR LÍQUIDO DA NFS-e", L + 1.5, y + 3.2);
+  pdf.setFont("helvetica", "bold"); pdf.setFontSize(13); pdf.setTextColor(20);
+  pdf.text(fmtBRL(n.valor_liquido), L + 1.5, y + 8.3);
   y += 10;
-  pdf.setFont("helvetica", "normal"); pdf.setFontSize(7); pdf.setTextColor(120);
-  campo("Competência", fmtData(n.competencia), L, 45);
-  campo("Processamento", fmtData(n.processada_em), L + 48, 45);
-  campo("NSU no ADN", String(n.nsu), L + 96, 45);
 
-  // ── Rodapé ───────────────────────────────────────────────────────────────
-  pdf.setFontSize(7); pdf.setTextColor(140);
+  // ── Complementares ───────────────────────────────────────────────────────
+  const compl = [n.info_complementar, n.outras_informacoes,
+                 n.substitui_chave ? `NFS-e substituída: ${n.substitui_chave}` : null]
+    .filter(Boolean).join("  ·  ");
+  if (compl) {
+    secao("Informações complementares");
+    linha([["", compl]]);
+  }
+
+  pdf.setFont("helvetica", "normal"); pdf.setFontSize(6); pdf.setTextColor(140);
   pdf.text(
-    `Gerado pelo CarboHub em ${new Date().toLocaleString("pt-BR")} · conteúdo extraído do XML oficial`,
-    L, 287);
+    `Gerado pelo CarboHub em ${new Date().toLocaleString("pt-BR")} · conteúdo extraído do XML assinado recebido do Portal Nacional da NFS-e · a autenticidade se confere pela chave de acesso no portal`,
+    L, 289);
 
   pdf.save(`NFSe-${n.numero ?? n.nsu}.pdf`);
 }
