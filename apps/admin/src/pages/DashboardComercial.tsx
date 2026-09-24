@@ -163,7 +163,12 @@ export default function DashboardComercial() {
   // Afogados" são a MESMA loja; nomes parecidos costumam ser filiais
   // distintas). Cliente sem documento fica na própria chave e nunca se funde
   // com outro por acaso.
-  const topGeral = useMemo(() => {
+  // ⚠️ NÃO é `useMemo`, e isso não é preguiça: este cálculo fica DEPOIS do
+  // `if (!canAdmin) return`, e hook depois de retorno antecipado muda a
+  // contagem de hooks entre renders — React #310, tela branca. Foi o que
+  // aconteceu ao introduzir este card. O custo de recalcular é percorrer dois
+  // mapas de ~1.500 entradas, irrelevante por render.
+  const topGeral = (() => {
     const soma = new Map<string, { nome: string; qtd: number }>();
     for (const mapa of [data?.porCliente, servicos?.porCliente]) {
       if (!mapa) continue;
@@ -176,7 +181,7 @@ export default function DashboardComercial() {
     let melhor = { nome: "—", qtd: 0 };
     for (const v of soma.values()) if (v.qtd > melhor.qtd) melhor = v;
     return melhor;
-  }, [data?.porCliente, servicos?.porCliente]);
+  })();
 
   // Total dividido pelo total — ver a nota no card.
   const ticketGeral = (() => {
