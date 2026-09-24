@@ -384,6 +384,17 @@ export default function DashboardComercial() {
     .filter((p) => p.eqItens > 0)
     .sort((a, b) => b.eqItens - a.eqItens || b.eqReceita - a.eqReceita);
 
+  // Sem filtro, o recorte é TODO o histórico — e dizer isso por escrito é o
+  // que evita alguém ler um acumulado de um ano como se fosse do mês.
+  const periodoLabel = (() => {
+    const d = (s?: string) => (s ? new Date(`${s}T12:00:00`).toLocaleDateString("pt-BR") : null);
+    const de = d(filters.from), ate = d(filters.to);
+    if (de && ate) return `${de} a ${ate}`;
+    if (de) return `de ${de} até hoje`;
+    if (ate) return `até ${ate}`;
+    return "todo o histórico";
+  })();
+
   const hasData = (monthly.reduce((s, m) => s + m.pedidos, 0)) > 0;
 
   return (
@@ -775,6 +786,16 @@ export default function DashboardComercial() {
           <span className="text-xs font-semibold uppercase tracking-wider text-board-muted">Unidades Vendidas</span>
           <div className="h-px flex-1 bg-border" />
         </div>
+
+        {/* ⚠️ O PERÍODO fica escrito na tela. "De quando são esses números" não
+            pode depender de lembrar qual filtro está aplicado no topo — e o
+            padrão aqui é o histórico INTEIRO, que é justamente o que ninguém
+            adivinha olhando um total. A régua também: só pedido que conta
+            métrica, ou seja, com NF válida. */}
+        <p className="-mt-1 text-xs text-board-muted">
+          Período: <span className="font-semibold text-board-text">{periodoLabel}</span>
+          {" · "}só pedidos que contam métrica (com NF válida) · bonificação incluída · insumo e serviço fora
+        </p>
 
         {erroUnidades && (
           <div className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/[0.06] px-3 py-2.5 text-sm">

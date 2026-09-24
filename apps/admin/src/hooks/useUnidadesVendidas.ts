@@ -219,10 +219,15 @@ export function useUnidadesVendidas(filtros: UnidadesFiltro = {}) {
       // itens: é justamente o item SEM `product_id` que precisa achar o
       // produto, e ele só acha se o catálogo estiver todo na mão.
       const { data: prods } = await db.from("mrp_products")
-        .select("id, name, product_code, bonificacao_de") as {
-          data: { id: string; name: string | null; product_code: string | null; bonificacao_de: string | null }[] | null;
+        .select("id, name, product_code, bonificacao_de, category") as {
+          data: { id: string; name: string | null; product_code: string | null; bonificacao_de: string | null; category: string | null }[] | null;
         };
       const nomePorId = new Map<string, { nome: string; code: string | null }>();
+      // ⚠️ Só PRODUTO FINAL conta unidade vendida. O `mrp_products` também
+      // guarda insumo, embalagem e semi-acabado — a "Bomboniere" (INS-BOM) é
+      // insumo e aparecia como se fossem 400 unidades vendidas ao cliente.
+      // Contar insumo aqui é a mesma doença de contar orçamento como venda.
+      const categoriaPorId = new Map<string, string | null>();
       const porCodigo = new Map<string, string>();
       const porNome = new Map<string, string | null>(); // null = nome ambíguo
       for (const p of prods ?? []) {
@@ -232,6 +237,7 @@ export function useUnidadesVendidas(filtros: UnidadesFiltro = {}) {
         // correção fecha.
         const destino = p.bonificacao_de ?? p.id;
         nomePorId.set(p.id, { nome: p.name ?? p.product_code ?? "Produto sem nome", code: p.product_code });
+        categoriaPorId.set(p.id, p.category);
         const cod = (p.product_code ?? "").trim().toUpperCase();
         if (cod && !porCodigo.has(cod)) porCodigo.set(cod, destino);
         const nk = chaveNome(p.name ?? "");
@@ -327,6 +333,10 @@ export function useUnidadesVendidas(filtros: UnidadesFiltro = {}) {
           // Serviço não tem unidade física e não entra numa contagem de frascos.
           if (i?.kind === "service") continue;
           const pid = resolverProduto(i);
+          // Insumo/embalagem/semi-acabado não é unidade vendida ao cliente.
+          // ⚠️ O corte é pela CATEGORIA do cadastro, nunca por uma lista de
+          // nomes no código: produto novo entra pelo cadastro e obedece sozinho.
+          if (pid && categoriaPorId.get(pid) !== "Produto Final") continue;
           const ident = pid ? nomePorId.get(pid) : undefined;
           const key = pid ? `prod:${pid}` : `nome:${chaveNome(itemNome(i)) || itemCodigo(i) || "?"}`;
           const linha = acc.get(key) ?? novo(
