@@ -62,6 +62,10 @@ export interface Segmentacao {
 
 export interface ClientesRow {
   mes: string;
+  // ⚠️ YYYY-MM, a chave de junção com a NFS-e. Casar pelo rótulo "set/26" é
+  // frágil de um jeito mudo: bastaria mudar a abreviação para os dois lados
+  // deixarem de se encontrar, e a linha de descarbonização sumiria sem erro.
+  mesIso: string;
   consumo_ativos: number; consumo_novos: number; consumo_acum: number;
   revenda_ativos: number; revenda_novos: number; revenda_acum: number;
   online_ativos: number;  online_novos: number;  online_acum: number;
@@ -192,7 +196,7 @@ export function useComercialCanais(filters: CanaisFilters = {}) {
       const cumul: Record<string, number> = { consumo: 0, online: 0 };
       const clientes: ClientesRow[] = allKeys.map((key) => {
         const [y, m] = key.split("-").map(Number);
-        const row: any = { mes: mesLbl(y, m) };
+        const row: any = { mes: mesLbl(y, m), mesIso: key };
         for (const ch of channels) {
           cumul[ch] += novos[ch][key] ?? 0;
           row[`${ch}_ativos`] = activeSet[ch][key]?.size ?? 0;

@@ -93,10 +93,14 @@ function GrowthSub({ label, pct, value, refLine }: { label: string; pct: number 
   );
 }
 
-const CANAL_CARDS: { key: CanalKey | "naoClassificado"; label: string; accent: string; bar: string; text: string }[] = [
+// ⚠️ `descarbonizacao` NÃO vem de `segmento` — não existe pedido com esse
+// canal em `carboze_orders`. Ele sai da NFS-e, e o card o busca em `servicos`.
+// Criar o valor na coluna `segmento` seria inventar pedido de serviço no Bling.
+const CANAL_CARDS: { key: CanalKey | "naoClassificado" | "descarbonizacao"; label: string; accent: string; bar: string; text: string }[] = [
   { key: "consumo", label: "Consumo (B2B)", accent: "border-l-blue-500", bar: "bg-blue-500", text: "text-blue-400" },
   { key: "revenda", label: "Revenda (PDV)", accent: "border-l-amber-400", bar: "bg-amber-400", text: "text-amber-500" },
   { key: "online", label: "On-line", accent: "border-l-green-500", bar: "bg-green-500", text: "text-green-500" },
+  { key: "descarbonizacao", label: "Descarbonização", accent: "border-l-cyan-500", bar: "bg-cyan-500", text: "text-cyan-500" },
   { key: "naoClassificado", label: "Não classificado", accent: "border-l-slate-400", bar: "bg-slate-400", text: "text-board-muted" },
 ];
 const META_CARDS: { key: CanalKey; title: string; color: string; note: string }[] = [
@@ -194,9 +198,24 @@ export default function DashboardComercial() {
     return { consumo: build("consumo"), revenda: build("revenda"), online: build("online") };
   }, [canais, canalMetas, year]);
 
+  // ⚠️ A descarbonização entra por `mesIso` (YYYY-MM), nunca pelo rótulo
+  // "set/26". E mês do Bling sem nota de serviço vira ZERO, não `undefined`:
+  // buraco na linha se lê como "não sei", e aqui a resposta é "nenhum cliente".
   const clientesChart = useMemo(
-    () => (canais?.clientes ?? []).map((r: any) => ({ mes: r.mes, b2b: r[`consumo_${modoClientes}`], pdv: r[`revenda_${modoClientes}`], online: r[`online_${modoClientes}`] })),
-    [canais, modoClientes],
+    () => {
+      const porIso = new Map((servicos?.clientesPorMes ?? []).map((m) => [m.mes, m] as const));
+      return (canais?.clientes ?? []).map((r: any) => {
+        const sv = porIso.get(r.mesIso);
+        return {
+          mes: r.mes,
+          b2b: r[`consumo_${modoClientes}`],
+          pdv: r[`revenda_${modoClientes}`],
+          online: r[`online_${modoClientes}`],
+          descarb: sv ? sv[modoClientes === "acum" ? "acum" : modoClientes] : 0,
+        };
+      });
+    },
+    [canais, modoClientes, servicos?.clientesPorMes],
   );
   const pdvDelta = useMemo(() => {
     const n = clientesChart.length;
@@ -559,12 +578,19 @@ export default function DashboardComercial() {
           <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">
             <div className="border-b border-border px-6 py-3">
               <h2 className="text-base font-bold text-board-text flex items-center gap-2"><BarChart3 className="h-4 w-4 text-blue-400" /> Vendas por Canal</h2>
-              <p className="text-xs text-board-muted mt-0.5">Consumo (B2B) vs Revenda (Ponto de Venda) · classifique cada pedido em <Link to="/comercial/dados/pedidos" className="font-semibold text-primary hover:underline">Pedidos</Link></p>
+              <p className="text-xs text-board-muted mt-0.5">Consumo · Revenda · On-line · Descarbonização (NFS-e) · classifique cada pedido em <Link to="/comercial/dados/pedidos" className="font-semibold text-primary hover:underline">Pedidos</Link></p>
             </div>
             <div className="grid grid-cols-2 gap-3 p-4">
+              {/* ⚠️ O percentual é sobre o total COM a descarbonização. Enquanto
+                  o denominador era só o Bling, os quatro canais somavam 100% e
+                  o serviço ficava de fora — acrescentar o card sem mexer na
+                  base faria a tela exibir cinco fatias somando ~160%. */}
               {seg && CANAL_CARDS.map((c) => {
-                const b = (seg as any)[c.key] as { qtd: number; brl: number };
-                const p = seg.pct(b.brl);
+                const b = c.key === "descarbonizacao"
+                  ? { qtd: servicos?.notas ?? 0, brl: servicos?.total ?? 0 }
+                  : (seg as any)[c.key] as { qtd: number; brl: number };
+                const baseTotal = seg.totalBRL + (servicos?.total ?? 0);
+                const p = baseTotal > 0 ? (b.brl / baseTotal) * 100 : 0;
                 return (
                   <div key={c.key} className={`rounded-xl bg-board-surface/60 border-l-4 ${c.accent} p-4`}>
                     <div className="flex items-center justify-between">
@@ -572,7 +598,7 @@ export default function DashboardComercial() {
                       <span className={`text-xs font-bold ${c.text}`}>{p.toFixed(0)}%</span>
                     </div>
                     <p className="mt-1.5 text-2xl font-bold text-board-text tabular-nums leading-none">{fmtK(b.brl)}</p>
-                    <p className="mt-1 text-xs text-board-muted">{b.qtd} pedido(s)</p>
+                    <p className="mt-1 text-xs text-board-muted">{b.qtd} {c.key === "descarbonizacao" ? "nota(s)" : "pedido(s)"}</p>
                     <div className="mt-2 h-1.5 w-full rounded-full bg-muted overflow-hidden"><div className={`h-full ${c.bar} rounded-full`} style={{ width: `${p}%` }} /></div>
                   </div>
                 );
@@ -589,7 +615,7 @@ export default function DashboardComercial() {
                     misturá-las foi o que fez o gráfico mostrar 110 PDVs
                     existindo 73. */}
                 <p className="text-xs text-board-muted mt-0.5">
-                  {MODO_LABEL[modoClientes]} — B2B (Consumo) e On-line por cliente único (CNPJ/CPF); PDV pelo cadastro de pontos
+                  {MODO_LABEL[modoClientes]} — B2B, On-line e Descarbonização por cliente único (CNPJ/CPF); PDV pelo cadastro de pontos
                 </p>
                 {pdvDelta && (
                   <div className="mt-1.5 inline-flex items-center gap-1.5 rounded-md bg-amber-400/10 px-2 py-1">
@@ -611,6 +637,7 @@ export default function DashboardComercial() {
                   <span className="flex items-center gap-1"><span className="inline-block w-4 border-t-2" style={{ borderColor: "#3b82f6" }} /> B2B (Consumo)</span>
                   <span className="flex items-center gap-1"><span className="inline-block w-4 border-t-2" style={{ borderColor: "#f59e0b" }} /> PDV (Revenda)</span>
                   <span className="flex items-center gap-1"><span className="inline-block w-4 border-t-2" style={{ borderColor: "#22c55e" }} /> On-line</span>
+                  <span className="flex items-center gap-1"><span className="inline-block w-4 border-t-2" style={{ borderColor: "#06b6d4" }} /> Descarbonização</span>
                 </div>
               </div>
             </div>
@@ -628,6 +655,11 @@ export default function DashboardComercial() {
                     <LabelList dataKey="pdv" position="bottom" style={{ fontSize: 10, fill: "#fbbf24", fontWeight: 700 }} />
                   </Line>
                   <Line type="monotone" dataKey="online" name="On-line" stroke="#22c55e" strokeWidth={2} strokeDasharray="4 3" dot={{ r: 2.5, fill: "#22c55e" }} isAnimationActive={false} />
+                  {/* Descarbonização: cliente único por CNPJ/CPF do TOMADOR da
+                      NFS-e — a mesma pergunta das duas primeiras linhas, feita
+                      na outra base. A série começa em jan/26 porque é de lá que
+                      o portal nacional entrega as emitidas. */}
+                  <Line type="monotone" dataKey="descarb" name="Descarbonização" stroke="#06b6d4" strokeWidth={2} dot={{ r: 2.5, fill: "#06b6d4" }} isAnimationActive={false} />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>

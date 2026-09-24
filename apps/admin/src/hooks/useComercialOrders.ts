@@ -2,6 +2,7 @@
 // TODOS os gráficos do Dashboard Comercial. Mesma base, mesmos filtros.
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { lerTudo } from "@/lib/lerTudo";
 
 const db = supabase as unknown as { from: (t: string) => any };
 
@@ -46,12 +47,25 @@ export function useComercialOrders(filters: ComercialFonteFilters = {}) {
   return useQuery({
     queryKey: ["comercial-fonte", vendedorId ?? "all", from ?? "", to ?? "", segmento ?? "all"],
     queryFn: async (): Promise<ComercialFonteData> => {
-      const { data, error } = await db
-        .from("carbo_vendas_metrica")
-        .select("id, order_number, created_at, customer_name, cnpj, vendedor_name, vendedor_id, segmento, status, total, excluir_metricas, external_ref, origem_override, bling_nf_id, nf_numero, nf_situacao, nf_valida, conta_metrica, motivo_fora")
-        .order("created_at", { ascending: false })
-        .limit(5000);
-      if (error) throw error;
+      // ⚠️ `lerTudo`, e NÃO `.limit(5000)`. O teto do PostgREST é 1.000 e ele
+      // NÃO avisa: não há erro, não há campo "truncado", a resposta parece
+      // completa — o `.limit(5000)` era ignorado e o rodapé da tela dizia
+      // "197 de 1000 linhas" com 1.229 pedidos na base. Com `ascending: false`
+      // o que sobrevive são os 1.000 MAIS RECENTES, então o histórico caía
+      // fora em silêncio, do mês mais velho para o mais novo.
+      //
+      // ⚠️ O desempate (`id`) é obrigatório ao paginar: `created_at` tem
+      // dezenas de empates por dia, e sem ordem estável a mesma linha volta em
+      // duas páginas e outra não volta em nenhuma — o erro sairia como número
+      // LIGEIRAMENTE errado, que é pior que tela vazia, porque ninguém nota.
+      const data = await lerTudo<any>((de, ate) =>
+        db
+          .from("carbo_vendas_metrica")
+          .select("id, order_number, created_at, customer_name, cnpj, vendedor_name, vendedor_id, segmento, status, total, excluir_metricas, external_ref, origem_override, bling_nf_id, nf_numero, nf_situacao, nf_valida, conta_metrica, motivo_fora")
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: false })
+          .range(de, ate),
+      );
 
       const fromTs = from ? new Date(from + "T00:00:00").getTime() : null;
       const toTs = to ? new Date(to + "T23:59:59").getTime() : null;

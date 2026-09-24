@@ -41,6 +41,33 @@ export interface ServicoMes {
   notas: number;
 }
 
+// Uma NFS-e como LINHA, para a tela de fonte (`/comercial/dados`).
+// ⚠️ Os campos são os da NOTA, não os de um pedido. Não existe `vendedor_id`,
+// `segmento` nem `conta_metrica` aqui — inventá-los para caber na tabela de
+// pedidos criaria um pedido que não existe em `carboze_orders`, e a ação em
+// massa daquela tela tentaria classificar o canal de um id inexistente.
+export interface ServicoLinha {
+  nsu: number;
+  chave: string | null;
+  numero: string | null;
+  emitida_em: string | null;
+  tomador: string;
+  doc: string | null;
+  valor: number;
+  cancelada: boolean;
+  codigo: string | null;
+  descarbonizacao: boolean;
+}
+
+// Cliente de serviço por mês, no MESMO formato dos canais do Bling
+// (ativos / novos / acumulado), para o gráfico "Crescimento de Clientes".
+export interface ServicoClientesMes {
+  mes: string;      // YYYY-MM
+  ativos: number;
+  novos: number;
+  acum: number;
+}
+
 export interface ServicosNfse {
   descarbonizacao: number;
   outros: number;
@@ -58,6 +85,12 @@ export interface ServicosNfse {
   // deixa as duas recorrências serem SOMADAS sem misturar empresas diferentes.
   porCliente: Map<string, { nome: string; qtd: number }>;
   porMes: ServicoMes[];
+  // As notas em si, para a tela de fonte. Mesma base, mesmos filtros.
+  linhas: ServicoLinha[];
+  // ⚠️ "Novo" é a primeira nota daquele TOMADOR em toda a base lida, não no
+  // recorte da tela: com filtro de período, um cliente de 2026 apareceria como
+  // novo em cada mês que alguém escolhesse olhar.
+  clientesPorMes: ServicoClientesMes[];
   // ⚠️ O mês em que a série COMEÇA. O Bling tem histórico desde out/25, mas o
   // portal nacional só entrega emitidas a partir de jan/26 — os meses
   // anteriores aparecem com zero de serviço, e isso é ausência de DADO, não
@@ -67,6 +100,9 @@ export interface ServicosNfse {
 }
 
 interface Linha {
+  nsu: number;
+  chave_acesso: string | null;
+  numero: string | null;
   papel: string | null;
   toma_nome: string | null;
   toma_doc: string | null;
@@ -90,7 +126,7 @@ export function useServicosNfse(filtros: ServicosFiltro = {}) {
       const linhas = await lerTudo<Linha>((de, ate) =>
         supabase
           .from("carbo_nfse_visao" as never)
-          .select("papel, cancelada, emitida_em, valor_liquido, serv_cod_nacional, toma_nome, toma_doc")
+          .select("nsu, chave_acesso, numero, papel, cancelada, emitida_em, valor_liquido, serv_cod_nacional, toma_nome, toma_doc")
           .order("emitida_em", { ascending: false, nullsFirst: false })
           .order("nsu", { ascending: false })
           .range(de, ate) as never,
@@ -104,8 +140,44 @@ export function useServicosNfse(filtros: ServicosFiltro = {}) {
       let maiorNota = 0, maiorNotaCliente = "—";
       const porCliente = new Map<string, { nome: string; qtd: number }>();
       let primeiroMes: string | null = null;
+      const listagem: ServicoLinha[] = [];
+
+      // ⚠️ O "primeiro mês de cada tomador" é calculado sobre a base INTEIRA,
+      // antes de qualquer filtro de período. Calculado dentro do recorte, um
+      // cliente de janeiro apareceria como NOVO em todo mês que alguém
+      // escolhesse olhar — e "novos" é o número que diz se a base cresce.
+      const primeiroMesDoCliente = new Map<string, string>();
+      for (const l of linhas) {
+        if (l.papel !== "emitida" || l.cancelada || !l.emitida_em) continue;
+        const doc = (l.toma_doc ?? "").replace(/\D/g, "");
+        const id = doc ? `doc:${doc}` : `nome:${(l.toma_nome ?? "").trim().toLocaleLowerCase("pt-BR")}`;
+        if (id === "nome:") continue;
+        const mes = l.emitida_em.slice(0, 7);
+        const atual = primeiroMesDoCliente.get(id);
+        if (!atual || mes < atual) primeiroMesDoCliente.set(id, mes);
+      }
+      const ativosPorMes = new Map<string, Set<string>>();
+      const novosPorMes = new Map<string, number>();
 
       for (const l of linhas) {
+        // A LISTA mostra a nota cancelada; o TOTAL não a soma. Escondê-la
+        // faria o número fechar e a conferência ficar impossível — mesma razão
+        // de o usuário bloqueado não sumir da tela de Usuários.
+        if (l.papel === "emitida" && l.emitida_em && dentro(l.emitida_em.slice(0, 10))) {
+          listagem.push({
+            nsu: l.nsu,
+            chave: l.chave_acesso,
+            numero: l.numero,
+            emitida_em: l.emitida_em,
+            tomador: l.toma_nome || "—",
+            doc: l.toma_doc,
+            valor: Number(l.valor_liquido) || 0,
+            cancelada: l.cancelada === true,
+            codigo: l.serv_cod_nacional,
+            descarbonizacao: (l.serv_cod_nacional ?? "").replace(/\D/g, "") === COD_DESCARBONIZACAO,
+          });
+        }
+
         // ⚠️ Só EMITIDA e só VÁLIDA. `recebida` é despesa — somá-la aqui
         // inverteria o sinal do dinheiro dentro do faturamento, que é o erro
         // que a tela da NFS-e existe para evitar.
@@ -136,8 +208,29 @@ export function useServicosNfse(filtros: ServicosFiltro = {}) {
         cli.qtd++;
         porCliente.set(chave, cli);
 
+        // Ativo no mês = teve nota naquele mês. Conjunto, não contador: duas
+        // notas do mesmo cliente no mesmo mês são UM cliente ativo.
+        let ativos = ativosPorMes.get(mes);
+        if (!ativos) { ativos = new Set(); ativosPorMes.set(mes, ativos); }
+        ativos.add(chave);
+        if (primeiroMesDoCliente.get(chave) === mes && !novosPorMes.has(`${mes}|${chave}`)) {
+          novosPorMes.set(`${mes}|${chave}`, 1);
+        }
+
         if (!primeiroMes || mes < primeiroMes) primeiroMes = mes;
       }
+
+      // ⚠️ O acumulado soma os NOVOS mês a mês, nunca `ativos` — somar ativos
+      // contaria de novo o cliente que comprou em dois meses, e a curva de base
+      // passaria a subir mais rápido que a base real.
+      const mesesClientes = Array.from(ativosPorMes.keys()).sort();
+      let acum = 0;
+      const clientesPorMes: ServicoClientesMes[] = mesesClientes.map((mes) => {
+        let novosDoMes = 0;
+        for (const k of novosPorMes.keys()) if (k.startsWith(`${mes}|`)) novosDoMes++;
+        acum += novosDoMes;
+        return { mes, ativos: ativosPorMes.get(mes)?.size ?? 0, novos: novosDoMes, acum };
+      });
 
       return {
         descarbonizacao,
@@ -150,6 +243,8 @@ export function useServicosNfse(filtros: ServicosFiltro = {}) {
         maiorNotaCliente,
         porCliente,
         porMes: Array.from(porMes.values()).sort((a, b) => a.mes.localeCompare(b.mes)),
+        linhas: listagem,
+        clientesPorMes,
         primeiroMes,
       };
     },

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   Database, AlertTriangle, Search, Download, ShoppingCart, DollarSign, Target, EyeOff,
-  Users, Building2, ListOrdered, Globe, FileText, ArrowUp, ArrowDown, ChevronsUpDown, Layers, Loader2, CheckCircle2, UserPlus, Pencil,
+  Users, Building2, ListOrdered, Globe, FileText, ArrowUp, ArrowDown, ChevronsUpDown, Layers, Loader2, CheckCircle2, UserPlus, Pencil, Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -20,6 +20,7 @@ import { ComercialFilterBar, EMPTY_FILTERS, type DashFilters } from "@/component
 import { ComercialTabs } from "@/components/comercial/ComercialTabs";
 import { useFollowupLeadStatus, useCreateFollowupLead } from "@/hooks/useFollowupLead";
 import { useVendedoresDir } from "@/hooks/useVendedoresDir";
+import { useServicosNfse, type ServicoLinha } from "@/hooks/useServicosNfse";
 
 const brl = (v: number) => (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const fmtDateTime = (s: string | null) => (s ? new Date(s).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "—");
@@ -56,6 +57,8 @@ interface RowVM {
 type SortCol = "cnpj" | "nome" | "canal" | "vendedor" | "pedidos" | "total" | "primeira" | "ultima";
 // Colunas da aba Pedidos.
 type PedCol = "pedido" | "data" | "cliente" | "vendedor" | "canal" | "status" | "total" | "conta" | "origem";
+// Colunas da aba Descarbonização. São as da NOTA — não há vendedor nem origem.
+type ServCol = "nota" | "data" | "cliente" | "codigo" | "valor" | "situacao";
 
 const CANAL_LABEL: Record<string, string> = { consumo: "Consumo (B2B)", revenda: "Revenda (PDV)", online: "On-line" };
 // Status do pedido em português — os valores crus do banco (quote, pending…)
@@ -173,12 +176,18 @@ export default function ComercialDados() {
   // na gestão de marketplace.
   const { aba } = useParams<{ aba?: string }>();
   const navigate = useNavigate();
-  const ABAS = ["pedidos", "pedidos-online", "clientes", "clientes-online"] as const;
+  const ABAS = ["pedidos", "pedidos-online", "descarbonizacao", "clientes", "clientes-online"] as const;
   type Aba = (typeof ABAS)[number];
   const view: Aba = (ABAS as readonly string[]).includes(aba ?? "") ? (aba as Aba) : "pedidos";
   const setView = (v: Aba) => navigate(`/comercial/dados/${v}`);
   // Duas perguntas separadas: QUAL lista mostrar e QUAL recorte de canal.
-  const lista: "pedidos" | "clientes" = view.startsWith("clientes") ? "clientes" : "pedidos";
+  // ⚠️ A descarbonização é uma TERCEIRA lista, não um recorte de canal das
+  // outras duas: a linha dela é uma NFS-e, não um pedido de `carboze_orders`.
+  // Enfiá-la na tabela de pedidos daria checkbox, "classificar canal" e lápis
+  // a linhas cujo id não existe naquela tabela — a ação em massa gravaria num
+  // pedido inexistente e não diria nada.
+  const lista: "pedidos" | "clientes" | "servicos" =
+    view === "descarbonizacao" ? "servicos" : view.startsWith("clientes") ? "clientes" : "pedidos";
   const canal: "interno" | "online" = view.endsWith("-online") ? "online" : "interno";
 
   // /comercial/dados sem aba, ou com aba inválida, vira a canônica. `replace`
@@ -315,6 +324,54 @@ export default function ComercialDados() {
 
   const vendedorId = filters.vendedor === "all" ? null : filters.vendedor;
   const { data, isLoading, error } = useComercialOrders({ vendedorId, from: filters.from, to: filters.to, segmento: filters.segmento });
+
+  // ⚠️ A NFS-e NÃO tem vendedor, então o filtro de vendedor não é aplicado a
+  // ela. Aplicá-lo como "nenhum vendedor casa" esvaziaria a aba ao escolher
+  // qualquer vendedor, e a pessoa leria isso como "este vendedor não fez
+  // descarbonização" — que é uma afirmação sobre o negócio, não sobre o dado.
+  const { data: servicos, isLoading: loadingServicos, error: errServicos } =
+    useServicosNfse({ from: filters.from, to: filters.to });
+  const [servSort, setServSort] = useState<{ col: ServCol; dir: "asc" | "desc" }>({ col: "data", dir: "desc" });
+  const toggleServSort = (col: ServCol) =>
+    setServSort((s) => (s.col === col
+      ? { col, dir: s.dir === "asc" ? "desc" : "asc" }
+      : { col, dir: (col === "valor" || col === "data") ? "desc" : "asc" }));
+
+  const servicoRows = useMemo(() => {
+    let r = servicos?.linhas ?? [];
+    const t = busca.trim().toLowerCase();
+    if (t) r = r.filter((l) => l.tomador.toLowerCase().includes(t) || (l.numero ?? "").toLowerCase().includes(t));
+    // "Só os que contam" aqui é a MESMA pergunta da aba de pedidos: nota
+    // cancelada não entra no faturamento.
+    if (soMetricas) r = r.filter((l) => !l.cancelada);
+    const dir = servSort.dir === "asc" ? 1 : -1;
+    const val = (l: ServicoLinha): string | number => {
+      switch (servSort.col) {
+        case "nota":    return (l.numero ?? "").padStart(12, "0");
+        case "data":    return l.emitida_em ?? "";
+        case "cliente": return l.tomador.toLowerCase();
+        case "codigo":  return l.codigo ?? "zzz";
+        case "valor":   return l.valor;
+        case "situacao":return l.cancelada ? 1 : 0;
+      }
+    };
+    return [...r].sort((a, b) => {
+      const va = val(a), vb = val(b);
+      if (typeof va === "number" && typeof vb === "number") return (va - vb) * dir || a.nsu - b.nsu;
+      return String(va).localeCompare(String(vb), "pt-BR") * dir || a.nsu - b.nsu;
+    });
+  }, [servicos?.linhas, busca, soMetricas, servSort]);
+
+  const kpisServico = useMemo(() => {
+    const validas = servicoRows.filter((l) => !l.cancelada);
+    const totalBRL = validas.reduce((s, l) => s + l.valor, 0);
+    return {
+      notas: validas.length,
+      totalBRL,
+      ticketMedio: validas.length ? totalBRL / validas.length : 0,
+      canceladas: servicoRows.filter((l) => l.cancelada).length,
+    };
+  }, [servicoRows]);
 
   const rows = useMemo(() => {
     let r = data?.rows ?? [];
@@ -475,6 +532,16 @@ export default function ComercialDados() {
   };
   const esc = (v: any) => `"${String(v ?? "").replace(/"/g, '""')}"`;
   const exportCsv = () => {
+    if (lista === "servicos") {
+      const head = ["nota", "data", "tomador", "cnpj_cpf", "codigo_servico", "descarbonizacao", "valor", "situacao", "chave_acesso"];
+      const lines = servicoRows.map((l) => [
+        l.numero ?? "", l.emitida_em ?? "", l.tomador, l.doc ? fmtDoc(l.doc) : "",
+        l.codigo ?? "", l.descarbonizacao ? "sim" : "não", l.valor,
+        l.cancelada ? "cancelada" : "válida", l.chave ?? "",
+      ].map(esc).join(","));
+      download("comercial-descarbonizacao.csv", head, lines);
+      return;
+    }
     if (lista === "clientes") {
       const head = ["cnpjs", "cliente", "vendedor(es)", "canal", "pedidos", "total", "primeira_compra", "ultima_compra"];
       const lines = rowsSorted.map((r) => [
@@ -509,19 +576,33 @@ export default function ComercialDados() {
     <main className="p-4 lg:p-6 board-fade-in">
       <div className="space-y-4 max-w-[1600px] mx-auto">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-          <CarboPageHeader icon={Database} title="Dados Comerciais — Fonte" description="As linhas cruas de carboze_orders que alimentam os gráficos. Mesma base, mesmos filtros." />
+          <CarboPageHeader icon={Database} title="Dados Comerciais — Fonte"
+            description={lista === "servicos"
+              ? "As NFS-e emitidas no portal nacional que alimentam a descarbonização nos gráficos. Não há vendedor na nota, então o filtro de vendedor não se aplica aqui."
+              : "As linhas cruas de carboze_orders que alimentam os gráficos. Mesma base, mesmos filtros."} />
           <div className="flex flex-col items-end gap-2">
             <ComercialTabs />
             <ComercialFilterBar filters={filters} onChange={setFilters} />
           </div>
         </div>
 
-        {/* Resumo */}
+        {/* Resumo — os cards são do que ESTÁ NA TELA, em qualquer aba. */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Tile icon={ShoppingCart} label={canal === "online" ? "Pedidos online (contam)" : "Pedidos internos (contam)"} value={String(kpis.totalPedidos)} tone="text-blue-500" />
-          <Tile icon={DollarSign} label="R$ Total (pedidos)" value={brl(kpis.totalBRL)} tone="text-carbo-green" />
-          <Tile icon={Target} label="Ticket médio" value={brl(kpis.ticketMedio)} tone="text-violet-500" />
-          <Tile icon={EyeOff} label="Excluídos das métricas" value={String(kpis.excluidos)} tone="text-amber-500" />
+          {lista === "servicos" ? (
+            <>
+              <Tile icon={Wrench} label="Notas de serviço (válidas)" value={String(kpisServico.notas)} tone="text-cyan-500" />
+              <Tile icon={DollarSign} label="R$ Total (NFS-e)" value={brl(kpisServico.totalBRL)} tone="text-carbo-green" />
+              <Tile icon={Target} label="Ticket médio" value={brl(kpisServico.ticketMedio)} tone="text-violet-500" />
+              <Tile icon={EyeOff} label="Canceladas" value={String(kpisServico.canceladas)} tone="text-amber-500" />
+            </>
+          ) : (
+            <>
+              <Tile icon={ShoppingCart} label={canal === "online" ? "Pedidos online (contam)" : "Pedidos internos (contam)"} value={String(kpis.totalPedidos)} tone="text-blue-500" />
+              <Tile icon={DollarSign} label="R$ Total (pedidos)" value={brl(kpis.totalBRL)} tone="text-carbo-green" />
+              <Tile icon={Target} label="Ticket médio" value={brl(kpis.ticketMedio)} tone="text-violet-500" />
+              <Tile icon={EyeOff} label="Excluídos das métricas" value={String(kpis.excluidos)} tone="text-amber-500" />
+            </>
+          )}
         </div>
 
         {/* Modo de visão */}
@@ -530,6 +611,7 @@ export default function ComercialDados() {
             {([
               ["pedidos",         "Pedidos internos",  ListOrdered],
               ["pedidos-online",  "Pedidos online",    Globe],
+              ["descarbonizacao", "Descarbonização",   Wrench],
               ["clientes",        "Clientes internos", Users],
               ["clientes-online", "Clientes online",   Globe],
             ] as const).map(([k, l, Ico]) => (
@@ -560,20 +642,33 @@ export default function ComercialDados() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar cliente ou nº do pedido…" className="pl-9 h-9" />
           </div>
-          <Select value={statusFiltro} onValueChange={setStatusFiltro}>
-            <SelectTrigger className="h-9 w-44 text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os status</SelectItem>
-              {statuses.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          {/* O seletor de status lista os status de `carboze_orders`. Na aba de
+              serviço ele não significa nada — uma NFS-e é válida ou cancelada,
+              e isso já é coluna. Filtro que não filtra é pior que filtro
+              ausente: quem escolhe uma opção e não vê mudança conclui que a
+              tela está quebrada. */}
+          {lista !== "servicos" && (
+            <Select value={statusFiltro} onValueChange={setStatusFiltro}>
+              <SelectTrigger className="h-9 w-44 text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os status</SelectItem>
+                {statuses.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
           <Button variant={soMetricas ? "default" : "outline"} size="sm" className="h-9" onClick={() => setSoMetricas((v) => !v)}>
             <EyeOff className="h-3.5 w-3.5 mr-1" /> Só os que contam métrica
           </Button>
-          <Button variant="outline" size="sm" className="h-9" onClick={exportCsv} disabled={lista === "pedidos" ? !rows.length : !rowsSorted.length}>
+          <Button variant="outline" size="sm" className="h-9"
+                  onClick={exportCsv}
+                  disabled={lista === "servicos" ? !servicoRows.length : lista === "pedidos" ? !rows.length : !rowsSorted.length}>
             <Download className="h-3.5 w-3.5 mr-1" /> Exportar CSV
           </Button>
-          <p className="text-xs text-muted-foreground ml-auto">{lista === "pedidos" ? `${rows.length} de ${data?.totalRows ?? 0} linhas` : `${rowsSorted.length} ${agrupado ? "grupos" : "clientes"}`}</p>
+          <p className="text-xs text-muted-foreground ml-auto">
+            {lista === "servicos" ? `${servicoRows.length} de ${servicos?.linhas.length ?? 0} notas`
+              : lista === "pedidos" ? `${rows.length} de ${data?.totalRows ?? 0} linhas`
+              : `${rowsSorted.length} ${agrupado ? "grupos" : "clientes"}`}
+          </p>
         </div>
 
         {/* Ações em massa — só na aba Pedidos e só com algo selecionado. */}
@@ -620,13 +715,15 @@ export default function ComercialDados() {
 
         {/* Falha de consulta NÃO pode virar "nenhum resultado" — foi assim que
             uma view faltando deixou a tela em branco sem dizer o motivo. */}
-        {error && (
+        {(lista === "servicos" ? errServicos : error) && (
           <div className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/[0.06] px-3 py-2.5 text-sm">
             <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-destructive" />
             <div>
-              <p className="font-semibold text-destructive">Não foi possível carregar os pedidos</p>
+              <p className="font-semibold text-destructive">
+                {lista === "servicos" ? "Não foi possível carregar as notas de serviço" : "Não foi possível carregar os pedidos"}
+              </p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {(error as { message?: string })?.message ?? "Erro desconhecido"}
+                {((lista === "servicos" ? errServicos : error) as { message?: string })?.message ?? "Erro desconhecido"}
               </p>
             </div>
           </div>
@@ -635,8 +732,59 @@ export default function ComercialDados() {
         {/* Tabela */}
         <CarboCard>
           <CarboCardContent className="p-0 overflow-x-auto">
-            {isLoading ? (
+            {(lista === "servicos" ? loadingServicos : isLoading) ? (
               <p className="text-sm text-muted-foreground py-10 text-center">Carregando…</p>
+            ) : lista === "servicos" ? (
+              servicoRows.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-10 text-center">Nenhuma nota de serviço para os filtros atuais.</p>
+              ) : (
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-board-surface">
+                  <tr className="border-b text-left text-xs text-muted-foreground">
+                    <SortTh col="nota"     label="Nota"     sort={servSort} onSort={toggleServSort} />
+                    <SortTh col="data"     label="Emissão"  sort={servSort} onSort={toggleServSort} />
+                    <SortTh col="cliente"  label="Tomador"  sort={servSort} onSort={toggleServSort} />
+                    <th className="px-3 py-2 font-medium">CNPJ / CPF</th>
+                    <SortTh col="codigo"   label="Serviço"  sort={servSort} onSort={toggleServSort} />
+                    <th className="px-3 py-2 font-medium">Canal</th>
+                    <SortTh col="situacao" label="Situação" sort={servSort} onSort={toggleServSort} />
+                    <SortTh col="valor"    label="Valor"    sort={servSort} onSort={toggleServSort} align="right" />
+                    <th className="px-3 py-2 font-medium text-center">Conta?</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {servicoRows.slice(0, 500).map((l) => (
+                    <tr key={`${l.nsu}`} className={`border-b last:border-0 hover:bg-accent/40 ${l.cancelada ? "opacity-50" : ""}`}>
+                      <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{l.numero || "—"}</td>
+                      <td className="px-3 py-2 text-xs whitespace-nowrap text-muted-foreground">{fmtDay(l.emitida_em)}</td>
+                      <td className="px-3 py-2 max-w-[240px] truncate">{l.tomador}</td>
+                      <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{l.doc ? fmtDoc(l.doc) : <span className="text-muted-foreground">—</span>}</td>
+                      {/* O código nacional aparece CRU ao lado do rótulo: é ele
+                          que separa descarbonização de comissão, e um código
+                          novo tem de ficar visível em vez de virar "outros"
+                          sem ninguém notar. */}
+                      <td className="px-3 py-2 text-xs whitespace-nowrap text-muted-foreground">{l.codigo || "—"}</td>
+                      <td className="px-3 py-2">
+                        {l.descarbonizacao
+                          ? <CarboBadge variant="info" size="sm">Descarbonização</CarboBadge>
+                          : <CarboBadge variant="secondary" size="sm">Outro serviço</CarboBadge>}
+                      </td>
+                      <td className="px-3 py-2">
+                        {l.cancelada
+                          ? <CarboBadge variant="destructive" size="sm">Cancelada</CarboBadge>
+                          : <CarboBadge variant="success" size="sm">Válida</CarboBadge>}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums font-medium">{brl(l.valor)}</td>
+                      <td className="px-3 py-2 text-center">
+                        {l.cancelada
+                          ? <CarboBadge variant="secondary">Não conta</CarboBadge>
+                          : <CarboBadge variant="success">Conta</CarboBadge>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              )
             ) : lista === "pedidos" ? (
               rows.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-10 text-center">Nenhuma linha para os filtros atuais.</p>
