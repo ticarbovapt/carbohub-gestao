@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import {
   FileSpreadsheet, ArrowUpRight, ArrowDownLeft, Ban, AlertTriangle, CheckCircle2,
   Repeat, FileCode2, Loader2, Scale, FileDown, Copy,
+  ChevronLeft, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
@@ -61,6 +62,15 @@ const num = (v: unknown) => (v == null ? 0 : Number(v) || 0);
 
 type Papel = "emitida" | "recebida" | "todas";
 type Situacao = "todas" | "validas" | "canceladas";
+type Ordem = "nota" | "data" | "contraparte" | "servico" | "valor" | "situacao";
+
+const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+
+// ⚠️ Paginação PRÓPRIA, e não o `Pager` do Faturamento: aquele tem
+// `PAGE_SIZE` FIXO em 20, e mexer na constante compartilhada mudaria a
+// paginação do Faturamento em silêncio — a armadilha de arquivo/constante
+// compartilhada que este repo já pagou várias vezes.
+const TAMANHOS = [25, 50, 100, 200];
 
 // A contraparte é a OUTRA ponta: numa nota emitida é o tomador, numa recebida é
 // o prestador. Coluna fixa repetiria "CARBO SOLUCOES LTDA" em metade da tela.
@@ -181,13 +191,51 @@ export default function NfseNacional() {
   const papel = (params.get("papel") as Papel) || "emitida";
   const ano = params.get("ano") || "todos";
   const situacao = (params.get("sit") as Situacao) || "todas";
+  const mes = params.get("mes") || "todos";
   const busca = params.get("q") || "";
+  const ordem = (params.get("ord") as Ordem) || "data";
+  const dir = params.get("dir") === "asc" ? "asc" : "desc";
+  const tamanho = Number(params.get("tam")) || 50;
+  const pagina = Math.max(1, Number(params.get("pg")) || 1);
 
   const troca = (chave: string, valor: string) => {
     const p = new URLSearchParams(params);
     if (!valor || valor === "todos" || valor === "todas") p.delete(chave);
     else p.set(chave, valor);
+    // ⚠️ Filtrar SEMPRE volta para a página 1. Sem isso, quem está na página 7
+    // e troca o ano cai numa lista de 2 páginas e vê a tela VAZIA — e lê isso
+    // como "não tem nota nesse ano", que é a conclusão errada.
+    if (chave !== "pg") p.delete("pg");
     setParams(p, { replace: true });
+  };
+
+  // Clicar no cabeçalho: primeira vez ordena, segunda inverte.
+  const ordenar = (col: Ordem) => {
+    const p = new URLSearchParams(params);
+    if (ordem === col) p.set("dir", dir === "asc" ? "desc" : "asc");
+    else { p.set("ord", col); p.set("dir", col === "valor" || col === "data" ? "desc" : "asc"); }
+    p.delete("pg");
+    setParams(p, { replace: true });
+  };
+
+  // Cabeçalho clicável. ⚠️ A seta mostra o estado ATUAL: `ChevronsUpDown`
+  // significa "dá para ordenar por aqui", e a seta cheia, "é por aqui que está
+  // ordenado agora". Sem essa distinção a pessoa não sabe se o clique fez algo.
+  const Ord = ({ col, children, fim }: { col: Ordem; children: React.ReactNode; fim?: boolean }) => {
+    const ativa = ordem === col;
+    const Icone = !ativa ? ChevronsUpDown : dir === "asc" ? ChevronUp : ChevronDown;
+    return (
+      <button
+        type="button"
+        onClick={() => ordenar(col)}
+        className={`inline-flex items-center gap-1 hover:text-foreground transition-colors ${
+          ativa ? "text-foreground font-medium" : ""} ${fim ? "justify-end w-full" : ""}`}
+        title={`Ordenar por ${col}`}
+      >
+        {children}
+        <Icone className={`h-3 w-3 ${ativa ? "" : "opacity-40"}`} />
+      </button>
+    );
   };
 
   const { data: notas, isLoading, error } = useNfse();
@@ -203,20 +251,41 @@ export default function NfseNacional() {
 
   const lista = useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    return (notas ?? []).filter((n) => {
+    const filtradas = (notas ?? []).filter((n) => {
       if (papel !== "todas" && n.papel !== papel) return false;
       if (situacao === "validas" && n.cancelada) return false;
       if (situacao === "canceladas" && !n.cancelada) return false;
-      if (ano !== "todos") {
+      if (ano !== "todos" || mes !== "todos") {
         if (!n.emitida_em) return false;
-        if (String(new Date(n.emitida_em).getFullYear()) !== ano) return false;
+        const d = new Date(n.emitida_em);
+        if (ano !== "todos" && String(d.getFullYear()) !== ano) return false;
+        if (mes !== "todos" && String(d.getMonth() + 1) !== mes) return false;
       }
       if (!termo) return true;
       return [n.numero, n.emit_nome, n.toma_nome, n.emit_cnpj, n.toma_doc,
               n.descricao, n.chave_acesso]
         .some((c) => (c ?? "").toLowerCase().includes(termo));
     });
-  }, [notas, papel, ano, situacao, busca]);
+
+    // ⚠️ Ordenação ESTÁVEL: todo critério desempata pelo `nsu`, que é único.
+    // Sem isso, duas notas do mesmo dia (ou do mesmo valor, que é comum aqui —
+    // R$ 400,00 aparece dezenas de vezes) trocam de lugar entre renderizações,
+    // e ao PAGINAR a mesma linha pode sair em duas páginas enquanto outra não
+    // sai em nenhuma. É a mesma lição do `lerTudo`, agora no front.
+    const sinal = dir === "asc" ? 1 : -1;
+    const txt = (s: string | null) => (s ?? "").toLocaleLowerCase("pt-BR");
+    const cmp: Record<Ordem, (a: NfseRow, b: NfseRow) => number> = {
+      nota: (a, b) => (Number(a.numero ?? 0) || 0) - (Number(b.numero ?? 0) || 0),
+      data: (a, b) =>
+        new Date(a.emitida_em ?? 0).getTime() - new Date(b.emitida_em ?? 0).getTime(),
+      contraparte: (a, b) => txt(contraparte(a)).localeCompare(txt(contraparte(b)), "pt-BR"),
+      servico: (a, b) => txt(a.descricao).localeCompare(txt(b.descricao), "pt-BR"),
+      valor: (a, b) => num(a.valor_liquido) - num(b.valor_liquido),
+      // Agrupa por estado, não por texto do selo: cancelada junto de cancelada.
+      situacao: (a, b) => (a.cancelada ? 1 : 0) - (b.cancelada ? 1 : 0),
+    };
+    return [...filtradas].sort((a, b) => cmp[ordem](a, b) * sinal || a.nsu - b.nsu);
+  }, [notas, papel, ano, mes, situacao, busca, ordem, dir]);
 
   // ⚠️ Os totais são SEPARADOS por direção, sempre — inclusive quando a aba é
   // de um papel só. É o que impede a aba "Todas" de voltar a mostrar um número
@@ -241,6 +310,13 @@ export default function NfseNacional() {
       retido: validas.reduce((s, n) => s + num(n.total_retido), 0),
     };
   }, [lista]);
+
+  // ⚠️ A paginação corta DEPOIS do resumo: os cartões somam o FILTRO inteiro,
+  // não a página. Somar só o que está à vista daria um total que muda quando a
+  // pessoa vira a página — e ninguém desconfiaria do número.
+  const paginas = Math.max(1, Math.ceil(lista.length / tamanho));
+  const pgSegura = Math.min(pagina, paginas);
+  const daPagina = lista.slice((pgSegura - 1) * tamanho, pgSegura * tamanho);
 
   // O aviso só aparece quando é VERDADEIRO para o que está na tela. Aviso
   // permanente vira paisagem e deixa de ser lido.
@@ -346,6 +422,21 @@ export default function NfseNacional() {
           </TabsList>
         </Tabs>
 
+        {/* Mês só aparece com um ano escolhido: "março" sem ano junta março de
+            quatro anos diferentes num total só, que não é o que se pergunta. */}
+        {ano !== "todos" && (
+          <select
+            className="h-9 rounded-md border border-border bg-background px-2 text-sm"
+            value={mes}
+            onChange={(e) => troca("mes", e.target.value)}
+          >
+            <option value="todos">Todos os meses</option>
+            {MESES.map((m, i) => (
+              <option key={m} value={String(i + 1)}>{m}</option>
+            ))}
+          </select>
+        )}
+
         <div className="ml-auto w-full sm:w-72">
           <CarboSearchInput
             placeholder="Nº, CNPJ, nome, descrição ou chave…"
@@ -417,18 +508,29 @@ export default function NfseNacional() {
             <CarboTable>
               <CarboTableHeader>
                 <CarboTableRow>
-                  <CarboTableHead className="w-[104px]">Nota</CarboTableHead>
-                  <CarboTableHead className="w-[260px]">
-                    {papel === "emitida" ? "Tomador" : papel === "recebida" ? "Prestador" : "Contraparte"}
+                  {/* A coluna "Nota" carrega número E data, então ela oferece
+                      os DOIS critérios — ordenar por número e ordenar por data
+                      são perguntas diferentes, e fundi-las perderia uma. */}
+                  <CarboTableHead className="w-[118px]">
+                    <Ord col="nota">Nº</Ord>
+                    <span className="text-muted-foreground mx-1">·</span>
+                    <Ord col="data">data</Ord>
                   </CarboTableHead>
-                  <CarboTableHead>Serviço</CarboTableHead>
-                  <CarboTableHead className="w-[150px] text-right">Valor</CarboTableHead>
-                  <CarboTableHead className="w-[150px]">Situação</CarboTableHead>
+                  <CarboTableHead className="w-[260px]">
+                    <Ord col="contraparte">
+                      {papel === "emitida" ? "Tomador" : papel === "recebida" ? "Prestador" : "Contraparte"}
+                    </Ord>
+                  </CarboTableHead>
+                  <CarboTableHead><Ord col="servico">Serviço</Ord></CarboTableHead>
+                  <CarboTableHead className="w-[150px] text-right">
+                    <Ord col="valor" fim>Valor</Ord>
+                  </CarboTableHead>
+                  <CarboTableHead className="w-[150px]"><Ord col="situacao">Situação</Ord></CarboTableHead>
                   <CarboTableHead className="w-[112px]">Arquivos</CarboTableHead>
                 </CarboTableRow>
               </CarboTableHeader>
               <CarboTableBody>
-                {lista.map((n) => {
+                {daPagina.map((n) => {
                   // ⚠️ `valor_servico` e `valor_liquido` continuam SEPARADOS no
                   // dado — divergem em 7 das 697, com R$ 6.541,77 de retenção.
                   // O que mudou é só a APRESENTAÇÃO: mostrar os dois em toda
@@ -492,6 +594,37 @@ export default function NfseNacional() {
           )}
         </CarboCardContent>
       </CarboCard>
+
+      {lista.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-2">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span>
+              {(pgSegura - 1) * tamanho + 1}–{Math.min(pgSegura * tamanho, lista.length)} de{" "}
+              <strong className="text-foreground">{lista.length}</strong> notas
+            </span>
+            <select
+              className="h-8 rounded-md border border-border bg-background px-2 text-xs"
+              value={tamanho}
+              onChange={(e) => troca("tam", e.target.value)}
+            >
+              {TAMANHOS.map((t) => <option key={t} value={t}>{t} por página</option>)}
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <CarboButton size="sm" variant="outline" disabled={pgSegura <= 1}
+                         onClick={() => troca("pg", String(pgSegura - 1))}>
+              <ChevronLeft className="h-4 w-4" /> Anterior
+            </CarboButton>
+            <span className="text-xs text-muted-foreground whitespace-nowrap">
+              Página {pgSegura} de {paginas}
+            </span>
+            <CarboButton size="sm" variant="outline" disabled={pgSegura >= paginas}
+                         onClick={() => troca("pg", String(pgSegura + 1))}>
+              Próxima <ChevronRight className="h-4 w-4" />
+            </CarboButton>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
