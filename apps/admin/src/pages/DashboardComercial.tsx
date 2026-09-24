@@ -99,6 +99,41 @@ function GrowthSub({ label, pct, value, refLine }: { label: string; pct: number 
 // ⚠️ `descarbonizacao` NÃO vem de `segmento` — não existe pedido com esse
 // canal em `carboze_orders`. Ele sai da NFS-e, e o card o busca em `servicos`.
 // Criar o valor na coluna `segmento` seria inventar pedido de serviço no Bling.
+// Participação sobre a MESMA base do número grande do card. Base diferente
+// engana calado, e por isso o rótulo dela vai escrito na tela ("dos packs" /
+// "dos itens"), não só aqui.
+const pctDe = (v: number, total: number) => (total > 0 ? `${((v / total) * 100).toFixed(1)}%` : "—");
+
+/** Card de produto — o mesmo formato da tela de Vendas Online. */
+function UnidadeCard({ nome, codigo, mapeado, numero, rotulo, detalhe, aviso }: {
+  nome: string; codigo: string | null; mapeado: boolean;
+  numero: number; rotulo: string; detalhe: string; aviso: string | null;
+}) {
+  // Sem mapeamento o multiplicador é desconhecido e o número é um PISO. O card
+  // diz isso na cara — somá-lo aos outros apagaria a pista de que falta cadastro.
+  const cor = mapeado ? "#a78bfa" : "#f59e0b";
+  return (
+    <div className="rounded-xl border border-border bg-board-surface/60 p-3 flex flex-col gap-1 transition-all hover:-translate-y-0.5"
+         style={{ borderLeftColor: cor, borderLeftWidth: 3 }}
+         title={`${nome}${codigo ? ` · ${codigo}` : ""}\n${numero.toLocaleString("pt-BR")} ${rotulo}\n${detalhe}`}>
+      <div className="flex items-start justify-between gap-1.5">
+        <p className="text-[11px] font-medium text-board-muted leading-tight line-clamp-2">{nome}</p>
+        <div className="p-1 rounded-lg shrink-0" style={{ background: cor + "20", color: cor }}>
+          <Package className="h-4 w-4" />
+        </div>
+      </div>
+      <p className="text-lg font-bold leading-none text-board-text tabular-nums">
+        {numero.toLocaleString("pt-BR")}
+        <span className="text-[11px] font-medium text-board-muted ml-1">{rotulo}</span>
+      </p>
+      <p className="text-[11px] text-board-muted leading-snug">
+        {detalhe}
+        {aviso && <span className="text-amber-500"> · {aviso}</span>}
+      </p>
+    </div>
+  );
+}
+
 const CANAL_CARDS: { key: CanalKey | "naoClassificado" | "descarbonizacao"; label: string; accent: string; bar: string; text: string }[] = [
   { key: "consumo", label: "Consumo (B2B)", accent: "border-l-blue-500", bar: "bg-blue-500", text: "text-blue-400" },
   { key: "revenda", label: "Revenda (PDV)", accent: "border-l-amber-400", bar: "bg-amber-400", text: "text-amber-500" },
@@ -337,6 +372,17 @@ export default function DashboardComercial() {
       return { ...pt, real: real && real > 0 ? real : null };
     });
   })();
+
+  // ⚠️ Duas listas a partir da MESMA agregação. Um produto vendido nos dois
+  // canais aparece nas duas, com o número de cada uma — é o que deixa comparar
+  // "quanto saiu por fora" contra "quanto a equipe vendeu" sem somar unidades
+  // diferentes.
+  const unidadesOnline = (unidades?.produtos ?? [])
+    .filter((p) => p.onPacks > 0)
+    .sort((a, b) => b.onUnidades - a.onUnidades || b.onReceita - a.onReceita);
+  const unidadesEquipe = (unidades?.produtos ?? [])
+    .filter((p) => p.eqItens > 0)
+    .sort((a, b) => b.eqItens - a.eqItens || b.eqReceita - a.eqReceita);
 
   const hasData = (monthly.reduce((s, m) => s + m.pedidos, 0)) > 0;
 
@@ -719,107 +765,70 @@ export default function DashboardComercial() {
           </div>
         </div>
 
-        {/* 8.5 Unidades vendidas — on-line e equipe, por produto */}
+        {/* 8.5 Unidades vendidas — DUAS seções separadas, on-line e equipe.
+            ⚠️ Elas não se somam num número só: o on-line conta PACKS (o que a
+            plataforma anunciou) e a equipe conta ITENS DO CATÁLOGO. O kit de
+            sachês é o caso — 1 pack entrega 10 sachês e 1 item de catálogo
+            TAMBÉM é o kit de 10. Um total único diria 2 onde foram 20. */}
         <div className="flex items-center gap-2 pt-2">
           <div className="h-px flex-1 bg-border" />
           <span className="text-xs font-semibold uppercase tracking-wider text-board-muted">Unidades Vendidas</span>
           <div className="h-px flex-1 bg-border" />
         </div>
 
-        <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">
-          <div className="border-b border-border px-6 py-3">
-            <h2 className="text-base font-bold text-board-text flex items-center gap-2"><Package className="h-4 w-4 text-cyan-400" /> Unidades por Produto</h2>
-            <p className="text-xs text-board-muted mt-0.5">
-              Quantas unidades chegaram ao cliente, separadas por origem · on-line conta <span className="font-semibold">packs × unidades do pack</span>, equipe conta <span className="font-semibold">itens do catálogo × unidades do item</span>
-            </p>
+        {erroUnidades && (
+          <div className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/[0.06] px-3 py-2.5 text-sm">
+            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-destructive" />
+            <p className="text-xs text-board-muted">Não foi possível carregar as unidades: {(erroUnidades as { message?: string })?.message ?? "erro desconhecido"}</p>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 items-start">
+          {/* ── On-line ───────────────────────────────────────────────────── */}
+          <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">
+            <div className="border-b border-border px-6 py-3">
+              <h2 className="text-base font-bold text-board-text flex items-center gap-2"><Globe className="h-4 w-4 text-blue-400" /> Unidades · On-line</h2>
+              <p className="text-xs text-board-muted mt-0.5">
+                <span className="font-semibold text-blue-500">{fmtNum(unidades?.onUnidades ?? 0)} unidades</span> ao cliente · {fmtNum(unidades?.onPacks ?? 0)} packs · {fmtK(unidades?.onReceita ?? 0)}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5 p-3">
+              {(unidadesOnline ?? []).map((p) => (
+                <UnidadeCard key={p.key} nome={p.nome} codigo={p.productCode} mapeado={p.mapeado}
+                             numero={p.onPacks} rotulo="packs"
+                             detalhe={`${pctDe(p.onPacks, unidades?.onPacks ?? 0)} dos packs · ${fmtNum(p.onUnidades)} un. · ${fmtK(p.onReceita)}`}
+                             aviso={!p.mapeado ? "sem mapa, é o mínimo" : null} />
+              ))}
+              {unidades && unidadesOnline.length === 0 && (
+                <p className="col-span-full py-6 text-center text-xs text-board-muted">Nenhuma venda on-line no período.</p>
+              )}
+            </div>
           </div>
 
-          {unidades ? (
-            <>
-              <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-border/50 border-b border-border">
-                <div className="px-4 py-3">
-                  <p className="text-[10px] font-bold text-board-muted uppercase tracking-widest">On-line</p>
-                  <p className="mt-1 text-2xl font-bold tabular-nums leading-none text-blue-500">{fmtNum(unidades.onUnidades)} <span className="text-sm font-semibold text-board-muted">un.</span></p>
-                  <p className="mt-1 text-[11px] text-board-muted tabular-nums">{fmtNum(unidades.onPacks)} packs · {fmtK(unidades.onReceita)}</p>
-                </div>
-                <div className="px-4 py-3">
-                  <p className="text-[10px] font-bold text-board-muted uppercase tracking-widest">Equipe / balcão</p>
-                  <p className="mt-1 text-2xl font-bold tabular-nums leading-none text-green-500">
-                    {unidades.eqUnidades === null ? "—" : fmtNum(unidades.eqUnidades)} <span className="text-sm font-semibold text-board-muted">un.</span>
-                  </p>
-                  <p className="mt-1 text-[11px] text-board-muted tabular-nums">{fmtNum(unidades.eqItens)} itens · {fmtK(unidades.eqReceita)}</p>
-                </div>
-                <div className="px-4 py-3">
-                  <p className="text-[10px] font-bold text-board-muted uppercase tracking-widest">Total</p>
-                  <p className="mt-1 text-2xl font-bold tabular-nums leading-none text-cyan-500">
-                    {unidades.totalUnidades === null ? "—" : fmtNum(unidades.totalUnidades)} <span className="text-sm font-semibold text-board-muted">un.</span>
-                  </p>
-                  <p className="mt-1 text-[11px] text-board-muted tabular-nums">{fmtK(unidades.onReceita + unidades.eqReceita)}</p>
-                </div>
-              </div>
-
-              {/* ⚠️ A lista de produtos sem fator é a LISTA DE TRABALHO, e ela
-                  fica no topo, não escondida num rodapé: enquanto ela existe,
-                  o total da equipe é "—". Um total que ignora o que não sabe
-                  somar é um total errado que parece certo. */}
-              {unidades.semFator.length > 0 && (
-                <div className="flex items-start gap-2 border-b border-border bg-amber-400/[0.07] px-4 py-2.5">
-                  <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-500" />
-                  <p className="text-xs text-board-muted">
-                    <span className="font-semibold text-amber-500">Sem fator de unidades</span> para {unidades.semFator.length} produto(s):{" "}
-                    {unidades.semFator.slice(0, 6).join(" · ")}{unidades.semFator.length > 6 ? " · …" : ""}.
-                    {" "}Quantas unidades vale UM item do catálogo sai do cadastro de SKU (Ops → Suprimentos → Mapeamento SKU).
-                    Sem isso a soma da equipe não é calculada — em vez de ser calculada errado.
-                  </p>
-                </div>
+          {/* ── Equipe / balcão ───────────────────────────────────────────── */}
+          <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">
+            <div className="border-b border-border px-6 py-3">
+              <h2 className="text-base font-bold text-board-text flex items-center gap-2"><ShoppingCart className="h-4 w-4 text-green-500" /> Unidades · Equipe / balcão</h2>
+              {/* ⚠️ O número grande da equipe é o ITEM DO CATÁLOGO, e o rótulo
+                  diz isso. Chamá-lo de "unidade" faria o kit de sachês valer 1
+                  ao lado de um frasco que também vale 1 — o mesmo erro que
+                  somar packs com itens. */}
+              <p className="text-xs text-board-muted mt-0.5">
+                <span className="font-semibold text-green-500">{fmtNum(unidades?.eqItens ?? 0)} itens</span> do catálogo · venda direta e revenda · {fmtK(unidades?.eqReceita ?? 0)}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5 p-3">
+              {(unidadesEquipe ?? []).map((p) => (
+                <UnidadeCard key={p.key} nome={p.nome} codigo={p.productCode} mapeado
+                             numero={p.eqItens} rotulo="itens"
+                             detalhe={`${pctDe(p.eqItens, unidades?.eqItens ?? 0)} dos itens · ${p.eqUnidades != null && p.eqUnidades !== p.eqItens ? `${fmtNum(p.eqUnidades)} un. · ` : ""}${fmtK(p.eqReceita)}`}
+                             aviso={p.eqBonificadas > 0 ? `inclui ${fmtNum(p.eqBonificadas)} bonif.` : null} />
+              ))}
+              {unidades && unidadesEquipe.length === 0 && (
+                <p className="col-span-full py-6 text-center text-xs text-board-muted">Nenhuma venda da equipe no período.</p>
               )}
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border text-left text-[11px] uppercase tracking-wider text-board-muted">
-                      <th className="px-4 py-2 font-semibold">Produto</th>
-                      <th className="px-3 py-2 font-semibold text-right">On-line (un.)</th>
-                      <th className="px-3 py-2 font-semibold text-right">packs</th>
-                      <th className="px-3 py-2 font-semibold text-right">Equipe (un.)</th>
-                      <th className="px-3 py-2 font-semibold text-right">itens</th>
-                      <th className="px-3 py-2 font-semibold text-right">Total (un.)</th>
-                      <th className="px-4 py-2 font-semibold text-right">Faturamento</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {unidades.produtos.map((p) => (
-                      <tr key={p.key} className="border-b border-border/50 last:border-0 hover:bg-accent/30">
-                        <td className="px-4 py-2">
-                          <span className="font-medium text-board-text">{p.nome}</span>
-                          {p.productCode && <span className="ml-1.5 text-[11px] text-board-muted">{p.productCode}</span>}
-                          {/* Linha que não resolve para produto do cadastro é
-                              DITA, nunca fundida num produto conhecido: é ela
-                              que aponta o mapa de SKU que falta. */}
-                          {!p.mapeado && <span className="ml-1.5 rounded bg-amber-400/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-500">sem mapa</span>}
-                        </td>
-                        <td className="px-3 py-2 text-right tabular-nums font-semibold text-blue-500">{p.onUnidades ? fmtNum(p.onUnidades) : "—"}</td>
-                        <td className="px-3 py-2 text-right tabular-nums text-board-muted">{p.onPacks ? fmtNum(p.onPacks) : "—"}</td>
-                        <td className="px-3 py-2 text-right tabular-nums font-semibold text-green-500">
-                          {p.eqUnidades === null ? <span className="text-amber-500" title="Fator de unidades desconhecido ou ambíguo">—</span> : p.eqUnidades ? fmtNum(p.eqUnidades) : "—"}
-                        </td>
-                        <td className="px-3 py-2 text-right tabular-nums text-board-muted">
-                          {p.eqItens ? fmtNum(p.eqItens) : "—"}
-                          {p.eqBonificadas > 0 && <span className="ml-1 text-[10px] text-cyan-500">+{fmtNum(p.eqBonificadas)} bonif.</span>}
-                        </td>
-                        <td className="px-3 py-2 text-right tabular-nums font-bold text-board-text">{p.totalUnidades === null ? "—" : fmtNum(p.totalUnidades)}</td>
-                        <td className="px-4 py-2 text-right tabular-nums">{fmtK(p.totalReceita)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          ) : (
-            <p className="py-10 text-center text-sm text-board-muted">
-              {erroUnidades ? `Não foi possível carregar: ${(erroUnidades as { message?: string })?.message ?? "erro desconhecido"}` : "Carregando…"}
-            </p>
-          )}
+            </div>
+          </div>
         </div>
 
         {/* 9. Footer */}
