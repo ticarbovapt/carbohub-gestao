@@ -2474,6 +2474,42 @@ Outras decisões que não se desfazem sem entender:
    fechar e a conferência ficar impossível — a razão de o usuário bloqueado não
    sumir da tela de Usuários.
 
+⚠️ **O parse do XML é MATERIALIZADO** (`carbo_nfse_notas_mat`,
+`carbo_nfse_eventos_mat`), e isso corrigiu um timeout real: com 697 notas a
+tela dava `canceling statement due to statement timeout`. A conta que eu não
+tinha feito ao defender "interpreta na leitura": ~20 `xpath` × 697 notas é
+~14 mil parses por abertura, **mais** três `left join lateral` sobre uma view
+que também parseia XML — reavaliada POR LINHA. É a família dos tetos
+silenciosos daqui (`lerTudo`, o `.limit(200)` do chat): funciona até o volume
+cruzar. Na sonda eram 50 documentos e era instantâneo.
+
+Isso **não revoga** a regra: o guardado continua sendo o XML CRU e a
+interpretação continua DERIVADA. Mudou o MOMENTO — na ingestão, não a cada
+clique. O que se perde: a correção só vale depois de `carbo_nfse_atualizar()`,
+e por isso o `carbo_nfse_gravar_lote` o chama **quando grava algo** (o cron é
+de 1 h e quase sempre volta vazio; recalcular à toa pegaria o lock por nada).
+
+⚠️ **MATVIEW NÃO TEM RLS nem aceita `security_invoker`.** Grant ali é
+vazamento direto pelo PostgREST — CNPJ, endereço e telefone de fornecedor para
+o portal de lojas e o de licenciados, que usam a MESMA `profiles`. Por isso as
+matviews não têm grant nenhum, e as views de leitura **rodam como DONO** e se
+guardam no próprio `WHERE` com `carbo_e_time_interno()` — molde de
+`carbo_usuarios_bloqueados` e `ml_accounts_public`. É o INVERSO do que valia
+antes nesta mesma integração, e inverter sem entender reabre o furo.
+
+⚠️ **E os `lateral` leem as MATVIEWS, não as views.** View sobre view faria a
+guarda ser avaliada por linha — exatamente a reavaliação que causou o timeout.
+
+⚠️ **Consequência prática: `carbo_nfse_visao` volta VAZIA no SQL Editor**, e
+isso NÃO é defeito. O editor roda como `postgres`, sem JWT, então `auth.uid()`
+é nulo e a guarda devolve false. Para conferir por lá, pergunte à matview
+(`carbo_nfse_notas_mat`), que o editor lê como dono. Confundir isso com "a
+integração quebrou" é meia hora perdida.
+
+⚠️ **`refresh` SEM `concurrently`**: função plpgsql já é uma transação, e o
+`concurrently` é recusado dentro de bloco transacional. O índice único existe
+assim mesmo, para o dia em que valer chamar de fora de uma função.
+
 ⚠️ **O menu do Finanças tem DOIS lugares, igual ao do Ops** — e eu caí nessa no
 mesmo dia em que escrevi a regra para o Ops. Rota nova precisa de
 `src/lib/financasNav.ts` (ícone e rótulo) **e** da lista de grupos em
