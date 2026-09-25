@@ -84,6 +84,30 @@ create unique index if not exists warehouses_licenciado_loja_uidx
 create index if not exists idx_warehouses_kind_licenciado
   on public.warehouses (kind) where kind = 'licenciado';
 
+-- ⚠️ O SEGUNDO CHECK, e ele não perdoa: `warehouses_owner_coerente` diz
+-- "vendedor tem dono, hub não tem" — e um terceiro tipo simplesmente NÃO CABE
+-- nele. Medido em 25/09/2026: o backfill abortou inteiro com 23514 na
+-- primeira loja, depois de os dois blocos anteriores terem passado.
+--
+-- É a mesma armadilha da plataforma nova que entrou em três CHECKs, não um: a
+-- busca certa procura pelo VALOR, não pelo nome da coluna — e mesmo ela só
+-- ajuda se alguém LER a saída.
+--
+-- A regra do licenciado não é "deixa passar": é dono NULO (não é a caixa de
+-- uma pessoa) e loja PREENCHIDA. Sem a segunda metade, um armazém de
+-- licenciado sem loja nenhuma entraria — e o aceite não teria para onde
+-- creditar, sem erro.
+do $$
+begin
+  alter table public.warehouses drop constraint if exists warehouses_owner_coerente;
+  alter table public.warehouses
+    add constraint warehouses_owner_coerente check (
+      (kind = 'vendedor'   and owner_id is not null and licenciado_loja_id is null)
+      or (kind = 'hub'        and owner_id is null     and licenciado_loja_id is null)
+      or (kind = 'licenciado' and owner_id is null     and licenciado_loja_id is not null)
+    );
+end $$;
+
 
 -- ╔═══════════════════════════════════════════════════════════════════════╗
 -- ║ BLOCO 2 — criar/achar o armazém de uma loja                           ║
