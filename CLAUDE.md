@@ -121,6 +121,68 @@ e dois lugares de errar.
 6. **Serviço de descarbonização ficou fora**: não é produto de catálogo, não
    tem gêmeo e não move estoque. O switch de bonificação dele permanece.
 
+### Envio do Hub Natal para LICENCIADO — o crédito é no ACEITE
+Pedido do dono do processo em 25/09/2026. O "Registrar envio" do Ops oferece os
+licenciados como destino; o saldo sai de Natal e o licenciado só conta o que
+recebeu depois do aceite, na tela dele.
+
+```
+public.warehouses  kind='licenciado' + licenciado_loja_id   o armazém de cada loja
+carbo_licenciado_recebimentos(uuid)   a fila do app deles (roda como DONO)
+carbo_licenciado_estoque_meu(uuid)    o estoque por produto (idem)
+ops_transfer_confirm                  o aceite — e o ROTEAMENTO do crédito
+licenciados.app_settings              chave `reagente_product_id` (CADASTRO)
+supabase/migrations/20261009000000_envio_para_licenciado.sql
+supabase/migrations/20261010000000_licenciado_novo_ganha_armazem.sql
+carbohub-licenciados  src/components/stock/Recebimentos.tsx   (OUTRO repo)
+```
+
+1. **Reusa `warehouses`, não cria tabela nova** — a mesma decisão das caixas de
+   vendedor, e pelo mesmo motivo: `warehouse_stock`, `stock_movements` e
+   `stock_transfers` já giram em torno de `warehouse_id`, então saída, trânsito,
+   aceite, estorno e auditoria vêm prontos. `ops_transfer_register` resolve por
+   `code` e não filtra `kind` — não precisou ser tocada.
+2. ⚠️ **DUAS CASAS, e cada produto tem UMA.** Reagente vai para
+   `licenciados.reagent_stock` (é o que `register_service` debita e o
+   `/inventory` deles lê); os demais vão para `warehouse_stock`. Frasco de
+   reagente em `warehouse_stock` a OS **nunca veria** — o licenciado receberia
+   carga e continuaria "sem reagente". Creditar nos DOIS criaria o par que
+   diverge. Qual produto é o reagente é CADASTRO, e **chave ausente RECUSA o
+   aceite**: creditar no lugar errado some com a carga sem erro.
+3. ⚠️ **A fila sai de FUNÇÃO própria, nunca de `grant` em
+   `carbo_transferencias`.** Aquela view é `security_invoker` sobre
+   `stock_transfers` e `warehouses`: liberá-la mostraria a logística inteira da
+   Carbo a outra empresa — o furo da `bling2_esteira`, que o portal de lojas e o
+   de licenciados enxergariam por usarem a MESMA `profiles`. As duas funções
+   rodam como dono, se guardam no próprio corpo e **ignoram o `p_loja` de quem
+   não manda**.
+4. ⚠️ **TRÊS tropeços de banco, todos medidos, e todos silenciosos de um jeito
+   diferente:**
+   - `warehouses_owner_coerente` é um SEGUNDO CHECK ("vendedor tem dono, hub não
+     tem") e um terceiro tipo **não cabe** nele. O BLOCO 0 já o mostrava — mas o
+     SQL Editor exibe só o resultado da ÚLTIMA consulta do bloco, então a saída
+     que importava não foi vista. **Consulta de medição acompanhada de outras no
+     mesmo bloco é consulta que ninguém lê.**
+   - `create or replace view` só aceita coluna nova **no fim**: no meio, ele
+     recusa com `42P16 cannot change name of view column`.
+   - ⚠️ `RETURNS TABLE` exige `::text` em toda coluna de texto — `warehouses.name`
+     e companhia são `varchar`. Sem o cast a função é **criada sem reclamar** e
+     falha só na CHAMADA, com `structure of query does not match function result
+     type`.
+5. ⚠️ **Falha de consulta não pode virar "nada".** A primeira versão do card
+   devolvia `[]` quando a RPC errava, e a tela ficava idêntica a "não há envio
+   nenhum". Três hipóteses foram gastas nesse escuro (cache de esquema, guarda,
+   bundle antigo) — todas erradas. Quem resolveu foi a tela passar a MOSTRAR o
+   erro do banco.
+6. **O aceite mora na LINHA do licenciado**, com o selo "N a aceitar" visível
+   ANTES do clique. Um card solto no meio da página não foi achado — e, sem
+   envio pendente, ele nem renderizava: "não subiu" ficava igual a "não há
+   nada". Uma leitura só alimenta o selo e o popup, então eles não têm como
+   discordar.
+7. **Licenciado novo ganha armazém sozinho** (gatilho em `licenciados.lojas`),
+   e o nome do armazém acompanha o da loja. Sem isso, loja renomeada apareceria
+   no seletor com o nome antigo e quem envia escolheria errado, sem erro.
+
 ### Estoque do vendedor / pronta entrega
 Base: o briefing de domínio "Carbo Core · Comercial NE · v1". As fases são
 ordenadas e **antecipar produz tela sem dado**. Fase 1 = registro de visita
