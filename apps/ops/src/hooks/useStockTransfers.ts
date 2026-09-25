@@ -89,10 +89,14 @@ export function useStockTransfers() {
   });
 }
 
-/** Os estoques que podem ser origem ou destino: hubs + caixas de vendedor. */
+/** Os estoques que podem ser origem ou destino: hubs, caixas de vendedor e
+ *  licenciados. O `select("*")` abaixo traz a coluna nova sozinho — mas o TIPO
+ *  precisa dela, senão o agrupamento da tela não compila. */
 export interface EstoqueOpcao {
   id: string; code: string; name: string; kind: string;
   owner_id: string | null; dono_nome: string | null;
+  /** Só em `kind = 'licenciado'`: a loja de `licenciados.lojas`. */
+  licenciado_loja_id?: string | null;
 }
 
 export function useEstoques() {

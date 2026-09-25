@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
-import { Send, Plus, Trash2, Loader2, ArrowRight, Warehouse, User } from "lucide-react";
+import { Send, Plus, Trash2, Loader2, ArrowRight, Warehouse, User, Store } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -52,6 +52,15 @@ export function CDSPRegistrarEnvioDialog({
 
   const hubs = useMemo(() => estoques.filter((e) => e.kind === "hub"), [estoques]);
   const caixas = useMemo(() => estoques.filter((e) => e.kind === "vendedor"), [estoques]);
+  // ⚠️ Licenciado é um TERCEIRO grupo, não "mais um galpão". O que chega lá
+  // vira estoque de outra empresa: o reagente entra no saldo que autoriza a
+  // OS de descarbonização deles. Misturar com os galpões faria escolher um
+  // licenciado por engano parecer um erro de digitação sem consequência.
+  const licenciados = useMemo(
+    () => estoques.filter((e) => e.kind === "licenciado")
+      .sort((a, b) => a.name.localeCompare(b.name, "pt-BR")),
+    [estoques],
+  );
   const origemNome = estoques.find((e) => e.code === origem)?.name ?? origem;
 
   const addRow = () => setRows((r) => [...r, newRow()]);
@@ -162,6 +171,16 @@ export function CDSPRegistrarEnvioDialog({
                         <SelectItem key={h.code} value={h.code}>{h.name}</SelectItem>
                       ))}
                     </SelectGroup>
+                    {licenciados.length > 0 && (
+                      <SelectGroup>
+                        <SelectLabel className="flex items-center gap-1.5 text-[11px]">
+                          <Store className="h-3 w-3" /> Licenciados
+                        </SelectLabel>
+                        {licenciados.filter((l) => l.code !== origem).map((l) => (
+                          <SelectItem key={l.code} value={l.code}>{l.name}</SelectItem>
+                        ))}
+                      </SelectGroup>
+                    )}
                     {caixas.length > 0 && (
                       <SelectGroup>
                         <SelectLabel className="flex items-center gap-1.5 text-[11px]">
