@@ -152,6 +152,19 @@ export default function Suprimentos() {
   const periodo = periodoValido(pUrl) ? pUrl : (periodoValido(leiaLocal("ops_sup_periodo")) ? leiaLocal("ops_sup_periodo") : "7d");
   const customFrom = searchParams.get("de") ?? (pUrl ? "" : leiaLocal("ops_sup_from"));
   const customTo = searchParams.get("ate") ?? (pUrl ? "" : leiaLocal("ops_sup_to"));
+  // ── Filtros da aba Movimentações ────────────────────────────────────────
+  // Na URL, como o período: o link copiado da barra leva o recorte junto, e o
+  // F5 não devolve a lista inteira. Sem `localStorage` de propósito — período
+  // é preferência ("eu trabalho em 30 dias"), busca de produto é pergunta
+  // ("cadê o sachê"), e pergunta grudenta volta semana que vem parecendo dado
+  // atual.
+  const movBusca = searchParams.get("mov") ?? "";
+  const movTipo = searchParams.get("tipo") ?? "";
+  const aplicaFiltroMov = (chave: "mov" | "tipo", valor: string) => {
+    const sp = new URLSearchParams(searchParams);
+    if (valor) sp.set(chave, valor); else sp.delete(chave);
+    setSearchParams(sp, { replace: true });
+  };
 
   // Escreve na URL (histórico normal: o Voltar desfaz a troca de período) e
   // lembra a preferência para a próxima sessão.
@@ -264,6 +277,7 @@ export default function Suprimentos() {
   // hipótese.
   const { data: movsPeriodo = [], isLoading: movLoading } = useStockMovements(
     HUB_CODE[hub], range.from.toISOString(), range.to.toISOString(),
+    300, movBusca, movTipo,
   );
   // KPIs de movimentação contados DIRETO no banco (sem o cap de 300 da lista — C10).
   const { data: movStats } = useStockMovementStats(HUB_CODE[hub], range.from.toISOString(), range.to.toISOString());
@@ -396,7 +410,11 @@ export default function Suprimentos() {
         {!isBling && !isMlFull && (
           <div className="space-y-2">
             <div className="flex items-center gap-2 justify-end flex-wrap">
-              <span className="text-xs text-muted-foreground">Período dos KPIs:</span>
+              {/* ⚠️ O rótulo dizia "Período dos KPIs" e ele também recorta a
+                  LISTA de movimentações — quem procurava por data não percebia
+                  que o controle já era este. Controle que governa duas coisas
+                  e anuncia uma só é controle que ninguém usa para a segunda. */}
+              <span className="text-xs text-muted-foreground">Período (KPIs e movimentações):</span>
               {periodo === "custom" && (
                 <div className="flex items-center gap-1.5">
                   <Input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className="h-7 w-[140px] text-xs" />
@@ -458,10 +476,64 @@ export default function Suprimentos() {
           </TabsContent>
 
           {/* Movimentações */}
-          <TabsContent value="movimentacoes" className="mt-4">
+          <TabsContent value="movimentacoes" className="mt-4 space-y-3">
+            {/* ── Filtros da lista ──────────────────────────────────────────
+                Produto e tipo são resolvidos NO SERVIDOR (ver
+                `useStockMovements`). A data já vem do seletor de período lá em
+                cima — repeti-la aqui criaria dois donos do mesmo recorte. */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative flex-1 min-w-[220px]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  value={movBusca}
+                  onChange={(e) => aplicaFiltroMov("mov", e.target.value)}
+                  placeholder="Filtrar por produto ou código…"
+                  className="pl-9 h-9"
+                />
+              </div>
+              <Select value={movTipo || "todos"} onValueChange={(v) => aplicaFiltroMov("tipo", v === "todos" ? "" : v)}>
+                <SelectTrigger className="h-9 w-[150px] text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Entradas e saídas</SelectItem>
+                  <SelectItem value="entrada">Só entradas</SelectItem>
+                  <SelectItem value="saida">Só saídas</SelectItem>
+                </SelectContent>
+              </Select>
+              {(movBusca || movTipo) && (
+                <Button variant="ghost" size="sm" className="h-9"
+                  onClick={() => { const sp = new URLSearchParams(searchParams); sp.delete("mov"); sp.delete("tipo"); setSearchParams(sp, { replace: true }); }}>
+                  Limpar
+                </Button>
+              )}
+              <p className="text-xs text-muted-foreground ml-auto">
+                {movsPeriodo.length} movimentaç{movsPeriodo.length === 1 ? "ão" : "ões"} · {periodLabel}
+              </p>
+            </div>
+
+            {/* ⚠️ O TETO É DITO. A consulta traz no máximo 300 linhas, e este
+                hub já passa disso — foram 309 em 30 dias. Sem este aviso, a
+                lista pareceria completa e alguém concluiria que não houve
+                movimento do que está faltando. O filtro de produto é a saída:
+                ele roda no servidor e cabe dentro do teto. */}
+            {movsPeriodo.length >= 300 && (
+              <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/[0.07] px-3 py-2 text-xs">
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-px text-amber-500" />
+                <span className="text-muted-foreground">
+                  Mostrando as <b className="text-foreground">300 mais recentes</b> do período — há mais.
+                  Filtre por produto ou encurte o período para ver o resto.
+                </span>
+              </div>
+            )}
+
             {movLoading ? (
               <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</div>
-            ) : movsPeriodo.length === 0 ? <CarboEmptyState title="Nenhuma movimentação neste hub" description="Entradas, saídas e ajustes deste hub aparecem aqui." /> : (
+            ) : movsPeriodo.length === 0 ? (
+              <CarboEmptyState
+                title={movBusca || movTipo ? "Nada encontrado com estes filtros" : "Nenhuma movimentação neste hub"}
+                description={movBusca || movTipo
+                  ? "Nenhuma movimentação deste hub no período combina com o filtro. Limpe o filtro ou amplie o período."
+                  : "Entradas, saídas e ajustes deste hub aparecem aqui."} />
+            ) : (
             <div className="rounded-lg border bg-card overflow-x-auto">
               <Table>
                 <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Produto</TableHead><TableHead>Tipo</TableHead><TableHead className="text-right">Qtd</TableHead><TableHead>Por</TableHead><TableHead>Origem</TableHead><TableHead>Card</TableHead></TableRow></TableHeader>

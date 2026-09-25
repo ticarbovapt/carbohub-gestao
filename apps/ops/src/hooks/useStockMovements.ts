@@ -73,9 +73,23 @@ export function useStockMovements(
   fromISO?: string,
   toISO?: string,
   limit = 300,
+  /**
+   * Texto do filtro de produto (nome ou código).
+   *
+   * ⚠️ O filtro é resolvido NO SERVIDOR, e não com um `.filter()` sobre a
+   * lista já carregada. Esta consulta tem teto de 300 linhas, e o hub passa
+   * disso (309 movimentações em 30 dias, medido em 25/09/2026): filtrar em
+   * memória procuraria o produto só dentro das 300 mais recentes e devolveria
+   * "nada encontrado" para um produto que teve movimento no período. Filtro
+   * que mente é pior que filtro ausente — quem procura conclui que não houve
+   * movimento.
+   */
+  produtoBusca?: string,
+  /** 'entrada' | 'saida' — também no servidor, pelo mesmo motivo. */
+  tipo?: string,
 ) {
   return useQuery({
-    queryKey: ["ops", "stock-movements", warehouseCode, fromISO, toISO, limit],
+    queryKey: ["ops", "stock-movements", warehouseCode, fromISO, toISO, limit, produtoBusca ?? "", tipo ?? ""],
     enabled: !!warehouseCode,
     queryFn: async (): Promise<StockMovement[]> => {
       // O id do hub tem de ser resolvido antes: stock_movements guarda
@@ -87,6 +101,23 @@ export function useStockMovements(
       // vazia em vez de trazer o mundo inteiro sem filtro.
       if (!hubId) return [];
 
+      // O texto vira LISTA DE IDS, contra o catálogo inteiro — não contra os
+      // produtos que por acaso apareceram nesta página de movimentos.
+      let idsFiltro: string[] | null = null;
+      const busca = (produtoBusca ?? "").trim();
+      if (busca) {
+        const alvo = busca.replace(/[%,]/g, " ");
+        const prods = await db
+          .from("mrp_products")
+          .select("id")
+          .or(`name.ilike.%${alvo}%,product_code.ilike.%${alvo}%`);
+        if (prods.error) throw prods.error;
+        idsFiltro = (prods.data ?? []).map((p: { id: string }) => p.id);
+        // Nenhum produto casa o texto ⇒ lista vazia, e isso é a resposta
+        // certa. Sem este atalho o `.in()` com array vazio traria TUDO.
+        if (idsFiltro.length === 0) return [];
+      }
+
       let q = db
         .from("stock_movements")
         .select("id, product_id, warehouse_id, tipo, quantidade, origem, observacoes, created_at, created_by, order_id, op_id, ref_externa, executor")
@@ -95,6 +126,8 @@ export function useStockMovements(
         .limit(limit);
       if (fromISO) q = q.gte("created_at", fromISO);
       if (toISO) q = q.lte("created_at", toISO);
+      if (idsFiltro) q = q.in("product_id", idsFiltro);
+      if (tipo === "entrada" || tipo === "saida") q = q.eq("tipo", tipo);
 
       const [movs, products, warehouses, profiles] = await Promise.all([
         q,
