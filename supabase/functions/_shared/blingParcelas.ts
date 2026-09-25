@@ -91,3 +91,48 @@ export function repartirParcelas(
 export function somaParcelas(parcelas: Parcela[]): number {
   return cent((parcelas ?? []).reduce((s, p) => s + (Number(p?.valor) || 0), 0));
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// O desconto que pertence à nota PAGA
+//
+// ⚠️ Caso real (25/09/2026, pedido V2026090081). O Bling recusou:
+//
+//     VALIDATION_ERROR — code 59
+//     "Não é possível salvar uma venda com o valor total negativo"
+//
+// `order.discount` é o AGREGADO dos descontos de todas as linhas — o `/vender`
+// grava `desconto_valor = descontoTotal + servDesconto` —, e a linha do gêmeo
+// de bonificação carrega 100% do próprio valor como desconto. Só que ela não
+// vai nesta nota: vai na remessa, com outra natureza de operação.
+//
+// Mandar o desconto inteiro sobre os itens pagos subtrai um desconto cuja
+// mercadoria não está ali:
+//
+//     itens pagos      R$  1.040,00
+//     desconto enviado R$  1.668,00   (o brinde)
+//     total            R$   -628,00   ← e o Bling recusa a venda inteira
+//
+// É a MESMA família do erro 22 acima, na outra ponta da mesma conta: lá o total
+// das parcelas saía de uma segunda fonte, aqui o desconto. Pedido sem
+// bonificação nunca cai em nenhum dos dois, que é por que isto demorou a
+// aparecer.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ItemComDesconto {
+  is_bonificacao?: boolean | null;
+  discount_amount?: unknown;
+}
+
+/**
+ * O desconto do pedido menos a parte que pertence às linhas de bonificação.
+ *
+ * ⚠️ Nunca negativo: desconto negativo viraria ACRÉSCIMO silencioso na nota.
+ * Pedido cujo desconto é só o do brinde fica corretamente com desconto zero.
+ */
+export function descontoSemBonificacao(
+  descontoDoPedido: unknown, itens: ItemComDesconto[],
+): number {
+  const daBonificacao = (itens ?? []).reduce(
+    (s, it) => s + (it?.is_bonificacao === true ? (Number(it?.discount_amount) || 0) : 0), 0);
+  return cent(Math.max(0, (Number(descontoDoPedido) || 0) - daBonificacao));
+}

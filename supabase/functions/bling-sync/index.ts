@@ -1,6 +1,6 @@
 // bling-sync v3 — Phase 2: stock + vendedores
 import { telefoneParaBling } from "../_shared/telefoneBling.ts";
-import { totalDaVenda, repartirParcelas, somaParcelas } from "../_shared/blingParcelas.ts";
+import { totalDaVenda, repartirParcelas, somaParcelas, descontoSemBonificacao } from "../_shared/blingParcelas.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.39.3";
 
 const ALLOWED_ORIGINS = [
@@ -620,6 +620,21 @@ async function createBlingPedido(
   // 3. Montar itens — tenta encontrar o produto no Bling pelo código
   const rawItems: any[] = Array.isArray(order.items) ? order.items : [];
   let blingItems: any[] = [];
+  // ⚠️ O desconto das linhas de BONIFICAÇÃO, somado à parte.
+  //
+  // `order.discount` é o agregado dos descontos de TODAS as linhas (o
+  // `/vender` grava `desconto_valor = descontoTotal + servDesconto`), e a
+  // linha de bonificação carrega 100% do próprio valor como desconto. Só que
+  // ela NÃO vai neste pedido — vai na remessa. Mandar o desconto inteiro sobre
+  // os itens pagos subtrai um desconto cuja mercadoria não está ali.
+  //
+  // Medido em 25/09/2026 no V2026090081: itens pagos R$ 1.040,00, desconto do
+  // pedido R$ 1.668,00 (o brinde), total enviado R$ −628,00 e o Bling recusa a
+  // venda inteira:
+  //     VALIDATION_ERROR — code 59
+  //     "Não é possível salvar uma venda com o valor total negativo"
+  // Só aparece em pedido com bonificação, que é o caso das duas notas.
+  let descontoDaBonificacao = 0;
   const itemsSummary: Array<{ name: string; matched: boolean; codigo: string }> = [];
 
   // Fallback por LINHA: a venda pode ter sido digitada com o nome livre
@@ -686,6 +701,7 @@ async function createBlingPedido(
     // desconto de linha não é enviado. Sem este zero explícito, a bonificação
     // ia ao Bling a preço cheio e o cliente seria COBRADO pelo brinde.
     const ehBonificacao = item.is_bonificacao === true;
+    if (ehBonificacao) descontoDaBonificacao += Number(item.discount_amount) || 0;
 
     blingItems.push({
       ...(blingProductId
@@ -778,8 +794,13 @@ async function createBlingPedido(
     };
   }
 
-  if (order.discount) {
-    pedidoPayload.desconto = { tipo: 1, valor: Number(order.discount) };
+  // ⚠️ O desconto enviado é o do PEDIDO MENOS o que pertence às linhas de
+  // bonificação, porque elas saíram deste payload. `Math.max(0, …)` porque
+  // desconto negativo viraria acréscimo silencioso — e um pedido cujo desconto
+  // é SÓ o do brinde fica corretamente com desconto zero.
+  const descontoDoPedido = descontoSemBonificacao(order.discount, rawItems);
+  if (descontoDoPedido > 0) {
+    pedidoPayload.desconto = { tipo: 1, valor: descontoDoPedido };
   }
 
   // Pagamento: envia a forma escolhida + parcelas pro Bling (preenche a
@@ -832,6 +853,24 @@ async function createBlingPedido(
         ? " — esperado, porque a bonificação vai numa remessa separada."
         : " — CONFIRA: sem bonificação os dois deveriam bater."),
     );
+  }
+
+  // ⚠️ Total negativo FALHA AQUI, com o motivo, em vez de virar um 400 do
+  // Bling. A mensagem dele ("Não é possível salvar uma venda com o valor total
+  // negativo", code 59) diz o sintoma e não a causa — e a causa é sempre a
+  // mesma conta, que nós temos na mão e ele não.
+  if (totalVenda < 0) {
+    const msg =
+      `O total desta nota ficaria NEGATIVO (R$ ${totalVenda.toFixed(2)}): ` +
+      `itens pagos somam R$ ${totalDaVenda(blingItems).toFixed(2)} e o desconto aplicado é ` +
+      `R$ ${(pedidoPayload.desconto?.valor ?? 0).toFixed(2)}` +
+      (descontoDaBonificacao > 0
+        ? ` (o desconto do pedido é R$ ${Number(order.discount || 0).toFixed(2)}, dos quais ` +
+          `R$ ${descontoDaBonificacao.toFixed(2)} pertencem às linhas de bonificação e saem daqui)`
+        : "") +
+      ". Confira o desconto do pedido antes de enviar.";
+    if (!dryRun) throw new Error(msg);
+    warnings.push(msg);
   }
 
   if (pagInfo.forma && totalVenda > 0) {

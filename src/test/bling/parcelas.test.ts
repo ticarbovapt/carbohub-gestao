@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  totalDaVenda, repartirParcelas, somaParcelas,
+  totalDaVenda, repartirParcelas, somaParcelas, descontoSemBonificacao,
 } from "../../../supabase/functions/_shared/blingParcelas";
 
 /**
@@ -129,5 +129,50 @@ describe("⚠️ ponto flutuante não pode vazar", () => {
       const p = repartirParcelas(total, ["a", "b", "c"], FORMA);
       expect(somaParcelas(p)).toBe(total);
     }
+  });
+});
+
+/**
+ * ⚠️ O segundo caso real: V2026090081, 25/09/2026. O Bling recusou com
+ *
+ *     code 59 — "Não é possível salvar uma venda com o valor total negativo"
+ *
+ * `order.discount` é o agregado dos descontos de TODAS as linhas, e a linha do
+ * gêmeo de bonificação carrega 100% do próprio valor. Ela sai desta nota (vai
+ * na remessa), mas o desconto ia inteiro — subtraindo um desconto cuja
+ * mercadoria não está na nota.
+ */
+describe("desconto: a parte do brinde não pertence à nota paga", () => {
+  it("o caso real — R$ 1.040,00 de itens com R$ 1.668,00 de desconto dava R$ -628,00", () => {
+    const itens = [
+      { is_bonificacao: false, discount_amount: 0 },
+      { is_bonificacao: false, discount_amount: 0 },
+      { is_bonificacao: true,  discount_amount: 1668 },
+    ];
+    expect(descontoSemBonificacao(1668, itens)).toBe(0);
+    expect(totalDaVenda([{ quantidade: 1, valor: 1040 }], descontoSemBonificacao(1668, itens))).toBe(1040);
+  });
+
+  it("desconto comercial de verdade SOBREVIVE — só a parte do brinde sai", () => {
+    const itens = [
+      { is_bonificacao: false, discount_amount: 100 },
+      { is_bonificacao: true,  discount_amount: 400 },
+    ];
+    expect(descontoSemBonificacao(500, itens)).toBe(100);
+  });
+
+  it("pedido sem bonificação não muda nada", () => {
+    const itens = [{ is_bonificacao: false, discount_amount: 250 }];
+    expect(descontoSemBonificacao(250, itens)).toBe(250);
+  });
+
+  it("nunca negativo: desconto negativo viraria acréscimo silencioso", () => {
+    const itens = [{ is_bonificacao: true, discount_amount: 900 }];
+    expect(descontoSemBonificacao(300, itens)).toBe(0);
+  });
+
+  it("modelo ANTIGO (sem is_bonificacao) passa intacto", () => {
+    const itens = [{ discount_amount: 80 }, { discount_amount: 20 }];
+    expect(descontoSemBonificacao(100, itens)).toBe(100);
   });
 });
