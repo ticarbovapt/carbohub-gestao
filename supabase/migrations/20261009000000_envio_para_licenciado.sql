@@ -434,17 +434,23 @@ begin
   end if;
 
   return query
+  -- ⚠️ `::text` em TODA coluna de texto. `warehouses.name`, `mrp_products.name`
+  -- e companhia são `varchar`, e o Postgres compara o tipo declarado no
+  -- RETURNS TABLE coluna a coluna: sem o cast ele recusa com
+  --     structure of query does not match function result type
+  -- na CHAMADA, nunca na criação — a função é criada sem reclamar e só falha
+  -- quando alguém a usa. Mesma regra que o carbohub-produtos já registra.
   select t.id,
          w.licenciado_loja_id,
-         w.name,
-         coalesce(pr.name, t.product_code, 'Produto'),
-         t.product_code,
-         t.quantity,
-         coalesce(pr.stock_unit, 'un'),
-         wf.name,
+         w.name::text,
+         coalesce(pr.name, t.product_code, 'Produto')::text,
+         t.product_code::text,
+         t.quantity::numeric,
+         coalesce(pr.stock_unit, 'un')::text,
+         wf.name::text,
          t.created_at,
-         pa.full_name,
-         t.notes
+         pa.full_name::text,
+         t.notes::text
   from public.stock_transfers t
   join public.warehouses w   on w.id = t.to_hub and w.kind = 'licenciado'
   join public.warehouses wf  on wf.id = t.from_hub
@@ -499,8 +505,9 @@ begin
   end if;
 
   return query
-  select w.licenciado_loja_id, w.name, ws.product_id, pr.product_code,
-         coalesce(pr.name, 'Produto'), coalesce(pr.stock_unit, 'un'), ws.quantity
+  select w.licenciado_loja_id, w.name::text, ws.product_id, pr.product_code::text,
+         coalesce(pr.name, 'Produto')::text, coalesce(pr.stock_unit, 'un')::text,
+         ws.quantity::numeric
   from public.warehouses w
   join public.warehouse_stock ws on ws.warehouse_id = w.id
   left join public.mrp_products pr on pr.id = ws.product_id
