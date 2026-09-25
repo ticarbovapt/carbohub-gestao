@@ -185,11 +185,17 @@ where w.licenciado_loja_id = l.id
 
 create or replace view public.carbo_estoques
 with (security_invoker = true) as
+-- ⚠️ A COLUNA NOVA VAI NO FIM, e isso não é estilo. `create or replace view`
+-- só permite ACRESCENTAR coluna ao final: pôr `licenciado_loja_id` no meio
+-- renomearia as seguintes, e o Postgres recusa com
+--     42P16: cannot change name of view column "dono_nome" to "licenciado_loja_id"
+-- Medido em 25/09/2026, com os 22 armazéns já criados. Mudar a ORDEM de uma
+-- view publicada exige drop + recreate, que derruba as dependentes junto.
 select
   w.id, w.code, w.name, w.kind, w.owner_id,
-  w.licenciado_loja_id,
   p.full_name as dono_nome,
-  coalesce(w.is_active, true) as ativo
+  coalesce(w.is_active, true) as ativo,
+  w.licenciado_loja_id
 from public.warehouses w
 left join public.profiles p on p.id = w.owner_id
 where coalesce(w.is_active, true);
