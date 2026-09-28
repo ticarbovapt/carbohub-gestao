@@ -8,6 +8,7 @@ import {
   ArrowUpRight, ArrowDownRight, Minus, Loader2, Pencil, AlertTriangle, Globe, Wrench, Package,
 } from "lucide-react";
 import { useServicosNfse } from "@/hooks/useServicosNfse";
+import { useDescarbPorte } from "@/hooks/useDescarbPorte";
 import { useUnidadesVendidas } from "@/hooks/useUnidadesVendidas";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { useAuth } from "@/contexts/AuthContext";
@@ -226,6 +227,10 @@ export default function DashboardComercial() {
   const { data: canalMetas } = useCanalMetas(year);
   // Unidades vendidas por produto — o mesmo recorte de período do resto da tela.
   const { data: unidades, error: erroUnidades } = useUnidadesVendidas({ from: filters.from, to: filters.to });
+  // ⚠️ Porte (P/M/G) vem da VENDA, não da nota. O porte não existe na NFS-e:
+  // o detalhe estruturado da descrição acabou em 30/04 (trocaram de emissor —
+  // a numeração reiniciou 2120 → 50) e a palavra "porte" nunca aparece.
+  const { data: porte } = useDescarbPorte({ from: filters.from, to: filters.to });
 
   const canalSeries = useMemo(() => {
     const real = canais?.realByCanal;
@@ -779,6 +784,67 @@ export default function DashboardComercial() {
             ))}
           </div>
         </div>
+
+        {/* 8.4 CarboVAPT por PORTE.
+            ⚠️ A fonte é a VENDA (`carboze_orders`, item kind=service com
+            `modality`), NUNCA a NFS-e. Medido em 28/09: o porte não existe na
+            nota — o detalhe estruturado da descrição (`texto|qtd|unit|total#`)
+            vai de 07/01 a 30/04 e ACABA ali, sem um dia de sobreposição, porque
+            trocaram de emissor (a numeração reiniciou, 2120 → 50). De 04/05 em
+            diante são 172 notas e R$ 461 mil sem detalhe nenhum, e a palavra
+            "porte" não aparece em período nenhum. A `crm_os` está vazia e nem
+            tem a coluna. */}
+        <div className="flex items-center gap-2 pt-2">
+          <div className="h-px flex-1 bg-border" />
+          <span className="text-xs font-semibold uppercase tracking-wider text-board-muted">CarboVAPT por porte</span>
+          <div className="h-px flex-1 bg-border" />
+        </div>
+
+        <p className="-mt-1 text-xs text-board-muted">
+          O porte é escolhido no <Link to="/vender" className="font-semibold text-primary hover:underline">/vender</Link> —
+          lista fechada, preço fixo por modalidade. Período: <span className="font-semibold text-board-text">{periodoLabel}</span>
+          {porte?.primeira && <> · 1ª venda de serviço registrada em <span className="font-semibold text-board-text">{porte.primeira.split("-").reverse().join("/")}</span></>}
+        </p>
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {(porte?.linhas ?? []).map((l) => (
+            <div key={l.porte} className={`rounded-xl border bg-board-surface overflow-hidden ${l.porte === "?" ? "border-amber-400/30" : "border-cyan-500/20"}`}>
+              <div className={`h-1 w-full ${l.porte === "?" ? "bg-amber-400" : "bg-cyan-500"}`} />
+              <div className="px-4 py-3">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="text-sm font-bold text-board-text">{l.rotulo}</span>
+                  {l.preco > 0 && <span className="text-[11px] text-board-muted">{fmtK(l.preco)} / veículo</span>}
+                </div>
+                <p className="text-[11px] text-board-muted">{l.motor}</p>
+                <div className="mt-2 flex items-baseline gap-2">
+                  <span className={`text-2xl font-extrabold ${l.porte === "?" ? "text-amber-500" : "text-cyan-500"}`}>{fmtNum(l.veiculos)}</span>
+                  <span className="text-xs text-board-muted">veículos · {fmtK(l.total)}</span>
+                </div>
+                <p className="mt-0.5 text-[11px] text-board-muted">
+                  {l.pedidos} pedido(s) · {pctDe(l.veiculos, porte?.veiculos ?? 0)} dos veículos
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* ⚠️ A COBERTURA fica colada na seção, não numa caixa distante. Sem
+            ela, um porte em ZERO se lê como "não vendemos esse tamanho" — e a
+            NFS-e desmente: só no período com detalhe são 42 veículos a R$ 700.
+            Medido em 28/09 na janela de agosto: 33,6%. Número sem denominador
+            ao lado é a doença do relatório que só concorda consigo mesmo. */}
+        {porte && (servicos?.descarbonizacao ?? 0) > 0 && (
+          <div className="rounded-lg border border-amber-400/30 bg-amber-400/5 px-3 py-2 text-xs text-board-muted">
+            <span className="font-semibold text-amber-500">
+              Cobertura: {pctDe(porte.total, servicos?.descarbonizacao ?? 0)}
+            </span>
+            {" — "}{fmtK(porte.total)} registrados com porte no /vender, contra {fmtK(servicos?.descarbonizacao ?? 0)} faturados
+            na NFS-e no mesmo período. O que foi faturado direto no emissor <strong className="text-foreground">não tem porte</strong>,
+            e não dá para deduzir: o preço sozinho não separa porte de contrato.
+            {" "}⚠️ As duas bases <strong className="text-foreground">não se somam nem se subtraem</strong> — não existe
+            elo entre o pedido e a nota, então isto é cobertura, não uma divisão do faturamento.
+          </div>
+        )}
 
         {/* 8.5 Unidades vendidas — DUAS seções separadas, on-line e equipe.
             ⚠️ Elas não se somam num número só: o on-line conta PACKS (o que a
