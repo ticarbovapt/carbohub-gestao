@@ -52,6 +52,11 @@ export default function StatusAvisos() {
   const [todos, setTodos] = useState(true);
   const [marcados, setMarcados] = useState<string[]>([]);
   const [previsao, setPrevisao] = useState("");
+  // ⚠️ Quanto tempo a tarja VERDE fica depois do "Encerrar". É do TI, e não
+  // uma constante no código: incidente de 5 min e de meio dia não pedem a
+  // mesma permanência. 0 = some na hora do clique.
+  const [verdeMin, setVerdeMin] = useState(30);
+  const [verdeTexto, setVerdeTexto] = useState("");
 
   const ativos = useMemo(() => (avisos ?? []).filter((a) => a.ativo), [avisos]);
   const encerrados = useMemo(() => (avisos ?? []).filter((a) => !a.ativo), [avisos]);
@@ -68,10 +73,14 @@ export default function StatusAvisos() {
       // para o caso comum é como se esquece uma.
       apps: todos ? [] : marcados,
       previsao_fim: paraIso(previsao),
+      normalizado_minutos: Math.max(0, Math.min(1440, Math.round(verdeMin) || 0)),
+      normalizado_texto: verdeTexto.trim() || null,
     });
     setTitulo("");
     setMensagem("");
     setPrevisao("");
+    setVerdeMin(30);
+    setVerdeTexto("");
     setMarcados([]);
     setTodos(true);
   }
@@ -146,6 +155,39 @@ export default function StatusAvisos() {
               placeholder="Ex.: o Bling está fora do ar. Os pedidos continuam sendo registrados e serão faturados quando voltar."
               maxLength={400}
             />
+          </div>
+
+          <div className="rounded-lg border border-border bg-muted/30 p-3">
+            <Label className="mb-2 block">Quando você encerrar</Label>
+            <p className="mb-3 text-xs text-muted-foreground">
+              A tarja não some na hora: ela fica <strong>verde</strong>, dizendo que normalizou. Quem passou a
+              manhã travado precisa ler isso — senão continua desconfiando e abre o chamado que a tarja
+              existia para evitar.
+            </p>
+            <div className="grid gap-4 sm:grid-cols-[10rem_1fr]">
+              <div>
+                <Label htmlFor="st-verde-min">Manter o verde por (min)</Label>
+                <Input
+                  id="st-verde-min"
+                  type="number"
+                  min={0}
+                  max={1440}
+                  value={verdeMin}
+                  onChange={(e) => setVerdeMin(Number(e.target.value))}
+                />
+                <p className="mt-1 text-xs text-muted-foreground">0 = some no clique.</p>
+              </div>
+              <div>
+                <Label htmlFor="st-verde-txt">Texto do verde (opcional)</Label>
+                <Input
+                  id="st-verde-txt"
+                  value={verdeTexto}
+                  onChange={(e) => setVerdeTexto(e.target.value)}
+                  placeholder="Vazio usa: O problema X foi resolvido e o sistema voltou ao normal."
+                  maxLength={240}
+                />
+              </div>
+            </div>
           </div>
 
           <div>
@@ -266,6 +308,9 @@ function Secao({
                         {s.rotulo} · {nomes} · início {dt(a.inicio_em)}
                         {a.previsao_fim ? ` · previsão ${dt(a.previsao_fim)}` : ""}
                         {a.encerrado_em ? ` · encerrado ${dt(a.encerrado_em)}` : ""}
+                        {a.ativo && (a.normalizado_minutos ?? 0) > 0
+                          ? ` · ao encerrar, verde por ${a.normalizado_minutos} min`
+                          : ""}
                       </p>
                     </div>
                     <div className="shrink-0">{children(a)}</div>

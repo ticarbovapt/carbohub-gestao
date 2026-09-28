@@ -374,17 +374,17 @@ apps/*/src/components/BloqueioAoVivo.tsx   o popup — REPLICADO nos SETE
    publicou a tabela e abriu a própria linha a cada um, com
    `user_id = auth.uid()`). Tabela separada só para avisar seria uma segunda
    verdade sobre o mesmo fato.
-6. ⚠️ **O sinal NÃO substitui a trava.** Realtime fora do ar ⇒ a aba cai na
+7. ⚠️ **O sinal NÃO substitui a trava.** Realtime fora do ar ⇒ a aba cai na
    renovação do token, como antes: o pior caso volta a ser o de ontem, nunca
    "continua entrando". Aviso que falha ABERTO é pior que aviso nenhum.
-7. ⚠️ **O `BloqueioAoVivo` monta ao lado do `<App />`, dentro do
+8. ⚠️ **O `BloqueioAoVivo` monta ao lado do `<App />`, dentro do
    `AuthProvider`** (`main.tsx`), NUNCA dentro do `Layout` ou de uma rota: o
    `signOut` troca a tela para o login, e lá dentro o componente desmontaria
    junto — o aviso sumiria no instante em que aparece.
-8. ⚠️ **Ele escuta `onAuthStateChange`, não o `useAuth()` do app.** Os sete
+9. ⚠️ **Ele escuta `onAuthStateChange`, não o `useAuth()` do app.** Os sete
    `AuthContext` divergem entre si; amarrar um deles faria as sete cópias do
    arquivo deixarem de ser idênticas.
-9. ⚠️ **Realtime não reentrega o que passou.** Aba dormindo, notebook fechado
+10. ⚠️ **Realtime não reentrega o que passou.** Aba dormindo, notebook fechado
    ou queda de rede perdem o evento PARA SEMPRE — daí a conferência na volta do
    foco (`focus` **e** `visibilitychange`, porque nem todo navegador dispara os
    dois). E ela lê a ÚLTIMA linha: "existe algum bloqueio?" derrubaria quem já
@@ -392,7 +392,7 @@ apps/*/src/components/BloqueioAoVivo.tsx   o popup — REPLICADO nos SETE
 10. **Bloqueado NÃO some da lista de Usuários** — fica marcado no nome, e o chip
    "Bloqueados" é filtro, não gaveta. Esconder quem perdeu o acesso é como se
    descobre meses depois que ele continuava liberado.
-11. ⚠️ **Os dois PORTAIS ficaram de fora** (outro repo): login deles ainda
+12. ⚠️ **Os dois PORTAIS ficaram de fora** (outro repo): login deles ainda
    mostraria `User is banned` em inglês, e não têm o popup. A trava vale lá
    igual — o que falta é a tradução e o aviso.
 
@@ -1212,13 +1212,14 @@ Bling fora, manutencao, lentidao  -> tarja DECLARADA   carbo_status_aviso
 
 ```
 packages/shell/src/StatusTarja.tsx          a tarja — arquivo ÚNICO, nos sete
-apps/*/src/main.tsx                         montada ao lado do <BloqueioAoVivo/>
+apps/*/src/components/Layout.tsx            montada logo ABAIXO do <TopBar/>
 apps/ti/src/pages/StatusAvisos.tsx          /status — onde o TI declara
 supabase/functions/status-sonda             recebe a sonda externa
 .github/workflows/status-sonda.yml          a sonda, a cada 5 min
 carbohub-landing  src/pages/Status.tsx      carbohub.com.br/status (OUTRO repo)
 supabase/migrations/20261011000000_status_aviso.sql
 supabase/migrations/20261012000000_status_sonda.sql
+supabase/migrations/20261013000000_status_aviso_normalizado.sql
 ```
 
 1. ⚠️ **O aviso declarado NÃO cobre a queda do Supabase**, e isso é
@@ -1234,35 +1235,55 @@ supabase/migrations/20261012000000_status_sonda.sql
 3. **Duas falhas seguidas para acender, UMA resposta para apagar.** Um pico de
    rede não pode pintar sete apps de vermelho: tarja vermelha sem motivo ensina
    o time a ignorá-la, que é a doença do sininho com 70 itens não lidos.
-4. ⚠️ **A tarja SOBREPÕE, não empurra o layout.** Empurrar exigiria mexer no
-   cabeçalho `sticky top-0` dos sete apps — exatamente o tipo de alteração
-   replicada que diverge em silêncio. Em troca ela é recolhível, por id do
-   aviso e por aba (`sessionStorage`): aviso novo volta a aparecer inteiro.
-5. ⚠️ **É UM arquivo, não sete.** Mora em `packages/shell` e cada `main.tsx`
+4. ⚠️ **Ela fica ABAIXO do cabeçalho, em FLUXO — nunca `fixed`.** A primeira
+   versão era sobreposta no topo e cobria a `TopBar` dos sete apps; o dono do
+   processo apontou no mesmo dia. Como o Layout de todos eles é `h-screen flex
+   flex-col`, basta montá-la logo após o `<TopBar/>`: ela ocupa a própria
+   altura e o corpo encolhe sozinho. Empurrar por fora (`padding-top` no
+   `body`) NÃO resolve — o cabeçalho é `sticky top-0` e voltaria a passar por
+   baixo dela no primeiro scroll.
+5. ⚠️ **NÃO dá para fechar**, por decisão do dono do processo. Aviso de
+   indisponibilidade que a pessoa esconde volta a produzir exatamente o que
+   ele existe para evitar: a pergunta no chat e o ticket. Quem tira a tarja é
+   o TI, encerrando — ou o próprio sistema, voltando a responder.
+   ⚠️ **E encerrar não apaga na hora: vira VERDE** por `normalizado_minutos`
+   (`20261013`). "Sumiu a tarja" e "nunca houve tarja" são indistinguíveis
+   para quem chega depois, e quem passou a manhã travado precisa LER que
+   normalizou. O prazo é do TI, nunca constante no código — incidente de 5 min
+   e de meio dia não pedem a mesma permanência.
+   ⚠️ A policy de leitura teve de deixar de ser `using (ativo)`, senão a linha
+   sai da vista no instante do clique e o verde nunca aparece. E a janela é
+   conferida DE NOVO na tela (`noVerde`): o TI enxerga o histórico inteiro por
+   uma segunda policy de SELECT, e sem essa conta ele veria o verde de um
+   incidente de semanas atrás.
+6. ⚠️ **É UM arquivo, não sete.** Mora em `packages/shell` e cada **Layout**
    passa só a própria chave (`app="ti"`). A chave vem escrita ali e NÃO de
    `appKeyAtual()`, que devolve `null` fora de produção — em dev a tarja
    ficaria muda.
-6. ⚠️ **A lista de apps da tela do TI sai de `HUB_APPS`.** Lista própria seria
+   ⚠️ O prop de cliente é ESTRUTURAL (`SupabaseLite`), não `SupabaseClient`:
+   os apps têm cópias próprias de `@supabase/supabase-js` e o tipo nominal
+   falharia nos sete, como já falha no `ChatProvider` ao lado.
+7. ⚠️ **A lista de apps da tela do TI sai de `HUB_APPS`.** Lista própria seria
    a oitava cópia do catálogo, e app novo ficaria fora do aviso, calado.
-7. ⚠️ **`apps` VAZIO = todos**, de propósito: o caso comum é o sistema inteiro,
+8. ⚠️ **`apps` VAZIO = todos**, de propósito: o caso comum é o sistema inteiro,
    e obrigar a marcar dez caixinhas para o caso comum é como se esquece uma.
-8. ⚠️ **`previsao_fim` é PREVISÃO, nunca interruptor.** A tarja não apaga
+9. ⚠️ **`previsao_fim` é PREVISÃO, nunca interruptor.** A tarja não apaga
    sozinha na hora marcada: manutenção que se estende é exatamente quando o
    aviso mais importa, e sumir no horário combinado deixaria o sistema instável
    e a tela limpa. Quem apaga é o TI, mudando `ativo`.
-9. ⚠️ **Leitura aberta a `anon`.** A tarja precisa aparecer ANTES do login —
+10. ⚠️ **Leitura aberta a `anon`.** A tarja precisa aparecer ANTES do login —
    quem não consegue entrar é quem mais precisa saber. E **sem policy de
    DELETE**: o aviso é a prova de que o sistema esteve fora.
-10. ⚠️ **A sonda externa NÃO registra a queda do Supabase** — ela grava no
+11. ⚠️ **A sonda externa NÃO registra a queda do Supabase** — ela grava no
    Supabase. O sinal é o BURACO na série ("sem medição desde HH:MM"), e a
    página de status lê exatamente assim. Prometer o contrário seria um
    relatório que só sabe concordar consigo mesmo (a doença da `20260941`).
-11. ⚠️ **O workflow manda o `CRON_SECRET`, não a service role.** Escrever
+12. ⚠️ **O workflow manda o `CRON_SECRET`, não a service role.** Escrever
    direto no PostgREST exigiria a chave que lê o banco inteiro — tokens do ML e
    notas fiscais inclusive — num secret do GitHub. A função `status-sonda`
    existe para o GitHub guardar o segredo MENOR, e ela FECHA sem ele
    (401/500), nunca abre.
-12. ⚠️ **Falta UM passo manual:** o secret `CRON_SECRET` em GitHub → Settings →
+13. ⚠️ **Falta UM passo manual:** o secret `CRON_SECRET` em GitHub → Settings →
    Secrets → Actions, com o mesmo valor que já está em Supabase → Edge
    Functions → Secrets. Sem ele o job falha ALTO a cada 5 min, que é o modo
    certo — sonda que falha calada é pior que sonda nenhuma.
