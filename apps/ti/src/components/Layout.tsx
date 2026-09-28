@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import {
-  LifeBuoy, MessagesSquare, ShoppingCart, Bug, Gauge, Users as UsersIcon, LayoutDashboard,
+  LifeBuoy, MessagesSquare, ShoppingCart, Bug, Gauge, Users as UsersIcon, LayoutDashboard, Megaphone,
 } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -47,6 +47,7 @@ export function Layout() {
     ] },
     { label: "TI", items: [
         { to: "/bugs", label: "Bugs e sugestões", icon: Bug },
+        { to: "/status", label: "Avisos de status", icon: Megaphone },
         { to: "/chat/adocao", label: "Adoção do Carbo Chat", icon: Gauge },
     ] },
     { label: "Ferramentas", items: [

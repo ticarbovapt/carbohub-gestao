@@ -1199,6 +1199,74 @@ etapa**: `nf_emitida` conta da emissão da NF, `etiqueta` de quando foi gerada,
 `em_transito` da postagem. Contar da data do pedido mistura demora de
 faturamento com demora de expedição.
 
+### Tarja de status — SÃO DUAS, e a separação é a decisão inteira
+Pedido do dono do processo em 28/09/2026, depois de uma queda em que os apps
+ficaram girando sem explicação: *"ja sobe a tarja vermelha em cima em todos os
+apps falando que há instabilidade … evitava das pessoas virem perguntar, abrir
+ticket"*.
+
+```
+Supabase fora                     -> tarja AUTOMATICA  mede sozinha, nao le nada
+Bling fora, manutencao, lentidao  -> tarja DECLARADA   carbo_status_aviso
+```
+
+```
+packages/shell/src/StatusTarja.tsx          a tarja — arquivo ÚNICO, nos sete
+apps/*/src/main.tsx                         montada ao lado do <BloqueioAoVivo/>
+apps/ti/src/pages/StatusAvisos.tsx          /status — onde o TI declara
+supabase/functions/status-sonda             recebe a sonda externa
+.github/workflows/status-sonda.yml          a sonda, a cada 5 min
+carbohub-landing  src/pages/Status.tsx      carbohub.com.br/status (OUTRO repo)
+supabase/migrations/20261011000000_status_aviso.sql
+supabase/migrations/20261012000000_status_sonda.sql
+```
+
+1. ⚠️ **O aviso declarado NÃO cobre a queda do Supabase**, e isso é
+   construção, não esquecimento: ele mora no Supabase, que é o que caiu. Quem
+   cobre aquele caso é a detecção automática, que não pergunta nada a ninguém.
+   Aviso que depende do que ele anuncia é aviso que falha calado — a mesma
+   lição do `BloqueioAoVivo`, onde o sinal do Realtime não substitui a trava.
+2. ⚠️ **"A minha internet caiu" e "o sistema caiu" têm a MESMA cara.** Quando a
+   sonda do Supabase falha, uma SEGUNDA sonda bate no endereço do próprio app
+   (outro provedor). As duas falhando = é a rede de quem olha, e a tarja diz
+   isso em cinza. Acusar o sistema nesse caso manda gente abrir ticket contra
+   um sistema que está de pé.
+3. **Duas falhas seguidas para acender, UMA resposta para apagar.** Um pico de
+   rede não pode pintar sete apps de vermelho: tarja vermelha sem motivo ensina
+   o time a ignorá-la, que é a doença do sininho com 70 itens não lidos.
+4. ⚠️ **A tarja SOBREPÕE, não empurra o layout.** Empurrar exigiria mexer no
+   cabeçalho `sticky top-0` dos sete apps — exatamente o tipo de alteração
+   replicada que diverge em silêncio. Em troca ela é recolhível, por id do
+   aviso e por aba (`sessionStorage`): aviso novo volta a aparecer inteiro.
+5. ⚠️ **É UM arquivo, não sete.** Mora em `packages/shell` e cada `main.tsx`
+   passa só a própria chave (`app="ti"`). A chave vem escrita ali e NÃO de
+   `appKeyAtual()`, que devolve `null` fora de produção — em dev a tarja
+   ficaria muda.
+6. ⚠️ **A lista de apps da tela do TI sai de `HUB_APPS`.** Lista própria seria
+   a oitava cópia do catálogo, e app novo ficaria fora do aviso, calado.
+7. ⚠️ **`apps` VAZIO = todos**, de propósito: o caso comum é o sistema inteiro,
+   e obrigar a marcar dez caixinhas para o caso comum é como se esquece uma.
+8. ⚠️ **`previsao_fim` é PREVISÃO, nunca interruptor.** A tarja não apaga
+   sozinha na hora marcada: manutenção que se estende é exatamente quando o
+   aviso mais importa, e sumir no horário combinado deixaria o sistema instável
+   e a tela limpa. Quem apaga é o TI, mudando `ativo`.
+9. ⚠️ **Leitura aberta a `anon`.** A tarja precisa aparecer ANTES do login —
+   quem não consegue entrar é quem mais precisa saber. E **sem policy de
+   DELETE**: o aviso é a prova de que o sistema esteve fora.
+10. ⚠️ **A sonda externa NÃO registra a queda do Supabase** — ela grava no
+   Supabase. O sinal é o BURACO na série ("sem medição desde HH:MM"), e a
+   página de status lê exatamente assim. Prometer o contrário seria um
+   relatório que só sabe concordar consigo mesmo (a doença da `20260941`).
+11. ⚠️ **O workflow manda o `CRON_SECRET`, não a service role.** Escrever
+   direto no PostgREST exigiria a chave que lê o banco inteiro — tokens do ML e
+   notas fiscais inclusive — num secret do GitHub. A função `status-sonda`
+   existe para o GitHub guardar o segredo MENOR, e ela FECHA sem ele
+   (401/500), nunca abre.
+12. ⚠️ **Falta UM passo manual:** o secret `CRON_SECRET` em GitHub → Settings →
+   Secrets → Actions, com o mesmo valor que já está em Supabase → Edge
+   Functions → Secrets. Sem ele o job falha ALTO a cada 5 min, que é o modo
+   certo — sonda que falha calada é pior que sonda nenhuma.
+
 ### ⚠️ O destino é sempre a `main` — mergear é parte da tarefa, não um passo à parte
 Dito pelo dono do processo em 21/09/2026, com estas palavras: *"manda o merge na
 main, já deveria ter feito inclusive sem eu pedir — sempre na main"*.

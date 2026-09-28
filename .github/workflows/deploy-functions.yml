@@ -65,6 +65,10 @@ jobs:
             return 1
           }
 
+          # Sonda externa da página de status. --no-verify-jwt porque quem chama
+          # é o GitHub Actions, que manda só o X-Cron-Secret e nenhum
+          # Authorization. Ela FECHA sem o segredo (401/500), nunca abre.
+          dep status-sonda --no-verify-jwt
           dep bling-auth --no-verify-jwt
           dep bling-sync --no-verify-jwt
           # Bling 2 — segunda conta. --no-verify-jwt em todas: a auth e a sync

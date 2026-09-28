@@ -9,6 +9,8 @@ export {
 } from "./apps";
 export type { AppKey, EcoApp, SwitcherApp, Identity, SwitcherProfile } from "./apps";
 export type { AppSwitcherProps } from "./AppSwitcher";
+export { StatusTarja } from "./StatusTarja";
+export type { StatusTarjaProps, StatusAviso, StatusSeveridade } from "./StatusTarja";
 export { cn } from "./cn";
 export {
   DESCARB_MODALIDADES, DESCARB_SERVICE_TYPES,

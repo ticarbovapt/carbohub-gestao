@@ -5,6 +5,7 @@ import Login from "./pages/Login";
 import Home from "./pages/Home";
 import Demandas from "./pages/Demandas";
 import BugReports from "./pages/BugReports";
+import StatusAvisos from "./pages/StatusAvisos";
 import Profile from "./pages/Profile";
 import MinhaEquipe from "./pages/MinhaEquipe";
 import Vender from "./pages/Vender";
@@ -30,6 +31,7 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/demandas" element={<Demandas />} />
         <Route path="/bugs" element={<BugReports />} />
+        <Route path="/status" element={<StatusAvisos />} />
         <Route path="/vender" element={<Vender />} />
         <Route path="/chat" element={<Chat />} />
         <Route path="/chat/adocao" element={<ChatAdocao />} />

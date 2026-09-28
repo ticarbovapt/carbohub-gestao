@@ -1,0 +1,108 @@
+# Sonda EXTERNA do ecossistema — mede de fora e grava o histórico.
+#
+# ⚠️ Roda FORA da nossa infraestrutura de propósito: medição feita de dentro
+# do próprio sistema não sabe dizer que o sistema caiu. É o mesmo motivo de a
+# tarja automática dos apps medir no navegador de quem usa.
+#
+# ⚠️ Ela NÃO consegue registrar que o Supabase está fora — a gravação passa
+# pelo Supabase. O sinal de queda é o BURACO na série ("sem medição desde
+# HH:MM"), e a página de status lê exatamente assim. Ver a 20261012000000.
+#
+# Pré-requisito, uma vez: o secret `CRON_SECRET` em
+# GitHub → Settings → Secrets and variables → Actions, com o MESMO valor que
+# já está em Supabase → Edge Functions → Secrets.
+# ⚠️ Sem ele a função devolve 401 e o job falha ALTO — que é o modo certo:
+# sonda que falha calada é pior que sonda nenhuma.
+
+name: Sonda de status
+
+on:
+  schedule:
+    # A cada 5 min. O GitHub atrasa schedules em horário de pico; para a
+    # pergunta "o sistema está de pé?" isso é aceitável, e é por isso que a
+    # tarja dos apps NÃO depende desta sonda.
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: status-sonda
+  cancel-in-progress: false
+
+jobs:
+  sondar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Medir e enviar
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SUPABASE_URL: https://wpkfirmapxevzpxjovjr.supabase.co
+        run: |
+          set -euo pipefail
+
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "::error::CRON_SECRET ausente nos secrets do repositório — a sonda não grava nada."
+            exit 1
+          fi
+
+          # alvo|url — o `alvo` é o que vai para carbo_status_sonda.alvo.
+          ALVOS=(
+            "supabase|${SUPABASE_URL}/rest/v1/"
+            "hub|https://carbohub.com.br/"
+            "app:admin|https://admin.carbohub.com.br/"
+            "app:crm|https://sales.carbohub.com.br/"
+            "app:ops|https://ops.carbohub.com.br/"
+            "app:ti|https://ti.carbohub.com.br/"
+            "app:financas|https://finance.carbohub.com.br/"
+            "app:mkt|https://mkt.carbohub.com.br/"
+            "app:atendimento|https://atendimento.carbohub.com.br/"
+            "app:licenciados|https://licenciados.carbohub.com.br/"
+            "app:lojas|https://lojas.carbohub.com.br/"
+            "app:md|https://md.carbohub.com.br/"
+            "app:controle|https://controle.carbohub.com.br/"
+          )
+
+          MEDICOES=""
+          for par in "${ALVOS[@]}"; do
+            alvo="${par%%|*}"
+            url="${par#*|}"
+            # ⚠️ O STATUS não é exigido 2xx: o /rest/v1/ do Supabase responde
+            # 401 sem apikey, e isso PROVA que ele está de pé. O que se mede é
+            # "respondeu alguma coisa em tempo hábil".
+            resposta=$(curl -sS -o /dev/null -m 15 \
+              -w '%{http_code} %{time_total}' "$url" 2>/dev/null || echo "000 15")
+            codigo="${resposta%% *}"
+            segundos="${resposta##* }"
+            ms=$(awk -v s="$segundos" 'BEGIN{printf "%d", s*1000}')
+
+            # 000 = não completou (DNS, TLS, timeout, conexão recusada).
+            # 5xx = o servidor está lá e quebrado — também é "não ok".
+            if [ "$codigo" = "000" ] || [ "${codigo:0:1}" = "5" ]; then
+              ok=false
+            else
+              ok=true
+            fi
+
+            MEDICOES="${MEDICOES}{\"alvo\":\"${alvo}\",\"ok\":${ok},\"ms\":${ms},\"detalhe\":\"HTTP ${codigo}\"},"
+            echo "${alvo} → HTTP ${codigo} em ${ms}ms (ok=${ok})"
+          done
+
+          CORPO="{\"medicoes\":[${MEDICOES%,}]}"
+
+          # ⚠️ O envio é a ÚLTIMA coisa, e falha do envio NÃO invalida as
+          # medições que já saíram no log acima: com o Supabase fora, é aqui
+          # que o job quebra, e o log do Actions vira a única prova do que se
+          # mediu naquele minuto.
+          codigo_envio=$(curl -sS -o /tmp/resp.json -w '%{http_code}' -m 20 \
+            -X POST "${SUPABASE_URL}/functions/v1/status-sonda" \
+            -H "Content-Type: application/json" \
+            -H "x-cron-secret: ${CRON_SECRET}" \
+            --data "$CORPO" || echo "000")
+
+          echo "envio → HTTP ${codigo_envio}"
+          cat /tmp/resp.json 2>/dev/null || true
+          echo
+
+          if [ "${codigo_envio:0:1}" != "2" ]; then
+            echo "::error::a sonda mediu mas não conseguiu gravar (HTTP ${codigo_envio}). Se o Supabase estiver fora, ESTE é o sintoma esperado."
+            exit 1
+          fi
