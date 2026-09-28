@@ -138,7 +138,11 @@ const CANAL_CARDS: { key: CanalKey | "naoClassificado" | "descarbonizacao"; labe
   { key: "consumo", label: "Consumo (B2B)", accent: "border-l-blue-500", bar: "bg-blue-500", text: "text-blue-400" },
   { key: "revenda", label: "Revenda (PDV)", accent: "border-l-amber-400", bar: "bg-amber-400", text: "text-amber-500" },
   { key: "online", label: "On-line", accent: "border-l-green-500", bar: "bg-green-500", text: "text-green-500" },
-  { key: "descarbonizacao", label: "Descarbonização", accent: "border-l-cyan-500", bar: "bg-cyan-500", text: "text-cyan-500" },
+  // ⚠️ O RÓTULO é "CarboVAPT" e a CHAVE continua `descarbonizacao` — o dado é a
+  // NFS-e de descarbonização (código 140101), e renomear a chave quebraria o
+  // `useServicosNfse` e a série mensal sem erro de compilação. Mesma regra do
+  // "Comercial Expansão", cuja chave continua `equipe` / `naoOnline`.
+  { key: "descarbonizacao", label: "CarboVAPT", accent: "border-l-cyan-500", bar: "bg-cyan-500", text: "text-cyan-500" },
   { key: "naoClassificado", label: "Não classificado", accent: "border-l-slate-400", bar: "bg-slate-400", text: "text-board-muted" },
 ];
 const META_CARDS: { key: CanalKey; title: string; color: string; note: string }[] = [
@@ -432,11 +436,11 @@ export default function DashboardComercial() {
           <KpiCard title="CarboZé on-line" value={fmtK(data?.totalOnline ?? 0)}
                    sub={`${data?.qtdOnline ?? 0} pedidos · marketplaces e loja própria`}
                    Icon={Globe} accent="border-l-blue-500" iconBg="bg-blue-500/10 text-blue-500" />
-          <KpiCard title="CarboZé equipe / balcão" value={fmtK(data?.totalNaoOnline ?? 0)}
+          <KpiCard title="Comercial Expansão" value={fmtK(data?.totalNaoOnline ?? 0)}
                    sub={`${data?.qtdNaoOnline ?? 0} pedidos · venda direta e revenda`}
                    Icon={ShoppingCart} accent="border-l-green-500" iconBg="bg-green-500/10 text-green-600" />
-          <KpiCard title="Descarbonização" value={fmtK(servicos?.descarbonizacao ?? 0)}
-                   sub={`${servicos?.notasDescarbonizacao ?? 0} notas · serviço CarboVapt${servicos?.outros ? ` · +${fmtK(servicos.outros)} em outros serviços` : ""}`}
+          <KpiCard title="CarboVAPT" value={fmtK(servicos?.descarbonizacao ?? 0)}
+                   sub={`${servicos?.notasDescarbonizacao ?? 0} notas de serviço${servicos?.outros ? ` · +${fmtK(servicos.outros)} em outros serviços` : ""}`}
                    Icon={Wrench} accent="border-l-cyan-500" iconBg="bg-cyan-500/10 text-cyan-500" />
           <KpiCard title="Faturamento total"
                    value={fmtK((data?.totalBRL ?? 0) + (servicos?.total ?? 0))}
@@ -452,7 +456,7 @@ export default function DashboardComercial() {
           <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
             A receita de serviço vem da NFS-e do Portal Nacional, que só tem notas emitidas
             a partir de <strong className="text-foreground">{servicos.primeiroMes}</strong>.
-            Meses anteriores aparecem sem descarbonização por falta de dado no portal, não
+            Meses anteriores aparecem sem CarboVAPT por falta de dado no portal, não
             por ausência de serviço. {servicos.notas} nota(s) no período.
           </div>
         )}
@@ -465,7 +469,7 @@ export default function DashboardComercial() {
               320 daquilo são documentos de outra natureza. */}
           <KpiCard title="Total de Vendas"
                    value={String((k?.totalVendas ?? 0) + (servicos?.notas ?? 0))}
-                   sub={`${data?.qtdOnline ?? 0} on-line · ${data?.qtdNaoOnline ?? 0} equipe · ${servicos?.notas ?? 0} serviço`}
+                   sub={`${data?.qtdOnline ?? 0} on-line · ${data?.qtdNaoOnline ?? 0} Comercial Expansão · ${servicos?.notas ?? 0} serviço`}
                    Icon={ShoppingCart} accent="border-l-green-500" iconBg="bg-green-500/10 text-green-600" />
           {/* O card "R$ Vendido (produto)" saiu: on-line e equipe já estão nos
               cards de ORIGEM acima, e quem quiser o produto sozinho soma os
@@ -477,7 +481,7 @@ export default function DashboardComercial() {
           <KpiCard title="Maior Venda"
                    value={fmtK(Math.max(k?.maiorVenda ?? 0, servicos?.maiorNota ?? 0))}
                    sub={(servicos?.maiorNota ?? 0) > (k?.maiorVenda ?? 0)
-                     ? `${servicos?.maiorNotaCliente ?? "—"} · descarbonização`
+                     ? `${servicos?.maiorNotaCliente ?? "—"} · CarboVAPT`
                      : `${k?.maiorCliente ?? "—"} · produto`}
                    Icon={Trophy} accent="border-l-amber-400" iconBg="bg-amber-400/10 text-amber-500" />
           <KpiCard title="Top Recorrência" value={topGeral.nome}
@@ -487,7 +491,7 @@ export default function DashboardComercial() {
               dividido pelo total. Média de médias daria peso igual a um canal
               de 320 notas e a outro de 1.100 pedidos. */}
           <KpiCard title="Ticket Médio" value={fmtK(ticketGeral)}
-                   sub={`on-line ${fmtK(data?.ticketOnline ?? 0)} · equipe ${fmtK(data?.ticketNaoOnline ?? 0)} · descarb. ${fmtK(servicos?.ticketMedio ?? 0)}`}
+                   sub={`on-line ${fmtK(data?.ticketOnline ?? 0)} · Comercial Expansão ${fmtK(data?.ticketNaoOnline ?? 0)} · CarboVAPT ${fmtK(servicos?.ticketMedio ?? 0)}`}
                    Icon={TrendingUp} accent="border-l-violet-400" iconBg="bg-violet-400/10 text-violet-500" />
         </div>
 
@@ -495,16 +499,16 @@ export default function DashboardComercial() {
             ⚠️ O bloco "Último Mês vs Janeiro" foi ABSORVIDO, não perdido: os
             dois passariam a mostrar a mesma comparação, e duas caixas dizendo
             o mesmo número fazem quem lê procurar a diferença que não existe.
-            A ordem é a MESMA dos gráficos abaixo (total · on-line · equipe ·
-            descarbonização) — ordem diferente entre blocos do mesmo painel é
+            A ordem é a MESMA dos gráficos abaixo (total · on-line · Comercial
+            Expansão · CarboVAPT) — ordem diferente entre blocos do mesmo painel é
             o que faz comparar a caixa errada. */}
         {mom && (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 items-start">
             {([
               { k: "total",   rotulo: "Total",            borda: "border-amber-400/20", barra: "bg-amber-400", chip: "bg-amber-400/10 text-amber-500", un: "vendas"  },
               { k: "online",  rotulo: "On-line",          borda: "border-blue-500/20",  barra: "bg-blue-500",  chip: "bg-blue-500/10 text-blue-500",   un: "pedidos" },
-              { k: "equipe",  rotulo: "Equipe / balcão",  borda: "border-green-500/20", barra: "bg-green-500", chip: "bg-green-500/10 text-green-600", un: "pedidos" },
-              { k: "descarb", rotulo: "Descarbonização",  borda: "border-cyan-500/20",  barra: "bg-cyan-500",  chip: "bg-cyan-500/10 text-cyan-500",   un: "notas"   },
+              { k: "equipe",  rotulo: "Comercial Expansão", borda: "border-green-500/20", barra: "bg-green-500", chip: "bg-green-500/10 text-green-600", un: "pedidos" },
+              { k: "descarb", rotulo: "CarboVAPT",          borda: "border-cyan-500/20",  barra: "bg-cyan-500",  chip: "bg-cyan-500/10 text-cyan-500",   un: "notas"   },
             ] as const).map((c) => {
               const d = mom[c.k];
               return (
@@ -542,16 +546,16 @@ export default function DashboardComercial() {
           ) : (
             <div className="px-4 pt-4 pb-4 space-y-4">
               {/* ⚠️ QUATRO recortes, e a ordem é a mesma nos três blocos:
-                  Total · On-line · Equipe · Descarbonização. Ordem diferente
+                  Total · On-line · Comercial Expansão · CarboVAPT. Ordem diferente
                   entre blocos faria a pessoa comparar o gráfico errado. */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <SerieMensal titulo="Faturado · TOTAL" acumulado={fmtK((k?.totalBRL ?? 0) + (servicos?.total ?? 0))}
                              cor="#1a7a4a" dados={serie} campo="totalFat" />
                 <SerieMensal titulo="Faturado · on-line" acumulado={fmtK(data?.totalOnline ?? 0)}
                              cor="#3b82f6" dados={serie} campo="onFat" />
-                <SerieMensal titulo="Faturado · equipe/balcão" acumulado={fmtK(data?.totalNaoOnline ?? 0)}
+                <SerieMensal titulo="Faturado · Comercial Expansão" acumulado={fmtK(data?.totalNaoOnline ?? 0)}
                              cor="#22c55e" dados={serie} campo="eqFat" />
-                <SerieMensal titulo="Faturado · descarbonização" acumulado={fmtK(servicos?.descarbonizacao ?? 0)}
+                <SerieMensal titulo="Faturado · CarboVAPT" acumulado={fmtK(servicos?.descarbonizacao ?? 0)}
                              cor="#06b6d4" dados={serie} campo="dsFat" />
               </div>
 
@@ -561,9 +565,9 @@ export default function DashboardComercial() {
                              cor="#3b6ea5" dados={serie} campo="totalQtd" />
                 <SerieMensal titulo="Vendas · on-line" moeda={false} acumulado={String(data?.qtdOnline ?? 0)}
                              cor="#3b82f6" dados={serie} campo="onQtd" />
-                <SerieMensal titulo="Vendas · equipe/balcão" moeda={false} acumulado={String(data?.qtdNaoOnline ?? 0)}
+                <SerieMensal titulo="Vendas · Comercial Expansão" moeda={false} acumulado={String(data?.qtdNaoOnline ?? 0)}
                              cor="#22c55e" dados={serie} campo="eqQtd" />
-                <SerieMensal titulo="Vendas · descarbonização" moeda={false}
+                <SerieMensal titulo="Vendas · CarboVAPT" moeda={false}
                              acumulado={String(servicos?.notasDescarbonizacao ?? 0)}
                              cor="#06b6d4" dados={serie} campo="dsQtd" />
               </div>
@@ -620,9 +624,9 @@ export default function DashboardComercial() {
                            cor="#8b5cf6" dados={serie} campo="totalTicket" />
               <SerieMensal titulo="Ticket · on-line" acumulado={fmtK(data?.ticketOnline ?? 0)}
                            cor="#3b82f6" dados={serie} campo="onTicket" />
-              <SerieMensal titulo="Ticket · equipe/balcão" acumulado={fmtK(data?.ticketNaoOnline ?? 0)}
+              <SerieMensal titulo="Ticket · Comercial Expansão" acumulado={fmtK(data?.ticketNaoOnline ?? 0)}
                            cor="#22c55e" dados={serie} campo="eqTicket" />
-              <SerieMensal titulo="Ticket · descarbonização" acumulado={fmtK(servicos?.ticketMedio ?? 0)}
+              <SerieMensal titulo="Ticket · CarboVAPT" acumulado={fmtK(servicos?.ticketMedio ?? 0)}
                            cor="#06b6d4" dados={serie} campo="dsTicket" />
             </div>
           </div>
@@ -640,7 +644,7 @@ export default function DashboardComercial() {
           <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">
             <div className="border-b border-border px-6 py-3">
               <h2 className="text-base font-bold text-board-text flex items-center gap-2"><BarChart3 className="h-4 w-4 text-blue-400" /> Vendas por Canal</h2>
-              <p className="text-xs text-board-muted mt-0.5">Consumo · Revenda · On-line · Descarbonização (NFS-e) · classifique cada pedido em <Link to="/comercial/dados/pedidos" className="font-semibold text-primary hover:underline">Pedidos</Link></p>
+              <p className="text-xs text-board-muted mt-0.5">Consumo · Revenda · On-line · CarboVAPT (NFS-e) · classifique cada pedido em <Link to="/comercial/dados/pedidos" className="font-semibold text-primary hover:underline">Pedidos</Link></p>
             </div>
             {/* ⚠️ LINHAS, não azulejos 2×3. Cinco canais em duas colunas davam
                 três fileiras com a última pela metade — altura de painel de
@@ -690,7 +694,7 @@ export default function DashboardComercial() {
                     misturá-las foi o que fez o gráfico mostrar 110 PDVs
                     existindo 73. */}
                 <p className="text-xs text-board-muted mt-0.5">
-                  {MODO_LABEL[modoClientes]} — B2B, On-line e Descarbonização por cliente único (CNPJ/CPF); PDV pelo cadastro de pontos
+                  {MODO_LABEL[modoClientes]} — B2B, On-line e CarboVAPT por cliente único (CNPJ/CPF); PDV pelo cadastro de pontos
                 </p>
                 {pdvDelta && (
                   <div className="mt-1.5 inline-flex items-center gap-1.5 rounded-md bg-amber-400/10 px-2 py-1">
@@ -712,7 +716,7 @@ export default function DashboardComercial() {
                   <span className="flex items-center gap-1"><span className="inline-block w-4 border-t-2" style={{ borderColor: "#3b82f6" }} /> B2B (Consumo)</span>
                   <span className="flex items-center gap-1"><span className="inline-block w-4 border-t-2" style={{ borderColor: "#f59e0b" }} /> PDV (Revenda)</span>
                   <span className="flex items-center gap-1"><span className="inline-block w-4 border-t-2" style={{ borderColor: "#22c55e" }} /> On-line</span>
-                  <span className="flex items-center gap-1"><span className="inline-block w-4 border-t-2" style={{ borderColor: "#06b6d4" }} /> Descarbonização</span>
+                  <span className="flex items-center gap-1"><span className="inline-block w-4 border-t-2" style={{ borderColor: "#06b6d4" }} /> CarboVAPT</span>
                 </div>
               </div>
             </div>
@@ -734,7 +738,7 @@ export default function DashboardComercial() {
                       NFS-e — a mesma pergunta das duas primeiras linhas, feita
                       na outra base. A série começa em jan/26 porque é de lá que
                       o portal nacional entrega as emitidas. */}
-                  <Line type="monotone" dataKey="descarb" name="Descarbonização" stroke="#06b6d4" strokeWidth={2} dot={{ r: 2.5, fill: "#06b6d4" }} isAnimationActive={false} />
+                  <Line type="monotone" dataKey="descarb" name="CarboVAPT" stroke="#06b6d4" strokeWidth={2} dot={{ r: 2.5, fill: "#06b6d4" }} isAnimationActive={false} />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
@@ -861,10 +865,10 @@ export default function DashboardComercial() {
             </div>
           </div>
 
-          {/* ── Equipe / balcão ───────────────────────────────────────────── */}
+          {/* ── Comercial Expansão (chave `eq*`, ex-"equipe / balcão") ────── */}
           <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">
             <div className="border-b border-border px-6 py-3">
-              <h2 className="text-base font-bold text-board-text flex items-center gap-2"><ShoppingCart className="h-4 w-4 text-green-500" /> Unidades · Equipe / balcão</h2>
+              <h2 className="text-base font-bold text-board-text flex items-center gap-2"><ShoppingCart className="h-4 w-4 text-green-500" /> Unidades · Comercial Expansão</h2>
               {/* ⚠️ O número grande da equipe é o ITEM DO CATÁLOGO, e o rótulo
                   diz isso. Chamá-lo de "unidade" faria o kit de sachês valer 1
                   ao lado de um frasco que também vale 1 — o mesmo erro que
@@ -881,7 +885,7 @@ export default function DashboardComercial() {
                              aviso={p.eqBonificadas > 0 ? `inclui ${fmtNum(p.eqBonificadas)} bonif.` : null} />
               ))}
               {unidades && unidadesEquipe.length === 0 && (
-                <p className="col-span-full py-6 text-center text-xs text-board-muted">Nenhuma venda da equipe no período.</p>
+                <p className="col-span-full py-6 text-center text-xs text-board-muted">Nenhuma venda da Comercial Expansão no período.</p>
               )}
             </div>
           </div>
