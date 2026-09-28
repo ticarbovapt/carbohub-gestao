@@ -657,6 +657,76 @@ sininho e o resumo mensal leem dela. A `carbo_estoque_ensaio` já teve uma cópi
 sem `lower()`: um status `Paid` contaria como venda no painel e não baixaria
 estoque.
 
+### ⚠️ A contagem física é um TERCEIRO relógio, e o ledger é quem o respeita
+Auditoria de 28/09/2026, nos cinco canais que deduzem. O gatilho foi a Shopee:
+o anúncio `58264919957` ("CarboZé Kit 5 Frascos 100ml") estava **sem SKU no
+painel**, então 9 vendas não resolviam para produto nenhum — não deduziam, e os
+painéis contavam 1 unidade onde o cliente levou 5.
+
+⚠️ **Preencher o SKU do passado NÃO é a correção; é a limpeza.** O que dura é
+preencher `124` no painel da Shopee — anúncio NOVO sem SKU volta ao mesmo
+buraco, calado. A aba "SKUs vendidos sem mapa" é o único lugar onde isso
+aparece, e é por isso que ela MOSTRA a linha sem SKU com o botão desabilitado.
+
+⚠️ **E o `update` no banco só dura porque o `trg_ecommerce_nao_apaga_com_vazio`
+existe.** Ele impede que vazio apague dado bom em `product_sku`, então o
+`pullShopee` de 5 em 5 min não regrava `null` por cima. Sem ele seria agosto de
+novo. **Conferido no banco (`pg_get_functiondef`), não na memória** — aquele
+gatilho é citado no repo e não está definido em migração nenhuma.
+
+**O que a auditoria ensinou, e vale para qualquer canal:**
+
+1. ⚠️ **Existem TRÊS perguntas, não duas.** O marco zero pergunta se a venda é
+   ANTIGA (data); o ledger, se a saída já foi CONTADA. A **contagem física** é a
+   terceira, e ela responde a segunda pergunta por fora do sistema: venda que
+   saiu antes do ajuste manual **já está** no saldo contado. Deduzi-la depois é
+   a dupla contagem de 31/08.
+   Medido: ajuste em `stock_movements` no HUB-SP em 24/09 16:19 (`saida 690`,
+   `origem = 'ajuste'`). Das 8 vendas pendentes da Shopee, **6 eram anteriores**
+   a ele. Proteção = linha em `carbo_estoque_consumo`, **sem tocar em
+   `warehouse_stock`**: o saldo já reflete, o que faltava era o sistema saber.
+2. ⚠️ **Proteção retroativa precisa de PISO no marco zero.** A primeira versão
+   do insert tinha só o teto (o instante da contagem) e pegou junto 3 vendas de
+   agosto — fundindo `anterior ao marco zero` com `já deduzido`, que é
+   exatamente a fusão proibida. Não mudou saldo, mas o ledger passou a afirmar
+   15 unidades contabilizadas que o sistema nunca deduziu.
+3. ⚠️ **NUNCA mover o marco zero para resolver isso.** Ele é filtro por data e
+   avançá-lo deixa passar pedido feito antes da contagem que ainda não é venda.
+   Quem sabe responder é o ledger.
+4. **A aritmética que fecha é a melhor conferência.** Somando os vereditos do
+   ensaio com os cancelados de cada canal, bate exato com o total de linhas da
+   plataforma — nos seis. Dois números que deveriam bater e batem.
+
+✅ **Estado em 28/09/2026:** `consumos_indevidos = 0`; 125 pedidos cancelados,
+**zero** ainda no ledger (o estorno funciona nos cinco); cron
+`ecommerce-deduz-estoque-10min` com 432 execuções em 3 dias, todas `succeeded` —
+e aqui isso SIGNIFICA algo, porque é SQL puro, não `net.http_post`.
+
+✅ **A PayT passou a deduzir** (`20261014`), com marco zero em `now()`: ela
+vendia desde 28/08 sem linha em `carbo_canal_estoque`, e o ensaio a marcava
+`canal sem configuração de galpão` — veredito honesto, diferente de
+"desligada". As 3 vendas antigas são anteriores à contagem de 24/09 e ficam
+fora, corretamente.
+
+⚠️ **PENDENTE, medido: o ML Full leva `429 local_rate_limited` no
+`/orders/search`.** As duas contas sincronizam com ~1 s de diferença
+(`15:20:09.029` e `15:20:09.975`), mesmo `client_id` — `local_rate_limited` é
+limite por aplicação, então é a segunda batendo em cima da primeira. Não custa
+estoque (o Full não deduz), custa PEDIDO: a chamada é feita **sem paginação**,
+teto de 50 do ML, e o `last_synced_at` avança mesmo na rodada barrada — a
+janela perdida não é relida. A correção é ESPAÇAR as duas contas, nunca
+aumentar retry.
+
+⚠️ **E `last_error` é GRUDENTO: só o `ml_token_trocar` o limpa.** Rodada de
+sync bem-sucedida não zera nada, então o campo mede "houve erro desde a última
+renovação", não "está com erro agora" — e a tela lê a segunda coisa. É a doença
+conhecida ao contrário: erro velho disfarçado de erro atual.
+⚠️ **Comparar `updated_at > last_synced_at` NÃO separa os dois** — tentei, e o
+dado matou: a própria rodada de sync carimba os dois com 30 ms de diferença,
+então a comparação é sempre verdadeira, inclusive na conta com `last_error`
+nulo. Quem separa é o `last_refresh_at`: erro presente com renovação ANTERIOR a
+ele significa que o erro foi escrito depois dela.
+
 ### ⚠️ Aviso de webhook não é pedido
 ML e Amazon mandam só "o pedido X mudou", sem itens, valor ou SKU. O código
 gravava mesmo assim uma linha com `quantity 1`, `units_real 1`, `total 0`,
