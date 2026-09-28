@@ -5,6 +5,8 @@ import { BrowserRouter } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AuthProvider } from "./contexts/AuthContext";
 import { BloqueioAoVivo } from "./components/BloqueioAoVivo";
+import { StatusTarja } from "@carbo/shell";
+import { supabase } from "@/integrations/supabase/client";
 import App from "./App";
 import "./index.css";
 
@@ -17,6 +19,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         <AuthProvider>
           <App />
           <BloqueioAoVivo />
+          <StatusTarja supabase={supabase} app="crm" statusUrl="https://carbohub.com.br/status" />
           <Toaster richColors position="top-right" offset={72} />
         </AuthProvider>
       </BrowserRouter>
