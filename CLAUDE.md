@@ -1478,7 +1478,60 @@ fato e não deixa de ser verdade porque a etiqueta foi cancelada depois. Quem ce
 
 ⚠️ **Toda migração que MOVE card grava `'ignorado'` em `carbo_msg_envios` ANTES
 de republicar a view.** A `20260946` esqueceu; deu sorte porque a população
-exposta era pequena. A `carbo_msg_fila` não tem data de corte em lugar nenhum.
+exposta era pequena.
+
+### ⚠️ A fila estourou o timeout e o WhatsApp parou por 18 DIAS, calado
+Medido em 28/09/2026. `select * from carbo_msg_fila` levava **39.069 ms**
+(`Buffers: shared hit=12.349.021`), e o `whatsapp-meta` devolvia, de minuto em
+minuto desde **10/09**:
+
+```
+500 {"error": "fila: canceling statement due to statement timeout"}
+```
+
+⚠️ **O `pg_cron` marcou `succeeded` as 1.440 execuções do dia** — o sucesso
+dele é ter POSTADO (`net.http_post` é assíncrono). Quem tinha o desfecho real
+era `net._http_response`, e ninguém olha aquilo. É a terceira vez que esta
+mesma cegueira custa dias neste repo (o `CRON_SECRET` sumido, os 401 do
+`ecommerce-sync`). **Fonte que dispara mensagem, confira em
+`net._http_response`, nunca em `cron.job_run_details`.**
+
+O plano nomeou o culpado sem ambiguidade — 38,6 s dos 39 num só ramo:
+
+```
+Subquery Scan on "*SELECT* 3"        o ramo da RECOMPRA
+  Nested Loop ... Rows Removed by Join Filter: 251909
+  Index Scan using bling2_nfe_bling_id_key ... loops=299574
+```
+
+⚠️ **A `bling2_esteira` estava sendo montada DUAS vezes, uma delas dentro de um
+laço.** O ramo fazia `from bling2_esteira e join carbo_recompra_pipeline p on
+p.bling_id = e.bling_id` — e a pipeline **já é** a esteira (CTE `entregue`)
+cruzada com `bling2_orders` e o carimbo de entrega. View é inlinada, então a
+união das DUAS contas Bling (desde a `20260990`) era reavaliada por linha.
+
+⚠️ **E o segundo `join` não trazia nada.** A pipeline já carrega `pedido_loja`,
+`canal`, `cliente`, `cliente_fone`, `total`, `entrega_cidade` e `entrega_uf`, e
+o template de recompra usa **uma** variável (`{{primeiro_nome}}`). A esteira
+inteira era lida para devolver NF, transportadora e rastreio que a mensagem
+descarta. Hoje o ramo lê SÓ a pipeline (`20261016`) — **não recoloque o join.**
+
+⚠️ **Invisível até o volume cruzar**, como o teto de 1.000 do PostgREST e o
+`.limit(200)` do chat: a esteira tinha poucas centenas de cards e hoje tem
+**1.021** (427 nos últimos 30 dias, 594 mais velhos, o mais antigo de 12/06).
+
+**E o marco zero foi JUNTO, na mesma migração** (`carbo_msg_config.inicio_em`,
+molde do `carbo_carrinho_config`): a fila nunca teve data de corte, então
+publicar a view rápida sozinha seria consertar o relógio e apertar o gatilho no
+mesmo instante — os 594 cards antigos voltam a ser candidatos a qualquer etapa
+que eles ainda não tenham em `carbo_msg_envios`.
+
+⚠️ **O corte é de 7 dias, e "hoje" está ERRADO** — eu tinha recomendado hoje e
+revi: hoje desliga a operação VIVA (pedido de ontem que emite NF amanhã nunca
+mais seria anunciado, e não há nada de errado com ele). O congelamento em
+`carbo_msg_envios` já cobriu os 309 que estavam parados; o marco zero é para o
+que vier. Na recompra ele olha a **entrega**, não a data do pedido — a régua
+conta 30 dias dali, e cortar por data de pedido esvaziaria o ramo para sempre.
 
 ### Melhor Envio — a etiqueta que nunca voltou para o Bling
 Etiqueta comprada DIRETO no painel do Melhor Envio não volta para o Bling: o
