@@ -21,6 +21,9 @@ export interface NovoAviso {
   mensagem: string | null;
   apps: string[];
   previsao_fim: string | null;
+  /** Por quantos minutos a tarja VERDE fica no ar depois do "Encerrar". */
+  normalizado_minutos: number;
+  normalizado_texto: string | null;
 }
 
 const CHAVE = ["status-avisos"];
@@ -31,7 +34,9 @@ export function useStatusAvisos() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("carbo_status_aviso")
-        .select("id, ativo, severidade, titulo, mensagem, apps, inicio_em, previsao_fim, encerrado_em, created_at")
+        .select(
+          "id, ativo, severidade, titulo, mensagem, apps, inicio_em, previsao_fim, encerrado_em, normalizado_minutos, normalizado_texto, created_at",
+        )
         .order("inicio_em", { ascending: false })
         .limit(200);
       // ⚠️ Erro SOBE. Devolver `[]` faria "não consigo ler" ficar igual a "não
@@ -55,6 +60,8 @@ export function useCriarAviso() {
         mensagem: novo.mensagem,
         apps: novo.apps,
         previsao_fim: novo.previsao_fim,
+        normalizado_minutos: novo.normalizado_minutos,
+        normalizado_texto: novo.normalizado_texto,
         created_by: sessao?.user?.id ?? null,
       });
       if (error) throw error;

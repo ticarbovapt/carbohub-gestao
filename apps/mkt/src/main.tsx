@@ -6,8 +6,6 @@ import { Toaster } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "./contexts/AuthContext";
 import { BloqueioAoVivo } from "./components/BloqueioAoVivo";
-import { StatusTarja } from "@carbo/shell";
-import { supabase } from "@/integrations/supabase/client";
 import App from "./App";
 import "./index.css";
 
@@ -21,7 +19,6 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <TooltipProvider delayDuration={200}>
             <App />
             <BloqueioAoVivo />
-            <StatusTarja supabase={supabase} app="mkt" statusUrl="https://carbohub.com.br/status" />
           </TooltipProvider>
           <Toaster richColors position="top-right" offset={72} />
         </AuthProvider>

@@ -6,7 +6,7 @@ import {
   CalendarCheck, PackageCheck,
 } from "lucide-react";
 import { ChatBadge, ChatProvider } from "@carbo/chat";
-import { Sidebar, type ShellNavSection } from "@carbo/shell";
+import { Sidebar, type ShellNavSection, StatusTarja } from "@carbo/shell";
 import { supabase } from "@/integrations/supabase/client";
 import { useMemo } from "react";
 import { TopBar } from "@/components/TopBar";
@@ -80,6 +80,10 @@ export function SalesShell() {
       loadCallEngine={() => import("@carbo/call").then((m) => m.loadCall())}>
     <div className="h-screen overflow-hidden bg-background text-foreground flex flex-col">
       <TopBar appName="Carbo Sales" appKey="crm" onMenu={handleMenu} />
+      {/* ⚠️ ABAIXO do TopBar, em FLUXO — nunca `fixed`. O Layout é
+          `h-screen flex flex-col`, entao ela ocupa a propria altura e o corpo
+          encolhe sozinho. A primeira versao era sobreposta e cobria o cabecalho. */}
+      <StatusTarja supabase={supabase} app="crm" statusUrl="https://carbohub.com.br/status" />
 
       <div className="flex flex-1 min-h-0">
         <Sidebar

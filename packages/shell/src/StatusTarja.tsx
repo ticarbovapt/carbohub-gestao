@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, Info, WifiOff, Wrench, X, Activity } from "lucide-react";
+import { AlertTriangle, Info, WifiOff, Wrench, Activity, CheckCircle2 } from "lucide-react";
 
 /**
- * Tarja de status — a faixa no topo que avisa que o sistema está instável.
+ * Tarja de status — a faixa que avisa que o sistema está instável.
  *
  * Pedido do dono do processo em 28/09/2026, depois de uma queda em que os apps
  * ficaram girando sem explicação: *"ja sobe a tarja vermelha em cima em todos
@@ -24,7 +24,7 @@ import { AlertTriangle, Info, WifiOff, Wrench, X, Activity } from "lucide-react"
  * Aviso que depende do que ele anuncia é aviso que falha calado — a mesma
  * lição do `BloqueioAoVivo`, onde o sinal do Realtime NÃO substitui a trava.
  *
- * ── Quatro coisas que parecem detalhe e não são ───────────────────────────
+ * ── Cinco coisas que parecem detalhe e não são ────────────────────────────
  *
  * 1. ⚠️ **"A minha internet caiu" e "o sistema caiu" têm a MESMA cara**, e
  *    acusar o sistema no primeiro caso é pior que não avisar nada: manda gente
@@ -39,15 +39,26 @@ import { AlertTriangle, Info, WifiOff, Wrench, X, Activity } from "lucide-react"
  *    cedo demais" é barato, errar para "fica vermelho sem motivo" ensina o
  *    time a ignorar a tarja — a doença do sininho com 70 itens não lidos.
  *
- * 3. ⚠️ **A tarja SOBREPÕE, não empurra o layout.** Empurrar exigiria mexer no
- *    cabeçalho `sticky top-0` dos sete apps, que é justamente o tipo de
- *    alteração replicada que diverge em silêncio. Em troca ela é recolhível: o
- *    X a reduz a um chip, guardado por id do aviso em `sessionStorage` — aviso
- *    novo (ou aba nova) volta a aparecer inteiro.
+ * 3. ⚠️ **Ela fica ABAIXO do cabeçalho, em fluxo — não sobreposta.** A
+ *    primeira versão era `fixed` no topo e cobria a TopBar dos sete apps; o
+ *    dono do processo apontou no mesmo dia. Como o Layout de todos eles é
+ *    `h-screen flex flex-col`, basta montá-la logo após o `<TopBar/>`: ela
+ *    ocupa a própria altura e o corpo encolhe sozinho. **Nada de `fixed`,
+ *    nada de `padding-top` no `body`** — empurrar por fora exigiria mexer no
+ *    `sticky top-0` de cada cabeçalho, que é o tipo de alteração replicada
+ *    que diverge em silêncio.
  *
- * 4. ⚠️ **Realtime NÃO é o único caminho.** Ele acende sem espera, mas há
- *    também uma releitura periódica e outra na volta do foco: Realtime fora do
- *    ar não pode ser o motivo de o aviso não aparecer.
+ * 4. ⚠️ **NÃO dá para fechar**, e isso é decisão do dono do processo. Aviso de
+ *    indisponibilidade que a pessoa esconde volta a produzir exatamente o que
+ *    ele existe para evitar: a pergunta no chat e o ticket. Quem tira a tarja
+ *    é o TI, encerrando o aviso — ou o próprio sistema, voltando a responder.
+ *
+ * 5. ⚠️ **Encerrar não apaga na hora: vira VERDE por um tempo.** "Sumiu a
+ *    tarja" e "nunca houve tarja" são indistinguíveis para quem chega depois,
+ *    e quem passou a manhã travado precisa ler que normalizou — senão
+ *    continua desconfiando do sistema (e abrindo ticket). Quanto tempo o
+ *    verde fica é do TI (`normalizado_minutos`), porque só ele sabe se o
+ *    incidente foi de cinco minutos ou de meio dia.
  */
 
 export type StatusSeveridade = "info" | "instabilidade" | "queda" | "manutencao";
@@ -62,6 +73,11 @@ export interface StatusAviso {
   apps: string[] | null;
   inicio_em: string;
   previsao_fim: string | null;
+  encerrado_em: string | null;
+  /** Por quantos minutos, depois de encerrado, a tarja VERDE continua no ar. */
+  normalizado_minutos: number | null;
+  /** Texto do verde. Vazio usa o padrão. */
+  normalizado_texto: string | null;
 }
 
 /** O mínimo que a tarja usa do cliente — o app passa o dele, como no switcher. */
@@ -78,8 +94,8 @@ export interface StatusTarjaProps {
    * lista `apps` do aviso filtra, e é o MESMO vocabulário que a tela do TI
    * usa para montar as caixinhas — uma lista só, sem cópia para divergir.
    *
-   * ⚠️ Vem escrita em cada `main.tsx`, e não de `appKeyAtual()`, porque
-   * aquela devolve `null` fora de produção: em dev a tarja ficaria muda.
+   * ⚠️ Vem escrita em cada Layout, e não de `appKeyAtual()`, porque aquela
+   * devolve `null` fora de produção: em dev a tarja ficaria muda.
    */
   app: string;
   /**
@@ -122,12 +138,7 @@ async function alcanca(url: string, sinal: AbortSignal): Promise<number | null> 
 
 // ── aparência ──────────────────────────────────────────────────────────────
 
-interface Cara {
-  fundo: string;
-  Icone: typeof AlertTriangle;
-}
-
-const CARAS: Record<StatusSeveridade, Cara> = {
+const CARAS: Record<StatusSeveridade, { fundo: string; Icone: typeof Info }> = {
   queda: { fundo: "bg-red-600", Icone: AlertTriangle },
   instabilidade: { fundo: "bg-amber-500", Icone: Activity },
   manutencao: { fundo: "bg-slate-700", Icone: Wrench },
@@ -141,13 +152,32 @@ function quando(iso: string | null): string {
   return d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 
+/**
+ * O aviso encerrado ainda está na janela do VERDE?
+ *
+ * ⚠️ A conta é feita AQUI, e não só na policy do banco, porque o TI enxerga o
+ * histórico inteiro (duas policies de SELECT que somam). Sem esta conta, quem
+ * é do TI veria a tarja verde de um incidente de semanas atrás.
+ */
+function noVerde(a: StatusAviso, agora: number): boolean {
+  if (a.ativo || !a.encerrado_em) return false;
+  const min = a.normalizado_minutos ?? 0;
+  if (min <= 0) return false;
+  const fim = new Date(a.encerrado_em).getTime() + min * 60_000;
+  return Number.isFinite(fim) && agora < fim;
+}
+
 // ── componente ─────────────────────────────────────────────────────────────
 
 export function StatusTarja({ supabase, app, supabaseUrl, statusUrl }: StatusTarjaProps) {
   const base = (supabaseUrl || (supabase as any)?.supabaseUrl || "").replace(/\/+$/, "");
-  const [declarado, setDeclarado] = useState<StatusAviso | null>(null);
+
+  const [avisos, setAvisos] = useState<StatusAviso[]>([]);
   const [automatico, setAutomatico] = useState<Automatico>(null);
-  const [recolhido, setRecolhido] = useState(false);
+  // ⚠️ Relógio próprio: a janela do verde fecha com o TEMPO, sem nenhum evento
+  // do banco para disparar um re-render. Sem isto a tarja verde ficaria no ar
+  // até alguém dar F5 — e o prazo que o TI escolheu não valeria nada.
+  const [agora, setAgora] = useState(() => Date.now());
 
   // `ref` e não estado: as sondas rodam dentro de timers e de listeners, que
   // não reagem a re-render — estado aqui daria closure velha, como no
@@ -160,21 +190,19 @@ export function StatusTarja({ supabase, app, supabaseUrl, statusUrl }: StatusTar
     try {
       const { data, error } = await supabase
         .from("carbo_status_aviso")
-        .select("id, ativo, severidade, titulo, mensagem, apps, inicio_em, previsao_fim")
-        .eq("ativo", true)
+        .select(
+          "id, ativo, severidade, titulo, mensagem, apps, inicio_em, previsao_fim, encerrado_em, normalizado_minutos, normalizado_texto",
+        )
         .order("inicio_em", { ascending: false })
         .limit(20);
       if (error) throw error;
-      const lista: StatusAviso[] = (data ?? []) as StatusAviso[];
-      // Lista vazia = todos os apps (ver o comentário da coluna na migração).
-      const meu = lista.find((a) => !a.apps?.length || a.apps.includes(app)) ?? null;
-      setDeclarado(meu);
+      setAvisos((data ?? []) as StatusAviso[]);
     } catch {
       // ⚠️ Falha de leitura NÃO apaga a tarja nem acende nada: quem responde
       // "o sistema está fora?" é a sonda, que não depende do banco. Inventar
       // um estado aqui seria a ausência disfarçada de resposta.
     }
-  }, [supabase, app]);
+  }, [supabase]);
 
   useEffect(() => {
     ler();
@@ -206,6 +234,12 @@ export function StatusTarja({ supabase, app, supabaseUrl, statusUrl }: StatusTar
       }
     };
   }, [ler, supabase]);
+
+  // O relógio do verde.
+  useEffect(() => {
+    const t = setInterval(() => setAgora(Date.now()), 20_000);
+    return () => clearInterval(t);
+  }, []);
 
   // ── detecção automática ──────────────────────────────────────────────────
   useEffect(() => {
@@ -283,107 +317,66 @@ export function StatusTarja({ supabase, app, supabaseUrl, statusUrl }: StatusTar
   }, [base]);
 
   // ── o que mostrar ────────────────────────────────────────────────────────
+  // Lista vazia de `apps` = todos (ver o comentário da coluna na migração).
+  const meu = (a: StatusAviso) => !a.apps?.length || a.apps.includes(app);
+  const declarado = avisos.find((a) => a.ativo && meu(a)) ?? null;
+  // ⚠️ Só entra no verde se NÃO houver aviso ativo: incidente novo aberto
+  // antes de o verde do anterior expirar não pode aparecer como "normalizado".
+  const verde = declarado ? null : (avisos.find((a) => meu(a) && noVerde(a, agora)) ?? null);
+
   // ⚠️ O automático VENCE o declarado: "o sistema não responde agora" é mais
   // urgente que "haverá manutenção às 22h", e mostrar os dois empilhados
-  // roubaria o topo da tela inteira.
-  let severidade: StatusSeveridade | null = null;
+  // roubaria o topo da tela inteira. E vence o verde com ainda mais razão:
+  // dizer "normalizou" enquanto nada responde seria mentir na cara de quem lê.
+  let fundo = "";
+  let Icone = Info;
   let titulo = "";
   let mensagem: string | null = null;
-  let chave = "";
+  let rodape: string | null = null;
 
   if (automatico === "rede_local") {
-    severidade = null; // tratado à parte (cinza, e não acusa o sistema)
-    chave = "auto:rede_local";
+    fundo = "bg-slate-600";
+    Icone = WifiOff;
+    titulo = "Você está sem conexão com a internet";
+    mensagem = "O sistema pode estar funcionando normalmente — o que não responde é a sua rede.";
   } else if (automatico === "queda") {
-    severidade = "queda";
+    fundo = CARAS.queda.fundo;
+    Icone = CARAS.queda.Icone;
     titulo = "O sistema não está respondendo";
     mensagem = "Estamos sem conexão com o servidor. A equipe de TI já é avisada automaticamente — não é preciso abrir chamado.";
-    chave = "auto:queda";
   } else if (automatico === "lentidao") {
-    severidade = "instabilidade";
+    fundo = CARAS.instabilidade.fundo;
+    Icone = CARAS.instabilidade.Icone;
     titulo = "Sistema lento agora";
     mensagem = "As respostas do servidor estão demorando mais que o normal. Pode ser preciso esperar alguns segundos por tela.";
-    chave = "auto:lentidao";
   } else if (declarado) {
-    severidade = declarado.severidade;
+    const cara = CARAS[declarado.severidade] ?? CARAS.info;
+    fundo = cara.fundo;
+    Icone = cara.Icone;
     titulo = declarado.titulo;
     mensagem = declarado.mensagem;
-    chave = `aviso:${declarado.id}`;
-  }
-
-  const temAlgo = automatico === "rede_local" || severidade !== null;
-
-  // Recolhimento por aviso e por aba: aviso novo volta a aparecer inteiro.
-  useEffect(() => {
-    if (!chave) return;
-    try {
-      setRecolhido(sessionStorage.getItem(`carbo-status-recolhido`) === chave);
-    } catch {
-      setRecolhido(false);
-    }
-  }, [chave]);
-
-  if (!temAlgo) return null;
-
-  function recolher() {
-    setRecolhido(true);
-    try {
-      sessionStorage.setItem("carbo-status-recolhido", chave);
-    } catch {
-      /* navegador sem storage: recolhe só nesta montagem */
-    }
-  }
-
-  const rede = automatico === "rede_local";
-  const cara = rede ? { fundo: "bg-slate-600", Icone: WifiOff } : CARAS[severidade!];
-  const Icone = cara.Icone;
-
-  if (recolhido) {
-    return (
-      <button
-        type="button"
-        onClick={() => {
-          setRecolhido(false);
-          try {
-            sessionStorage.removeItem("carbo-status-recolhido");
-          } catch {
-            /* nada a fazer */
-          }
-        }}
-        className={`fixed right-3 top-3 z-[9999] flex items-center gap-1.5 rounded-full ${cara.fundo} px-3 py-1.5 text-xs font-medium text-white shadow-lg`}
-        title="Ver o aviso de status"
-      >
-        <Icone className="h-3.5 w-3.5" />
-        {rede ? "Sem internet" : "Aviso do sistema"}
-      </button>
-    );
+    if (declarado.previsao_fim) rodape = `Previsão de normalização: ${quando(declarado.previsao_fim)}.`;
+  } else if (verde) {
+    fundo = "bg-emerald-600";
+    Icone = CheckCircle2;
+    titulo = "Tudo normalizado";
+    mensagem =
+      verde.normalizado_texto?.trim() ||
+      `O problema "${verde.titulo}" foi resolvido e o sistema voltou ao normal.`;
+    rodape = `Normalizado às ${quando(verde.encerrado_em)}.`;
+  } else {
+    return null;
   }
 
   return (
-    <div
-      role="status"
-      aria-live="polite"
-      className={`fixed inset-x-0 top-0 z-[9999] ${cara.fundo} text-white shadow-md`}
-    >
+    <div role="status" aria-live="polite" className={`shrink-0 ${fundo} text-white`}>
       <div className="mx-auto flex max-w-[1600px] items-start gap-2.5 px-3 py-2 sm:px-4">
         <Icone className="mt-0.5 h-4 w-4 shrink-0" />
         <div className="min-w-0 flex-1 text-[13px] leading-snug">
-          <span className="font-semibold">
-            {rede ? "Você está sem conexão com a internet" : titulo}
-          </span>
-          {(rede || mensagem) && (
-            <span className="ml-1.5 opacity-90">
-              {rede
-                ? "O sistema pode estar funcionando normalmente — o que não responde é a sua rede."
-                : mensagem}
-            </span>
-          )}
-          {!rede && declarado && !automatico && declarado.previsao_fim && (
-            <span className="ml-1.5 opacity-90">
-              Previsão de normalização: {quando(declarado.previsao_fim)}.
-            </span>
-          )}
-          {!rede && statusUrl && (
+          <span className="font-semibold">{titulo}</span>
+          {mensagem && <span className="ml-1.5 opacity-90">{mensagem}</span>}
+          {rodape && <span className="ml-1.5 opacity-90">{rodape}</span>}
+          {statusUrl && automatico !== "rede_local" && (
             <a
               href={statusUrl}
               target="_blank"
@@ -394,15 +387,7 @@ export function StatusTarja({ supabase, app, supabaseUrl, statusUrl }: StatusTar
             </a>
           )}
         </div>
-        <button
-          type="button"
-          onClick={recolher}
-          className="-mr-1 shrink-0 rounded p-1 opacity-80 transition hover:bg-white/15 hover:opacity-100"
-          title="Recolher o aviso"
-          aria-label="Recolher o aviso"
-        >
-          <X className="h-4 w-4" />
-        </button>
+        {/* ⚠️ Sem botão de fechar, de propósito — ver a decisão 4 no topo. */}
       </div>
     </div>
   );
