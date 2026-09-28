@@ -216,9 +216,12 @@ left join public.bling2_nfe      nf  on nf.bling_id = bo.nf_bling_id
 left join public.bling2_contacts c   on c.bling_id = bo.contato_id
 left join public.bling2_lojas    l   on l.bling_id = bo.loja_id
 left join public.carboze_orders  o   on o.external_ref = 'bling2-' || bo.bling_id
-left join payt_carrinho          pc  on coalesce(bo.numero_loja, '') like 'PAYT!_%' escape '!'
-                                    and pc.transacao = split_part(bo.numero_loja, '_', 3)
-left join plataforma             p   on p.platform_order_number = coalesce(pc.carrinho, bo.numero_loja)
+-- ⚠️ ALIAS `ptc`, NUNCA `pc`: `carbo_pedido_codigo` ja usa `pc` logo abaixo, e
+-- dois aliases iguais no mesmo FROM sao `table name "pc" specified more than
+-- once` — e, pior, `pc.codigo` passaria a apontar para a tabela errada.
+left join payt_carrinho          ptc on coalesce(bo.numero_loja, '') like 'PAYT!_%' escape '!'
+                                    and ptc.transacao = split_part(bo.numero_loja, '_', 3)
+left join plataforma             p   on p.platform_order_number = coalesce(ptc.carrinho, bo.numero_loja)
 left join public.rastreio_envios r
        on r.codigo = nullif(bo.raw_detalhe -> 'transporte' -> 'volumes' -> 0 ->> 'codigoRastreamento', '')
 left join public.carbo_pedido_codigo pc on pc.bling_id = bo.bling_id
