@@ -27,6 +27,20 @@ export interface Produto {
    * linha, e o ESTOQUE baixa do pai — é a mesma garrafa da mesma prateleira.
    */
   bonificacao_de: string | null;
+  /**
+   * Quando preenchido, esta linha é o MESMO produto físico do id apontado,
+   * vendido a outro preço conforme o tipo de cliente (PDV, microdistribuidor).
+   *
+   * ⚠️ Não é desconto: o valor sai CHEIO na NF. Vender a 15,60 com 4,10 de
+   * desconto e vender a 11,50 dão o mesmo total e notas fiscais diferentes —
+   * e o imposto é no momento da NF.
+   *
+   * ⚠️ O ESTOQUE baixa do pai (`carbo_itens_para_estoque` resolve `preco_de`):
+   * é a mesma garrafa da mesma prateleira, e o SKU da faixa nunca é produzido.
+   */
+  preco_de: string | null;
+  /** Qual faixa (carbo_faixa_preco.codigo). Anda sempre junto com `preco_de`. */
+  faixa_preco: string | null;
 }
 
 export function useProdutos() {
@@ -38,7 +52,7 @@ export function useProdutos() {
       // Mesma regra que a OP usa (category === "Produto Final").
       const { data, error } = await db
         .from("mrp_products")
-        .select("id, name, product_code, stock_unit, sale_price, bonificacao_de")
+        .select("id, name, product_code, stock_unit, sale_price, bonificacao_de, preco_de, faixa_preco")
         .eq("is_active", true)
         .eq("category", "Produto Final")
         .order("name");

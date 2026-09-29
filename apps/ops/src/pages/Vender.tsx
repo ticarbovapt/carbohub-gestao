@@ -1493,7 +1493,21 @@ export default function Vender() {
                     <Label>Produto</Label>
                     <Select value={r.productId} onValueChange={(v) => onProduct(r.id, v)}>
                       <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                      <SelectContent>{produtos.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
+                      {/* ⚠️ O PREÇO aparece na opção, e isso não é enfeite: desde
+                          que o mesmo produto tem faixa por tipo de cliente
+                          (CarboZé 100ml · PDV · Microdistribuidor), o nome
+                          sozinho não diz qual delas o vendedor está escolhendo
+                          — e escolher a errada não dá erro, dá uma NF com o
+                          valor errado. Produto sem preço é dito com todas as
+                          letras porque o /vender RECUSA vendê-lo. */}
+                      <SelectContent>{produtos.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name}
+                          <span className={p.sale_price == null ? "text-destructive" : "text-muted-foreground"}>
+                            {" — "}{p.sale_price == null ? "sem preço" : brl(p.sale_price)}
+                          </span>
+                        </SelectItem>
+                      ))}</SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-1.5">

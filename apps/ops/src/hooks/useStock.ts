@@ -66,6 +66,11 @@ export function useStock() {
           // uma linha zerada por produto, e um dia alguém tenta transferir
           // bonificação.
           .is("bonificacao_de", null)
+          // ⚠️ A linha de FAIXA DE PREÇO (CZ100-PDV, CZ100-MD) também não tem
+          // saldo próprio: é o mesmo produto físico do pai, vendido a outro
+          // preço. Sem esta linha a grade ganharia uma linha ZERADA por produto
+          // POR FAIXA — o mesmo defeito do gêmeo de bonificação, multiplicado.
+          .is("preco_de", null)
           .order("product_code"),
         db.from("warehouse_stock").select("product_id, quantity, warehouse:warehouses(code)"),
         db.from("ops_stock_min").select("product_id, min_qty, warehouse:warehouses(code)"),
