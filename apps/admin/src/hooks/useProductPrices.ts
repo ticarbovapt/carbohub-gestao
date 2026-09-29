@@ -27,6 +27,15 @@ export interface FinalProduct {
    */
   preco_de: string | null;
   faixa_preco: string | null;
+  /**
+   * Se aparece no dropdown do /vender.
+   *
+   * ⚠️ NÃO é `is_active`: aquele governa MRP, produção, grade de Suprimentos e
+   * caixa de vendedor. Desativar um produto para tirá-lo da lista de venda o
+   * tiraria do ESTOQUE junto, e o saldo que existe na prateleira sumiria da
+   * tela sem erro nenhum.
+   */
+  aparece_no_vender: boolean;
 }
 
 export interface FaixaPreco {
@@ -63,7 +72,7 @@ export function useFinalProducts() {
     queryFn: async (): Promise<FinalProduct[]> => {
       const { data, error } = await db
         .from("mrp_products")
-        .select("id, name, product_code, stock_unit, sale_price, sale_price_updated_at, sale_price_updated_by, bonificacao_de, preco_de, faixa_preco")
+        .select("id, name, product_code, stock_unit, sale_price, sale_price_updated_at, sale_price_updated_by, bonificacao_de, preco_de, faixa_preco, aparece_no_vender")
         .eq("is_active", true)
         .eq("category", "Produto Final")
         .order("name", { ascending: true });
@@ -101,6 +110,26 @@ export function useCriarFaixaPreco() {
       toast({ title: "Faixa criada", description: "Defina o preço dela abaixo — sem preço ela não vende." });
     },
     onError: (e: any) => toast({ title: "Erro ao criar a faixa", description: e?.message ?? "Tente de novo", variant: "destructive" }),
+  });
+}
+
+/**
+ * Liga/desliga a aparição de um produto no dropdown do /vender.
+ *
+ * ⚠️ Isso NÃO desativa o produto. Ele continua no estoque, na produção e no
+ * MRP — é só a lista de venda que muda. A tela precisa dizer isso, senão
+ * "escondi" e "desativei" viram a mesma coisa na cabeça de quem clica.
+ */
+export function useProdutoNoVender() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (p: { productId: string; aparece: boolean }) => {
+      const { error } = await db.rpc("carbo_produto_no_vender", { p_produto: p.productId, p_aparece: p.aparece });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["final_products_prices"] }),
+    onError: (e: any) => toast({ title: "Erro ao mudar a visibilidade", description: e?.message ?? "Tente de novo", variant: "destructive" }),
   });
 }
 

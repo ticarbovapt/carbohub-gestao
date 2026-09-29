@@ -41,6 +41,19 @@ export interface Produto {
   preco_de: string | null;
   /** Qual faixa (carbo_faixa_preco.codigo). Anda sempre junto com `preco_de`. */
   faixa_preco: string | null;
+  /**
+   * Se este produto aparece no dropdown do /vender. Liga/desliga em
+   * Admin › Comercial › Tabela de preços.
+   *
+   * ⚠️ NÃO é `is_active`: esconder da lista de venda não desativa o produto —
+   * ele continua no estoque, na produção e no MRP.
+   *
+   * ⚠️ E a tela NÃO filtra por isto cegamente: produto já escolhido numa linha
+   * continua aparecendo, senão reabrir um orçamento antigo cujo produto foi
+   * escondido depois mostraria a linha VAZIA carregando um produto real — e
+   * salvar assim perderia o item, calado.
+   */
+  aparece_no_vender: boolean;
 }
 
 export function useProdutos() {
@@ -52,7 +65,7 @@ export function useProdutos() {
       // Mesma regra que a OP usa (category === "Produto Final").
       const { data, error } = await db
         .from("mrp_products")
-        .select("id, name, product_code, stock_unit, sale_price, bonificacao_de, preco_de, faixa_preco")
+        .select("id, name, product_code, stock_unit, sale_price, bonificacao_de, preco_de, faixa_preco, aparece_no_vender")
         .eq("is_active", true)
         .eq("category", "Produto Final")
         .order("name");
