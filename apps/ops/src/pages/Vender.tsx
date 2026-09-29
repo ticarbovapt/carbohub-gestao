@@ -32,7 +32,7 @@ import { useVincularOrcamento } from "@/hooks/useLeadOrcamento";
 import { useProdutos } from "@/hooks/useProdutos";
 import { useCreateOSFromSale } from "@/hooks/useDescarbOS";
 import {
-  DESCARB_MODALIDADES, DESCARB_SERVICE_TYPES,
+  DESCARB_MODALIDADES,
   modalidadePrice, modalidadeLabel, modalidadeHint,
   servicoPadraoPorDoc, type DescarbServiceType,
 } from "@carbo/shell";
@@ -240,7 +240,11 @@ export default function Vender() {
   const [isLicenciado, setIsLicenciado] = useState(false);
   const [rows, setRows] = useState<ItemRow[]>([emptyRow()]);
   // Itens de serviço (descarbonizações) — opcional, começa VAZIO.
-  const [serviceRows, setServiceRows] = useState<ServiceRow[]>([]);
+  // ⚠️ Nasce com UMA linha, igual ao `rows` do CarboZé. Nascia vazio e a seção
+  // chegava "fechada": o vendedor tinha de achar "Adicionar Serviço" antes de
+  // conseguir vender — um clique a mais para o caso NORMAL, que é justamente o
+  // que a tela não deve cobrar.
+  const [serviceRows, setServiceRows] = useState<ServiceRow[]>([emptyServiceRow()]);
   const [obsPublica, setObsPublica] = useState("");
   const [notasInternas, setNotasInternas] = useState("");
   const [tipoPonto, setTipoPonto] = useState("");
@@ -634,9 +638,14 @@ export default function Vender() {
       toast.info("Itens de produto removidos — uma venda é de um tipo só.");
     }
     if (novo === "carboze" && hasValidService) {
-      setServiceRows([]);
+      setServiceRows([emptyServiceRow()]);
       toast.info("Itens de serviço removidos — uma venda é de um tipo só.");
     }
+    // ⚠️ Repõe a linha vazia ao ENTRAR no modo: sem isto, quem volta ao
+    // CarboVAPT depois de ter trocado encontra a seção fechada de novo — que é
+    // exatamente o que esta mudança corrige.
+    if (novo === "carbovapt" && serviceRows.length === 0) setServiceRows([emptyServiceRow()]);
+    if (novo === "carboze" && rows.length === 0) setRows([emptyRow()]);
     // ⚠️ O CarboVAPT não mostra o endereço de faturamento separado, porque a
     // seção inteira JÁ é ele. Campo escondido que continua preenchido vai junto
     // no payload — esconder sem devolver ao padrão faria a NF de serviço sair
@@ -667,9 +676,12 @@ export default function Vender() {
   // barrar aqui do que salvar a venda e falhar na OS.
   const frotaSemData = hasValidService && serviceType === "frota" && !executionDate;
 
-  // Palpite do tipo de serviço pelo documento — só enquanto o vendedor não
-  // tiver escolhido à mão. CNPJ sugere B2B; se ele trocar para Frota, a escolha
-  // dele manda e o documento para de mexer.
+  // O tipo de serviço vem do DOCUMENTO: CNPJ ⇒ b2b, CPF ⇒ b2c. Desde 29/09/2026
+  // não há mais seletor na tela — este passou a ser o único caminho para venda
+  // nova. ⚠️ `serviceTypeTocado` continua existindo e NÃO é resto: orçamento
+  // antigo guardou a escolha manual no snapshot (inclusive `frota`), e sem esta
+  // trava o documento a sobrescreveria ao reabrir, mudando calado o tipo de uma
+  // venda que alguém já decidiu.
   useEffect(() => {
     if (serviceTypeTocado) return;
     setServiceType(servicoPadraoPorDoc(doc));
@@ -731,7 +743,8 @@ export default function Vender() {
       setDiscReason(snap.discReason ?? ""); setDeliveryDate(snap.deliveryDate ?? "");
       // Orçamento antigo não tem o campo: produção, que é o de sempre.
       setModalidade(snap.modalidade ?? "producao");
-      setServiceRows(snap.serviceRows ?? []); setExecutionDate(snap.executionDate ?? "");
+      setServiceRows(Array.isArray(snap.serviceRows) && snap.serviceRows.length ? snap.serviceRows : [emptyServiceRow()]);
+      setExecutionDate(snap.executionDate ?? "");
       // Orçamento antigo não tem o campo: cai no palpite pelo documento.
       if (snap.serviceType) { setServiceType(snap.serviceType); setServiceTypeTocado(true); }
       else setServiceType(servicoPadraoPorDoc(snap.doc ?? ""));
@@ -832,7 +845,7 @@ export default function Vender() {
     setDiscReason("");
     setDeliveryDate("");
     setRecorrente(false); setRecPeriodo("mensal"); setRecParcelas(6);
-    setServiceRows([]); setExecutionDate("");
+    setServiceRows([emptyServiceRow()]); setExecutionDate("");
     setServiceType("b2c"); setServiceTypeTocado(false);
   }
 
@@ -1528,26 +1541,20 @@ export default function Vender() {
             <p className="text-xs text-muted-foreground">Nenhum serviço adicionado. Use “Adicionar Serviço” para incluir descarbonizações.</p>
           )}
 
-          {/* Tipo da OS. Define como o Carbox recebe o serviço — e Frota exige
-              data, porque uma ida com vários carros precisa estar agendada. */}
-          {serviceRows.length > 0 && (
-            <div className="space-y-1.5">
-              <Label>Tipo de serviço</Label>
-              <div className="flex flex-wrap gap-2">
-                {DESCARB_SERVICE_TYPES.map((st) => {
-                  const on = serviceType === st.key;
-                  return (
-                    <button key={st.key} type="button"
-                      onClick={() => { setServiceType(st.key); setServiceTypeTocado(true); }}
-                      className={`rounded-lg border px-3 py-2 text-left transition-colors ${on ? "border-carbo-green bg-carbo-green/10" : "hover:bg-muted"}`}>
-                      <span className={`block text-sm font-semibold ${on ? "text-carbo-green" : ""}`}>{st.label}</span>
-                      <span className="block text-[11px] text-muted-foreground">{st.hint}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+          {/* ⚠️ O SELETOR "Tipo de serviço" (B2C/B2B/Frota) SAIU em 29/09/2026,
+              por decisão do dono do processo: *"deixa o cara usar apenas o
+              tamanho e colocar a quantidade normalmente"*. O VALOR continua —
+              ele é `service_type`/`person_type` na RPC da OS, e a OS é o que vai
+              para o portal de licenciados. Quem o decide agora é o DOCUMENTO,
+              que já era o padrão: CNPJ ⇒ b2b, CPF ⇒ b2c (`servicoPadraoPorDoc`).
+
+              ⚠️ Consequência ASSUMIDA, não esquecida: 'frota' deixa de ser
+              escolhível, porque nada o deriva do documento. Com isso a trava
+              "Frota exige a previsão de execução" não dispara mais em venda
+              nova — venda de empresa com vários carros vai para a OS como b2b,
+              e a data de execução passa a ser opcional nela. Se um dia a frota
+              precisar voltar a ser distinguida, ela volta como CAMPO da OS, não
+              como pergunta no /vender. */}
 
           {serviceRows.map((s) => {
             const price = modalidadePrice(s.modality);
