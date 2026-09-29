@@ -281,21 +281,40 @@ comment on function public.carbo_itens_para_estoque is
 -- ╔═══════════════════════════════════════════════════════════════════════╗
 -- ║ BLOCO 6 — a linha de faixa fica FORA das telas de estoque             ║
 -- ╚═══════════════════════════════════════════════════════════════════════╝
--- ⚠️ Mesmo motivo do gêmeo: ela não tem saldo próprio. Aparecer aqui daria uma
--- linha zerada por produto POR FAIXA — com duas faixas, a grade de Suprimentos
--- TRIPLICA de altura e nenhuma das linhas novas tem número nenhum.
+-- Mesmo motivo do gêmeo: ela não tem saldo próprio. Aparecer aqui daria uma
+-- linha zerada por produto POR FAIXA.
 --
--- ⚠️ `create or replace view` sem `WITH` APAGA as reloptions. Esta view não
--- tem `security_invoker` hoje (conferido na `20260900`), mas a regra vale: ao
--- republicar QUALQUER view, repita a cláusula que ela tinha.
+-- ⚠️⚠️ A PRIMEIRA VERSÃO DESTE BLOCO FOI ESCRITA A PARTIR DA MIGRAÇÃO
+-- `20260900` E ESTAVA ERRADA. Ela levou `42P16: cannot drop columns from view`
+-- porque a definição VIVA é a da `20260915` e tem duas colunas a mais
+-- (`is_active`, `vendedor_avatar`).
+--
+-- ⚠️ E O ERRO FOI SORTE, NÃO CUIDADO. Se as colunas tivessem batido, o
+-- `create or replace` teria PASSADO — e teria removido, calado, as DUAS coisas
+-- que a `20260915` acrescentou e que eu não sabia que existiam:
+--
+--   `carbo_pode_ver_caixa(w.owner_id)`   o gate de quem enxerga qual caixa
+--   `with (security_invoker = false)`    a reloption
+--
+-- Sem o gate, qualquer autenticado passaria a ver a caixa de todo vendedor.
+-- É a lição que o próprio repositório já registrou duas vezes e que eu não
+-- segui: **pergunte ao BANCO (`pg_get_viewdef`), não à migração que criou a
+-- tabela** — a mesma falha do CHECK da `20260918`. E "CREATE OR REPLACE VIEW
+-- sem WITH apaga as reloptions" é a lição da `20260919`, que também teria sido
+-- repetida aqui.
+--
+-- A versão abaixo é a da `20260915` com UMA linha a mais no WHERE.
 
-create or replace view public.vendedor_estoque as
+create or replace view public.vendedor_estoque
+with (security_invoker = false) as
 select
   w.id            as warehouse_id,
-  w.owner_id      as vendedor_id,
-  p.full_name     as vendedor_nome,
   w.code          as warehouse_code,
   w.name          as warehouse_name,
+  w.is_active,
+  w.owner_id      as vendedor_id,
+  coalesce(p.full_name, 'Vendedor sem cadastro') as vendedor_nome,
+  p.avatar_url    as vendedor_avatar,
   pr.id           as product_id,
   pr.product_code,
   pr.name         as product_name,
@@ -303,15 +322,19 @@ select
   coalesce(ws.quantity, 0)::numeric as quantidade,
   ws.updated_at   as saldo_em
 from public.warehouses w
-join public.profiles p on p.id = w.owner_id
+left join public.profiles p on p.id = w.owner_id
 cross join public.mrp_products pr
 left join public.warehouse_stock ws
        on ws.warehouse_id = w.id and ws.product_id = pr.id
 where w.kind = 'vendedor'
   and pr.is_active
   and pr.category = 'Produto Final'
-  and pr.bonificacao_de is null       -- ⬅ o gêmeo não tem saldo próprio
-  and pr.preco_de is null;            -- ⬅ nem a linha de faixa
+  and pr.bonificacao_de is null          -- o gêmeo de bonificação não é produto de prateleira
+  and pr.preco_de is null                -- ⬅ nem a linha de faixa de preço
+  and public.carbo_pode_ver_caixa(w.owner_id);
+
+comment on view public.vendedor_estoque is
+  'Saldo por vendedor e produto. Traz linha ZERADA para produto sem saldo de proposito: e o que falta na caixa. Exclui o gemeo de bonificacao E a linha de faixa de preco — nenhum dos dois tem saldo proprio. ⚠️ SECURITY DEFINER com gate explicito (carbo_pode_ver_caixa): com security_invoker o inner join em profiles fazia a policy de departamento esconder TODAS as caixas de quem trabalha em Suprimentos — tela vazia, sem erro.';
 
 grant select on public.vendedor_estoque to authenticated;
 
