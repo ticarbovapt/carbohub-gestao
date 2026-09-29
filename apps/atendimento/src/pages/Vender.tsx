@@ -1500,7 +1500,13 @@ export default function Vender() {
                           — e escolher a errada não dá erro, dá uma NF com o
                           valor errado. Produto sem preço é dito com todas as
                           letras porque o /vender RECUSA vendê-lo. */}
-                      <SelectContent>{produtos.map((p) => (
+                      {/* ⚠️ `|| p.id === r.productId`: o filtro esconde o que
+                          o Admin escondeu, MAS nunca some com o que já está
+                          escolhido nesta linha. Sem isso, reabrir um orçamento
+                          antigo cujo produto foi escondido depois mostraria a
+                          linha VAZIA carregando um produto real — e salvar
+                          perderia o item, sem erro nenhum. */}
+                      <SelectContent>{produtos.filter((p) => p.aparece_no_vender || p.id === r.productId).map((p) => (
                         <SelectItem key={p.id} value={p.id}>
                           {p.name}
                           <span className={p.sale_price == null ? "text-destructive" : "text-muted-foreground"}>
