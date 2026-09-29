@@ -170,6 +170,9 @@ export function useProdutosDoMapa() {
         .select("id, name, product_code, stock_unit")
         .eq("is_active", true)
         .is("bonificacao_de", null)
+        // ⚠️ Mesma razão: a linha de faixa de preço é o produto do pai com
+        // outro preço, não um item de prateleira.
+        .is("preco_de", null)
         .order("product_code");
       if (error) throw traduzErro(error);
       return (data ?? []) as ProdutoAlvo[];
