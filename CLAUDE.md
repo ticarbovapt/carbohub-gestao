@@ -674,6 +674,27 @@ existe.** Ele impede que vazio apague dado bom em `product_sku`, então o
 novo. **Conferido no banco (`pg_get_functiondef`), não na memória** — aquele
 gatilho é citado no repo e não está definido em migração nenhuma.
 
+⚠️ **`product_sku` é o que NÓS gravamos; `raw->'_item'` é o que a plataforma
+MANDOU — e confundi-los inverteu a conclusão** (29/09/2026). O anúncio voltou
+à aba "sem mapa" e eu li a coluna: 13 de 16 linhas com `124`, 3 vazias, e
+concluí "o painel funcionou e regrediu". O payload cru desmentiu: `item_sku`
+vem **vazio nas DEZESSEIS**, inclusive nas treze com `124`. Aqueles `124` eram
+**nossos**, da limpeza da `20261014`; as três de 29/09 entraram depois dela.
+Não houve regressão nem defeito de escrita — o campo sempre veio vazio da
+origem. Perguntar à coluna o que a origem mandou é o relatório que só sabe
+concordar consigo mesmo, na versão mais barata de cometer.
+
+⚠️ **O anúncio tem id ESTÁVEL e ele já está gravado**: `raw->'_item'->>'item_id'`
+(e `model_id` para variação), que é inclusive o sufixo do `order_id`. Se a
+Shopee continuar mandando SKU vazio mesmo com o painel preenchido, o caminho é
+mapear por ANÚNCIO — nunca pelo `product_name`, que é texto livre do anunciante
+e muda com SEO. Mapa por nome é a lição já paga no cadastro de PDV, e a NFS-e
+mostrou o mesmo com `SERVO=IÇO DE DESACRBONIZAÇÃO` digitado à mão.
+⚠️ Isso **não** revoga o "sem fallback" da `20260958`: aquilo proibia inferência
+implícita (casar SKU com `product_code` e torcer). Mapa por `item_id` seria
+CADASTRO explícito, com a propriedade que importa mantida — anúncio novo
+continua aparecendo na aba até alguém mapear.
+
 **O que a auditoria ensinou, e vale para qualquer canal:**
 
 1. ⚠️ **Existem TRÊS perguntas, não duas.** O marco zero pergunta se a venda é
