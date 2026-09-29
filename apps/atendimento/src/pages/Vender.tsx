@@ -32,7 +32,7 @@ import { useVincularOrcamento } from "@/hooks/useLeadOrcamento";
 import { useProdutos } from "@/hooks/useProdutos";
 import { useCreateOSFromSale } from "@/hooks/useDescarbOS";
 import {
-  DESCARB_MODALIDADES,
+  DESCARB_MODALIDADES, DESCARB_EXTRAS, extraLabel,
   modalidadePrice, modalidadeLabel, modalidadeHint,
   servicoPadraoPorDoc, type DescarbServiceType,
 } from "@carbo/shell";
@@ -245,6 +245,9 @@ export default function Vender() {
   // conseguir vender — um clique a mais para o caso NORMAL, que é justamente o
   // que a tela não deve cobrar.
   const [serviceRows, setServiceRows] = useState<ServiceRow[]>([emptyServiceRow()]);
+  // Serviços que acompanham a descarbonização (laudo, medição). Guardados por
+  // CHAVE, nunca por rótulo: o texto muda e o histórico não pode mudar junto.
+  const [extras, setExtras] = useState<string[]>([]);
   const [obsPublica, setObsPublica] = useState("");
   const [notasInternas, setNotasInternas] = useState("");
   const [tipoPonto, setTipoPonto] = useState("");
@@ -579,6 +582,52 @@ export default function Vender() {
       };
     });
 
+  /**
+   * Os extras como LINHA do orçamento: bonificação a R$ 0,00.
+   *
+   * ⚠️ Eles são item do PEDIDO, não campo do snapshot, e essa é a decisão
+   * inteira. O PDF é regerado a partir do pedido gravado (`Vendas.tsx`), não do
+   * formulário — campo que só existisse no snapshot sumiria do papel na
+   * segunda via, calado. Como `is_bonificacao` JÁ atravessa aquele `map`, isto
+   * chega ao PDF sem uma linha de código lá.
+   *
+   * ⚠️ `kind: "service"` e não um terceiro tipo: `so_servico`, em
+   * `useVendas.ts`, é `items.every(i => i.kind === "service")` — e é ele que
+   * diz que o pedido nunca vai ser faturado nem expedido. Um `kind` novo
+   * tiraria a venda de CarboVAPT dessa conta sem dar erro nenhum.
+   *
+   * ⚠️ Extra NÃO torna a venda válida: `erroDeModo()` exige
+   * `validServiceItems()`, e estes não entram lá. Marcar só as caixinhas e
+   * salvar continua sendo recusado — senão nasceria um pedido de R$ 0,00.
+   *
+   * ⚠️ E eles NÃO vão para a OS: as vagas de veículo saem de `serviceItemsRpc`,
+   * que lê `serviceRows`. Laudo não é carro para descarbonizar.
+   */
+  const extrasItens = () => {
+    if (mode !== "carbovapt") return [];
+    if (!serviceRows.some((s) => s.modality && s.qty > 0)) return [];
+    return extras
+      .map((k) => ({ k, label: extraLabel(k) }))
+      // Chave que saiu da lista some da linha em vez de imprimir "opacidade"
+      // cru no papel do cliente.
+      .filter((x): x is { k: string; label: string } => !!x.label)
+      .map((x) => ({
+        name: x.label,
+        kind: "service" as const,
+        modality: null,
+        product_id: null,
+        product_code: null,
+        quantity: 1,
+        unit_price: 0,
+        bonus_quantity: 0,
+        is_bonificacao: true,
+        discount_type: "none" as const,
+        discount_value: 0,
+        discount_amount: 0,
+        total: 0,
+      }));
+  };
+
   // Itens que a caixa não cobre. Some quantidade + bonificação porque o produto
   // bonificado também sai da prateleira — é a mesma conta do banco.
   //
@@ -641,6 +690,10 @@ export default function Vender() {
       setServiceRows([emptyServiceRow()]);
       toast.info("Itens de serviço removidos — uma venda é de um tipo só.");
     }
+    // Os extras são do CarboVAPT. Deixá-los marcados fora dele seria campo
+    // escondido indo junto no payload — o mesmo tropeço do endereço de
+    // faturamento, e a razão de `enderecoFaturamentoOuNulo` existir.
+    if (novo === "carboze") setExtras([]);
     // ⚠️ Repõe a linha vazia ao ENTRAR no modo: sem isto, quem volta ao
     // CarboVAPT depois de ter trocado encontra a seção fechada de novo — que é
     // exatamente o que esta mudança corrige.
@@ -714,13 +767,14 @@ export default function Vender() {
     discReason: string; deliveryDate: string;
     modalidade?: "producao" | "pronta_entrega";
     serviceRows: ServiceRow[]; executionDate: string; serviceType?: DescarbServiceType;
+    extras?: string[];
   };
   function formSnapshot(): FormSnapshot {
     return {
       mode, doc, customerName, email, phone, isLicenciado, rows, obsPublica, notasInternas,
       tipoPonto, classificacao, volumeMedio, atuaDiesel, atuaFrotas, vendedorId, endereco, fatMesmo,
       fatEndereco, ie, ieUf, pagModalidade, pagParcelas, pagFaturamento, discReason, deliveryDate,
-      serviceRows, executionDate, serviceType,
+      serviceRows, executionDate, serviceType, extras,
       modalidade,
     };
   }
@@ -745,6 +799,7 @@ export default function Vender() {
       setModalidade(snap.modalidade ?? "producao");
       setServiceRows(Array.isArray(snap.serviceRows) && snap.serviceRows.length ? snap.serviceRows : [emptyServiceRow()]);
       setExecutionDate(snap.executionDate ?? "");
+      setExtras(Array.isArray(snap.extras) ? snap.extras : []);
       // Orçamento antigo não tem o campo: cai no palpite pelo documento.
       if (snap.serviceType) { setServiceType(snap.serviceType); setServiceTypeTocado(true); }
       else setServiceType(servicoPadraoPorDoc(snap.doc ?? ""));
@@ -799,6 +854,24 @@ export default function Vender() {
         discount_value: i.discount_value,
         discount_amount: i.discount_amount,
       })),
+      ...extrasItens().map((i) => ({
+        produto: i.name,
+        kind: "service",
+        modalidade: null as string | null,
+        product_id: null as string | null,
+        product_code: null as string | null,
+        quantidade: i.quantity,
+        preco_unitario: 0,
+        bonificacao: 0,
+        // ⚠️ É esta marca que faz o PDF imprimir a linha no bloco de
+        // bonificação e a MANTÉM fora da base de rateio do desconto. Sem ela,
+        // uma linha de R$ 0,00 encolheria o fator e todas as outras receberiam
+        // desconto a menos — o total deixaria de fechar.
+        is_bonificacao: true,
+        discount_type: "none",
+        discount_value: 0,
+        discount_amount: 0,
+      })),
     ];
     return {
       form_snapshot: formSnapshot(),
@@ -845,7 +918,7 @@ export default function Vender() {
     setDiscReason("");
     setDeliveryDate("");
     setRecorrente(false); setRecPeriodo("mensal"); setRecParcelas(6);
-    setServiceRows([emptyServiceRow()]); setExecutionDate("");
+    setServiceRows([emptyServiceRow()]); setExecutionDate(""); setExtras([]);
     setServiceType("b2c"); setServiceTypeTocado(false);
   }
 
@@ -894,7 +967,7 @@ export default function Vender() {
         ie: ie || undefined,
         endereco,
         endereco_faturamento: enderecoFaturamentoOuNulo(),
-        vendedor_name: vendedor || undefined, items: [...items, ...validServiceItems()],
+        vendedor_name: vendedor || undefined, items: [...items, ...validServiceItems(), ...extrasItens()],
         subtotal: orderSubtotal, discount: orderDesconto, discount_percent: percentAgregado, total: orderTotal,
         payment_terms: pagamentoLabel || undefined,
         notes: obsPublica || undefined, created_at: new Date().toISOString(), validityDays: 7,
@@ -925,7 +998,7 @@ export default function Vender() {
         ie: ie || undefined,
         endereco,
         endereco_faturamento: enderecoFaturamentoOuNulo(),
-        vendedor_name: vendedor || undefined, items: [...items, ...validServiceItems()],
+        vendedor_name: vendedor || undefined, items: [...items, ...validServiceItems(), ...extrasItens()],
         subtotal: orderSubtotal, discount: orderDesconto, discount_percent: percentAgregado, total: orderTotal,
         payment_terms: pagamentoLabel || undefined,
         notes: obsPublica || undefined, created_at: new Date().toISOString(), validityDays: 7,
@@ -1650,6 +1723,44 @@ export default function Vender() {
               Frota precisa da <strong>previsão de execução</strong> — sem data a OS não é aberta.
             </div>
           )}
+
+          {/* ── Serviços que acompanham ──────────────────────────────────────
+              Vão DESCRITOS no orçamento como bonificação a R$ 0,00. Não somam,
+              não descontam e não geram vaga de veículo na OS.
+
+              ⚠️ O texto "não alteram o valor" fica na tela de propósito: sem
+              ele, quem marca duas caixinhas e vê o total parado no mesmo número
+              acha que a tela não registrou — e marca de novo, ou desiste. */}
+          <div className="border-t pt-3 space-y-2">
+            <div>
+              <Label>Serviços que acompanham <span className="text-xs font-normal text-muted-foreground">(opcional)</span></Label>
+              <p className="text-[11px] text-muted-foreground">
+                Não alteram o valor — entram no orçamento como bonificação, a R$ 0,00.
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-4">
+              {DESCARB_EXTRAS.map((ex) => (
+                <label key={ex.key} className="flex items-center gap-2 text-sm cursor-pointer">
+                  <Checkbox
+                    checked={extras.includes(ex.key)}
+                    onCheckedChange={(c) =>
+                      setExtras((p) => (c ? [...new Set([...p, ex.key])] : p.filter((k) => k !== ex.key)))
+                    }
+                  />
+                  {ex.label}
+                </label>
+              ))}
+            </div>
+            {/* ⚠️ O aviso só aparece com caixinha marcada E sem serviço na
+                venda. Marcar isto sozinho NÃO gera pedido — `erroDeModo()`
+                recusa —, e sem dizer por quê o vendedor clicaria em "Gerar
+                Venda" sem entender a recusa. */}
+            {extras.length > 0 && !hasValidService && (
+              <p className="text-[11px] text-amber-600">
+                Escolha ao menos uma descarbonização acima — estes serviços acompanham a venda, não são a venda.
+              </p>
+            )}
+          </div>
 
           {/* Resumo dos serviços: subtotal · desconto · total */}
           {serviceRows.length > 0 && (

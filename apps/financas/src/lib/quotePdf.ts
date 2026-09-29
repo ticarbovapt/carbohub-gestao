@@ -389,7 +389,12 @@ export async function generateQuotePdf(order: QuotePdfData, opts?: { download?: 
     body.push(temDesconto
       ? [nome, String(qty), brl(unit), `- ${brl(qty * unit)}`, brl(0), brl(0)]
       : [nome, String(qty), brl(unit), brl(0)]);
-    riscar.push(true);
+    // ⚠️ Riscar só faz sentido quando HÁ um valor cheio para riscar. O
+    // extra do CarboVAPT (laudo, medição) entra a R$ 0,00 de verdade — não
+    // tem gêmeo no catálogo, não espelha preço nenhum —, e o traço sobre
+    // "R$ 0,00" diria que ele ficou mais barato, que é exatamente o que o
+    // comentário do `didDrawCell` abaixo já proibia para a bonificação.
+    riscar.push(unit > 0);
   });
 
   const vazio = temDesconto ? ["Nenhum item", "", "", "", "", ""] : ["Nenhum item", "", "", ""];

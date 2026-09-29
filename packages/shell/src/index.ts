@@ -13,13 +13,13 @@ export { StatusTarja } from "./StatusTarja";
 export type { StatusTarjaProps, StatusAviso, StatusSeveridade } from "./StatusTarja";
 export { cn } from "./cn";
 export {
-  DESCARB_MODALIDADES, DESCARB_SERVICE_TYPES,
-  modalidadePrice, modalidadeLabel, modalidadeHint,
+  DESCARB_MODALIDADES, DESCARB_SERVICE_TYPES, DESCARB_EXTRAS,
+  modalidadePrice, modalidadeLabel, modalidadeHint, extraLabel,
   servicoPadraoPorDoc, totalVagas,
 } from "./descarb";
 export type {
   DescarbPorte, DescarbFuel, DescarbModalidade,
-  DescarbServiceType, DescarbItemRpc,
+  DescarbServiceType, DescarbItemRpc, DescarbExtra,
 } from "./descarb";
 export type {
   ShellNavItem,
