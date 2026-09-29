@@ -1561,7 +1561,18 @@ export default function Vender() {
                   <div className="space-y-1.5">
                     <Label>Produto</Label>
                     <Select value={r.productId} onValueChange={(v) => onProduct(r.id, v)}>
-                      <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                      {/* ⚠️ O CAMPO FECHADO mostra o NOME COMPLETO do produto,
+                          não o rótulo da opção. Sem isto ele dizia só
+                          "Microdistribuidor R$ 11,50" — e de qual produto?
+                          Dentro do menu o nome está no cabeçalho do grupo; no
+                          campo fechado não há cabeçalho nenhum, então o nome
+                          tem de vir junto. Só apareceu renderizando: nem o
+                          `tsc` nem o build sabem o que o Radix desenha ali. */}
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione">
+                          {produtos.find((x) => x.id === r.productId)?.name}
+                        </SelectValue>
+                      </SelectTrigger>
                       {/* ⚠️ O PREÇO aparece na opção, e isso não é enfeite: com
                           três linhas do mesmo produto, o nome sozinho não diz
                           qual foi escolhida, e escolher errado não dá erro —
@@ -1592,31 +1603,23 @@ export default function Vender() {
                               <SelectLabel className="text-foreground">{g.pai.name}</SelectLabel>
                               {visiveis.map((o) => (
                                 <SelectItem key={o.p.id} value={o.p.id} className="pl-8">
-                                  <span className="inline-flex items-center gap-2">
+                                  <span className="inline-flex items-baseline gap-2 whitespace-nowrap">
                                     <span>{o.rotulo}</span>
-                                    {/* Chip igual ao da tela de preços — é o que
-                                        faz reconhecer sem ler. */}
+                                    {/* ⚠️ UMA informação por opção, e ela é o
+                                        PREÇO. A primeira versão levava chip
+                                        colorido + preço + a dica da faixa na
+                                        mesma linha: o texto estourava a largura
+                                        do menu e era cortado na direita, e o
+                                        menu ficava tão alto que cortava uma
+                                        opção no meio. Quem estava fazendo a
+                                        tela não entendeu a própria tela — e o
+                                        vendedor tem de entender em um olhar. */}
                                     {o.bonificacao ? (
-                                      <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-amber-500/10 text-amber-600">
-                                        grátis
-                                      </span>
-                                    ) : o.p.faixa_preco ? (
-                                      <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-carbo-green/10 text-carbo-green">
-                                        {brl(o.p.sale_price ?? 0)}
-                                      </span>
+                                      <span className="text-amber-600 font-medium">grátis</span>
+                                    ) : o.p.sale_price == null ? (
+                                      <span className="text-destructive">sem preço</span>
                                     ) : (
-                                      <span className={o.p.sale_price == null ? "text-destructive" : "text-muted-foreground"}>
-                                        {o.p.sale_price == null ? "sem preço" : brl(o.p.sale_price)}
-                                      </span>
-                                    )}
-                                    {/* A dica da faixa fica na opção: as três
-                                        ficam lado a lado agora, o que ajuda a
-                                        escolher certo e também facilita clicar
-                                        na errada. Enquanto não existe trava por
-                                        cadastro do cliente, dizer para quem é
-                                        cada faixa é a mitigação barata. */}
-                                    {o.hint && (
-                                      <span className="text-[10px] text-muted-foreground">· {o.hint}</span>
+                                      <span className="text-muted-foreground tabular-nums">{brl(o.p.sale_price)}</span>
                                     )}
                                   </span>
                                 </SelectItem>
@@ -1626,6 +1629,32 @@ export default function Vender() {
                         })}
                       </SelectContent>
                     </Select>
+                    {/* ── O que foi escolhido, por extenso ──────────────────
+                        ⚠️ A dica da faixa SAIU de dentro do menu e veio para
+                        cá. Lá ela estourava a largura e era cortada na
+                        direita; aqui aparece no momento em que importa — DEPOIS
+                        do clique — e confirma para o vendedor o que ele acabou
+                        de escolher. É a mitigação enquanto não existe trava por
+                        cadastro do cliente.
+                        ⚠️ E a bonificação avisa que sai a R$ 0,00: a linha
+                        trava 100% de desconto, e ver "grátis" no menu não é o
+                        mesmo que ver o efeito na venda. */}
+                    {(() => {
+                      const esc = produtos.find((p) => p.id === r.productId);
+                      if (!esc) return null;
+                      if (esc.bonificacao_de) return (
+                        <p className="text-[11px] text-amber-600">
+                          Bonificação — sai a R$ 0,00 nesta venda e na nota.
+                        </p>
+                      );
+                      const fx = faixasPreco.find((f) => f.codigo === esc.faixa_preco);
+                      if (!fx) return null;
+                      return (
+                        <p className="text-[11px] text-carbo-green">
+                          Preço de <b>{fx.rotulo}</b>{fx.hint ? ` — ${fx.hint}` : ""}
+                        </p>
+                      );
+                    })()}
                   </div>
                   <div className="space-y-1.5">
                     <Label>Quantidade</Label>
