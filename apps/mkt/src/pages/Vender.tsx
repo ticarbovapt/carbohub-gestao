@@ -16,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { ptBR } from "date-fns/locale";
@@ -29,7 +29,7 @@ import { useCreateVenda, useUpdateVendaFull, useCriarRecorrencia, RECORRENCIA_PE
 import { useMeuEstoque } from "@/hooks/useMeuEstoque";
 import { useConvertQuote } from "@/hooks/useCarbozeVendas";
 import { useVincularOrcamento } from "@/hooks/useLeadOrcamento";
-import { useProdutos } from "@/hooks/useProdutos";
+import { useProdutos, useFaixasPreco } from "@/hooks/useProdutos";
 import { useCreateOSFromSale } from "@/hooks/useDescarbOS";
 import {
   DESCARB_MODALIDADES, DESCARB_EXTRAS, extraLabel,
@@ -164,6 +164,75 @@ export default function Vender() {
   const [searchParams] = useSearchParams();
   const editId = searchParams.get("edit");
   const { data: produtos = [] } = useProdutos();
+  const { data: faixasPreco = [] } = useFaixasPreco();
+  /**
+   * O catálogo agrupado por PRODUTO, para o dropdown.
+   *
+   * ⚠️ Declarado AQUI, junto de `produtos` e ACIMA de tudo que o usa — o
+   * callback de `useMemo` roda DURANTE o render e não perdoa ordem de
+   * declaração. É o tropeço que já derrubou o /vender em produção.
+   *
+   * Antes a lista era plana e ordenada por NOME, e isso confundia de três
+   * jeitos ao mesmo tempo (medido na tela em 29/09/2026, com 10 linhas):
+   *
+   *   1. o mesmo produto aparecia 4 vezes e o que distinguia era o SUFIXO —
+   *      a parte mais difícil de ler, no fim da linha e na mesma cor;
+   *   2. "CarboZé 1 Litro" vinha antes de "CarboZé 100ml", porque alfabético;
+   *   3. a bonificação cair logo abaixo do pai era SORTE (`- b` < `- M` <
+   *      `- P`). Uma faixa chamada "- Atacado" entraria antes dela.
+   *
+   * Agora o nome do produto é o CABEÇALHO do grupo e some das opções; a ordem
+   * dentro dele é explícita: padrão, faixas na ordem do CADASTRO, e a
+   * bonificação por ÚLTIMO — ela não é uma opção de preço, é a exceção.
+   */
+  const gruposDeProduto = useMemo(() => {
+    const ordemFaixa = (cod: string | null) => {
+      const i = faixasPreco.findIndex((f) => f.codigo === cod);
+      return i < 0 ? 999 : i;
+    };
+    const paiDe = new Map(produtos.map((p) => [p.id, p]));
+    const grupos = produtos
+      .filter((p) => !p.preco_de && !p.bonificacao_de)
+      .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
+      .map((pai) => {
+        const filhos = produtos.filter((p) => p.preco_de === pai.id);
+        const gemeo = produtos.find((p) => p.bonificacao_de === pai.id);
+        const faixaDe = (p: typeof pai) => faixasPreco.find((f) => f.codigo === p.faixa_preco);
+        return {
+          pai,
+          opcoes: [
+            { p: pai, rotulo: "Padrão", hint: null as string | null, bonificacao: false },
+            ...filhos
+              .slice()
+              .sort((a, b) => ordemFaixa(a.faixa_preco) - ordemFaixa(b.faixa_preco))
+              .map((f) => ({
+                p: f,
+                // ⚠️ Reserva pelo NOME quando a faixa não foi lida: o nome já
+                // carrega o rótulo ("CarboZé 100ml - PDV"). É reserva de
+                // APRESENTAÇÃO, nunca de identidade — quem identifica continua
+                // sendo `faixa_preco`. E nunca mostrar o código cru.
+                rotulo: faixaDe(f)?.rotulo ?? f.name.replace(pai.name + " - ", ""),
+                hint: faixaDe(f)?.hint ?? null,
+                bonificacao: false,
+              })),
+            ...(gemeo ? [{ p: gemeo, rotulo: "Bonificação", hint: null, bonificacao: true }] : []),
+          ],
+        };
+      });
+    // ⚠️ Produto derivado cujo PAI não veio na consulta ficaria órfão e SUMIRIA
+    // da lista, calado. Não deve acontecer (o pai é sempre ativo), mas sumir
+    // com opção de venda é caro demais para depender disso.
+    const orfaos = produtos.filter(
+      (p) => (p.preco_de && !paiDe.has(p.preco_de)) || (p.bonificacao_de && !paiDe.has(p.bonificacao_de)),
+    );
+    if (orfaos.length) {
+      grupos.push({
+        pai: orfaos[0],
+        opcoes: orfaos.map((p) => ({ p, rotulo: p.name, hint: null, bonificacao: !!p.bonificacao_de })),
+      });
+    }
+    return grupos;
+  }, [produtos, faixasPreco]);
   /** A linha é bonificação quando o produto escolhido é um gêmeo.
    *  ⚠️ A regra mora no PRODUTO, não numa flag da linha: assim ela sobrevive
    *  a reabrir o orçamento, e um gêmeo escolhido por qualquer caminho já
@@ -1493,27 +1562,69 @@ export default function Vender() {
                     <Label>Produto</Label>
                     <Select value={r.productId} onValueChange={(v) => onProduct(r.id, v)}>
                       <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                      {/* ⚠️ O PREÇO aparece na opção, e isso não é enfeite: desde
-                          que o mesmo produto tem faixa por tipo de cliente
-                          (CarboZé 100ml · PDV · Microdistribuidor), o nome
-                          sozinho não diz qual delas o vendedor está escolhendo
-                          — e escolher a errada não dá erro, dá uma NF com o
-                          valor errado. Produto sem preço é dito com todas as
-                          letras porque o /vender RECUSA vendê-lo. */}
-                      {/* ⚠️ `|| p.id === r.productId`: o filtro esconde o que
+                      {/* ⚠️ O PREÇO aparece na opção, e isso não é enfeite: com
+                          três linhas do mesmo produto, o nome sozinho não diz
+                          qual foi escolhida, e escolher errado não dá erro —
+                          dá uma NF com o valor errado.
+
+                          ⚠️ E a BONIFICAÇÃO diz "grátis", nunca o valor. O
+                          preço dela ESPELHA o do pai (por gatilho, para o PDF
+                          mostrar o tamanho do brinde), mas aqui aquele número
+                          não tem esse contexto e lia-se como preço de venda —
+                          a linha sai com 100% de desconto travado. Mostrar
+                          R$ 15,60 numa opção que custa zero é número errado
+                          sobre dinheiro, que é o pior lugar para estar errado.
+
+                          ⚠️ `|| p.id === r.productId`: o filtro esconde o que
                           o Admin escondeu, MAS nunca some com o que já está
                           escolhido nesta linha. Sem isso, reabrir um orçamento
                           antigo cujo produto foi escondido depois mostraria a
                           linha VAZIA carregando um produto real — e salvar
                           perderia o item, sem erro nenhum. */}
-                      <SelectContent>{produtos.filter((p) => p.aparece_no_vender || p.id === r.productId).map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {p.name}
-                          <span className={p.sale_price == null ? "text-destructive" : "text-muted-foreground"}>
-                            {" — "}{p.sale_price == null ? "sem preço" : brl(p.sale_price)}
-                          </span>
-                        </SelectItem>
-                      ))}</SelectContent>
+                      <SelectContent>
+                        {gruposDeProduto.map((g) => {
+                          const visiveis = g.opcoes.filter(
+                            (o) => o.p.aparece_no_vender || o.p.id === r.productId,
+                          );
+                          if (!visiveis.length) return null;
+                          return (
+                            <SelectGroup key={g.pai.id}>
+                              <SelectLabel className="text-foreground">{g.pai.name}</SelectLabel>
+                              {visiveis.map((o) => (
+                                <SelectItem key={o.p.id} value={o.p.id} className="pl-8">
+                                  <span className="inline-flex items-center gap-2">
+                                    <span>{o.rotulo}</span>
+                                    {/* Chip igual ao da tela de preços — é o que
+                                        faz reconhecer sem ler. */}
+                                    {o.bonificacao ? (
+                                      <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-amber-500/10 text-amber-600">
+                                        grátis
+                                      </span>
+                                    ) : o.p.faixa_preco ? (
+                                      <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-carbo-green/10 text-carbo-green">
+                                        {brl(o.p.sale_price ?? 0)}
+                                      </span>
+                                    ) : (
+                                      <span className={o.p.sale_price == null ? "text-destructive" : "text-muted-foreground"}>
+                                        {o.p.sale_price == null ? "sem preço" : brl(o.p.sale_price)}
+                                      </span>
+                                    )}
+                                    {/* A dica da faixa fica na opção: as três
+                                        ficam lado a lado agora, o que ajuda a
+                                        escolher certo e também facilita clicar
+                                        na errada. Enquanto não existe trava por
+                                        cadastro do cliente, dizer para quem é
+                                        cada faixa é a mitigação barata. */}
+                                    {o.hint && (
+                                      <span className="text-[10px] text-muted-foreground">· {o.hint}</span>
+                                    )}
+                                  </span>
+                                </SelectItem>
+                              ))}
+                            </SelectGroup>
+                          );
+                        })}
+                      </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-1.5">

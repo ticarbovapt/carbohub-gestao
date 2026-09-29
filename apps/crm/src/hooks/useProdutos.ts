@@ -56,6 +56,13 @@ export interface Produto {
   aparece_no_vender: boolean;
 }
 
+export interface FaixaPreco {
+  codigo: string;
+  rotulo: string;
+  hint: string | null;
+  ordem: number;
+}
+
 export function useProdutos() {
   return useQuery({
     queryKey: ["crm_produtos_catalogo"],
@@ -71,6 +78,38 @@ export function useProdutos() {
         .order("name");
       if (error) throw error;
       return (data ?? []) as Produto[];
+    },
+  });
+}
+
+/**
+ * As faixas de preço cadastradas — rótulo, dica e ORDEM.
+ *
+ * ⚠️ Consulta SEPARADA de propósito, e não um embed na de produtos. Embed do
+ * PostgREST depende do cache de esquema; se ele falhar, a consulta INTEIRA
+ * falha e o dropdown fica vazio — ausência que esvazia a tela é o pior modo de
+ * errar aqui. Separada, o catálogo continua vindo e só o rótulo bonito falta.
+ *
+ * ⚠️ A ORDEM vem do cadastro, nunca do alfabeto. Ordenar por nome fazia a
+ * bonificação cair embaixo do pai por SORTE (`- b` < `- M` < `- P`): uma faixa
+ * chamada "- Atacado" entraria antes dela e ninguém saberia por quê.
+ */
+export function useFaixasPreco() {
+  return useQuery({
+    queryKey: ["crm_faixas_preco"],
+    staleTime: 10 * 60 * 1000,
+    queryFn: async (): Promise<FaixaPreco[]> => {
+      const { data, error } = await db
+        .from("carbo_faixa_preco")
+        .select("codigo, rotulo, hint, ordem")
+        .eq("ativo", true)
+        .order("ordem");
+      // ⚠️ Falha aqui NÃO propaga: sem as faixas o /vender cai no nome do
+      // produto, que já carrega o rótulo (" - PDV"). Derivar do nome é reserva
+      // de APRESENTAÇÃO, nunca de identidade — quem identifica continua sendo
+      // `faixa_preco`.
+      if (error) return [];
+      return (data ?? []) as FaixaPreco[];
     },
   });
 }
