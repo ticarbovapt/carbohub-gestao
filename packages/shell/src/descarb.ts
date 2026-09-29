@@ -48,6 +48,37 @@ export function modalidadeHint(m: string): string {
   return `${mod.motor} · ${fuel}`;
 }
 
+// ── Serviços que ACOMPANHAM a descarbonização ────────────────────────────────
+// Pedido do dono do processo em 29/09/2026: itens que podem ou não ir junto,
+// que NÃO alteram o valor e existem para ficar DESCRITOS no orçamento — o
+// cliente precisa ler no papel o que está ganhando.
+//
+// ⚠️ Eles são BONIFICAÇÃO a R$ 0,00, nunca item de catálogo: não têm gêmeo em
+// `mrp_products`, não movem estoque e não viram vaga de veículo na OS. São
+// serviço prestado junto, e é só isso.
+//
+// ⚠️ Mora AQUI, ao lado de `DESCARB_MODALIDADES`, e não numa tabela do banco —
+// de propósito. A tabela de preços dos portes já é código; pôr um dos dois em
+// cadastro e o outro em código criaria o par que diverge, e esta lista é a
+// mesma nos sete apps pelo mesmo motivo que aquela. Preço é o que muda sozinho;
+// isto não. O custo assumido: item novo aqui pede deploy.
+export interface DescarbExtra {
+  key: string;
+  label: string;
+}
+
+export const DESCARB_EXTRAS: DescarbExtra[] = [
+  { key: "opacidade", label: "Laudo de Opacidade (Opacímetro)" },
+  { key: "ruido",     label: "Medição de Ruído (Decibelímetro)" },
+];
+
+/** Rótulo do extra. ⚠️ Chave desconhecida devolve `null`, NUNCA a própria
+ *  chave: orçamento antigo com um extra que saiu da lista mostraria
+ *  `"opacidade"` cru no papel do cliente. Ausência tem de aparecer como
+ *  ausência — quem chama decide o que fazer com ela. */
+export const extraLabel = (k: string): string | null =>
+  DESCARB_EXTRAS.find((x) => x.key === k)?.label ?? null;
+
 // ── Tipo de serviço da OS ────────────────────────────────────────────────────
 // Espelha licenciados.os_service_type. Frota EXIGE agendamento (a RPC recusa
 // sem scheduled_at), por isso o formulário precisa saber disto.
