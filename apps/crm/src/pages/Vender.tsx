@@ -74,6 +74,32 @@ const emptyRow = (): ItemRow => ({ id: crypto.randomUUID(), productId: "", qty: 
 // cinco cópias do preço é cinco chances de divergir. O Licenciados tem a dele
 // (NewSalePage.tsx) — repo separado, sem como importar; as duas se espelham.
 
+// ⚠️ UMA VENDA É DE UM TIPO SÓ, desde 29/09/2026. CarboZé fatura por NF-e do
+// Bling e CarboVAPT por NFS-e do Portal Nacional — um pedido misto não teria
+// como sair por um caminho só. Medido ANTES de fechar a regra: ZERO pedidos no
+// histórico misturam item de produto com item de serviço, então não há passado
+// a tratar.
+export type VendaModo = "carboze" | "carbovapt";
+
+// ⚠️ O estado antigo era `"venda" | "promo"`, e "Ação Promocional" NUNCA chegou
+// ao banco: `buildOrderFields` jamais leu `input.tipo` — sem coluna, sem CHECK,
+// sem regra. Ela só existia dentro do `quote_form_snapshot`. Por isso os dois
+// valores velhos viram CarboZé aqui: sem esta normalização, reabrir um
+// orçamento antigo reidrataria um modo que não existe mais, e a tela ficaria
+// num estado impossível sem dar erro.
+// ⚠️ E o valor velho NÃO diz o tipo da venda — `"venda"`/`"promo"` valiam para
+// produto e para serviço igualmente. Quem diz é o que o pedido TEM: orçamento
+// antigo só de serviço precisa reabrir em CarboVAPT, senão a guarda de submit o
+// recusa e ele fica impossível de editar. Por isso a normalização olha as
+// linhas, não só o rótulo guardado.
+const normalizarModo = (v: unknown, linhasDeServico?: unknown): VendaModo => {
+  if (v === "carbovapt") return "carbovapt";
+  if (v === "carboze") return "carboze";
+  const temServico = Array.isArray(linhasDeServico)
+    && linhasDeServico.some((s) => !!(s as { modality?: string } | null)?.modality);
+  return temServico ? "carbovapt" : "carboze";
+};
+
 // Linha de serviço: separada da de produto. Preço vem fixo da modalidade.
 interface ServiceRow {
   id: string; modality: "" | "P" | "M" | "G"; qty: number; hasBonus: boolean; bonusQty: number;
@@ -200,7 +226,13 @@ export default function Vender() {
     },
   });
 
-  const [mode, setMode] = useState<"venda" | "promo">("venda");
+  const [mode, setMode] = useState<VendaModo>("carboze");
+  // ⚠️ Declarado AQUI, junto do estado, NUNCA perto do JSX: o callback de
+  // `useMemo`/`useCallback` roda DURANTE o render, e ler isto antes da
+  // declaração derruba a tela com "Cannot access before initialization" — que
+  // nem o `tsc` nem o `npm run build` pegam. É o tropeço que já derrubou o
+  // /vender em produção nos seis apps.
+  const ehCarboze = mode === "carboze";
   const [doc, setDoc] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [email, setEmail] = useState("");
@@ -232,6 +264,16 @@ export default function Vender() {
   const [fatMesmo, setFatMesmo] = useState(true);
   const [fatEndereco, setFatEndereco] = useState({ logradouro: "", numero: "", bairro: "", cidade: "", uf: "", cep: "" });
   const setFat = (patch: Partial<typeof fatEndereco>) => setFatEndereco((e) => ({ ...e, ...patch }));
+  /** ⚠️ O endereço de faturamento separado NÃO existe no CarboVAPT: lá a seção
+   *  inteira já é o de faturamento. Esconder o campo não basta — orçamento
+   *  antigo reidratado pode trazer `fatMesmo = false`, e o valor iria junto no
+   *  payload de uma tela onde ninguém consegue vê-lo nem corrigi-lo. Quem
+   *  decide é esta função, no caminho por onde os TRÊS usos passam (payload e
+   *  os dois PDFs), em vez de três condições que divergem depois. */
+  const enderecoFaturamentoOuNulo = () => {
+    if (!ehCarboze || fatMesmo) return null;
+    return (fatEndereco.logradouro || fatEndereco.cidade || fatEndereco.cep) ? fatEndereco : null;
+  };
   const [ie, setIe] = useState("");
   const [ieUf, setIeUf] = useState(""); // override da UF p/ validar a IE; vazio = usa a do endereço
   const isIsento = /^isento$/i.test(ie.trim());
@@ -581,6 +623,31 @@ export default function Vender() {
   // Há ao menos um item válido de serviço? (habilita a previsão de execução.)
   const hasValidService = serviceRows.some((s) => s.modality && s.qty > 0);
 
+  // Troca de tipo LIMPA o outro lado, e avisa. ⚠️ Só esconder a seção não
+  // bastaria: o state continuaria preenchido e os itens iriam junto no
+  // payload — descarte silencioso, que é o modo de falhar mais caro daqui.
+  // Limpar sem dizer seria apagar trabalho em silêncio; por isso o toast.
+  function trocarModo(novo: VendaModo) {
+    if (novo === mode) return;
+    if (novo === "carbovapt" && hasValidProduct) {
+      setRows([emptyRow()]);
+      toast.info("Itens de produto removidos — uma venda é de um tipo só.");
+    }
+    if (novo === "carboze" && hasValidService) {
+      setServiceRows([]);
+      toast.info("Itens de serviço removidos — uma venda é de um tipo só.");
+    }
+    // ⚠️ O CarboVAPT não mostra o endereço de faturamento separado, porque a
+    // seção inteira JÁ é ele. Campo escondido que continua preenchido vai junto
+    // no payload — esconder sem devolver ao padrão faria a NF de serviço sair
+    // com um endereço que ninguém mais vê na tela.
+    if (novo === "carbovapt" && !fatMesmo) {
+      setFatMesmo(true);
+      setFatEndereco({ logradouro: "", numero: "", bairro: "", cidade: "", uf: "", cep: "" });
+    }
+    setMode(novo);
+  }
+
   // Itens no formato da RPC: cada unidade (paga OU bonificada) vira uma vaga de
   // veículo na OS. A bonificação entra aqui porque o carro bonificado também é
   // um carro que alguém vai descarbonizar.
@@ -627,7 +694,7 @@ export default function Vender() {
 
   // ── Snapshot do formulário: grava tudo (JSON) e reidrata fielmente na edição ──
   type FormSnapshot = {
-    mode: "venda" | "promo"; doc: string; customerName: string; email: string; phone: string; isLicenciado: boolean;
+    mode: VendaModo; doc: string; customerName: string; email: string; phone: string; isLicenciado: boolean;
     rows: ItemRow[]; obsPublica: string; notasInternas: string; tipoPonto: string; classificacao: string;
     volumeMedio: string; atuaDiesel: boolean; atuaFrotas: boolean; vendedorId: string;
     endereco: typeof endereco; fatMesmo: boolean; fatEndereco: typeof fatEndereco;
@@ -651,7 +718,7 @@ export default function Vender() {
     if (!editOrder || hydrated) return;
     const snap = editOrder.quote_form_snapshot as FormSnapshot | null;
     if (snap && typeof snap === "object") {
-      setMode(snap.mode ?? "venda"); setDoc(snap.doc ?? ""); setCustomerName(snap.customerName ?? "");
+      setMode(normalizarModo(snap.mode, snap.serviceRows)); setDoc(snap.doc ?? ""); setCustomerName(snap.customerName ?? "");
       setEmail(snap.email ?? ""); setPhone(snap.phone ?? ""); setIsLicenciado(!!snap.isLicenciado);
       setRows(Array.isArray(snap.rows) && snap.rows.length ? snap.rows : [emptyRow()]);
       setObsPublica(snap.obsPublica ?? ""); setNotasInternas(snap.notasInternas ?? "");
@@ -734,7 +801,7 @@ export default function Vender() {
       is_licenciado: isLicenciado,
       payment_terms: pagamentoLabel || undefined,
       endereco: (endereco.logradouro || endereco.cidade || endereco.cep) ? endereco : null,
-      endereco_faturamento: fatMesmo ? null : ((fatEndereco.logradouro || fatEndereco.cidade || fatEndereco.cep) ? fatEndereco : null),
+      endereco_faturamento: enderecoFaturamentoOuNulo(),
       // Totais do PEDIDO = produto + serviço (combinados).
       subtotal_bruto: orderSubtotal,
       // Desconto do pedido = agregado dos itens; tipo 'value' (R$) quando há desconto.
@@ -753,7 +820,7 @@ export default function Vender() {
 
   // Limpa o formulário após salvar.
   function resetForm() {
-    setMode("venda"); setDoc(""); setCustomerName(""); setEmail(""); setPhone("");
+    setMode("carboze"); setDoc(""); setCustomerName(""); setEmail(""); setPhone("");
     setIsLicenciado(false); setRows([emptyRow()]); setObsPublica("");
     setNotasInternas(""); setTipoPonto(""); setClassificacao(""); setVolumeMedio("");
     setAtuaDiesel(false); setAtuaFrotas(false); setVendedorId("");
@@ -769,9 +836,27 @@ export default function Vender() {
     setServiceType("b2c"); setServiceTypeTocado(false);
   }
 
+  /** ⚠️ Uma venda é de UM tipo só (29/09/2026). Esconder a seção do outro tipo
+   *  NÃO basta: o state continua preenchido se o vendedor trocou de modo com
+   *  item posto, e iria junto no payload. `trocarModo` limpa na troca; esta
+   *  guarda é o cinto — ela mora no submit, que é o único lugar por onde tudo
+   *  passa. Devolve a mensagem, ou null quando está tudo certo. */
+  function erroDeModo(): string | null {
+    const temProduto = validItems().length > 0;
+    const temServico = validServiceItems().length > 0;
+    if (!temProduto && !temServico) return "Adicione ao menos um item.";
+    if (mode === "carboze" && temServico)
+      return "Esta venda é CarboZé — o serviço sai em venda própria, porque a NF dele é do Portal Nacional.";
+    if (mode === "carbovapt" && temProduto)
+      return "Esta venda é CarboVAPT — o produto sai em venda própria, porque a NF dele é do Bling.";
+    if (mode === "carboze" && !temProduto) return "Adicione ao menos um produto.";
+    if (mode === "carbovapt" && !temServico) return "Adicione ao menos um serviço.";
+    return null;
+  }
+
   async function handleQuote() {
     const items = validItems();
-    if (items.length === 0 && validServiceItems().length === 0) { toast.error("Adicione ao menos um item."); return; }
+    { const err = erroDeModo(); if (err) { toast.error(err); return; } }
     if (items.some((i) => !(i.unit_price > 0))) { toast.error("Há item sem preço na tabela. A gestão precisa cadastrar em Admin › Tabela de preços."); return; }
     if (!pagamentoValido) { toast.error("Selecione a forma de pagamento."); return; }
     if (frotaSemData) { toast.error("Frota exige a previsão de execução — a OS não é aberta sem data."); return; }
@@ -795,7 +880,7 @@ export default function Vender() {
         customer_name: customerName || "Cliente", cnpj: doc || undefined,
         ie: ie || undefined,
         endereco,
-        endereco_faturamento: fatMesmo ? null : fatEndereco,
+        endereco_faturamento: enderecoFaturamentoOuNulo(),
         vendedor_name: vendedor || undefined, items: [...items, ...validServiceItems()],
         subtotal: orderSubtotal, discount: orderDesconto, discount_percent: percentAgregado, total: orderTotal,
         payment_terms: pagamentoLabel || undefined,
@@ -810,7 +895,7 @@ export default function Vender() {
 
   async function handleEmailQuote() {
     const items = validItems();
-    if (items.length === 0 && validServiceItems().length === 0) { toast.error("Adicione ao menos um item."); return; }
+    { const err = erroDeModo(); if (err) { toast.error(err); return; } }
     if (items.some((i) => !(i.unit_price > 0))) { toast.error("Há item sem preço na tabela. A gestão precisa cadastrar em Admin › Tabela de preços."); return; }
     if (!pagamentoValido) { toast.error("Selecione a forma de pagamento."); return; }
     if (frotaSemData) { toast.error("Frota exige a previsão de execução — a OS não é aberta sem data."); return; }
@@ -826,7 +911,7 @@ export default function Vender() {
         customer_name: customerName || "Cliente", cnpj: doc || undefined,
         ie: ie || undefined,
         endereco,
-        endereco_faturamento: fatMesmo ? null : fatEndereco,
+        endereco_faturamento: enderecoFaturamentoOuNulo(),
         vendedor_name: vendedor || undefined, items: [...items, ...validServiceItems()],
         subtotal: orderSubtotal, discount: orderDesconto, discount_percent: percentAgregado, total: orderTotal,
         payment_terms: pagamentoLabel || undefined,
@@ -905,7 +990,7 @@ export default function Vender() {
   }
 
   async function handleSell() {
-    if (validItems().length === 0 && validServiceItems().length === 0) { toast.error("Adicione ao menos um item."); return; }
+    { const err = erroDeModo(); if (err) { toast.error(err); return; } }
     if (validItems().some((i) => !(i.unit_price > 0))) { toast.error("Há item sem preço na tabela. A gestão precisa cadastrar em Admin › Tabela de preços."); return; }
     if (!pagamentoValido) { toast.error("Selecione a forma de pagamento."); return; }
     if (frotaSemData) { toast.error("Frota exige a previsão de execução — a OS não é aberta sem data."); return; }
@@ -1055,14 +1140,25 @@ export default function Vender() {
         <CarboCardContent className="p-4 space-y-3">
           <h3 className="font-semibold flex items-center gap-2"><Package className="h-4 w-4 text-carbo-green" /> Tipo de Operação</h3>
           <div className="grid grid-cols-2 gap-2 max-w-md">
-            {([["venda", "Venda"], ["promo", "Ação Promocional"]] as const).map(([v, label]) => (
-              <button key={v} onClick={() => setMode(v)}
-                className={`rounded-xl border p-3 text-sm font-medium transition-all ${
+            {([
+              ["carboze",   "CarboZé",   "Produto · NF-e pelo Bling"],
+              ["carbovapt", "CarboVAPT", "Serviço · NFS-e pelo Portal Nacional"],
+            ] as const).map(([v, label, hint]) => (
+              <button key={v} onClick={() => trocarModo(v)}
+                className={`rounded-xl border p-3 text-left transition-all ${
                   mode === v ? "border-carbo-green bg-carbo-green/5 text-foreground" : "bg-card text-muted-foreground hover:bg-muted"}`}>
-                {label}
+                <span className="block text-sm font-medium">{label}</span>
+                <span className="block text-[11px] text-muted-foreground mt-0.5">{hint}</span>
               </button>
             ))}
           </div>
+          {/* ⚠️ Dito na tela, porque a regra é nova e muda o que o vendedor
+              podia fazer ontem: até 29/09/2026 dava para pôr produto e serviço
+              no mesmo pedido. */}
+          <p className="text-[11px] text-muted-foreground">
+            Uma venda é de um tipo só — o faturamento sai por caminhos diferentes.
+            Para vender os dois ao mesmo cliente, registre duas vendas.
+          </p>
         </CarboCardContent>
       </CarboCard>
 
@@ -1163,11 +1259,16 @@ export default function Vender() {
         </CarboCardContent>
       </CarboCard>
 
-      {/* Endereço de Entrega */}
+      {/* ── Endereço ─────────────────────────────────────────────────────────
+          ⚠️ A SEÇÃO É A MESMA NOS DOIS MODOS, e as COLUNAS DE DESTINO também
+          (`delivery_address/city/state/zip`). No CarboVAPT não há entrega — o
+          endereço serve para FATURAR —, mas mandar o serviço para
+          `billing_address` e deixar `delivery_*` nulo mudaria o que outras
+          telas mostram para pedido de serviço. Muda o RÓTULO, não o destino. */}
       <CarboCard>
         <CarboCardContent className="p-4 space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="font-semibold flex items-center gap-2"><MapPin className="h-4 w-4 text-carbo-green" /> Endereço de Entrega</h3>
+            <h3 className="font-semibold flex items-center gap-2"><MapPin className="h-4 w-4 text-carbo-green" /> {ehCarboze ? "Endereço de Entrega" : "Endereço de Faturamento"}</h3>
             <Button variant="outline" size="sm" onClick={localizarNoMapa} disabled={geoLoading}>
               {geoLoading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <MapPin className="h-4 w-4 mr-1" />}
               {geoLoading ? "Localizando..." : "Localizar no mapa"}
@@ -1219,16 +1320,23 @@ export default function Vender() {
                   </CircleMarker>
                 </MapContainer>
               </div>
-              <p className="text-[11px] text-muted-foreground flex items-center gap-1"><MapPin className="h-3 w-3" /> Posição <b>aproximada</b> pelo endereço — confira se bate com o local de entrega.</p>
+              <p className="text-[11px] text-muted-foreground flex items-center gap-1"><MapPin className="h-3 w-3" /> Posição <b>aproximada</b> pelo endereço — confira se bate com o {ehCarboze ? "local de entrega" : "endereço do cliente"}.</p>
             </div>
           ) : (
             <div className="rounded-xl border border-dashed flex flex-col items-center justify-center gap-2 py-10 text-center text-muted-foreground">
               <MapPin className="h-6 w-6" />
-              <p className="text-sm px-6">{mapMsg ?? <>Preencha o endereço e clique em <b>Localizar no mapa</b> para visualizar o ponto aproximado de entrega.</>}</p>
+              <p className="text-sm px-6">{mapMsg ?? <>Preencha o endereço e clique em <b>Localizar no mapa</b> para visualizar o ponto aproximado {ehCarboze ? "de entrega" : "do endereço"}.</>}</p>
             </div>
           )}
 
-          {/* Endereço de Faturamento (NF) — pode diferir do de entrega */}
+          {/* Endereço de Faturamento (NF) — pode diferir do de entrega.
+              ⚠️ Só no CarboZé. No CarboVAPT a seção inteira JÁ é o endereço de
+              faturamento, e perguntar "é o mesmo da entrega?" onde não há
+              entrega é oferecer uma decisão que não existe — e abriria um
+              segundo endereço concorrendo com o único que vale. Por isso
+              `trocarModo` devolve `fatMesmo` a true ao entrar no CarboVAPT:
+              campo escondido que continua preenchido vai junto no payload. */}
+          {ehCarboze && (
           <div className="border-t pt-3 mt-1 space-y-3">
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <h4 className="font-semibold text-sm flex items-center gap-2"><FileText className="h-4 w-4 text-carbo-green" /> Endereço de Faturamento (NF)</h4>
@@ -1265,10 +1373,12 @@ export default function Vender() {
               </div>
             )}
           </div>
+          )}
         </CarboCardContent>
       </CarboCard>
 
       {/* Itens do Pedido — pôr o produto e fechar a venda */}
+      {ehCarboze && (
       <CarboCard>
         <CarboCardContent className="p-4 space-y-4">
           <div className="flex items-center justify-between">
@@ -1400,12 +1510,15 @@ export default function Vender() {
           </div>
         </CarboCardContent>
       </CarboCard>
+      )}
 
-      {/* Itens de Serviço (descarbonizações) — preço fixo por modalidade */}
+      {/* Itens de Serviço (descarbonizações) — preço fixo por modalidade.
+          ⚠️ Deixou de ser "(opcional)": no CarboVAPT ele é A venda. */}
+      {!ehCarboze && (
       <CarboCard>
         <CarboCardContent className="p-4 space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="font-semibold flex items-center gap-2"><Sparkles className="h-4 w-4 text-carbo-green" /> Itens de Serviço <span className="text-xs text-muted-foreground font-normal">(opcional)</span></h3>
+            <h3 className="font-semibold flex items-center gap-2"><Sparkles className="h-4 w-4 text-carbo-green" /> Itens de Serviço</h3>
             <Button variant="outline" size="sm" onClick={() => setServiceRows((p) => [...p, emptyServiceRow()])}>
               <Plus className="h-4 w-4 mr-1" /> Adicionar Serviço
             </Button>
@@ -1545,6 +1658,7 @@ export default function Vender() {
           )}
         </CarboCardContent>
       </CarboCard>
+      )}
 
       {/* ── Como o produto sai ───────────────────────────────────────────────
           Só aparece com produto físico no pedido: serviço de descarbonização
@@ -1554,7 +1668,7 @@ export default function Vender() {
           ⚠️ O padrão é PRODUÇÃO — o comportamento de sempre. A pronta entrega
           é escolha explícita, porque ela deduz estoque na hora e manda o
           pedido direto para a NF: efeito grande demais para ser default. */}
-      {hasValidProduct && (
+      {ehCarboze && hasValidProduct && (
         <CarboCard>
           <CarboCardContent className="p-4 space-y-3">
             <h3 className="font-semibold flex items-center gap-2">
@@ -1612,11 +1726,17 @@ export default function Vender() {
         </CarboCard>
       )}
 
-      {/* Prazo de Entrega e Fabricação (opcional) */}
+      {/* ── Prazo ────────────────────────────────────────────────────────────
+          Esta seção JÁ era meio-a-meio antes da separação: a data de entrega
+          tinha `disabled={!hasValidProduct}` e a de execução,
+          `disabled={!hasValidService}`. A separação por modo só promove esse
+          gating de campo para coluna — o `disabled` fica, porque ele responde
+          outra pergunta ("já tem item?"). */}
       <CarboCard>
         <CarboCardContent className="p-4 space-y-3">
-          <h3 className="font-semibold flex items-center gap-2"><CalendarClock className="h-4 w-4 text-carbo-green" /> Prazo de Entrega</h3>
-          <div className="grid md:grid-cols-2 gap-3">
+          <h3 className="font-semibold flex items-center gap-2"><CalendarClock className="h-4 w-4 text-carbo-green" /> {ehCarboze ? "Prazo de Entrega" : "Previsão de Execução"}</h3>
+          <div className={`grid gap-3 ${ehCarboze ? "md:grid-cols-2" : "max-w-sm"}`}>
+            {ehCarboze && (
             <div className="space-y-1.5">
               <Label>Data de entrega combinada</Label>
               <Popover open={dateOpen} onOpenChange={(o) => { if (hasValidProduct) setDateOpen(o); }}>
@@ -1650,8 +1770,10 @@ export default function Vender() {
               </Popover>
               <p className="text-[11px] text-muted-foreground">Combine com o cliente. O prazo de fábrica (PPF/PPE) é calculado em dias úteis.</p>
             </div>
+            )}
 
             {/* Previsão de execução (serviço) — habilita só com item de serviço válido */}
+            {!ehCarboze && (
             <div className="space-y-1.5">
               <Label>Previsão de execução</Label>
               <Popover open={execDateOpen} onOpenChange={(o) => { if (hasValidService) setExecDateOpen(o); }}>
@@ -1685,8 +1807,9 @@ export default function Vender() {
               </Popover>
               <p className="text-[11px] text-muted-foreground">Estimativa da data de execução da descarbonização.</p>
             </div>
+            )}
           </div>
-          {prazos && (
+          {ehCarboze && prazos && (
             <div className="space-y-2">
               <div className="rounded-lg border divide-y text-sm max-w-sm">
                 <div className="flex justify-between px-3 py-2"><span className="text-muted-foreground">Fabricar até (PPF)</span><span className="tabular-nums font-medium">{fmtBr(prazos.ppf)}</span></div>
@@ -1709,7 +1832,9 @@ export default function Vender() {
         </CarboCardContent>
       </CarboCard>
 
-      {/* Recorrência (opcional) — replica ESTE pedido nos meses seguintes */}
+      {/* Recorrência (opcional) — replica ESTE pedido nos meses seguintes.
+          Já era travada por `!hasValidProduct`; passa a ser do modo. */}
+      {ehCarboze && (
       <CarboCard>
         <CarboCardContent className="p-4 space-y-3">
           <div className="flex items-start justify-between gap-3">
@@ -1785,6 +1910,7 @@ export default function Vender() {
           )}
         </CarboCardContent>
       </CarboCard>
+      )}
 
       {/* Forma de Pagamento (obrigatória) */}
       <CarboCard>

@@ -1,7 +1,14 @@
 # `/vender` — separar CarboZé de CarboVAPT
 
 **Mapa de implementação.** Levantado em 29/09/2026 lendo o código, não a
-memória. Nada aqui foi aplicado ainda.
+memória.
+
+✅ **FASE 1 APLICADA em 29/09/2026** — reorganização visual, uma-venda-por-tipo
+e a guarda de submit. Os sete `Vender.tsx` voltaram byte a byte iguais, e a tela
+foi RENDERIZADA nos dois modos (harness temporário, apagado antes do commit),
+porque o `tsc` não pega TDZ e o build também não.
+⏳ **FASE 2 pendente:** vários locais de execução. As decisões do dono do
+processo estão na seção 6.
 
 Pedido do dono do processo: o seletor "Tipo de Operação" passa de
 **Venda / Ação Promocional** para **CARBOZÉ / CARBOVAPT**; o que é comum aos
@@ -194,14 +201,57 @@ mergear.
 
 ---
 
-## 6. Decisões que são do dono do processo
+## 6. Decisões do dono do processo — RESPONDIDAS em 29/09/2026
 
-1. **"Ação Promocional" morre ou vira o quê?** Hoje não faz nada; se o time usa
-   o rótulo para alguma coisa, sumir apaga isso.
-2. **Locais de execução: fase 1 (um local) ou já vários?** Vários exigem
-   esquema novo.
-3. **O local de execução mora na VENDA ou na OS?** Nos dois seria a segunda
-   verdade sobre o mesmo fato.
-4. **Venda antiga que misturou produto e serviço** — existe? Se existir, ela
-   reabre em qual modo? (Medir antes: pedido com item `kind='service'` **e**
-   item de produto.)
+1. ✅ **"Ação Promocional" MORRE.** Não vira marcação nem nada: ela nunca chegou
+   ao banco. ⚠️ Mas o valor antigo continua dentro do `quote_form_snapshot` de
+   orçamento já salvo, então `normalizarModo` o trata — e trata olhando as
+   LINHAS, não o rótulo: `"venda"`/`"promo"` valiam para produto e para serviço
+   igualmente, então orçamento antigo só de serviço reabre em **CarboVAPT**.
+   Sem isso a guarda de submit o recusaria e ele ficaria impossível de editar.
+   O `VendaTipo` e o `TIPO_LABEL` guardam os QUATRO valores pelo mesmo motivo.
+2. ✅ **Fase 1 = UM local**, que já é o comportamento de hoje.
+3. ✅ **O local mora na OS, não na venda.** Palavras do dono do processo: a
+   venda aparece em `/vendas` como já aparece, e *"carbovapt gera uma OS que vai
+   para o portal de licenciados, que nossos funcionários registram e executam
+   por lá"*. Logo a venda **coleta**, a OS **carrega** — pôr o local em
+   `carboze_orders` criaria a segunda verdade sobre onde o serviço acontece.
+   ⚠️ E isso faz a fase 2 atravessar DOIS repositórios: o esquema de N locais é
+   de `crm_os`/`service_orders`, e quem mostra é o `carbohub-licenciados`.
+4. ✅ **Venda misturada: ZERO no histórico.** Medido antes de fechar a regra —
+   nenhum pedido tem item de produto e item de serviço juntos. Não há passado a
+   tratar, e é isso que permitiu a regra ser dura em vez de tolerante.
+   ⚠️ A medição foi de DADO, não de possibilidade: a tela permitia misturar até
+   hoje. Se um dia aparecer, ela reabre pela regra do item 1 (tem serviço ⇒
+   CarboVAPT) e a guarda de submit vai exigir que o vendedor separe.
+
+---
+
+## 7. O que a fase 1 mudou, arquivo a arquivo
+
+```
+apps/*/src/pages/Vender.tsx           os SETE, byte a byte iguais
+apps/*/src/hooks/useVendas.ts         os SETE, só o `VendaTipo` (o do crm difere
+                                      no resto — FILTRO_VENDA_DO_TIME)
+apps/crm/src/components/VendaDetailsDialog.tsx   TIPO_LABEL (cópia única)
+```
+
+1. **O seletor deixou de ser decorativo.** `mode` agora governa seção,
+   validação e o que vai no payload.
+2. ⚠️ **Esconder NÃO é a regra — é a aparência dela.** A regra mora em
+   `erroDeModo()`, no submit, que é o único lugar por onde os três caminhos
+   (orçamento, e-mail, venda) passam. `trocarModo` limpa na troca e DIZ que
+   limpou; a guarda é o cinto. Mesmo princípio da dedução de estoque morar na
+   RPC e não no `/vender`.
+3. ⚠️ **O endereço muda de RÓTULO, nunca de COLUNA.** CarboVAPT grava em
+   `delivery_address/city/state/zip` como sempre — redirecionar serviço para
+   `billing_address` mudaria o que outras telas mostram, e isso precisa ser
+   medido antes, não suposto.
+4. ⚠️ **Campo escondido que continua preenchido vai junto no payload.** O
+   endereço de faturamento separado some no CarboVAPT (a seção inteira já é
+   ele), então `enderecoFaturamentoOuNulo()` decide num lugar só, por onde os
+   três usos passam — o payload e os dois PDFs. Três condições iguais em três
+   lugares são três condições que divergem depois.
+5. **"Prazo de Entrega" virou "Previsão de Execução" no CarboVAPT**, com uma
+   coluna em cada modo. O `disabled={!hasValidProduct}` / `{!hasValidService}`
+   FICA: ele responde outra pergunta ("já tem item?").
