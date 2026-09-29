@@ -14,7 +14,14 @@ const db = supabase as unknown as {
 };
 
 export type VendaStatus = "orcamento" | "pedido" | "cancelado";
-export type VendaTipo = "venda" | "promo";
+// ⚠️ `tipo` NUNCA chega ao banco: `buildOrderFields` jamais leu `input.tipo` —
+// sem coluna, sem CHECK, sem regra. Ele só sobrevive dentro do
+// `quote_form_snapshot`, que o /vender relê para editar. Por isso os quatro
+// valores convivem: "venda"/"promo" é o vocabulário ANTIGO, guardado em
+// orçamento já salvo, e "carboze"/"carbovapt" é o de 29/09/2026. Estreitar
+// isto para os dois novos não quebraria o banco — quebraria a REABERTURA de
+// pedido antigo, calada, que é o modo caro de errar aqui.
+export type VendaTipo = "venda" | "promo" | "carboze" | "carbovapt";
 
 export interface VendaItemInput {
   is_bonificacao?: boolean;

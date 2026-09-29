@@ -10,7 +10,13 @@ const fmtDateTime = (s: string) => new Date(s).toLocaleString("pt-BR", { day: "2
 
 const STATUS_LABEL: Record<string, string> = { orcamento: "Orçamento", pedido: "Pedido", cancelado: "Cancelado" };
 const STATUS_VARIANT: Record<string, "secondary" | "success" | "destructive"> = { orcamento: "secondary", pedido: "success", cancelado: "destructive" };
-const TIPO_LABEL: Record<string, string> = { venda: "Venda", promo: "Ação Promocional" };
+// ⚠️ Os quatro ficam. "venda"/"promo" é o vocabulário anterior a 29/09/2026 e
+// ainda está no snapshot de pedido antigo; tirá-los faria a linha cair no
+// fallback `?? v.tipo` e mostrar a palavra crua do sistema para o vendedor.
+const TIPO_LABEL: Record<string, string> = {
+  venda: "Venda", promo: "Ação Promocional",
+  carboze: "CarboZé", carbovapt: "CarboVAPT",
+};
 
 type Endereco = Record<string, unknown> | null;
 function fmtEndereco(e: Endereco): string | null {
