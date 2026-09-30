@@ -23,6 +23,8 @@ import {
   nivelDaJanela, fracaoDaJanela, type NivelJanela,
   useNotificaveis, useMarcarNotificado,
   useAgendadas, useAgendar, useCancelarAgendada, useEnviarMidia, useMidia,
+  useBuscaNaConversa, useGaleriaDaConversa,
+  type AchadoNaConversa, type ItemDaGaleria,
   useNotas, useAnotar, useApagarNota, type Nota,
   useDefinirStatus, useDefinirResponsavel, useAtendentes,
   useTags, useCriarTag, useMarcarTag,
@@ -59,6 +61,15 @@ const hora = (s: string) =>
  *  vem no separador, e repeti-lo em cada balão é ruído. */
 const soHora = (s: string) =>
   new Date(s).toLocaleString("pt-BR", {
+    hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo",
+  });
+
+/** Dia e hora, para a busca e a galeria: ali NÃO há separador de dia, e o
+ *  achado pode ser de qualquer época — só a hora não localiza nada.
+ *  ⚠️ `timeZone` escrito, como em todo o resto do arquivo. */
+const fmtDataHora = (s: string) =>
+  new Date(s).toLocaleString("pt-BR", {
+    day: "2-digit", month: "2-digit", year: "2-digit",
     hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo",
   });
 
@@ -565,6 +576,189 @@ function SeparadorDeDia({ rotulo }: { rotulo: string }) {
 }
 
 /**
+ * Procurar dentro da conversa.
+ *
+ * ⚠️ A busca é do SERVIDOR, não do que está na tela — e o rodapé diz isso com
+ * todas as letras. A tela carrega 30 dias; quem procura um comprovante de
+ * junho e recebe "nada" concluiria que ele não existe.
+ */
+function BuscaNaConversa({ waId, aoFechar, aoAbrir }: {
+  waId: string;
+  aoFechar: () => void;
+  aoAbrir: (a: AchadoNaConversa) => void;
+}) {
+  const [termo, setTermo] = useState("");
+  const { data: achados = [], isFetching } = useBuscaNaConversa(waId, termo);
+  const campo = useRef<HTMLInputElement>(null);
+  useEffect(() => { campo.current?.focus(); }, []);
+  const curto = termo.trim().length < 2;
+
+  return (
+    <div className="shrink-0 border-b bg-muted/30 px-3 py-2">
+      <div className="flex items-center gap-2">
+        <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <input
+          ref={campo} value={termo} onChange={(e) => setTermo(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Escape") aoFechar(); }}
+          placeholder="Procurar nesta conversa…"
+          className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+        />
+        {isFetching && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+        <button type="button" onClick={aoFechar} aria-label="Fechar a busca"
+                className="shrink-0 rounded p-1 text-muted-foreground hover:text-foreground">
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      {/* ⚠️ O mínimo de dois caracteres é DITO. Campo que não reage sem dizer
+          por quê parece quebrado — e com um caractere o `ilike` varreria a
+          conversa inteira para devolver quase tudo. */}
+      {curto ? (
+        termo.length > 0 && (
+          <p className="mt-1.5 text-[11px] text-muted-foreground">Digite ao menos 2 letras.</p>
+        )
+      ) : !isFetching && (
+        <div className="mt-2 max-h-52 overflow-y-auto rounded-lg border bg-background">
+          {achados.length === 0 ? (
+            <p className="px-3 py-3 text-center text-[11px] text-muted-foreground">
+              Nada com esse termo — e a procura foi na conversa INTEIRA, não só no
+              que está na tela.
+            </p>
+          ) : (
+            <>
+              {achados.map((a) => (
+                <button key={a.wamid} type="button" onClick={() => aoAbrir(a)}
+                        className="flex w-full items-start gap-2 border-b px-3 py-2 text-left
+                                   last:border-b-0 hover:bg-muted/50">
+                  <span className="shrink-0 pt-px text-[10px] uppercase tracking-wide text-muted-foreground">
+                    {a.direcao === "saida" ? "nós" : "cliente"}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-xs">{destacar(a.texto, termo)}</span>
+                    <span className="mt-0.5 block text-[10px] text-muted-foreground">
+                      {fmtDataHora(a.ocorrido_em)}
+                    </span>
+                  </span>
+                </button>
+              ))}
+              {/* ⚠️ O teto é DITO quando é atingido. Lista cortada em silêncio é
+                  a doença do teto de 1.000 do PostgREST: a resposta parece
+                  completa e não é. */}
+              {achados.length >= 50 && (
+                <p className="px-3 py-2 text-center text-[10px] text-muted-foreground">
+                  Mostrando as 50 mais recentes — refine o termo para ver as outras.
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** O termo em negrito dentro do trecho: sem isto, numa mensagem longa a pessoa
+ *  ainda tem de procurar o que procurou. */
+function destacar(texto: string | null, termo: string) {
+  const t = termo.trim();
+  const txt = texto ?? "";
+  if (!t) return txt;
+  const i = txt.toLowerCase().indexOf(t.toLowerCase());
+  if (i < 0) return txt;
+  return (
+    <>
+      {txt.slice(0, i)}
+      <mark className="bg-carbo-green/30 text-foreground">{txt.slice(i, i + t.length)}</mark>
+      {txt.slice(i + t.length)}
+    </>
+  );
+}
+
+/**
+ * Os arquivos da conversa, num lugar só.
+ *
+ * ⚠️ É uma LISTA, não uma grade de miniaturas, e isso é decisão. A mídia aqui
+ * não é baixada — o webhook guarda só o `midia_id` e o link da Meta expira, e
+ * cada arquivo passa pela `whatsapp-midia-baixar` com o nosso token. Uma grade
+ * baixaria vinte arquivos no clique de abrir; quem abre a galeria quer UM.
+ * Clicar abre pelo mesmo caminho do balão.
+ */
+function GaleriaDaConversa({ waId, aoFechar }: { waId: string; aoFechar: () => void }) {
+  const { data: itens = [], isFetching } = useGaleriaDaConversa(waId, true);
+  const [aberto, setAberto] = useState<ItemDaGaleria | null>(null);
+
+  useEffect(() => {
+    const t = (e: KeyboardEvent) => { if (e.key === "Escape") { if (aberto) setAberto(null); else aoFechar(); } };
+    window.addEventListener("keydown", t);
+    return () => window.removeEventListener("keydown", t);
+  }, [aoFechar, aberto]);
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4"
+         onMouseDown={(e) => { if (e.target === e.currentTarget) aoFechar(); }}>
+      <div className="flex max-h-full w-full max-w-2xl flex-col overflow-hidden rounded-xl border bg-background shadow-lg">
+        <div className="flex shrink-0 items-center justify-between border-b px-4 py-3">
+          <div>
+            <p className="text-sm font-semibold">Arquivos da conversa</p>
+            <p className="text-[11px] text-muted-foreground">
+              {isFetching ? "Buscando…"
+                : `${itens.length} ${itens.length === 1 ? "arquivo" : "arquivos"}, do mais novo para o mais antigo`}
+            </p>
+          </div>
+          <button type="button" onClick={aoFechar} aria-label="Fechar a galeria"
+                  className="rounded p-1 text-muted-foreground hover:text-foreground">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto p-3">
+          {isFetching ? (
+            <div className="grid place-items-center py-10">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : itens.length === 0 ? (
+            <p className="py-10 text-center text-xs text-muted-foreground">
+              Nenhuma foto, áudio ou arquivo nesta conversa ainda.
+            </p>
+          ) : (
+            <div className="space-y-1">
+              {itens.map((i) => {
+                const Icone = ICONE_MIDIA[i.tipo] ?? FileIcon;
+                return (
+                  <button key={i.wamid} type="button" onClick={() => setAberto(i)}
+                          className="flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left
+                                     transition-colors hover:bg-muted/50">
+                    <Icone className="h-4 w-4 shrink-0 text-carbo-green" />
+                    <span className="min-w-0 flex-1 truncate text-xs">
+                      {i.texto || (NOME_MIDIA[i.tipo] ?? i.tipo)}
+                    </span>
+                    <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
+                      {i.direcao === "saida" ? "nós" : "cliente"}
+                    </span>
+                    <span className="shrink-0 text-[10px] text-muted-foreground">
+                      {fmtDataHora(i.ocorrido_em)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* O item escolhido abre pelo MESMO componente do balão — um caminho só
+            para baixar mídia, em vez de dois que divergem. */}
+        {aberto && (
+          <div className="shrink-0 border-t p-3">
+            <Anexo mediaId={aberto.midia_id} tipo={aberto.tipo}
+                   nome={aberto.texto ?? null} Icone={ICONE_MIDIA[aberto.tipo] ?? FileIcon} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
  * Um balão da conversa.
  *
  * Três naturezas, e a tela precisa distingui-las:
@@ -890,6 +1084,15 @@ function Conversa({ c }: { c: Conversa }) {
   const [verAgendar, setVerAgendar] = useState(false);
   const [quando, setQuando] = useState("");
   const [texto, setTexto] = useState("");
+  // Busca e galeria: as duas respondem "onde foi que ele mandou aquilo?" por
+  // caminhos diferentes — pelo que foi escrito e pelo que foi anexado.
+  const [buscando, setBuscando] = useState(false);
+  const [galeria, setGaleria] = useState(false);
+  // ⚠️ O achado destaca a mensagem NA TELA quando ela está carregada. Quando
+  // não está (a conversa carrega 30 dias, o achado pode ser de junho), a tela
+  // diz isso em vez de rolar para lugar nenhum — rolagem que não acontece é
+  // indistinguível de clique que não funcionou.
+  const [realce, setRealce] = useState<string | null>(null);
   const fim = useRef<HTMLDivElement>(null);
   const aberta = janelaAberta(c.janela_ate);
 
@@ -1070,6 +1273,20 @@ function Conversa({ c }: { c: Conversa }) {
           </div>
 
           <div className="flex shrink-0 flex-col items-end gap-1.5">
+          {/* Procurar e ver os arquivos ficam JUNTOS: as duas são a mesma
+              pergunta ("onde está aquilo?") por caminhos diferentes. */}
+          <div className="flex items-center gap-1">
+            <Button size="sm" variant="ghost" className="h-8 w-8 p-0"
+                    title="Procurar nesta conversa"
+                    onClick={() => { setBuscando((v) => !v); setRealce(null); }}>
+              <Search className="h-3.5 w-3.5" />
+            </Button>
+            <Button size="sm" variant="ghost" className="h-8 w-8 p-0"
+                    title="Arquivos da conversa"
+                    onClick={() => setGaleria(true)}>
+              <Paperclip className="h-3.5 w-3.5" />
+            </Button>
+          </div>
           {/* ⚠️ Resolver é o botão mais usado desta tela: a maioria das
               respostas é "Ok recebido", e sem ele a única forma de tirar a
               conversa da fila seria mandar um "de nada" ao cliente. */}
@@ -1170,6 +1387,32 @@ function Conversa({ c }: { c: Conversa }) {
         {/* `space-y` saiu: o espaçamento agora é do BLOCO (no próprio balão),
             porque mensagem colada e mensagem nova precisam de distâncias
             diferentes — um `space-y` único achatava as duas no mesmo valor. */}
+        {/* A barra de busca fica ENTRE o cabeçalho e as mensagens, empurrando
+            a lista para baixo em vez de sobrepô-la: sobreposta, ela cobriria
+            justamente o topo do histórico, que é para onde a pessoa olha
+            enquanto lê o resultado. */}
+        {buscando && (
+          <BuscaNaConversa
+            waId={c.wa_id}
+            aoFechar={() => { setBuscando(false); setRealce(null); }}
+            aoAbrir={(a) => {
+              const alvo = document.getElementById(`msg-${a.wamid}`);
+              if (alvo) {
+                alvo.scrollIntoView({ block: "center", behavior: "smooth" });
+                setRealce(a.wamid);
+              } else {
+                // ⚠️ DIZ que não está carregada em vez de não fazer nada. A
+                // conversa na tela é de 30 dias; achado de junho não tem para
+                // onde rolar, e clique sem efeito lê-se como botão quebrado.
+                setRealce(null);
+                toast.info(`Mensagem de ${fmtDataHora(a.ocorrido_em)} — fora do período carregado na tela.`);
+              }
+            }}
+          />
+        )}
+
+        {galeria && <GaleriaDaConversa waId={c.wa_id} aoFechar={() => setGaleria(false)} />}
+
         <div className="min-h-0 flex-1 overflow-y-auto px-0.5 pb-1 pr-1">
           {(() => {
             const linhas = montarLinhaDoTempo(c.mensagens, notas.data ?? []);
@@ -1187,8 +1430,13 @@ function Conversa({ c }: { c: Conversa }) {
                 : l.kind === "nota"
                   ? <Recado key={l.n.id} n={l.n}
                             apagar={() => apagarNota.mutate({ id: l.n.id, wa_id: c.wa_id })} />
-                  : <Balao key={l.m.wamid} m={l.m} primeira={l.primeira} ultima={l.ultima}
-                           mostrarComoReenviar={l.m.wamid === alvo} />,
+                  : <div key={l.m.wamid} id={`msg-${l.m.wamid}`}
+                         className={realce === l.m.wamid
+                           ? "rounded-lg ring-2 ring-carbo-green/60 transition-shadow"
+                           : undefined}>
+                      <Balao m={l.m} primeira={l.primeira} ultima={l.ultima}
+                             mostrarComoReenviar={l.m.wamid === alvo} />
+                    </div>,
             );
           })()}
           <div ref={fim} />
