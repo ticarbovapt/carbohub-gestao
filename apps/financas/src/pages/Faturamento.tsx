@@ -112,7 +112,15 @@ export default function Faturamento() {
   const [search, setSearch] = useState("");
   // Aba ativa persistida na URL (?tab=…), pra não voltar pro "sistema" a cada F5.
   const [searchParams, setSearchParams] = useSearchParams();
-  const VALID_TABS = ["sistema", "bling", "online", "vincular", "todas"];
+  // ⚠️ ABA NOVA ENTRA AQUI TAMBÉM — são DOIS lugares, e esquecer o segundo não
+  // dá erro nenhum. O `<TabsTrigger>` renderiza, o clique grava `?tab=…`, e
+  // esta lista devolve a aba para "sistema" calado: o botão parece morto.
+  // Aconteceu no mesmo dia em que a aba da filial foi criada.
+  //
+  // O fallback existe para link antigo com aba que não existe mais, e por isso
+  // fica — mas é ele que transforma "esqueci de registrar" em "o botão não
+  // funciona", que é o sintoma mais difícil de ligar à causa.
+  const VALID_TABS = ["sistema", "bling", "online", "vincular", "vincular_filial", "todas"];
   const rawTab = searchParams.get("tab") || "sistema";
   const activeTab = VALID_TABS.includes(rawTab) ? rawTab : "sistema";
   const setActiveTab = (v: string) =>
