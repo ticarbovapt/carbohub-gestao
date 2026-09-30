@@ -893,8 +893,13 @@ async function upsertNfeDaLista(admin: Admin, nf: any): Promise<void> {
     loja_id: nf.loja?.id ?? null,
     unidade_negocio_id: nf.loja?.unidadeNegocio?.id ?? null,
     situacao: nfeSituacaoLabel(nf.situacao),
-    xml_url: nf.xml || null,
-    pdf_url: nf.pdf || null,
+    // ⚠️ Só GRAVA quando a lista tem o link; ausente, preserva o que o detalhe
+    // já escreveu. Mesma razão pela qual `valor_total` e `contato_cnpj` ficam
+    // de fora, logo acima — e aqui a razão é mais dura: o XML é o último degrau
+    // da resolução do rodapé, e apagá-lo a cada minuto tirava justamente a
+    // fonte que SEMPRE tem o texto.
+    ...(nf.xml ? { xml_url: nf.xml } : {}),
+    ...(nf.pdf ? { pdf_url: nf.pdf } : {}),
     raw_data: nf,
     synced_at: nowIso(),
     updated_at: nowIso(),
@@ -902,12 +907,93 @@ async function upsertNfeDaLista(admin: Admin, nf: any): Promise<void> {
   if (error) throw error;
 }
 
+// ── Resolução da observação (o rodapé com o nº do pedido) ─────────────────
+//
+// ⚠️ PORTADA do `bling-sync`, não inventada aqui. Lá o comentário já dizia por
+// que a escada tem três degraus: *"o JSON do detalhe do Bling NEM SEMPRE traz
+// esse texto (ou traz com outro nome), mas o XML SEMPRE traz — é dele que o
+// DANFE é renderizado"*. A conta 2 lia SÓ o primeiro degrau, e o resultado foi
+// medido em 30/09/2026: **884 notas, `informacoes_adicionais` preenchida em
+// ZERO** — enquanto o rodapé estava lá, visível no painel do Bling, em
+// "Informações complementares".
+//
+// Sem isto não existe casamento por texto na filial: o regex rodaria sobre uma
+// coluna vazia e não casaria nada, calado.
+const OBS_CODE_REGEX = /(V\d{10}|PED-\d{4}-\d{5})/i;
+
+function decodeXmlEntities(s: string): string {
+  return s
+    .replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+    .replace(/&amp;/g, "&");
+}
+
+/** Varre qualquer string da árvore procurando o código — o campo muda de nome
+ *  e de aninhamento entre respostas, e foi por isso que a matriz precisou
+ *  disto. */
+function deepFindCode(obj: any, depth = 0): string | null {
+  if (obj == null || depth > 6) return null;
+  if (typeof obj === "string") return OBS_CODE_REGEX.test(obj) ? obj : null;
+  if (typeof obj !== "object") return null;
+  for (const v of Object.values(obj)) {
+    const found = deepFindCode(v, depth + 1);
+    if (found) return found;
+  }
+  return null;
+}
+
+/** O XML é a fonte de verdade do DANFE: `<infCpl>` é literalmente o que a nota
+ *  imprime em "Informações complementares". */
+async function extractObsFromXml(xmlUrl: string): Promise<string | null> {
+  try {
+    const res = await fetch(xmlUrl);
+    if (!res.ok) return null;
+    const xml = await res.text();
+    const parts: string[] = [];
+    const cpl = xml.match(/<infCpl>([\s\S]*?)<\/infCpl>/i);
+    const fisco = xml.match(/<infAdFisco>([\s\S]*?)<\/infAdFisco>/i);
+    if (cpl?.[1]) parts.push(decodeXmlEntities(cpl[1].trim()));
+    if (fisco?.[1]) parts.push(decodeXmlEntities(fisco[1].trim()));
+    const joined = parts.join(" ").trim();
+    return joined || null;
+  } catch (e) {
+    console.error("[bling2-sync] extractObsFromXml falhou:", e);
+    return null;
+  }
+}
+
+async function resolveNfeObs(d: any, xmlUrl?: string | null): Promise<string | null> {
+  let obs: any = d?.informacoesAdicionais ?? d?.observacoes ?? null;
+  if (obs && typeof obs === "object") {
+    obs = obs.informacoesAdicionaisContribuinte
+      || obs.informacoesComplementares
+      || obs.informacoesAdicionaisContribuente
+      || null;
+  }
+  if (typeof obs === "string" && OBS_CODE_REGEX.test(obs)) return obs;
+
+  const deep = deepFindCode(d);
+  if (deep) return deep;
+
+  const link = xmlUrl || d?.xml || d?.linkXml || d?.linkXML || null;
+  if (link) {
+    const fromXml = await extractObsFromXml(link);
+    if (fromXml) return fromXml;
+  }
+  return typeof obs === "string" ? obs : null;
+}
+
 // Busca o detalhe de uma NF e grava valor, CNPJ, situação e links.
 // Devolve true se gravou.
 async function detalharNfe(admin: Admin, token: string, nf: any): Promise<boolean> {
   const detail = await blingFetch(token, `/nfe/${nf.bling_id}`, 1, 1);
   const d = detail.data || {};
-  const upd: Record<string, unknown> = { raw_data: d, updated_at: nowIso() };
+  // ⚠️ `raw_detalhe`, NUNCA `raw_data`. A listagem roda de minuto em minuto e
+  // faz `raw_data: nf` no upsert — ela REGRAVA o detalhe por cima com a linha
+  // magra da lista, e foi isso que apagou a prova: a NF 000986 tinha 627 bytes
+  // de JSON guardado, que é o tamanho da linha de listagem, não de um detalhe.
+  // Mesmo nome e mesmo motivo do `bling2_orders.raw_detalhe`.
+  const upd: Record<string, unknown> = { raw_detalhe: d, updated_at: nowIso() };
 
   const valor = extractValorNota(d);
   const cnpj  = extractContatoDoc(d.contato);
@@ -919,9 +1005,18 @@ async function detalharNfe(admin: Admin, token: string, nf: any): Promise<boolea
   if (situ) upd.situacao = situ;
   if (d.contato?.nome) upd.contato_nome = d.contato.nome;
   if (d.chaveAcesso) upd.chave_acesso = d.chaveAcesso;
-  if (d.observacoes || d.informacoesAdicionais) {
-    upd.informacoes_adicionais = d.informacoesAdicionais || d.observacoes;
-  }
+  // ⚠️ A escada inteira, e o XML como último degrau. A versão anterior lia só
+  // os dois campos diretos e por isso a coluna ficou vazia em 884 de 884.
+  const obs = await resolveNfeObs(d, d.xml || nf.xml_url || null);
+  if (obs) upd.informacoes_adicionais = obs;
+
+  // ⚠️ A NATUREZA vai junto, e não é detalhe: é ELA que diz se esta nota é a
+  // venda ou a remessa de bonificação. Sem ela, o casamento por texto poria a
+  // nota de bonificação em `bling2_nf_id` — o lugar da nota PRINCIPAL — e o
+  // pedido cairia do faturamento. Foi exatamente o que aconteceu no
+  // `V2026090052` da matriz (ver `20260996`), e lá custou meses.
+  const nat = d.naturezaOperacao?.descricao ?? d.naturezaOperacao ?? null;
+  if (typeof nat === "string" && nat.trim()) upd.natureza_operacao = nat.trim();
   const pdf = d.pdf || d.linkPDF || d.linkPdf || d.linkDanfe || d.danfe || null;
   if (pdf) upd.pdf_url = pdf;
   if (d.xml) upd.xml_url = d.xml;
@@ -1023,10 +1118,14 @@ async function syncNFeRecente(admin: Admin, token: string, logId: string): Promi
 
   // Detalhe só do que está DENTRO da janela e ainda sem valor. É aqui que a
   // nota ganha valor, CNPJ e o link do DANFE.
+  // ⚠️ `valor_total is null` NÃO basta mais como fila. A nota que já tem valor
+  // foi detalhada ANTES de esta função saber ler o rodapé — ela nunca voltaria
+  // aqui, e o casamento por texto nasceria cego para todo o histórico. A
+  // condição agora é "falta valor OU falta a observação".
   const { data: semvalor } = await admin
     .from("bling2_nfe")
-    .select("id, bling_id")
-    .is("valor_total", null)
+    .select("id, bling_id, xml_url")
+    .or("valor_total.is.null,informacoes_adicionais.is.null")
     .gte("data_emissao", corte)
     .order("data_emissao", { ascending: false })
     .limit(40);
@@ -1113,8 +1212,11 @@ async function syncNFe(admin: Admin, token: string, logId: string): Promise<Sync
   // detalhe. Teto de 120 por execução para caber no tempo da função.
   const { data: semDetalhe } = await admin
     .from("bling2_nfe")
-    .select("id, bling_id")
-    .is("valor_total", null)
+    .select("id, bling_id, xml_url")
+    // ⚠️ Mesma mudança da rodada recente: `valor_total is null` sozinho nunca
+    // traria de volta a nota que já foi detalhada ANTES de esta função saber
+    // ler o rodapé — e o histórico é justamente o que precisa voltar.
+    .or("valor_total.is.null,informacoes_adicionais.is.null")
     .order("data_emissao", { ascending: false })
     // ── TETOS: por que 40, e não 120 ──────────────────────────────────────
     // A conta de tempo que eu tinha feito estava errada: contei só os 350ms de
