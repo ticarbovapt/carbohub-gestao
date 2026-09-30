@@ -7,7 +7,7 @@ import {
   Search, SearchX, X, Package, ArrowUpRight, CornerDownLeft, Megaphone,
   BellRing, BellOff, Check, CheckCheck, Inbox, Undo2, Sparkles, UserCheck, Tag as TagIcon, Plus,
   CalendarClock, Trash2, Square, Play, Pause, Download, StickyNote, EyeOff, Copy,
-  Maximize2,
+  Maximize2, SlidersHorizontal, ChevronDown,
   type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -20,6 +20,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   useConversas, useConversasAoVivo, useResponder, janelaAberta, faltaDaJanela,
+  // ⚠️ Puras e na `lib`, não aqui: dá para conferir o recorte sem montar tela.
+  aplicarFiltrosDaCaixa, quantosFiltrosAtivos, FILTROS_VAZIOS,
+  type FiltrosDaCaixa as TipoFiltros,
   nivelDaJanela, fracaoDaJanela, type NivelJanela,
   useNotificaveis, useMarcarNotificado,
   useAgendadas, useAgendar, useCancelarAgendada, useEnviarMidia, useMidia,
@@ -2217,6 +2220,8 @@ export default function Conversas() {
      de entrada existe para mostrar o trabalho. O contador ao lado de cada
      filtro diz o que há nos outros, então nada fica escondido. */
   const [filtro, setFiltro] = useState<FiltroConversa>("pendentes");
+  const [filtros, setFiltros] = useState<TipoFiltros>(FILTROS_VAZIOS);
+  const [painelFiltros, setPainelFiltros] = useState(false);
   const [verQuemRecebe, setVerQuemRecebe] = useState(false);
   const { data: notificaveis } = useNotificaveis();
   const quantosRecebem = (notificaveis ?? []).filter((p) => p.recebe).length;
@@ -2251,6 +2256,39 @@ export default function Conversas() {
       return false;
     });
   }, [lista, busca, filtro, meuId]);
+
+  /* ⚠️ Os filtros entram DEPOIS da aba e da busca, e a ordem importa: a aba diz
+     DE QUE FILA a pessoa está tratando, a busca é a pergunta pontual, o filtro
+     é o recorte dentro dela. Aplicá-los antes faria a contagem das abas — que
+     mede a caixa INTEIRA — deixar de bater com o que a lista mostra, e o placar
+     viraria decoração. */
+  const visiveis = useMemo(
+    () => aplicarFiltrosDaCaixa(filtradas, filtros), [filtradas, filtros]);
+  const filtrosAtivos = quantosFiltrosAtivos(filtros);
+
+  /* As opções saem do que EXISTE nas conversas carregadas, nunca de uma lista
+     fixa: etiqueta que ninguém usou não deve aparecer para ser escolhida e
+     devolver zero — opção que só leva a lista vazia é a doença do relatório
+     que discorda para sempre do que o sistema faz. */
+  const opcoesResponsavel = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of lista) if (c.responsavel) m.set(c.responsavel, c.responsavel_nome ?? "sem nome");
+    return [...m].map(([id, nome]) => ({ id, nome }))
+      .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  }, [lista]);
+  const opcoesTag = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of lista) for (const t of c.tags) m.set(t.id, t.nome);
+    return [...m].map(([id, nome]) => ({ id, nome }))
+      .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  }, [lista]);
+  const opcoesEtapa = useMemo(() => {
+    const vistas = new Set<string>();
+    for (const c of lista) if (c.sobre_a_etapa) vistas.add(c.sobre_a_etapa);
+    // Ordem da ESTEIRA, não alfabética: "A caminho" antes de "Entregue" é como
+    // quem atende pensa o pedido.
+    return Object.keys(NOME_ETAPA).filter((k) => vistas.has(k));
+  }, [lista]);
 
   /* O cabeçalho é o placar da caixa INTEIRA, não da lista filtrada: um filtro na
      coluna não pode fazer o número de urgências parecer menor. */
@@ -2406,13 +2444,114 @@ export default function Conversas() {
                     );
                   })}
                 </div>
+
+                {/* ── Filtros ────────────────────────────────────────────────
+                    ⚠️ NASCE FECHADO, e o botão diz quantos estão ativos. Quatro
+                    seletores abertos o tempo todo empurrariam a primeira
+                    conversa para fora da tela — o oposto do que uma caixa de
+                    entrada precisa fazer. O selo com o número é o que impede o
+                    outro defeito: filtro ligado que ninguém lembra de ter
+                    ligado, e aí "a conversa sumiu do sistema".
+
+                    ⚠️ E eles NÃO repetem as abas. "Minhas", "Sem responsável" e
+                    "Janela aberta" estão logo acima; repetir aqui seria dois
+                    lugares para a mesma pergunta. */}
+                <div className="flex items-center gap-1">
+                  <button type="button" onClick={() => setPainelFiltros((v) => !v)}
+                          aria-expanded={painelFiltros}
+                          className={`flex flex-1 items-center justify-center gap-1.5 rounded-md border
+                                      px-2 py-1.5 text-[11px] font-medium leading-none transition-colors ${
+                            filtrosAtivos > 0
+                              ? "border-carbo-green/40 bg-carbo-green/10 text-foreground"
+                              : "border-border/60 bg-muted/40 text-muted-foreground hover:bg-muted/70"}`}>
+                    <SlidersHorizontal className="h-3 w-3" />
+                    Filtros
+                    {filtrosAtivos > 0 && (
+                      <span className="rounded bg-carbo-green/20 px-1 py-0.5 text-[10px]
+                                       font-semibold tabular-nums text-carbo-green">
+                        {filtrosAtivos}
+                      </span>
+                    )}
+                    <ChevronDown className={`h-3 w-3 transition-transform ${painelFiltros ? "rotate-180" : ""}`} />
+                  </button>
+                  {/* ⚠️ Limpar aparece MESMO com o painel fechado: é justamente
+                      fechado que a pessoa esquece que filtrou. */}
+                  {filtrosAtivos > 0 && (
+                    <button type="button" onClick={() => setFiltros(FILTROS_VAZIOS)}
+                            title="Limpar filtros"
+                            className="shrink-0 rounded-md border border-border/60 bg-muted/40 p-1.5
+                                       text-muted-foreground transition-colors hover:bg-muted/70">
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+
+                {painelFiltros && (
+                  <div className="space-y-1">
+                    {[
+                      { rot: "Responsável", val: filtros.responsavel,
+                        set: (v: string) => setFiltros((f) => ({ ...f, responsavel: v || null })),
+                        ops: opcoesResponsavel.map((o) => [o.id, o.nome] as const) },
+                      { rot: "Etiqueta", val: filtros.tag,
+                        set: (v: string) => setFiltros((f) => ({ ...f, tag: v || null })),
+                        ops: opcoesTag.map((o) => [o.id, o.nome] as const) },
+                      { rot: "Etapa do aviso", val: filtros.etapa,
+                        set: (v: string) => setFiltros((f) => ({ ...f, etapa: v || null })),
+                        ops: opcoesEtapa.map((k) => [k, NOME_ETAPA[k] ?? k] as const) },
+                      { rot: "Status", val: filtros.status,
+                        set: (v: string) => setFiltros((f) => ({ ...f, status: (v || null) as TipoFiltros["status"] })),
+                        ops: ORDEM_STATUS.filter((e): e is NonNullable<typeof e> => !!e)
+                          /* ⚠️ O rótulo sai do MESMO `STATUS` do chip e do
+                             cabeçalho de grupo: uma segunda tabela aqui diria
+                             "Aberto" num lugar e outra coisa no outro. */
+                          .map((e) => [e, STATUS[e].rotulo] as const) },
+                    ].map((sel) => (
+                      /* ⚠️ Seletor com ZERO opção não é mostrado. Um "Etiqueta:
+                         qualquer" sozinho, sem nada para escolher, ocupa altura
+                         e promete um recorte que não existe. */
+                      sel.ops.length === 0 ? null : (
+                        <select key={sel.rot} aria-label={sel.rot}
+                                value={sel.val ?? ""} onChange={(e) => sel.set(e.target.value)}
+                                className="w-full rounded-md border border-border/60 bg-muted/40 px-2 py-1.5
+                                           text-[11px] outline-none focus:border-carbo-green/40">
+                          {/* ⚠️ O RÓTULO vai dentro de cada opção, não só no
+                              "qualquer". Campo fechado só mostra a opção
+                              escolhida: sem isso ele dizia "Carla Reis" — e
+                              Carla Reis é o quê, responsável ou etiqueta? É o
+                              mesmo defeito do dropdown de produto do /vender,
+                              que dizia "Microdistribuidor R$ 11,50" sem o nome
+                              do produto, e que só apareceu renderizando. */}
+                          <option value="">{sel.rot}: qualquer</option>
+                          {sel.ops.map(([v, r]) => (
+                            <option key={v} value={v}>{sel.rot}: {r}</option>
+                          ))}
+                        </select>
+                      )
+                    ))}
+                    <select aria-label="Ordenar" value={filtros.ordem}
+                            onChange={(e) => setFiltros((f) => ({ ...f, ordem: e.target.value as TipoFiltros["ordem"] }))}
+                            className="w-full rounded-md border border-border/60 bg-muted/40 px-2 py-1.5
+                                       text-[11px] outline-none focus:border-carbo-green/40">
+                      <option value="recentes">Mais recentes primeiro</option>
+                      <option value="antigas">Mais antigas primeiro</option>
+                    </select>
+                    {/* ⚠️ A ordem vale DENTRO de cada grupo, e a tela diz isso.
+                        Os grupos seguem a urgência ("Abertas" antes de
+                        "Resolvidas") e não mudam de lugar — sem esta linha,
+                        escolher "Mais antigas" e ver "Abertas" continuar no
+                        topo se lê como filtro que não funcionou. */}
+                    <p className="px-0.5 text-[10px] leading-tight text-muted-foreground/70">
+                      A ordem vale dentro de cada grupo.
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="max-h-[20rem] min-h-0 flex-1 overflow-y-auto p-0 lg:max-h-none">
                 {/* ⚠️ "Nada casou com a busca" é diferente de "não há conversa".
                     O segundo vive fora daqui; este só precisa mostrar a saída —
                     senão a lista some e parece que os dados sumiram. */}
-                {filtradas.length === 0 ? (
+                {visiveis.length === 0 ? (
                   <div className="px-3 py-8 text-center">
                     <SearchX className="mx-auto h-5 w-5 text-muted-foreground/60" />
                     <p className="mt-2 text-xs text-muted-foreground">
@@ -2423,10 +2562,17 @@ export default function Conversas() {
                         ? <>Nada casou com “{busca.trim()}”. São {lista.length} conversas no total.</>
                         : <>São {lista.length} conversas no total — troque o filtro para vê-las.</>}
                     </p>
-                    {(busca.trim() || filtro !== "todas") && (
+                    {/* ⚠️ Ele limpa os TRÊS recortes — aba, busca e filtros.
+                        Antes zerava só os dois primeiros, e a lista ficava
+                        vazia depois do clique quando quem a esvaziou tinha sido
+                        um filtro: um botão que promete desfazer e não desfaz é
+                        pior que botão nenhum, porque a pessoa conclui que não
+                        há conversa nenhuma. Pela mesma razão ele aparece também
+                        quando só há filtro ativo. */}
+                    {(busca.trim() || filtro !== "todas" || filtrosAtivos > 0) && (
                       <Button size="sm" variant="outline" className="mt-3 h-7 text-[11px]"
-                              onClick={() => { setBusca(""); setFiltro("todas"); }}>
-                        Limpar busca e filtro
+                              onClick={() => { setBusca(""); setFiltro("todas"); setFiltros(FILTROS_VAZIOS); }}>
+                        Limpar busca e filtros
                       </Button>
                     )}
                   </div>
@@ -2436,7 +2582,7 @@ export default function Conversas() {
                      meio dos avisos que ninguém respondeu. O cabeçalho de grupo
                      é o que faz a lista ter tamanho legível para sempre. */
                   ORDEM_STATUS.flatMap((estado) => {
-                    const doGrupo = filtradas.filter((c) => c.status === estado);
+                    const doGrupo = visiveis.filter((c) => c.status === estado);
                     if (!doGrupo.length) return [];
                     return [
                       <p key={`g-${estado ?? "sem"}`}

@@ -446,3 +446,87 @@ export function nivelDaJanela(janela_ate: string | null): NivelJanela {
 export function fracaoDaJanela(janela_ate: string | null): number {
   return Math.max(0, Math.min(1, msDaJanela(janela_ate) / JANELA_MS));
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Filtros da caixa
+//
+// A busca livre resolve enquanto há cinco conversas. Com 241 — o número real em
+// 30/09/2026 — a pergunta de quem atende deixa de ser "onde está o Fulano" e
+// passa a ser "o que está marcado como orçamento", "o que é do Pedro", "o que
+// ficou parado em Nota fiscal emitida". Nenhuma dessas se responde digitando
+// um nome.
+//
+// ⚠️ TUDO NO NAVEGADOR, sobre a lista que já está carregada. Filtrar no
+// servidor seria uma ida ao banco por clique, e a lista já vem inteira.
+//
+// ⚠️ E ELES NÃO REPETEM AS ABAS. "Não respondidas", "Minhas", "Sem
+// responsável", "Janela aberta" e "Todas" já existem em cima da lista. Repetir
+// "sem dono" e "não lidas" aqui criaria DOIS lugares para a mesma pergunta —
+// e dois lugares que discordam é o defeito que este repositório mais paga.
+// O que os filtros acrescentam é o que as abas não sabem perguntar:
+// atendente ESPECÍFICO, etiqueta, etapa do aviso e status do atendimento.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * ⚠️ Só DUAS, e "quem espera resposta primeiro" foi tirada de propósito.
+ *
+ * A lista é renderizada AGRUPADA por status (`ORDEM_STATUS`), e a ordem dos
+ * grupos já é a da urgência — "Abertas, ninguém respondeu" vem primeiro. Uma
+ * ordenação por pendência só poderia agir DENTRO de cada grupo, onde ela é
+ * quase sempre idêntica à que já está lá: no grupo `aberto` o cliente falou por
+ * último, então praticamente todo mundo tem `aguardando > 0`.
+ *
+ * Seria um seletor que soma 1 no selo de filtros ativos e não muda uma linha da
+ * tela — a mesma doença do relatório que só sabe concordar consigo mesmo, na
+ * versão mais barata de cometer.
+ */
+export type OrdemDaCaixa = "recentes" | "antigas";
+
+export interface FiltrosDaCaixa {
+  /** Id do responsável. `null` = qualquer. As abas cobrem "minhas" e "sem dono". */
+  responsavel: string | null;
+  /** Id da etiqueta. */
+  tag: string | null;
+  /** Etapa do aviso da esteira sobre o qual a conversa fala. */
+  etapa: string | null;
+  /** Status do atendimento — o que o time decidiu. */
+  status: StatusAtendimento | null;
+  ordem: OrdemDaCaixa;
+}
+
+export const FILTROS_VAZIOS: FiltrosDaCaixa = {
+  responsavel: null, tag: null, etapa: null, status: null, ordem: "recentes",
+};
+
+/** Quantos filtros estão de fato mudando o que se vê — é o número do selo.
+ *  ⚠️ A ordenação PADRÃO não conta: ela não esconde nada, e contá-la faria o
+ *  selo nascer com 1 e perder o significado. */
+export function quantosFiltrosAtivos(f: FiltrosDaCaixa): number {
+  return (f.responsavel ? 1 : 0) + (f.tag ? 1 : 0) + (f.etapa ? 1 : 0)
+    + (f.status ? 1 : 0) + (f.ordem !== "recentes" ? 1 : 0);
+}
+
+/**
+ * Aplica os filtros e a ordenação. Fora do componente, de propósito: dá para
+ * conferir sem montar tela.
+ *
+ * ⚠️ A ordenação devolve lista NOVA (`[...]`) — ordenar no lugar mutaria o
+ * array do cache do react-query, e o próximo render partiria de uma ordem que
+ * ninguém escolheu.
+ */
+export function aplicarFiltrosDaCaixa(
+  lista: Conversa[], f: FiltrosDaCaixa,
+): Conversa[] {
+  const filtrada = lista.filter((c) => {
+    if (f.responsavel && c.responsavel !== f.responsavel) return false;
+    if (f.tag && !c.tags.some((t) => t.id === f.tag)) return false;
+    if (f.etapa && c.sobre_a_etapa !== f.etapa) return false;
+    if (f.status && c.status !== f.status) return false;
+    return true;
+  });
+
+  const quando = (c: Conversa) => new Date(c.ultima_em).getTime();
+
+  if (f.ordem === "antigas") return [...filtrada].sort((a, b) => quando(a) - quando(b));
+  return [...filtrada].sort((a, b) => quando(b) - quando(a));
+}
