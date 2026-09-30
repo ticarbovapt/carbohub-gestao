@@ -585,6 +585,18 @@ function Balao({ m, primeira, ultima }: {
   const anexo = !!m.midia_id;
   const desconhecida = !m.texto && !anexo && !automatica;
   const IconeAnexo = ICONE_MIDIA[m.tipo] ?? FileIcon;
+  // ⚠️ `unsupported` NÃO é "um formato que a tela não conhece" — é a META
+  // dizendo que ELA não processou a mensagem. O payload vem com
+  // `errors[].code = 131051` e `unsupported: { type: "unknown" }`, e SEM
+  // conteúdo nenhum (medido em 30/09/2026: 7 mensagens, texto e mídia nulos
+  // nas sete). Não há o que mostrar e não vai haver.
+  const naoEntregue = m.tipo === "unsupported";
+  // ⚠️ `reaction` chega COM texto (o emoji), então ela caía no ramo de texto e
+  // aparecia como se o cliente tivesse ENVIADO a mensagem "👍". Não enviou —
+  // reagiu a uma mensagem nossa. Medido: 28 reações de 21 clientes, contra 7
+  // `unsupported` de 1. O defeito de maior alcance era este, e ninguém o via
+  // porque ele não parece defeito: parece uma resposta curta.
+  const reacao = m.tipo === "reaction" && !!m.texto;
 
   // ⚠️ O aviso mostra a MENSAGEM que o cliente recebeu, não o nome do template.
   // Ela é reconstruída no banco a partir do corpo aprovado + os parâmetros que
@@ -623,6 +635,27 @@ function Balao({ m, primeira, ultima }: {
     );
   }
 
+  // ── Reação ────────────────────────────────────────────────────────────────
+  // Desenhada pequena e sem balão: ela não é uma fala, é um gesto sobre uma
+  // fala anterior. Com o balão normal, um 👍 ocupava o mesmo espaço e o mesmo
+  // peso de uma pergunta — e quem atende lia como resposta.
+  //
+  // ⚠️ O emoji fica GRANDE e o "reagiu" pequeno, nessa ordem: o que importa é
+  // QUAL foi a reação. Escrever `reagiu com "👍"` entre aspas faria parecer
+  // texto digitado, que é justamente a confusão que isto corrige.
+  if (reacao) {
+    return (
+      <div className={`flex ${nossa ? "justify-end" : "justify-start"} ${primeira ? "mt-3 first:mt-0" : "mt-0.5"}`}>
+        <div className="flex items-center gap-1.5 rounded-full border bg-muted/30 px-2.5 py-1">
+          <span className="text-base leading-none">{m.texto}</span>
+          <span className="text-[10px] text-muted-foreground">
+            {nossa ? "reagimos" : "reagiu"} · {soHora(m.ocorrido_em)}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`flex ${nossa ? "justify-end" : "justify-start"} ${
       /* Bloco novo respira; mensagem colada na anterior quase encosta — é isso
@@ -648,13 +681,32 @@ function Balao({ m, primeira, ultima }: {
              em todo balão de voz repetindo o óbvio. O player já diz o que é. */
           null
         ) : (
-          <p className="flex items-start gap-1.5 text-[11px] leading-relaxed text-amber-500">
-            <HelpCircle className="mt-px h-3 w-3 shrink-0" />
-            <span>
-              Mensagem do tipo <strong>“{m.tipo}”</strong> — a tela ainda não sabe
-              mostrar este formato. O conteúdo está gravado.
-            </span>
-          </p>
+          /* ⚠️ SÃO DUAS PERGUNTAS DIFERENTES e antes as duas caíam na mesma
+             frase amarela, que afirmava duas coisas que a tela não sabia:
+             "a tela ainda não sabe mostrar este formato" (sugere defeito
+             nosso, corrigível) e "O conteúdo está gravado" (o PAYLOAD está;
+             o conteúdo não existe).
+
+             Quem lê isso não pede o reenvio — e o reenvio é a única coisa que
+             recupera a mensagem. Ausência disfarçada de resposta, de novo. */
+          naoEntregue ? (
+            <p className="flex items-start gap-1.5 text-[11px] leading-relaxed text-amber-500">
+              <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
+              <span>
+                O cliente enviou algo que o <strong>WhatsApp não entrega</strong> por
+                esta API — o conteúdo não chegou até nós e não tem como chegar.
+                Peça para reenviar como <strong>texto, foto ou áudio</strong>.
+              </span>
+            </p>
+          ) : (
+            <p className="flex items-start gap-1.5 text-[11px] leading-relaxed text-amber-500">
+              <HelpCircle className="mt-px h-3 w-3 shrink-0" />
+              <span>
+                Mensagem do tipo <strong>“{m.tipo}”</strong> — a tela ainda não sabe
+                mostrar este formato. O conteúdo está gravado.
+              </span>
+            </p>
+          )
         )}
 
         {/* ⚠️ O fracasso do envio aparece SEMPRE, e não só na última do bloco.
@@ -2187,7 +2239,17 @@ export default function Conversas() {
                               {c.ultima_direcao === "saida" && (
                                 <span className="shrink-0 text-muted-foreground/60">você:</span>
                               )}
-                              <span className="truncate">{c.ultima_texto ?? "(arquivo)"}</span>
+                              {/* ⚠️ A prévia diz o que É, não "(arquivo)" para
+                                  tudo que tem texto nulo. `unsupported` não
+                                  tem arquivo — a Meta não entregou nada —, e
+                                  prometer um anexo faz alguém abrir a conversa
+                                  procurando o que não existe. */}
+                              <span className="truncate">
+                                {c.ultima_texto
+                                  ?? (c.ultima_tipo === "unsupported"
+                                        ? "(não entregue pelo WhatsApp)"
+                                        : `(${(NOME_MIDIA[c.ultima_tipo] ?? "arquivo").toLowerCase()})`)}
+                              </span>
                             </p>
 
                             {/* Qualificadores: a linha some inteira quando não há
