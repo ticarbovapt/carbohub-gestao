@@ -2178,176 +2178,189 @@ function SecaoPainel({ titulo, icone: Icone, children }: {
 const LinhaDaConversa = memo(function LinhaDaConversa({ c, selecionada, comBusca, onAbrir }: {
   c: Conversa; selecionada: boolean; comBusca: boolean; onAbrir: (wa_id: string) => void;
 }) {
-                const nivelC = nivelDaJanela(c.janela_ate);
-                const tomC = TOM_JANELA[nivelC];
-                const abertoC = janelaAberta(c.janela_ate);
-                                /* "Não respondida" engrossa nome e prévia — a mesma gramática
-                   do WhatsApp. Sai de `aguardando`, que já é a conta do banco. */
-                const naoRespondida = c.aguardando > 0;
-                /* ⚠️ O segundo nome só aparece com BUSCA ativa: é ele que
-                   explica por que a linha casou (a busca olha os dois nomes).
-                   Fora da busca era uma terceira linha permanente para um dado
-                   que o cabeçalho da conversa já mostra. */
-                const mostrarApelido = comBusca && !!c.nome_whatsapp;
-                /* ⚠️ O rodapé agora aparece SEMPRE: ou ele diz quem é o dono, ou diz
- que não há. Era a ausência dele que fazia a lista ter duas alturas
- de linha — e "sem dono" só é informação se estiver visível. */
-                const temRodape = true;
+  const nivelC = nivelDaJanela(c.janela_ate);
+  const tomC = TOM_JANELA[nivelC];
+  const abertoC = janelaAberta(c.janela_ate);
+  /* "Não respondida" engrossa nome e prévia — a mesma gramática do WhatsApp.
+     Sai de `aguardando`, que já é a conta do banco. */
+  const naoRespondida = c.aguardando > 0;
+  /* ⚠️ O segundo nome só aparece com BUSCA ativa: é ele que explica por que a
+     linha casou (a busca olha os dois nomes). Fora da busca era uma terceira
+     linha permanente para um dado que o cabeçalho da conversa já mostra. */
+  const mostrarApelido = comBusca && !!c.nome_whatsapp;
 
-                return (
-                  <button type="button" onClick={() => onAbrir(c.wa_id)}
-                          className={`relative w-full border-b border-border/60 px-3 py-2.5 text-left
-                                      transition-colors last:border-b-0 ${
-                            selecionada
-                              ? "bg-muted/60 before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:bg-carbo-green before:content-['']"
-                              : "hover:bg-muted/30"}`}>
-                    <div className="flex items-start gap-3">
+  return (
+    <button type="button" onClick={() => onAbrir(c.wa_id)}
+            className={`relative w-full border-b border-border/60 px-3 py-2.5 text-left
+                        transition-colors last:border-b-0 ${
+              selecionada
+                ? "bg-muted/60 before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:bg-carbo-green before:content-['']"
+                : "hover:bg-muted/30"}`}>
+      <div className="flex items-start gap-3">
 
-                      {/* Avatar NEUTRO. A borda colorida por nível saiu: era a
-                          segunda cópia do relógio, que muda de cor logo ao lado. */}
-                      <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center
-                                       rounded-full border border-border bg-muted/60
-                                       text-[13px] font-semibold uppercase text-muted-foreground">
-                        {inicialDe(c.cliente, c.wa_id)}
-                      </span>
+        {/* Avatar NEUTRO. A borda colorida por nível saiu: era a segunda cópia
+            do relógio, que muda de cor logo ao lado.
 
-                      <div className="min-w-0 flex-1">
-                        {/* ── Nome + relógio ──────────────────────────────
-                            O relógio fica COLADO no nome de propósito: não é o
-                            que se procura na varredura, é o que muda a decisão
-                            depois de achar a conversa. */}
-                        <div className="flex items-center gap-1.5">
-                          <span className={`min-w-0 truncate text-[13px] leading-tight ${
-                            naoRespondida ? "font-semibold text-foreground"
-                                          : "font-medium text-foreground/90"}`}>
-                            {c.cliente ?? c.wa_id}
-                          </span>
+            ⚠️ E continua sendo INICIAL, não foto. A Cloud API oficial não tem
+            endpoint para a foto de perfil do cliente — só para a do nosso
+            próprio número. */}
+        <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center
+                         rounded-full border border-border bg-muted/60
+                         text-[13px] font-semibold uppercase text-muted-foreground">
+          {inicialDe(c.cliente, c.wa_id)}
+        </span>
 
-                          {abertoC ? (
-                            /* ⚠️ `folgada` fica CINZA, não verde: trinta relógios
-                               verdes ensinam a ignorar a cor justamente antes de
-                               ela ficar vermelha. Os cortes continuam sendo os do
-                               `nivelDaJanela` — muda o destaque, não a regra. */
-                            <span title={`Janela de 24 h fecha em ${faltaDaJanela(c.janela_ate)}`}
-                                  className={`shrink-0 text-[10px] leading-none tabular-nums ${
-                                    nivelC === "folgada" ? "text-muted-foreground/70"
-                                                         : `${tomC.texto} font-semibold`}`}>
-                              {faltaDaJanela(c.janela_ate)}
-                            </span>
-                          ) : (
-                            /* Fechada: cadeado, não pastilha. Pastilha grande em
-                               dois terços das linhas destacava justamente onde não
-                               há ação possível. */
-                            <Lock className="h-3 w-3 shrink-0 text-muted-foreground/50"
-                                  aria-label="Janela de 24 h fechada" />
-                          )}
-                        </div>
+        {/* ⚠️ NÃO existe mais trilho direito. A hora morava numa coluna fixa à
+            direita, e ela custava aquela largura em TODA linha — inclusive nas
+            que não tinham nada para pôr ali. Com a hora aqui dentro, no topo,
+            os chips de baixo ganharam a faixa inteira e pararam de quebrar em
+            duas linhas. É o desenho do pacote do /atendimento, e o motivo é o
+            mesmo: numa coluna de 320px, coluna fixa é largura que some. */}
+        <div className="min-w-0 flex-1">
 
-                        {/* Prévia. `truncate` mora no span interno: num flex ele
-                            não funciona no contêiner. */}
-                        <p className={`mt-0.5 flex min-w-0 items-center gap-1 text-xs leading-snug ${
-                          naoRespondida ? "text-foreground/75" : "text-muted-foreground"}`}>
-                          {c.parece_encerrada && (
-                            <Sparkles className="h-3 w-3 shrink-0 text-emerald-500"
-                                      aria-label="Parece só um agradecimento" />
-                          )}
-                          {c.ultima_direcao === "saida" && (
-                            <span className="shrink-0 text-muted-foreground/60">você:</span>
-                          )}
-                          {/* ⚠️ A prévia diz o que É, não "(arquivo)" para
-                              tudo que tem texto nulo. `unsupported` não
-                              tem arquivo — a Meta não entregou nada —, e
-                              prometer um anexo faz alguém abrir a conversa
-                              procurando o que não existe. */}
-                          <span className="truncate">
-                            {c.ultima_texto
-                              ?? (c.ultima_tipo === "unsupported"
-                                    ? "(não entregue pelo WhatsApp)"
-                                    : `(${(NOME_MIDIA[c.ultima_tipo] ?? "arquivo").toLowerCase()})`)}
-                          </span>
-                        </p>
+          {/* ── Nome · relógio da janela · hora ─────────────────────────────
+              ⚠️ São DOIS tempos e eles não são a mesma coisa: `faltaDaJanela` é
+              quanto ainda dá para responder (some quando fecha, e vira
+              cadeado); `hora` é quando foi a última mensagem. Confundi-los faz
+              alguém achar que tem seis horas para responder uma conversa de
+              ontem. */}
+          <div className="flex items-baseline gap-1.5">
+            <span className={`min-w-0 truncate text-[13px] leading-tight ${
+              naoRespondida ? "font-semibold text-foreground"
+                            : "font-medium text-foreground/90"}`}>
+              {c.cliente ?? c.wa_id}
+            </span>
 
-                        {/* Qualificadores: a linha some inteira quando não há
-                            nenhum, e é isso que deixa a lista com duas alturas só. */}
-                        {temRodape && (
-                          <div className="mt-1 flex min-w-0 items-center gap-1.5 overflow-hidden">
-                            {mostrarApelido && (
-                              <span className="min-w-0 truncate text-[10px] text-muted-foreground/60">
-                                no WhatsApp: {c.nome_whatsapp}
-                              </span>
-                            )}
-                            {c.tags.slice(0, 1).map((t) => (
-                              <span key={t.id}
-                                    /* ⚠️ A ETIQUETA é quem encolhe, não o dono. Com
-                                       tudo `shrink-0` e `overflow-hidden`, quem
-                                       sobrava fora era o último — e o último é
-                                       justamente "sem dono", que aparecia cortado
-                                       como "sem donc". Entre os dois, o dono é o
-                                       que diz se a linha precisa de alguém; a
-                                       etiqueta diz quem é a pessoa. */
-                                    className={`min-w-0 max-w-[6.5rem] truncate rounded-full border
-                                                px-1.5 py-px text-[9px] leading-[14px] ${
-                                      COR_TAG[t.cor] ?? COR_TAG.cinza}`}>
-                                {t.nome}
-                              </span>
-                            ))}
-                            {c.tags.length > 1 && (
-                              <span className="shrink-0 text-[9px] text-muted-foreground/60">
-                                +{c.tags.length - 1}
-                              </span>
-                            )}
-                            {c.responsavel_nome ? (
-                              <span className="flex shrink-0 items-center gap-0.5 text-[10px] text-muted-foreground/70">
-                                <UserCheck className="h-3 w-3" />
-                                {c.responsavel_nome.split(" ")[0]}
-                              </span>
-                            ) : (
-                              /* ⚠️ "sem dono" é DITO, não deixado em branco. Campo vazio se lê
-                                 como "não carregou"; o que ele significa aqui é que ninguém
-                                 assumiu — trabalho parado, e o único estado desta linha sobre o
-                                 qual dá para agir sem abrir a conversa. */
-                              <span className="shrink-0 rounded border border-dashed border-border px-1
-                                               text-[9px] leading-[1.4] text-muted-foreground/60">
-                                sem dono
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
+            {abertoC ? (
+              /* ⚠️ `folgada` fica CINZA, não verde: trinta relógios verdes
+                 ensinam a ignorar a cor justamente antes de ela ficar
+                 vermelha. Os cortes continuam sendo os do `nivelDaJanela` —
+                 muda o destaque, não a regra. */
+              <span title={`Janela de 24 h fecha em ${faltaDaJanela(c.janela_ate)}`}
+                    className={`shrink-0 text-[10px] leading-none tabular-nums ${
+                      nivelC === "folgada" ? "text-muted-foreground/70"
+                                           : `${tomC.texto} font-semibold`}`}>
+                {faltaDaJanela(c.janela_ate)}
+              </span>
+            ) : (
+              /* Fechada: cadeado, não pastilha. Pastilha grande em dois terços
+                 das linhas destacava justamente onde não há ação possível. */
+              <Lock className="h-3 w-3 shrink-0 self-center text-muted-foreground/50"
+                    aria-label="Janela de 24 h fechada" />
+            )}
 
-                      {/* ── Trilho direito ──────────────────────────────
-                          Status em caixa alta, hora embaixo, contador. Coluna
-                          FIXA em todas as linhas: estado se compara alinhado; no
-                          meio do fluxo obriga a reler linha a linha. */}
-                      <div className="flex shrink-0 flex-col items-end gap-1 pt-0.5">
-                        {c.status && (
-                          <span className={`whitespace-nowrap rounded-full border px-1.5 py-px
-                                            text-[9px] font-semibold uppercase tracking-wide ${
-                            STATUS[c.status].classe}`}>
-                            {STATUS[c.status].rotulo}
-                          </span>
-                        )}
+            <span className="ml-auto shrink-0 text-[10px] leading-none tabular-nums
+                             text-muted-foreground/60">
+              {hora(c.ultima_em)}
+            </span>
+          </div>
 
-                        <span className="text-[10px] leading-none tabular-nums text-muted-foreground/60">
-                          {hora(c.ultima_em)}
-                        </span>
+          {/* Prévia. `truncate` mora no span interno: num flex ele não funciona
+              no contêiner. */}
+          <p className={`mt-0.5 flex min-w-0 items-center gap-1 text-xs leading-snug ${
+            naoRespondida ? "text-foreground/75" : "text-muted-foreground"}`}>
+            {c.parece_encerrada && (
+              <Sparkles className="h-3 w-3 shrink-0 text-emerald-500"
+                        aria-label="Parece só um agradecimento" />
+            )}
+            {c.ultima_direcao === "saida" && (
+              <span className="shrink-0 text-muted-foreground/60">você:</span>
+            )}
+            {/* ⚠️ A prévia diz o que É, não "(arquivo)" para tudo que tem texto
+                nulo. `unsupported` não tem arquivo — a Meta não entregou nada —,
+                e prometer um anexo faz alguém abrir a conversa procurando o que
+                não existe. */}
+            <span className="truncate">
+              {c.ultima_texto
+                ?? (c.ultima_tipo === "unsupported"
+                      ? "(não entregue pelo WhatsApp)"
+                      : `(${(NOME_MIDIA[c.ultima_tipo] ?? "arquivo").toLowerCase()})`)}
+            </span>
+          </p>
 
-                        {/* ⚠️ O contador substitui o "N sem resposta" E o badge
-                            "✓ resolvida": círculo cheio embaixo da hora é a
-                            gramática que já se lê sem legenda, e o grupo mais o
-                            badge de status já nomeiam o estado. Três sinais para
-                            o mesmo fato era o que deixava a linha ilegível. */}
-                        {naoRespondida && (
-                          <span className="flex h-[1.1rem] min-w-[1.1rem] items-center justify-center
-                                           rounded-full bg-amber-500 px-1 text-[10px] font-semibold
-                                           leading-none tabular-nums text-background">
-                            {c.aguardando}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </button>
-                );
+          {/* ── Qualificadores: estado, etiqueta, dono e o contador ──────────
+              ⚠️ Esta faixa QUEBRA linha, nunca recorta. Já foi `overflow-hidden`
+              com tudo `shrink-0`, e o que não coubesse era cortado no MEIO —
+              sobrava um `;` ou um `(` solto no fim, dado pela metade parecendo
+              sujeira de render. Quem caía fora era sempre o último, e o último
+              era o DONO, que é justamente o que diz se a conversa precisa de
+              alguém. */}
+          <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1">
+            {/* ⚠️ O ESTADO vem primeiro: ele diz se esta linha precisa de alguém
+                agora. Etiqueta e dono dizem quem é a pessoa.
+
+                E em caixa NORMAL. "EM ATENDIMENTO" com `tracking-wide` media
+                ~110px de uma coluna de 320 e sozinho empurrava o dono para uma
+                segunda linha; a caixa alta existia para o chip competir com o
+                nome quando ele morava à direita. Aqui embaixo ele não precisa
+                gritar. */}
+            {c.status && (
+              <span className={`shrink-0 whitespace-nowrap rounded-full border px-1.5
+                                text-[10px] font-medium leading-[15px]
+                                ${STATUS[c.status].classe}`}>
+                {STATUS[c.status].rotulo}
+              </span>
+            )}
+
+            {mostrarApelido && (
+              <span className="min-w-0 truncate text-[10px] text-muted-foreground/60">
+                no WhatsApp: {c.nome_whatsapp}
+              </span>
+            )}
+
+            {c.tags.slice(0, 1).map((t) => (
+              /* ⚠️ A ETIQUETA é quem encolhe, não o dono: entre os dois, o dono
+                 é o que diz se a linha precisa de alguém. */
+              <span key={t.id}
+                    className={`min-w-0 max-w-[6.5rem] truncate rounded-full border
+                                px-1.5 py-px text-[9px] leading-[14px] ${
+                      COR_TAG[t.cor] ?? COR_TAG.cinza}`}>
+                {t.nome}
+              </span>
+            ))}
+            {c.tags.length > 1 && (
+              <span className="shrink-0 text-[9px] text-muted-foreground/60">
+                +{c.tags.length - 1}
+              </span>
+            )}
+
+            {c.responsavel_nome ? (
+              <span className="flex shrink-0 items-center gap-0.5 text-[10px] text-muted-foreground/70">
+                <UserCheck className="h-3 w-3" />
+                {c.responsavel_nome.split(" ")[0]}
+              </span>
+            ) : (
+              /* ⚠️ "sem dono" é DITO, não deixado em branco. Campo vazio se lê
+                 como "não carregou"; o que ele significa aqui é que ninguém
+                 assumiu — trabalho parado, e o único estado desta linha sobre o
+                 qual dá para agir sem abrir a conversa. */
+              <span className="shrink-0 rounded border border-dashed border-border px-1
+                               text-[9px] leading-[14px] text-muted-foreground/60">
+                sem dono
+              </span>
+            )}
+
+            {/* ⚠️ `ml-auto`: o contador vai para a ponta da faixa, não para o
+                fim dos chips. Ele é o único número da linha e precisa cair
+                sempre na mesma coluna — no meio do fluxo, obriga a reler linha
+                a linha para achá-lo.
+
+                E ele substitui o "N sem resposta" E o antigo badge "✓
+                resolvida": círculo cheio já se lê sem legenda, e o chip de
+                estado ao lado já nomeia o resto. Três sinais para o mesmo fato
+                era o que deixava a linha ilegível. */}
+            {naoRespondida && (
+              <span className="ml-auto flex h-[1.1rem] min-w-[1.1rem] items-center justify-center
+                               rounded-full bg-amber-500 px-1 text-[10px] font-semibold
+                               leading-none tabular-nums text-background">
+                {c.aguardando}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    </button>
+  );
 }, (a, b) =>
   a.selecionada === b.selecionada
   && a.comBusca === b.comBusca
@@ -2686,11 +2699,19 @@ export default function Conversas() {
      `agruparConversas`. E `atual` sai da lista COMPLETA — filtrar não pode
      fechar a conversa que já está aberta na direita. */
   const [busca, setBusca] = useState("");
-  /* ⚠️ Abre em "Pendentes", não em "Todas". Com 22 conversas e 2 pendências,
-     "Todas" faz a pessoa procurar o trabalho no meio do histórico — e a caixa
-     de entrada existe para mostrar o trabalho. O contador ao lado de cada
-     filtro diz o que há nos outros, então nada fica escondido. */
-  const [filtro, setFiltro] = useState<FiltroConversa>("pendentes");
+  /* ⚠️ Abre em "Pendentes" QUANDO HÁ pendência — e em "Todas" quando não há.
+     A regra original era só a primeira metade, e ela quebrou no dia em que a
+     caixa cresceu: com 243 conversas e ZERO pendentes, a tela abria dizendo
+     "Nenhuma conversa com esse filtro" numa caixa cheia. Quem chega não lê
+     isso como "está tudo respondido" — lê como sistema fora do ar, e é a
+     mesma doença do erro que se disfarça de vazio.
+
+     A intenção continua de pé: a caixa de entrada existe para mostrar o
+     TRABALHO, e o contador ao lado de cada aba diz o que há nas outras.
+     `null` = ninguém escolheu ainda; quem escolhe a primeira vez é o efeito
+     abaixo, uma vez só. */
+  const [filtro, setFiltro] = useState<FiltroConversa | null>(null);
+  const abaDecidida = useRef(false);
   const [filtros, setFiltros] = useState<TipoFiltros>(FILTROS_VAZIOS);
   const [painelFiltros, setPainelFiltros] = useState(false);
   const [verQuemRecebe, setVerQuemRecebe] = useState(false);
@@ -2705,17 +2726,32 @@ export default function Conversas() {
     aberta: lista.filter((c) => janelaAberta(c.janela_ate)).length,
   }), [lista, meuId]);
 
+  /* ⚠️ UMA VEZ SÓ, e depois que a lista chegou. Sem a trava, a contagem sai de
+     zero durante o carregamento, a aba seria decidida como "Todas" e trocaria
+     sozinha para "Pendentes" quando o dado chegasse — a lista mudando debaixo
+     do cursor de quem já começou a ler. E sem `lista.length` no teste, a caixa
+     legitimamente vazia congelaria a decisão no instante errado. */
+  useEffect(() => {
+    if (abaDecidida.current || isLoading || lista.length === 0) return;
+    abaDecidida.current = true;
+    setFiltro(contagens.pendentes > 0 ? "pendentes" : "todas");
+  }, [isLoading, lista.length, contagens.pendentes]);
+
+  /* Antes de a decisão acontecer a tela mostra TODAS — nunca uma aba que pode
+     estar vazia. Vazio no primeiro quadro é indistinguível de tela quebrada. */
+  const aba: FiltroConversa = filtro ?? "todas";
+
   const filtradas = useMemo(() => {
     const termo = busca.trim();
     const alvoTexto = normalizar(termo);
     const alvoNumero = soDigitos(termo);
     return lista.filter((c) => {
-      if (filtro === "pendentes" && c.status !== "aberto") return false;
-      if (filtro === "minhas" && c.responsavel !== meuId) return false;
+      if (aba === "pendentes" && c.status !== "aberto") return false;
+      if (aba === "minhas" && c.responsavel !== meuId) return false;
       // ⚠️ Resolvida sem dono não é trabalho parado: ela sairia como "ninguém
       // pegou" e encheria a aba de conversa encerrada.
-      if (filtro === "sem_dono" && (c.responsavel || c.status === "resolvido")) return false;
-      if (filtro === "aberta" && !janelaAberta(c.janela_ate)) return false;
+      if (aba === "sem_dono" && (c.responsavel || c.status === "resolvido")) return false;
+      if (aba === "aberta" && !janelaAberta(c.janela_ate)) return false;
       if (!termo) return true;
       // ⚠️ Os DOIS nomes: quem procura pelo que viu no WhatsApp tem de achar,
       // e quem procura pelo do cadastro também.
@@ -2726,7 +2762,7 @@ export default function Conversas() {
       if (alvoNumero && soDigitos(c.wa_id).includes(alvoNumero)) return true;
       return false;
     });
-  }, [lista, busca, filtro, meuId]);
+  }, [lista, busca, aba, meuId]);
 
   /* ⚠️ Os filtros entram DEPOIS da aba e da busca, e a ordem importa: a aba diz
      DE QUE FILA a pessoa está tratando, a busca é a pergunta pontual, o filtro
@@ -2795,7 +2831,7 @@ export default function Conversas() {
                     onClick={() => setVerQuemRecebe((v) => !v)}>
               {quantosRecebem === 0
                 ? <><BellOff className="h-3.5 w-3.5" /> Ninguém recebe aviso</>
-                : <><BellRing className="h-3.5 w-3.5" /> {quantosRecebem} recebem aviso</>}
+                : <><BellRing className="h-3.5 w-3.5" /> {quantosRecebem} {quantosRecebem === 1 ? "recebe" : "recebem"} aviso</>}
             </Button>
             <Button asChild size="sm" variant="outline" className="h-8 gap-1.5">
               <Link to={voltar}><ArrowLeft className="h-3.5 w-3.5" /> Voltar</Link>
@@ -2895,7 +2931,7 @@ export default function Conversas() {
                     resolvidas. */}
                 <div className="grid grid-cols-2 gap-1">
                   {FILTROS.map((f) => {
-                    const ativo = filtro === f.id;
+                    const ativo = aba === f.id;
                     const n = contagens[f.id];
                     // Pendentes é a única aba que mede trabalho parado: fica âmbar
                     // mesmo inativa, na mesma cor do placar do cabeçalho da página.
@@ -3053,7 +3089,7 @@ export default function Conversas() {
                         pior que botão nenhum, porque a pessoa conclui que não
                         há conversa nenhuma. Pela mesma razão ele aparece também
                         quando só há filtro ativo. */}
-                    {(busca.trim() || filtro !== "todas" || filtrosAtivos > 0) && (
+                    {(busca.trim() || aba !== "todas" || filtrosAtivos > 0) && (
                       <Button size="sm" variant="outline" className="mt-3 h-7 text-[11px]"
                               onClick={() => { setBusca(""); setFiltro("todas"); setFiltros(FILTROS_VAZIOS); }}>
                         Limpar busca e filtros
