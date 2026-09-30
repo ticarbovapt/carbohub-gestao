@@ -275,22 +275,58 @@ export default function Vendas() {
    * primeira, e quem clicasse em "NF bonificação" receberia a nota errada —
    * pior que não ter o botão, porque o arquivo abre e parece certo.
    */
+  /**
+   * ⚠️ A nota pode estar na MATRIZ ou na FILIAL, e a tela precisa saber em qual.
+   *
+   * O pedido faturado em SP guarda a nota em `bling2_nf_id` — colunas próprias,
+   * porque as duas contas numeram do zero e um id da conta 2 em `bling_nf_id`
+   * casaria com uma nota REAL da conta 1 (nota cancelada de uma empresa
+   * derrubando venda da outra; já foi tentado e revertido).
+   *
+   * Era por isso que o botão não aparecia: o Sales só olhava as colunas da
+   * matriz. O pedido entrava no filtro de faturamento — aquilo lê
+   * `conta_metrica`, que já conhecia as duas contas — e o PDF sumia. Duas
+   * telas discordando sobre o mesmo pedido, e nenhuma com defeito aparente.
+   */
+  function notaDaVenda(venda: CarbozeVendaRow, qual: "venda" | "bonificacao") {
+    const daFilial = qual === "bonificacao"
+      ? venda.bling2_nf_bonificacao_id : venda.bling2_nf_id;
+    if (daFilial) {
+      return {
+        id: daFilial,
+        numero: qual === "bonificacao"
+          ? venda.invoice2_bonificacao_number : venda.invoice2_number,
+        conta: 2 as const,
+      };
+    }
+    const daMatriz = qual === "bonificacao"
+      ? venda.bling_nf_bonificacao_id : venda.bling_nf_id;
+    return {
+      id: daMatriz,
+      numero: qual === "bonificacao"
+        ? venda.invoice_bonificacao_number : venda.invoice_number,
+      conta: 1 as const,
+    };
+  }
+
   async function baixarNF(venda: CarbozeVendaRow, qual: "venda" | "bonificacao" = "venda") {
-    const nfId = qual === "bonificacao" ? venda.bling_nf_bonificacao_id : venda.bling_nf_id;
-    const nfNumero = qual === "bonificacao"
-      ? venda.invoice_bonificacao_number : venda.invoice_number;
+    const { id: nfId, numero: nfNumero, conta } = notaDaVenda(venda, qual);
     if (!nfId) return;
     setNfLoadingId(venda.id + qual);
     try {
-      const f = await fetchNfFiles(nfId);
+      const f = await fetchNfFiles(nfId, conta);
       if (f?.pdf_url) {
         window.open(f.pdf_url, "_blank", "noopener");
       } else if (f?.xml_url) {
         window.open(f.xml_url, "_blank", "noopener");
         toast.message("NF sem PDF sincronizado — abrindo o XML.");
       } else {
+        // ⚠️ Diz QUAL conta. "não sincronizou do Bling" com duas contas no ar
+        // manda a pessoa conferir no painel errado — e conferir no painel
+        // errado devolve "a nota está lá, o sistema é que está quebrado".
         toast.error(
-          `NF ${nfNumero ?? nfId} vinculada, mas o arquivo ainda não sincronizou do Bling.`,
+          `NF ${nfNumero ?? nfId} vinculada (${conta === 2 ? "filial SP" : "matriz"}), ` +
+          `mas o arquivo ainda não sincronizou do Bling.`,
         );
       }
     } catch (e) {
@@ -883,12 +919,17 @@ export default function Vendas() {
                                 </DropdownMenu>
                               ) : (
                                 <>
-                                  {venda.bling_nf_id && (
+                                  {/* ⚠️ `notaDaVenda` e não `venda.bling_nf_id`: a
+                                      nota da FILIAL mora em coluna própria, e
+                                      olhar só a da matriz era o motivo de o
+                                      botão não aparecer para pedido faturado em
+                                      SP. */}
+                                  {notaDaVenda(venda, "venda").id && (
                                     <button
                                       onClick={() => baixarNF(venda, "venda")}
                                       disabled={nfLoadingId === venda.id + "venda"}
                                       className="h-8 px-2.5 inline-flex items-center gap-1 rounded-md text-xs font-medium whitespace-nowrap bg-carbo-green/10 text-carbo-green hover:bg-carbo-green/20 border border-carbo-green/30 transition-colors disabled:opacity-50"
-                                      title={`Baixar NF ${venda.invoice_number ?? venda.bling_nf_id}`}
+                                      title={`Baixar NF ${notaDaVenda(venda, "venda").numero ?? notaDaVenda(venda, "venda").id}`}
                                     >
                                       {nfLoadingId === venda.id + "venda" ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileDown className="h-3 w-3" />}
                                       <span className="hidden sm:inline">Baixar NF</span>
@@ -898,12 +939,12 @@ export default function Vendas() {
                                       As duas notas têm significados opostos — uma é receita,
                                       a outra é produto dado — e dois botões iguais lado a
                                       lado fariam a pessoa baixar a errada sem perceber. */}
-                                  {venda.bling_nf_bonificacao_id && (
+                                  {notaDaVenda(venda, "bonificacao").id && (
                                     <button
                                       onClick={() => baixarNF(venda, "bonificacao")}
                                       disabled={nfLoadingId === venda.id + "bonificacao"}
                                       className="h-8 px-2.5 inline-flex items-center gap-1 rounded-md text-xs font-medium whitespace-nowrap bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border border-amber-500/30 transition-colors disabled:opacity-50"
-                                      title={`Baixar NF de bonificação ${venda.invoice_bonificacao_number ?? venda.bling_nf_bonificacao_id}`}
+                                      title={`Baixar NF de bonificação ${notaDaVenda(venda, "bonificacao").numero ?? notaDaVenda(venda, "bonificacao").id}`}
                                     >
                                       {nfLoadingId === venda.id + "bonificacao" ? <Loader2 className="h-3 w-3 animate-spin" /> : <Gift className="h-3 w-3" />}
                                       <span className="hidden sm:inline">NF bonif.</span>
