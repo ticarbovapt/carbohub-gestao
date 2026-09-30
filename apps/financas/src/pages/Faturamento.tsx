@@ -25,6 +25,7 @@ import {
 import { BlingConfirmDialog } from "@/components/faturamento/BlingConfirmDialog";
 import { BaixarNFButton } from "@/components/faturamento/BaixarNFButton";
 import { VincularNFsTab } from "@/components/faturamento/VincularNFsTab";
+import { VincularNFsFilialTab } from "@/components/faturamento/VincularNFsFilialTab";
 import { TodasNFsTab } from "@/components/faturamento/TodasNFsTab";
 import { Pager, useUrlPage, paginate } from "@/components/faturamento/Pager";
 
@@ -481,6 +482,12 @@ export default function Faturamento() {
             <TabsTrigger value="bling" className="gap-2"><Store className="h-4 w-4" /> Do Bling ({bling.length})</TabsTrigger>
             <TabsTrigger value="online" className="gap-2"><Globe className="h-4 w-4" /> NF Online ({online.length})</TabsTrigger>
             <TabsTrigger value="vincular" className="gap-2"><Link2 className="h-4 w-4" /> Vincular NFs</TabsTrigger>
+            {/* ⚠️ Aba PRÓPRIA da filial, não um filtro dentro da de cima. As
+                duas contas Bling numeram do zero: `bling_id` de uma não
+                significa nada na outra, e uma lista só faria alguém vincular a
+                nota da empresa errada ao pedido — sem erro nenhum, porque os
+                dois números existem. */}
+            <TabsTrigger value="vincular_filial" className="gap-2"><Link2 className="h-4 w-4" /> Vincular NFs (filial)</TabsTrigger>
             <TabsTrigger value="todas" className="gap-2"><Files className="h-4 w-4" /> Todas as NFs</TabsTrigger>
           </TabsList>
 
@@ -524,6 +531,19 @@ export default function Faturamento() {
 
           <TabsContent value="vincular" className="mt-4">
             <VincularNFsTab />
+          </TabsContent>
+
+          <TabsContent value="vincular_filial" className="mt-4">
+            <VincularNFsFilialTab />
+            <p className="mt-3 text-xs text-muted-foreground">
+              A nota da <strong>filial SP</strong> casa sozinha por dois caminhos: o
+              <strong> id do pedido</strong> (quando a venda foi criada no Bling pelo
+              sistema) e o <strong>rodapé da NF</strong> (o <code>V…</code> em
+              "Informações complementares"). Esta aba é o resto — nota avulsa,
+              pedido com referência trocada, ou rodapé que não chegou.
+              O vínculo é uma decisão registrada de quem clicou: o sistema
+              sugere, quem confirma é você.
+            </p>
           </TabsContent>
 
           <TabsContent value="todas" className="mt-4">

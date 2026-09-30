@@ -279,6 +279,7 @@ export const CHAVES_DO_VINCULO = [
   "orphan-nfes",           // a aba Vincular NFs
   "all-nfes",              // a aba Todas as NFs  ← era a que faltava
   "linkable-orders",       // a busca de pedido dentro do diálogo
+  "nf-filial-sem-pedido",  // a fila da FILIAL — mesma regra, outra conta
 ] as const;
 
 /** Vincula manualmente a NF ao pedido (o humano confirmou a sugestão). */
@@ -322,5 +323,112 @@ export function useLinkNFeToOrder() {
       toast.success("NF vinculada ao pedido!");
     },
     onError: (err: Error) => toast.error("Erro ao vincular NF: " + err.message),
+  });
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A FILIAL (Bling 2) — a mesma rede, e por que ela não reusa o de cima
+//
+// ⚠️ São CONTAS diferentes e elas numeram do zero: `bling_id` de uma não
+// significa nada na outra. Reusar as consultas acima traria a nota da matriz
+// para o pedido da filial, calado — é o mesmo motivo pelo qual a esteira
+// entrou com o `bling_id` do Bling 1 NEGATIVO.
+//
+// ⚠️ E não existe `bling2_nfe.order_id`: a verdade do vínculo mora só em
+// `carboze_orders.bling2_nf_id`. "A nota está livre?" é uma PERGUNTA, e quem a
+// responde é a view `carbo_nf_filial_sem_pedido`, que deriva dos pedidos. Um
+// par espelho (order_id aqui + bling2_nf_id lá) é o que já divergiu na matriz.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface NfeFilialSemPedido {
+  bling_id: number;
+  numero: string | null;
+  serie: string | null;
+  data_emissao: string | null;
+  contato_nome: string | null;
+  contato_cnpj: string | null;
+  valor_total: number | null;
+  situacao: string | null;
+  natureza_operacao: string | null;
+  /** A NATUREZA decidiu, no banco. A tela só mostra. */
+  e_bonificacao: boolean;
+  /** O `V…` que o rodapé anuncia, quando o sync conseguiu lê-lo. */
+  codigo_no_rodape: string | null;
+  informacoes_adicionais: string | null;
+  pdf_url: string | null;
+  xml_url: string | null;
+}
+
+/** As NFs da filial que nenhum pedido reivindicou — a fila do vínculo manual. */
+export function useNfesFilialSemPedido(search = "") {
+  return useQuery({
+    queryKey: ["nf-filial-sem-pedido", search.trim()],
+    staleTime: 30_000,
+    queryFn: async (): Promise<NfeFilialSemPedido[]> => {
+      const { data, error } = await supabase
+        .from("carbo_nf_filial_sem_pedido")
+        .select("*")
+        .order("data_emissao", { ascending: false })
+        // ⚠️ Teto EXPLÍCITO. Sem `.limit()` o PostgREST corta em 1.000 e não
+        // avisa — e são 884 notas hoje, que é a distância de um mês do
+        // problema. Com o teto escrito, quem cruzar vê a lista parar num
+        // número redondo em vez de descobrir meses depois que faltava metade.
+        .limit(500);
+      if (error) throw error;
+      let rows = (data || []) as NfeFilialSemPedido[];
+      const q = search.trim().toLowerCase();
+      if (q) {
+        rows = rows.filter((n) =>
+          (n.contato_nome || "").toLowerCase().includes(q) ||
+          (n.numero || "").includes(q) ||
+          (n.codigo_no_rodape || "").toLowerCase().includes(q));
+      }
+      return rows;
+    },
+  });
+}
+
+/** Vincula, na mão, uma NF da filial a um pedido. Quem decide a coluna é a RPC. */
+export function useVincularNfFilial() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ orderNumber, blingId }: { orderNumber: string; blingId: number }) => {
+      // ⚠️ RPC, não `update` daqui: a regra de QUAL coluna recebe a nota
+      // (venda x bonificação) é a mesma do casamento automático e mora no
+      // banco. Repeti-la em TypeScript seria a cópia que diverge — e divergir
+      // aqui põe a nota de bonificação no lugar da nota de venda, que é o
+      // defeito que derrubou o `V2026090052` do faturamento.
+      const { error } = await (supabase as any).rpc("carbo_nf_filial_vincular", {
+        p_order_number: orderNumber,
+        p_nf_bling_id: blingId,
+      });
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      for (const chave of CHAVES_DO_VINCULO) qc.invalidateQueries({ queryKey: [chave] });
+      toast.success("NF da filial vinculada ao pedido!");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
+/** Desfaz o vínculo. Existe porque vincular à mão erra. */
+export function useDesvincularNfFilial() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ orderNumber, bonificacao = false }:
+                       { orderNumber: string; bonificacao?: boolean }) => {
+      const { error } = await (supabase as any).rpc("carbo_nf_filial_desvincular", {
+        p_order_number: orderNumber,
+        p_bonificacao: bonificacao,
+      });
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      for (const chave of CHAVES_DO_VINCULO) qc.invalidateQueries({ queryKey: [chave] });
+      toast.success("Vínculo desfeito. A nota voltou para a fila.");
+    },
+    onError: (err: Error) => toast.error(err.message),
   });
 }

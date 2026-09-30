@@ -1,0 +1,298 @@
+import { useState } from "react";
+import { FileText, Search, Loader2, Gift, ExternalLink, AlertTriangle } from "lucide-react";
+import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
+import { CarboButton } from "@/components/ui/carbo-button";
+import { CarboBadge } from "@/components/ui/carbo-badge";
+import { CarboSearchInput } from "@/components/ui/carbo-input";
+import {
+  CarboTable, CarboTableHeader, CarboTableBody, CarboTableRow,
+  CarboTableHead, CarboTableCell,
+} from "@/components/ui/carbo-table";
+import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
+import { CarboSkeleton } from "@/components/ui/CarboSkeleton";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from "@/components/ui/dialog";
+import { Pager, useUrlPage, paginate } from "./Pager";
+import {
+  useNfesFilialSemPedido, useLinkableOrders, useVincularNfFilial,
+  type NfeFilialSemPedido,
+} from "@/hooks/useNfeLinking";
+
+/**
+ * O vínculo manual da FILIAL (Bling 2) — a rede das duas automáticas.
+ *
+ * A filial casa a NF por dois caminhos (`carbo_vincula_nf_filial`): id exato e,
+ * desde a `20261022`, o rodapé da nota. Nenhum alcança tudo, e os buracos são
+ * conhecidos: pedido com `external_ref` de prefixo errado, NF emitida avulsa no
+ * painel, e nota em que o rodapé não chegou — o Bling substitui a observação
+ * pelo texto fiscal da natureza (`20260996`).
+ *
+ * ⚠️ Aba SEPARADA da matriz, e não um filtro dentro dela. As duas contas
+ * numeram do zero: `bling_id` de uma não significa nada na outra, e misturá-las
+ * numa lista só faria alguém vincular a nota da empresa errada ao pedido — sem
+ * erro nenhum, porque os dois números existem. É a mesma razão pela qual a
+ * esteira entra com o `bling_id` do Bling 1 NEGATIVO.
+ */
+
+const fmtBRL = (v: number | null) =>
+  (v ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+const fmtDate = (s: string | null) => {
+  if (!s) return "—";
+  const d = s.slice(0, 10).split("-");
+  return d.length === 3 ? `${d[2]}/${d[1]}/${d[0]}` : s;
+};
+
+/** Diálogo de vínculo: escolhe o pedido para casar com a NF da filial. */
+function DialogoFilial({ nfe, onClose }: { nfe: NfeFilialSemPedido | null; onClose: () => void }) {
+  /* ⚠️ A busca NASCE com o código do rodapé quando ele existe. É o dado que a
+     própria nota carrega, e digitá-lo de novo à mão é onde se erra um dígito —
+     num número de dez caracteres que só difere no fim. */
+  const [search, setSearch] = useState(nfe?.codigo_no_rodape ?? "");
+  const { data: orders = [], isLoading } = useLinkableOrders(search, !!nfe);
+  const vincular = useVincularNfFilial();
+
+  return (
+    <Dialog open={!!nfe} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>
+            Vincular NF {nfe?.numero || ""} da FILIAL a um pedido
+          </DialogTitle>
+          <DialogDescription>
+            {nfe?.contato_nome} · {fmtBRL(nfe?.valor_total ?? 0)} · {fmtDate(nfe?.data_emissao ?? null)}
+          </DialogDescription>
+        </DialogHeader>
+
+        {/* ⚠️ A natureza é DITA antes do clique. Nota de bonificação vai para
+            as colunas de bonificação — quem vincula precisa saber disso ANTES,
+            senão fica procurando a nota na coluna errada depois e conclui que
+            o vínculo não funcionou. */}
+        {nfe?.e_bonificacao && (
+          <div className="flex items-start gap-2 rounded-lg border border-amber-500/30
+                          bg-amber-500/10 px-3 py-2 text-[11px] text-amber-600 dark:text-amber-500">
+            <Gift className="mt-px h-3.5 w-3.5 shrink-0" />
+            <span>
+              A natureza desta nota é de <strong>bonificação</strong> — ela entra como
+              nota de <strong>remessa</strong> do pedido, não como a nota da venda.
+              O valor dela não conta no faturamento.
+            </span>
+          </div>
+        )}
+
+        {/* O rodapé cru, quando existe. É a prova de qual pedido a nota
+            anuncia, e é o que permite conferir o VENDEDOR — que não é chave,
+            é conferência. */}
+        {nfe?.informacoes_adicionais && (
+          <p className="rounded-lg border bg-muted/40 px-3 py-2 font-mono text-[11px]
+                        leading-relaxed text-muted-foreground">
+            {nfe.informacoes_adicionais}
+          </p>
+        )}
+
+        <div className="space-y-3">
+          <CarboSearchInput
+            placeholder="Buscar pedido por nº ou cliente…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+
+          {isLoading ? (
+            <div className="flex items-center gap-2 py-6 text-xs text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Procurando…
+            </div>
+          ) : orders.length === 0 ? (
+            /* ⚠️ Diz POR QUE pode estar vazio. "Nenhum pedido" sozinho leva a
+               pessoa a concluir que o pedido não existe, quando o caso comum é
+               ele já ter nota — e a busca só traz os que estão sem. */
+            <p className="py-6 text-center text-xs text-muted-foreground">
+              Nenhum pedido sem nota encontrado.
+              {search.trim() && <> O pedido pode já ter uma NF vinculada.</>}
+            </p>
+          ) : (
+            <div className="max-h-72 space-y-1 overflow-y-auto">
+              {orders.map((o) => (
+                <button
+                  key={o.id}
+                  type="button"
+                  disabled={vincular.isPending}
+                  onClick={() =>
+                    vincular.mutate(
+                      { orderNumber: o.order_number, blingId: nfe!.bling_id },
+                      { onSuccess: onClose },
+                    )
+                  }
+                  className="flex w-full items-center justify-between gap-3 rounded-lg border
+                             px-3 py-2 text-left transition-colors hover:border-carbo-green/40
+                             hover:bg-carbo-green/5 disabled:opacity-50"
+                >
+                  <span className="min-w-0">
+                    <span className="block font-mono text-xs font-semibold">{o.order_number}</span>
+                    <span className="block truncate text-[11px] text-muted-foreground">
+                      {o.customer_name || "—"} · {fmtDate(o.created_at)}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-xs font-medium tabular-nums">
+                    {fmtBRL(o.total)}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function VincularNFsFilialTab() {
+  const [search, setSearch] = useState("");
+  const { data: notas = [], isLoading, error } = useNfesFilialSemPedido(search);
+  const [vinculando, setVinculando] = useState<NfeFilialSemPedido | null>(null);
+  const [page, setPage] = useUrlPage("pfilial");
+  const pag = paginate(notas, page);
+
+  const comCodigo = notas.filter((n) => n.codigo_no_rodape).length;
+
+  return (
+    <div className="space-y-4">
+      <CarboCard>
+        <CarboCardContent className="space-y-4 pt-6">
+          <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+            <div>
+              <p className="text-sm font-semibold">NFs da FILIAL sem pedido vinculado</p>
+              <p className="text-xs text-muted-foreground">
+                O que o casamento automático não pegou — pedido com referência
+                trocada, nota avulsa, ou rodapé que não chegou.
+              </p>
+            </div>
+            <div className="w-full sm:w-72">
+              <CarboSearchInput
+                placeholder="Buscar por nº, cliente ou V…"
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              />
+            </div>
+          </div>
+
+          {/* ⚠️ Quando a nota JÁ anuncia o pedido no rodapé, ela vai ser casada
+              sozinha na próxima rodada do cron — e mandar alguém vincular à mão
+              o que o sistema vai fazer em cinco minutos é trabalho inventado.
+              A tela diz isso em vez de deixar a pessoa descobrir. */}
+          {comCodigo > 0 && (
+            <p className="flex items-start gap-1.5 rounded-lg border border-carbo-green/30
+                          bg-carbo-green/5 px-3 py-2 text-[11px] text-muted-foreground">
+              <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0 text-carbo-green" />
+              <span>
+                <strong>{comCodigo}</strong> destas já trazem o número do pedido no rodapé —
+                o casamento automático as pega na próxima rodada (a cada 5 min).
+                Não precisa vincular à mão.
+              </span>
+            </p>
+          )}
+
+          {/* ⚠️ Erro e vazio são coisas diferentes, e mostrá-los igual já custou
+              caro neste repo: a tela de estoque dos vendedores dizia "ninguém
+              tem caixa" quando o que havia era falha de permissão. */}
+          {error ? (
+            <p className="flex items-start gap-1.5 text-xs text-red-500">
+              <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />
+              Não consegui carregar: {(error as Error).message}
+            </p>
+          ) : isLoading ? (
+            <div className="space-y-2">
+              {Array.from({ length: 4 }).map((_, i) => <CarboSkeleton key={i} className="h-12 w-full" />)}
+            </div>
+          ) : notas.length === 0 ? (
+            <CarboEmptyState
+              icon={FileText}
+              title="Nenhuma NF da filial pendente"
+              description={search
+                ? "Nenhuma NF encontrada com essa busca."
+                : "Toda nota válida da filial já está vinculada a um pedido."}
+            />
+          ) : (
+            <CarboTable>
+              <CarboTableHeader>
+                <CarboTableRow>
+                  <CarboTableHead>NF</CarboTableHead>
+                  <CarboTableHead>Cliente</CarboTableHead>
+                  <CarboTableHead>Emissão</CarboTableHead>
+                  <CarboTableHead>Rodapé</CarboTableHead>
+                  <CarboTableHead className="text-right">Valor</CarboTableHead>
+                  <CarboTableHead className="text-right">Ações</CarboTableHead>
+                </CarboTableRow>
+              </CarboTableHeader>
+              <CarboTableBody>
+                {pag.slice.map((n) => (
+                  <CarboTableRow key={n.bling_id}>
+                    <CarboTableCell>
+                      <CarboBadge variant="secondary" className="gap-1">
+                        <FileText className="h-3 w-3" />
+                        {n.numero || n.bling_id}{n.serie ? `/${n.serie}` : ""}
+                      </CarboBadge>
+                      {n.e_bonificacao && (
+                        <CarboBadge variant="outline" className="ml-1 gap-1 text-[10px]">
+                          <Gift className="h-3 w-3" /> bonificação
+                        </CarboBadge>
+                      )}
+                    </CarboTableCell>
+                    <CarboTableCell className="max-w-[220px] truncate">
+                      {n.contato_nome || "—"}
+                    </CarboTableCell>
+                    <CarboTableCell>{fmtDate(n.data_emissao)}</CarboTableCell>
+                    <CarboTableCell>
+                      {n.codigo_no_rodape ? (
+                        <span className="font-mono text-[11px] text-carbo-green">
+                          {n.codigo_no_rodape}
+                        </span>
+                      ) : (
+                        /* ⚠️ "sem rodapé" é DITO. Vazio aqui se lê como "não
+                           carregou", e o que ele significa é que esta nota só
+                           pode ser casada à mão — que é a informação que decide
+                           o que a pessoa faz em seguida. */
+                        <span className="text-[11px] text-muted-foreground/60">sem rodapé</span>
+                      )}
+                    </CarboTableCell>
+                    <CarboTableCell className="text-right font-medium">
+                      {fmtBRL(n.valor_total)}
+                    </CarboTableCell>
+                    <CarboTableCell>
+                      <div className="flex items-center justify-end gap-2">
+                        {/* O PDF vem do próprio espelho: a filial guarda o link
+                            do DANFE. Sem link, o botão não aparece — botão que
+                            não faz nada é pior que botão nenhum. */}
+                        {n.pdf_url && (
+                          <CarboButton size="sm" variant="outline" className="gap-1.5" asChild>
+                            <a href={n.pdf_url} target="_blank" rel="noreferrer">
+                              <ExternalLink className="h-3.5 w-3.5" /> DANFE
+                            </a>
+                          </CarboButton>
+                        )}
+                        <CarboButton size="sm" variant="outline" className="gap-1.5"
+                                     onClick={() => setVinculando(n)}>
+                          <Search className="h-3.5 w-3.5" /> Vincular
+                        </CarboButton>
+                      </div>
+                    </CarboTableCell>
+                  </CarboTableRow>
+                ))}
+              </CarboTableBody>
+            </CarboTable>
+          )}
+
+          {!isLoading && !error && (
+            <Pager page={pag.safePage} pageCount={pag.pageCount} total={notas.length} onPage={setPage} />
+          )}
+        </CarboCardContent>
+      </CarboCard>
+
+      {/* `key` no bling_id: sem ele o diálogo reusaria o estado da nota
+          anterior, e a busca nasceria com o código do pedido ERRADO já
+          digitado — a pior forma de sugerir. */}
+      <DialogoFilial key={vinculando?.bling_id ?? "nenhuma"}
+                     nfe={vinculando} onClose={() => setVinculando(null)} />
+    </div>
+  );
+}
