@@ -84,7 +84,14 @@ export function Layout() {
           onMobileOpenChange={setMobileOpen}
         />
 
-        <main className="flex-1 min-w-0 overflow-y-auto">
+        {/* ⚠️ `min-h-0` não é enfeite: num flex column a altura mínima de um
+            filho é a do CONTEÚDO, então sem ele o `main` cresce junto com a
+            página e o `overflow-y-auto` nunca chega a valer. É também o que
+            dá a este `main` uma altura DEFINIDA — sem ela, tela que quer
+            ocupar "o que sobrou" (o /conversas) volta a precisar de uma conta
+            sobre a altura do cabeçalho, e toda conta dessas erra no dia em que
+            a tarja de status aparece. */}
+        <main className="flex-1 min-h-0 min-w-0 overflow-y-auto">
           <Outlet />
         </main>
       </div>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   MessagesSquare, Send, Loader2, AlertTriangle, Clock, ArrowLeft, Lock, Paperclip,
@@ -2158,6 +2158,214 @@ function SecaoPainel({ titulo, icone: Icone, children }: {
  * no Bling, e um número em cinza de 10px vira erro de digitação. Ele também NÃO
  * é formatado: máscara com espaços sobrevive à cópia e vira busca que não acha.
  */
+/**
+ * A linha da lista de conversas.
+ *
+ * ⚠️ `memo` com comparador EXPLÍCITO, nunca o raso. O raso não serviria aqui:
+ * o `useConversas` remonta as conversas a cada refetch e a cada evento do
+ * Realtime, devolvendo OBJETOS NOVOS com o mesmo conteúdo — `prev.c !== next.c`
+ * seria sempre verdade, e as 241 linhas se redesenhariam inteiras a cada
+ * mensagem que chega e a cada tecla digitada na busca.
+ *
+ * A comparação é pelo que a linha REALMENTE desenha: campo que ela não mostra
+ * pode mudar à vontade sem custar repaint nenhum.
+ *
+ * ⚠️ Campo NOVO na linha entra AQUI junto. Esquecer é a falha silenciosa deste
+ * padrão — a linha simplesmente para de atualizar aquele dado, sem erro, e o
+ * sintoma (um nome velho na lista e o certo dentro da conversa) parece defeito
+ * de cache do banco.
+ */
+const LinhaDaConversa = memo(function LinhaDaConversa({ c, selecionada, comBusca, onAbrir }: {
+  c: Conversa; selecionada: boolean; comBusca: boolean; onAbrir: (wa_id: string) => void;
+}) {
+                const nivelC = nivelDaJanela(c.janela_ate);
+                const tomC = TOM_JANELA[nivelC];
+                const abertoC = janelaAberta(c.janela_ate);
+                                /* "Não respondida" engrossa nome e prévia — a mesma gramática
+                   do WhatsApp. Sai de `aguardando`, que já é a conta do banco. */
+                const naoRespondida = c.aguardando > 0;
+                /* ⚠️ O segundo nome só aparece com BUSCA ativa: é ele que
+                   explica por que a linha casou (a busca olha os dois nomes).
+                   Fora da busca era uma terceira linha permanente para um dado
+                   que o cabeçalho da conversa já mostra. */
+                const mostrarApelido = comBusca && !!c.nome_whatsapp;
+                /* ⚠️ O rodapé agora aparece SEMPRE: ou ele diz quem é o dono, ou diz
+ que não há. Era a ausência dele que fazia a lista ter duas alturas
+ de linha — e "sem dono" só é informação se estiver visível. */
+                const temRodape = true;
+
+                return (
+                  <button type="button" onClick={() => onAbrir(c.wa_id)}
+                          className={`relative w-full border-b border-border/60 px-3 py-2.5 text-left
+                                      transition-colors last:border-b-0 ${
+                            selecionada
+                              ? "bg-muted/60 before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:bg-carbo-green before:content-['']"
+                              : "hover:bg-muted/30"}`}>
+                    <div className="flex items-start gap-3">
+
+                      {/* Avatar NEUTRO. A borda colorida por nível saiu: era a
+                          segunda cópia do relógio, que muda de cor logo ao lado. */}
+                      <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center
+                                       rounded-full border border-border bg-muted/60
+                                       text-[13px] font-semibold uppercase text-muted-foreground">
+                        {inicialDe(c.cliente, c.wa_id)}
+                      </span>
+
+                      <div className="min-w-0 flex-1">
+                        {/* ── Nome + relógio ──────────────────────────────
+                            O relógio fica COLADO no nome de propósito: não é o
+                            que se procura na varredura, é o que muda a decisão
+                            depois de achar a conversa. */}
+                        <div className="flex items-center gap-1.5">
+                          <span className={`min-w-0 truncate text-[13px] leading-tight ${
+                            naoRespondida ? "font-semibold text-foreground"
+                                          : "font-medium text-foreground/90"}`}>
+                            {c.cliente ?? c.wa_id}
+                          </span>
+
+                          {abertoC ? (
+                            /* ⚠️ `folgada` fica CINZA, não verde: trinta relógios
+                               verdes ensinam a ignorar a cor justamente antes de
+                               ela ficar vermelha. Os cortes continuam sendo os do
+                               `nivelDaJanela` — muda o destaque, não a regra. */
+                            <span title={`Janela de 24 h fecha em ${faltaDaJanela(c.janela_ate)}`}
+                                  className={`shrink-0 text-[10px] leading-none tabular-nums ${
+                                    nivelC === "folgada" ? "text-muted-foreground/70"
+                                                         : `${tomC.texto} font-semibold`}`}>
+                              {faltaDaJanela(c.janela_ate)}
+                            </span>
+                          ) : (
+                            /* Fechada: cadeado, não pastilha. Pastilha grande em
+                               dois terços das linhas destacava justamente onde não
+                               há ação possível. */
+                            <Lock className="h-3 w-3 shrink-0 text-muted-foreground/50"
+                                  aria-label="Janela de 24 h fechada" />
+                          )}
+                        </div>
+
+                        {/* Prévia. `truncate` mora no span interno: num flex ele
+                            não funciona no contêiner. */}
+                        <p className={`mt-0.5 flex min-w-0 items-center gap-1 text-xs leading-snug ${
+                          naoRespondida ? "text-foreground/75" : "text-muted-foreground"}`}>
+                          {c.parece_encerrada && (
+                            <Sparkles className="h-3 w-3 shrink-0 text-emerald-500"
+                                      aria-label="Parece só um agradecimento" />
+                          )}
+                          {c.ultima_direcao === "saida" && (
+                            <span className="shrink-0 text-muted-foreground/60">você:</span>
+                          )}
+                          {/* ⚠️ A prévia diz o que É, não "(arquivo)" para
+                              tudo que tem texto nulo. `unsupported` não
+                              tem arquivo — a Meta não entregou nada —, e
+                              prometer um anexo faz alguém abrir a conversa
+                              procurando o que não existe. */}
+                          <span className="truncate">
+                            {c.ultima_texto
+                              ?? (c.ultima_tipo === "unsupported"
+                                    ? "(não entregue pelo WhatsApp)"
+                                    : `(${(NOME_MIDIA[c.ultima_tipo] ?? "arquivo").toLowerCase()})`)}
+                          </span>
+                        </p>
+
+                        {/* Qualificadores: a linha some inteira quando não há
+                            nenhum, e é isso que deixa a lista com duas alturas só. */}
+                        {temRodape && (
+                          <div className="mt-1 flex min-w-0 items-center gap-1.5 overflow-hidden">
+                            {mostrarApelido && (
+                              <span className="min-w-0 truncate text-[10px] text-muted-foreground/60">
+                                no WhatsApp: {c.nome_whatsapp}
+                              </span>
+                            )}
+                            {c.tags.slice(0, 1).map((t) => (
+                              <span key={t.id}
+                                    /* ⚠️ A ETIQUETA é quem encolhe, não o dono. Com
+                                       tudo `shrink-0` e `overflow-hidden`, quem
+                                       sobrava fora era o último — e o último é
+                                       justamente "sem dono", que aparecia cortado
+                                       como "sem donc". Entre os dois, o dono é o
+                                       que diz se a linha precisa de alguém; a
+                                       etiqueta diz quem é a pessoa. */
+                                    className={`min-w-0 max-w-[6.5rem] truncate rounded-full border
+                                                px-1.5 py-px text-[9px] leading-[14px] ${
+                                      COR_TAG[t.cor] ?? COR_TAG.cinza}`}>
+                                {t.nome}
+                              </span>
+                            ))}
+                            {c.tags.length > 1 && (
+                              <span className="shrink-0 text-[9px] text-muted-foreground/60">
+                                +{c.tags.length - 1}
+                              </span>
+                            )}
+                            {c.responsavel_nome ? (
+                              <span className="flex shrink-0 items-center gap-0.5 text-[10px] text-muted-foreground/70">
+                                <UserCheck className="h-3 w-3" />
+                                {c.responsavel_nome.split(" ")[0]}
+                              </span>
+                            ) : (
+                              /* ⚠️ "sem dono" é DITO, não deixado em branco. Campo vazio se lê
+                                 como "não carregou"; o que ele significa aqui é que ninguém
+                                 assumiu — trabalho parado, e o único estado desta linha sobre o
+                                 qual dá para agir sem abrir a conversa. */
+                              <span className="shrink-0 rounded border border-dashed border-border px-1
+                                               text-[9px] leading-[1.4] text-muted-foreground/60">
+                                sem dono
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* ── Trilho direito ──────────────────────────────
+                          Status em caixa alta, hora embaixo, contador. Coluna
+                          FIXA em todas as linhas: estado se compara alinhado; no
+                          meio do fluxo obriga a reler linha a linha. */}
+                      <div className="flex shrink-0 flex-col items-end gap-1 pt-0.5">
+                        {c.status && (
+                          <span className={`whitespace-nowrap rounded-full border px-1.5 py-px
+                                            text-[9px] font-semibold uppercase tracking-wide ${
+                            STATUS[c.status].classe}`}>
+                            {STATUS[c.status].rotulo}
+                          </span>
+                        )}
+
+                        <span className="text-[10px] leading-none tabular-nums text-muted-foreground/60">
+                          {hora(c.ultima_em)}
+                        </span>
+
+                        {/* ⚠️ O contador substitui o "N sem resposta" E o badge
+                            "✓ resolvida": círculo cheio embaixo da hora é a
+                            gramática que já se lê sem legenda, e o grupo mais o
+                            badge de status já nomeiam o estado. Três sinais para
+                            o mesmo fato era o que deixava a linha ilegível. */}
+                        {naoRespondida && (
+                          <span className="flex h-[1.1rem] min-w-[1.1rem] items-center justify-center
+                                           rounded-full bg-amber-500 px-1 text-[10px] font-semibold
+                                           leading-none tabular-nums text-background">
+                            {c.aguardando}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                );
+}, (a, b) =>
+  a.selecionada === b.selecionada
+  && a.comBusca === b.comBusca
+  && a.onAbrir === b.onAbrir
+  && a.c.wa_id === b.c.wa_id
+  && a.c.cliente === b.c.cliente
+  && a.c.nome_whatsapp === b.c.nome_whatsapp
+  && a.c.ultima_em === b.c.ultima_em
+  && a.c.ultima_texto === b.c.ultima_texto
+  && a.c.ultima_tipo === b.c.ultima_tipo
+  && a.c.ultima_direcao === b.c.ultima_direcao
+  && a.c.aguardando === b.c.aguardando
+  && a.c.janela_ate === b.c.janela_ate
+  && a.c.status === b.c.status
+  && a.c.responsavel_nome === b.c.responsavel_nome
+  && a.c.parece_encerrada === b.c.parece_encerrada
+  && a.c.tags.map((t) => t.id).join("\u0000") === b.c.tags.map((t) => t.id).join("\u0000"));
+
 function PainelContato({ c, meuId }: { c: Conversa; meuId: string | null }) {
   const definirStatus = useDefinirStatus();
   const definirResponsavel = useDefinirResponsavel();
@@ -2560,7 +2768,9 @@ export default function Conversas() {
     (c) => c.estado === "precisa_resposta" && janelaAberta(c.janela_ate)).length;
 
   return (
-    <div className="space-y-4 p-4 md:p-6">
+    /* ⚠️ `h-full` + coluna flex, para o quadro das três colunas poder pedir "o
+       que sobrou" em vez de uma conta. Ver o comentário do grid, abaixo. */
+    <div className="flex h-full min-h-0 flex-col gap-4 p-4 md:p-6">
       <CarboPageHeader
         icon={MessagesSquare}
         title="Conversas"
@@ -2628,7 +2838,18 @@ export default function Conversas() {
           primeiro a sair quando falta espaço — sem ele dá para atender, sem a
           conversa não. */}
       {lista.length > 0 && (
-        <div className="grid gap-3 lg:h-[calc(100vh-13rem)] lg:grid-cols-[20rem_1fr] xl:grid-cols-[20rem_1fr_19rem]">
+        /* ⚠️ A altura é O QUE SOBROU (`flex-1 min-h-0`), nunca uma conta. Era
+           `h-[calc(100vh-13rem)]`, e o `13rem` era um chute sobre cabeçalho
+           mais respiro: a tarja de status, que monta ACIMA desta tela e
+           aparece e some sozinha, já fazia a conta errar — a coluna ficava uns
+           40px mais alta que o espaço real e a página inteira passava a rolar.
+           Conta sobre altura de cabeçalho erra toda vez que alguém acrescenta
+           um aviso, e ninguém liga uma coisa à outra.
+
+           ⚠️ E `100vh` estava errado no celular por um segundo motivo: no
+           Safari e no Chrome de telefone ele INCLUI a barra de endereço, então
+           o pé da lista ficava atrás dela, inalcançável. */
+        <div className="grid min-h-0 gap-3 lg:flex-1 lg:grid-cols-[20rem_1fr] xl:grid-cols-[20rem_1fr_19rem]">
           <CarboCard className="min-h-0 overflow-hidden">
             <CarboCardContent className="flex h-full min-h-0 flex-col gap-0 p-0">
               {/* Busca e filtro ficam FORA da área que rola: com 40 conversas,
@@ -2870,160 +3091,11 @@ export default function Conversas() {
                           {doGrupo.length}
                         </span>
                       </p>,
-                      ...doGrupo.map((c) => {
-                    const nivelC = nivelDaJanela(c.janela_ate);
-                    const tomC = TOM_JANELA[nivelC];
-                    const abertoC = janelaAberta(c.janela_ate);
-                    const selecionada = atual?.wa_id === c.wa_id;
-                    /* "Não respondida" engrossa nome e prévia — a mesma gramática
-                       do WhatsApp. Sai de `aguardando`, que já é a conta do banco. */
-                    const naoRespondida = c.aguardando > 0;
-                    /* ⚠️ O segundo nome só aparece com BUSCA ativa: é ele que
-                       explica por que a linha casou (a busca olha os dois nomes).
-                       Fora da busca era uma terceira linha permanente para um dado
-                       que o cabeçalho da conversa já mostra. */
-                    const mostrarApelido = !!busca.trim() && !!c.nome_whatsapp;
-                    const temRodape = mostrarApelido || c.tags.length > 0 || !!c.responsavel_nome;
-
-                    return (
-                      <button key={c.wa_id} type="button" onClick={() => abrir(c.wa_id)}
-                              className={`relative w-full border-b border-border/60 px-3 py-2.5 text-left
-                                          transition-colors last:border-b-0 ${
-                                selecionada
-                                  ? "bg-muted/60 before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:bg-carbo-green before:content-['']"
-                                  : "hover:bg-muted/30"}`}>
-                        <div className="flex items-start gap-3">
-
-                          {/* Avatar NEUTRO. A borda colorida por nível saiu: era a
-                              segunda cópia do relógio, que muda de cor logo ao lado. */}
-                          <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center
-                                           rounded-full border border-border bg-muted/60
-                                           text-[13px] font-semibold uppercase text-muted-foreground">
-                            {inicialDe(c.cliente, c.wa_id)}
-                          </span>
-
-                          <div className="min-w-0 flex-1">
-                            {/* ── Nome + relógio ──────────────────────────────
-                                O relógio fica COLADO no nome de propósito: não é o
-                                que se procura na varredura, é o que muda a decisão
-                                depois de achar a conversa. */}
-                            <div className="flex items-center gap-1.5">
-                              <span className={`min-w-0 truncate text-[13px] leading-tight ${
-                                naoRespondida ? "font-semibold text-foreground"
-                                              : "font-medium text-foreground/90"}`}>
-                                {c.cliente ?? c.wa_id}
-                              </span>
-
-                              {abertoC ? (
-                                /* ⚠️ `folgada` fica CINZA, não verde: trinta relógios
-                                   verdes ensinam a ignorar a cor justamente antes de
-                                   ela ficar vermelha. Os cortes continuam sendo os do
-                                   `nivelDaJanela` — muda o destaque, não a regra. */
-                                <span title={`Janela de 24 h fecha em ${faltaDaJanela(c.janela_ate)}`}
-                                      className={`shrink-0 text-[10px] leading-none tabular-nums ${
-                                        nivelC === "folgada" ? "text-muted-foreground/70"
-                                                             : `${tomC.texto} font-semibold`}`}>
-                                  {faltaDaJanela(c.janela_ate)}
-                                </span>
-                              ) : (
-                                /* Fechada: cadeado, não pastilha. Pastilha grande em
-                                   dois terços das linhas destacava justamente onde não
-                                   há ação possível. */
-                                <Lock className="h-3 w-3 shrink-0 text-muted-foreground/50"
-                                      aria-label="Janela de 24 h fechada" />
-                              )}
-                            </div>
-
-                            {/* Prévia. `truncate` mora no span interno: num flex ele
-                                não funciona no contêiner. */}
-                            <p className={`mt-0.5 flex min-w-0 items-center gap-1 text-xs leading-snug ${
-                              naoRespondida ? "text-foreground/75" : "text-muted-foreground"}`}>
-                              {c.parece_encerrada && (
-                                <Sparkles className="h-3 w-3 shrink-0 text-emerald-500"
-                                          aria-label="Parece só um agradecimento" />
-                              )}
-                              {c.ultima_direcao === "saida" && (
-                                <span className="shrink-0 text-muted-foreground/60">você:</span>
-                              )}
-                              {/* ⚠️ A prévia diz o que É, não "(arquivo)" para
-                                  tudo que tem texto nulo. `unsupported` não
-                                  tem arquivo — a Meta não entregou nada —, e
-                                  prometer um anexo faz alguém abrir a conversa
-                                  procurando o que não existe. */}
-                              <span className="truncate">
-                                {c.ultima_texto
-                                  ?? (c.ultima_tipo === "unsupported"
-                                        ? "(não entregue pelo WhatsApp)"
-                                        : `(${(NOME_MIDIA[c.ultima_tipo] ?? "arquivo").toLowerCase()})`)}
-                              </span>
-                            </p>
-
-                            {/* Qualificadores: a linha some inteira quando não há
-                                nenhum, e é isso que deixa a lista com duas alturas só. */}
-                            {temRodape && (
-                              <div className="mt-1 flex min-w-0 items-center gap-1.5 overflow-hidden">
-                                {mostrarApelido && (
-                                  <span className="min-w-0 truncate text-[10px] text-muted-foreground/60">
-                                    no WhatsApp: {c.nome_whatsapp}
-                                  </span>
-                                )}
-                                {c.tags.slice(0, 1).map((t) => (
-                                  <span key={t.id}
-                                        className={`max-w-[6.5rem] shrink-0 truncate rounded-full border
-                                                    px-1.5 py-px text-[9px] leading-[14px] ${
-                                          COR_TAG[t.cor] ?? COR_TAG.cinza}`}>
-                                    {t.nome}
-                                  </span>
-                                ))}
-                                {c.tags.length > 1 && (
-                                  <span className="shrink-0 text-[9px] text-muted-foreground/60">
-                                    +{c.tags.length - 1}
-                                  </span>
-                                )}
-                                {c.responsavel_nome && (
-                                  <span className="flex shrink-0 items-center gap-0.5 text-[10px] text-muted-foreground/70">
-                                    <UserCheck className="h-3 w-3" />
-                                    {c.responsavel_nome.split(" ")[0]}
-                                  </span>
-                                )}
-                              </div>
-                            )}
-                          </div>
-
-                          {/* ── Trilho direito ──────────────────────────────
-                              Status em caixa alta, hora embaixo, contador. Coluna
-                              FIXA em todas as linhas: estado se compara alinhado; no
-                              meio do fluxo obriga a reler linha a linha. */}
-                          <div className="flex shrink-0 flex-col items-end gap-1 pt-0.5">
-                            {c.status && (
-                              <span className={`whitespace-nowrap rounded-full border px-1.5 py-px
-                                                text-[9px] font-semibold uppercase tracking-wide ${
-                                STATUS[c.status].classe}`}>
-                                {STATUS[c.status].rotulo}
-                              </span>
-                            )}
-
-                            <span className="text-[10px] leading-none tabular-nums text-muted-foreground/60">
-                              {hora(c.ultima_em)}
-                            </span>
-
-                            {/* ⚠️ O contador substitui o "N sem resposta" E o badge
-                                "✓ resolvida": círculo cheio embaixo da hora é a
-                                gramática que já se lê sem legenda, e o grupo mais o
-                                badge de status já nomeiam o estado. Três sinais para
-                                o mesmo fato era o que deixava a linha ilegível. */}
-                            {naoRespondida && (
-                              <span className="flex h-[1.1rem] min-w-[1.1rem] items-center justify-center
-                                               rounded-full bg-amber-500 px-1 text-[10px] font-semibold
-                                               leading-none tabular-nums text-background">
-                                {c.aguardando}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  }),
+                      ...doGrupo.map((c) => (
+                        <LinhaDaConversa key={c.wa_id} c={c}
+                                         selecionada={atual?.wa_id === c.wa_id}
+                                         comBusca={!!busca.trim()} onAbrir={abrir} />
+                      )),
                     ];
                   })
                 )}
