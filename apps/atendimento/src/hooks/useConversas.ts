@@ -27,6 +27,12 @@ export {
 export { pareceEncerramento, statusEfetivo } from "@/lib/conversas";
 export type { StatusAtendimento, Atendimento, TagConversa } from "@/lib/conversas";
 export type { Conversa, MensagemConversa, NivelJanela, EstadoConversa } from "@/lib/conversas";
+// As funções de filtro são PURAS e moram na `lib`; o hook só as repassa, para
+// a tela ter um import só — o mesmo caminho de `janelaAberta` e `faltaDaJanela`.
+export {
+  aplicarFiltrosDaCaixa, quantosFiltrosAtivos, FILTROS_VAZIOS,
+} from "@/lib/conversas";
+export type { FiltrosDaCaixa, OrdemDaCaixa } from "@/lib/conversas";
 
 export function useConversas(dias = 30) {
   return useQuery({
