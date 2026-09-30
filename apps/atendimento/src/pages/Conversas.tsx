@@ -577,8 +577,13 @@ function SeparadorDeDia({ rotulo }: { rotulo: string }) {
  * dizer que chegou um áudio E que ele não está aqui. Fingir que não chegou nada
  * é o único erro caro; parecer feio, não.
  */
-function Balao({ m, primeira, ultima }: {
+function Balao({ m, primeira, ultima, mostrarComoReenviar }: {
   m: MensagemConversa; primeira: boolean; ultima: boolean;
+  /** ⚠️ Só na mensagem não entregue MAIS RECENTE da conversa. Não dá para usar
+   *  `ultima`: ela marca fim de BLOCO, e as sete do mesmo cliente caíram em
+   *  dias diferentes — o texto de ação voltaria a aparecer em todas, que é
+   *  exatamente o que esta mudança corrige. */
+  mostrarComoReenviar?: boolean;
 }) {
   const automatica = m.tipo === "template";
   const nossa = m.direcao === "saida";
@@ -630,6 +635,42 @@ function Balao({ m, primeira, ultima }: {
           <p className="mt-1 text-right text-[10px] leading-none text-muted-foreground/70">
             {soHora(m.ocorrido_em)}
           </p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Não entregue pelo WhatsApp ────────────────────────────────────────────
+  //
+  // ⚠️ DESESCALADO em 30/09/2026, no mesmo dia. A primeira versão era um balão
+  // amarelo do tamanho de uma mensagem, com o texto de ação repetido em TODAS
+  // as linhas. O dono do processo abriu a tela e leu aquilo como *"segue com
+  // erro aqui"* — e estava certo na leitura, ainda que o sistema estivesse
+  // certo no conteúdo: quatro tarjas grandes repetindo o mesmo aviso gritam
+  // mais que uma mensagem de verdade, e aviso que parece erro faz abrir
+  // ticket contra um sistema que está funcionando. É a mesma lição da tarja
+  // de status: vermelho sem motivo ensina o time a ignorar o vermelho.
+  //
+  // O FATO continua dito em toda linha (a mensagem existiu e não chegou), mas
+  // pequeno. A AÇÃO — pedir o reenvio — aparece UMA vez, na última do bloco:
+  // repetir "peça para reenviar" quatro vezes não faz ninguém pedir quatro
+  // vezes, faz parar de ler.
+  if (naoEntregue) {
+    return (
+      <div className={`flex ${nossa ? "justify-end" : "justify-start"} ${primeira ? "mt-3 first:mt-0" : "mt-0.5"}`}>
+        <div className="max-w-[85%] sm:max-w-[70%]">
+          <div className="flex items-center gap-1.5 rounded-full border border-dashed bg-muted/20 px-2.5 py-1">
+            <AlertTriangle className="h-3 w-3 shrink-0 text-muted-foreground" />
+            <span className="text-[11px] text-muted-foreground">
+              mensagem não entregue pelo WhatsApp · {soHora(m.ocorrido_em)}
+            </span>
+          </div>
+          {mostrarComoReenviar && (
+            <p className="mt-1 pl-2.5 text-[10px] leading-snug text-muted-foreground/80">
+              O WhatsApp não entrega esse formato por esta API — o conteúdo não chegou
+              até nós. Peça para reenviar como texto, foto ou áudio.
+            </p>
+          )}
         </div>
       </div>
     );
@@ -689,24 +730,20 @@ function Balao({ m, primeira, ultima }: {
 
              Quem lê isso não pede o reenvio — e o reenvio é a única coisa que
              recupera a mensagem. Ausência disfarçada de resposta, de novo. */
-          naoEntregue ? (
-            <p className="flex items-start gap-1.5 text-[11px] leading-relaxed text-amber-500">
-              <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
-              <span>
-                O cliente enviou algo que o <strong>WhatsApp não entrega</strong> por
-                esta API — o conteúdo não chegou até nós e não tem como chegar.
-                Peça para reenviar como <strong>texto, foto ou áudio</strong>.
-              </span>
-            </p>
-          ) : (
-            <p className="flex items-start gap-1.5 text-[11px] leading-relaxed text-amber-500">
-              <HelpCircle className="mt-px h-3 w-3 shrink-0" />
-              <span>
-                Mensagem do tipo <strong>“{m.tipo}”</strong> — a tela ainda não sabe
-                mostrar este formato. O conteúdo está gravado.
-              </span>
-            </p>
-          )
+          /* ⚠️ Aqui só chega FORMATO QUE A TELA NÃO CONHECE — `unsupported`
+             sai antes, no seu próprio ramo. São perguntas diferentes e antes
+             caíam na mesma frase amarela, que afirmava duas coisas que a tela
+             não sabia: "a tela ainda não sabe mostrar" (sugeria defeito nosso,
+             corrigível) e "O conteúdo está gravado" (o PAYLOAD está; o
+             conteúdo, não). Aqui as duas são verdade — é formato novo da Meta,
+             e o payload cru realmente tem o que mostrar. */
+          <p className="flex items-start gap-1.5 text-[11px] leading-relaxed text-amber-500">
+            <HelpCircle className="mt-px h-3 w-3 shrink-0" />
+            <span>
+              Mensagem do tipo <strong>“{m.tipo}”</strong> — a tela ainda não sabe
+              mostrar este formato. O conteúdo está gravado.
+            </span>
+          </p>
         )}
 
         {/* ⚠️ O fracasso do envio aparece SEMPRE, e não só na última do bloco.
@@ -1134,14 +1171,26 @@ function Conversa({ c }: { c: Conversa }) {
             porque mensagem colada e mensagem nova precisam de distâncias
             diferentes — um `space-y` único achatava as duas no mesmo valor. */}
         <div className="min-h-0 flex-1 overflow-y-auto px-0.5 pb-1 pr-1">
-          {montarLinhaDoTempo(c.mensagens, notas.data ?? []).map((l) =>
-            l.kind === "dia"
-              ? <SeparadorDeDia key={l.chave} rotulo={l.rotulo} />
-              : l.kind === "nota"
-                ? <Recado key={l.n.id} n={l.n}
-                          apagar={() => apagarNota.mutate({ id: l.n.id, wa_id: c.wa_id })} />
-                : <Balao key={l.m.wamid} m={l.m} primeira={l.primeira} ultima={l.ultima} />,
-          )}
+          {(() => {
+            const linhas = montarLinhaDoTempo(c.mensagens, notas.data ?? []);
+            // ⚠️ "Peça para reenviar" UMA vez, na mensagem não entregue mais
+            // RECENTE. Repetir a instrução em cada linha não faz ninguém pedir
+            // mais de uma vez — faz parar de ler, que é a doença do sininho
+            // com 70 itens não lidos.
+            const ultimoNaoEntregue = [...linhas].reverse()
+              .find((l) => l.kind === "msg" && l.m.tipo === "unsupported");
+            const alvo = ultimoNaoEntregue && ultimoNaoEntregue.kind === "msg"
+              ? ultimoNaoEntregue.m.wamid : null;
+            return linhas.map((l) =>
+              l.kind === "dia"
+                ? <SeparadorDeDia key={l.chave} rotulo={l.rotulo} />
+                : l.kind === "nota"
+                  ? <Recado key={l.n.id} n={l.n}
+                            apagar={() => apagarNota.mutate({ id: l.n.id, wa_id: c.wa_id })} />
+                  : <Balao key={l.m.wamid} m={l.m} primeira={l.primeira} ultima={l.ultima}
+                           mostrarComoReenviar={l.m.wamid === alvo} />,
+            );
+          })()}
           <div ref={fim} />
         </div>
 
