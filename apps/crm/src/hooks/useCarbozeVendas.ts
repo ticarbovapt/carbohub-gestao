@@ -84,6 +84,25 @@ export interface CarbozeVendaRow {
    * descartava — e campo descartado aqui some da tela sem erro nenhum. */
   invoice_bonificacao_number: string | null;
   bling_nf_bonificacao_id: number | null;
+  /** Qual conta Bling faturou este pedido: 1 = matriz, 2 = filial SP. */
+  bling_conta: number | null;
+  /**
+   * As notas da FILIAL, em colunas PRÓPRIAS.
+   *
+   * ⚠️ Nunca em `bling_nf_id`. As duas contas Bling numeram do zero, e
+   * `carbo_vendas_metrica` junta `bling_nfe` por aquele id: um id da conta 2
+   * ali casaria com uma nota REAL da conta 1 — nota cancelada de uma empresa
+   * derrubando venda da outra. Já foi tentado e revertido.
+   *
+   * ⚠️ E o `select("*")` SEMPRE trouxe estas colunas. Quem as descartava era o
+   * mapeamento abaixo — a mesma armadilha que já tinha sumido com a nota de
+   * bonificação da matriz: campo que não atravessa o `map` some da tela sem
+   * erro nenhum.
+   */
+  bling2_nf_id: number | null;
+  invoice2_number: string | null;
+  bling2_nf_bonificacao_id: number | null;
+  invoice2_bonificacao_number: string | null;
   external_ref: string | null;    // "bling-<id>" quando o pedido já foi enviado ao Bling
   /** Unidade de negócio: `revenda` | `consumo` | `online`, ou null.
    *
@@ -259,6 +278,11 @@ function mapVenda(row: any): CarbozeVendaRow {
           bling_nf_id: row.bling_nf_id ?? null,
           invoice_bonificacao_number: row.invoice_bonificacao_number ?? null,
           bling_nf_bonificacao_id: row.bling_nf_bonificacao_id ?? null,
+          bling_conta: row.bling_conta ?? null,
+          bling2_nf_id: row.bling2_nf_id ?? null,
+          invoice2_number: row.invoice2_number ?? null,
+          bling2_nf_bonificacao_id: row.bling2_nf_bonificacao_id ?? null,
+          invoice2_bonificacao_number: row.invoice2_bonificacao_number ?? null,
           external_ref: row.external_ref ?? null,
           segmento: row.segmento ?? null,
           order_type: row.order_type ?? null,
@@ -355,9 +379,15 @@ export interface NfFiles {
  * no Bling e cacheia — mesmo caminho do Finanças (useNfeLinks). Assim o botão
  * "Baixar NF" do Sales funciona sem depender do cache estar preenchido.
  */
-export async function fetchNfFiles(blingNfId: number): Promise<NfFiles | null> {
+export async function fetchNfFiles(blingNfId: number, conta: 1 | 2 = 1): Promise<NfFiles | null> {
+  // ⚠️ A TABELA depende da CONTA, e isto não é detalhe: as duas numeram do
+  // zero. Procurar um id da filial em `bling_nfe` ou acha NADA, ou — pior —
+  // acha a nota de OUTRA empresa com o mesmo número e entrega o PDF errado
+  // para o cliente. É a mesma razão pela qual a esteira entra com o `bling_id`
+  // do Bling 1 negativo.
+  const tabela = conta === 2 ? "bling2_nfe" : "bling_nfe";
   const { data, error } = await db
-    .from("bling_nfe")
+    .from(tabela)
     .select("pdf_url, xml_url, chave_acesso, numero")
     .eq("bling_id", blingNfId)
     .maybeSingle();
@@ -365,6 +395,13 @@ export async function fetchNfFiles(blingNfId: number): Promise<NfFiles | null> {
 
   const cached = (data as NfFiles) ?? null;
   if (cached?.pdf_url || cached?.xml_url) return cached;
+
+  // ⚠️ A filial NÃO tem busca ao vivo: o `bling2-sync` não expõe uma entidade
+  // `nfe_links`. Sem link no espelho, a resposta honesta é "ainda não
+  // sincronizou" — chamar o `bling-sync` aqui bateria na conta ERRADA e
+  // devolveria "não encontrada" para uma nota que existe, o que manda quem
+  // opera procurar defeito no lugar errado.
+  if (conta === 2) return cached;
 
   // Cache sem link — busca ao vivo no Bling (e cacheia pdf_url pra próxima vez).
   const res = await supabase.functions.invoke("bling-sync", {
