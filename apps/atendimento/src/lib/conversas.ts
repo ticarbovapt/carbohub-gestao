@@ -184,6 +184,11 @@ export interface Conversa {
   cliente: string | null;
   ultima_em: string;
   ultima_texto: string | null;
+  /** ⚠️ O TIPO da última mensagem, porque `ultima_texto` nulo não diz POR QUÊ.
+   *  A lista escrevia "(arquivo)" para todo texto nulo — inclusive para
+   *  `unsupported`, em que não há arquivo nenhum e nunca vai haver. Prévia que
+   *  inventa um anexo faz alguém abrir a conversa procurando um arquivo. */
+  ultima_tipo: string;
   ultima_direcao: "entrada" | "saida";
   /** Quantas mensagens do cliente ainda não foram respondidas por nós. */
   aguardando: number;
@@ -363,6 +368,7 @@ export function agruparConversas(
           ? doWhats : null,
       ultima_em: ultima.ocorrido_em,
       ultima_texto: ultima.texto,
+      ultima_tipo: ultima.tipo,
       ultima_direcao: ultima.direcao,
       aguardando,
       janela_ate: janelas[wa_id] ?? null,
