@@ -943,26 +943,45 @@ function deepFindCode(obj: any, depth = 0): string | null {
 }
 
 /** O XML é a fonte de verdade do DANFE: `<infCpl>` é literalmente o que a nota
- *  imprime em "Informações complementares". */
-async function extractObsFromXml(xmlUrl: string): Promise<string | null> {
+ *  imprime em "Informações complementares", e `<natOp>` é a natureza. */
+async function lerXmlDaNota(xmlUrl: string): Promise<string | null> {
   try {
     const res = await fetch(xmlUrl);
     if (!res.ok) return null;
-    const xml = await res.text();
-    const parts: string[] = [];
-    const cpl = xml.match(/<infCpl>([\s\S]*?)<\/infCpl>/i);
-    const fisco = xml.match(/<infAdFisco>([\s\S]*?)<\/infAdFisco>/i);
-    if (cpl?.[1]) parts.push(decodeXmlEntities(cpl[1].trim()));
-    if (fisco?.[1]) parts.push(decodeXmlEntities(fisco[1].trim()));
-    const joined = parts.join(" ").trim();
-    return joined || null;
+    return await res.text();
   } catch (e) {
-    console.error("[bling2-sync] extractObsFromXml falhou:", e);
+    console.error("[bling2-sync] leitura do XML falhou:", e);
     return null;
   }
 }
 
-async function resolveNfeObs(d: any, xmlUrl?: string | null): Promise<string | null> {
+function obsDoXml(xml: string): string | null {
+  const parts: string[] = [];
+  const cpl = xml.match(/<infCpl>([\s\S]*?)<\/infCpl>/i);
+  const fisco = xml.match(/<infAdFisco>([\s\S]*?)<\/infAdFisco>/i);
+  if (cpl?.[1]) parts.push(decodeXmlEntities(cpl[1].trim()));
+  if (fisco?.[1]) parts.push(decodeXmlEntities(fisco[1].trim()));
+  const joined = parts.join(" ").trim();
+  return joined || null;
+}
+
+/** A natureza de operação. ⚠️ `<natOp>` é OBRIGATÓRIO no layout da NF-e, então
+ *  o XML sempre a tem — e foi medido em 30/09/2026 que o JSON do detalhe da
+ *  conta 2 NUNCA a traz: `com_natureza = 0` em 884 notas. */
+function natOpDoXml(xml: string): string | null {
+  const m = xml.match(/<natOp>([\s\S]*?)<\/natOp>/i);
+  return m?.[1] ? decodeXmlEntities(m[1].trim()) || null : null;
+}
+
+/**
+ * A observação E a natureza, do jeito mais barato que dá.
+ *
+ * ⚠️ UMA leitura do XML para as duas. Buscá-lo duas vezes dobraria o tempo de
+ * cada detalhe — e a rodada já morre nos 150s do edge function quando o teto
+ * passa de 40, que é uma conta que este arquivo já errou uma vez.
+ */
+async function resolveNfeCampos(d: any, xmlUrl?: string | null):
+  Promise<{ obs: string | null; natOp: string | null }> {
   let obs: any = d?.informacoesAdicionais ?? d?.observacoes ?? null;
   if (obs && typeof obs === "object") {
     obs = obs.informacoesAdicionaisContribuinte
@@ -970,17 +989,30 @@ async function resolveNfeObs(d: any, xmlUrl?: string | null): Promise<string | n
       || obs.informacoesAdicionaisContribuente
       || null;
   }
-  if (typeof obs === "string" && OBS_CODE_REGEX.test(obs)) return obs;
+  const obsDireta = typeof obs === "string" && OBS_CODE_REGEX.test(obs) ? obs : null;
+  const obsProfunda = obsDireta ?? deepFindCode(d);
 
-  const deep = deepFindCode(d);
-  if (deep) return deep;
+  // A natureza no JSON, quando vier. Medido: não vem — mas continuar tentando
+  // custa zero e é o degrau que some se o Bling passar a mandá-la.
+  const natJson = typeof d?.naturezaOperacao === "string"
+    ? d.naturezaOperacao
+    : (d?.naturezaOperacao?.descricao ?? d?.naturezaOperacao?.nome ?? null);
 
+  // ⚠️ O XML é lido quando FALTA qualquer um dos dois, não só a observação. A
+  // versão anterior só o buscava pela obs, e por isso a natureza ficava nula em
+  // toda nota cujo rodapé o JSON já tinha entregado.
+  const precisaDoXml = !obsProfunda || !natJson;
+  let doXml: { obs: string | null; natOp: string | null } = { obs: null, natOp: null };
   const link = xmlUrl || d?.xml || d?.linkXml || d?.linkXML || null;
-  if (link) {
-    const fromXml = await extractObsFromXml(link);
-    if (fromXml) return fromXml;
+  if (precisaDoXml && link) {
+    const xml = await lerXmlDaNota(link);
+    if (xml) doXml = { obs: obsDoXml(xml), natOp: natOpDoXml(xml) };
   }
-  return typeof obs === "string" ? obs : null;
+
+  return {
+    obs: obsProfunda ?? doXml.obs ?? (typeof obs === "string" ? obs : null),
+    natOp: (typeof natJson === "string" && natJson.trim() ? natJson.trim() : null) ?? doXml.natOp,
+  };
 }
 
 // Busca o detalhe de uma NF e grava valor, CNPJ, situação e links.
@@ -1005,18 +1037,19 @@ async function detalharNfe(admin: Admin, token: string, nf: any): Promise<boolea
   if (situ) upd.situacao = situ;
   if (d.contato?.nome) upd.contato_nome = d.contato.nome;
   if (d.chaveAcesso) upd.chave_acesso = d.chaveAcesso;
-  // ⚠️ A escada inteira, e o XML como último degrau. A versão anterior lia só
-  // os dois campos diretos e por isso a coluna ficou vazia em 884 de 884.
-  const obs = await resolveNfeObs(d, d.xml || nf.xml_url || null);
-  if (obs) upd.informacoes_adicionais = obs;
-
-  // ⚠️ A NATUREZA vai junto, e não é detalhe: é ELA que diz se esta nota é a
-  // venda ou a remessa de bonificação. Sem ela, o casamento por texto poria a
-  // nota de bonificação em `bling2_nf_id` — o lugar da nota PRINCIPAL — e o
-  // pedido cairia do faturamento. Foi exatamente o que aconteceu no
-  // `V2026090052` da matriz (ver `20260996`), e lá custou meses.
-  const nat = d.naturezaOperacao?.descricao ?? d.naturezaOperacao ?? null;
-  if (typeof nat === "string" && nat.trim()) upd.natureza_operacao = nat.trim();
+  // ⚠️ A escada inteira, e o XML como último degrau — para a observação E para
+  // a natureza, numa leitura só.
+  //
+  // ⚠️ A NATUREZA não é detalhe: é ELA que diz se esta nota é a venda ou a
+  // remessa de bonificação. Sem ela, `carbo_natureza_e_bonificacao(null)` é
+  // sempre falso e o casamento por texto poria a nota de bonificação em
+  // `bling2_nf_id` — o lugar da nota PRINCIPAL —, derrubando o pedido do
+  // faturamento. Foi isso que aconteceu com o `V2026090052` na matriz
+  // (`20260996`). Medido em 30/09/2026: o JSON da conta 2 não traz a natureza
+  // em NENHUMA das 884 notas, então quem a entrega é o `<natOp>` do XML.
+  const campos = await resolveNfeCampos(d, d.xml || nf.xml_url || null);
+  if (campos.obs) upd.informacoes_adicionais = campos.obs;
+  if (campos.natOp) upd.natureza_operacao = campos.natOp;
   const pdf = d.pdf || d.linkPDF || d.linkPdf || d.linkDanfe || d.danfe || null;
   if (pdf) upd.pdf_url = pdf;
   if (d.xml) upd.xml_url = d.xml;
@@ -1125,7 +1158,14 @@ async function syncNFeRecente(admin: Admin, token: string, logId: string): Promi
   const { data: semvalor } = await admin
     .from("bling2_nfe")
     .select("id, bling_id, xml_url")
-    .or("valor_total.is.null,informacoes_adicionais.is.null")
+    // ⚠️ O marcador é `raw_detalhe`, não "falta a observação". A condição óbvia
+    // — `informacoes_adicionais is null` — cria fila que NUNCA esvazia: nota
+    // cujo XML não tem o rodapé (ou que não tem link de XML) voltaria a cada
+    // rodada, para sempre, e como a fila é ordenada e tem teto de 40, ela
+    // travaria a cabeça e as outras nunca seriam detalhadas. `raw_detalhe`
+    // responde a pergunta certa — "esta nota já passou pelo código NOVO?" — e
+    // por isso ela volta UMA vez e sai.
+    .or("valor_total.is.null,raw_detalhe.is.null")
     .gte("data_emissao", corte)
     .order("data_emissao", { ascending: false })
     .limit(40);
@@ -1216,7 +1256,14 @@ async function syncNFe(admin: Admin, token: string, logId: string): Promise<Sync
     // ⚠️ Mesma mudança da rodada recente: `valor_total is null` sozinho nunca
     // traria de volta a nota que já foi detalhada ANTES de esta função saber
     // ler o rodapé — e o histórico é justamente o que precisa voltar.
-    .or("valor_total.is.null,informacoes_adicionais.is.null")
+    // ⚠️ O marcador é `raw_detalhe`, não "falta a observação". A condição óbvia
+    // — `informacoes_adicionais is null` — cria fila que NUNCA esvazia: nota
+    // cujo XML não tem o rodapé (ou que não tem link de XML) voltaria a cada
+    // rodada, para sempre, e como a fila é ordenada e tem teto de 40, ela
+    // travaria a cabeça e as outras nunca seriam detalhadas. `raw_detalhe`
+    // responde a pergunta certa — "esta nota já passou pelo código NOVO?" — e
+    // por isso ela volta UMA vez e sai.
+    .or("valor_total.is.null,raw_detalhe.is.null")
     .order("data_emissao", { ascending: false })
     // ── TETOS: por que 40, e não 120 ──────────────────────────────────────
     // A conta de tempo que eu tinha feito estava errada: contei só os 350ms de
