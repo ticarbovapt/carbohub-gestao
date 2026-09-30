@@ -4,7 +4,7 @@ import { supabase, FUNCTIONS_URL } from "@/integrations/supabase/client";
 import {
   JANELA_MS, agruparConversas,
   type Conversa, type MensagemConversa, type Atendimento,
-  type TagConversa, type StatusAtendimento,
+  type TagConversa, type StatusAtendimento, type RespostaRapida,
 } from "@/lib/conversas";
 
 /**
@@ -33,6 +33,12 @@ export {
   aplicarFiltrosDaCaixa, quantosFiltrosAtivos, FILTROS_VAZIOS,
 } from "@/lib/conversas";
 export type { FiltrosDaCaixa, OrdemDaCaixa } from "@/lib/conversas";
+// A barra `/atalho`: o que decide quando o painel abre e o que casa com o termo
+// é PURO e mora na `lib` — dá para conferir sem montar tela.
+export {
+  termoDaBarra, filtrarRespostas, normalizarAtalho, atalhoValido,
+} from "@/lib/conversas";
+export type { RespostaRapida } from "@/lib/conversas";
 
 export function useConversas(dias = 30) {
   return useQuery({
@@ -719,5 +725,75 @@ export function useGaleriaDaConversa(wa_id: string | null, ligado: boolean) {
       if (error) throw error;
       return (data ?? []) as ItemDaGaleria[];
     },
+  });
+}
+
+// ─── Respostas rápidas ───────────────────────────────────────────────────────
+
+/**
+ * A lista do time, em ordem de atalho.
+ *
+ * ⚠️ `staleTime` alto e uma consulta só para a tela inteira: a barra `/` abre a
+ * cada tecla, e reconsultar ali faria uma ida ao banco por caractere digitado.
+ * A lista é cadastro — muda quando alguém cria uma resposta, não durante o
+ * atendimento.
+ */
+export function useRespostasRapidas() {
+  return useQuery({
+    queryKey: ["wa-respostas"],
+    staleTime: 5 * 60 * 1000,
+    queryFn: async (): Promise<RespostaRapida[]> => {
+      const { data, error } = await (supabase as any)
+        .from("carbo_wa_respostas")
+        .select("id, atalho, corpo, criado_por, criado_em")
+        .order("atalho");
+      if (error) throw error;
+      return (data ?? []) as RespostaRapida[];
+    },
+  });
+}
+
+export function useSalvarResposta() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ atalho, corpo }: { atalho: string; corpo: string }) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Sessão expirada. Faça login novamente.");
+      // ⚠️ Manda o bruto: quem normaliza é o gatilho do banco, e mandar daqui
+      // já normalizado criaria DUAS regras para a mesma coisa — no dia em que
+      // elas divergissem, o índice único deixaria de pegar o duplicado.
+      const { data, error } = await (supabase as any).from("carbo_wa_respostas")
+        .insert({ atalho, corpo, criado_por: session.user.id })
+        .select("id, atalho, corpo, criado_por, criado_em").single();
+      if (error) {
+        // 23505 = o atalho já existe. Dizer isso é melhor que "erro": o próximo
+        // passo de quem vê é escolher outro nome, e "erro" não leva a lugar
+        // nenhum. 23514 = o CHECK do formato.
+        throw new Error(
+          error.code === "23505" ? `Já existe uma resposta com o atalho /${atalho}.`
+          : error.code === "23514" ? "O atalho aceita só letras, números, hífen e _ (até 24)."
+          : error.message);
+      }
+      return data as RespostaRapida;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["wa-respostas"] }); },
+  });
+}
+
+export function useApagarResposta() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error, count } = await (supabase as any)
+        .from("carbo_wa_respostas").delete({ count: "exact" }).eq("id", id);
+      if (error) throw new Error(error.message);
+      // ⚠️ DELETE recusado pela RLS não dá erro — volta com zero linhas. Sem
+      // esta conferência, apagar a resposta de outra pessoa mostraria sucesso e
+      // a linha continuaria lá até o próximo F5. É a família do
+      // `.from().update()` sem checagem, que escondeu por meses que
+      // `postos.prefix` não existia.
+      if (count === 0) throw new Error("Essa resposta é de outra pessoa — só quem escreveu (ou a chefia) pode apagar.");
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["wa-respostas"] }); },
   });
 }

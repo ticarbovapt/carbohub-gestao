@@ -530,3 +530,84 @@ export function aplicarFiltrosDaCaixa(
   if (f.ordem === "antigas") return [...filtrada].sort((a, b) => quando(a) - quando(b));
   return [...filtrada].sort((a, b) => quando(b) - quando(a));
 }
+
+// ─── Respostas rápidas: a barra `/atalho` ────────────────────────────────────
+//
+// As frases que o time repete todo dia. ⚠️ O texto é COLADO no campo, NUNCA
+// enviado: quase toda resposta precisa do nome do cliente ou de um ajuste antes
+// de sair, e enviar direto transformaria o atalho numa armadilha — um Enter a
+// mais e o cliente recebeu a frase errada.
+//
+// ⚠️ Puras e aqui, não no componente: são elas que decidem QUANDO o painel
+// abre, e isso é a parte que erra de um jeito difícil de enxergar na tela.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface RespostaRapida {
+  id: string;
+  atalho: string;
+  corpo: string;
+  criado_por: string | null;
+  criado_em: string;
+}
+// ⚠️ Sem o NOME do autor, de propósito. Trazê-lo pediria um embed
+// `profiles(full_name)`, que depende do cache de esquema do PostgREST e, ao
+// falhar, derruba a consulta INTEIRA — a lista de respostas viria vazia por
+// causa de um rótulo decorativo. Mesma razão pela qual `useFaixasPreco` é
+// consulta separada. O que a tela precisa de verdade é `criado_por`, para saber
+// se mostra o botão de apagar.
+
+/**
+ * O que foi digitado depois da barra, ou `null` quando não é uma chamada.
+ *
+ * ⚠️ Só vale no COMEÇO do campo e sem espaço, e as duas condições são
+ * necessárias:
+ *
+ *   · no MEIO do texto, "10/04" e "contato@x.com/br" abririam o painel no meio
+ *     de uma frase — barra ali é pontuação, não gesto;
+ *   · DEPOIS de um espaço, o painel ficaria aberto enquanto a pessoa continua
+ *     escrevendo a resposta de verdade.
+ *
+ * Barra sozinha (`/`) devolve string VAZIA, não null: é o caso de quem quer ver
+ * a lista inteira sem saber o nome de nenhum atalho. `null` e `""` significam
+ * coisas diferentes aqui, e colapsá-los fecharia o painel justamente para quem
+ * mais precisa dele.
+ */
+export function termoDaBarra(rascunho: string): string | null {
+  const m = /^\/([a-zA-Z0-9_-]*)$/.exec(rascunho);
+  return m ? m[1].toLowerCase() : null;
+}
+
+/**
+ * As respostas que casam com o termo.
+ *
+ * Casa no atalho E no corpo: quem lembra da frase ("parcelamos em 3x") mas não
+ * do atalho encontra do mesmo jeito. ⚠️ O atalho vem PRIMEIRO na ordem porque
+ * ele é a busca deliberada; achar pelo corpo é o resgate, e inverter faria a
+ * primeira linha — a que o Enter escolhe — ser a menos provável.
+ */
+export function filtrarRespostas(lista: RespostaRapida[], termo: string): RespostaRapida[] {
+  const t = termo.trim().toLowerCase();
+  if (!t) return lista;
+  const porAtalho = lista.filter((r) => r.atalho.includes(t));
+  const porCorpo = lista.filter(
+    (r) => !r.atalho.includes(t) && r.corpo.toLowerCase().includes(t));
+  return [...porAtalho, ...porCorpo];
+}
+
+/**
+ * O atalho como ele vai ser GRAVADO — a mesma normalização do gatilho do banco.
+ *
+ * ⚠️ Espelho de APRESENTAÇÃO, nunca a regra: quem normaliza de verdade é o
+ * `trg_carbo_wa_resposta_normaliza`, porque a tela é um lugar por onde se passa
+ * e o banco é o único por onde TODO mundo passa. Isto existe só para o campo
+ * poder mostrar, enquanto se digita, o que o `/` vai chamar depois — e para o
+ * botão de salvar recusar antes de uma viagem ao banco.
+ */
+export function normalizarAtalho(bruto: string): string {
+  return bruto.trim().replace(/^\/+/, "").trim().toLowerCase();
+}
+
+/** O mesmo CHECK da tabela, para a tela dizer "não serve" antes de tentar. */
+export function atalhoValido(bruto: string): boolean {
+  return /^[a-z0-9_-]{1,24}$/.test(normalizarAtalho(bruto));
+}

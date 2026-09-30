@@ -7,7 +7,7 @@ import {
   Search, SearchX, X, Package, ArrowUpRight, CornerDownLeft, Megaphone,
   BellRing, BellOff, Check, CheckCheck, Inbox, Undo2, Sparkles, UserCheck, Tag as TagIcon, Plus,
   CalendarClock, Trash2, Square, Play, Pause, Download, StickyNote, EyeOff, Copy,
-  Maximize2, SlidersHorizontal, ChevronDown,
+  Maximize2, SlidersHorizontal, ChevronDown, MessageSquarePlus,
   type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -27,6 +27,10 @@ import {
   useNotificaveis, useMarcarNotificado,
   useAgendadas, useAgendar, useCancelarAgendada, useEnviarMidia, useMidia,
   useBuscaNaConversa, useGaleriaDaConversa,
+  // A barra `/atalho`: as frases que o time repete todo dia.
+  useRespostasRapidas, useSalvarResposta, useApagarResposta,
+  termoDaBarra, filtrarRespostas, normalizarAtalho, atalhoValido,
+  type RespostaRapida,
   type AchadoNaConversa, type ItemDaGaleria,
   useNotas, useAnotar, useApagarNota, type Nota,
   useDefinirStatus, useDefinirResponsavel, useAtendentes,
@@ -1033,6 +1037,210 @@ function formatoDeAudio(): string | null {
   return FORMATOS_AUDIO.find((f) => MediaRecorder.isTypeSupported(f)) ?? null;
 }
 
+/**
+ * O painel que a barra `/` abre, logo acima do campo de resposta.
+ *
+ * ⚠️ Ele ABRE, mas quem manda nas setas e no Enter é o campo de texto — o foco
+ * nunca sai de lá. Painel que rouba o foco obrigaria a pessoa a voltar ao campo
+ * com o mouse depois de escolher, que é o contrário de um atalho de teclado.
+ */
+function PainelDaBarra({ itens, indice, aoEscolher }: {
+  itens: RespostaRapida[]; indice: number; aoEscolher: (r: RespostaRapida) => void;
+}) {
+  const caixa = useRef<HTMLDivElement>(null);
+
+  // A destacada tem de ficar VISÍVEL ao descer com a seta: passando de umas
+  // seis respostas o painel rola, e sem isto a seleção desce para fora da caixa
+  // e a pessoa tecla no escuro.
+  useEffect(() => {
+    caixa.current?.querySelector<HTMLElement>(`[data-i="${indice}"]`)
+      ?.scrollIntoView({ block: "nearest" });
+  }, [indice]);
+
+  if (itens.length === 0) {
+    return (
+      <div className="mb-1.5 rounded-lg border border-dashed border-border/60 bg-muted/30
+                      px-3 py-2 text-[11px] text-muted-foreground">
+        {/* ⚠️ Diz ONDE se cria. "Nenhuma resposta" sozinho deixa a pessoa
+            achando que o recurso está quebrado. */}
+        Nenhuma resposta com esse atalho — as respostas se criam no botão
+        <MessageSquarePlus className="mx-1 inline h-3 w-3" />aqui embaixo.
+      </div>
+    );
+  }
+
+  return (
+    <div ref={caixa} className="mb-1.5 max-h-56 overflow-y-auto rounded-lg border bg-background shadow-lg">
+      {itens.map((r, i) => (
+        <button key={r.id} type="button" data-i={i}
+                /* ⚠️ `mousedown` e não `click`: o clique tira o foco do campo
+                   de resposta antes de disparar, e o painel fecharia antes de
+                   chegar aqui. */
+                onMouseDown={(e) => { e.preventDefault(); aoEscolher(r); }}
+                className={`flex w-full items-start gap-2 px-3 py-2 text-left transition-colors ${
+                  i === indice ? "bg-carbo-green/10" : "hover:bg-muted/60"}`}>
+          <span className="shrink-0 rounded bg-carbo-green/15 px-1.5 py-px font-mono
+                           text-[10px] font-semibold text-carbo-green">
+            /{r.atalho}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">
+            {r.corpo}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * O botão de gerenciar: ver o que existe, acrescentar e apagar.
+ *
+ * ⚠️ DUAS portas para a mesma lista, e a divisão é proposital: a BARRA é o
+ * caminho de quem está atendendo (`/frete`, Enter, texto colado, mão no
+ * teclado); este painel é o caminho de quem está organizando. Ninguém cadastra
+ * frase no meio de um atendimento, e ninguém quer abrir painel para colar uma.
+ */
+function GerenciadorDeRespostas({ lista, aoUsar }: {
+  lista: RespostaRapida[]; aoUsar: (r: RespostaRapida) => void;
+}) {
+  /* ⚠️ Pergunta ao `useAuth()` aqui dentro, em vez de receber por prop: o
+     componente que o monta (`Conversa`) não conhece o usuário, e passar um id
+     por três níveis só para decidir a visibilidade de um ícone seria um prop
+     atravessando a árvore inteira. */
+  const { user } = useAuth();
+  const meuId = user?.id ?? null;
+  const salvar = useSalvarResposta();
+  const apagar = useApagarResposta();
+  const [aberto, setAberto] = useState(false);
+  const [criando, setCriando] = useState(false);
+  const [atalho, setAtalho] = useState("");
+  const [corpo, setCorpo] = useState("");
+  const caixa = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!aberto) return;
+    const fora = (e: MouseEvent) => {
+      if (!caixa.current?.contains(e.target as Node)) setAberto(false);
+    };
+    document.addEventListener("mousedown", fora);
+    return () => document.removeEventListener("mousedown", fora);
+  }, [aberto]);
+
+  const limpo = normalizarAtalho(atalho);
+  const podeSalvar = atalhoValido(atalho) && !!corpo.trim() && !salvar.isPending;
+
+  return (
+    <div ref={caixa} className="relative">
+      <Button size="sm" variant="outline" className="h-8 w-8 p-0"
+              title="Respostas rápidas — ou digite / no campo de resposta"
+              aria-label="Respostas rápidas" aria-expanded={aberto}
+              onClick={() => setAberto((v) => !v)}>
+        <MessageSquarePlus className="h-3.5 w-3.5" />
+      </Button>
+
+      {aberto && (
+        /* `bottom-10`: o painel abre para CIMA. O campo de resposta fica no pé
+           da tela, e para baixo ele sairia da janela. */
+        <div className="absolute bottom-10 right-0 z-30 w-80 rounded-xl border bg-background p-3 shadow-xl">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-xs font-semibold">Respostas rápidas</p>
+            <Button size="sm" variant="outline" className="h-6 gap-1 px-2 text-[10px]"
+                    onClick={() => setCriando((v) => !v)}>
+              {criando ? <X className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
+              {criando ? "Cancelar" : "Nova"}
+            </Button>
+          </div>
+
+          {criando && (
+            <div className="mb-3 space-y-2 rounded-lg border bg-muted/40 p-2">
+              <label className="block">
+                <span className="mb-1 block text-[10px] uppercase tracking-wide text-muted-foreground">
+                  Atalho
+                </span>
+                <div className="flex items-center gap-1">
+                  <span className="font-mono text-sm text-muted-foreground">/</span>
+                  <Input value={atalho} onChange={(e) => setAtalho(e.target.value)}
+                         placeholder="frete" maxLength={24}
+                         className="h-7 min-w-0 flex-1 font-mono text-xs" />
+                </div>
+                {/* ⚠️ Mostra o que vai ser GRAVADO enquanto se digita. Quem
+                    escreve "Frete " não erra — o gatilho do banco normaliza —,
+                    mas descobriria só depois que o atalho é outro. */}
+                {!!atalho.trim() && (
+                  <span className={`mt-1 block text-[10px] ${
+                    atalhoValido(atalho) ? "text-muted-foreground" : "text-amber-500"}`}>
+                    {atalhoValido(atalho)
+                      ? <>vai ser chamada por <span className="font-mono">/{limpo}</span></>
+                      : "só letras, números, hífen e _ — até 24, sem espaço"}
+                  </span>
+                )}
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[10px] uppercase tracking-wide text-muted-foreground">
+                  Texto
+                </span>
+                <Textarea value={corpo} onChange={(e) => setCorpo(e.target.value)}
+                          rows={3} maxLength={4096}
+                          placeholder="Me manda o CEP que eu calculo o frete pra você."
+                          className="resize-none text-xs" />
+              </label>
+              <Button size="sm" className="h-7 w-full gap-1.5 text-xs" disabled={!podeSalvar}
+                      onClick={() => salvar.mutate({ atalho, corpo }, {
+                        onSuccess: () => {
+                          toast.success(`Resposta salva. Chame por /${limpo}`);
+                          setAtalho(""); setCorpo(""); setCriando(false);
+                        },
+                        onError: (e) => toast.error((e as Error).message),
+                      })}>
+                {salvar.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
+                Salvar
+              </Button>
+            </div>
+          )}
+
+          {lista.length === 0 ? (
+            <p className="py-4 text-center text-[11px] text-muted-foreground">
+              Nenhuma resposta ainda. As frases que o time repete todo dia moram
+              aqui — e saem com <span className="font-mono">/atalho</span> no campo
+              de resposta.
+            </p>
+          ) : (
+            <div className="max-h-64 space-y-1 overflow-y-auto">
+              {lista.map((r) => (
+                <div key={r.id} className="group flex items-start gap-2 rounded-lg px-2 py-1.5 hover:bg-muted/60">
+                  <button type="button" className="min-w-0 flex-1 text-left"
+                          onClick={() => { aoUsar(r); setAberto(false); }}>
+                    <span className="block font-mono text-[11px] font-semibold text-carbo-green">
+                      /{r.atalho}
+                    </span>
+                    <span className="mt-0.5 line-clamp-2 block text-[11px] text-muted-foreground">
+                      {r.corpo}
+                    </span>
+                  </button>
+                  {/* ⚠️ O botão some para quem não escreveu, mas quem RECUSA é a
+                      policy — esconder é a aparência da regra, não a regra. E a
+                      chefia apaga qualquer uma: sem isso, a resposta de quem saiu
+                      da empresa ficaria para sempre (`criado_por` vira null). */}
+                  {!!meuId && r.criado_por === meuId && (
+                    <button type="button" aria-label={`Apagar a resposta /${r.atalho}`}
+                            className="shrink-0 rounded p-1 text-muted-foreground opacity-0
+                                       transition-opacity hover:text-red-500 group-hover:opacity-100"
+                            onClick={() => apagar.mutate(r.id, {
+                              onError: (e) => toast.error((e as Error).message),
+                            })}>
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Conversa({ c }: { c: Conversa }) {
   const responder = useResponder();
   const notas = useNotas(c.wa_id);
@@ -1087,6 +1295,29 @@ function Conversa({ c }: { c: Conversa }) {
   const [verAgendar, setVerAgendar] = useState(false);
   const [quando, setQuando] = useState("");
   const [texto, setTexto] = useState("");
+
+  /* ── A barra `/atalho` ────────────────────────────────────────────────────
+     ⚠️ TDZ: tudo isto roda no RENDER (`useMemo`), então depende de `texto` já
+     estar declarado acima. É a armadilha que derrubou o /vender nos seis apps
+     e que nem o `tsc` nem o build pegam. */
+  const respostas = useRespostasRapidas();
+  const termoBarra = termoDaBarra(texto);
+  const sugestoes = useMemo(
+    () => (termoBarra === null ? [] : filtrarRespostas(respostas.data ?? [], termoBarra)),
+    [respostas.data, termoBarra]);
+  const [iBarra, setIBarra] = useState(0);
+  /* ⚠️ Escape FECHA sem apagar o que foi digitado. Sem isto, quem escreveu "/"
+     de propósito (uma data, um "e/ou") ficaria com o painel aberto por cima da
+     conversa e sem saída a não ser apagar o texto. Ele se rearma sozinho na
+     próxima tecla, porque o termo muda. */
+  const [barraFechada, setBarraFechada] = useState(false);
+  useEffect(() => { setIBarra(0); setBarraFechada(false); }, [termoBarra]);
+  const barraAberta = termoBarra !== null && !barraFechada;
+  /** ⚠️ COLA, nunca envia — ver a migração `20261021`. A resposta quase sempre
+   *  precisa do nome do cliente ou de um ajuste, e enviar direto faria um Enter
+   *  a mais mandar a frase errada para o cliente. */
+  const colarResposta = (r: RespostaRapida) => { setTexto(r.corpo); setBarraFechada(true); };
+
   // Busca e galeria: as duas respondem "onde foi que ele mandou aquilo?" por
   // caminhos diferentes — pelo que foi escrito e pelo que foi anexado.
   const [buscando, setBuscando] = useState(false);
@@ -1597,12 +1828,36 @@ function Conversa({ c }: { c: Conversa }) {
         ) : aberta ? (
           <div className={`rounded-lg border bg-muted/40 p-2 transition-colors ${
                             responder.isPending ? "opacity-70" : ""}`}>
+            {barraAberta && (
+              <PainelDaBarra itens={sugestoes} indice={iBarra} aoEscolher={colarResposta} />
+            )}
             <Textarea
               value={texto} onChange={(e) => setTexto(e.target.value)}
               placeholder="Responder…" rows={3} maxLength={4096}
               className="resize-y border-0 bg-transparent px-1 py-0.5 text-xs shadow-none
                          focus-visible:ring-0 focus-visible:ring-offset-0"
               onKeyDown={(e) => {
+                /* ⚠️ A barra vem ANTES do envio. Com o painel aberto o campo tem
+                   só `/frete` escrito: Ctrl+Enter ali mandaria "/frete" para o
+                   cliente, que é a pior coisa que este recurso poderia fazer. */
+                if (barraAberta) {
+                  if (e.key === "Escape") { e.preventDefault(); setBarraFechada(true); return; }
+                  if (sugestoes.length > 0) {
+                    if (e.key === "ArrowDown") {
+                      e.preventDefault(); setIBarra((i) => (i + 1) % sugestoes.length); return;
+                    }
+                    if (e.key === "ArrowUp") {
+                      e.preventDefault();
+                      setIBarra((i) => (i - 1 + sugestoes.length) % sugestoes.length); return;
+                    }
+                    /* Enter SOZINHO escolhe. Aqui ele não conflita com o envio,
+                       que é Ctrl+Enter — e nem com a quebra de linha, porque
+                       ninguém quebra linha no meio de um `/atalho`. */
+                    if (e.key === "Enter") {
+                      e.preventDefault(); colarResposta(sugestoes[iBarra]); return;
+                    }
+                  }
+                }
                 if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); enviar(); }
               }}
             />
@@ -1620,6 +1875,13 @@ function Conversa({ c }: { c: Conversa }) {
                 <span aria-hidden="true">+</span>
                 <kbd className="rounded border bg-background px-1 py-px font-sans text-[10px]">V</kbd>
                 <span>cola print</span>
+                <span className="mx-1 text-muted-foreground/40">·</span>
+                {/* ⚠️ O atalho é ANUNCIADO. Recurso que só existe para quem foi
+                    avisado é recurso que metade do time nunca usa — e aqui o
+                    custo disso é a frase ser redigitada diferente a cada vez,
+                    que é o problema inteiro. */}
+                <kbd className="rounded border bg-background px-1 py-px font-mono text-[10px]">/</kbd>
+                <span>resposta pronta</span>
               </div>
               <div className="flex items-center gap-2">
                 {perto && (
@@ -1643,6 +1905,7 @@ function Conversa({ c }: { c: Conversa }) {
                          // já contou essa história.
                          if (f) setPrevia({ arquivo: f, url: URL.createObjectURL(f), som: false });
                        }} />
+                <GerenciadorDeRespostas lista={respostas.data ?? []} aoUsar={colarResposta} />
                 <Button size="sm" variant="outline" className="h-8 w-8 p-0"
                         title="Enviar foto ou documento"
                         disabled={enviarMidia.isPending || gravando || !!previa}
