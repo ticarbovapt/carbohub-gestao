@@ -51,6 +51,221 @@ Duas armadilhas já pagas, não repita:
    `isManager(profile, fnMap)` — a mesma expressão. O alias `isGestor` existe nos
    seis só para a tela poder ser idêntica. Não duplique a regra.
 
+### `/vender`: CarboZé e CarboVAPT são vendas SEPARADAS (29/09/2026)
+O seletor "Tipo de Operação" deixou de ser **Venda / Ação Promocional** e passou
+a ser **CARBOZÉ / CARBOVAPT** — e pela primeira vez ele GOVERNA a tela. Até aqui
+`mode` era decorativo: `buildOrderFields` nunca leu `input.tipo`, não há coluna
+nem CHECK, e o valor só sobrevivia dentro do `quote_form_snapshot`.
+
+```
+CarboZé    Endereço de Entrega · Itens do Pedido · Como o produto sai ·
+           Data de entrega combinada · Recorrência          NF-e pelo Bling
+CarboVAPT  Endereço de Faturamento · Itens de Serviço ·
+           Previsão de Execução                    NFS-e pelo Portal Nacional
+```
+
+Comum aos dois, no topo: responsável, busca por documento, cliente, endereço,
+pagamento, dados estratégicos e observações.
+
+1. ⚠️ **Uma venda é de UM tipo só**, porque a NF sai por caminhos diferentes.
+   Medido ANTES de fechar a regra: **zero** pedidos no histórico misturam item
+   de produto com item de serviço — não há passado a tratar, e foi isso que
+   permitiu a regra ser dura em vez de tolerante.
+2. ⚠️ **Esconder NÃO é a regra — é a aparência dela.** A regra mora em
+   `erroDeModo()`, no submit, que é o único lugar por onde os três caminhos
+   (orçamento, e-mail, venda) passam. `trocarModo` limpa os itens do outro tipo
+   e DIZ que limpou; a guarda é o cinto. Mesmo princípio da dedução de estoque
+   morar na RPC e não na tela.
+3. ⚠️ **O endereço muda de RÓTULO, nunca de COLUNA.** No CarboVAPT não há
+   entrega e o endereço serve para faturar, mas ele continua indo para
+   `delivery_address/city/state/zip`: redirecionar serviço para
+   `billing_address` mudaria o que outras telas mostram, e isso precisa ser
+   medido antes, não suposto.
+4. ⚠️ **Campo escondido que continua preenchido vai junto no payload.** O
+   endereço de faturamento separado some no CarboVAPT (a seção inteira já é
+   ele), então `enderecoFaturamentoOuNulo()` decide num lugar só, por onde os
+   TRÊS usos passam — o payload e os dois PDFs. Três condições iguais em três
+   lugares são três condições que divergem depois.
+5. ⚠️ **"Ação Promocional" morreu, mas o valor antigo continua no snapshot.**
+   `normalizarModo` o trata olhando as LINHAS, não o rótulo: `"venda"`/`"promo"`
+   valiam para produto e serviço igualmente, então orçamento antigo só de
+   serviço reabre em **CarboVAPT**. Sem isso a guarda de submit o recusaria e
+   ele ficaria impossível de editar. `VendaTipo` e `TIPO_LABEL` guardam os
+   QUATRO valores pelo mesmo motivo.
+6. **O seletor B2C/B2B/Frota SAIU**, mas o VALOR ficou: `service_type` e
+   `person_type` são parâmetros da RPC que cria a OS, e a OS é o que vai para o
+   portal de licenciados. Quem decide agora é o DOCUMENTO — CNPJ ⇒ b2b, CPF ⇒
+   b2c (`servicoPadraoPorDoc`), que já era o padrão.
+   ⚠️ **Consequência ASSUMIDA:** `frota` deixou de ser escolhível, então a trava
+   "Frota exige a previsão de execução" não dispara mais em venda nova. Se ela
+   precisar voltar, volta como CAMPO DA OS — quem sabe se a ida tem vários
+   carros é quem executa, não quem vende.
+   ⚠️ `serviceTypeTocado` continua existindo e NÃO é resto: orçamento antigo
+   guardou a escolha manual (inclusive `frota`), e sem essa trava o documento a
+   sobrescreveria ao reabrir.
+7. **Serviços que ACOMPANHAM** (Laudo de Opacidade, Medição de Ruído) são
+   checkbox e entram no orçamento como **bonificação a R$ 0,00**. Lista em
+   `packages/shell/src/descarb.ts` (`DESCARB_EXTRAS`).
+   ⚠️ Eles são **ITEM DO PEDIDO, não campo do snapshot**: o PDF é regerado a
+   partir do pedido GRAVADO (`Vendas.tsx`), então campo que só existisse no
+   snapshot sumiria do papel na segunda via, calado — a família do
+   `discount_amount`. Como `is_bonificacao` já atravessa aquele `map`, isto
+   chega ao PDF sem uma linha de código lá.
+   ⚠️ `kind: "service"`, nunca um terceiro tipo: `so_servico` é
+   `items.every(i => i.kind === "service")`, e é ele que diz que o pedido nunca
+   vai ser faturado nem expedido.
+   ⚠️ Extra NÃO torna a venda válida — `erroDeModo()` exige
+   `validServiceItems()`, senão nasceria pedido de R$ 0,00. E eles não viram
+   vaga de veículo na OS: laudo não é carro para descarbonizar.
+8. **Itens de Serviço nasce com UMA linha**, como o `rows` do CarboZé — inclusive
+   ao TROCAR de modo, senão quem volta ao CarboVAPT acha a seção fechada de novo.
+
+⚠️ **PENDENTE (fase 2), e decidido pelo dono do processo:** vários locais de
+execução moram **na OS, não na venda** — a OS do CarboVAPT vai para o portal de
+licenciados, onde os funcionários registram e executam. Isso atravessa DOIS
+repositórios. Pôr o local em `carboze_orders` criaria a segunda verdade sobre
+onde o serviço acontece.
+
+### FAIXA DE PREÇO por tipo de cliente — é PRODUTO, igual à bonificação
+Pedido do dono do processo em 29/09/2026: o mesmo produto tem três preços
+conforme quem compra.
+
+```
+compra esporádica     R$ 15,60   CZ100        o preço de sempre
+ponto de venda        R$ 13,00   CZ100-PDV    revende o nosso produto
+microdistribuidor     R$ 11,50   CZ100-MD     compra em volume, revende como quiser
+```
+
+⚠️ **A exigência que define o desenho é FISCAL**, e está nas palavras dele:
+*"a NF vai receber o valor de 11,50 e não 15,60 − 4,10 = 11,50, que vai dar
+muito desconto na NF, e o imposto é no momento da NF"*. **Não é desconto** — o
+unitário sai CHEIO na nota. Vender a 15,60 com 4,10 de desconto e vender a 11,50
+dão o mesmo total e notas fiscais diferentes.
+
+⚠️ **E o produto FÍSICO continua sendo um só:** *"quando for vendido e precisar
+produzir, ainda vão produzir o CarboZé sachê ou o CarboZé 100ml"*. Logo estoque,
+produção e MRP olham o PAI.
+
+É o **mesmo mecanismo do gêmeo de bonificação** (`20260900`): um produto irmão
+que aponta para o pai, com o estoque baixando do pai. A única diferença é o
+preço — lá zero, aqui cheio.
+
+```
+carbo_faixa_preco                  as faixas, CADASTRO (codigo, rotulo, sufixo, hint, ordem)
+mrp_products.preco_de              aponta o PAI
+mrp_products.faixa_preco           qual faixa (anda SEMPRE junto com preco_de)
+carbo_preco_faixa_criar(uuid,text) cria sob demanda, idempotente
+supabase/migrations/20261019000000_faixa_de_preco_por_tipo_de_cliente.sql
+```
+
+1. ⚠️ **DUAS colunas, não uma.** Pôr a faixa em `bonificacao_de` faria a tela
+   travar 100% de desconto na linha — o oposto do que precisa acontecer. Um
+   CHECK impede as duas preenchidas juntas: seriam dois donos para "quem é o
+   meu pai", o erro do `bling_nf_id`.
+2. ⚠️ **As faixas são CADASTRO, nunca CHECK** — faixa nova é um INSERT, sem
+   deploy. A lição de "plataforma nova entra em TRÊS CHECKs".
+3. ⚠️ **`carbo_bonificacao_auto` teve de aprender a pular `preco_de`.** SEM
+   ISSO A MIGRAÇÃO CRIA LIXO SOZINHA: o gatilho dispara em todo Produto Final
+   novo com `bonificacao_de is null`, e a linha de faixa é exatamente isso —
+   criar "CarboZé 100ml - PDV" criaria junto o "- bonificação" dele. Bonificação
+   não tem faixa: é de graça nas três.
+4. ⚠️ **`sale_price` NASCE NULO** — o oposto do gêmeo de bonificação, que nasce
+   0. Lá zero é o preço CERTO; aqui zero seria resposta inventada e o `/vender`
+   venderia de graça sem reclamar. Nulo significa NÃO PRECIFICADO e a tela
+   recusa a venda. A lição do `('CZ100', 0)` da `20260969`.
+5. **Criação SOB DEMANDA, produto a produto**, por botão em `/comercial/precos`.
+   Criar as duas faixas para os 22 produtos de uma vez encheria o dropdown com
+   44 linhas que ninguém pediu, a maioria sem preço e portanto invendáveis.
+6. ⚠️ **Quem filtra `.is("bonificacao_de", null)` tem de filtrar `preco_de`
+   junto** — `useStock`, `useMrpProducts`, `useSkuMapeamento` (Ops) e a view
+   `vendedor_estoque`. Sem isso a grade de Suprimentos ganha uma linha ZERADA
+   por produto POR FAIXA.
+7. ⚠️ **PENDENTE, e é decisão do dono do processo:** nada impede o vendedor
+   escolher "Microdistribuidor" para quem compra uma vez. A faixa é propriedade
+   do CLIENTE e virou propriedade do PRODUTO — foi o que ele pediu, e o custo é
+   este. A trava possível é o `/vender` só oferecer a faixa compatível com o
+   cadastro do cliente. Enquanto não existe, a mitigação é o hint aparecer na
+   tela DEPOIS do clique ("Preço de Microdistribuidor — compra em volume…").
+
+### Quem APARECE no dropdown do /vender — `aparece_no_vender`
+Medido em 29/09/2026: **11 produtos reais e 11 gêmeos de bonificação = 22
+linhas**, mais as faixas. Metade da lista é gêmeo, e gêmeo é usado numa venda a
+cada muitas. Queixa do dono do processo: *"o dropdown lotado de coisa, difícil
+de achar os itens"*. Interruptor por linha em `/comercial/precos`
+(`carbo_produto_no_vender`, migração `20261020`). ✅ Resultado: 24 → **10**.
+
+1. ⚠️ **COLUNA NOVA, NUNCA `is_active`.** Aquele governa o sistema TODO — MRP,
+   produção, grade de Suprimentos, caixa de vendedor, mapa de SKU. Desativar um
+   produto para tirá-lo do dropdown o tiraria do ESTOQUE junto, e o saldo que
+   existe na prateleira sumiria da tela sem erro nenhum.
+2. ⚠️ **E não é `sale_price is null`.** "Não tem preço" é lacuna de
+   configuração; "não quero na lista" é decisão. Juntar as duas faria esconder
+   um produto virar apagar o preço dele.
+3. ⚠️ **`default true`** — nasce APARECENDO. O contrário esconderia o catálogo
+   inteiro no instante da migração e o `/vender` ficaria sem produto nenhum.
+4. ⚠️ **O `/vender` NÃO filtra cegamente:** a lista é
+   `p.aparece_no_vender || p.id === r.productId`. Sem o segundo termo, reabrir
+   um orçamento cujo produto foi escondido depois mostraria a linha VAZIA
+   carregando um produto real — e salvar perderia o item, calado.
+5. **O rótulo na tela é "No /vender", não "Ativo".** Chamar de ativo faria
+   alguém desligar um produto que tem saldo na prateleira achando que só estava
+   limpando a lista.
+6. ⚠️ **Produto novo nasce aparecendo, e o gêmeo dele também** — cada Produto
+   Final cadastrado acrescenta DUAS linhas ao dropdown, não uma.
+
+### O dropdown de produto é AGRUPADO — e a bonificação não mostra preço
+1. ⚠️ **A bonificação mostrava o preço do pai e é GRÁTIS.** "CarboPRO 100ml -
+   bonificação — R$ 15,60" lia-se como "custa 15,60"; a linha sai com 100% de
+   desconto travado. O preço espelhado existe por um motivo bom — no PDF o
+   cliente vê `R$ 133,68 × 10 · −100% · R$ 0,00`, que mostra o tamanho do brinde
+   —, mas no dropdown aquele número não tem esse contexto e vira número errado
+   sobre DINHEIRO. Hoje diz **"grátis"**.
+2. **O nome do produto é CABEÇALHO do grupo** e sumiu das opções. Ele aparecia
+   em 4 linhas e o que as distinguia era o SUFIXO — a parte mais difícil de ler.
+3. ⚠️ **A ordem era ACIDENTAL.** Alfabética, então "CarboZé 1 Litro" vinha antes
+   de "CarboZé 100ml"; e a bonificação cair logo abaixo do pai era SORTE
+   (`- b` < `- M` < `- P`). Hoje é explícita: padrão → faixas na ordem do
+   CADASTRO → bonificação por ÚLTIMO (ela não é opção de preço, é a exceção).
+4. ⚠️ **UMA informação por opção, e ela é o PREÇO.** A primeira versão levava
+   chip colorido + preço + a dica da faixa na mesma linha: o texto estourava a
+   largura e era cortado à direita. A dica virou linha ABAIXO do campo, que
+   aparece DEPOIS do clique — ali cabe, e confirma o que foi escolhido.
+5. ⚠️ **O CAMPO FECHADO mostra o nome COMPLETO**, não o rótulo da opção. Sem
+   isso ele dizia só "Microdistribuidor R$ 11,50" — e de qual produto? Dentro do
+   menu o nome está no cabeçalho; no campo fechado não há cabeçalho nenhum.
+   **Só apareceu renderizando:** nem o `tsc` nem o build sabem o que o Radix
+   desenha ali.
+6. `useFaixasPreco` é consulta SEPARADA, não embed: embed do PostgREST depende
+   do cache de esquema e, ao falhar, derrubaria a consulta inteira — dropdown
+   vazio. A reserva é o NOME do produto (reserva de APRESENTAÇÃO, nunca de
+   identidade; o código cru nunca aparece na tela).
+
+### ⚠️ CarboVAPT por PORTE: tentado, MEDIDO e removido (29/09/2026)
+A ideia era segmentar o faturamento de CarboVAPT em P/M/G a partir da NFS-e.
+**Não funciona, e o dado prova.** A `20261017` foi revertida e a seção saiu do
+`/comercial/dashboard`.
+
+```
+total            R$ 727.615,56
+classificado     R$ 110.800,00   15,2%
+não classificado R$ 616.815,56   84,8%
+```
+
+1. ⚠️ **O PORTE NÃO ESTÁ NA NOTA.** A palavra nunca aparece nas 342 notas, e o
+   detalhe estruturado da descrição (`texto|qtd|unit|total#`) acaba em 30/04 —
+   trocaram de emissor, a numeração reiniciou (2120 → 50).
+2. ⚠️ **A nota traz o TOTAL do serviço, não o preço de um veículo.** R$ 800 × 19
+   notas = dois P; R$ 3.200 × 22 = oito P **ou** 400 + 4×700; R$ 4.200 = três G
+   **ou** seis M. Alargar faixa não resolveria: chamaria de "um M" o que são
+   dois P, e o número sairia plausível e errado.
+3. ⚠️ **A seção chegou a ser MERGEADA sem o SQL ter rodado**, e ficou no ar
+   lendo uma view inexistente: cabeçalho e legenda renderizando com a grade
+   VAZIA, sem erro. Seção que não consegue mostrar número é pior que seção
+   nenhuma — quem olha não sabe se é "não vendeu" ou "não carregou".
+4. **O caminho que funciona é o porte ser GRAVADO no ato da venda.** O `/vender`
+   já guarda `modality` (P/M/G) em cada linha de serviço; o que falta é essa
+   informação chegar ao dashboard. Deduzir da nota depois é o que não dá.
+
 ### Estoque do vendedor / pronta entrega
 Cada vendedor tem uma caixa física: um `warehouse` com `kind='vendedor'` e
 `owner_id`. Reusar `warehouses` (e não criar tabela nova) é o que faz o fluxo
@@ -303,6 +518,15 @@ linha sem desconto e rodapé com desconto, que é o defeito oposto e pior.
 que remonta o pedido para regerar o papel **descartava** `discount_amount` — e
 `is_bonificacao` junto, o que também jogava a linha de brinde de volta na base
 de rateio. Campo que o PDF passou a ler tem de atravessar esse `map`.
+
+⚠️ **Riscar só faz sentido quando HÁ valor cheio para riscar** (29/09/2026).
+`riscar` era `true` fixo para toda linha de bonificação, e isso está certo para
+o gêmeo de PRODUTO — ele espelha o preço do pai, e o R$ 133,68 riscado é o que
+mostra o tamanho do brinde. Mas os **serviços que acompanham** o CarboVAPT
+(laudo, medição) entram a R$ 0,00 de verdade: não têm gêmeo no catálogo e não
+espelham preço nenhum, e o traço sobre "R$ 0,00" diria que eles ficaram mais
+baratos — exatamente o que o comentário do `didDrawCell` logo abaixo já
+proibia. Hoje é `riscar.push(unit > 0)`.
 
 ⚠️ **A sobra de centavo não pode cair em linha SEM desconto.** Ela ia para a de
 menor quantidade; no modo por item isso inventaria centavos de desconto num
@@ -997,8 +1221,25 @@ o teto real era **seis opções**, e ninguém sabia disso. Um menu de 6 itens me
 200px e rolava por **8 pixels** — o Radix ligava as duas setas de scroll e o
 menu parecia cortado sem ter o que mostrar.
 
-Hoje as duas são `min(22rem,60vh)`. Ao mexer numa, mexa na outra: deixá-las
-diferentes recria o teto invisível.
+⚠️ **E o texto acima dizia "hoje as duas são `min(22rem,60vh)`" — era verdade
+em UM app de sete** (medido em 29/09/2026). A correção tinha sido feita só no
+`admin`; o `crm`, `ops`, `ti`, `financas`, `mkt` e `atendimento` seguiram com
+`max-h-60`/`max-h-48`, ou seja com o teto de 192px, **inclusive o `crm`, que é
+o app do VENDEDOR**. O sintoma reapareceu no dropdown de produto do `/vender`:
+ele cortava "Microdistribuidor" no meio, e ninguém ligou isso ao `select.tsx`.
+
+Hoje os **sete** têm `min(28rem,70vh)` = 448px (medido com o menu aberto no
+navegador, não estimado) e os sete `select.tsx` estão byte a byte iguais.
+
+1. **Ao mexer numa altura, mexa na outra** — deixá-las diferentes recria o teto
+   invisível.
+2. ⚠️ **E mexa nos SETE.** `select.tsx` não estava em lista de arquivo
+   replicado nenhuma, e foi assim que ele divergiu: divergir ali não dá erro —
+   dá um menu cortado num app e inteiro no outro, e nada liga uma coisa à
+   outra.
+3. ⚠️ **Registro que afirma estado do código envelhece.** Esta seção descrevia
+   uma correção como concluída enquanto ela valia para 1/7. Ao escrever "hoje
+   é X" aqui, diga **em quantos apps** — e confira, não presuma.
 
 ### E-commerce: a tabela tem uma linha por ITEM, não por pedido
 `ecommerce_orders` grava `order_id = '<pedido>-<item>'` — de propósito, porque
@@ -1587,6 +1828,24 @@ supabase/functions/_shared/melhorEnvioParse.ts                  puro, testado
    ou seja, lojista e licenciado (mesma tabela `profiles`) lendo a esteira
    inteira da Carbo pelo PostgREST. **Toda republicação de view repete a
    cláusula.** Confira com `select relname, reloptions from pg_class`.
+
+⚠️ **E a REGRA IRMÃ, paga em 29/09/2026: escreva a view a partir do BANCO
+(`pg_get_viewdef`), nunca da migração que a criou.** A `20261019` republicava
+a `vendedor_estoque` copiada da `20260900` e levou
+`42P16: cannot drop columns from view` — a definição viva era a da `20260915`,
+com duas colunas a mais.
+
+**O erro foi SORTE, não cuidado**, e é isso que importa: se as colunas tivessem
+batido, o `create or replace` teria PASSADO e removido, calado, as duas coisas
+que a `20260915` acrescentou e que quem escrevia não sabia que existiam —
+`carbo_pode_ver_caixa(w.owner_id)` (o gate de quem enxerga qual caixa) e o
+`with (security_invoker = false)`. Sem o gate, qualquer autenticado passaria a
+ver a caixa de estoque de todo vendedor. Um vazamento inteiro, dentro de uma
+migração cujo objetivo era esconder duas linhas zeradas.
+
+É a MESMA lição do CHECK da `20260918` ("pergunte ao `pg_get_constraintdef`,
+não à definição de nascimento"), e as duas custaram o mesmo tipo de engano:
+afirmar o estado de produção a partir do repositório.
 
 ### ⚠️ `security_invoker` na esteira tem OUTRO lado: quem opera precisa ler
 Fechar o vazamento da `bling2_esteira` (view sem `security_invoker` roda com os
