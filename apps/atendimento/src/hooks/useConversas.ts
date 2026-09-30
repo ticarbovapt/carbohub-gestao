@@ -629,3 +629,89 @@ export function useEnviarMidia() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["wa-conversas"] }); },
   });
 }
+
+/**
+ * Procurar dentro de UMA conversa — e a busca vai ao SERVIDOR, de propósito.
+ *
+ * ⚠️ A `useConversas` carrega 30 dias com `.limit(1000)`. Buscar no que está em
+ * memória devolveria "nada" para o comprovante de junho, e quem procura,
+ * procura justamente o que não está à vista: a pessoa concluiria que a
+ * mensagem não existe. É a ausência disfarçada de resposta — o mesmo defeito
+ * do `Math.round` inventando `×1` e do `(arquivo)` na prévia da lista.
+ *
+ * Sem recorte de data, então: a conversa inteira, desde sempre.
+ *
+ * ⚠️ Só a partir de DOIS caracteres. Com um, o `ilike` varre a conversa
+ * inteira para devolver quase tudo — custo de banco para um resultado que não
+ * responde nada.
+ */
+export interface AchadoNaConversa {
+  wamid: string;
+  texto: string;
+  ocorrido_em: string;
+  direcao: "entrada" | "saida";
+}
+
+export function useBuscaNaConversa(wa_id: string | null, termo: string) {
+  const t = termo.trim();
+  return useQuery({
+    queryKey: ["wa-busca", wa_id, t],
+    enabled: !!wa_id && t.length >= 2,
+    staleTime: 30_000,
+    queryFn: async (): Promise<AchadoNaConversa[]> => {
+      // ⚠️ `%` e `_` são curingas do `ilike`: digitar "50%" sem escapar varre
+      // tudo o que começa com 50 e o resultado parece aleatório.
+      const alvo = `%${t.replace(/[\\%_]/g, (c) => "\\" + c)}%`;
+      const { data, error } = await (supabase as any)
+        .from("carbo_wa_conversas")
+        .select("wamid, texto, ocorrido_em, direcao")
+        .eq("wa_id", wa_id)
+        .ilike("texto", alvo)
+        .order("ocorrido_em", { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      return (data ?? []) as AchadoNaConversa[];
+    },
+  });
+}
+
+/**
+ * Os arquivos de UMA conversa, do mais novo para o mais antigo.
+ *
+ * ⚠️ Vai ao servidor pela mesma razão da busca, e por uma segunda: o arquivo
+ * que alguém procura na galeria é quase sempre o antigo — o recente ainda está
+ * rolando na tela.
+ *
+ * ⚠️ E ela devolve a LISTA, nunca as imagens. A mídia aqui NÃO é baixada: o
+ * webhook guarda só o `midia_id` e o link da Meta expira, então cada arquivo
+ * passa pela `whatsapp-midia-baixar` com o nosso token. Montar uma grade de
+ * miniaturas baixaria vinte arquivos no clique de abrir a galeria — quem abre
+ * quer UM. O download continua sendo por item, no mesmo caminho do balão.
+ */
+export interface ItemDaGaleria {
+  wamid: string;
+  tipo: string;
+  texto: string | null;
+  midia_id: string;
+  ocorrido_em: string;
+  direcao: "entrada" | "saida";
+}
+
+export function useGaleriaDaConversa(wa_id: string | null, ligado: boolean) {
+  return useQuery({
+    queryKey: ["wa-galeria", wa_id],
+    enabled: !!wa_id && ligado,
+    staleTime: 60_000,
+    queryFn: async (): Promise<ItemDaGaleria[]> => {
+      const { data, error } = await (supabase as any)
+        .from("carbo_wa_conversas")
+        .select("wamid, tipo, texto, midia_id, ocorrido_em, direcao")
+        .eq("wa_id", wa_id)
+        .not("midia_id", "is", null)
+        .order("ocorrido_em", { ascending: false })
+        .limit(200);
+      if (error) throw error;
+      return (data ?? []) as ItemDaGaleria[];
+    },
+  });
+}
