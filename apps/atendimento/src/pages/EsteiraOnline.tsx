@@ -678,7 +678,19 @@ function Bloco({ titulo, icon: Icon, children }: {
   );
 }
 
-function Detalhe({ row, rastreio, avisos, templates, onClose }: {
+/**
+ * ⚠️ EXPORTADO, e não só usado aqui: a tela de Conversas abre ESTE MESMO card
+ * para o pedido de que a conversa trata, em vez de mandar a pessoa para a
+ * Esteira e fazê-la procurar. Duas cópias do card divergiriam em silêncio — é
+ * a doença que o `quotePdf.ts` do `mkt` já pagou, e ninguém percebe porque
+ * divergir aqui não dá erro, dá dois cards diferentes sobre o mesmo pedido.
+ *
+ * ⚠️ Por isso as props de contexto são OPCIONAIS. A Esteira tem os mapas de
+ * rastreio e de avisos da página inteira; quem abre um pedido só passa o que
+ * conseguiu para aquele. Faltar qualquer um deles esconde a seção, nunca
+ * quebra o card.
+ */
+export function Detalhe({ row, rastreio, avisos, templates, onClose }: {
   row: EsteiraRow; rastreio?: RastreioCard;
   avisos?: Map<string, EnvioMsg>;
   templates?: Array<{ etapa: EtapaMsg; ativo: boolean; titulo: string }>;

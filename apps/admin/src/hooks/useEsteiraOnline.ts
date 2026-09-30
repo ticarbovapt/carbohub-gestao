@@ -189,6 +189,40 @@ export function useEsteiraOnline(de: string, ate: string) {
  * parte, para não se misturar com o que está dentro da janela.
  */
 
+/**
+ * UM pedido, pelo `bling_id`, sem janela de tempo.
+ *
+ * Existe porque a tela de Conversas abre o card do pedido de que a conversa
+ * trata, e ali não há período nenhum escolhido — há um `bling_id` que veio do
+ * aviso que a esteira mandou, e ele pode ser de qualquer data.
+ *
+ * ⚠️ É por isso que NÃO dá para reusar o `useEsteiraOnline`: aquele recorta por
+ * `data_pedido` e tem teto de 1.000 linhas. Um pedido de junho simplesmente não
+ * estaria na resposta — e o sintoma seria o card "não abrir", sem erro nenhum,
+ * que é exatamente o aviso âmbar que a Esteira precisa mostrar quando recebe um
+ * link fora da janela.
+ *
+ * ⚠️ `maybeSingle`, não `single`: pedido que saiu da esteira (cancelado fora do
+ * corte, ou nunca chegado ao Bling) devolve ZERO linhas, e `single` transforma
+ * isso em erro. Ausência aqui é resposta — quem chama precisa distinguir "não
+ * existe" de "falhou ao carregar", e são telas diferentes.
+ */
+export function useEsteiraPedido(blingId: number | null) {
+  return useQuery({
+    queryKey: ["esteira-pedido", blingId],
+    enabled: blingId != null,
+    queryFn: async (): Promise<EsteiraRow | null> => {
+      const { data, error } = await (supabase as any)
+        .from("bling2_esteira")
+        .select("*")
+        .eq("bling_id", blingId)
+        .maybeSingle();
+      if (error) throw error;
+      return (data ?? null) as EsteiraRow | null;
+    },
+  });
+}
+
 export function useEsteiraTravadosAntigos(de: string) {
   return useQuery({
     queryKey: ["esteira-travados-antigos", de],

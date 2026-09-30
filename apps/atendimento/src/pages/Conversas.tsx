@@ -14,6 +14,11 @@ import { toast } from "sonner";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+// ⚠️ O card do pedido é o DA ESTEIRA, importado — nunca uma segunda versão.
+import { Detalhe } from "@/pages/EsteiraOnline";
+import { useEsteiraPedido, useAvisosDoPedido, useRastreios } from "@/hooks/useEsteiraOnline";
+import { useTemplatesMsg } from "@/hooks/useMensagensCliente";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -1241,7 +1246,12 @@ function GerenciadorDeRespostas({ lista, aoUsar }: {
   );
 }
 
-function Conversa({ c }: { c: Conversa }) {
+function Conversa({ c, onVerPedido }: {
+  c: Conversa;
+  /** Abre o card do pedido. ⚠️ Vem de FORA: esta tela e o painel do contato
+   *  mostram o MESMO pedido, e dois estados locais abririam duas janelas. */
+  onVerPedido: (blingId: number) => void;
+}) {
   const responder = useResponder();
   const notas = useNotas(c.wa_id);
   const anotar = useAnotar();
@@ -1482,16 +1492,18 @@ function Conversa({ c }: { c: Conversa }) {
               {c.bling_id != null && (
                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                   {/* Quem atende quase sempre precisa ver o pedido antes de
-                      responder. O chip leva direto para a esteira em vez de
-                      obrigar a decorar o número e procurar lá. */}
-                  <Link to="/ecommerce/esteira"
-                        className="inline-flex items-center gap-1 rounded-md border bg-muted/40
-                                   px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground
-                                   transition-colors hover:bg-muted/70 hover:text-foreground">
+                      responder. O chip abre o card AQUI — antes ele levava para
+                      a Esteira, e sair do atendimento no meio dele é como a
+                      resposta fica pela metade. */}
+                  <button type="button" onClick={() => onVerPedido(c.bling_id!)}
+                          title="Ver o pedido sem sair da conversa"
+                          className="inline-flex items-center gap-1 rounded-md border bg-muted/40
+                                     px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground
+                                     transition-colors hover:bg-muted/70 hover:text-foreground">
                     <Package className="h-3 w-3" />
                     <span className="font-mono">#{c.bling_id}</span>
-                    <ArrowUpRight className="h-3 w-3 opacity-60" />
-                  </Link>
+                    <Maximize2 className="h-3 w-3 opacity-60" />
+                  </button>
 
                   {vinculoProvavel && (
                     <span
@@ -2175,6 +2187,81 @@ function SecaoPainel({ titulo, icone: Icone, children }: {
  * sintoma (um nome velho na lista e o certo dentro da conversa) parece defeito
  * de cache do banco.
  */
+/**
+ * O card do pedido — O MESMO da Esteira, aberto aqui dentro.
+ *
+ * Quem atende quase sempre precisa ver o pedido antes de responder. Antes, o
+ * chip mandava para `/ecommerce/esteira` e a pessoa tinha de achar o card no
+ * meio do quadro — e nem isso acontecia: o link ia com `?pedido=`, e a Esteira
+ * só lê `?card=`. Ela abria na home do quadro e o card não abria, sem erro
+ * nenhum. É a armadilha que já estava escrita no CLAUDE.md, cometida de novo.
+ *
+ * ⚠️ Mas trocar o nome do parâmetro NÃO era a correção certa: mandar quem está
+ * atendendo para outra tela é convite a abandonar o atendimento pela metade, e
+ * a volta depende de um `?voltar=` que só a Esteira sabe montar. O card vem
+ * para cá.
+ *
+ * ⚠️ E é o componente `Detalhe` da PRÓPRIA Esteira, importado, nunca uma
+ * segunda versão dele. Duas cópias divergiriam em silêncio — a doença do
+ * `quotePdf.ts` do `mkt`, que passou meses mostrando outro PDF e ninguém viu,
+ * porque divergir não dá erro: dá dois cards diferentes sobre o mesmo pedido.
+ */
+function CardDoPedido({ blingId, onClose }: { blingId: number; onClose: () => void }) {
+  const { data: row, isLoading, error } = useEsteiraPedido(blingId);
+  const { data: avisos } = useAvisosDoPedido([blingId]);
+  const { data: templates } = useTemplatesMsg();
+  /* Um código só, e só depois que a linha chegou — `useRastreios` já sai
+     desligado com a lista vazia. */
+  const { data: mapaRastreio } = useRastreios(row?.rastreio ? [row.rastreio] : []);
+
+  if (row) {
+    return (
+      <Detalhe row={row} rastreio={row.rastreio ? mapaRastreio?.get(row.rastreio) : undefined}
+               avisos={avisos} templates={templates} onClose={onClose} />
+    );
+  }
+
+  /* ⚠️ Carregando, erro e "não está na esteira" são TRÊS respostas, e a tela
+     diz qual é. Colapsá-las num diálogo vazio repetiria o defeito que acabou
+     de ser corrigido: o clique "não faz nada", e quem clicou não sabe se o
+     pedido sumiu, se a consulta falhou ou se é para esperar. */
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="w-[min(28rem,calc(100vw-2rem))] max-w-none">
+        <DialogHeader>
+          <DialogTitle className="font-mono text-base">#{blingId}</DialogTitle>
+        </DialogHeader>
+        {isLoading ? (
+          <p className="flex items-center gap-2 py-4 text-xs text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Carregando o pedido…
+          </p>
+        ) : error ? (
+          <p className="flex items-start gap-1.5 py-4 text-xs text-red-500">
+            <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />
+            Não consegui carregar: {(error as Error).message}
+          </p>
+        ) : (
+          <div className="py-4 text-xs text-muted-foreground">
+            <p className="flex items-start gap-1.5 text-amber-500">
+              <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />
+              Este pedido não está na Esteira do On-line.
+            </p>
+            {/* ⚠️ Dizer POR QUÊ, porque os motivos pedem ações diferentes: o
+                aviso é gravado com o `bling_id` no instante do envio, e o
+                pedido pode ter saído da esteira depois (venda de balcão, que a
+                esteira não mostra) ou nunca ter chegado ao Bling. */}
+            <p className="mt-2 leading-relaxed text-muted-foreground/80">
+              O aviso foi enviado com este número, então ele existiu. Ou a venda
+              não é de canal on-line — a esteira só mostra esses —, ou o pedido
+              ainda não chegou ao Bling.
+            </p>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 const LinhaDaConversa = memo(function LinhaDaConversa({ c, selecionada, comBusca, onAbrir }: {
   c: Conversa; selecionada: boolean; comBusca: boolean; onAbrir: (wa_id: string) => void;
 }) {
@@ -2379,7 +2466,9 @@ const LinhaDaConversa = memo(function LinhaDaConversa({ c, selecionada, comBusca
   && a.c.parece_encerrada === b.c.parece_encerrada
   && a.c.tags.map((t) => t.id).join("\u0000") === b.c.tags.map((t) => t.id).join("\u0000"));
 
-function PainelContato({ c, meuId }: { c: Conversa; meuId: string | null }) {
+function PainelContato({ c, meuId, onVerPedido }: {
+  c: Conversa; meuId: string | null; onVerPedido: (blingId: number) => void;
+}) {
   const definirStatus = useDefinirStatus();
   const definirResponsavel = useDefinirResponsavel();
   const marcarTag = useMarcarTag();
@@ -2620,14 +2709,18 @@ function PainelContato({ c, meuId }: { c: Conversa; meuId: string | null }) {
             )}
           </SecaoPainel>
 
-          {/* Por último porque é SAÍDA da tela: no topo, um link para outra rota é
-              convite a abandonar o atendimento antes de terminá-lo. */}
+          {/* Por último porque é o CONTEXTO, não a ação: quem abre a conversa
+              vem responder, e o pedido é o que ele confere antes. ⚠️ Já foi um
+              link para a Esteira, e por isso ficava aqui embaixo — sair da tela
+              no meio do atendimento é como a resposta fica pela metade. Agora
+              abre o card aqui mesmo, e a ordem continua certa pelo outro
+              motivo. */}
           {c.bling_id && (
             <SecaoPainel titulo="Pedido" icone={Package}>
-              <Link to={`/ecommerce/esteira?pedido=${c.bling_id}`}
-                    className="flex items-center gap-2.5 rounded-lg border border-border
-                               bg-muted/40 p-3 transition-colors hover:border-carbo-green/40
-                               hover:bg-carbo-green/5">
+              <button type="button" onClick={() => onVerPedido(c.bling_id!)}
+                      className="flex w-full items-center gap-2.5 rounded-lg border border-border
+                                 bg-muted/40 p-3 text-left transition-colors
+                                 hover:border-carbo-green/40 hover:bg-carbo-green/5">
                 <Package className="h-4 w-4 shrink-0 text-carbo-green" />
                 <span className="min-w-0 flex-1">
                   <span className="block font-mono text-[13px] font-semibold tabular-nums
@@ -2640,8 +2733,8 @@ function PainelContato({ c, meuId }: { c: Conversa; meuId: string | null }) {
                     </span>
                   )}
                 </span>
-                <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-              </Link>
+                <Maximize2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              </button>
             </SecaoPainel>
           )}
         </div>
@@ -2699,6 +2792,12 @@ export default function Conversas() {
      `agruparConversas`. E `atual` sai da lista COMPLETA — filtrar não pode
      fechar a conversa que já está aberta na direita. */
   const [busca, setBusca] = useState("");
+  /* ⚠️ O card do pedido mora AQUI, e não dentro de cada chip: a conversa e o
+     painel do contato mostram o mesmo pedido, e dois estados locais abririam
+     duas janelas sobre ele. Nulo = fechado, e ele NÃO entra na URL — a URL
+     desta tela guarda qual CONVERSA está aberta, e empilhar o card ali faria o
+     "voltar" do navegador fechar a conversa junto. */
+  const [verPedido, setVerPedido] = useState<number | null>(null);
   /* ⚠️ Abre em "Pendentes" QUANDO HÁ pendência — e em "Todas" quando não há.
      A regra original era só a primeira metade, e ela quebrou no dia em que a
      caixa cresceu: com 243 conversas e ZERO pendentes, a tela abria dizendo
@@ -3139,9 +3238,19 @@ export default function Conversas() {
             </CarboCardContent>
           </CarboCard>
 
-          {atual && <Conversa key={atual.wa_id} c={atual} />}
-          {atual && <PainelContato key={`p-${atual.wa_id}`} c={atual} meuId={meuId} />}
+          {atual && <Conversa key={atual.wa_id} c={atual} onVerPedido={setVerPedido} />}
+          {atual && <PainelContato key={`p-${atual.wa_id}`} c={atual} meuId={meuId}
+                                   onVerPedido={setVerPedido} />}
         </div>
+      )}
+
+      {/* ⚠️ FORA do grid das três colunas, e é de propósito: ele é um diálogo
+          e o grid tem `min-h-0` com colunas que rolam — montado lá dentro, o
+          card herdaria aquele recorte e a parte de baixo dele ficaria cortada
+          sem barra de rolagem, que é o modo de falhar do `min-h-0` ao
+          contrário. */}
+      {verPedido != null && (
+        <CardDoPedido blingId={verPedido} onClose={() => setVerPedido(null)} />
       )}
     </div>
   );
