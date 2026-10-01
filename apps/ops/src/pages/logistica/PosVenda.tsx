@@ -147,6 +147,46 @@ function notaDoPedido(o: PosVendaOrder, qual: "venda" | "bonificacao") {
   };
 }
 
+/**
+ * As notas do pedido, prontas para baixar.
+ *
+ * ⚠️ Aparece EM TODA ETAPA a partir do momento em que existe nota — não só em
+ * "NF Finalizada" e "Emitir etiqueta", como era. O pedido continua precisando
+ * do papel depois de sair para transporte e depois de entregue: é aí que o
+ * cliente liga pedindo a DANFE, e quem atende tinha de abrir o Faturamento
+ * para achá-la. Chip que some quando o card anda é chip que só serve na
+ * etapa em que ninguém precisava dele.
+ *
+ * ⚠️ E as DUAS notas quando houver bonificação — a de venda e a remessa. Elas
+ * viajam juntas com a carga, e mostrar só a primeira é como a logística ficou
+ * sem a segunda até 22/09.
+ */
+function ChipsDaNota({ o, variant }: {
+  o: PosVendaOrder;
+  variant: "success" | "info" | "warning";
+}) {
+  const venda = notaDoPedido(o, "venda");
+  const bonif = notaDoPedido(o, "bonificacao");
+  if (!venda.id && !bonif.id) return null;
+
+  return (
+    /* ⚠️ `stopPropagation`: o card inteiro abre o detalhe no clique, e sem isto
+       baixar a nota abriria a modal por cima do download. */
+    <div className="flex flex-wrap gap-1.5"
+         onClick={(e) => e.stopPropagation()}
+         onPointerDown={(e) => e.stopPropagation()}>
+      {venda.id && (
+        <ChipNf nfId={venda.id} numero={venda.numero} conta={venda.conta}
+                variant={variant} rotulo={bonif.id ? "NF venda" : "NF"} />
+      )}
+      {bonif.id && (
+        <ChipNf nfId={bonif.id} numero={bonif.numero} conta={bonif.conta}
+                variant="warning" rotulo="NF bonif." />
+      )}
+    </div>
+  );
+}
+
 function ChipNf({ nfId, numero, conta, variant, rotulo }: {
   nfId: number | null;
   numero: string | null;
@@ -660,37 +700,16 @@ export default function PosVenda() {
                           {o.fulfillment_stage === "gerar_nf" && (
                             <CarboBadge variant="warning" className="gap-1">🧾 Liberado no Faturamento — aguardando NF</CarboBadge>
                           )}
-                          {/* ⚠️ As DUAS notas quando houver bonificação: a de venda e a
-                              remessa. Elas viajam juntas com a carga — mostrar só a
-                              primeira é como a logística ficou sem a segunda até 22/09. */}
-                          {o.fulfillment_stage === "nf_finalizada" && (
-                            <div className="flex flex-wrap gap-1.5">
-                              <ChipNf nfId={notaDoPedido(o, "venda").id}
-                                numero={notaDoPedido(o, "venda").numero}
-                                conta={notaDoPedido(o, "venda").conta} variant="success"
-                                rotulo={notaDoPedido(o, "bonificacao").id ? "NF venda" : "NF"} />
-                              {notaDoPedido(o, "bonificacao").id && (
-                                <ChipNf nfId={notaDoPedido(o, "bonificacao").id}
-                                  numero={notaDoPedido(o, "bonificacao").numero}
-                                  conta={notaDoPedido(o, "bonificacao").conta}
-                                  variant="warning" rotulo="NF bonif." />
-                              )}
-                            </div>
-                          )}
+                          {/* ⚠️ SEM condição de etapa. A nota passa a acompanhar o
+                              card até o fim: é depois da entrega que o cliente liga
+                              pedindo a DANFE, e quem atende tinha de ir ao
+                              Faturamento procurar. A cor acompanha a etapa — verde em
+                              "NF Finalizada", azul daí em diante — porque ali ela é
+                              a conquista da etapa, e depois é referência. */}
+                          <ChipsDaNota o={o}
+                            variant={o.fulfillment_stage === "nf_finalizada" ? "success" : "info"} />
                           {o.fulfillment_stage === "emitir_etiqueta" && (
                             <div onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-                              <div className="flex flex-wrap gap-1.5 mb-2">
-                                <ChipNf nfId={notaDoPedido(o, "venda").id}
-                                  numero={notaDoPedido(o, "venda").numero}
-                                  conta={notaDoPedido(o, "venda").conta} variant="info"
-                                  rotulo={notaDoPedido(o, "bonificacao").id ? "NF venda" : "NF"} />
-                                {notaDoPedido(o, "bonificacao").id && (
-                                  <ChipNf nfId={notaDoPedido(o, "bonificacao").id}
-                                    numero={notaDoPedido(o, "bonificacao").numero}
-                                    conta={notaDoPedido(o, "bonificacao").conta}
-                                    variant="warning" rotulo="NF bonif." />
-                                )}
-                              </div>
                               <Button size="sm" variant="outline" className="w-full h-9 text-xs gap-1.5"
                                 onClick={() => setEtiquetaOrder(o)}>
                                 <Tag className="h-3.5 w-3.5" /> Emitir etiqueta
@@ -1088,6 +1107,15 @@ export default function PosVenda() {
                   {detail.vendedor_name && <VendedorTag name={detail.vendedor_name} avatar={detail.vendedor_avatar} />}
                   <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> {fmtDate(detail.created_at)}</span>
                 </div>
+
+                {/* ⚠️ A nota, logo abaixo da identificação do pedido. Ela faltava
+                    AQUI — o card mostrava o chip e a modal que ele abre, não:
+                    clicar para ver "os detalhes" e perder o documento mais
+                    procurado do pedido é o contrário do que a palavra promete.
+
+                    Em cima de tudo porque é o que se vem buscar: logo abaixo do
+                    número do pedido, antes de contato e endereço. */}
+                <ChipsDaNota o={detail} variant="info" />
 
                 {(detail.customer_phone || detail.customer_email) && (
                   <div className="space-y-1">
