@@ -23,6 +23,20 @@ const FASES = [
   // lista, o auto-sync FILTRA a fase em silêncio: a chamada responde 202, nada
   // roda e nem log aparece — foi o que aconteceu na primeira tentativa.
   "nfe_recheck",
+  // Backfill do detalhe da NF, que é o que traz a NATUREZA (do `<natOp>` do
+  // XML) — e a natureza é o que separa nota de VENDA de nota de BONIFICAÇÃO na
+  // filial (`20261026`).
+  //
+  // ⚠️ ESTA LINHA FALTOU, e o aviso estava escrito duas linhas acima. A
+  // `20261024` criou o cron chamando `nfe_detalhe` e registrou a entidade no
+  // `bling2-sync` — mas não aqui, no PORTEIRO. Medido em 01/10/2026: 934 das
+  // 1.031 notas da filial sem natureza, fila intocada por 24 h.
+  //
+  // ⚠️ E o 401 do segredo errado (`20261036`) estava POR CIMA deste 400,
+  // escondendo-o: consertado o segredo, o defeito de verdade apareceu. Um
+  // sintoma tapando outro é por que a conferência é `net._http_response` e não
+  // "parou de dar erro".
+  "nfe_detalhe",
 ];
 
 Deno.serve(async (req: Request): Promise<Response> => {
