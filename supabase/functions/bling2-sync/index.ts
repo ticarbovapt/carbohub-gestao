@@ -1191,6 +1191,57 @@ function semvalorSeguro(rows: any): any[] {
   return Array.isArray(rows) ? rows : [];
 }
 
+/**
+ * BACKFILL do detalhe das NF-e — rodada própria, alta frequência.
+ *
+ * ⚠️ Existe porque o backfill morava DENTRO do `all`, e o `all` roda DUAS VEZES
+ * POR DIA (11:30 e 17:30). Com teto de 40, o histórico drenava a 80 notas por
+ * dia — as 766 sem detalhe levariam dez dias, e durante esse tempo o casamento
+ * por rodapé e a natureza simplesmente não existiriam para elas.
+ *
+ * Isso não era defeito quando o detalhe servia só para preencher `valor_total`
+ * de nota nova: a rodada incremental de 1 min já cobria a janela de 8 dias, e o
+ * que ficava para trás era pouco. Virou defeito quando o detalhe passou a ser a
+ * ÚNICA fonte do rodapé e da natureza — aí o histórico inteiro vira fila.
+ *
+ * ⚠️ FORA do `all`, de propósito: rodar as duas versões na mesma passada seria
+ * trabalho repetido, pela mesma razão que já tirou `orders_recente` e
+ * `nfe_recente` de lá.
+ *
+ * ⚠️ E ela CONVERGE. A fila é `raw_detalhe is null`, e o detalhe sempre grava
+ * `raw_detalhe` — mesmo quando não acha rodapé nem natureza. Nota que o XML não
+ * resolve sai da fila na primeira tentativa, em vez de voltar para sempre e
+ * travar a cabeça dela. É a armadilha que o comentário do `valor_total` já
+ * documentava neste arquivo.
+ */
+async function syncNfeDetalheBackfill(admin: Admin, token: string, _logId: string): Promise<SyncResult> {
+  let synced = 0, failed = 0;
+
+  const { data: fila } = await admin
+    .from("bling2_nfe")
+    .select("id, bling_id, xml_url")
+    .or("valor_total.is.null,raw_detalhe.is.null")
+    // Da mais NOVA para a mais velha: se a fila nunca esvaziar, o que fica de
+    // fora é o passado distante, não a operação de ontem.
+    .order("data_emissao", { ascending: false })
+    // Mesmo teto de 40 das outras rodadas, e pela mesma conta: ~1s por detalhe
+    // (latência da API, não os 350ms de pausa), contra os 150s do edge
+    // function. A diferença é a FREQUÊNCIA, não o tamanho do lote.
+    .limit(40);
+
+  for (const nf of semvalorSeguro(fila)) {
+    try { await detalharNfe(admin, token, nf); synced++; }
+    catch (e) {
+      console.error(`[bling2-sync] backfill de detalhe da NF ${nf.bling_id} falhou:`, e);
+      failed++;
+    }
+    await sleep(RATE_MS);
+  }
+
+  console.log(`[bling2-sync] backfill de detalhe: ${synced} detalhadas, ${failed} falhas`);
+  return { synced, failed };
+}
+
 async function syncNFe(admin: Admin, token: string, logId: string): Promise<SyncResult> {
   let synced = 0, failed = 0;
   const inicioDaRodada = nowIso();
@@ -1585,6 +1636,9 @@ const SYNCS: Record<string, (a: Admin, t: string, l: string) => Promise<SyncResu
   // "all": é varredura dirigida, disparada quando se quer certeza sobre o
   // faturamento, não a cada rodada.
   nfe_recheck: syncNfeRecheck,
+  // O backfill do detalhe. Fora do "all" pela mesma razão das outras
+  // incrementais: rodar as duas versões na mesma passada é trabalho repetido.
+  nfe_detalhe: syncNfeDetalheBackfill,
 };
 
 // Ordem importa: `variacoes` e `stock` leem `bling2_products`; contas leem
