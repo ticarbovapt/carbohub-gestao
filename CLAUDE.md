@@ -2682,6 +2682,137 @@ dupla de notas, **faltas opostas** — um aviso só nunca ia pegar os dois.
    este é documento fiscal faltando numa carga que pode já estar na rua. Mesma
    cor para as duas coisas faria a segunda ler como rotina.
 
+### Nota sem pedido, pedido sem nota — e a lista que nasce MORTA
+Pedido do dono do processo em 01/10/2026: *"verifica as nfs do bling 1 e 2, e os
+pedidos que estão parados… verifica se tem nf fora que não está vinculada e
+travando isso"*.
+
+```
+carbo_nf_sem_pedido    nota solta, com o veredito do porquê
+carbo_pedido_sem_nota  a outra ponta, com o que poderia ser dela
+carbo_nf_filial_vincular(text, bigint, text)   o vínculo manual
+```
+
+⚠️ **"Nota não ligada a `carboze_orders`" NÃO é "nota órfã".** A maioria
+esmagadora das notas das duas contas é venda ON-LINE, que vive em
+`bling_orders`/`bling2_orders` e nunca teve pedido nosso. Medido: **1.062 de
+1.118** são `sem_codigo_no_rodape`. O que separa é o RODAPÉ — nota emitida pelo
+NOSSO sistema carrega `V2026090081`.
+
+⚠️ **E eu apliquei esse cuidado a UMA ponta só.** A fila de pedidos nasceu com
+**1.108 linhas**, quase todas `BLING-*`/`BLING2-*` — pedido IMPORTADO, cuja nota
+mora em `bling_orders.nf_bling_id`. O padrão denunciou sozinho: `BLING2-2 →
+000027`, `BLING2-3 → 000028`, numeração sequencial e valor idêntico ao centavo.
+A régua certa é a MESMA dos dois lados (`order_number ~ '^(V[0-9]{10}|…)$'`):
+**a nota cita o pedido pelo NÚMERO dele**, então pedido com outro formato é
+pedido que nota nenhuma consegue citar. Resultado: 1.108 → **54**.
+
+1. ⚠️ **Nota EM VOO não é nota CANCELADA.** `Pendente` lida como cancelada fez a
+   view dizer *"falta EMITIR"* para o `V2026090074`, cuja nota de R$ 6.900 estava
+   sendo autorizada no mesmo minuto — e mandar emitir para quem acabou de emitir
+   é como nasce a segunda nota do mesmo pedido. A régua JÁ EXISTIA na `20260813`
+   (`carbo_nf_valida` **e** `carbo_nf_invalida`) e eu usei só a primeira; o que
+   sobra entre as duas listas brancas é o balde `em_voo`, onde situação NOVA do
+   Bling aparece em vez de ser classificada em silêncio.
+2. ⚠️ **Unicidade dos DOIS lados.** A trava perguntava *"há uma nota solta para
+   este documento?"* e nunca *"quantos pedidos disputam esta nota?"*. Medido: a
+   NF 000107 (R$ 4.480) era oferecida a CINCO pedidos da M Construções e a
+   000209 (R$ 28.000) a SEIS da Luck/NLAT — **onze pedidos, duas notas**. É o
+   `count(distinct bling_id) = 1` do Melhor Envio aplicado pela metade. Disputa
+   vira `AMBIGUO` e NÃO elege nenhuma: escolher enterraria a dúvida.
+3. ⚠️ **VALOR não entra na régua** — casar por valor + data já ligou `Leandro
+   Teodolino` a `Mauro Nishimoto` aqui. O valor aparece na saída para a pessoa
+   CONFERIR, que é outra coisa.
+4. ⚠️ **`carbo_nf_filial_vincular` tem TRÊS argumentos em produção** (`p_como`
+   com default), e a migração no repo declara dois. E ela **recusa do SQL
+   Editor**: ele roda como `postgres` sem JWT, `auth.uid()` é nulo e a guarda
+   devolve `Sem permissão` — igual à `carbo_nfse_visao` voltar vazia por lá.
+   Isso está CERTO; o caminho é a tela, ou um `update` que repita as travas
+   (`bling2_nf_id is null`, situação lida AGORA, `bling_conta = 2` junto).
+
+⚠️ **E o selo mentia ao lado do chip.** O `🧾 Liberado no Faturamento —
+aguardando NF` lia só `fulfillment_stage`, então aparecia na mesma pilha do chip
+`NF 000303`. **Destravar os cards não conserta isso** — o selo voltaria a mentir
+no próximo pedido preso. Quando dois elementos da mesma pilha discordam, o
+errado é o que não olhou o FATO.
+
+⚠️ E a `20261027` destravou só a FILIAL porque a queixa daquele momento era
+sobre a conta 2; os da MATRIZ ficaram presos — não por regra, por **recorte da
+pergunta**.
+
+### Entrega futura: o SALDO, e a mãe é DERIVADA
+Confirmado pelo dono do processo: *"são duas notas mães"*. Dois contratos, cada
+um com o próprio cronograma — a view agrupa por mãe e **nunca soma as duas**.
+
+```
+000232  BRISANET  R$ 55.380  6 remessas  R$ 27.690  saldo 27.690  50,00%
+000234  BRISANET  R$ 21.840  6 remessas  R$ 10.920  saldo 10.920  50,00%
+000247  CARBO     R$  1.930  1 remessa   R$  1.930  saldo      0  100%
+000251  CARBO     R$  2.384  1 remessa   R$  2.384  saldo      0  100%
+```
+
+Os dois contratos na **metade exata** e a soma fechando com a contagem
+independente das remessas: identidade, não semelhança. E as duas últimas são as
+operações internas da natureza `15110656619` classificada no mesmo dia — a view
+nasceu provando a decisão de três horas antes.
+
+1. ⚠️ **A MÃE não é cadastro.** O caminho óbvio seria cadastrar a natureza dela
+   ao lado da de remessa; seria pior. A mãe **se anuncia** — é a nota cuja chave
+   as remessas referenciam. Derivar faz contrato NOVO aparecer sozinho, no dia
+   da primeira remessa. Mesma decisão de `carbo_nossos_cnpjs()`. Só a natureza
+   de REMESSA é cadastro, porque é ela que tira do faturamento.
+2. ⚠️ **A chave casa por CONTEÚDO, nunca por posição.** Os rodapés reais trazem
+   a chave em TRÊS formatos, e um deles põe o número da nota **com pontos** antes
+   dela (`NF 024.630: 2425 1203 …`) — ancorar em `REFERENCIADA:` falha nesse caso
+   **em silêncio**, devolvendo null como se não houvesse referência.
+3. ⚠️ **A remessa não pode ser mãe de si mesma**: o rodapé contém a própria
+   chave em alguns formatos, e sem o `is distinct from` o saldo se cancelaria.
+4. **A aritmética que fecha é a conferência**: toda remessa válida em
+   exatamente UMA mãe (14 = 14). Órfã e contada-duas-vezes passam caladas.
+5. ⚠️ **O que isto NÃO responde:** qual pedido é qual parcela. As 14 vendas de
+   R$ 1.820 são indistinguíveis por valor — o saldo diz quanto falta do
+   CONTRATO, não a quem cada parcela pertence.
+
+### ⚠️ "Parou de dar erro" pode significar "TROCOU de erro"
+Três causas empilhadas sobre o MESMO sintoma (fila de natureza parada em 934), e
+cada uma só apareceu quando a de cima saiu:
+
+```
+segredo errado no cron       401   20261036
+fase ausente no PORTEIRO     400   bling2-auto-sync FASES
+deploy ainda no ar           400   o cron disparou 30s depois do push
+```
+
+1. ⚠️ **O cron chama `bling2-auto-sync`, não `bling2-sync`.** Eu registrei a
+   entidade `nfe_detalhe` no SEGUNDO (quem executa) e esqueci do PRIMEIRO (o
+   porteiro) — e o aviso estava escrito DUAS LINHAS acima de onde eu devia ter
+   mexido: *"Sem estar nesta lista, o auto-sync FILTRA a fase em silêncio"*.
+2. ⚠️ **Segredo de cron se COPIA do banco, nunca se digita.** O valor é lido de
+   um job que provadamente devolve 202 (`bling2-sync-incremental`), com `%L` em
+   tudo — nunca impresso em consulta, nunca colado no chat. A conferência
+   devolve BOOLEANO por job: `false` em mais de um é mais fonte muda levando 401.
+   ⚠️ E o bloco **ABORTA** se não conseguir ler: reagendar com segredo nulo troca
+   um job que falha ALTO por um que falha calado.
+3. ⚠️ **Nesse ponto regerar backup de função é IMPOSSÍVEL** — as funções já não
+   existem, `pg_get_functiondef` não tem o que devolver. A tabela é a ÚNICA
+   cópia, e o conserto é `replace` no texto JÁ GRAVADO. **Rede que só funciona
+   enquanto o que ela protege ainda existe não é rede.**
+4. ⚠️ **`PUBLIC` não é um role com nome.** `role_routine_grants` o reporta como a
+   string `PUBLIC` e `format('%I')` produz `"PUBLIC"` → `42704`. O `do` é
+   atômico, então isso derrubou a recriação das DUAS funções com a view já
+   republicada, e a busca global do Sales ficou fora do ar.
+5. ⚠️ **Push em `main` deploya, e o cron não espera.** O deploy levou 89 s e a
+   rodada do minuto seguinte pegou a função ANTIGA. Conferência feita antes do
+   Actions terminar não mede nada — olhe o run, não o relógio.
+6. ⚠️ **O número de ANTES envelhece em horas.** 1.302/R$ 940.937,41 num dia e
+   1.303/R$ 941.094,52 no outro. Meça imediatamente antes.
+
+⚠️ **E o padrão que se repetiu TRÊS vezes em um dia: metade do cuidado é zero
+cuidado.** Filtro no lado da nota e não no do pedido (1.108 linhas);
+`carbo_nf_valida` sem `carbo_nf_invalida` (nota em voo lida como cancelada);
+unicidade de um lado só (uma nota oferecida a cinco pedidos). Nas três, a metade
+que faltou era exatamente onde o erro morava.
+
 ### ⚠️ Republicar `carbo_vendas_metrica`: são TRÊS dependentes, e duas são FUNÇÃO
 Pago duas vezes no mesmo dia (01/10/2026), e a segunda derrubou tela em
 produção. O `CLAUDE.md` já dizia *"e `prorettype` para as funções `returns
