@@ -159,9 +159,22 @@ export default function DashboardComercial() {
   // "quanto do faturamento do período foi vendido num mês e faturado noutro" —
   // não "quanto entrou de fora do período". São perguntas diferentes, e é por
   // isso que o rótulo diz "atravessou o mês", não "veio de antes".
+  //
+  // ⚠️ RECORRÊNCIA FICA DE FORA, pela mesma razão que na tela de Vendas: o
+  // pedido recorrente nasce com todas as parcelas de uma vez, então a de
+  // dezembro tem `created_at` de setembro SEMPRE. Isso é mecânica do
+  // agendador, não venda que escorregou de mês.
+  //
+  // Media 58 pedidos / R$ 190.531 contando recorrência; 27 / R$ 126.191 sem
+  // ela — um terço do card era ruído. As duas telas precisam responder a mesma
+  // pergunta do mesmo jeito; duas definições de "transbordo" seria repetir a
+  // história das 14 definições de "venda que conta".
   const transbordo = useMemo(() => {
     const mes = (iso: string) => iso.substring(0, 7);
-    const cruzou = pedidos.filter((v) => v.sale_date && mes(v.created_at) < mes(v.sale_date));
+    const recorrente = (v: typeof pedidos[number]) =>
+      v.order_type === "recorrente" || v.is_recurring === true;
+    const cruzou = pedidos.filter((v) =>
+      !recorrente(v) && v.sale_date && mes(v.created_at) < mes(v.sale_date));
     return { qtd: cruzou.length, valor: cruzou.reduce((s, v) => s + (Number(v.total) || 0), 0) };
   }, [pedidos]);
 

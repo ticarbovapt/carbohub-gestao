@@ -142,9 +142,26 @@ const mesDe = (iso: string) => iso.substring(0, 7);
 /** Pedido importado da ponte do Bling (BLING-123) — não nasceu nesta tela. */
 const ehPedidoBling = (v: CarbozeVendaRow) => /^BLING-/i.test(v.order_number ?? "");
 
-/** Vendido num mês, faturado/efetivado no seguinte: o transbordo que ENTROU. */
+/**
+ * Vendido num mês, faturado/efetivado no seguinte: o transbordo que ENTROU.
+ *
+ * ⚠️ RECORRÊNCIA NÃO É TRANSBORDO, e por isso sai da conta.
+ *
+ * O pedido recorrente nasce com todas as parcelas de uma vez: assina-se em
+ * setembro e as entregas de out, nov, dez e jan já existem no banco naquele
+ * dia. O `created_at` delas é mais antigo que o mês efetivo SEMPRE — é a
+ * mecânica da recorrência, não uma venda que escorregou de mês.
+ *
+ * Contá-las enchia o card de ruído e escondia o número que importa. Em
+ * outubro/2026 o card dizia R$ 16.180 (98% do vendido) e os OITO pedidos eram
+ * recorrência; o transbordo real do mês era ZERO. Agosto e setembro não têm
+ * nenhuma recorrência no balde, então nada muda para trás — a correção limpa
+ * só o futuro, que era onde o número não queria dizer nada.
+ *
+ * Quem procura essas vendas tem a marca própria delas na coluna PEDIDO: 🔄.
+ */
 const veioDeMesAnterior = (v: CarbozeVendaRow) =>
-  mesDe(v.created_at) < mesDe(effectiveDate(v));
+  !ehRecorrente(v) && mesDe(v.created_at) < mesDe(effectiveDate(v));
 
 /** Rótulo curto do mês de origem ("ago/26"), para marcar a linha. */
 const mesOrigemCurto = (v: CarbozeVendaRow) =>
@@ -848,13 +865,21 @@ export default function Vendas() {
                               )}
                             </span>
                           </td>
-                          {/* ⚠️ Duas marcas DIFERENTES, e a distinção importa:
-                              ✱ (âmbar) = `sale_date` foi corrigida — pode ser
-                                  dentro do mesmo mês, não diz nada de caixa;
-                              ↩ mês (ciano) = a venda MUDOU DE MÊS, foi fechada
-                                  num mês e faturada no seguinte. É o transbordo.
-                              Só o ✱ existia, e ele acende nos dois casos — quem
-                              procurasse transbordo por ele acharia o dobro. */}
+                          {/* ⚠️ TRÊS casos, e cada um tem uma marca — ou marca
+                              nenhuma. A distinção é o ponto:
+
+                              ↩ mês (ciano) = venda fechada num mês e faturada
+                                  no seguinte. É o transbordo de verdade.
+                              ✱ (âmbar)     = `sale_date` corrigida à mão; pode
+                                  ser dentro do mesmo mês, não diz nada de caixa.
+                              recorrente    = NADA aqui. A data dela sempre
+                                  difere da criação, porque quem a move é o
+                                  agendador — não é correção nem transbordo. A
+                                  marca dela é o 🔄 na coluna PEDIDO.
+
+                              Sem o corte da recorrência, outubro mostrava ↩ em
+                              oito linhas e o card dizia 98% de transbordo, num
+                              mês cujo transbordo real era zero. */}
                           <td className="p-3 text-muted-foreground whitespace-nowrap">
                             {fmtDate(effectiveDate(venda))}
                             {veioDeMesAnterior(venda) ? (
@@ -865,6 +890,7 @@ export default function Vendas() {
                                 ↩ {mesOrigemCurto(venda)}
                               </span>
                             ) : (
+                              !ehRecorrente(venda) &&
                               venda.sale_date && venda.sale_date !== venda.created_at.substring(0, 10) && (
                                 <span className="ml-1 text-[10px] text-amber-500 font-medium" title="Data da venda corrigida">✱</span>
                               )
