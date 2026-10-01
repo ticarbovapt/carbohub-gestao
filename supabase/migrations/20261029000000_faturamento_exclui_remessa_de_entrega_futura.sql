@@ -91,7 +91,16 @@ select
   pg_get_functiondef(p.oid),
   coalesce((
     select string_agg(
-             format('grant execute on function %s to %I;', p.oid::regprocedure, g.grantee),
+             format('grant execute on function %s to %s;',
+                    p.oid::regprocedure,
+                    -- ⚠️ `PUBLIC` NÃO é um role com nome — é palavra-chave.
+                    -- `%I` o transforma em `"PUBLIC"` e o replay morre com
+                    -- `42704 role "PUBLIC" does not exist`. Medido em 01/10/2026:
+                    -- o `do` é atômico, então a falha derrubou a recriação das
+                    -- DUAS funções e a busca global do Sales ficou fora do ar
+                    -- com a view já republicada.
+                    case when g.grantee = 'PUBLIC' then 'public'
+                         else quote_ident(g.grantee) end),
              E'\n')
     from information_schema.role_routine_grants g
     -- ⚠️ Casa por `specific_name` (nome + oid), nunca só pelo nome: com
@@ -228,6 +237,17 @@ grant all on public.carbo_vendas_nf_cancelada to anon, authenticated, service_ro
 -- ⚠️ Reexecuta o texto que o PRÓPRIO BANCO devolveu. Nenhuma transcrição: os
 -- corpos têm regex com barras invertidas, e uma barra a mais quebra a busca
 -- global do Sales sem erro de sintaxe nenhum.
+
+-- ⚠️ CONSERTO DE 01/10/2026, aplicado em produção: a primeira versão gerava
+-- `to "PUBLIC"` e o replay morreu com `42704 role "PUBLIC" does not exist`. O
+-- `do` é atômico, então NENHUMA das duas funções voltou — a view já estava
+-- republicada e a busca global do Sales ficou fora. Quem já tem backup gravado
+-- com o texto velho conserta sem regerar nada (regerar é IMPOSSÍVEL: as funções
+-- já não existem, e a tabela é a única cópia):
+--
+--   update public.carbo_backup_20261029
+--      set grants = replace(grants, ' to "PUBLIC";', ' to public;')
+--    where grants like '% to "PUBLIC";%';
 
 do $recria$
 declare
