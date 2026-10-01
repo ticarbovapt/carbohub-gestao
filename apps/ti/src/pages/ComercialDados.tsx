@@ -79,6 +79,12 @@ const MOTIVO_FORA: Record<string, string> = {
   // Nota com natureza "Remessa em bonificação" — brinde, não receita. Não é
   // "aguardando NF": a nota existe e é válida. Ver 20260981.
   bonificacao: "Bonificação — nota de remessa, não é receita",
+  // ⚠️ Rótulo PRÓPRIO, e não juntado ao de bonificação. Os dois saem do
+  // faturamento, mas por razões diferentes: ali é brinde, aqui o valor JÁ foi
+  // faturado na nota mãe e esta só movimenta a mercadoria. Quem fecha o mês
+  // precisa saber qual é — um nome que serve para os dois faz alguém concluir
+  // a coisa errada. Ver 20261029.
+  remessa_entrega_futura: "Remessa de entrega futura — já faturado na nota mãe",
 };
 
 const canalBadge = (s: string | null) =>
