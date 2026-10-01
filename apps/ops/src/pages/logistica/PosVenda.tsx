@@ -4,7 +4,7 @@ import {
   DragOverlay, type DragStartEvent, type DragEndEvent,
 } from "@dnd-kit/core";
 import { toast } from "sonner";
-import { ShoppingBag, Loader2, User, Calendar, MapPin, Phone, Mail, Package, FileText, CreditCard, Truck, Boxes, Weight, Tag, Pencil, CheckCircle2, Gift, Download } from "lucide-react";
+import { ShoppingBag, Loader2, User, Calendar, MapPin, Phone, Mail, Package, FileText, CreditCard, Truck, Boxes, Weight, Tag, Pencil, CheckCircle2, Gift, Download, FileWarning } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -145,6 +145,48 @@ function notaDoPedido(o: PosVendaOrder, qual: "venda" | "bonificacao") {
     chave: qual === "bonificacao" ? o.nf_bonificacao_access_key : o.nf_access_key,
     conta: 1 as const,
   };
+}
+
+/**
+ * O pedido tem alguma linha PAGA, ou é 100% brinde?
+ *
+ * ⚠️ É esta pergunta — e não "tem nota?" — que separa pedido com documento
+ * faltando de pedido que nunca vai ter nota de venda. Existem os dois:
+ * `BLING-21`, `BLING-61` e `BLING-72` são só de bonificação, têm uma nota e
+ * nenhuma de venda, e estão CERTOS assim (a `20260996` os deixou fora do
+ * faturamento de propósito).
+ *
+ * Lê os dois modelos, como `itensBonificados`: `is_bonificacao` é a marca
+ * atual; no histórico a bonificação era quantidade extra numa linha paga, e
+ * essa linha é de venda.
+ */
+function temLinhaDeVenda(items: PosVendaOrder["items"] | null | undefined) {
+  if (!Array.isArray(items)) return false;
+  return items.some((i: any) => i?.is_bonificacao !== true);
+}
+
+/**
+ * ⚠️ A REMESSA chegou e a nota de VENDA não — o caso OPOSTO do aviso que já
+ * existe na modal de etiqueta, e ninguém avisava.
+ *
+ * Medido em 01/10/2026 no `V2026090001`: R$ 2.600 (CarboPRO 100ml × 200, linha
+ * PAGA), `fulfillment_stage = 'em_transporte'`, com a remessa de bonificação
+ * `000940` vinculada e `bling2_nf_id` NULO. A carga saiu com nota de brinde e
+ * sem nota de venda, e alguém moveu o card à mão passando por cima disso — sem
+ * erro nenhum, porque nada olhava para esta combinação.
+ *
+ * O aviso da modal cobre "tem item bonificado e falta a REMESSA". Este cobre
+ * "tem a remessa e falta a VENDA". Mesma dupla de notas, faltas opostas: um
+ * aviso só nunca ia pegar os dois.
+ *
+ * ⚠️ E ele mora no CARD, não na modal — a modal de etiqueta é de UMA etapa, e
+ * este pedido já tinha passado dela. Aviso que só aparece na etapa em que o
+ * erro ainda não aconteceu é aviso que chega tarde.
+ */
+function faltaNotaDeVenda(o: PosVendaOrder) {
+  return !notaDoPedido(o, "venda").id
+    && !!notaDoPedido(o, "bonificacao").id
+    && temLinhaDeVenda(o.items);
 }
 
 /**
@@ -673,6 +715,19 @@ export default function PosVenda() {
                                   {b.nome} × {b.qtd}
                                 </p>
                               ))}
+                            </div>
+                          )}
+                          {/* ⚠️ VERMELHO, não âmbar: o de cima é procedimento
+                              ("embale separado"), este é documento fiscal
+                              faltando numa carga que pode já estar na rua. */}
+                          {faltaNotaDeVenda(o) && (
+                            <div className="rounded-md border border-red-400/60 bg-red-50 dark:bg-red-950/30 px-2 py-1">
+                              <p className="text-[11px] font-semibold text-red-700 dark:text-red-300 flex items-center gap-1">
+                                <FileWarning className="h-3 w-3 shrink-0" /> Só a NF de bonificação está vinculada
+                              </p>
+                              <p className="text-[11px] text-red-700/90 dark:text-red-300/90">
+                                Falta a NF de venda — não despache sem ela.
+                              </p>
                             </div>
                           )}
                           {resumoItens(o.items) && (
