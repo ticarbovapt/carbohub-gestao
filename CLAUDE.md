@@ -2526,6 +2526,140 @@ duas decisões, em vez de dois que podem discordar. O sufixo fica como rede.
    ⚠️ O código de barras da etiqueta continua sendo o da nota de **venda** — a
    etiqueta identifica a carga faturada, a bonificação viaja junto.
 
+### REMESSA de entrega futura — e o CATÁLOGO, que é a parte que importa
+Achado em 01/10/2026 olhando um card parado da Brisanet, e o pedido do dono do
+processo foi literal: *"consegue verificar para casos assim no futuro? dai não
+fazemos algo apenas pontual, pq isso passa despercebido"*.
+
+A nota **MÃE** fatura o contrato inteiro e as **FILHAS** só movimentam a
+mercadoria, mês a mês, descontando dela. As duas contavam:
+
+```
+15110465964   MÃE      000232 R$ 55.380 · 000234 R$ 21.840      = R$ 77.220
+15110465968   REMESSA  6 notas já emitidas                      = R$ 11.050  ← em dobro
+                       14 parcelas até abr/27                   = R$ 25.480  ← viriam
+```
+
+✅ Aplicado: **1.303 → 1.297 pedidos**, R$ 941.094,52 → **R$ 930.044,52**.
+
+O sinal que denunciou está no RODAPÉ e é identidade, não semelhança:
+`NOTA FISCAL REFERENCIADA: ... 55 001 000000232`. **Nenhuma venda comum
+referencia outra nota.**
+
+1. ⚠️ **NÃO reusar `carbo_natureza_e_bonificacao`.** Mecanicamente bastava
+   cadastrar o id sob uma chave `%natureza_bonificacao%` — sem mexer em view
+   nenhuma. E seria errado: o `motivo_fora` passaria a dizer **"bonificacao"**
+   para uma remessa de entrega futura, e esta tela é lida por quem fecha o mês.
+   São conceitos IRMÃOS: `carbo_natureza_sem_faturamento()` é gêmea em forma e
+   diferente em significado. Os dois tiram do faturamento, por razões
+   diferentes, e a tela precisa dizer QUAL.
+2. ⚠️ **`carbo_naturezas_fiscais` é a lista de trabalho, e é o entregável de
+   verdade.** A bonificação levou DEZ meses para aparecer (0,61% do
+   faturamento); a entrega futura, cinco (1,2%). **As duas foram achadas por
+   acaso, olhando outra coisa.** O que faltava não era régua — era um lugar onde
+   natureza NOVA aparece sozinha, com o dinheiro ao lado. Molde do
+   `carbo_nfse_eventos_tipos`: desconhecido não faz nada e APARECE.
+   `suspeita_de_remessa` marca natureza não classificada cujas notas referenciam
+   outra nota. A consulta que vale rodar de tempos em tempos:
+
+```sql
+select * from public.carbo_naturezas_fiscais
+where suspeita_de_remessa order by valor desc;
+```
+
+3. ⚠️ **Lista BRANCA, e aqui "ausência FECHA" NÃO vale.** Sem natureza
+   cadastrada a função devolve `false` e tudo continua contando. Fechar
+   significaria tratar toda natureza não classificada como remessa e **zerar o
+   faturamento**. Quem protege contra o esquecimento é o catálogo, não a régua —
+   é o oposto do `CRON_SECRET`, e de propósito.
+4. ⚠️ **A view NÃO LIA a natureza da FILIAL**, e isso só apareceu em
+   `pg_get_viewdef`: ela fazia `coalesce(n.raw_data->..., n2.raw_data->...)`, e o
+   detalhe da conta 2 **nunca** traz `naturezaOperacao` (medido: 884 notas,
+   zero). A natureza da filial mora em `n2.natureza_operacao`, do `<natOp>` do
+   XML. Ou seja, a regra da `20260981` valia só para a matriz sem ninguém saber.
+   ⚠️ **E a correção não consertou o passado — fechou uma porta.** As 2 notas de
+   bonificação da filial estão em `bling2_nf_bonificacao_id`, a coluna certa, e
+   o faturamento caiu exatamente os R$ 11.050 da remessa, nem um centavo da
+   bonificação. O furo era FUTURO: vínculo manual em `bling2_nf_id` — que às
+   vezes é legítimo — teria levado R$ 1.908,80 para dentro da receita, calado.
+5. ⚠️ **A natureza é resolvida num `left join lateral` ÚNICO.** Ela aparecia
+   QUATRO vezes no corpo da view (em `e_bonificacao`, em `conta_metrica` e duas
+   no CASE). Quatro cópias de uma regra fiscal são quatro lugares para divergir,
+   e divergir aqui não dá erro: dá dinheiro contado diferente conforme a coluna.
+   A ORDEM do coalesce importa — `n2.natureza_operacao` vem ANTES do
+   `n2.raw_data`, que fica como rede para o dia em que o Bling mandá-la.
+6. ⚠️ **A POSIÇÃO no `motivo_fora`:** depois de `bonificacao` e antes de
+   `nf_invalida`/`aguardando_nf`. Remessa não tem nada de inválida, e
+   "aguardando emissão" mandaria alguém emitir uma segunda.
+7. **Cadastro, nunca CHECK**: natureza nova entra com um INSERT em
+   `carbo_config_fiscal` sob chave `%natureza_sem_faturamento%`, sem deploy.
+   ⚠️ Chave fora do padrão entra na tabela sem erro e **não é lida por ninguém**
+   — cadastro que parece feito e não vale nada.
+
+⚠️ **PENDENTE, e é decisão fiscal do dono do processo:** o catálogo já aponta
+duas naturezas não classificadas que referenciam outra nota —
+`15110656619` (2 notas, R$ 4.314,50) e `15109234302` (1 nota, R$ 315,00).
+
+### ⚠️ Republicar `carbo_vendas_metrica`: são TRÊS dependentes, e duas são FUNÇÃO
+Pago duas vezes no mesmo dia (01/10/2026), e a segunda derrubou tela em
+produção. O `CLAUDE.md` já dizia *"e `prorettype` para as funções `returns
+setof`"* — eu perguntei só por `pg_depend` + `pg_rewrite`, que acha VIEWS.
+
+```
+carbo_vendas_nf_cancelada          view
+carbo_vendas_busca(text, integer)  a busca global do Sales
+carbo_pdv_pedidos(text)            os pedidos de um PDV
+```
+
+Esse erro é barato: `2BP01` aborta a transação inteira e nada muda. **E
+`DROP ... CASCADE` continua fora de questão**, mesmo com o `HINT` do Postgres
+sugerindo — cascade apaga as duas funções em silêncio e a busca do Sales sumiria
+sem motivo aparente.
+
+1. ⚠️ **NÃO transcreva corpo de função à mão.** Os dois são regex densos (`\s+`,
+   `\D`, `\m`), e uma barra a mais quebra a busca de um jeito que nenhum build
+   pega. O BANCO copia melhor: guarde `pg_get_functiondef` numa **tabela real**
+   (não `temp` — o SQL Editor pode rodar cada bloco numa sessão diferente, e a
+   temp levaria a única cópia) e reexecute com `execute`.
+2. ⚠️ **Os GRANTS vão junto**, senão o PostgREST devolve "permission denied"
+   para uma função que EXISTE. Casam por `specific_name` (= `proname || '_' ||
+   oid`), nunca pelo nome — com sobrecarga o nome traz os grants da errada.
+3. ⚠️ **`PUBLIC` não é um role com nome.** `role_routine_grants` reporta o
+   grantee de um grant público como a string `PUBLIC`, e `format('%I')` a
+   transforma em `"PUBLIC"` → `42704 role "PUBLIC" does not exist`. O `do` é
+   atômico, então a falha no PRIMEIRO grant **derrubou a recriação das DUAS
+   funções, com a view já republicada**: a busca global do Sales ficou fora do
+   ar. Use `quote_ident` para role de verdade e a palavra crua para `PUBLIC`.
+4. ⚠️ **E a lição é sobre a RECUPERAÇÃO, não sobre o `%I`:** nesse ponto regerar
+   o backup é IMPOSSÍVEL — as funções já não existem, `pg_get_functiondef` não
+   tem o que devolver e `role_routine_grants` não tem o que listar. A tabela é a
+   ÚNICA cópia, e o conserto é um `replace` no texto JÁ GRAVADO. **Rede que só
+   funciona enquanto o que ela protege ainda existe não é rede.**
+5. ⚠️ **O número de ANTES envelhece em horas.** Medi 1.302 / R$ 940.937,41 num
+   dia e 1.303 / R$ 941.094,52 no outro — entrou um pedido de R$ 157,11 no meio.
+   Conferência contra número de ontem acusa diferença que não é a sua. Meça
+   imediatamente antes.
+
+### ⚠️ O Rastreio avança com a NF da FILIAL também
+O gatilho `carboze_orders_nf_autostage` olhava SÓ `bling_nf_id` — é de
+julho/2026, de quando só existia uma conta Bling, e o comentário dele dizia
+"imune a por qual caminho a NF foi vinculada", o que era verdade na época.
+Oito pedidos ficaram presos em "Gerar Nota Fiscal" com a nota já vinculada.
+
+1. ⚠️ **Só a nota de VENDA avança o card.** `bling2_nf_bonificacao_id` está de
+   fora de propósito: a remessa acompanha a carga mas não é o documento que
+   libera a expedição, e a etiqueta carrega o número da nota de venda.
+2. ⚠️ **Republicar a função não reprocessa o passado** — o gatilho é BEFORE
+   UPDATE e reage à TRANSIÇÃO de nulo para preenchido, que já aconteceu. Precisa
+   do `update` de destravamento, e ele exige `fulfillment_stage = 'gerar_nf'`:
+   pedido que a logística já moveu à mão NÃO pode voltar.
+3. **Um pedido pode ter DUAS notas** no mesmo pedido do sistema — uma de venda e
+   uma de bonificação —, então o vínculo manual não pode recusar a segunda por
+   já existir a primeira. Ele recusa **sobrescrever**, e diz qual nota já está
+   lá. ⚠️ Isso só funciona porque a natureza da filial passou a ser reconhecida
+   (`20261026`): sem isso a nota de bonificação caía no ramo de venda, encontrava
+   a outra e era bloqueada — a recusa estava certa, a classificação é que não.
+
 ### ⚠️ A COMISSÃO tem definição PRÓPRIA de "pedido faturado"
 `/comissionamento` não lê `carbo_vendas_metrica`. As duas RPCs
 (`crm_comissao_agregado`, `crm_comissao_detalhe`) leem `carboze_orders` direto:
