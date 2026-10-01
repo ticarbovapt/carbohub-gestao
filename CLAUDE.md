@@ -2596,9 +2596,91 @@ where suspeita_de_remessa order by valor desc;
    ⚠️ Chave fora do padrão entra na tabela sem erro e **não é lida por ninguém**
    — cadastro que parece feito e não vale nada.
 
-⚠️ **PENDENTE, e é decisão fiscal do dono do processo:** o catálogo já aponta
-duas naturezas não classificadas que referenciam outra nota —
-`15110656619` (2 notas, R$ 4.314,50) e `15109234302` (1 nota, R$ 315,00).
+### ⚠️ Nota NOSSA e nota de TERCEIRO: o catálogo acusou, e eu quase errei o rótulo
+Dia seguinte ao catálogo nascer, e ele já valeu: apontou as duas naturezas acima.
+Eu classifiquei **as duas** como `sem_faturamento`. O CNPJ dentro da chave
+referenciada desmentiu metade.
+
+```
+nossos CNPJs     36060692000100 (matriz) · 36060692000291 (filial)
+
+000003 · 000005  →  36060692000100  NOSSA     15110656619  remessa   ✅ fica
+000120           →  03793451000111  TERCEIRO  15109234302  devolução ❌ saiu
+```
+
+```
+referencia nota NOSSA      a mãe é nossa e já faturou   remessa, entrega futura
+referencia nota de TERCEIRO a nota é do fornecedor       devolução, retorno, conserto
+```
+
+1. ⚠️ **As duas saem do faturamento, e é por isso que confundi-las é caro.** O
+   número ficaria certo e o `motivo_fora` diria `remessa_entrega_futura` para
+   uma DEVOLUÇÃO — o mesmo rótulo mentindo que me fez recusar reusar
+   `carbo_natureza_e_bonificacao` dois dias antes. **Rótulo errado com total
+   certo não dá erro nenhum e é lido como fato meses depois.**
+2. ⚠️ **O `delete` que eu ofereci primeiro apagava AS DUAS.** Ele teria levado a
+   classificação certa junto com a errada, e o dono do processo não rodou porque
+   não sabia o que era — acerto dele, não meu. Desfazer é cirúrgico: só a chave
+   errada.
+3. **Voltar para a lista de trabalho NÃO é regressão.** "Não classificado" é um
+   estado honesto, e carregar o que ninguém decidiu é a função do catálogo.
+4. ⚠️ **O que salvou foi ter medido o IMPACTO antes:** zero pedidos que contavam
+   estavam nessas notas, então o faturamento ficou nos mesmos 1.297 /
+   R$ 930.044,52 nas duas direções. Foi por caber tempo que deu para fazer a
+   coisa certa em vez da conveniente. Sem a medição eu teria descoberto o erro
+   pelo número mudando, e aí consertar é mexer em mês fechado.
+5. ⚠️ **E o truque virou COLUNA, que é o ponto.** A pergunta que resolveu isto
+   em uma consulta não podia ficar na cabeça de quem a fez:
+
+```
+carbo_nossos_cnpjs()                   derivado das posições 7..20 da chave
+carbo_nf_referencia_nota_nossa(text)   true · false · NULL
+suspeita_de_remessa                    APERTADO: exige nota nossa
+suspeita_de_devolucao                  a segunda lista, outra decisão
+```
+
+6. ⚠️ **A lista de CNPJ é DERIVADA, nunca escrita no código.** Conta nova, CNPJ
+   novo ou filial nova entram sozinhos ao emitir a primeira nota. Lista à mão
+   seria mais uma cópia de cadastro, e divergir dela não daria erro — daria nota
+   **nossa** classificada como de terceiro, calada.
+7. ⚠️ **`null` NÃO é "terceiro".** Sem rodapé não há o que ler, e colapsar
+   ausência em resposta é o `Math.round` inventando `×1`.
+8. ⚠️ **Compara por CONTEÚDO, não por posição.** O rodapé é texto livre e o
+   número da nota vem junto da chave (`NF 024.630: 2425 1203 ...`), então tirar
+   os não-dígitos dá **50** dígitos e não 44 — corte por posição erraria. O
+   risco aceito é um CNPJ de 14 dígitos coincidir dentro da tira, e o erro
+   possível é no sentido de "achar que é nossa", que **mantém** a nota numa lista
+   que alguém olha em vez de escondê-la.
+9. ⚠️ **Coluna nova em `create or replace view` vai NO FIM** — no meio dá `42P16
+   cannot change name of view column`. E `security_invoker = true` repetido.
+
+⚠️ **PENDENTE, e é decisão fiscal do dono do processo:** `15109234302`
+(1 nota, R$ 315,00, 15/12/2025) está em `suspeita_de_devolucao`. Se for
+devolução, ela precisa de rótulo PRÓPRIO no `motivo_fora` — não do de remessa.
+Não vale inventar um terceiro `when` antes de saber: R$ 315 em dez meses não
+justifica adivinhar, e adivinhar é o que esta seção existe para não repetir.
+
+### ⚠️ A remessa chegou e a nota de VENDA não — o aviso OPOSTO do que existia
+Medido em 01/10/2026 no `V2026090001`: **R$ 2.600** (CarboPRO 100ml × 200, linha
+**paga**), `fulfillment_stage = 'em_transporte'`, com a remessa de bonificação
+`000940` vinculada e `bling2_nf_id` **nulo**. A carga saiu com nota de brinde e
+sem nota de venda, e alguém moveu o card à mão passando por cima disso.
+
+O aviso que já existia cobre *"tem item bonificado e falta a REMESSA"*. Mesma
+dupla de notas, **faltas opostas** — um aviso só nunca ia pegar os dois.
+
+1. ⚠️ **`temLinhaDeVenda` é a condição que importa, não "tem nota?".** Existem
+   pedidos que NUNCA vão ter nota de venda: `BLING-21`, `BLING-61` e `BLING-72`
+   são 100% bonificação, têm uma nota só e estão CERTOS assim (a `20260996` os
+   deixou fora do faturamento de propósito). Sem essa condição o aviso piscaria
+   nos três para sempre, e aviso que sempre pisca é aviso que ninguém lê — a
+   doença do sininho com 70 itens.
+2. ⚠️ **Mora no CARD, não na modal de etiqueta.** Aquela é de UMA etapa, e este
+   pedido já tinha passado dela. Aviso que só aparece na etapa em que o erro
+   ainda não aconteceu chega tarde.
+3. **VERMELHO, não âmbar.** O aviso de cima é procedimento ("embale separado");
+   este é documento fiscal faltando numa carga que pode já estar na rua. Mesma
+   cor para as duas coisas faria a segunda ler como rotina.
 
 ### ⚠️ Republicar `carbo_vendas_metrica`: são TRÊS dependentes, e duas são FUNÇÃO
 Pago duas vezes no mesmo dia (01/10/2026), e a segunda derrubou tela em
