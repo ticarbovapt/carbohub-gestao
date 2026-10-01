@@ -423,13 +423,32 @@ export function VincularNFsFilialTab() {
                 {pag.slice.map((n) => (
                   <CarboTableRow key={n.bling_id}>
                     <CarboTableCell>
-                      <CarboBadge variant="secondary" className="gap-1">
-                        <FileText className="h-3 w-3" />
+                      {/* ⚠️ A nota de BONIFICAÇÃO se distingue no PRÓPRIO
+                          número, em violeta, e não só por um chip ao lado. As
+                          duas notas de um pedido chegam com o mesmo cliente, a
+                          mesma data e o mesmo rodapé — o que as separa é o que
+                          elas SÃO, e isso tem de ser visível na varredura, sem
+                          ler a linha inteira. Chip ao lado é informação que só
+                          chega depois de já ter lido o número.
+
+                          Violeta, e não âmbar: o âmbar desta tela já é o aviso
+                          de "falta natureza", e duas coisas diferentes na mesma
+                          cor voltam a exigir leitura. */}
+                      <CarboBadge
+                        variant={n.e_bonificacao ? "outline" : "secondary"}
+                        className={`gap-1 ${n.e_bonificacao
+                          ? "border-violet-500/40 bg-violet-500/10 text-violet-400"
+                          : ""}`}>
+                        {n.e_bonificacao
+                          ? <Gift className="h-3 w-3" />
+                          : <FileText className="h-3 w-3" />}
                         {n.numero || n.bling_id}{n.serie ? `/${n.serie}` : ""}
                       </CarboBadge>
                       {n.e_bonificacao && (
-                        <CarboBadge variant="outline" className="ml-1 gap-1 text-[10px]">
-                          <Gift className="h-3 w-3" /> bonificação
+                        <CarboBadge variant="outline"
+                                    className="ml-1 gap-1 border-violet-500/40 bg-violet-500/10
+                                               text-[10px] text-violet-400">
+                          bonificação
                         </CarboBadge>
                       )}
                     </CarboTableCell>
