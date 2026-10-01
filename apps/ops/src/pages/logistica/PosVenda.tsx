@@ -115,9 +115,43 @@ function itensBonificados(items: PosVendaOrder["items"] | null | undefined) {
  * kanban é arrastável (`onPointerDown`). Sem isso, baixar a nota arrastaria o
  * card de coluna.
  */
-function ChipNf({ nfId, numero, variant, rotulo }: {
+/**
+ * Qual nota, e de QUAL conta Bling.
+ *
+ * ⚠️ A nota pode estar na matriz (`bling_nf_id`) ou na filial (`bling2_nf_id`),
+ * e as duas contas numeram do zero: procurar um id da filial em `bling_nfe` ou
+ * não acha NADA, ou — pior — acha a nota de outra empresa com o mesmo número e
+ * entrega o PDF errado para o cliente.
+ *
+ * ⚠️ Num lugar SÓ porque o Rastreio pergunta isto em cinco pontos (o chip de
+ * "NF Finalizada", o de "Emitir etiqueta", o portão fiscal, a chave do código
+ * de barras e o nº impresso na etiqueta). Cinco condições iguais em cinco
+ * lugares são cinco condições que divergem depois — a mesma regra do
+ * `enderecoFaturamentoOuNulo()` no /vender.
+ */
+function notaDoPedido(o: PosVendaOrder, qual: "venda" | "bonificacao") {
+  const daFilial = qual === "bonificacao" ? o.bling2_nf_bonificacao_id : o.bling2_nf_id;
+  if (daFilial) {
+    return {
+      id: daFilial,
+      numero: qual === "bonificacao" ? o.invoice2_bonificacao_number : o.invoice2_number,
+      chave: qual === "bonificacao" ? o.nf2_bonificacao_access_key : o.nf2_access_key,
+      conta: 2 as const,
+    };
+  }
+  return {
+    id: qual === "bonificacao" ? o.bling_nf_bonificacao_id : o.bling_nf_id,
+    numero: qual === "bonificacao" ? o.invoice_bonificacao_number : o.invoice_number,
+    chave: qual === "bonificacao" ? o.nf_bonificacao_access_key : o.nf_access_key,
+    conta: 1 as const,
+  };
+}
+
+function ChipNf({ nfId, numero, conta, variant, rotulo }: {
   nfId: number | null;
   numero: string | null;
+  /** ⚠️ Decide a TABELA onde o PDF é procurado. Ver `notaDoPedido`. */
+  conta: 1 | 2;
   variant: "success" | "info" | "warning";
   rotulo: string;
 }) {
@@ -130,10 +164,14 @@ function ChipNf({ nfId, numero, variant, rotulo }: {
 
     setBaixando(true);
     try {
-      const nf = await fetchNfFiles(nfId);
+      const nf = await fetchNfFiles(nfId, conta);
       const url = nf?.pdf_url || nf?.xml_url;
       if (!url) {
-        toast.error("A nota ainda não tem arquivo no Bling. Tente de novo em alguns minutos.");
+        // ⚠️ Diz QUAL conta. Com duas no ar, "não tem arquivo no Bling" manda a
+        // pessoa conferir no painel errado — e conferir no painel errado
+        // devolve "a nota está lá, o sistema é que está quebrado".
+        toast.error(`A nota ainda não tem arquivo no Bling (${conta === 2 ? "filial SP" : "matriz"}). ` +
+                    "Tente de novo em alguns minutos.");
         return;
       }
       // Mesma chamada do `BaixarNFButton` do Finanças. Nenhuma aba nasce antes:
@@ -313,16 +351,18 @@ export default function PosVenda() {
 
     // Busca best-effort. Nenhuma das duas bloqueia a emissão da etiqueta: NF
     // indisponível cai para o nº do pedido no código de barras, como sempre.
-    if (etiquetaOrder.bling_nf_id) {
-      fetchNfFiles(etiquetaOrder.bling_nf_id).then((nf) => {
+    const nfVenda = notaDoPedido(etiquetaOrder, "venda");
+    const nfBonif = notaDoPedido(etiquetaOrder, "bonificacao");
+    if (nfVenda.id) {
+      fetchNfFiles(nfVenda.id, nfVenda.conta).then((nf) => {
         // ⚠️ O código de barras é o da nota de VENDA, nunca o da remessa. A
         // etiqueta identifica a carga faturada; a bonificação viaja junto.
         setEtqChave(nf?.chave_acesso ?? null);
         setEtqNfs((a) => ({ ...a, venda: nf }));
       }).catch(() => {});
     }
-    if (etiquetaOrder.bling_nf_bonificacao_id) {
-      fetchNfFiles(etiquetaOrder.bling_nf_bonificacao_id)
+    if (nfBonif.id) {
+      fetchNfFiles(nfBonif.id, nfBonif.conta)
         .then((nf) => setEtqNfs((a) => ({ ...a, bonificacao: nf })))
         .catch(() => {});
     }
@@ -339,7 +379,11 @@ export default function PosVenda() {
       const volumes = order.shipment_volumes && order.shipment_volumes > 0 ? order.shipment_volumes : 1;
       const payload: EtiquetaData = {
         order_number: order.order_number,
-        invoice_number: order.invoice_number ?? (order.bling_nf_id ? `#${order.bling_nf_id}` : null),
+        // ⚠️ O nº impresso é o da nota de VENDA, da conta que a emitiu. Com a
+        // leitura antiga, etiqueta de pedido faturado na filial saía SEM número
+        // de nota — e a etiqueta é o documento que viaja com a carga.
+        invoice_number: notaDoPedido(order, "venda").numero
+          ?? (notaDoPedido(order, "venda").id ? `#${notaDoPedido(order, "venda").id}` : null),
         cnpj: order.cnpj,
         customer_name: order.customer_name,
         delivery_address: order.delivery_address,
@@ -408,7 +452,11 @@ export default function PosVenda() {
   // Considera "com NF" quem já tem bling_nf_id/nº ou já passou de "NF Finalizada".
   const STAGE_ORDER = POSVENDA_STAGES.map((s) => s.key);
   const hasNF = (o: PosVendaOrder) =>
-    !!o.bling_nf_id || !!o.invoice_number ||
+    // ⚠️ `notaDoPedido` e não `o.bling_nf_id`: o portão fiscal recusava mover
+    // para Transporte um pedido faturado na FILIAL, dizendo "emita a NF antes"
+    // sobre um pedido que já tinha nota. A trava estava certa; ela é que não
+    // enxergava a segunda conta.
+    !!notaDoPedido(o, "venda").id || !!notaDoPedido(o, "venda").numero ||
     STAGE_ORDER.indexOf(o.fulfillment_stage) >= STAGE_ORDER.indexOf("nf_finalizada");
 
   function requestStage(order: PosVendaOrder, stage: FulfillmentStage) {
@@ -617,10 +665,14 @@ export default function PosVenda() {
                               primeira é como a logística ficou sem a segunda até 22/09. */}
                           {o.fulfillment_stage === "nf_finalizada" && (
                             <div className="flex flex-wrap gap-1.5">
-                              <ChipNf nfId={o.bling_nf_id} numero={o.invoice_number} variant="success"
-                                rotulo={o.bling_nf_bonificacao_id ? "NF venda" : "NF"} />
-                              {o.bling_nf_bonificacao_id && (
-                                <ChipNf nfId={o.bling_nf_bonificacao_id} numero={o.invoice_bonificacao_number}
+                              <ChipNf nfId={notaDoPedido(o, "venda").id}
+                                numero={notaDoPedido(o, "venda").numero}
+                                conta={notaDoPedido(o, "venda").conta} variant="success"
+                                rotulo={notaDoPedido(o, "bonificacao").id ? "NF venda" : "NF"} />
+                              {notaDoPedido(o, "bonificacao").id && (
+                                <ChipNf nfId={notaDoPedido(o, "bonificacao").id}
+                                  numero={notaDoPedido(o, "bonificacao").numero}
+                                  conta={notaDoPedido(o, "bonificacao").conta}
                                   variant="warning" rotulo="NF bonif." />
                               )}
                             </div>
@@ -628,10 +680,14 @@ export default function PosVenda() {
                           {o.fulfillment_stage === "emitir_etiqueta" && (
                             <div onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
                               <div className="flex flex-wrap gap-1.5 mb-2">
-                                <ChipNf nfId={o.bling_nf_id} numero={o.invoice_number} variant="info"
-                                  rotulo={o.bling_nf_bonificacao_id ? "NF venda" : "NF"} />
-                                {o.bling_nf_bonificacao_id && (
-                                  <ChipNf nfId={o.bling_nf_bonificacao_id} numero={o.invoice_bonificacao_number}
+                                <ChipNf nfId={notaDoPedido(o, "venda").id}
+                                  numero={notaDoPedido(o, "venda").numero}
+                                  conta={notaDoPedido(o, "venda").conta} variant="info"
+                                  rotulo={notaDoPedido(o, "bonificacao").id ? "NF venda" : "NF"} />
+                                {notaDoPedido(o, "bonificacao").id && (
+                                  <ChipNf nfId={notaDoPedido(o, "bonificacao").id}
+                                    numero={notaDoPedido(o, "bonificacao").numero}
+                                    conta={notaDoPedido(o, "bonificacao").conta}
                                     variant="warning" rotulo="NF bonif." />
                                 )}
                               </div>
@@ -830,7 +886,14 @@ export default function PosVenda() {
                     transporte recusa a carga sem a segunda. */}
                 <p className="flex items-center gap-1.5">
                   <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-                  NF venda: <span className="font-medium">{etiquetaOrder.invoice_number || (etiquetaOrder.bling_nf_id ? `#${etiquetaOrder.bling_nf_id}` : "—")}</span>
+                  {/* ⚠️ `notaDoPedido` aqui também: lendo só a matriz, a prévia da
+                      etiqueta de um pedido faturado na FILIAL dizia "NF venda: —"
+                      com a nota vinculada do lado. */}
+                  NF venda: <span className="font-medium">{
+                    notaDoPedido(etiquetaOrder, "venda").numero
+                    || (notaDoPedido(etiquetaOrder, "venda").id
+                          ? `#${notaDoPedido(etiquetaOrder, "venda").id}` : "—")
+                  }</span>
                   {etqNfs.venda?.pdf_url && (
                     <a href={etqNfs.venda.pdf_url} target="_blank" rel="noopener noreferrer"
                        className="underline text-primary">DANFE</a>
@@ -840,11 +903,12 @@ export default function PosVenda() {
                        className="underline text-muted-foreground">XML</a>
                   )}
                 </p>
-                {etiquetaOrder.bling_nf_bonificacao_id ? (
+                {notaDoPedido(etiquetaOrder, "bonificacao").id ? (
                   <p className="flex items-center gap-1.5">
                     <Gift className="h-3.5 w-3.5 text-amber-500" />
                     NF bonificação: <span className="font-medium">
-                      {etiquetaOrder.invoice_bonificacao_number || `#${etiquetaOrder.bling_nf_bonificacao_id}`}
+                      {notaDoPedido(etiquetaOrder, "bonificacao").numero
+                       || `#${notaDoPedido(etiquetaOrder, "bonificacao").id}`}
                     </span>
                     {etqNfs.bonificacao?.pdf_url && (
                       <a href={etqNfs.bonificacao.pdf_url} target="_blank" rel="noopener noreferrer"

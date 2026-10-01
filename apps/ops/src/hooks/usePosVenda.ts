@@ -47,9 +47,15 @@ export interface NfFiles { pdf_url: string | null; xml_url: string | null; chave
  * etiqueta. Perder a etiqueta porque o link do PDF não veio seria trocar um
  * problema por outro maior.
  */
-export async function fetchNfFiles(blingNfId: number): Promise<NfFiles | null> {
+export async function fetchNfFiles(blingNfId: number, conta: 1 | 2 = 1): Promise<NfFiles | null> {
+  // ⚠️ A TABELA depende da CONTA. As duas contas Bling numeram do zero:
+  // procurar um id da filial em `bling_nfe` ou não acha nada, ou — pior — acha
+  // a nota de OUTRA empresa com o mesmo número e entrega o PDF errado para o
+  // cliente. É a mesma razão pela qual a esteira entra com o `bling_id` do
+  // Bling 1 NEGATIVO.
+  const tabela = conta === 2 ? "bling2_nfe" : "bling_nfe";
   const { data, error } = await db
-    .from("bling_nfe").select("pdf_url, xml_url, chave_acesso, numero")
+    .from(tabela).select("pdf_url, xml_url, chave_acesso, numero")
     .eq("bling_id", blingNfId).maybeSingle();
   if (error) return null;
 
@@ -63,6 +69,14 @@ export async function fetchNfFiles(blingNfId: number): Promise<NfFiles | null> {
     : null;
 
   if (cache?.pdf_url || cache?.xml_url) return cache;
+
+  // ⚠️ A FILIAL não tem busca ao vivo: o `bling2-sync` não expõe uma entidade
+  // `nfe_links`. Chamar o `bling-sync` aqui bateria na conta ERRADA e
+  // devolveria "nota não encontrada" para uma nota que existe — mandando quem
+  // opera procurar defeito no lugar errado. Sem link no espelho, a resposta
+  // honesta é o cache (que ainda pode ter a CHAVE, e é ela que vira o código
+  // de barras da etiqueta).
+  if (conta === 2) return cache;
 
   try {
     const res = await supabase.functions.invoke("bling-sync", {
@@ -137,6 +151,22 @@ export interface PosVendaOrder {
   linha: string | null;
   bling_nf_id: number | null;      // NF vinculada (Faturamento/Bling) → NF finalizada
   invoice_number: string | null;   // nº da NF-e, quando emitida
+  /** 1 = matriz, 2 = filial SP. É ela que diz em QUAL espelho procurar o PDF. */
+  bling_conta: number | null;
+  /**
+   * As notas da FILIAL.
+   *
+   * ⚠️ Colunas próprias, e nunca `bling_nf_id`: as duas contas Bling numeram do
+   * zero, e um id da conta 2 naquela coluna casaria com uma nota REAL da conta
+   * 1 — nota cancelada de uma empresa derrubando venda da outra. Já foi tentado
+   * e revertido.
+   */
+  bling2_nf_id: number | null;
+  invoice2_number: string | null;
+  nf2_access_key: string | null;
+  bling2_nf_bonificacao_id: number | null;
+  invoice2_bonificacao_number: string | null;
+  nf2_bonificacao_access_key: string | null;
   // ── A SEGUNDA nota: a remessa de bonificação ──────────────────────────────
   //
   // ⚠️ Venda com brinde gera DUAS notas, e a logística precisa das duas para
@@ -172,7 +202,13 @@ const SELECT_BASE =
   // ⚠️ A lista é escrita À MÃO: coluna que não estiver aqui simplesmente não
   // chega, e o campo aparece vazio na tela sem erro nenhum. Foi assim que a
   // segunda nota ficou invisível para a logística.
-  "bling_nf_bonificacao_id, invoice_bonificacao_number, nf_bonificacao_access_key";
+  "bling_nf_bonificacao_id, invoice_bonificacao_number, nf_bonificacao_access_key, " +
+  // ⚠️ A FILIAL (conta 2) mora em colunas PRÓPRIAS, e sem estas o Rastreio é
+  // cego para ela: o pedido faturado em SP aparecia sem nota nenhuma e ficava
+  // parado em "Gerar Nota Fiscal". É literalmente o que o comentário acima
+  // previa, uma conta depois.
+  "bling_conta, bling2_nf_id, invoice2_number, nf2_access_key, " +
+  "bling2_nf_bonificacao_id, invoice2_bonificacao_number, nf2_bonificacao_access_key";
 const SELECT_COLS = SELECT_BASE + ", production_done";
 
 // Etapas terminais do rastreio (colunas que só acumulam).
