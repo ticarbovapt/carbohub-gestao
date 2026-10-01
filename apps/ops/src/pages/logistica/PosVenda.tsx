@@ -752,7 +752,20 @@ export default function PosVenda() {
                               <CarboBadge variant="warning" className="gap-1">⚠️ Sem OP — recriar (mover p/ Pedido Recebido e voltar)</CarboBadge>
                             )
                           )}
-                          {o.fulfillment_stage === "gerar_nf" && (
+                          {/* ⚠️ A nota de VENDA tem de ESTAR FALTANDO para o selo
+                              dizer que falta. Sem essa condição ele afirmava
+                              "aguardando NF" com o chip "NF 000303" renderizado
+                              logo abaixo, na mesma pilha — relatado pelo dono do
+                              processo em 01/10/2026, nos 9 cards da Brisanet.
+
+                              O selo lia a ETAPA e o chip lia o FATO, e quando os
+                              dois discordam quem está errado é quem não olhou o
+                              fato. A etapa travada é problema à parte (há
+                              `update` de destravamento para ela); um selo que
+                              mente não se conserta destravando — ele volta a
+                              mentir no próximo pedido que ficar preso. */}
+                          {o.fulfillment_stage === "gerar_nf"
+                            && !notaDoPedido(o, "venda").id && (
                             <CarboBadge variant="warning" className="gap-1">🧾 Liberado no Faturamento — aguardando NF</CarboBadge>
                           )}
                           {/* ⚠️ SEM condição de etapa. A nota passa a acompanhar o
