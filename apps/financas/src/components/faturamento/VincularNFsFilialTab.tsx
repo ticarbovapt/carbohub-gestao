@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { FileText, Search, Loader2, Gift, ExternalLink, AlertTriangle } from "lucide-react";
+import { useMemo, useState } from "react";
+import { FileText, Search, Loader2, Gift, ExternalLink, AlertTriangle, ArrowUp, ArrowDown } from "lucide-react";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboButton } from "@/components/ui/carbo-button";
 import { CarboBadge } from "@/components/ui/carbo-badge";
@@ -43,6 +43,94 @@ const fmtDate = (s: string | null) => {
   const d = s.slice(0, 10).split("-");
   return d.length === 3 ? `${d[2]}/${d[1]}/${d[0]}` : s;
 };
+
+// ─── Ordenação por coluna ────────────────────────────────────────────────────
+//
+// Puras e fora do componente: dá para conferir o recorte sem montar tela, pelo
+// mesmo caminho das funções de filtro da caixa de Conversas.
+
+type Coluna = "nf" | "cliente" | "emissao" | "rodape" | "valor";
+type Direcao = "asc" | "desc";
+
+/**
+ * ⚠️ AUSÊNCIA NÃO COMPETE POR POSIÇÃO — nulo vai para o FIM nos dois sentidos.
+ *
+ * Com nulo participando da comparação, ordenar por "Rodapé" encheria a primeira
+ * página de "sem rodapé" num dos sentidos, que é exatamente o contrário do que
+ * a pessoa quer ver ao clicar ali: ela quer achar as que TÊM. É a mesma regra
+ * do `nulls last` que a consulta já usa por emissão.
+ */
+function compara(a: unknown, b: unknown, dir: Direcao): number {
+  const vazio = (v: unknown) => v == null || v === "";
+  if (vazio(a) && vazio(b)) return 0;
+  if (vazio(a)) return 1;
+  if (vazio(b)) return -1;
+
+  let d: number;
+  if (typeof a === "number" && typeof b === "number") {
+    d = a - b;
+  } else {
+    const sa = String(a), sb = String(b);
+    // `numeric: true` faz "000986" vir antes de "001038" e "9" antes de "10".
+    // Sem isto a ordem do número da NF é alfabética — e alfabética em número é
+    // a ordem que parece certa até o dígito mudar de casa.
+    d = sa.localeCompare(sb, "pt-BR", { numeric: true, sensitivity: "base" });
+  }
+  return dir === "asc" ? d : -d;
+}
+
+function valorDaColuna(n: NfeFilialSemPedido, col: Coluna): unknown {
+  switch (col) {
+    case "nf":      return n.numero ?? String(n.bling_id);
+    case "cliente": return n.contato_nome;
+    case "emissao": return n.data_emissao;
+    case "rodape":  return n.codigo_no_rodape;
+    case "valor":   return n.valor_total;
+  }
+}
+
+/**
+ * ⚠️ Devolve lista NOVA e DESEMPATA pelo `bling_id`.
+ *
+ * O desempate não é zelo: esta lista é PAGINADA. Com dezenas de notas no mesmo
+ * dia e nenhum critério único, a ordem entre elas fica por conta do acaso — e
+ * aí a mesma nota pode aparecer em duas páginas enquanto outra não aparece em
+ * nenhuma. É o mesmo defeito que o `lerTudo` paga com `.order("id")`, e ele sai
+ * como número LIGEIRAMENTE errado, que é pior que tela vazia porque ninguém
+ * nota.
+ *
+ * E ordenar no lugar mutaria o array do cache do react-query.
+ */
+function ordenar(lista: NfeFilialSemPedido[], col: Coluna, dir: Direcao): NfeFilialSemPedido[] {
+  return [...lista].sort((x, y) => {
+    const d = compara(valorDaColuna(x, col), valorDaColuna(y, col), dir);
+    return d !== 0 ? d : x.bling_id - y.bling_id;
+  });
+}
+
+/** O cabeçalho clicável. A seta DIZ o sentido — sem ela, clicar e ver a lista
+ *  mudar não ensina qual é o estado atual. */
+function Ordenavel({ col, rotulo, atual, dir, aoClicar, alinhar }: {
+  col: Coluna; rotulo: string; atual: Coluna; dir: Direcao;
+  aoClicar: (c: Coluna) => void; alinhar?: "right";
+}) {
+  const ativa = atual === col;
+  return (
+    <button type="button" onClick={() => aoClicar(col)}
+            title={`Ordenar por ${rotulo}`}
+            className={`flex w-full items-center gap-1 text-[11px] font-medium uppercase
+                        tracking-wide transition-colors hover:text-foreground ${
+              alinhar === "right" ? "justify-end" : ""} ${
+              ativa ? "text-foreground" : "text-muted-foreground"}`}>
+      {rotulo}
+      {/* ⚠️ A seta aparece SÓ na coluna ativa. Uma seta apagada em todas as
+          colunas vira decoração, e aí a ativa deixa de se distinguir. */}
+      {ativa && (dir === "asc"
+        ? <ArrowUp className="h-3 w-3 shrink-0" />
+        : <ArrowDown className="h-3 w-3 shrink-0" />)}
+    </button>
+  );
+}
 
 /** Diálogo de vínculo: escolhe o pedido para casar com a NF da filial. */
 function DialogoFilial({ nfe, onClose }: { nfe: NfeFilialSemPedido | null; onClose: () => void }) {
@@ -151,7 +239,25 @@ export function VincularNFsFilialTab() {
   const { data: notas = [], isLoading, error } = useNfesFilialSemPedido(search);
   const [vinculando, setVinculando] = useState<NfeFilialSemPedido | null>(null);
   const [page, setPage] = useUrlPage("pfilial");
-  const pag = paginate(notas, page);
+  /* O padrão continua sendo a emissão mais recente — é a ordem em que a
+     consulta já vem, e trocar o padrão mudaria a tela de quem não pediu nada. */
+  const [ordem, setOrdem] = useState<{ col: Coluna; dir: Direcao }>({ col: "emissao", dir: "desc" });
+
+  /* ⚠️ Clicar numa coluna VOLTA para a página 1. Sem isso, quem está na página
+     3 reordena e continua na 3 — de uma lista inteiramente diferente —, e a
+     conclusão é "a ordenação pulou linhas". */
+  const trocarOrdem = (col: Coluna) => {
+    setOrdem((o) => o.col === col
+      ? { col, dir: o.dir === "asc" ? "desc" : "asc" }
+      /* Coluna nova começa ASCENDENTE, menos a emissão: data quase sempre se
+         procura da mais recente, e o resto (nome, número, valor) do menor para
+         o maior. */
+      : { col, dir: col === "emissao" ? "desc" : "asc" });
+    setPage(1);
+  };
+
+  const ordenadas = useMemo(() => ordenar(notas, ordem.col, ordem.dir), [notas, ordem]);
+  const pag = paginate(ordenadas, page);
 
   const comCodigo = notas.filter((n) => n.codigo_no_rodape).length;
 
@@ -216,12 +322,24 @@ export function VincularNFsFilialTab() {
             <CarboTable>
               <CarboTableHeader>
                 <CarboTableRow>
-                  <CarboTableHead>NF</CarboTableHead>
-                  <CarboTableHead>Cliente</CarboTableHead>
-                  <CarboTableHead>Emissão</CarboTableHead>
-                  <CarboTableHead>Rodapé</CarboTableHead>
-                  <CarboTableHead className="text-right">Valor</CarboTableHead>
-                  <CarboTableHead className="text-right">Ações</CarboTableHead>
+                  <CarboTableHead><Ordenavel col="nf" rotulo="NF" atual={ordem.col} dir={ordem.dir} aoClicar={trocarOrdem} /></CarboTableHead>
+                  <CarboTableHead><Ordenavel col="cliente" rotulo="Cliente" atual={ordem.col} dir={ordem.dir} aoClicar={trocarOrdem} /></CarboTableHead>
+                  <CarboTableHead><Ordenavel col="emissao" rotulo="Emissão" atual={ordem.col} dir={ordem.dir} aoClicar={trocarOrdem} /></CarboTableHead>
+                  <CarboTableHead><Ordenavel col="rodape" rotulo="Rodapé" atual={ordem.col} dir={ordem.dir} aoClicar={trocarOrdem} /></CarboTableHead>
+                  <CarboTableHead><Ordenavel col="valor" rotulo="Valor" atual={ordem.col} dir={ordem.dir} aoClicar={trocarOrdem} alinhar="right" /></CarboTableHead>
+                  {/* Ações não ordena: não há "maior ação". Cabeçalho clicável
+                      que não faz nada é pior que cabeçalho morto.
+
+                      ⚠️ Mas ele usa as classes dos cabeçalhos INATIVOS. Com o
+                      estilo padrão ele ficava mais claro que todos os outros e
+                      lia como a coluna ATIVA — o destaque da ordenação deixava
+                      de significar alguma coisa. */}
+                  <CarboTableHead>
+                    <span className="block text-right text-[11px] font-medium uppercase
+                                     tracking-wide text-muted-foreground">
+                      Ações
+                    </span>
+                  </CarboTableHead>
                 </CarboTableRow>
               </CarboTableHeader>
               <CarboTableBody>
@@ -283,7 +401,7 @@ export function VincularNFsFilialTab() {
           )}
 
           {!isLoading && !error && (
-            <Pager page={pag.safePage} pageCount={pag.pageCount} total={notas.length} onPage={setPage} />
+            <Pager page={pag.safePage} pageCount={pag.pageCount} total={ordenadas.length} onPage={setPage} />
           )}
         </CarboCardContent>
       </CarboCard>
