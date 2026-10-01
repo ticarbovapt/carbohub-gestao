@@ -12,7 +12,7 @@ import {
   ChevronLeft, ChevronRight, Search, ShoppingBag, TrendingUp,
   Package, Users, ArrowRightCircle, CalendarDays, X, Trash2, Loader2, FileDown,
   ChevronDown, Pencil, FileText, Lock, Ban, Gift,
-  Store, Factory, Globe, HelpCircle, Repeat,
+  Store, Factory, Globe, HelpCircle, Repeat, Package2, Wrench, Blend,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
@@ -136,6 +136,51 @@ const segmentoDe = (v: CarbozeVendaRow): SegmentoId =>
 const ehRecorrente = (v: CarbozeVendaRow) =>
   v.order_type === "recorrente" || v.is_recurring === true;
 
+// ── Produto × Serviço ────────────────────────────────────────────────────────
+//
+// O sinal CANÔNICO é `items[].kind === "service"`, não o nome do produto.
+//
+// Foi pedido "sempre que existir 'descarbonização' no nome do produto", e hoje
+// os dois critérios dão exatamente o mesmo: das 12 linhas com `kind=service`
+// as 12 têm "descarboniza" no nome, e das 1.478 sem `kind` nenhuma tem.
+// Concordam 100%.
+//
+// Mesmo assim o `kind` lidera, porque nome é texto que alguém digita:
+// "Descarb. G", "DESCARBONIZACAO" sem acento, ou um produto batizado "Kit
+// descarbonização" quebrariam a regra do nome em silêncio. E o `so_servico` do
+// `useVendas` já usa `kind` — decidir por outro critério aqui criaria duas
+// respostas para "isto é serviço?".
+//
+// O nome entra como REDE, não como regra: linha de descarbonização que algum
+// fluxo antigo tenha gravado sem `kind` continua classificada certo.
+const ehLinhaServico = (i: { kind?: string | null; name?: string | null }) =>
+  i?.kind === "service" || /descarboniza/i.test(i?.name ?? "");
+
+type TipoPedido = "produto" | "servico" | "misto";
+
+/**
+ * ⚠️ MISTO é um estado de verdade, não um detalhe de implementação.
+ *
+ * Hoje não existe nenhum (1.331 só produto, 11 só serviço, 0 mistos), mas nada
+ * impede vender aditivo + descarbonização no mesmo pedido. Empurrar o misto
+ * para um dos dois baldes faria o valor INTEIRO dele contar do lado errado, e
+ * ninguém veria. Melhor ele aparecer como o que é — o botão fica desabilitado
+ * enquanto a contagem for zero.
+ */
+const tipoDoPedido = (v: CarbozeVendaRow): TipoPedido => {
+  const itens = v.items ?? [];
+  const temServico = itens.some(ehLinhaServico);
+  const temProduto = itens.some((i) => !ehLinhaServico(i));
+  if (temServico && temProduto) return "misto";
+  return temServico ? "servico" : "produto";
+};
+
+const TIPOS = [
+  { id: "produto" as const, label: "Produto", icone: Package2, cor: "text-amber-400", bg: "bg-amber-500/15" },
+  { id: "servico" as const, label: "Serviço", icone: Wrench, cor: "text-rose-400", bg: "bg-rose-500/15" },
+  { id: "misto" as const, label: "Misto", icone: Blend, cor: "text-orange-400", bg: "bg-orange-500/15" },
+];
+
 /** Mês (YYYY-MM) de uma data ISO. */
 const mesDe = (iso: string) => iso.substring(0, 7);
 
@@ -253,6 +298,7 @@ export default function Vendas() {
   // Segmentos selecionados. Vazio = todos — e não "nenhum": filtro que começa
   // escondendo tudo faz a tela parecer quebrada no primeiro carregamento.
   const [segsAtivos, setSegsAtivos] = useState<Set<SegmentoId>>(new Set());
+  const [tiposAtivos, setTiposAtivos] = useState<Set<TipoPedido>>(new Set());
 
   const hasCustomRange = !!(customFrom || customTo);
   const clearCustomRange = () => { setCustomFrom(""); setCustomTo(""); };
@@ -462,19 +508,47 @@ export default function Vendas() {
     () => (ocultarBling ? porVendedor.filter((v) => !ehPedidoBling(v)) : porVendedor),
     [porVendedor, ocultarBling],
   );
-  const contagemPorSeg = useMemo(() => {
-    const m = new Map<SegmentoId, number>();
-    for (const v of semSegFiltro) m.set(segmentoDe(v), (m.get(segmentoDe(v)) ?? 0) + 1);
-    return m;
-  }, [semSegFiltro]);
-
-  const filtered = useMemo(
+  // ⚠️ Cada contagem sai do recorte SEM o seu próprio filtro, mas COM o outro
+  // aplicado. É o que faz os dois filtros se combinarem (Revenda + Serviço) sem
+  // que nenhum botão zere a si mesmo no instante em que é clicado.
+  //
+  // Daí as duas bases serem declaradas ANTES das contagens: `const` em escopo
+  // de função tem zona morta, e usá-las antes quebraria em tempo de execução,
+  // não de compilação.
+  const porTipoBase = useMemo(
     () => (segsAtivos.size === 0 ? semSegFiltro : semSegFiltro.filter((v) => segsAtivos.has(segmentoDe(v)))),
     [semSegFiltro, segsAtivos],
+  );
+  const porSegBase = useMemo(
+    () => (tiposAtivos.size === 0 ? semSegFiltro : semSegFiltro.filter((v) => tiposAtivos.has(tipoDoPedido(v)))),
+    [semSegFiltro, tiposAtivos],
+  );
+
+  const contagemPorSeg = useMemo(() => {
+    const m = new Map<SegmentoId, number>();
+    for (const v of porSegBase) m.set(segmentoDe(v), (m.get(segmentoDe(v)) ?? 0) + 1);
+    return m;
+  }, [porSegBase]);
+  const contagemPorTipo = useMemo(() => {
+    const m = new Map<TipoPedido, number>();
+    for (const v of porTipoBase) m.set(tipoDoPedido(v), (m.get(tipoDoPedido(v)) ?? 0) + 1);
+    return m;
+  }, [porTipoBase]);
+
+  const filtered = useMemo(
+    () => porTipoBase.filter((v) => tiposAtivos.size === 0 || tiposAtivos.has(tipoDoPedido(v))),
+    [porTipoBase, tiposAtivos],
   );
 
   const alternarSeg = (id: SegmentoId) =>
     setSegsAtivos((cur) => {
+      const n = new Set(cur);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
+
+  const alternarTipo = (id: TipoPedido) =>
+    setTiposAtivos((cur) => {
       const n = new Set(cur);
       n.has(id) ? n.delete(id) : n.add(id);
       return n;
@@ -722,6 +796,42 @@ export default function Vendas() {
           {segsAtivos.size > 0 && (
             <button className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
               onClick={() => setSegsAtivos(new Set())}>
+              <X className="h-3 w-3" /> limpar
+            </button>
+          )}
+        </div>
+
+        {/* ── Produto × Serviço ──
+            Linha própria, e combina com a de cima: Revenda + Serviço filtra os
+            dois ao mesmo tempo. "Serviço" é a linha com `kind=service` (hoje,
+            toda descarbonização). */}
+        <div className="flex flex-wrap items-center gap-2 -mt-1">
+          <span className="text-xs text-muted-foreground">Tipo:</span>
+          {TIPOS.map((t) => {
+            const Icone = t.icone;
+            const ativo = tiposAtivos.has(t.id);
+            const qtd = contagemPorTipo.get(t.id) ?? 0;
+            return (
+              <button
+                key={t.id}
+                onClick={() => alternarTipo(t.id)}
+                disabled={qtd === 0 && !ativo}
+                title={t.id === "misto"
+                  ? "Pedido com produto E serviço na mesma venda"
+                  : qtd === 0 ? `Nenhum pedido de ${t.label} neste período` : `Filtrar por ${t.label}`}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition
+                  ${ativo ? `${t.bg} border-current ${t.cor} font-medium` : "border-border text-muted-foreground hover:bg-muted/40"}
+                  ${qtd === 0 && !ativo ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
+              >
+                <Icone className="h-3.5 w-3.5" />
+                {t.label}
+                <span className="tabular-nums opacity-70">{qtd}</span>
+              </button>
+            );
+          })}
+          {tiposAtivos.size > 0 && (
+            <button className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+              onClick={() => setTiposAtivos(new Set())}>
               <X className="h-3 w-3" /> limpar
             </button>
           )}

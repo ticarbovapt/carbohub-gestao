@@ -22,6 +22,10 @@ export interface VendaItem {
   discount_type?: string;     // 'percent' | 'value' | 'none'
   discount_value?: number;    // número digitado (% ou R$)
   discount_amount?: number;   // R$ abatido na linha
+  /** `service` quando a linha é descarbonização; ausente nas de produto.
+   *  Já vinha no jsonb e no cast — só não estava tipado, então a tela não
+   *  sabia que podia perguntar. É o campo que separa Produto de Serviço. */
+  kind?: string | null;
 }
 
 export interface CarbozeVendaRow {
