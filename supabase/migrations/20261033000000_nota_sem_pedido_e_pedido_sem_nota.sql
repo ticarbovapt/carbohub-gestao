@@ -156,6 +156,25 @@ with pedidos as (
   where o.status not in ('quote', 'cancelled')
     and o.bling_nf_id is null
     and o.bling2_nf_id is null
+    -- ⚠️ SÓ pedido NASCIDO AQUI, e a régua é o MESMO regex do rodapé.
+    --
+    -- Medido em 01/10/2026, na primeira execução desta view: **1.108 linhas**,
+    -- e a esmagadora maioria era `BLING-*` / `BLING2-*` — pedido IMPORTADO do
+    -- Bling pela ponte. A nota deles existe e está certa: mora em
+    -- `bling_orders.nf_bling_id`, não em `carboze_orders`. O padrão denunciou
+    -- sozinho — `BLING2-2 → 000027`, `BLING2-3 → 000028`, `BLING2-4 → 000029`,
+    -- numeração sequencial e valor idêntico ao centavo.
+    --
+    -- ⚠️ Eu tinha aplicado a lição *"lista que nunca esvazia é lista que
+    -- ninguém abre"* ao lado da NOTA (veredito pelo código do rodapé) e NÃO ao
+    -- lado do PEDIDO. Metade do cuidado é zero cuidado: a lista nasceu com
+    -- 1.108 linhas, ou seja, morta.
+    --
+    -- A simetria é exata e é por isso que esta é a régua certa: a nota cita o
+    -- pedido pelo NÚMERO dele, então pedido cujo número não tem esse formato é
+    -- pedido que nota nenhuma consegue citar. Perguntar por ele é perguntar o
+    -- que esta view não tem como responder.
+    and o.order_number ~ '^(V[0-9]{10}|PED-[0-9]{4}-[0-9]{5})$'
 ),
 -- Nota com o código DESTE pedido no rodapé e ainda solta. É o achado forte:
 -- aqui não há dúvida nenhuma, o papel nomeia o pedido.
@@ -211,7 +230,7 @@ left join por_codigo    c on c.pedido_id = p.id
 left join por_documento d on d.pedido_id = p.id;
 
 comment on view public.carbo_pedido_sem_nota is
-  'Pedido do sistema (nao orcamento, nao cancelado) sem NF em nenhuma das duas contas, com o que existe de nota solta que poderia ser dele. VINCULAR = ha nota cujo RODAPE cita este pedido, nao ha duvida. conferir = nota solta do mesmo documento, e CANDIDATO: exige unicidade e nunca vincula sozinho, porque casar por documento ja ligou pedidos de pessoas diferentes neste projeto. Valor nao entra na regua — aparece so para a pessoa conferir.';
+  'Pedido NASCIDO AQUI (order_number no formato V0000000000 ou PED-0000-00000), nao orcamento, nao cancelado, sem NF em nenhuma das duas contas, com o que existe de nota solta que poderia ser dele. ATENCAO: pedido BLING-* / BLING2-* fica FORA de proposito — ele foi importado do Bling e a nota dele mora em bling_orders.nf_bling_id, nao aqui; incluir os dois dava 1.108 linhas na primeira execucao, uma lista morta no primeiro dia. A regua e o MESMO regex do rodape: a nota cita o pedido pelo numero dele, entao pedido com outro formato e pedido que nota nenhuma consegue citar. VINCULAR = ha nota cujo RODAPE cita este pedido, nao ha duvida. conferir = nota solta do mesmo documento, e CANDIDATO: exige unicidade e nunca vincula sozinho, porque casar por documento ja ligou pedidos de pessoas diferentes neste projeto. Valor nao entra na regua — aparece so para a pessoa conferir.';
 
 grant select on public.carbo_pedido_sem_nota to authenticated;
 
@@ -256,11 +275,26 @@ grant select on public.carbo_pedido_sem_nota to authenticated;
 -- where fulfillment_stage = 'gerar_nf'
 -- order by dias_esperando desc;
 
--- (f) ⚠️ Os dois da VONNIX, que é a pergunta que abriu isto. O `doc` igual nos
---     dois significa pedido DUPLICADO ou o portao do "mesmo documento, outro
---     nome" do createBlingPedido; doc diferente significa duas empresas.
--- select order_number, customer_name, cnpj, total, veredito,
---        nota_com_o_codigo, candidata_por_documento, candidata_valor
+-- (f) ⚠️ Os dois da VONNIX, que é a pergunta que abriu isto.
+--     ✅ RESPONDIDO em 01/10/2026, e a minha hipótese estava ERRADA: os CNPJs
+--     são DIFERENTES (37.193.053/0001-86 e 49.745.570/0001-08). Não é pedido
+--     duplicado nem o portão do "mesmo documento, outro nome" — são duas
+--     empresas de verdade, e `VONNIX`/`VONIXX` é só grafia. Nenhuma nota existe
+--     para nenhum dos dois: ninguém emitiu, e a pausa é comercial.
+-- select p.order_number, p.customer_name, o.cnpj, p.total, p.veredito,
+--        p.nota_com_o_codigo, p.candidata_por_documento, p.candidata_valor
 -- from public.carbo_pedido_sem_nota p
--- join public.carboze_orders o using (order_number)
+-- join public.carboze_orders o on o.order_number = p.order_number
 -- where p.order_number in ('V2026090074', 'V2026090075');
+
+-- (g) ⚠️ A NOTA INVÁLIDA DE R$ 6.900 na matriz — mesmo valor exato dos dois
+--     pedidos da VONNIX. Pode ser uma emissão cancelada e refeita, e nesse caso
+--     não é fila: é história. Mas igualdade de valor é PISTA, nunca prova —
+--     casar por valor já ligou `Leandro Teodolino` a `Mauro Nishimoto` neste
+--     projeto. Esta consulta serve para alguém LER o contato e o rodapé, não
+--     para o sistema decidir.
+-- select conta, numero, valor_total, data_emissao, situacao,
+--        contato_nome, contato_doc, codigo, veredito
+-- from public.carbo_nf_sem_pedido
+-- where not valida
+-- order by conta, data_emissao desc;
