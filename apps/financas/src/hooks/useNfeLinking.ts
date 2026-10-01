@@ -393,7 +393,12 @@ export function useNfesFilialSemPedido(search = "") {
 export function useVincularNfFilial() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ orderNumber, blingId }: { orderNumber: string; blingId: number }) => {
+    mutationFn: async ({ orderNumber, blingId, como }:
+                       { orderNumber: string; blingId: number;
+                         /** 'venda' | 'bonificacao'. Obrigatório quando a nota
+                          *  está sem natureza no espelho — a RPC recusa sem
+                          *  isso, em vez de adivinhar. */
+                         como?: "venda" | "bonificacao" }) => {
       // ⚠️ RPC, não `update` daqui: a regra de QUAL coluna recebe a nota
       // (venda x bonificação) é a mesma do casamento automático e mora no
       // banco. Repeti-la em TypeScript seria a cópia que diverge — e divergir
@@ -402,6 +407,7 @@ export function useVincularNfFilial() {
       const { error } = await (supabase as any).rpc("carbo_nf_filial_vincular", {
         p_order_number: orderNumber,
         p_nf_bling_id: blingId,
+        p_como: como ?? null,
       });
       if (error) throw new Error(error.message);
     },

@@ -141,6 +141,17 @@ function DialogoFilial({ nfe, onClose }: { nfe: NfeFilialSemPedido | null; onClo
   const { data: orders = [], isLoading } = useLinkableOrders(search, !!nfe);
   const vincular = useVincularNfFilial();
 
+  /* ⚠️ A NATUREZA decide quando existe. Quando NÃO existe — e hoje ela não
+     existe em nenhuma nota da filial, foi medido —, quem decide é quem está
+     olhando a nota, e a escolha é OBRIGATÓRIA: a RPC recusa sem ela.
+
+     A versão anterior não perguntava nada, e `carbo_natureza_e_bonificacao(null)`
+     devolvia `false` — ou seja, TODA nota ia para a coluna da venda. Foi assim
+     que a segunda nota da NOVA NB tomou o lugar da primeira. */
+  const naturezaConhecida = !!nfe?.natureza_operacao;
+  const [como, setComo] = useState<"venda" | "bonificacao" | null>(null);
+  const podeVincular = naturezaConhecida || como !== null;
+
   return (
     <Dialog open={!!nfe} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-lg">
@@ -157,7 +168,7 @@ function DialogoFilial({ nfe, onClose }: { nfe: NfeFilialSemPedido | null; onClo
             as colunas de bonificação — quem vincula precisa saber disso ANTES,
             senão fica procurando a nota na coluna errada depois e conclui que
             o vínculo não funcionou. */}
-        {nfe?.e_bonificacao && (
+        {naturezaConhecida && nfe?.e_bonificacao && (
           <div className="flex items-start gap-2 rounded-lg border border-amber-500/30
                           bg-amber-500/10 px-3 py-2 text-[11px] text-amber-600 dark:text-amber-500">
             <Gift className="mt-px h-3.5 w-3.5 shrink-0" />
@@ -177,6 +188,41 @@ function DialogoFilial({ nfe, onClose }: { nfe: NfeFilialSemPedido | null; onClo
                         leading-relaxed text-muted-foreground">
             {nfe.informacoes_adicionais}
           </p>
+        )}
+
+        {/* ── A escolha, quando o espelho não sabe ──────────────────────
+            ⚠️ Um pedido pode ter DUAS notas: a da venda, que é receita, e a
+            remessa de bonificação, que não é. É a mesma lógica da matriz
+            (`20260903`), e é por isso que elas moram em colunas separadas.
+            Sem natureza no espelho, nada na nota diz qual é esta — e chutar
+            põe a bonificação no lugar da venda, derrubando o pedido do
+            faturamento. */}
+        {!naturezaConhecida && (
+          <div className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+            <p className="text-[11px] leading-relaxed text-amber-600 dark:text-amber-500">
+              <strong>Esta nota é a da venda ou a remessa de bonificação?</strong>{" "}
+              O espelho ainda não trouxe a natureza dela, então quem sabe é você.
+              Um mesmo pedido pode ter as duas.
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => setComo("venda")}
+                      className={`rounded-lg border px-2 py-2 text-left transition-colors ${
+                        como === "venda"
+                          ? "border-carbo-green/50 bg-carbo-green/10"
+                          : "border-border hover:bg-muted/60"}`}>
+                <span className="block text-xs font-semibold">Nota da venda</span>
+                <span className="block text-[10px] text-muted-foreground">conta no faturamento</span>
+              </button>
+              <button type="button" onClick={() => setComo("bonificacao")}
+                      className={`rounded-lg border px-2 py-2 text-left transition-colors ${
+                        como === "bonificacao"
+                          ? "border-amber-500/50 bg-amber-500/10"
+                          : "border-border hover:bg-muted/60"}`}>
+                <span className="block text-xs font-semibold">Remessa de bonificação</span>
+                <span className="block text-[10px] text-muted-foreground">não conta no faturamento</span>
+              </button>
+            </div>
+          </div>
         )}
 
         <div className="space-y-3">
@@ -204,16 +250,24 @@ function DialogoFilial({ nfe, onClose }: { nfe: NfeFilialSemPedido | null; onClo
                 <button
                   key={o.id}
                   type="button"
-                  disabled={vincular.isPending}
+                  /* ⚠️ Desabilitado até a escolha existir. Deixar clicável
+                     para falhar na RPC faria a pessoa escolher o pedido,
+                     clicar, e só então descobrir que faltava um passo acima —
+                     com o diálogo já rolado para baixo. */
+                  disabled={vincular.isPending || !podeVincular}
                   onClick={() =>
                     vincular.mutate(
-                      { orderNumber: o.order_number, blingId: nfe!.bling_id },
+                      {
+                        orderNumber: o.order_number,
+                        blingId: nfe!.bling_id,
+                        como: naturezaConhecida ? undefined : (como ?? undefined),
+                      },
                       { onSuccess: onClose },
                     )
                   }
                   className="flex w-full items-center justify-between gap-3 rounded-lg border
                              px-3 py-2 text-left transition-colors hover:border-carbo-green/40
-                             hover:bg-carbo-green/5 disabled:opacity-50"
+                             hover:bg-carbo-green/5 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <span className="min-w-0">
                     <span className="block font-mono text-xs font-semibold">{o.order_number}</span>
@@ -259,7 +313,13 @@ export function VincularNFsFilialTab() {
   const ordenadas = useMemo(() => ordenar(notas, ordem.col, ordem.dir), [notas, ordem]);
   const pag = paginate(ordenadas, page);
 
-  const comCodigo = notas.filter((n) => n.codigo_no_rodape).length;
+  /* ⚠️ Conta só o que o automático VAI casar de verdade: ele passou a exigir
+     natureza conhecida (sem ela, uma remessa iria para a coluna da venda). Com
+     o `codigo_no_rodape` sozinho, o aviso prometia um casamento que não
+     aconteceria — e promessa que não se cumpre é pior que aviso nenhum, porque
+     a pessoa espera em vez de resolver. */
+  const comCodigo = notas.filter((n) => n.codigo_no_rodape && n.natureza_operacao).length;
+  const esperandoNatureza = notas.filter((n) => n.codigo_no_rodape && !n.natureza_operacao).length;
 
   return (
     <div className="space-y-4">
@@ -294,6 +354,23 @@ export function VincularNFsFilialTab() {
                 <strong>{comCodigo}</strong> destas já trazem o número do pedido no rodapé —
                 o casamento automático as pega na próxima rodada (a cada 5 min).
                 Não precisa vincular à mão.
+              </span>
+            </p>
+          )}
+
+          {/* ⚠️ Estado PRÓPRIO, e não juntado ao de cima. "Vai casar sozinha" e
+              "tem o número mas ainda não dá para casar" pedem coisas opostas:
+              na primeira a pessoa espera, na segunda ela decide. Colapsar as
+              duas num número só faria metade da fila parecer resolvida. */}
+          {esperandoNatureza > 0 && (
+            <p className="flex items-start gap-1.5 rounded-lg border border-amber-500/30
+                          bg-amber-500/5 px-3 py-2 text-[11px] text-muted-foreground">
+              <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0 text-amber-500" />
+              <span>
+                <strong>{esperandoNatureza}</strong> trazem o número do pedido mas ainda
+                estão sem a natureza no espelho — sem ela não dá para saber se a nota é a
+                da venda ou a remessa de bonificação, e o automático não arrisca.
+                Vincule à mão dizendo qual é, ou espere o espelho trazer.
               </span>
             </p>
           )}
