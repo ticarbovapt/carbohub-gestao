@@ -3724,3 +3724,109 @@ update public.carbo_msg_templates
    (`?teste=<fone>&numero_id=<id>`, que manda `hello_world`). Sem isso, a
    primeira mensagem por um número novo é uma oferta real para um cliente real —
    e descobrir ali que ele não está registrado é descobrir tarde.
+
+### ⚠️ A conversa nasce no ENVIO — mas a janela só abre quando o cliente escreve
+Duas coisas que parecem uma, e confundi-las faz alguém achar que a tela quebrou.
+Pergunta literal do dono do processo em 02/10/2026: *"espero que para os
+clientes de verdade fique assim também, e não precise que eles respondam para
+abrir a conversa"*.
+
+```
+a CONVERSA aparece   no instante do ENVIO     — e o balão da oferta junto
+a JANELA de 24 h     só com a mensagem DELE   — a nossa NUNCA abre
+```
+
+Conferido no código, não suposto: o envio real grava em `carbo_msg_envios` com
+`wamid`, `wa_id` e `numero_id`, e é o **segundo ramo** da `carbo_wa_conversas`
+que lê dali. E o NOME também aparece — `agruparConversas` usa
+`cliente_pedido ?? nome_whatsapp`, e `cliente_pedido` vem do pedido na esteira,
+existindo muito antes de a pessoa escrever. A lista não vira "268 números
+soltos".
+
+⚠️ **Consequência para o TREINAMENTO, e ela precisa ser a primeira frase:** no
+segundo seguinte ao disparo a tela tem 268 conversas **sem campo de resposta** —
+e isso está CERTO. O campo some de propósito, porque a Meta recusa texto livre
+com 131047 e deixá-lo ali faria a pessoa escrever a resposta inteira antes de
+descobrir. O time **não responde a oferta**: ele espera. O trabalho começa
+quando o cliente escreve.
+
+⚠️ **A conta que prova que a tela não está mentindo por omissão**, e vale rodar
+depois de ligar — os dois têm de BATER:
+
+```sql
+select count(*) from public.carbo_msg_envios
+where etapa = 'recompra' and status in ('enviado','entregue','lido');
+
+select count(distinct wa_id) from public.carbo_wa_conversas
+where numero_id = '1274076859132981';
+```
+
+Ofertas subindo e conversas não = `wa_id` ou `numero_id` faltando no registro do
+envio. ⚠️ Antes de ligar eles **não** batem de propósito (0 × 1): o modo de teste
+grava em `carbo_wa_mensagens`, não no ledger.
+
+### ⚠️ `&etapa=` — o teste manda a mensagem REAL, e os TRÊS erros que ele custou
+`whatsapp-meta?teste=<fone>&etapa=<etapa>&nome=<nome>` manda o template de
+verdade para UM número, pelo `montarPayload` da produção. Existe porque
+`hello_world` não treina ninguém: o time precisa ver o que o CLIENTE vê.
+
+⚠️ **Ele grava em `carbo_wa_mensagens`, NUNCA em `carbo_msg_envios`.** A PK
+daquela é `(bling_id, etapa)` — *"uma mensagem por etapa por pedido, para
+sempre"* — então o teste precisaria inventar um `bling_id`, e o inventado
+**bloquearia o envio real daquele pedido** depois. Teste que consome a vaga do
+que ele testa é pior que teste nenhum.
+⚠️ Custo aceito: no teste o rótulo fica "aviso automático" sem o nome da etapa,
+porque a etapa vem do ledger. No envio real sai `automático · recompra`.
+
+**Os três erros, em ordem, e o terceiro escondia o segundo:**
+
+1. **O balão não aparecia.** O modo mandava pelo Graph e não registrava em lugar
+   nenhum — a conversa abria com a RESPOSTA do cliente e sem a oferta que a
+   provocou. Treinar numa conversa a que falta o que NÓS dissemos é treinar para
+   ler pela metade.
+2. ⚠️ **O balão saiu VAZIO: `texto` não estava no `select`.** Eu fiz a função
+   passar a LER `tpl.texto` e não acrescentei a coluna à consulta. Veio
+   `undefined`, virou `""`, e a substituição das variáveis rodou sobre nada.
+   **Campo que a função passou a ler tem de atravessar o `select`** — a mesma
+   família do `map` do `Vendas.tsx` que descartava `discount_amount`.
+3. ⚠️ **`sobre_a_etapa` NÃO É COLUNA de `carbo_wa_mensagens`** — ela é DERIVADA
+   na `carbo_wa_conversas`, a partir de `carbo_msg_envios` pelos `lateral`. Eu a
+   pus no `insert` achando que era coluna, e **o custo não foi o `42703`: foi o
+   silêncio.** O insert falhava, o `console.error` engolia, a função devolvia
+   `ok: true` e o balão simplesmente não era gravado — com tudo parecendo certo.
+   Supor coluna é perguntar à migração em vez de ao banco; `console.error`
+   sozinho é o `catch` vazio do `sfxVenda` outra vez.
+
+Hoje as duas falhas APARECEM na resposta: texto vazio RECUSA dizendo o que
+preencher, e falha de gravação volta `ok: false` com a frase que importa — *a
+mensagem já foi para o cliente e quem ficou sem ela foi a tela*.
+
+### ⏸️ Recompra: pronta e DESLIGADA — o que rodar na segunda
+Decisão do dono do processo em 02/10/2026 (sexta, 16h): *"update só segunda"*.
+Tudo configurado, **nada enviando**.
+
+```
+recompra  meta · 1274076859132981 · recompra_lembrete · APPROVED
+          teto_diario NULL · 9–18 · dias_uteis · ativo FALSE
+```
+
+**O interruptor, com o time na mesa:**
+
+```sql
+update public.carbo_msg_templates
+   set liberar_anteriores = true, ativo = true
+ where etapa = 'recompra';
+```
+
+⚠️ **São DOIS, e ligar só o `ativo` manda ZERO** — o marco zero de 21/09 exclui
+as 268 entregas de 30/06 a 02/09. Isso já está na seção acima e se repete aqui
+porque é o erro que vai acontecer se alguém ligar com pressa.
+
+Saem **268**, do mais antigo primeiro (Kristel SOUZA, entregue 30/06), ~20 por
+rodada de 1 min ⇒ cerca de 15 minutos.
+
+⚠️ **Rodar num sábado não manda nada** e a fila espera segunda: `dias_uteis` com
+9–18. A janela ATRASA, NUNCA PULA.
+
+⚠️ **E alguém precisa atender.** A oferta termina em *"Bora repor?"* sem link —
+quem manda o link é uma pessoa, dentro da janela de 24 h.
