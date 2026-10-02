@@ -50,7 +50,15 @@ const supabase = createClient(
 
 const SEGREDO  = Deno.env.get("CRON_SECRET") ?? "";
 const TOKEN    = Deno.env.get("WHATSAPP_ACCESS_TOKEN") ?? "";
-const PHONE_ID = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID") ?? "1255756280958635";
+// ⚠️ O número NÃO é mais constante: desde 02/10/2026 o WABA tem TRÊS (serviço,
+// CarboZé Clube/recompra e carrinho) e QUEM DECIDE É A ETAPA, pelo cadastro em
+// `carbo_wa_numeros` — a `carbo_msg_fila` já traz o `numero_id` resolvido.
+//
+// Este valor fica só como RESERVA do modo de teste e de linha antiga sem
+// número. Ele estava escrito em QUATRO edge functions com o mesmo literal:
+// quatro cópias de um cadastro, que é exatamente o que a `carbo_wa_numeros`
+// existe para acabar.
+const PHONE_ID_SERVICO = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID") ?? "1255756280958635";
 const VERSAO   = Deno.env.get("WHATSAPP_API_VERSION") ?? "v25.0";
 
 // Teto por rodada. O cron é de 1 minuto; 20 por rodada é muito acima do que a
@@ -76,8 +84,12 @@ interface LinhaFila {
 }
 
 /** Uma chamada ao Graph, com repetição só no que é transitório. */
-async function enviar(body: Record<string, unknown>) {
-  const url = `https://graph.facebook.com/${VERSAO}/${PHONE_ID}/messages`;
+async function enviar(body: Record<string, unknown>, phoneId?: string | null) {
+  // ⚠️ A reserva é o número de SERVIÇO, não um erro: linha de fila antiga pode
+  // chegar sem `numero_id`, e recusar ali pararia o aviso de entrega por causa
+  // de uma coluna nova. Quem FECHA sem número é o cadastro (`n.ativo` no WHERE
+  // da view), que é onde a decisão cabe.
+  const url = `https://graph.facebook.com/${VERSAO}/${phoneId || PHONE_ID_SERVICO}/messages`;
   let ultima: { status: number; json: any } = { status: 0, json: null };
 
   for (let tentativa = 0; tentativa <= 2; tentativa++) {
@@ -142,11 +154,16 @@ Deno.serve(async (req: Request) => {
         como_resolver: "Supabase > Edge Functions > Secrets > WHATSAPP_ACCESS_TOKEN.",
       }, 500);
     }
+    // ⚠️ `&numero_id=` existe para PROVAR que um número novo fala ANTES de
+    // ligar a etapa dele. Sem isso, a primeira mensagem pelo CarboZé Clube
+    // seria uma oferta real para um cliente real — e descobrir ali que o
+    // número não está registrado é descobrir tarde.
+    const phoneTeste = url.searchParams.get("numero_id") || PHONE_ID_SERVICO;
     const r = await enviar({
       messaging_product: "whatsapp", recipient_type: "individual",
       to: numero, type: "template",
       template: { name: "hello_world", language: { code: "en_US" } },
-    });
+    }, phoneTeste);
     const ok = r.status >= 200 && r.status < 300;
     return json({
       ok, teste: numero, status: r.status,
@@ -213,6 +230,7 @@ Deno.serve(async (req: Request) => {
       if (!ensaio) {
         await supabase.from("carbo_msg_envios").upsert({
           bling_id: l.bling_id, etapa: l.etapa, status: "ignorado", canal: "meta",
+          numero_id: (l as any).numero_id ?? null,
           motivo: `telefone inválido: ${l.telefone ?? "vazio"}`,
           telefone: l.telefone, enviado_em: new Date().toISOString(),
         });
@@ -243,6 +261,7 @@ Deno.serve(async (req: Request) => {
       if (!ensaio) {
         await supabase.from("carbo_msg_envios").upsert({
           bling_id: l.bling_id, etapa: l.etapa, status: "pendente", canal: "meta",
+          numero_id: (l as any).numero_id ?? null,
           motivo: `esperando: ${montado.faltando.join(", ")}`,
           telefone: normalizado,
         });
@@ -260,6 +279,7 @@ Deno.serve(async (req: Request) => {
         adiados++;
         await supabase.from("carbo_msg_envios").upsert({
           bling_id: l.bling_id, etapa: l.etapa, status: "pendente", canal: "meta",
+          numero_id: (l as any).numero_id ?? null,
           motivo: `aguardando ${l.atraso_min} min do template`, telefone: normalizado,
         });
         continue;
@@ -280,11 +300,16 @@ Deno.serve(async (req: Request) => {
     // ── Grava a intenção ANTES de chamar ────────────────────────────────────
     await supabase.from("carbo_msg_envios").upsert({
       bling_id: l.bling_id, etapa: l.etapa, status: "erro", canal: "meta",
+      numero_id: (l as any).numero_id ?? null,
       motivo: "envio iniciado", telefone: normalizado, payload: montado.body,
     });
 
     try {
-      const { status, json: resposta } = await enviar(montado.body);
+      // ⚠️ O número vem da FILA, que o resolve pelo cadastro da etapa. Decidir
+      // aqui seria a quinta cópia da mesma pergunta.
+      const { status, json: resposta } = await enviar(
+        montado.body, (l as any).numero_id as string | null,
+      );
       const ok = status >= 200 && status < 300;
       const wamid = resposta?.messages?.[0]?.id ?? null;
       // ⚠️ O `wa_id` é o número REAL na base do WhatsApp, e pode ser diferente
@@ -296,6 +321,10 @@ Deno.serve(async (req: Request) => {
 
       await supabase.from("carbo_msg_envios").upsert({
         bling_id: l.bling_id, etapa: l.etapa, canal: "meta",
+        // ⚠️ POR QUAL NÚMERO saiu. Sem isto a `carbo_wa_conversas` não consegue
+        // pôr a mensagem na caixa certa — e a resposta do cliente cairia na
+        // conversa do outro número.
+        numero_id: (l as any).numero_id ?? null,
         // `falhou` e não `erro`: a Meta respondeu, e o que ela disse está no
         // código. `erro` fica para o que nem chegou lá.
         status: ok ? "enviado" : "falhou",
@@ -314,6 +343,7 @@ Deno.serve(async (req: Request) => {
       falhas++;
       await supabase.from("carbo_msg_envios").upsert({
         bling_id: l.bling_id, etapa: l.etapa, status: "erro", canal: "meta",
+        numero_id: (l as any).numero_id ?? null,
         motivo: String((e as Error)?.message ?? e).slice(0, 300),
         telefone: normalizado, payload: montado.body,
         enviado_em: new Date().toISOString(),

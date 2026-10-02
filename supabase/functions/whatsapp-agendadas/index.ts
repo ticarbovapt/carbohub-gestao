@@ -32,7 +32,10 @@ const supabase = createClient(
 
 const SEGREDO  = Deno.env.get("CRON_SECRET") ?? "";
 const TOKEN    = Deno.env.get("WHATSAPP_ACCESS_TOKEN") ?? "";
-const PHONE_ID = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID") ?? "1255756280958635";
+// ⚠️ Reserva: o número de SERVIÇO. Quem manda é a LINHA agendada, que guarda
+// o número desde a `20261041` — a mensagem tem de sair pelo mesmo número em que
+// a conversa aconteceu, senão ela chega de um desconhecido.
+const PHONE_ID_SERVICO = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID") ?? "1255756280958635";
 const VERSAO   = Deno.env.get("WHATSAPP_API_VERSION") ?? "v25.0";
 
 const TETO = 20;
@@ -45,7 +48,7 @@ function json(body: unknown, status = 200): Response {
 }
 
 interface LinhaFila {
-  id: string; wa_id: string; texto: string; enviar_em: string;
+  id: string; wa_id: string; texto: string; enviar_em: string; numero_id?: string | null;
   janela_ate: string | null; janela_aberta: boolean | null;
 }
 
@@ -105,7 +108,7 @@ Deno.serve(async (req: Request) => {
     let resposta: any = null, status = 0;
     try {
       for (let tentativa = 0; tentativa <= 2; tentativa++) {
-        const res = await fetch(`https://graph.facebook.com/${VERSAO}/${PHONE_ID}/messages`, {
+        const res = await fetch(`https://graph.facebook.com/${VERSAO}/${a.numero_id || PHONE_ID_SERVICO}/messages`, {
           method: "POST",
           headers: { "Authorization": `Bearer ${TOKEN}`, "Content-Type": "application/json" },
           body: JSON.stringify(payload),
@@ -138,7 +141,8 @@ Deno.serve(async (req: Request) => {
       // atendimento não veria o que foi dito ao cliente — que é o mesmo buraco
       // que a esteira tinha antes de os avisos entrarem na linha do tempo.
       const { error: erroMsg } = await supabase.from("carbo_wa_mensagens").upsert({
-        wamid, wa_id: a.wa_id, direcao: "saida", tipo: "text", texto: a.texto,
+        wamid, wa_id: a.wa_id, numero_id: a.numero_id || PHONE_ID_SERVICO,
+        direcao: "saida", tipo: "text", texto: a.texto,
         ocorrido_em: new Date().toISOString(),
         // ⚠️ O agendamento NÃO gravava autor nenhum — só `agendada_id`. Quem
         // agendou às 18h de sexta e a mensagem saiu no sábado era, para a
