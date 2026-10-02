@@ -117,6 +117,27 @@ Deno.serve(async (req: Request) => {
 
   for (const entry of payload?.entry ?? []) {
     for (const change of entry?.changes ?? []) {
+      // ── POR QUAL NÚMERO NOSSO isto chegou ──────────────────────────────
+      //
+      // ⚠️ O `metadata` fica no nível do `change.value`, NÃO dentro da
+      // mensagem — e por isso ele nunca foi gravado: medido em 02/10/2026,
+      // `payload -> 'metadata'` é NULO nas 456 linhas da tabela, e as chaves
+      // que estão lá são as da mensagem (`type`, `text`, `id`, `from`).
+      //
+      // ⚠️ Desde que o WABA tem TRÊS números (serviço, Clube/recompra e
+      // carrinho), isto deixou de ser informação e virou IDENTIDADE: a janela
+      // de 24 h da Meta é por PAR (nosso número ↔ cliente). Sem ele, o cliente
+      // que responde à OFERTA abriria no nosso banco a janela do número de
+      // SERVIÇO, e a tela ofereceria texto livre que a Meta recusa com 131047
+      // — depois de a pessoa ter escrito a resposta inteira.
+      //
+      // ⚠️ A reserva é o número de SERVIÇO porque era o único que existia até
+      // 02/10/2026, e é com ele que as 456 linhas foram remarcadas. Deixar
+      // `null` faria a linha cair fora da PK composta e sumir da tela — e
+      // ausência disfarçada de resposta é a doença conhecida deste repo.
+      const numeroId: string =
+        change?.value?.metadata?.phone_number_id ?? "1255756280958635";
+
       for (const acao of interpretar(change)) {
         // ── A trava da reentrega ────────────────────────────────────────────
         // Grava a chave PRIMEIRO. Se já existe, este evento já foi tratado e
@@ -158,9 +179,14 @@ Deno.serve(async (req: Request) => {
             if (e1) throw new Error(`status: ${e1.message}`);
             status++;
           } else if (acao.tipo === "inbound") {
+            // ⚠️ O alvo do conflito é o PAR, não a pessoa. `carbo_wa_contatos`
+            // é onde mora `last_inbound_at`, ou seja, a janela de 24 h — e ela
+            // é por par. Com `onConflict: "wa_id"`, a mesma pessoa escrevendo
+            // para o Clube sobrescreveria a janela do número de serviço.
             const { error: e2 } = await supabase.from("carbo_wa_contatos").upsert({
+              numero_id: numeroId,
               wa_id: acao.waId, nome: acao.nome, last_inbound_at: acao.quando,
-            }, { onConflict: "wa_id" });
+            }, { onConflict: "numero_id,wa_id" });
             if (e2) throw new Error(`contato ${acao.waId}: ${e2.message}`);
 
             // ⚠️ A CONVERSA. Número da Cloud API não aparece na Caixa de
@@ -172,7 +198,8 @@ Deno.serve(async (req: Request) => {
             // urgente: se esta escrita falhar, o atendimento ainda sabe que
             // pode responder, e a falha aparece no corpo da resposta.
             const { error: e2b } = await supabase.from("carbo_wa_mensagens").upsert({
-              wamid: acao.wamid, wa_id: acao.waId, direcao: "entrada",
+              wamid: acao.wamid, wa_id: acao.waId, numero_id: numeroId,
+              direcao: "entrada",
               tipo: acao.formato, texto: acao.texto,
               midia_id: acao.midiaId, midia_mime: acao.midiaMime,
               responde_a: acao.respondeA, ocorrido_em: acao.quando,
