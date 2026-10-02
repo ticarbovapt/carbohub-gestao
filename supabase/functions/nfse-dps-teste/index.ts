@@ -294,6 +294,143 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const algo: Algo = body.algo === "sha1" ? "sha1" : "sha256";
   const enviar = body.enviar === true;
 
+  // ═════════════════════════════════════════════════════════════════════════
+  // `{"diagnostico": true}` — UM deploy, muitas respostas
+  //
+  // Medido em 02/10/2026: forçar HTTP/1.1 tirou o `endpoint requires HTTP/1.1`
+  // e trouxe `Connection reset by peer (os error 104)`. ⚠️ Esse reset tem TRÊS
+  // causas possíveis com a MESMA cara — certificado recusado, caminho que não
+  // existe, ou o corpo do POST — e um deploy por hipótese é o jeito caro de
+  // descobrir qual.
+  //
+  // ⚠️ O que torna isto mensurável é haver CONTROLE POSITIVO: o
+  // `adn.producaorestrita` responde ao nosso certificado na leitura (é o que a
+  // `nfse-nacional` faz desde 23/09). Se ele responder aqui e o `sefin`
+  // resetar, o certificado está fora de suspeita — e sem esse par o reset não
+  // prova nada.
+  //
+  // ⚠️ E há CONTROLE NEGATIVO: a MESMA chamada SEM o certificado. Se sem cert
+  // vier resposta HTTP e com cert vier reset, é o certificado que o servidor
+  // está recusando — a inversão que nenhuma outra medição mostra.
+  //
+  // ⚠️ A LISTA DE HOSTS É FECHADA, como na `nfse-nacional`, e não é zelo: esta
+  // função APRESENTA O CERTIFICADO A1 DA EMPRESA em cada requisição. Um
+  // parâmetro de host livre a transformaria num proxy que assina, no CNPJ da
+  // Carbo, contra qualquer servidor que alguém escolher.
+  //
+  // ⚠️ SÓ HOSTS DE PRODUÇÃO RESTRITA. Sondar produção com o certificado é
+  // bater na porta do serviço que emite nota de verdade.
+  // ═════════════════════════════════════════════════════════════════════════
+  if (body.diagnostico === true) {
+    const ADN = "https://adn.producaorestrita.nfse.gov.br";
+    const SEFIN = "https://sefin.producaorestrita.nfse.gov.br";
+
+    // Um DPS mínimo e assinado, só para o corpo não ser vazio nos POSTs.
+    const dAmostra: DadosDps = {
+      tpAmb: "2", cLocEmi: "2408102", cnpjPrest: "36060692000100",
+      fonePrest: "8432075055", emailPrest: "fiscal@carbovapt.com.br",
+      serie: "90000", nDPS: "900", dhEmi: "2026-10-02T12:00:00-03:00",
+      dCompet: "2026-10-02", tomaCnpj: "04601397000128",
+      tomaNome: "TESTE", tomaMun: "2310803", tomaCep: "63460000",
+      tomaLgr: "RUA TESTE", tomaNro: "S/N", tomaBairro: "CENTRO",
+      descServ: "Teste de conectividade.", infComp: "TESTE",
+      valor: "1.00",
+    };
+    const idA = montarId(dAmostra.cLocEmi, dAmostra.cnpjPrest, dAmostra.serie, dAmostra.nDPS);
+    const infA = montarInfDps(dAmostra, idA);
+    let gz = "";
+    try {
+      const sigA = await assinar(infA, idA, cert, key, algo);
+      gz = await gzipB64(
+        `<?xml version="1.0" encoding="UTF-8"?><DPS xmlns="${NS_NFSE}" versao="1.01">${infA}${sigA}</DPS>`,
+      );
+    } catch (e) {
+      return json({ ok: false, etapa: "assinar (diagnostico)", erro: String(e) }, 500);
+    }
+
+    // ⚠️ DOIS clientes: um COM certificado e um SEM. É o par que separa
+    // "o servidor recusa o nosso cert" de "o servidor não está aí".
+    let cliCert: Deno.HttpClient | null = null;
+    try {
+      cliCert = Deno.createHttpClient(
+        { cert, key, http1: true, http2: false } as Deno.CreateHttpClientOptions,
+      );
+    } catch { /* reportado por tentativa */ }
+    let cliNu: Deno.HttpClient | null = null;
+    try {
+      cliNu = Deno.createHttpClient({ http1: true, http2: false } as Deno.CreateHttpClientOptions);
+    } catch { /* idem */ }
+
+    type Caso = {
+      nome: string; url: string; metodo: "GET" | "POST";
+      comCert: boolean; corpo?: string; tipo?: string;
+    };
+    const corpoPadrao = JSON.stringify({ dpsXmlGZipB64: gz });
+
+    const casos: Caso[] = [
+      // ── CONTROLE POSITIVO: o host e o caminho que JÁ funcionam ───────────
+      { nome: "A· CONTROLE+ adn DFe GET (cert)", url: `${ADN}/contribuintes/DFe/0`, metodo: "GET", comCert: true },
+      // ── CONTROLE NEGATIVO: o mesmo, sem certificado ──────────────────────
+      { nome: "B· CONTROLE- adn DFe GET (SEM cert)", url: `${ADN}/contribuintes/DFe/0`, metodo: "GET", comCert: false },
+      // ── O host do DPS fala HTTP com o nosso cert? ───────────────────────
+      { nome: "C· sefin dps GET (cert)", url: `${SEFIN}/sefinnacional/dps`, metodo: "GET", comCert: true },
+      { nome: "D· sefin raiz GET (cert)", url: `${SEFIN}/`, metodo: "GET", comCert: true },
+      { nome: "E· sefin dps GET (SEM cert)", url: `${SEFIN}/sefinnacional/dps`, metodo: "GET", comCert: false },
+      // ── O POST que está resetando, e as variações que isolam o porquê ───
+      { nome: "F· sefin dps POST corpo cheio (cert)", url: `${SEFIN}/sefinnacional/dps`, metodo: "POST", comCert: true, corpo: corpoPadrao },
+      { nome: "G· sefin dps POST corpo {} (cert)", url: `${SEFIN}/sefinnacional/dps`, metodo: "POST", comCert: true, corpo: "{}" },
+      { nome: "H· sefin dps POST corpo cheio (SEM cert)", url: `${SEFIN}/sefinnacional/dps`, metodo: "POST", comCert: false, corpo: corpoPadrao },
+      // ── Variações de CAMINHO e de HOST para o POST ──────────────────────
+      { nome: "I· sefin SefinNacional/dps POST (cert)", url: `${SEFIN}/SefinNacional/dps`, metodo: "POST", comCert: true, corpo: corpoPadrao },
+      { nome: "J· sefin /dps POST (cert)", url: `${SEFIN}/dps`, metodo: "POST", comCert: true, corpo: corpoPadrao },
+      { nome: "K· adn sefinnacional/dps POST (cert)", url: `${ADN}/sefinnacional/dps`, metodo: "POST", comCert: true, corpo: corpoPadrao },
+      { nome: "L· adn contribuintes/dps POST (cert)", url: `${ADN}/contribuintes/dps`, metodo: "POST", comCert: true, corpo: corpoPadrao },
+    ];
+
+    const achados: unknown[] = [];
+    for (const c of casos) {
+      const cli = c.comCert ? cliCert : cliNu;
+      if (!cli) {
+        achados.push({ caso: c.nome, erro: "cliente não pôde ser criado" });
+        continue;
+      }
+      const t0 = Date.now();
+      try {
+        const r = await fetch(c.url, {
+          client: cli,
+          method: c.metodo,
+          headers: c.metodo === "POST"
+            ? { "Content-Type": c.tipo ?? "application/json", Accept: "application/json" }
+            : { Accept: "application/json" },
+          body: c.metodo === "POST" ? c.corpo : undefined,
+        });
+        const txt = await r.text().catch(() => "");
+        achados.push({
+          caso: c.nome, url: c.url, status: r.status, ms: Date.now() - t0,
+          // ⚠️ O corpo vai CRU, só truncado. A rejeição do ADN diz qual campo,
+          // e resumir aqui é perder a única coisa que a sonda traz.
+          corpo: txt.slice(0, 700),
+        });
+      } catch (e) {
+        achados.push({ caso: c.nome, url: c.url, ms: Date.now() - t0, erro: String(e) });
+      }
+    }
+
+    return json({
+      ok: true,
+      modo: "DIAGNÓSTICO de conectividade (produção restrita apenas)",
+      algo,
+      // ⚠️ A leitura NÃO é "qual deu 200". É o PADRÃO entre os controles:
+      leitura: {
+        "A responde e C/F resetam": "o certificado está OK — o problema é host/caminho/corpo do DPS",
+        "A resetar também": "é a rede do Supabase ou o certificado, e aí nada abaixo prova nada",
+        "H/E responder e F/C resetar": "o servidor está RECUSANDO o nosso certificado",
+        "A e B iguais": "o endpoint de leitura não exige mTLS, então ele NÃO serve de controle do cert",
+      },
+      achados,
+    });
+  }
+
   // ⚠️ SEM `producao` no corpo, SEMPRE restrita e SEMPRE tpAmb=2. E mesmo com
   // ele, a função recusa: emitir de verdade não é coisa de sonda.
   if (body.producao === true) {
@@ -398,7 +535,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
     // com o gov.br — certificado recusado teria vindo como erro de TLS. Um erro
     // que prova quatro coisas funcionando vale mais que um sucesso que não
     // prova nenhuma.
-    cliente = Deno.createHttpClient({ cert, key, http1: true, http2: false });
+    //
+    // ⚠️ O cast existe porque `http1`/`http2` são opções instáveis e podem não
+    // estar na tipagem desta versão do Deno — mesmo molde da `nfse-nacional`.
+    // O comportamento em tempo de execução é o que importa.
+    cliente = Deno.createHttpClient(
+      { cert, key, http1: true, http2: false } as Deno.CreateHttpClientOptions,
+    );
   } catch (e) {
     return json({ ok: false, etapa: "createHttpClient", erro: String(e) }, 500);
   }
