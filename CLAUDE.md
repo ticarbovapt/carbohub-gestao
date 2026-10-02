@@ -3560,3 +3560,167 @@ perto do que foi pedido (*"apenas confirmar no portal nacional e emitir"*) e
 **não exige a chave privada no servidor** — o que elimina o segredo mais
 sensível do projeto de um caminho novo. Só não foi o caminho de partida porque
 ninguém mediu se o emissor web aceita entrada pré-preenchida.
+
+### TRÊS números no mesmo WABA — e a janela de 24 h é por PAR
+Pedido do dono do processo em 02/10/2026: *"vou precisar colocar mais um número
+aqui no Carbo atendimento que também é api oficial… vai haver um botão para
+variar entre os números"*, e depois, com todas as letras: *"não pode se misturar
+as conversas desse número com esse outro que já funciona"*.
+
+```
+98876-9187  CarboZé              serviço   1255756280958635  ativo
+98174-7452  CarboZé Clube        recompra  1274076859132981  ativo
+98175-8713  CarboZé Atendimento  carrinho  1347087218483622  DESLIGADO, não registrado
+```
+
+Mesmo WABA (`1777955220017913`) ⇒ **mesmo token, MESMO webhook**, e template
+aprovado vale para os três. Quem separa no webhook é `metadata.phone_number_id`.
+
+```
+carbo_wa_numeros                       o CADASTRO (migração 20261041)
+carbo_wa_mensagens.numero_id           por qual número NOSSO passou
+carbo_msg_templates.numero_id          de qual número a ETAPA sai
+apps/atendimento … useNumeros()        o seletor
+```
+
+1. ⚠️ **A JANELA DE 24 H É POR PAR** (nosso número ↔ cliente), e ela mora em
+   `carbo_wa_contatos`, cuja PK era só `wa_id`. Com dois números vivos, o
+   cliente que responde à OFERTA abriria no nosso banco a janela do número de
+   SERVIÇO — e a tela ofereceria texto livre que a Meta recusa com **131047**,
+   depois de a pessoa ter escrito a resposta inteira. As PKs de
+   `carbo_wa_contatos`, `_atendimento`, `_resolvidas` viraram `(numero_id,
+   wa_id)`, e a de `_conversa_tag`, `(numero_id, wa_id, tag_id)`.
+2. ⚠️ **O `metadata` NUNCA foi gravado, e não dava para recuperar.** Ele fica no
+   nível do `change.value`, não dentro da mensagem — medido: nulo nas **456**
+   linhas, e as chaves presentes eram as da mensagem (`type`, `text`, `id`,
+   `from`). O backfill por constante foi a única resposta honesta, e vale porque
+   até 02/10/2026 só existia um número.
+3. ⚠️ **A troca de chave e a troca de código NÃO cabem no mesmo momento.** O
+   webhook gravava com `onConflict: "wa_id"`: trocar a PK antes do deploy quebra
+   o upsert (e o que ele não grava existe só no celular do cliente); trocar o
+   código antes do SQL aponta para um índice que não existe. A saída foi **a
+   chave primeiro** — índice composto CONVIVENDO com a PK antiga, deploy, e só
+   então o `drop constraint`.
+   ⚠️ A janela em que a PK antiga ainda vivia era segura **só porque o Clube
+   ainda não enviava nada**. Fazer isso depois de ligar a recompra seria perder
+   mensagem de cliente.
+4. ⚠️ **A CHAVE é o `phone_number_id` da META, nunca um uuid nosso**: é ele que
+   chega no webhook e é ele que vai na URL de envio. Id sintético criaria uma
+   segunda identidade com um mapa no meio para divergir.
+5. ⚠️ **CADASTRO, nunca constante.** O id estava escrito em QUATRO edge
+   functions (`whatsapp-meta`, `-responder`, `-midia`, `-agendadas`) com o mesmo
+   `?? "1255756280958635"`. Hoje: a FILA decide no `whatsapp-meta`, a TELA nas
+   duas do navegador, e a LINHA agendada na quarta.
+   ⚠️ **A reserva ABRE, não fecha** — o INVERSO do `CRON_SECRET`. Lá a ausência
+   trava porque o segredo é portaria; aqui "fechar" é não responder cliente por
+   causa de um campo novo do front, ou parar o aviso de entrega por uma coluna
+   nova. Quem FECHA sem número é o cadastro (`n.ativo` no `WHERE` da fila).
+6. ⚠️ **`ativo` nasce FALSE e `registrado` é separado dele.** O número de
+   carrinho está conectado e NÃO registrado na Cloud API, e enviar por número
+   não registrado falha com erro genérico da Graph API — que manda procurar no
+   lugar errado. "Não registrei" e "registrei e não quero usar" são respostas
+   diferentes: a lição dos TRÊS estados de `e_online`.
+   Índice único **parcial** em `funcao` (só onde `ativo`): dois ativos para a
+   mesma função fariam o roteamento escolher por acaso.
+7. ⚠️ **Duas coisas que só apareceram no `pg_get_viewdef`**, e que eu teria
+   quebrado calado:
+   - a `carbo_wa_conversas` casava o contato por `wa_id` — passou a casar pelo
+     PAR, senão traria o nome e a janela do outro número;
+   - o vínculo **aproximado** ("o último aviso enviado a este número") passou a
+     exigir o MESMO número nosso. Sem isso, uma resposta no Clube seria ligada
+     ao pedido anunciado pelo SERVIÇO — aproximação que atravessa canal e se
+     passa por certeza.
+8. ⚠️ **E a `carbo_wa_agendadas_fila` ia DUPLICAR mensagem.** Ela fazia `left
+   join carbo_wa_contatos on c.wa_id = a.wa_id`; com a PK composta isso casa
+   DUAS linhas quando a mesma pessoa escreve para dois números, a view devolve a
+   agendada duas vezes e o cliente recebe duas vezes. Invisível até o Clube
+   receber a primeira resposta de quem já falou com o serviço.
+9. **Na TELA, a caixa é de UM número só**, e o seletor escolhe qual — assim o
+   `wa_id` volta a ser único dentro da caixa e o `agruparConversas` não mudou.
+   ⚠️ **AS QUATRO consultas** filtram pelo mesmo número; filtrar só a primeira
+   traz a janela, o status e as etiquetas do outro número — o "balde de sobra"
+   do `carbohub-produtos`. ⚠️ `numeroId` nulo **não é "todos"**: é "ainda não
+   escolheu", e o hook tem `enabled`.
+   ⚠️ **Trocar de número FECHA a conversa aberta**: `?de=` é um `wa_id`, e o
+   mesmo `wa_id` no outro número é outra conversa.
+10. ⚠️ **Cadastro vazio não pode virar tela branca.** `carbo_wa_numeros` é
+   guardada por `carbo_e_time_interno()` e devolve ZERO linhas, sem erro, para
+   quem está fora — e com o `enabled` a tela ficaria vazia para sempre. Por isso
+   há um aviso explícito dizendo que o problema é o acesso, não a caixa. Mesmo
+   sintoma da `bling2_esteira` "travada na primeira coluna".
+11. **O seletor só aparece com DOIS ou mais**, e mostra TODOS — "qual caixa
+   estou vendo?" e "quais caixas existem?" são a mesma pergunta para quem
+   atende. A cor vem do cadastro, não de um mapa na tela.
+
+### A recompra pela Meta — o que segura, e o que o número REALMENTE é
+`recompra` saiu da Evolution e passou a sair pela Cloud API, pelo Clube, com o
+`recompra_lembrete` (MARKETING, aprovado, variável `primeiro_nome`).
+
+⚠️ **SÃO TRÊS NÚMEROS DIFERENTES, e planejar pelo primeiro é planejar por um que
+não vai acontecer** (medido em 02/10/2026):
+
+```
+361  o que a Esteira mostra em "Hora de ofertar"
+268  quem tem TELEFONE e ainda não recebeu — os ~93 que faltam são o
+     "91 sem telefone" do próprio cabeçalho da Esteira, quase todo ML
+  0  o que sairia ligando só o `ativo`
+```
+
+⚠️ **Ligar o `ativo` sozinho NÃO MANDA NADA**, e a tela diria "ligado" com a
+fila vazia. São DOIS interruptores:
+
+```sql
+update public.carbo_msg_templates
+   set liberar_anteriores = true, ativo = true
+ where etapa = 'recompra';
+```
+
+1. ⚠️ **`liberar_anteriores` existe porque o marco zero exclui os 268 PARA
+   SEMPRE.** O corte de 21/09 foi posto pela `20261016` para a fila travada não
+   disparar de uma vez; o efeito colateral — excluir quem foi entregue antes —
+   foi **herdado, nunca decidido**. A régua conta 30 dias da ENTREGA, e as 268
+   entregas são de 30/06 a 02/09.
+2. ⚠️ **O `teto_diario` foi uma hipótese minha que o DADO desmentiu.** Eu pus 40
+   raciocinando que número novo começa no patamar de 250 da Meta e que 268 não
+   caberia. O painel mostra **2.000/24 h** — e esse número estava a um clique no
+   WhatsApp Manager. *Limiar se MEDE, não se supõe*, de novo.
+   Hoje `teto_diario` é **null** na recompra. Ele continua existindo porque é a
+   trava certa quando o patamar for o problema.
+3. ⚠️ **A JANELA DE HORÁRIO não existia, e o dono do processo a expôs sem
+   querer:** *"hoje é sexta 16h, o expediente encerra 17h… não posso disparar
+   nada agora"*. Nada impedia a fila de disparar no sábado ou às 3h da manhã.
+   `hora_inicio`/`hora_fim`/`dias_uteis` em `carbo_msg_templates`; recompra 9–18
+   em dias úteis, carrinho 8–22 **sem** `dias_uteis` (carrinho abandonado no
+   sábado é quando a loja vende).
+   ⚠️ **A janela ATRASA, NUNCA PULA**: a fila é view do estado ATUAL e só ganha
+   linha em `carbo_msg_envios` quando o envio acontece — quem não sai às 3h
+   continua elegível às 9h. Ninguém é perdido.
+   ⚠️ **As SEIS da esteira ficam SEM janela**, de propósito: "saiu para entrega"
+   às 20h é serviço e é esperado; segurá-lo até as 9h é pior que mandá-lo. A
+   janela é para o COMERCIAL, onde falar é uma ESCOLHA — mesma separação do
+   teto.
+4. ⚠️ **A oferta NÃO TEM LINK.** Ela termina em *"Bora repor?"*, e quem manda o
+   link é uma PESSOA, dentro da janela de 24 h. Por isso a tela do Clube tinha
+   de existir ANTES do envio — foi exatamente a condição que o dono do processo
+   impôs: *"só podemos enviar as mensagens aos clientes quando essa tela estiver
+   disponível, pois precisaremos ver as respostas"*. 268 ofertas são até 268
+   conversas para responder, e cliente que respondeu "bora" e foi ignorado é
+   pior que cliente não contactado.
+5. ⚠️ **Template enviado NÃO abre a janela de 24 h** — quem abre é o CLIENTE
+   respondendo. Então a conversa não aparece na tela só por ter sido enviada.
+   Isso confunde no primeiro teste e precisa ser dito antes, não depois.
+6. **`&etapa=` no `whatsapp-meta` manda a mensagem DE VERDADE para um número.**
+   `hello_world` não serve para treinar: o time precisa ver o que o cliente vê.
+   Ele passa pelo `montarPayload` real, então também testa variável nomeada,
+   `fallback` e idioma — **teste que usa outro caminho prova o caminho errado**.
+   ⚠️ A trava continua forte: só template que existe em `carbo_msg_templates` E
+   está `APPROVED`. Mesmo com o segredo, o mais que se consegue é mandar uma
+   mensagem NOSSA, já aprovada, para um número por vez.
+   ⚠️ E o número sai do CADASTRO da etapa, não do `&numero_id=`: o treino tem de
+   acontecer na MESMA caixa da operação.
+   ✅ Conferido em 02/10/2026 às 16:22 — a oferta chegou pelo Clube com o
+   `primeiro_nome` resolvido, antes de qualquer cliente real.
+7. ⚠️ **Prove que um número novo FALA antes de ligar a etapa dele**
+   (`?teste=<fone>&numero_id=<id>`, que manda `hello_world`). Sem isso, a
+   primeira mensagem por um número novo é uma oferta real para um cliente real —
+   e descobrir ali que ele não está registrado é descobrir tarde.
