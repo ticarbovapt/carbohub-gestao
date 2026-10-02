@@ -24,6 +24,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   useConversas, useConversasAoVivo, useResponder, janelaAberta, faltaDaJanela,
+  useNumeros, type NumeroWa,
   // ⚠️ Puras e na `lib`, não aqui: dá para conferir o recorte sem montar tela.
   aplicarFiltrosDaCaixa, quantosFiltrosAtivos, FILTROS_VAZIOS,
   type FiltrosDaCaixa as TipoFiltros,
@@ -1335,7 +1336,7 @@ function Conversa({ c, onVerPedido }: {
 
   const anotarAgora = () => {
     if (!recado.trim()) return;
-    anotar.mutate({ wa_id: c.wa_id, texto: recado }, {
+    anotar.mutate({ wa_id: c.wa_id, numero_id: c.numero_id, texto: recado }, {
       onSuccess: () => { setRecado(""); setAba("responder"); toast.success("Anotado"); },
       onError: (e) => toast.error((e as Error).message),
     });
@@ -1456,7 +1457,7 @@ function Conversa({ c, onVerPedido }: {
   useEffect(() => { fim.current?.scrollIntoView({ block: "end" }); }, [c.mensagens.length]);
 
   const mandarArquivo = (arquivo: File, legenda?: string) => {
-    enviarMidia.mutate({ wa_id: c.wa_id, arquivo, legenda: legenda?.trim() || undefined }, {
+    enviarMidia.mutate({ wa_id: c.wa_id, numero_id: c.numero_id, arquivo, legenda: legenda?.trim() || undefined }, {
       onSuccess: () => { toast.success("Enviado"); },
       onError: (e) => toast.error((e as Error).message),
     });
@@ -1504,7 +1505,7 @@ function Conversa({ c, onVerPedido }: {
   const enviar = () => {
     const t = texto.trim();
     if (!t) return;
-    responder.mutate({ wa_id: c.wa_id, texto: t }, {
+    responder.mutate({ wa_id: c.wa_id, numero_id: c.numero_id, texto: t }, {
       onSuccess: () => { setTexto(""); toast.success("Enviada"); },
       onError: (e) => toast.error((e as Error).message),
     });
@@ -1640,7 +1641,7 @@ function Conversa({ c, onVerPedido }: {
                 <Button size="sm" variant="outline"
                         className="h-8 gap-1.5 text-emerald-500"
                         disabled={resolver.isPending}
-                        onClick={() => resolver.mutate({ wa_id: c.wa_id, status: "resolvido" }, {
+                        onClick={() => resolver.mutate({ wa_id: c.wa_id, numero_id: c.numero_id, status: "resolvido" }, {
                           onSuccess: () => toast.success("Conversa marcada como resolvida"),
                           onError: (e) => toast.error((e as Error).message),
                         })}>
@@ -1657,7 +1658,7 @@ function Conversa({ c, onVerPedido }: {
                            `aberto` não entra no ramo de decisão humana do
                            `statusEfetivo`, então o status volta a ser DERIVADO de
                            quem falou por último — que é o comportamento original. */
-                        onClick={() => resolver.mutate({ wa_id: c.wa_id, status: "aberto" }, {
+                        onClick={() => resolver.mutate({ wa_id: c.wa_id, numero_id: c.numero_id, status: "aberto" }, {
                           onError: (e) => toast.error((e as Error).message),
                         })}>
                   <Undo2 className="h-3.5 w-3.5" /> Reabrir
@@ -1713,7 +1714,7 @@ function Conversa({ c, onVerPedido }: {
             <Button size="sm" variant="ghost"
                     className="ml-auto h-6 gap-1 px-2 text-[11px] text-emerald-500"
                     disabled={resolver.isPending}
-                    onClick={() => resolver.mutate({ wa_id: c.wa_id, status: "resolvido" }, {
+                    onClick={() => resolver.mutate({ wa_id: c.wa_id, numero_id: c.numero_id, status: "resolvido" }, {
                       onError: (e) => toast.error((e as Error).message),
                     })}>
               <CheckCheck className="h-3 w-3" /> Resolver
@@ -2094,7 +2095,7 @@ function Conversa({ c, onVerPedido }: {
                             toast.error("Esse horário já está fora da janela de 24 h.");
                             return;
                           }
-                          agendar.mutate({ wa_id: c.wa_id, texto: texto.trim(), enviar_em: iso }, {
+                          agendar.mutate({ wa_id: c.wa_id, numero_id: c.numero_id, texto: texto.trim(), enviar_em: iso }, {
                             onSuccess: () => {
                               setTexto(""); setVerAgendar(false);
                               toast.success(`Agendada para ${hora(iso)}`);
@@ -2629,7 +2630,7 @@ function PainelContato({ c, meuId, onVerPedido }: {
     criarTag.mutate({ nome: novaTag, cor: "cinza" }, {
       onSuccess: (t) => {
         setNovaTag("");
-        marcarTag.mutate({ wa_id: c.wa_id, tag_id: t.id, marcar: true });
+        marcarTag.mutate({ wa_id: c.wa_id, numero_id: c.numero_id, tag_id: t.id, marcar: true });
       },
       onError: (err) => toast.error((err as Error).message),
     });
@@ -2737,7 +2738,7 @@ function PainelContato({ c, meuId, onVerPedido }: {
                       className="h-9 w-full gap-1.5 text-[11px]"
                       disabled={definirStatus.isPending}
                       onClick={() => definirStatus.mutate(
-                        { wa_id: c.wa_id, status: c.status === "aguardando" ? "aberto" : "aguardando" },
+                        { wa_id: c.wa_id, numero_id: c.numero_id, status: c.status === "aguardando" ? "aberto" : "aguardando" },
                         { onError: (e) => toast.error((e as Error).message) })}>
                 <Clock className="h-3.5 w-3.5" />
                 {c.status === "aguardando" ? "Retomar" : "Aguardando"}
@@ -2746,7 +2747,7 @@ function PainelContato({ c, meuId, onVerPedido }: {
                       className="h-9 w-full gap-1.5 text-[11px]"
                       disabled={definirStatus.isPending}
                       onClick={() => definirStatus.mutate(
-                        { wa_id: c.wa_id, status: c.status === "resolvido" ? "aberto" : "resolvido" },
+                        { wa_id: c.wa_id, numero_id: c.numero_id, status: c.status === "resolvido" ? "aberto" : "resolvido" },
                         { onError: (e) => toast.error((e as Error).message) })}>
                 {c.status === "resolvido"
                   ? <><Undo2 className="h-3.5 w-3.5" /> Reabrir</>
@@ -2783,7 +2784,7 @@ function PainelContato({ c, meuId, onVerPedido }: {
                           ? `Assumir esta conversa de ${c.responsavel_nome}`
                           : "Assumir esta conversa"}
                         onClick={() => definirStatus.mutate(
-                          { wa_id: c.wa_id, status: "em_atendimento", assumir: true },
+                          { wa_id: c.wa_id, numero_id: c.numero_id, status: "em_atendimento", assumir: true },
                           { onError: (e) => toast.error((e as Error).message) })}>
                   <UserCheck className="h-3.5 w-3.5 shrink-0" />
                   {/* ⚠️ "Assumir esta conversa" NÃO cabe: renderizado, saía
@@ -2826,7 +2827,7 @@ function PainelContato({ c, meuId, onVerPedido }: {
                   onChange={(e) => {
                     const id = e.target.value || null;
                     const nome = (atendentes ?? []).find((a) => a.user_id === id)?.full_name ?? null;
-                    definirResponsavel.mutate({ wa_id: c.wa_id, user_id: id, nome },
+                    definirResponsavel.mutate({ wa_id: c.wa_id, numero_id: c.numero_id, user_id: id, nome },
                       { onError: (err) => toast.error((err as Error).message) });
                     setVerResponsavel(false);
                   }}
@@ -2856,7 +2857,7 @@ function PainelContato({ c, meuId, onVerPedido }: {
             <div className="flex flex-wrap items-center gap-1.5">
               {c.tags.map((t) => (
                 <button key={t.id} type="button" title="Tirar esta etiqueta"
-                        onClick={() => marcarTag.mutate({ wa_id: c.wa_id, tag_id: t.id, marcar: false })}
+                        onClick={() => marcarTag.mutate({ wa_id: c.wa_id, numero_id: c.numero_id, tag_id: t.id, marcar: false })}
                         className={`group inline-flex items-center gap-1 rounded-md border
                                     px-2 py-1 text-[11px] font-medium transition-opacity
                                     hover:opacity-80 ${COR_TAG[t.cor] ?? COR_TAG.cinza}`}>
@@ -2880,7 +2881,7 @@ function PainelContato({ c, meuId, onVerPedido }: {
                   <div className="space-y-0.5">
                     {disponiveis.map((t) => (
                       <button key={t.id} type="button"
-                              onClick={() => marcarTag.mutate({ wa_id: c.wa_id, tag_id: t.id, marcar: true })}
+                              onClick={() => marcarTag.mutate({ wa_id: c.wa_id, numero_id: c.numero_id, tag_id: t.id, marcar: true })}
                               className="flex w-full items-center gap-2 rounded px-1.5 py-1
                                          text-left text-[11px] transition-colors hover:bg-muted/60">
                         <span className={`h-2.5 w-2.5 shrink-0 rounded-full border
@@ -3000,7 +3001,38 @@ export default function Conversas() {
   // E a mensagem nova chega sozinha, sem esperar o intervalo de 30 s.
   useConversasAoVivo();
 
-  const { data: conversas, isLoading, error } = useConversas();
+  /* ── Qual NÚMERO esta caixa está mostrando ─────────────────────────────
+     ⚠️ Desde 02/10/2026 o WABA tem três números (serviço, CarboZé Clube /
+     recompra e carrinho), e a janela de 24 h da Meta é por PAR — nosso número
+     ↔ cliente. A mesma pessoa em dois números são DUAS conversas, com janelas,
+     status e etiquetas independentes. Misturá-las faria a tela oferecer texto
+     livre que a Meta recusa com 131047, depois de a pessoa ter escrito a
+     resposta inteira.
+
+     ⚠️ Mora na URL, como o resto do estado desta família de telas: sem isso o
+     F5 devolve a caixa do serviço com a conversa do Clube aberta, e não dá
+     para mandar "olha essa conversa" para alguém. */
+  const { data: numeros, error: erroNumeros, isLoading: carregandoNumeros } = useNumeros();
+  const numeroDaUrl = params.get("numero");
+  /* ⚠️ A reserva é o PRIMEIRO da ordem do cadastro (serviço), nunca uma
+     constante aqui: número novo passa a existir com um INSERT, e um literal
+     nesta linha seria mais uma cópia do cadastro. E `null` enquanto o cadastro
+     não chega NÃO consulta — o hook tem `enabled`, porque consulta sem filtro
+     voltaria a misturar as caixas. */
+  const numeroId = numeroDaUrl
+    ?? (numeros?.[0]?.phone_number_id ?? null);
+  const trocarNumero = (id: string) => {
+    const p = new URLSearchParams(params);
+    p.set("numero", id);
+    /* ⚠️ Fecha a conversa aberta: `?de=` é um `wa_id`, e o MESMO `wa_id` em
+       outro número é outra conversa. Levar o parâmetro junto abriria uma
+       conversa que não existe naquela caixa, ou — pior — a conversa certa da
+       pessoa errada no contexto errado. */
+    p.delete("de");
+    setParams(p, { replace: true });
+  };
+
+  const { data: conversas, isLoading, error } = useConversas(30, numeroId);
 
   const lista = conversas ?? [];
   const atual = useMemo(
@@ -3140,6 +3172,41 @@ export default function Conversas() {
         description="As respostas dos clientes no WhatsApp oficial — o único lugar onde elas existem."
         actions={
           <div className="flex flex-wrap items-center gap-3">
+            {/* ── O SELETOR DE NÚMERO ──────────────────────────────────────
+                ⚠️ Só aparece com DOIS ou mais: com um número ele seria um botão
+                que não faz nada, e controle que não muda nada ensina a ignorar
+                os que mudam. Hoje são dois ativos (serviço e Clube) — o de
+                carrinho não está registrado na Meta e o `useNumeros` o esconde,
+                porque oferecer um número que não envia é prometer o que a Graph
+                API recusa com erro genérico.
+
+                ⚠️ E ele mostra TODOS os números, não só o aberto: "qual caixa
+                estou vendo?" e "quais caixas existem?" são a mesma pergunta
+                para quem atende, e um dropdown esconderia a segunda. */}
+            {(numeros?.length ?? 0) > 1 && (
+              <div className="flex items-center gap-1 rounded-lg border border-border
+                              bg-muted/40 p-0.5">
+                {(numeros ?? []).map((n: NumeroWa) => {
+                  const ativo = n.phone_number_id === numeroId;
+                  return (
+                    <button key={n.phone_number_id} type="button"
+                            onClick={() => trocarNumero(n.phone_number_id)}
+                            title={`${n.rotulo} · ${n.numero_exibicao ?? ""}`}
+                            aria-pressed={ativo}
+                            className={`flex items-center gap-1.5 rounded-md px-2.5 py-1
+                                        text-[11px] font-medium transition-colors ${
+                              ativo ? "bg-background text-foreground shadow-sm"
+                                    : "text-muted-foreground hover:text-foreground"}`}>
+                      {/* A cor vem do CADASTRO, não de um mapa aqui: número novo
+                          entra com um INSERT e já chega com a cor dele. */}
+                      <span className="h-2 w-2 shrink-0 rounded-full"
+                            style={{ backgroundColor: n.cor ?? "#64748B" }} />
+                      {n.rotulo}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             {/* ⚠️ UM placar, não dois números soltos — mas as DUAS contas
                 continuam na tela, porque elas pedem coisas OPOSTAS: janela
                 aberta ainda dá para responder; janela fechada a Meta recusa
@@ -3193,12 +3260,31 @@ export default function Conversas() {
       {/* ⚠️ Erro e vazio são coisas diferentes, e mostrá-los igual já custou
           caro nesta base: a tela de estoque dos vendedores dizia "ninguém tem
           caixa" quando o que havia era falha de permissão. */}
-      {error && (
+      {/* ⚠️ CADASTRO VAZIO NÃO PODE VIRAR TELA BRANCA. `carbo_wa_numeros` é
+          guardada por `carbo_e_time_interno()`, e quem não estiver nessa lista
+          recebe ZERO linhas — sem erro. Sem este aviso, a caixa não consultaria
+          nada (o hook tem `enabled`) e a tela ficaria vazia para sempre,
+          exatamente como a `bling2_esteira` ficava "travada na primeira coluna"
+          para quem não tinha leitura. Falha de consulta não pode virar "nada". */}
+      {!carregandoNumeros && !erroNumeros && (numeros?.length ?? 0) === 0 && (
+        <CarboCard>
+          <CarboCardContent className="p-4">
+            <p className="flex items-start gap-1.5 text-xs text-amber-500">
+              <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />
+              Nenhum número de WhatsApp disponível para o seu acesso. O cadastro
+              (<span className="font-mono">carbo_wa_numeros</span>) é lido só por
+              quem está no time interno — não é a caixa que está vazia.
+            </p>
+          </CarboCardContent>
+        </CarboCard>
+      )}
+
+      {(error || erroNumeros) && (
         <CarboCard>
           <CarboCardContent className="p-4">
             <p className="flex items-start gap-1.5 text-xs text-red-500">
               <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />
-              Não consegui carregar: {(error as Error).message}
+              Não consegui carregar: {((error ?? erroNumeros) as Error).message}
             </p>
           </CarboCardContent>
         </CarboCard>

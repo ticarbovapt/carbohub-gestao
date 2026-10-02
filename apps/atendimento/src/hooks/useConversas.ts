@@ -40,23 +40,69 @@ export {
 } from "@/lib/conversas";
 export type { RespostaRapida } from "@/lib/conversas";
 
-export function useConversas(dias = 30) {
+/**
+ * Os números da Cloud API que a Carbo opera.
+ *
+ * ⚠️ Só os ATIVOS. O cadastro guarda também o que ainda não foi registrado na
+ * Meta (o de carrinho, hoje), e oferecer na tela um número que não envia é
+ * prometer o que a Graph API recusa com erro genérico — que manda procurar no
+ * lugar errado.
+ */
+export interface NumeroWa {
+  phone_number_id: string;
+  rotulo: string;
+  numero_exibicao: string | null;
+  funcao: string;
+  cor: string | null;
+  ordem: number;
+}
+
+export function useNumeros() {
   return useQuery({
-    queryKey: ["wa-conversas", dias],
+    queryKey: ["wa-numeros"],
+    queryFn: async (): Promise<NumeroWa[]> => {
+      const { data, error } = await (supabase as any)
+        .from("carbo_wa_numeros")
+        .select("phone_number_id, rotulo, numero_exibicao, funcao, cor, ordem")
+        .eq("ativo", true)
+        .order("ordem");
+      if (error) throw error;
+      return (data ?? []) as NumeroWa[];
+    },
+    // Cadastro muda uma vez por semestre; relê-lo a cada 30 s seria ruído.
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useConversas(dias = 30, numeroId?: string | null) {
+  return useQuery({
+    queryKey: ["wa-conversas", dias, numeroId ?? null],
     queryFn: async (): Promise<Conversa[]> => {
       const desde = new Date(Date.now() - dias * 86_400_000).toISOString();
 
       const [{ data: msgs, error }, { data: contatos }, { data: atend }, { data: vinculos }] =
         await Promise.all([
+          // ⚠️ AS QUATRO consultas filtram pelo mesmo número. Filtrar só a
+          // primeira traria a janela, o status e as etiquetas do OUTRO número
+          // para dentro desta caixa — o "balde de sobra" do repo irmão, em que
+          // a tela monta o mapa a partir de uma lista JÁ filtrada e recebe as
+          // linhas de uma consulta que não foi.
+          //
+          // ⚠️ E `numeroId` nulo NÃO significa "todos": significa que a tela
+          // ainda não escolheu. Devolver tudo misturaria as caixas, que é o
+          // defeito inteiro. Quem decide é o `enabled` lá embaixo.
           (supabase as any).from("carbo_wa_conversas")
-            .select("*").gte("ocorrido_em", desde).order("ocorrido_em", { ascending: false })
+            .select("*").gte("ocorrido_em", desde).eq("numero_id", numeroId)
+            .order("ocorrido_em", { ascending: false })
             .limit(1000),
-          (supabase as any).from("carbo_wa_contatos").select("wa_id,last_inbound_at"),
-          (supabase as any).from("carbo_wa_atendimento").select("*"),
+          (supabase as any).from("carbo_wa_contatos")
+            .select("wa_id,last_inbound_at").eq("numero_id", numeroId),
+          (supabase as any).from("carbo_wa_atendimento").select("*").eq("numero_id", numeroId),
           // A tag vem junto do vínculo: a lista da esquerda precisa das etiquetas
           // para filtrar, e uma consulta por conversa seriam 36 idas ao banco.
           (supabase as any).from("carbo_wa_conversa_tag")
-            .select("wa_id, carbo_wa_tags(id, nome, cor, ativo)"),
+            .select("wa_id, carbo_wa_tags(id, nome, cor, ativo)")
+            .eq("numero_id", numeroId),
         ]);
       if (error) throw error;
 
@@ -98,6 +144,10 @@ export function useConversas(dias = 30) {
     // E é a rede de segurança do Realtime: WebSocket que cai reconecta em
     // silêncio, e sem o intervalo a tela ficaria parada parecendo vazia.
     refetchInterval: 30_000,
+    // ⚠️ Sem número escolhido não consulta. Uma consulta sem o filtro voltaria
+    // a misturar as três caixas, e misturar é exatamente o que esta tela
+    // passou a existir para não fazer.
+    enabled: !!numeroId,
   });
 }
 
@@ -174,12 +224,15 @@ export function useConversasAoVivo() {
 export function useResponder() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ wa_id, texto }: { wa_id: string; texto: string }) => {
+    mutationFn: async ({ wa_id, texto, numero_id }:
+                       { wa_id: string; texto: string; numero_id?: string | null }) => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Sessão expirada. Faça login novamente.");
 
       const res = await supabase.functions.invoke("whatsapp-responder", {
-        body: { wa_id, texto },
+        // ⚠️ POR QUAL número a resposta sai. A função tem reserva no número de
+        // serviço, então omitir não quebra — manda do número errado, que é pior.
+        body: { wa_id, texto, numero_id },
       });
 
       if (res.error) {
@@ -226,13 +279,14 @@ export function useResponder() {
 export function useDefinirStatus() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ wa_id, status, assumir }:
-                       { wa_id: string; status: StatusAtendimento; assumir?: boolean }) => {
+    mutationFn: async ({ wa_id, status, assumir, numero_id }:
+                       { wa_id: string; status: StatusAtendimento; assumir?: boolean;
+                         numero_id?: string | null }) => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Sessão expirada. Faça login novamente.");
 
       const linha: Record<string, unknown> = {
-        wa_id, status,
+        wa_id, numero_id, status,
         desde: new Date().toISOString(),
         atualizado_em: new Date().toISOString(),
         atualizado_por: session.user.id,
@@ -248,7 +302,7 @@ export function useDefinirStatus() {
       }
 
       const { error } = await (supabase as any)
-        .from("carbo_wa_atendimento").upsert(linha, { onConflict: "wa_id" });
+        .from("carbo_wa_atendimento").upsert(linha, { onConflict: "numero_id,wa_id" });
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["wa-conversas"] }); },
@@ -259,18 +313,19 @@ export function useDefinirStatus() {
 export function useDefinirResponsavel() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ wa_id, user_id, nome }:
-                       { wa_id: string; user_id: string | null; nome: string | null }) => {
+    mutationFn: async ({ wa_id, user_id, nome, numero_id }:
+                       { wa_id: string; user_id: string | null; nome: string | null;
+                         numero_id?: string | null }) => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Sessão expirada. Faça login novamente.");
 
       // ⚠️ NÃO mexe em `desde`: trocar o responsável não é decidir de novo
       // sobre a conversa, e reescrever a data desfaria uma reabertura pendente.
       const { error } = await (supabase as any).from("carbo_wa_atendimento")
-        .upsert({ wa_id, responsavel: user_id, responsavel_nome: nome,
+        .upsert({ wa_id, numero_id, responsavel: user_id, responsavel_nome: nome,
                   atualizado_em: new Date().toISOString(),
                   atualizado_por: session.user.id },
-                { onConflict: "wa_id" });
+                { onConflict: "numero_id,wa_id" });
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["wa-conversas"] }); },
@@ -328,8 +383,9 @@ export function useCriarTag() {
 export function useMarcarTag() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ wa_id, tag_id, marcar }:
-                       { wa_id: string; tag_id: string; marcar: boolean }) => {
+    mutationFn: async ({ wa_id, tag_id, marcar, numero_id }:
+                       { wa_id: string; tag_id: string; marcar: boolean;
+                         numero_id?: string | null }) => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Sessão expirada. Faça login novamente.");
 
@@ -343,7 +399,8 @@ export function useMarcarTag() {
         return;
       }
       const { error } = await (supabase as any).from("carbo_wa_conversa_tag")
-        .upsert({ wa_id, tag_id, por: session.user.id }, { onConflict: "wa_id,tag_id" });
+        .upsert({ wa_id, numero_id, tag_id, por: session.user.id },
+                { onConflict: "numero_id,wa_id,tag_id" });
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["wa-conversas"] }); },
@@ -446,13 +503,17 @@ export function useAgendadas(wa_id: string | null) {
 export function useAgendar() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ wa_id, texto, enviar_em }:
-                       { wa_id: string; texto: string; enviar_em: string }) => {
+    mutationFn: async ({ wa_id, texto, enviar_em, numero_id }:
+                       { wa_id: string; texto: string; enviar_em: string;
+                         numero_id?: string | null }) => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Sessão expirada. Faça login novamente.");
 
       const { error } = await (supabase as any).from("carbo_wa_agendadas")
-        .insert({ wa_id, texto, enviar_em, criado_por: session.user.id });
+        // ⚠️ A agendada guarda o número: ela sai horas depois, e tem de sair
+        // pelo MESMO número em que a conversa aconteceu — senão chega de um
+        // desconhecido.
+        .insert({ wa_id, numero_id, texto, enviar_em, criado_por: session.user.id });
       if (error) throw error;
     },
     onSuccess: (_d, v) => {
@@ -514,7 +575,8 @@ export function useNotas(wa_id: string | null) {
 export function useAnotar() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ wa_id, texto }: { wa_id: string; texto: string }) => {
+    mutationFn: async ({ wa_id, texto, numero_id }:
+                       { wa_id: string; texto: string; numero_id?: string | null }) => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Sessão expirada. Faça login novamente.");
 
@@ -524,7 +586,7 @@ export function useAnotar() {
         .from("profiles").select("full_name").eq("id", session.user.id).maybeSingle();
 
       const { error } = await (supabase as any).from("carbo_wa_notas").insert({
-        wa_id, texto: texto.trim(), autor: session.user.id,
+        wa_id, numero_id, texto: texto.trim(), autor: session.user.id,
         autor_nome: perfil?.full_name ?? session.user.email ?? null,
       });
       if (error) throw error;
@@ -617,13 +679,18 @@ export function useMidia(media_id: string | null, ligado: boolean) {
 export function useEnviarMidia() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ wa_id, arquivo, legenda }:
-                       { wa_id: string; arquivo: File; legenda?: string }) => {
+    mutationFn: async ({ wa_id, arquivo, legenda, numero_id }:
+                       { wa_id: string; arquivo: File; legenda?: string;
+                         numero_id?: string | null }) => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Sessão expirada. Faça login novamente.");
 
       const form = new FormData();
       form.append("wa_id", wa_id);
+      // ⚠️ O upload e o envio têm de ir para o MESMO número: o `media_id` que a
+      // Meta devolve pertence ao número que subiu o arquivo, e cruzá-los volta
+      // como erro genérico da Graph API.
+      if (numero_id) form.append("numero_id", numero_id);
       form.append("arquivo", arquivo, arquivo.name || "arquivo");
       if (legenda?.trim()) form.append("legenda", legenda.trim());
 
