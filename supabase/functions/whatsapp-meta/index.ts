@@ -159,6 +159,76 @@ Deno.serve(async (req: Request) => {
     // seria uma oferta real para um cliente real — e descobrir ali que o
     // número não está registrado é descobrir tarde.
     const phoneTeste = url.searchParams.get("numero_id") || PHONE_ID_SERVICO;
+
+    // ── `&etapa=` — a mensagem DE VERDADE, para UM número ────────────────
+    //
+    // Pedido do dono do processo em 02/10/2026: *"quero enviar a primeira
+    // mensagem para meu número pessoal para a tela desbloquear aqui para eu
+    // dar o treinamento ao time de atendimento"*.
+    //
+    // ⚠️ `hello_world` NÃO serve para isso: o time precisa ver o que o CLIENTE
+    // vê, e precisa de uma conversa de verdade na caixa do Clube para treinar
+    // a resposta com o link. Um teste que não parece com o real treina para o
+    // que não vai acontecer.
+    //
+    // ⚠️ E ele passa pelo `montarPayload` REAL, não por um corpo montado à
+    // mão: é assim que este modo também testa as variáveis nomeadas, o
+    // `fallback` e o idioma. Teste que usa outro caminho que o da produção
+    // prova o caminho errado.
+    //
+    // ⚠️ A TRAVA CONTINUA SENDO FORTE: só template que existe em
+    // `carbo_msg_templates` E está `APPROVED`. Mesmo com o segredo em mãos, o
+    // mais que se consegue é mandar uma mensagem NOSSA, já aprovada, para um
+    // número por vez — nunca texto livre, nunca template arbitrário.
+    const etapaTeste = url.searchParams.get("etapa");
+    if (etapaTeste) {
+      const { data: tpl } = await supabase.from("carbo_msg_templates")
+        .select("etapa, meta_template_nome, meta_idioma, meta_variaveis, meta_status, meta_botao_url_de, numero_id")
+        .eq("etapa", etapaTeste).maybeSingle();
+
+      if (!tpl) return json({ error: `etapa desconhecida: ${etapaTeste}` }, 400);
+      if (tpl.meta_status !== "APPROVED" || !tpl.meta_template_nome) {
+        return json({
+          error: `a etapa ${etapaTeste} não tem template aprovado na Meta`,
+          meta_status: tpl.meta_status, meta_template_nome: tpl.meta_template_nome,
+        }, 400);
+      }
+
+      // O nome de quem recebe vem do `&nome=`, porque não há pedido nenhum por
+      // trás de um teste — e `primeiro_nome` é a variável do `recompra_lembrete`.
+      const nomeTeste = url.searchParams.get("nome") || "Lucas Padilha";
+      const linhaFalsa: Record<string, unknown> = {
+        nome: nomeTeste,
+        primeiro_nome: String(nomeTeste).trim().split(" ")[0],
+      };
+      const m = montarPayload(
+        numero, tpl.meta_template_nome, tpl.meta_idioma ?? "pt_BR",
+        (tpl.meta_variaveis ?? []) as any, linhaFalsa, tpl.meta_botao_url_de,
+      );
+      // ⚠️ Variável obrigatória faltando SEGURA, e diz qual. É a mesma regra da
+      // fila — a Meta recusa parâmetro vazio com 132000, e mandar assim seria
+      // treinar o time com um erro.
+      if (m.faltando.length) {
+        return json({ error: "faltam variáveis", faltando: m.faltando }, 400);
+      }
+      // ⚠️ O número sai do CADASTRO da etapa, não do `&numero_id=`: a mensagem
+      // de teste tem de chegar pelo MESMO número por onde a de verdade vai
+      // chegar, senão o treinamento acontece numa caixa e a operação em outra.
+      const rr = await enviar(m.body, tpl.numero_id || phoneTeste);
+      const okk = rr.status >= 200 && rr.status < 300;
+      return json({
+        ok: okk, modo: "mensagem REAL para um número", etapa: etapaTeste,
+        template: tpl.meta_template_nome, numero_id: tpl.numero_id,
+        para: numero, status: rr.status,
+        wamid: rr.json?.messages?.[0]?.id ?? null,
+        wa_id: rr.json?.contacts?.[0]?.wa_id ?? null,
+        erro: okk ? null : detalheDoErro(rr.json),
+        nota: okk
+          ? "A conversa aparece na caixa deste número assim que o cliente RESPONDER — o envio por template não abre a janela sozinho."
+          : null,
+      }, 200);
+    }
+
     const r = await enviar({
       messaging_product: "whatsapp", recipient_type: "individual",
       to: numero, type: "template",
