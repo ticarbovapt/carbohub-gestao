@@ -183,7 +183,11 @@ Deno.serve(async (req: Request) => {
     const etapaTeste = url.searchParams.get("etapa");
     if (etapaTeste) {
       const { data: tpl } = await supabase.from("carbo_msg_templates")
-        .select("etapa, meta_template_nome, meta_idioma, meta_variaveis, meta_status, meta_botao_url_de, numero_id")
+        // ⚠️ `texto` ESTAVA FALTANDO AQUI, e o balão foi gravado VAZIO — "aviso
+        // automático" sem uma linha de mensagem. Campo que a função passou a
+        // LER tem de atravessar o `select`; é a mesma família do `map` do
+        // `Vendas.tsx` que descartava `discount_amount`.
+        .select("etapa, texto, meta_template_nome, meta_idioma, meta_variaveis, meta_status, meta_botao_url_de, numero_id")
         .eq("etapa", etapaTeste).maybeSingle();
 
       if (!tpl) return json({ error: `etapa desconhecida: ${etapaTeste}` }, 400);
@@ -245,6 +249,18 @@ Deno.serve(async (req: Request) => {
         for (const [chave, valor] of Object.entries(m.valores ?? {})) {
           textoRenderizado = textoRenderizado.split(`{{${chave}}}`).join(valor);
         }
+        // ⚠️ TEXTO VAZIO NÃO VIRA BALÃO MUDO. `carbo_msg_templates.texto` é o
+        // espelho de conferência do que a Meta aprovou; se ele estiver em
+        // branco, gravar assim produz exatamente o defeito que isto conserta —
+        // um balão sem mensagem, que se lê como "o sistema perdeu o conteúdo".
+        // Melhor dizer o que falta.
+        if (!textoRenderizado.trim()) {
+          return json({
+            ok: false, etapa: etapaTeste, wamid: wamidTeste,
+            erro: "A mensagem FOI enviada ao cliente, mas `carbo_msg_templates.texto` está vazio para esta etapa — o balão ficaria sem conteúdo na tela.",
+            como_resolver: "Preencha o `texto` da etapa com o corpo aprovado na Meta (ele é espelho de conferência, não é o que sai) e dispare de novo.",
+          }, 500);
+        }
         const { error: erroMsg } = await supabase.from("carbo_wa_mensagens").upsert({
           wamid: wamidTeste,
           wa_id: waIdTeste,
@@ -252,6 +268,11 @@ Deno.serve(async (req: Request) => {
           direcao: "saida",
           tipo: "template",
           texto: textoRenderizado,
+          // ⚠️ A ETAPA, para o rótulo do balão dizer QUAL aviso é
+          // ("automático · recompra") em vez de só "aviso automático". Sem ela
+          // a tela não tem como saber, e um rótulo genérico num balão vazio foi
+          // exatamente o que apareceu no primeiro teste.
+          sobre_a_etapa: tpl.etapa,
           ocorrido_em: new Date().toISOString(),
           payload: m.body,
         }, { onConflict: "wamid" });
