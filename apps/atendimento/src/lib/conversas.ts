@@ -28,6 +28,11 @@ export const JANELA_MS = 24 * 60 * 60 * 1000;
 export interface MensagemConversa {
   wamid: string;
   wa_id: string;
+  /** ⚠️ Por qual NÚMERO NOSSO ela passou. Desde 02/10/2026 o WABA tem três
+   *  (serviço, CarboZé Clube/recompra e carrinho), e a janela de 24 h da Meta é
+   *  por PAR — nosso número ↔ cliente. A mesma pessoa em dois números são DUAS
+   *  conversas, com janelas, status e etiquetas independentes. */
+  numero_id?: string | null;
   cliente: string | null;
   direcao: "entrada" | "saida";
   tipo: string;
@@ -181,6 +186,9 @@ export type EstadoConversa = "precisa_resposta" | "resolvida" | "sem_pendencia";
 
 export interface Conversa {
   wa_id: string;
+  /** De qual número NOSSO é esta conversa. Toda escrita (status, responsável,
+   *  etiqueta, recado, resposta) precisa dele: as chaves viraram o PAR. */
+  numero_id: string | null;
   cliente: string | null;
   ultima_em: string;
   ultima_texto: string | null;
@@ -316,6 +324,11 @@ export function agruparConversas(
 
   const conversas: Conversa[] = [];
   for (const [wa_id, msgs] of porPessoa) {
+    // ⚠️ O número sai das MENSAGENS, não de um parâmetro: a lista já vem
+    // filtrada por número, então todas as linhas do grupo têm o mesmo. Pegar o
+    // primeiro não-nulo tolera linha antiga sem a coluna, que a migração
+    // preencheu mas um cache velho poderia não ter.
+    const numeroDaConversa = msgs.find((m) => m.numero_id)?.numero_id ?? null;
     const ordenadas = [...msgs].sort(
       (a, b) => new Date(a.ocorrido_em).getTime() - new Date(b.ocorrido_em).getTime());
     const ultima = ordenadas[ordenadas.length - 1];
@@ -360,6 +373,7 @@ export function agruparConversas(
 
     conversas.push({
       wa_id,
+      numero_id: numeroDaConversa,
       cliente: doPedido ?? doWhats,
       // Só vale mostrar o segundo quando ele diz alguma coisa a mais.
       nome_whatsapp:
