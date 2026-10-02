@@ -4,11 +4,10 @@ import {
   MessagesSquare, Send, Loader2, AlertTriangle, Clock, ArrowLeft, Lock, Paperclip,
   Image as ImageIcon, Video, Mic, FileText, MapPin, User,
   File as FileIcon, HelpCircle,
-  Search, SearchX, X, Package, ArrowUpRight, CornerDownLeft, Megaphone,
+  Search, SearchX, X, Package, ArrowUpRight, Megaphone,
   BellRing, BellOff, Check, CheckCheck, Inbox, Undo2, Sparkles, UserCheck, Tag as TagIcon, Plus,
   CalendarClock, Trash2, Square, Play, Pause, Download, StickyNote, EyeOff, Copy,
   Maximize2, SlidersHorizontal, ChevronDown, MessageSquarePlus,
-  type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
@@ -109,19 +108,36 @@ function useRelogio(ms = 30_000) {
   }, [ms]);
 }
 
-/** "Hoje" / "Ontem" / "terça-feira, 12/08/2026".
+/** "Hoje" / "Ontem" / "Seg., 28/09" — e com o ano só quando ele é outro.
  *
  *  ⚠️ "Ontem" sai de subtrair 24 h do agora e comparar o dia resultante em SP —
- *  não de aritmética de calendário. */
+ *  não de aritmética de calendário.
+ *
+ *  ⚠️ A primeira letra é posta em maiúscula AQUI, e não com `capitalize` no CSS
+ *  do separador: aquela classe capitaliza CADA palavra, e era ela que escrevia
+ *  "Segunda-Feira", que não é português. O `capitalize` saiu do
+ *  `SeparadorDeDia` junto com esta mudança.
+ *
+ *  ⚠️ O ano só aparece quando NÃO é o ano corrente. A conversa carrega 30 dias,
+ *  então ele é o mesmo em todos os separadores — e repetido é carimbo, não
+ *  informação. Mesma razão por que o horário só sai na última do bloco. */
 function rotuloDoDia(s: string): string {
   const dia = diaEmSP(s);
   const agora = Date.now();
-  if (dia === diaEmSP(new Date(agora).toISOString())) return "Hoje";
+  const hoje = diaEmSP(new Date(agora).toISOString());
+  if (dia === hoje) return "Hoje";
   if (dia === diaEmSP(new Date(agora - 86_400_000).toISOString())) return "Ontem";
-  return new Date(s).toLocaleDateString("pt-BR", {
-    weekday: "long", day: "2-digit", month: "2-digit", year: "numeric",
+  // ⚠️ A comparação de ano é sobre o dia JÁ em Brasília (`dd/mm/aaaa`), nunca
+  // `getFullYear()`: aquele é hora local do navegador, e às 21h de 31/12 ele
+  // diria um ano que em SP ainda não começou — a armadilha de fuso do
+  // `ordered_at::date`.
+  const opcoes: Intl.DateTimeFormatOptions = {
+    weekday: "short", day: "2-digit", month: "2-digit",
     timeZone: "America/Sao_Paulo",
-  });
+  };
+  if (dia.slice(-4) !== hoje.slice(-4)) opcoes.year = "numeric";
+  const r = new Date(s).toLocaleDateString("pt-BR", opcoes);
+  return r.charAt(0).toUpperCase() + r.slice(1);
 }
 
 const NOME_ETAPA: Record<string, string> = {
@@ -302,32 +318,39 @@ const ehNomeDeGravacao = (t: string) => /^audio-\d+\.(ogg|m4a|webm|mp4)$/i.test(
  *
  * ⚠️ Ele NÃO pode parecer um balão. Balão é o que o cliente vê ou viu; recado é
  * o contrário disso, e a distinção não pode depender de ler o texto. Por isso
- * ele fica no meio, sem lado, com moldura tracejada âmbar e o olho cortado
- * dizendo "só o time vê" — a mesma lógica do contorno tracejado do aviso
+ * ele fica no meio, sem lado, com moldura tracejada âmbar e a frase "só o time
+ * vê" ACIMA do texto — a mesma lógica do contorno tracejado do aviso
  * automático, que existe para ninguém confundir sistema com gente.
+ *
+ * ⚠️ O sigilo NUNCA foi a cor nem o ícone: é a tabela separada
+ * (`carbo_wa_notas`), que nenhum caminho de envio lê. A tela só precisa dizer o
+ * fato uma vez, bem — eram DOIS ícones (bloco de notas + olho cortado) e DOIS
+ * rótulos ("recado interno" e "só o time vê") para um único fato, mais uma
+ * terceira linha só para autor e hora.
+ *
+ * ⚠️ `soHora`, não `hora`: o dia já está no separador logo acima, e repeti-lo em
+ * cada recado é o mesmo carimbo que o horário dos balões evita.
  */
 function Recado({ n, apagar }: { n: Nota; apagar: () => void }) {
   return (
     <div className="my-3 flex justify-center">
       <div className="group w-[92%] rounded-lg border border-dashed border-amber-500/40
                       bg-amber-500/5 px-3 py-2 sm:w-[80%]">
-        <p className="flex items-center gap-1.5 text-[10px] font-medium text-amber-500/90">
-          <StickyNote className="h-3 w-3" />
-          recado interno
-          <EyeOff className="h-3 w-3" />
-          <span className="text-muted-foreground">só o time vê</span>
+        <p className="flex items-center gap-1.5 text-[10px] leading-none text-amber-500/90">
+          <StickyNote className="h-3 w-3 shrink-0" />
+          <span className="shrink-0 font-medium">recado interno · só o time vê</span>
+          <span className="ml-auto min-w-0 truncate text-muted-foreground/70">
+            {n.autor_nome ?? "alguém do time"} · {soHora(n.criado_em)}
+          </span>
           <button type="button" onClick={apagar}
-                  className="ml-auto opacity-0 transition-opacity group-hover:opacity-100
+                  className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100
                              hover:text-red-500"
                   aria-label="Apagar recado">
             <Trash2 className="h-3 w-3" />
           </button>
         </p>
-        <p className="mt-1 whitespace-pre-wrap break-words text-[13px] leading-relaxed">
+        <p className="mt-1.5 whitespace-pre-wrap break-words text-[13px] leading-relaxed">
           {n.texto}
-        </p>
-        <p className="mt-1 text-[10px] leading-none text-muted-foreground/70">
-          {n.autor_nome ?? "alguém do time"} · {hora(n.criado_em)}
         </p>
       </div>
     </div>
@@ -575,12 +598,16 @@ function Anexo({ mediaId, tipo, nome, Icone }: {
 }
 
 /** Separador de dia, grudado no topo enquanto se rola aquele dia: numa conversa
- *  longa, quem chega no meio precisa saber "de quando é isto?" sem subir. */
+ *  longa, quem chega no meio precisa saber "de quando é isto?" sem subir.
+ *
+ *  ⚠️ SEM `capitalize`. Aquela classe maiusculiza CADA palavra e produzia
+ *  "Segunda-Feira"; quem decide a maiúscula é o `rotuloDoDia`, que põe só a
+ *  primeira letra. */
 function SeparadorDeDia({ rotulo }: { rotulo: string }) {
   return (
     <div className="sticky top-0 z-10 flex justify-center py-1.5">
       <span className="rounded-full border bg-muted/80 px-2.5 py-0.5 text-[10px]
-                       font-medium capitalize text-muted-foreground backdrop-blur">
+                       font-medium text-muted-foreground backdrop-blur">
         {rotulo}
       </span>
     </div>
@@ -816,31 +843,63 @@ function Balao({ m, primeira, ultima, mostrarComoReenviar }: {
   // saber apenas que "houve um aviso" faz perguntar ao cliente uma informação
   // que nós mesmos mandamos.
   //
-  // O contorno tracejado e o rótulo continuam: a pessoa tem de distinguir o que
-  // saiu por sistema do que alguém digitou.
+  // O contorno tracejado e a palavra "automático" CONTINUAM: a pessoa tem de
+  // distinguir o que saiu por sistema do que alguém digitou, e essa distinção
+  // não é estética — aviso automático NÃO conta como atendimento
+  // (`statusEfetivo`, em `lib/conversas.ts`, olha `tipo === "template"`).
   if (automatica) {
+    // ⚠️ O código de rastreio vinha DUAS VEZES: no corpo (o template o manda
+    // como parâmetro do texto) e no rodapé do botão, em monoespaçado, logo
+    // abaixo. O mesmo dado a três centímetros de distância, e o do rodapé
+    // chamando mais atenção que a própria mensagem.
+    //
+    // ⚠️ E a regra NÃO pode ser "esconder o do rodapé": há template com botão
+    // cujo corpo não cita o código, e ali o rodapé é a ÚNICA fonte. Quem decide
+    // é a comparação com o texto de verdade, mensagem por mensagem — ausência
+    // disfarçada de resposta é a doença conhecida deste repo.
+    const codigoJaNoTexto = !!m.botao_rastreio && !!m.texto
+      && m.texto.includes(m.botao_rastreio);
+    // O nome da ETAPA diz QUAL aviso é, em menos espaço do que "aviso
+    // automático da esteira" gastava sem informar nada. Cru quando é etapa que
+    // o mapa não conhece (recompra, carrinho), e nulo quando o envio não
+    // guardou etapa — e aí o rótulo volta a ser "aviso automático".
+    const etapa = m.sobre_a_etapa
+      ? (NOME_ETAPA[m.sobre_a_etapa] ?? m.sobre_a_etapa)
+      : null;
     return (
       <div className={`flex justify-end ${primeira ? "mt-3 first:mt-0" : "mt-0.5"}`}>
         <div className="max-w-[85%] rounded-lg border border-dashed bg-muted/30 px-3 py-2 sm:max-w-[70%]">
-          <p className="flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground">
-            <Megaphone className="h-3 w-3" /> aviso automático da esteira
+          {/* ⚠️ O rótulo fica ACIMA do texto: ele responde "isto foi gente ou
+              sistema?", e essa pergunta se responde ANTES de ler a mensagem. A
+              hora vem na mesma linha porque ela sobrava vazia à direita — e
+              assim o balão perde uma linha inteira sem perder nada. */}
+          <p className="flex items-center gap-1.5 text-[10px] font-medium leading-none text-muted-foreground">
+            <Megaphone className="h-3 w-3 shrink-0" />
+            <span className="min-w-0 truncate">
+              {etapa ? `automático · ${etapa}` : "aviso automático"}
+            </span>
+            <span className="ml-auto shrink-0 font-normal text-muted-foreground/70">
+              {soHora(m.ocorrido_em)}
+            </span>
           </p>
-          <p className="mt-1 whitespace-pre-wrap break-words text-[13px] leading-relaxed">
+          <p className="mt-1.5 whitespace-pre-wrap break-words text-[13px] leading-relaxed">
             {m.texto}
           </p>
           {/* O botão não faz parte do corpo, mas faz parte do que o cliente
-              recebeu — e é justamente o código que o atendimento vai conferir. */}
+              recebeu — por isso ele continua dito. O CÓDIGO só aparece aqui
+              quando o corpo não o tem. */}
           {m.botao_rastreio && (
             <p className="mt-1.5 flex items-center gap-1 rounded-md border bg-background/40 px-2 py-1
                           text-[10px] text-muted-foreground">
               <ArrowUpRight className="h-3 w-3 shrink-0" />
-              <span>botão <strong className="text-foreground">Acompanhar pedido</strong> →</span>
-              <span className="truncate font-mono">{m.botao_rastreio}</span>
+              <span className="shrink-0">
+                botão <strong className="font-medium text-foreground">Acompanhar pedido</strong>
+              </span>
+              {!codigoJaNoTexto && (
+                <span className="min-w-0 truncate font-mono">{m.botao_rastreio}</span>
+              )}
             </p>
           )}
-          <p className="mt-1 text-right text-[10px] leading-none text-muted-foreground/70">
-            {soHora(m.ocorrido_em)}
-          </p>
         </div>
       </div>
     );
@@ -1454,142 +1513,188 @@ function Conversa({ c, onVerPedido }: {
   return (
     <CarboCard className="flex h-full min-h-0 flex-col">
       <CarboCardContent className="flex min-h-0 flex-1 flex-col gap-3 p-4">
+        {/* ── Cabeçalho da conversa ─────────────────────────────────────────
+            ⚠️ O que é do CONTATO mora no painel da direita (avatar, nome, nome
+            do WhatsApp, telefone, card do pedido). Aqui ele aparece com
+            `xl:hidden` — e a condição NÃO é estilo, é MEDIDA: o `PainelContato`
+            é `hidden … xl:flex` e a terceira coluna do grid só existe a partir
+            do `xl`. ABAIXO DE 1280 px O PAINEL NÃO EXISTE, então esconder sem a
+            condição apagaria o nome do cliente em notebook de 1366 — onde não
+            há painel nenhum para repeti-lo. A duplicação da queixa é só no `xl`.
+
+            O que SOBRA em qualquer largura é o que é da CONVERSA: a janela de
+            24 h, a dúvida sobre o vínculo do pedido, e as ações. */}
         <div className="flex flex-wrap items-start justify-between gap-3 border-b pb-2.5">
+
+          {/* No `xl` sobra aqui só o aviso de vínculo provável — e vazio é o
+              estado CERTO: significa "não há dúvida sobre de que pedido é esta
+              conversa". */}
           <div className="flex min-w-0 items-start gap-2.5">
+
+            {/* Identidade do contato: só abaixo do `xl`. O painel mostra o mesmo
+                avatar em 64 px, o mesmo nome e o telefone copiável. */}
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full
                             border border-carbo-green/30 bg-carbo-green/10
-                            text-[11px] font-semibold uppercase text-emerald-500">
+                            text-[11px] font-semibold uppercase text-emerald-500
+                            xl:hidden">
               {inicialDe(c.cliente, c.wa_id)}
             </div>
 
             <div className="min-w-0">
-              <h3 className="truncate text-sm font-semibold leading-tight">
-                {c.cliente ?? c.wa_id}
-              </h3>
+              <div className="xl:hidden">
+                <h3 className="truncate text-sm font-semibold leading-tight">
+                  {c.cliente ?? c.wa_id}
+                </h3>
 
-              {/* ⚠️ O nome do WhatsApp em linha própria, e só quando difere do
-                  cadastro. Alguém que conhece o cliente como "advmauro166" não
-                  o encontra por "Mauro Silva" — e vice-versa. */}
-              {c.nome_whatsapp && (
-                <p className="truncate text-[10px] leading-tight text-muted-foreground/70">
-                  no WhatsApp: {c.nome_whatsapp}
-                </p>
-              )}
+                {/* ⚠️ O nome do WhatsApp em linha própria, e só quando existe.
+                    Alguém que conhece o cliente como "advmauro166" não o
+                    encontra por "Mauro Silva" — e vice-versa. */}
+                {c.nome_whatsapp && (
+                  <p className="truncate text-[10px] leading-tight text-muted-foreground/70">
+                    no WhatsApp: {c.nome_whatsapp}
+                  </p>
+                )}
 
-              {/* O número é identificador, não título: monoespaçado e mais
-                  apagado que o nome. Antes os dois tinham o mesmo peso. */}
-              <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5
-                              text-[10px] text-muted-foreground/80">
-                <span className="font-mono tracking-tight">{c.wa_id}</span>
-                {c.sobre_a_etapa && (
-                  <>
-                    <span aria-hidden="true">·</span>
-                    <span>{NOME_ETAPA[c.sobre_a_etapa] ?? c.sobre_a_etapa}</span>
-                  </>
+                {/* O número é identificador, não título: monoespaçado e mais
+                    apagado que o nome. A ETAPA vem junto dele aqui; no `xl` quem
+                    a mostra é o card de Pedido do painel, como subtítulo do
+                    número — que é o lugar certo, porque ela é atributo do
+                    PEDIDO, não do contato. */}
+                <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5
+                                text-[10px] text-muted-foreground/80">
+                  <span className="font-mono tracking-tight">{c.wa_id}</span>
+                  {c.sobre_a_etapa && (
+                    <>
+                      <span aria-hidden="true">·</span>
+                      <span>{NOME_ETAPA[c.sobre_a_etapa] ?? c.sobre_a_etapa}</span>
+                    </>
+                  )}
+                </div>
+
+                {/* O chip neutro do pedido: abre o card sem sair da conversa.
+                    Fica no bloco `xl:hidden` porque, no `xl`, o painel tem o
+                    card inteiro — número, etapa e o mesmo clique. */}
+                {c.bling_id != null && !vinculoProvavel && (
+                  <div className="mt-1.5">
+                    <button type="button" onClick={() => onVerPedido(c.bling_id!)}
+                            title="Ver o pedido sem sair da conversa"
+                            className="inline-flex items-center gap-1 rounded-md border bg-muted/40
+                                       px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground
+                                       transition-colors hover:bg-muted/70 hover:text-foreground">
+                      <Package className="h-3 w-3" />
+                      <span className="font-mono">#{c.bling_id}</span>
+                      <Maximize2 className="h-3 w-3 opacity-60" />
+                    </button>
+                  </div>
                 )}
               </div>
 
-              {c.bling_id != null && (
-                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                  {/* Quem atende quase sempre precisa ver o pedido antes de
-                      responder. O chip abre o card AQUI — antes ele levava para
-                      a Esteira, e sair do atendimento no meio dele é como a
-                      resposta fica pela metade. */}
-                  <button type="button" onClick={() => onVerPedido(c.bling_id!)}
-                          title="Ver o pedido sem sair da conversa"
-                          className="inline-flex items-center gap-1 rounded-md border bg-muted/40
-                                     px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground
-                                     transition-colors hover:bg-muted/70 hover:text-foreground">
-                    <Package className="h-3 w-3" />
-                    <span className="font-mono">#{c.bling_id}</span>
-                    <Maximize2 className="h-3 w-3 opacity-60" />
-                  </button>
-
-                  {vinculoProvavel && (
-                    <span
-                      title="Pedido deduzido do último aviso enviado a este número, não da resposta do cliente. Confirme antes de tratar como certo."
-                      className="inline-flex items-center gap-1 rounded-md border border-amber-500/30
-                                 bg-amber-500/5 px-1.5 py-0.5 text-[10px] text-amber-500">
-                      <HelpCircle className="h-3 w-3" /> provável
-                    </span>
-                  )}
-                </div>
+              {/* ⚠️ ESTE fica em TODA largura, e é a única coisa do pedido que
+                  sobrevive no `xl`: o painel da direita NÃO diz "provável" em
+                  lugar nenhum — o card dele mostra só número e etapa. O aviso
+                  carrega o número de propósito ("provável" sozinho não diz
+                  provável o quê) e continua abrindo o card, porque a dúvida só
+                  se resolve olhando o pedido. `vinculo_exato = false` significa
+                  que o pedido foi DEDUZIDO do último aviso enviado ao número,
+                  não lido do `context.id` da resposta. Aproximação que se passa
+                  por certeza é como alguém responde sobre o pedido errado. */}
+              {vinculoProvavel && (
+                <button type="button" onClick={() => onVerPedido(c.bling_id!)}
+                        title="Pedido deduzido do último aviso enviado a este número, não da resposta do cliente. Confirme antes de tratar como certo."
+                        className="mt-1.5 inline-flex items-center gap-1 rounded-md border
+                                   border-amber-500/30 bg-amber-500/5 px-1.5 py-0.5
+                                   text-[10px] font-medium text-amber-500 transition-colors
+                                   hover:bg-amber-500/10 xl:mt-0">
+                  <HelpCircle className="h-3 w-3 shrink-0" />
+                  <span className="font-mono">#{c.bling_id}</span>
+                  <span className="font-normal">· vínculo provável</span>
+                  <Maximize2 className="h-3 w-3 opacity-60" />
+                </button>
               )}
             </div>
           </div>
 
+          {/* ── Lado direito: as AÇÕES da conversa e o relógio ──────────────
+              Procurar, arquivos e resolver na MESMA linha: eram duas, e o
+              cabeçalho ficou uma linha mais baixo sem perder nada. */}
           <div className="flex shrink-0 flex-col items-end gap-1.5">
-          {/* Procurar e ver os arquivos ficam JUNTOS: as duas são a mesma
-              pergunta ("onde está aquilo?") por caminhos diferentes. */}
-          <div className="flex items-center gap-1">
-            <Button size="sm" variant="ghost" className="h-8 w-8 p-0"
-                    title="Procurar nesta conversa"
-                    onClick={() => { setBuscando((v) => !v); setRealce(null); }}>
-              <Search className="h-3.5 w-3.5" />
-            </Button>
-            <Button size="sm" variant="ghost" className="h-8 w-8 p-0"
-                    title="Arquivos da conversa"
-                    onClick={() => setGaleria(true)}>
-              <Paperclip className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-          {/* ⚠️ Resolver é o botão mais usado desta tela: a maioria das
-              respostas é "Ok recebido", e sem ele a única forma de tirar a
-              conversa da fila seria mandar um "de nada" ao cliente. */}
-          {c.estado === "precisa_resposta" ? (
-            <Button size="sm" variant="outline"
-                    className="h-8 gap-1.5 text-emerald-500"
-                    disabled={resolver.isPending}
-                    onClick={() => resolver.mutate({ wa_id: c.wa_id, status: "resolvido" }, {
-                      onSuccess: () => toast.success("Conversa marcada como resolvida"),
-                      onError: (e) => toast.error((e as Error).message),
-                    })}>
-              {resolver.isPending
-                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                : <CheckCheck className="h-3.5 w-3.5" />}
-              Marcar resolvida
-            </Button>
-          ) : c.estado === "resolvida" ? (
-            <Button size="sm" variant="ghost"
-                    className="h-8 gap-1.5 text-[11px] text-muted-foreground"
-                    disabled={resolver.isPending}
-                    /* ⚠️ Reabrir é voltar para "aberto", e não apagar a linha.
-                       `aberto` não entra no ramo de decisão humana do
-                       `statusEfetivo`, então o status volta a ser DERIVADO de
-                       quem falou por último — que é o comportamento original. */
-                    onClick={() => resolver.mutate({ wa_id: c.wa_id, status: "aberto" }, {
-                      onError: (e) => toast.error((e as Error).message),
-                    })}>
-              <Undo2 className="h-3.5 w-3.5" /> Reabrir
-            </Button>
-          ) : null}
+            <div className="flex items-center gap-1">
+              {/* Procurar e ver os arquivos ficam JUNTOS: as duas são a mesma
+                  pergunta ("onde está aquilo?") por caminhos diferentes. */}
+              <Button size="sm" variant="ghost" className="h-8 w-8 p-0"
+                      title="Procurar nesta conversa"
+                      onClick={() => { setBuscando((v) => !v); setRealce(null); }}>
+                <Search className="h-3.5 w-3.5" />
+              </Button>
+              <Button size="sm" variant="ghost" className="h-8 w-8 p-0"
+                      title="Arquivos da conversa"
+                      onClick={() => setGaleria(true)}>
+                <Paperclip className="h-3.5 w-3.5" />
+              </Button>
 
-          {/* O relógio: badge + barra. A barra é a informação que o texto não
-              dava — "23h59" e "12 min" liam-se igual. */}
-          <div className="w-[9.5rem]">
-            {aberta ? (
-              <>
+              {/* ⚠️ Resolver é o botão mais usado desta tela: a maioria das
+                  respostas é "Ok recebido", e sem ele a única forma de tirar a
+                  conversa da fila seria mandar um "de nada" ao cliente. Ele FICA
+                  em toda largura — abaixo do `xl` é o único que existe. */}
+              {c.estado === "precisa_resposta" ? (
+                <Button size="sm" variant="outline"
+                        className="h-8 gap-1.5 text-emerald-500"
+                        disabled={resolver.isPending}
+                        onClick={() => resolver.mutate({ wa_id: c.wa_id, status: "resolvido" }, {
+                          onSuccess: () => toast.success("Conversa marcada como resolvida"),
+                          onError: (e) => toast.error((e as Error).message),
+                        })}>
+                  {resolver.isPending
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : <CheckCheck className="h-3.5 w-3.5" />}
+                  Marcar resolvida
+                </Button>
+              ) : c.estado === "resolvida" ? (
+                <Button size="sm" variant="ghost"
+                        className="h-8 gap-1.5 text-[11px] text-muted-foreground"
+                        disabled={resolver.isPending}
+                        /* ⚠️ Reabrir é voltar para "aberto", e não apagar a linha.
+                           `aberto` não entra no ramo de decisão humana do
+                           `statusEfetivo`, então o status volta a ser DERIVADO de
+                           quem falou por último — que é o comportamento original. */
+                        onClick={() => resolver.mutate({ wa_id: c.wa_id, status: "aberto" }, {
+                          onError: (e) => toast.error((e as Error).message),
+                        })}>
+                  <Undo2 className="h-3.5 w-3.5" /> Reabrir
+                </Button>
+              ) : null}
+            </div>
+
+            {/* ⚠️ O relógio é a REGRA CENTRAL da tela, não enfeite de canto:
+                texto livre só passa com a janela aberta, e ela abre quando o
+                CLIENTE escreve. Markup IDÊNTICO ao de antes — badge, barra e o
+                aviso de menos de 1 h —, e com o lado esquerdo mais leve ele ficou
+                MAIS visível, não menos. A barra é a informação que o texto não
+                dava: "23h59" e "12 min" liam-se igual. */}
+            <div className="w-[9.5rem]">
+              {aberta ? (
+                <>
+                  <CarboBadge variant="secondary"
+                              className={`w-full justify-center gap-1 text-[11px] font-medium ${tom.texto}`}>
+                    <Clock className="h-3 w-3" /> {faltaDaJanela(c.janela_ate)} de janela
+                  </CarboBadge>
+                  <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-muted/40">
+                    <div className={`h-full rounded-full transition-all ${tom.barra}`}
+                         style={{ width: `${Math.round(fracao * 100)}%` }} />
+                  </div>
+                  {nivel === "urgente" && (
+                    <p className="mt-1 text-center text-[10px] text-red-500">
+                      fecha em menos de 1 h
+                    </p>
+                  )}
+                </>
+              ) : (
                 <CarboBadge variant="secondary"
-                            className={`w-full justify-center gap-1 text-[11px] font-medium ${tom.texto}`}>
-                  <Clock className="h-3 w-3" /> {faltaDaJanela(c.janela_ate)} de janela
+                            className="w-full justify-center gap-1 text-[11px] text-muted-foreground">
+                  <Lock className="h-3 w-3" /> janela fechada
                 </CarboBadge>
-                <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-muted/40">
-                  <div className={`h-full rounded-full transition-all ${tom.barra}`}
-                       style={{ width: `${Math.round(fracao * 100)}%` }} />
-                </div>
-                {nivel === "urgente" && (
-                  <p className="mt-1 text-center text-[10px] text-red-500">
-                    fecha em menos de 1 h
-                  </p>
-                )}
-              </>
-            ) : (
-              <CarboBadge variant="secondary"
-                          className="w-full justify-center gap-1 text-[11px] text-muted-foreground">
-                <Lock className="h-3 w-3" /> janela fechada
-              </CarboBadge>
-            )}
-          </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -1814,7 +1919,7 @@ function Conversa({ c, onVerPedido }: {
                           bg-amber-500/5 p-2">
             <Textarea
               value={recado} onChange={(e) => setRecado(e.target.value)}
-              placeholder="Recado para o time — o cliente não vê." rows={3} maxLength={2000}
+              placeholder="Recado para o time…" rows={3} maxLength={2000}
               className="resize-y border-0 bg-transparent px-1 py-0.5 text-xs shadow-none
                          focus-visible:ring-0 focus-visible:ring-offset-0"
               onKeyDown={(e) => {
@@ -1823,9 +1928,15 @@ function Conversa({ c, onVerPedido }: {
             />
             <div className="mt-1.5 flex items-center justify-between gap-2 border-t
                             border-amber-500/20 pt-1.5">
+              {/* ⚠️ Este é o aviso que FICA, porque está colado no botão: é aqui
+                  que acontece o clique irreversível. O `placeholder` dizia a
+                  mesma coisa e desaparece na primeira tecla; a aba selecionada
+                  já diz "Recado interno" com o olho cortado. Ficou a metade que
+                  diz a CONSEQUÊNCIA — "só o time vê" é a mesma frase na voz
+                  passiva. */}
               <p className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                 <EyeOff className="h-3 w-3 shrink-0" />
-                só o time vê — não vai para o WhatsApp
+                não vai para o WhatsApp
               </p>
               <Button size="sm" className="h-8 gap-1.5"
                       disabled={!recado.trim() || anotar.isPending}
@@ -1874,26 +1985,24 @@ function Conversa({ c, onVerPedido }: {
               }}
             />
             <div className="mt-1.5 flex items-center justify-between gap-2 border-t pt-1.5">
-              <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                {/* O atalho vira tecla: numa linha de texto apagada ninguém lia. */}
-                <kbd className="rounded border bg-background px-1 py-px font-sans text-[10px]">⌘/Ctrl</kbd>
-                <span aria-hidden="true">+</span>
-                <kbd className="rounded border bg-background px-1 py-px font-sans text-[10px]">
-                  <CornerDownLeft className="inline h-2.5 w-2.5" />
-                </kbd>
-                <span>envia</span>
-                <span className="mx-1 text-muted-foreground/40">·</span>
-                <kbd className="rounded border bg-background px-1 py-px font-sans text-[10px]">⌘/Ctrl</kbd>
-                <span aria-hidden="true">+</span>
-                <kbd className="rounded border bg-background px-1 py-px font-sans text-[10px]">V</kbd>
-                <span>cola print</span>
-                <span className="mx-1 text-muted-foreground/40">·</span>
-                {/* ⚠️ O atalho é ANUNCIADO. Recurso que só existe para quem foi
-                    avisado é recurso que metade do time nunca usa — e aqui o
-                    custo disso é a frase ser redigitada diferente a cada vez,
-                    que é o problema inteiro. */}
+              {/* ⚠️ Ficaram os DOIS atalhos que ninguém descobre sozinho: a barra
+                  `/` e o colar de print. O `⌘/Ctrl + ↵` saiu daqui e virou o
+                  `title` do botão Enviar — ele é convenção de qualquer caixa de
+                  texto, e com o mesmo peso dos outros dois roubava a atenção de
+                  quem precisava ser anunciado. Três dicas com o mesmo peso é
+                  nenhuma dica.
+                  ⚠️ O que NÃO pode sair: recurso que só existe para quem foi
+                  avisado é recurso que metade do time nunca usa — e aqui o custo
+                  disso é a frase ser redigitada diferente a cada vez, que é o
+                  problema inteiro. O `/` vem na frente por ser o de maior uso. */}
+              <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-muted-foreground/70">
                 <kbd className="rounded border bg-background px-1 py-px font-mono text-[10px]">/</kbd>
-                <span>resposta pronta</span>
+                <span className="shrink-0">resposta pronta</span>
+                <span className="mx-0.5 shrink-0 text-muted-foreground/40">·</span>
+                <kbd className="shrink-0 rounded border bg-background px-1 py-px font-sans text-[10px]">⌘/Ctrl</kbd>
+                <span className="shrink-0" aria-hidden="true">+</span>
+                <kbd className="shrink-0 rounded border bg-background px-1 py-px font-sans text-[10px]">V</kbd>
+                <span className="truncate">cola print</span>
               </div>
               <div className="flex items-center gap-2">
                 {perto && (
@@ -1952,7 +2061,10 @@ function Conversa({ c, onVerPedido }: {
                         }}>
                   <CalendarClock className="h-3.5 w-3.5" /> Agendar
                 </Button>
-                <Button size="sm" className="h-8 gap-1.5"
+                {/* ⚠️ O atalho de envio mora AQUI, no `title`, e não mais na
+                    barra de dicas: é nesta tecla que a pessoa olha quando se
+                    pergunta como manda. */}
+                <Button size="sm" className="h-8 gap-1.5" title="Enviar — ⌘/Ctrl + Enter"
                         disabled={!texto.trim() || responder.isPending} onClick={enviar}>
                   {responder.isPending
                     ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -2138,38 +2250,6 @@ function QuemRecebe({ aoFechar }: { aoFechar: () => void }) {
   );
 }
 
-/** Rótulo + conteúdo de uma seção do painel.
- *  Um lugar só decide divisória e espaçamento — antes cada bloco repetia
- *  `space-y-2 border-t pt-3` na mão, e três cópias de um espaçamento divergem
- *  como qualquer outra cópia. */
-function SecaoPainel({ titulo, icone: Icone, children }: {
-  titulo: string; icone: LucideIcon; children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-2">
-      <p className="flex items-center gap-1.5 px-0.5 text-[10px] font-semibold
-                    uppercase tracking-wide text-muted-foreground">
-        <Icone className="h-3 w-3" /> {titulo}
-      </p>
-      {children}
-    </div>
-  );
-}
-
-/**
- * O painel do contato — o que o time sabe sobre esta conversa.
- *
- * ⚠️ A ordem não é estética: identidade → atendimento → etiquetas → pedido. Quem
- * abre o painel está fazendo uma destas três coisas, nesta frequência: conferir
- * com quem está falando, mudar o estado do atendimento, ou achar o pedido. Campo
- * de cadastro bonito no topo empurraria as ações para baixo da dobra — e o
- * PEDIDO fica por último de propósito: ele leva para OUTRA rota, e o que leva
- * embora não pode ficar no caminho de quem ainda está atendendo.
- *
- * ⚠️ E o telefone fica GRANDE e selecionável. Ele é o que se copia para procurar
- * no Bling, e um número em cinza de 10px vira erro de digitação. Ele também NÃO
- * é formatado: máscara com espaços sobrevive à cópia e vira busca que não acha.
- */
 /**
  * A linha da lista de conversas.
  *
@@ -2466,6 +2546,47 @@ const LinhaDaConversa = memo(function LinhaDaConversa({ c, selecionada, comBusca
   && a.c.parece_encerrada === b.c.parece_encerrada
   && a.c.tags.map((t) => t.id).join("\u0000") === b.c.tags.map((t) => t.id).join("\u0000"));
 
+/**
+ * O painel do contato — a FONTE ÚNICA de quem é esta pessoa, e o que fazer com
+ * esta conversa.
+ *
+ * ⚠️ Identidade e pedido moram AQUI, e por isso o cabeçalho da conversa não os
+ * repete no `xl`. Nome, apelido do WhatsApp, telefone, estado e número do pedido
+ * apareciam nos DOIS lugares — e informação duplicada em duas pilhas é
+ * informação que divergiu no dia em que alguém mexeu numa delas. A regra é a
+ * mesma do `quotePdf.ts` e da `bling2_esteira`: um lugar decide, o resto lê.
+ *
+ * ⚠️ E a condição de largura NÃO é estilo: este painel é `hidden … xl:flex` e a
+ * terceira coluna do grid só existe a partir do `xl`. ABAIXO DE 1280 px ELE NÃO
+ * EXISTE — por isso o cabeçalho esconde a identidade com `xl:hidden` em vez de
+ * apagá-la, senão o nome do cliente sumiria em notebook de 1366.
+ *
+ * ⚠️ A ordem não é estética: identidade → ação → etiquetas → pedido. Quem abre o
+ * painel está fazendo uma destas três coisas, nesta frequência: conferir com
+ * quem está falando, mudar o estado do atendimento, ou achar o pedido. O PEDIDO
+ * fica por último de propósito — ele leva para OUTRA tela, e o que leva embora
+ * não pode ficar no caminho de quem ainda está atendendo.
+ *
+ * ⚠️ E NÃO há cabeçalho de seção em caixa alta. Havia QUATRO (`ATENDIMENTO`,
+ * `RESPONSÁVEL`, `ETIQUETAS`, `PEDIDO`) para um a três controles cada, mais uma
+ * caixa com borda dentro da primeira: mais moldura que conteúdo, e foi o que o
+ * dono do processo chamou de "informação demais". Hoje quem separa é o
+ * agrupamento — uma caixa para o que exige AÇÃO, e o resto em fluxo.
+ *
+ * ⚠️ O telefone fica GRANDE e selecionável, e NÃO é formatado: ele é o que se
+ * copia para procurar no Bling, e máscara com espaços sobrevive à cópia e vira
+ * busca que não acha. Por isso continuam existindo as DUAS coisas — o
+ * `select-all` e o botão de copiar —, e o número NÃO virou um botão só:
+ * envolvê-lo num `<button>` mataria a seleção à mão, que é o caminho que
+ * funciona quando a API de clipboard é recusada (sem HTTPS, sem permissão) e
+ * falha calada.
+ *
+ * ⚠️ Os botões de estado continuam sendo DOIS, e são os dois que uma pessoa
+ * decide. `aberto` e `em_atendimento` saem de quem falou por último
+ * (`statusEfetivo`, em `lib/conversas.ts`) e NÃO podem ganhar botão — status
+ * manual brigando com a realidade é a doença conhecida dessas ferramentas, e
+ * produz fila em que ninguém confia.
+ */
 function PainelContato({ c, meuId, onVerPedido }: {
   c: Conversa; meuId: string | null; onVerPedido: (blingId: number) => void;
 }) {
@@ -2477,6 +2598,13 @@ function PainelContato({ c, meuId, onVerPedido }: {
   const { data: tags } = useTags();
   const [novaTag, setNovaTag] = useState("");
   const [verTags, setVerTags] = useState(false);
+  /* ⚠️ O seletor de responsável é o caminho DE EXCEÇÃO e fica fechado. Ele e o
+     botão "Assumir" eram dois controles de largura cheia, empilhados, para a
+     MESMA decisão — e o dropdown dizia "— sem responsável —" ao lado de um botão
+     que dizia "Assumir esta conversa". Aberto só sob demanda, o repouso tem um
+     gesto só e o rótulo "Passar para" devolve sentido único ao `Sem
+     responsável`, que é a opção de REMOVER o dono, não o estado da conversa. */
+  const [verResponsavel, setVerResponsavel] = useState(false);
 
   const minhas = new Set(c.tags.map((t) => t.id));
   const souEu = !!meuId && c.responsavel === meuId;
@@ -2486,6 +2614,15 @@ function PainelContato({ c, meuId, onVerPedido }: {
      faz o painel parecer com defeito. */
   const outroNome =
     c.nome_whatsapp && c.nome_whatsapp !== c.cliente ? c.nome_whatsapp : null;
+
+  /* O primeiro nome de quem já atende, para o BOTÃO poder dizer de quem se está
+     assumindo. Sem isso, com o seletor fechado, o painel em repouso não diria o
+     nome do dono em lugar nenhum — e "quem está com isto" é a pergunta que faz
+     alguém assumir ou não. Primeiro nome só, como na lista da esquerda: o nome
+     inteiro estoura um controle de ~16rem e sai cortado. */
+  const donoPrimeiroNome = c.responsavel_nome
+    ? c.responsavel_nome.trim().split(" ")[0]
+    : null;
 
   const criar = () => {
     if (!novaTag.trim()) return;
@@ -2508,143 +2645,215 @@ function PainelContato({ c, meuId, onVerPedido }: {
 
   return (
     <CarboCard className="hidden min-h-0 xl:flex xl:flex-col">
-      <CarboCardContent className="min-h-0 flex-1 space-y-4 overflow-y-auto p-0">
+      <CarboCardContent className="min-h-0 flex-1 space-y-3 overflow-y-auto p-0">
 
         {/* ── Identidade ──────────────────────────────────────────────────
             ⚠️ `sticky`: o painel rola quando a conversa tem muitas etiquetas, e
             o número é justamente o que se quer alcançar em qualquer ponto da
-            rolagem. */}
-        <div className="sticky top-0 z-10 flex flex-col items-center gap-2 border-b
-                        border-border bg-background/95 px-4 pb-4 pt-4 text-center
-                        backdrop-blur">
-          <span className="flex h-16 w-16 items-center justify-center rounded-full
-                           border border-carbo-green/30 bg-carbo-green/5 text-xl
-                           font-semibold text-carbo-green ring-1 ring-carbo-green/20">
-            {inicialDe(c.cliente, c.wa_id)}
-          </span>
+            rolagem.
 
-          <div className="space-y-0.5">
-            <p className="text-[15px] font-semibold leading-tight">
-              {c.cliente ?? "Sem nome"}
-            </p>
-            {outroNome && (
-              <p className="text-[11px] leading-tight text-muted-foreground">
-                no WhatsApp: {outroNome}
+            ⚠️ E ALINHADA À ESQUERDA, não centralizada. Centralizado, o avatar de
+            64px mais nome, apelido, telefone e selo empilhados consumiam ~190px
+            de altura antes do primeiro botão — as ações caíam abaixo da dobra em
+            telas de 768px, que é o que o comentário antigo deste componente
+            prometia evitar e o layout fazia. Avatar de 44px ao lado do nome
+            custa 44px e diz a mesma coisa. */}
+        <div className="sticky top-0 z-10 space-y-2 border-b border-border
+                        bg-background/95 px-4 pb-3 pt-4 backdrop-blur">
+          <div className="flex items-center gap-3">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center
+                             rounded-full border border-carbo-green/30 bg-carbo-green/5
+                             text-[15px] font-semibold uppercase text-carbo-green">
+              {inicialDe(c.cliente, c.wa_id)}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[15px] font-semibold leading-tight">
+                {c.cliente ?? "Sem nome"}
               </p>
-            )}
+              {outroNome && (
+                <p className="truncate text-[11px] leading-tight text-muted-foreground">
+                  no WhatsApp: {outroNome}
+                </p>
+              )}
+            </div>
           </div>
 
           {/* O telefone como OBJETO de cópia: pílula + botão. Sem máscara, porque
-              é ele que se cola na busca do ERP. */}
+              é ele que se cola na busca do ERP. ⚠️ A pílula NÃO é um botão (ver o
+              doc acima): o `select-all` tem de continuar funcionando. */}
           <div className="flex items-center gap-1 rounded-md border border-border
                           bg-muted/40 px-2 py-1">
-            <span className="select-all font-mono text-[15px] tracking-tight
-                             tabular-nums text-foreground">
+            <span className="min-w-0 flex-1 select-all font-mono text-[15px]
+                             tracking-tight tabular-nums text-foreground">
               {c.wa_id}
             </span>
             <button type="button" onClick={copiarNumero} title="Copiar número"
                     aria-label="Copiar número"
-                    className="rounded-sm p-1 text-muted-foreground transition-colors
-                               hover:text-carbo-green">
+                    className="shrink-0 rounded-sm p-1 text-muted-foreground
+                               transition-colors hover:text-carbo-green">
               <Copy className="h-3.5 w-3.5" />
             </button>
           </div>
-
-          {/* O status é INFORMAÇÃO e mora junto da identidade — colado aqui, ele
-              faz os dois botões abaixo lerem como "mudar isto". */}
-          {c.status && (
-            <span className={`inline-flex items-center rounded-md border px-2 py-0.5
-                              text-[10px] font-medium ${STATUS[c.status].classe}`}>
-              {STATUS[c.status].rotulo}
-            </span>
-          )}
         </div>
 
-        <div className="space-y-4 px-4 pb-4">
+        <div className="space-y-3 px-4 pb-4">
 
-          <SecaoPainel titulo="Atendimento" icone={UserCheck}>
-            <div className="space-y-2.5 rounded-lg border border-border bg-muted/40 p-3">
+          {/* ── O que exige AÇÃO ────────────────────────────────────────────
+              Uma caixa, sem cabeçalho. Ela era uma seção com título em caixa
+              alta MAIS uma caixa com borda por dentro MAIS um segundo título em
+              caixa alta para o responsável: três molduras para quatro controles.
+              O que diz "isto é acionável" é o fundo, não o texto. */}
+          <div className="space-y-2.5 rounded-lg border border-border bg-muted/40 p-3">
 
-              {/* ⚠️ Só DOIS botões, e são os dois status que uma pessoa decide.
-                  "Aberto" e "Em atendimento" não têm botão de propósito: eles saem
-                  de quem falou por último, e um botão para eles seria um jeito de
-                  mentir para a própria fila. */}
-              <div className="grid grid-cols-2 gap-1.5">
-                <Button size="sm" variant={c.status === "aguardando" ? "default" : "outline"}
-                        className="h-9 w-full gap-1.5 text-[11px]"
-                        disabled={definirStatus.isPending}
-                        onClick={() => definirStatus.mutate(
-                          { wa_id: c.wa_id, status: c.status === "aguardando" ? "aberto" : "aguardando" },
-                          { onError: (e) => toast.error((e as Error).message) })}>
-                  <Clock className="h-3.5 w-3.5" />
-                  {c.status === "aguardando" ? "Retomar" : "Aguardando"}
-                </Button>
-                <Button size="sm" variant={c.status === "resolvido" ? "default" : "outline"}
-                        className="h-9 w-full gap-1.5 text-[11px]"
-                        disabled={definirStatus.isPending}
-                        onClick={() => definirStatus.mutate(
-                          { wa_id: c.wa_id, status: c.status === "resolvido" ? "aberto" : "resolvido" },
-                          { onError: (e) => toast.error((e as Error).message) })}>
-                  {c.status === "resolvido"
-                    ? <><Undo2 className="h-3.5 w-3.5" /> Reabrir</>
-                    : <><CheckCheck className="h-3.5 w-3.5" /> Resolver</>}
-                </Button>
-              </div>
+            {/* ⚠️ O estado é a PRIMEIRA linha da caixa de ação, e não um selo
+                solto junto da identidade. Colado nos botões, ele lê como "é
+                isto, e aqui se muda"; colado no nome, lia como um terceiro
+                atributo do contato — e o contato não tem estado, a conversa tem.
 
-              <div className="space-y-1.5">
-                <p className="text-[10px] font-medium uppercase tracking-wide
-                              text-muted-foreground">
-                  Responsável
+                ⚠️ E status nulo é DITO. Em branco ele ficava igual a "não
+                carregou"; "Sem pendência" é o mesmo rótulo que o agrupamento da
+                lista já usa para `status === null`, então os dois contam a mesma
+                história. */}
+            <div className="flex items-center">
+              {c.status ? (
+                <span className={`inline-flex items-center rounded-md border px-2 py-0.5
+                                  text-[10px] font-medium ${STATUS[c.status].classe}`}>
+                  {STATUS[c.status].rotulo}
+                </span>
+              ) : (
+                <span className="inline-flex items-center rounded-md border border-dashed
+                                 border-border px-2 py-0.5 text-[10px] text-muted-foreground">
+                  Sem pendência
+                </span>
+              )}
+            </div>
+
+            {/* ⚠️ Só DOIS botões, e são os dois status que uma pessoa decide.
+                "Aberto" e "Em atendimento" não têm botão de propósito: eles saem
+                de quem falou por último, e um botão para eles seria um jeito de
+                mentir para a própria fila. */}
+            <div className="grid grid-cols-2 gap-1.5">
+              <Button size="sm" variant={c.status === "aguardando" ? "default" : "outline"}
+                      className="h-9 w-full gap-1.5 text-[11px]"
+                      disabled={definirStatus.isPending}
+                      onClick={() => definirStatus.mutate(
+                        { wa_id: c.wa_id, status: c.status === "aguardando" ? "aberto" : "aguardando" },
+                        { onError: (e) => toast.error((e as Error).message) })}>
+                <Clock className="h-3.5 w-3.5" />
+                {c.status === "aguardando" ? "Retomar" : "Aguardando"}
+              </Button>
+              <Button size="sm" variant={c.status === "resolvido" ? "default" : "outline"}
+                      className="h-9 w-full gap-1.5 text-[11px]"
+                      disabled={definirStatus.isPending}
+                      onClick={() => definirStatus.mutate(
+                        { wa_id: c.wa_id, status: c.status === "resolvido" ? "aberto" : "resolvido" },
+                        { onError: (e) => toast.error((e as Error).message) })}>
+                {c.status === "resolvido"
+                  ? <><Undo2 className="h-3.5 w-3.5" /> Reabrir</>
+                  : <><CheckCheck className="h-3.5 w-3.5" /> Resolver</>}
+              </Button>
+            </div>
+
+            {/* ── Responsável: UM gesto, e o resto atrás do `⌄` ──────────────
+                ⚠️ Em time pequeno, puxar da fila é o modelo certo — rodízio
+                automático atribui conversa para quem está almoçando, e ninguém
+                mais mexe porque "já tem dono". Quando JÁ sou eu, o lugar não
+                fica vazio: o buraco de 28px era o que fazia o cartão parecer
+                desmontado.
+
+                ⚠️ E quando o dono é OUTRA pessoa, o nome dela vai DENTRO do
+                botão ("Assumir de Maria"). Com o seletor fechado, era ali que o
+                nome do dono deixaria de aparecer — e "quem está com isto" é
+                justamente a pergunta que decide se alguém assume. */}
+            <div className="flex items-center gap-1.5">
+              {souEu ? (
+                <p className="flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5
+                              rounded-md border border-carbo-green/30 bg-carbo-green/5
+                              px-2 text-[11px] font-medium text-carbo-green">
+                  <Check className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">Você é o responsável</span>
                 </p>
-                {/* `h-9` igual à dos botões acima: as três caixas alinhadas é
-                    metade da sensação de bloco organizado. */}
+              ) : (
+                <Button size="sm" variant="outline"
+                        className="h-9 min-w-0 flex-1 gap-1.5 border-carbo-green/40
+                                   text-[11px] text-carbo-green hover:bg-carbo-green/5
+                                   hover:text-carbo-green"
+                        disabled={definirStatus.isPending}
+                        title={donoPrimeiroNome
+                          ? `Assumir esta conversa de ${c.responsavel_nome}`
+                          : "Assumir esta conversa"}
+                        onClick={() => definirStatus.mutate(
+                          { wa_id: c.wa_id, status: "em_atendimento", assumir: true },
+                          { onError: (e) => toast.error((e as Error).message) })}>
+                  <UserCheck className="h-3.5 w-3.5 shrink-0" />
+                  {/* ⚠️ "Assumir esta conversa" NÃO cabe: renderizado, saía
+                      "Assumir esta con…" ao lado do `⌄`, que lê como tela
+                      quebrada. O rótulo curto cabe inteiro e o `title` guarda a
+                      frase — e quando há dono, o NOME é a parte que não pode
+                      sumir, porque é ela que decide se alguém assume. */}
+                  <span className="truncate">
+                    {donoPrimeiroNome ? `Assumir de ${donoPrimeiroNome}` : "Assumir"}
+                  </span>
+                </Button>
+              )}
+
+              <button type="button" onClick={() => setVerResponsavel((v) => !v)}
+                      aria-expanded={verResponsavel}
+                      title="Passar para outra pessoa"
+                      aria-label="Passar para outra pessoa"
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center
+                                  rounded-md border border-border transition-colors ${
+                        verResponsavel ? "bg-muted/60 text-foreground"
+                                       : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"}`}>
+                <ChevronDown className={`h-3.5 w-3.5 transition-transform ${
+                  verResponsavel ? "rotate-180" : ""}`} />
+              </button>
+            </div>
+
+            {verResponsavel && (
+              /* ⚠️ `Sem responsável` é a opção de REMOVER o dono, e só faz
+                 sentido sob este rótulo. Em repouso, no campo fechado, ela se
+                 lia como o estado da conversa ao lado de um botão "Assumir" —
+                 dois controles dizendo a mesma coisa, que é a queixa que este
+                 desenho responde. */
+              <div className="flex items-center gap-2 border-t border-border pt-2.5">
+                <span className="shrink-0 text-[11px] text-muted-foreground">
+                  Passar para
+                </span>
                 <select
                   value={c.responsavel ?? ""}
+                  disabled={definirResponsavel.isPending}
                   onChange={(e) => {
                     const id = e.target.value || null;
                     const nome = (atendentes ?? []).find((a) => a.user_id === id)?.full_name ?? null;
                     definirResponsavel.mutate({ wa_id: c.wa_id, user_id: id, nome },
                       { onError: (err) => toast.error((err as Error).message) });
+                    setVerResponsavel(false);
                   }}
-                  className="h-9 w-full rounded-md border border-border bg-background
-                             px-2 text-xs text-foreground">
-                  <option value="">— sem responsável —</option>
+                  className="h-9 min-w-0 flex-1 rounded-md border border-border
+                             bg-background px-2 text-[11px] text-foreground
+                             disabled:opacity-60">
+                  <option value="">Sem responsável</option>
                   {(atendentes ?? []).map((a) => (
                     <option key={a.user_id} value={a.user_id}>{a.full_name ?? a.user_id}</option>
                   ))}
                 </select>
-
-                {/* ⚠️ Em time pequeno, puxar da fila é o modelo certo — rodízio
-                    automático atribui conversa para quem está almoçando, e ninguém
-                    mais mexe porque "já tem dono". Quando JÁ sou eu, o lugar não
-                    fica vazio: o buraco de 28px era o que fazia o cartão parecer
-                    desmontado. */}
-                {souEu ? (
-                  <p className="flex items-center justify-center gap-1.5 rounded-md
-                                border border-carbo-green/30 bg-carbo-green/5 py-1.5
-                                text-[11px] font-medium text-carbo-green">
-                    <Check className="h-3.5 w-3.5" /> Você é o responsável
-                  </p>
-                ) : (
-                  <Button size="sm" variant="ghost"
-                          className="h-8 w-full gap-1.5 text-[11px] text-carbo-green
-                                     hover:text-carbo-green"
-                          disabled={definirStatus.isPending}
-                          onClick={() => definirStatus.mutate(
-                            { wa_id: c.wa_id, status: "em_atendimento", assumir: true },
-                            { onError: (e) => toast.error((e as Error).message) })}>
-                    <UserCheck className="h-3.5 w-3.5" /> Assumir esta conversa
-                  </Button>
-                )}
               </div>
-            </div>
-          </SecaoPainel>
+            )}
+          </div>
 
-          {/* Chips no repouso; formulário só sob demanda. O `X` aparece no hover
-              para a área ler como informação, e não como uma fileira de botões de
-              excluir. */}
-          <SecaoPainel titulo="Etiquetas" icone={TagIcon}>
-            <div className="flex flex-wrap gap-1.5">
+          {/* ── Etiquetas: os CHIPS são o rótulo ────────────────────────────
+              O cabeçalho `ETIQUETAS` saiu: um chip colorido com um `X` no hover
+              e um botão tracejado "+ etiqueta" ao lado não precisam de legenda,
+              e o ícone de etiqueta mudou do título para dentro do próprio botão
+              — que é onde ele continua nomeando a coisa, inclusive quando a
+              conversa não tem etiqueta nenhuma.
+
+              Chips no repouso; formulário só sob demanda. O `X` aparece no hover
+              para a área ler como informação, e não como uma fileira de botões
+              de excluir. */}
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-1.5">
               {c.tags.map((t) => (
                 <button key={t.id} type="button" title="Tirar esta etiqueta"
                         onClick={() => marcarTag.mutate({ wa_id: c.wa_id, tag_id: t.id, marcar: false })}
@@ -2661,7 +2870,7 @@ function PainelContato({ c, meuId, onVerPedido }: {
                                   border-border px-2 py-1 text-[11px] transition-colors ${
                         verTags ? "bg-muted/60 text-foreground"
                                 : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"}`}>
-                <Plus className="h-2.5 w-2.5" /> etiqueta
+                <TagIcon className="h-2.5 w-2.5" /> + etiqueta
               </button>
             </div>
 
@@ -2689,7 +2898,10 @@ function PainelContato({ c, meuId, onVerPedido }: {
                 )}
 
                 {/* ⚠️ Botão ao lado do campo. Só Enter é affordance invisível:
-                    quem não sabe, não cria — e aí ninguém cria etiqueta. */}
+                    quem não sabe, não cria — e aí ninguém cria etiqueta.
+                    ⚠️ E o nome é digitado, mas a COR sai de paleta fechada
+                    (`cinza`): `carbo_wa_tags` é tabela com cor de paleta, e
+                    hexadecimal livre produz etiqueta ilegível no tema escuro. */}
                 <div className="flex items-center gap-1 border-t border-border pt-2">
                   <Input value={novaTag} onChange={(e) => setNovaTag(e.target.value)}
                          placeholder="Nova etiqueta"
@@ -2707,35 +2919,45 @@ function PainelContato({ c, meuId, onVerPedido }: {
                 </div>
               </div>
             )}
-          </SecaoPainel>
+          </div>
 
-          {/* Por último porque é o CONTEXTO, não a ação: quem abre a conversa
+          {/* ── Pedido ──────────────────────────────────────────────────────
+              Por último porque é o CONTEXTO, não a ação: quem abre a conversa
               vem responder, e o pedido é o que ele confere antes. ⚠️ Já foi um
               link para a Esteira, e por isso ficava aqui embaixo — sair da tela
               no meio do atendimento é como a resposta fica pela metade. Agora
-              abre o card aqui mesmo, e a ordem continua certa pelo outro
-              motivo. */}
+              abre o card aqui mesmo, e a ordem continua certa pelo outro motivo.
+
+              ⚠️ O cabeçalho `PEDIDO` saiu e a palavra entrou NO CARD, na mesma
+              linha do número: o título ocupava uma linha inteira para rotular um
+              único elemento que já traz o ícone de caixa. */}
           {c.bling_id && (
-            <SecaoPainel titulo="Pedido" icone={Package}>
-              <button type="button" onClick={() => onVerPedido(c.bling_id!)}
-                      className="flex w-full items-center gap-2.5 rounded-lg border border-border
-                                 bg-muted/40 p-3 text-left transition-colors
-                                 hover:border-carbo-green/40 hover:bg-carbo-green/5">
-                <Package className="h-4 w-4 shrink-0 text-carbo-green" />
-                <span className="min-w-0 flex-1">
-                  <span className="block font-mono text-[13px] font-semibold tabular-nums
-                                   text-carbo-green">
-                    #{c.bling_id}
-                  </span>
-                  {c.sobre_a_etapa && (
-                    <span className="block truncate text-[11px] text-muted-foreground">
-                      {NOME_ETAPA[c.sobre_a_etapa] ?? c.sobre_a_etapa}
-                    </span>
-                  )}
+            <button type="button" onClick={() => onVerPedido(c.bling_id!)}
+                    className="flex w-full items-center gap-2.5 rounded-lg border border-border
+                               bg-muted/40 p-3 text-left transition-colors
+                               hover:border-carbo-green/40 hover:bg-carbo-green/5">
+              <Package className="h-4 w-4 shrink-0 text-carbo-green" />
+              {/* ⚠️ O NÚMERO vem primeiro e SOZINHO na linha principal. Com a
+                  palavra "Pedido" na frente ele saía cortado ("#26970326…") na
+                  largura real do painel — e número cortado é a mesma doença do
+                  dropdown do /vender que dizia só "Microdistribuidor R$ 11,50":
+                  identificador pela metade não identifica nada. A palavra desceu
+                  para o subtítulo, onde pode truncar sem custo.
+                  ⚠️ Só apareceu RENDERIZANDO: nem o `tsc` nem o build sabem onde
+                  o texto estoura. */}
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-mono text-[13px] font-semibold
+                                 leading-tight tabular-nums text-carbo-green">
+                  #{c.bling_id}
                 </span>
-                <Maximize2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-              </button>
-            </SecaoPainel>
+                <span className="block truncate text-[11px] text-muted-foreground">
+                  Pedido{c.sobre_a_etapa
+                    ? ` · ${NOME_ETAPA[c.sobre_a_etapa] ?? c.sobre_a_etapa}`
+                    : ""}
+                </span>
+              </span>
+              <Maximize2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            </button>
           )}
         </div>
       </CarboCardContent>
@@ -2909,17 +3131,44 @@ export default function Conversas() {
       <CarboPageHeader
         icon={MessagesSquare}
         title="Conversas"
-        description="As respostas dos clientes no WhatsApp oficial. É o único lugar onde elas existem — número da Cloud API não aparece na Caixa de Entrada da Meta."
+        /* ⚠️ Uma linha, e ela guarda a cláusula que MANDA: estas mensagens não
+           existem em outro lugar. O MECANISMO (o número da Cloud API não
+           aparece na Caixa de Entrada da Meta, e a Cloud API não guarda
+           histórico) saiu do cabeçalho porque é explicação, não algo que alguém
+           faça a respeito — e foi para o card de caixa vazia, que é lido por
+           quem chega sem contexto em vez de a cada abertura da tela. */
+        description="As respostas dos clientes no WhatsApp oficial — o único lugar onde elas existem."
         actions={
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-            {urgentes > 0 && (
-              <span className="text-xs font-medium text-amber-500">
-                {urgentes} esperando resposta
-              </span>
-            )}
-            {esperando > urgentes && (
-              <span className="text-[11px] text-muted-foreground">
-                {esperando - urgentes} com a janela já fechada
+          <div className="flex flex-wrap items-center gap-3">
+            {/* ⚠️ UM placar, não dois números soltos — mas as DUAS contas
+                continuam na tela, porque elas pedem coisas OPOSTAS: janela
+                aberta ainda dá para responder; janela fechada a Meta recusa
+                (131047), e nenhum dos seis templates da esteira serve para
+                responder dúvida. Fundi-las num total só apagaria exatamente a
+                regra central desta tela.
+                ⚠️ E o placar é da caixa INTEIRA, não da lista filtrada: filtro
+                na coluna não pode fazer a urgência parecer menor. */}
+            {esperando > 0 && (
+              <span
+                title="Conversas que precisam de resposta. A segunda conta é a das que já estão fora da janela de 24 h — nelas a Meta recusa texto livre."
+                className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1
+                            text-[11px] leading-none ${
+                  urgentes > 0
+                    ? "border-amber-500/30 bg-amber-500/5 font-medium text-amber-500"
+                    : "border-border bg-muted/40 text-muted-foreground"}`}>
+                <Clock className="h-3.5 w-3.5 shrink-0" />
+                {urgentes > 0 && (
+                  <span className="tabular-nums">{urgentes} esperando resposta</span>
+                )}
+                {urgentes > 0 && esperando > urgentes && (
+                  <span aria-hidden="true" className="text-muted-foreground/60">·</span>
+                )}
+                {esperando > urgentes && (
+                  <span className={`tabular-nums ${
+                    urgentes > 0 ? "font-normal text-muted-foreground" : ""}`}>
+                    {esperando - urgentes} com a janela fechada
+                  </span>
+                )}
               </span>
             )}
             {/* ⚠️ Zero recebendo não é um detalhe de configuração: é ninguém
