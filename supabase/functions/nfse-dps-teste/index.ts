@@ -384,7 +384,21 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   let cliente: Deno.HttpClient;
   try {
-    cliente = Deno.createHttpClient({ cert, key });
+    // ⚠️ `http1: true, http2: false` NÃO é ajuste fino — sem isso a chamada
+    // morre antes de o ADN ver o XML. Medido em 02/10/2026, na primeira
+    // tentativa real:
+    //
+    //   http2 error: stream error received: endpoint requires HTTP/1.1
+    //
+    // O Deno negocia HTTP/2 por ALPN e o `sefin...nfse.gov.br` exige 1.1.
+    //
+    // ⚠️ E a notícia BOA está escondida nesse erro: a `etapa` foi `fetch`, não
+    // `assinar`, e o erro é de PROTOCOLO, não de TLS. Ou seja, a chave abriu, a
+    // assinatura foi montada, o cliente mTLS subiu e o handshake TLS COMPLETOU
+    // com o gov.br — certificado recusado teria vindo como erro de TLS. Um erro
+    // que prova quatro coisas funcionando vale mais que um sucesso que não
+    // prova nenhuma.
+    cliente = Deno.createHttpClient({ cert, key, http1: true, http2: false });
   } catch (e) {
     return json({ ok: false, etapa: "createHttpClient", erro: String(e) }, 500);
   }
