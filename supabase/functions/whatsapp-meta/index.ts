@@ -268,17 +268,31 @@ Deno.serve(async (req: Request) => {
           direcao: "saida",
           tipo: "template",
           texto: textoRenderizado,
-          // ⚠️ A ETAPA, para o rótulo do balão dizer QUAL aviso é
-          // ("automático · recompra") em vez de só "aviso automático". Sem ela
-          // a tela não tem como saber, e um rótulo genérico num balão vazio foi
-          // exatamente o que apareceu no primeiro teste.
-          sobre_a_etapa: tpl.etapa,
+          // ⚠️ `sobre_a_etapa` NÃO EXISTE em `carbo_wa_mensagens` — ela é
+          // DERIVADA na `carbo_wa_conversas`, a partir de `carbo_msg_envios`
+          // pelos `lateral`. Eu a escrevi aqui achando que era coluna, e o
+          // `42703` não apareceria na tela: o insert falhava, o `console.error`
+          // engolia, e o balão simplesmente não era gravado. Coluna suposta é
+          // a mesma doença de perguntar à migração em vez de ao banco.
+          //
+          // Consequência aceita: no TESTE o rótulo fica "aviso automático", sem
+          // o nome da etapa. No envio REAL o balão vem do outro ramo da view
+          // (`carbo_msg_envios`, que TEM `etapa`) e sai "automático · recompra".
           ocorrido_em: new Date().toISOString(),
           payload: m.body,
         }, { onConflict: "wamid" });
         // ⚠️ Falha aqui NÃO é silenciosa: a mensagem foi para o cliente e a
         // tela ficaria sem ela, que é exatamente o defeito que isto conserta.
-        if (erroMsg) console.error("[whatsapp-meta] teste: não gravei a conversa", erroMsg);
+        // ⚠️ E a falha passa a APARECER na resposta, não só no console. Foi o
+        // `console.error` que escondeu o `42703` acima: a chamada devolvia
+        // `ok: true` e a conversa ficava sem o balão, com tudo parecendo certo.
+        if (erroMsg) {
+          return json({
+            ok: false, etapa: etapaTeste, wamid: wamidTeste,
+            erro: "A mensagem FOI enviada ao cliente, mas não consegui gravá-la na conversa.",
+            detalhe: erroMsg.message,
+          }, 500);
+        }
       }
 
       return json({
