@@ -7,7 +7,7 @@ import {
   Search, SearchX, X, Package, ArrowUpRight, Megaphone,
   BellRing, BellOff, Check, CheckCheck, Inbox, Undo2, Sparkles, UserCheck, Tag as TagIcon, Plus,
   CalendarClock, Trash2, Square, Play, Pause, Download, StickyNote, EyeOff, Copy,
-  Maximize2, SlidersHorizontal, ChevronDown, MessageSquarePlus,
+  Maximize2, SlidersHorizontal, ChevronDown, MessageSquarePlus, Link2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
@@ -18,6 +18,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Detalhe } from "@/pages/EsteiraOnline";
 import { useEsteiraPedido, useAvisosDoPedido, useRastreios } from "@/hooks/useEsteiraOnline";
 import { useTemplatesMsg } from "@/hooks/useMensagensCliente";
+import { CHECKOUTS } from "@/lib/checkouts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -2588,6 +2589,224 @@ const LinhaDaConversa = memo(function LinhaDaConversa({ c, selecionada, comBusca
  * manual brigando com a realidade é a doença conhecida dessas ferramentas, e
  * produz fila em que ninguém confia.
  */
+const emReais = (n: number) =>
+  n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+/**
+ * A COMPRA ORIGINAL, aberta no painel.
+ *
+ * O card já existia e dizia só `#26970326 · Entregue` — ou seja, dizia que
+ * havia uma compra e não dizia QUAL. Quem atende uma oferta de recompra precisa
+ * da resposta antes de escrever a primeira frase: oferecer o kit de 100ml a
+ * quem comprou sachê é a única coisa que não pode acontecer nesta caixa.
+ *
+ * ⚠️ É a MESMA consulta do card grande (`useEsteiraPedido`), de propósito e não
+ * por preguiça: duas leituras do mesmo pedido divergiriam no dia em que a
+ * `bling2_esteira` mudasse — e divergir aqui não dá erro, dá dois cards
+ * diferentes sobre a mesma compra, que é a doença do `quotePdf.ts` do `mkt`. O
+ * cache do TanStack é por `["esteira-pedido", blingId]`, então abrir o card
+ * grande depois NÃO custa uma segunda ida ao banco.
+ *
+ * ⚠️ E o "não está na esteira" é DITO em vez de o painel mostrar um pedido sem
+ * itens. Ausência disfarçada de resposta é a doença do `Math.round` inventando
+ * `×1`: card com zero itens lê-se como "comprou nada", e o que é verdade é que
+ * a venda não é de canal on-line (balcão não entra na esteira) ou ainda não
+ * chegou ao Bling.
+ */
+function CompraOriginal({ c, onVerPedido }: {
+  c: Conversa; onVerPedido: (blingId: number) => void;
+}) {
+  const { data: row, isLoading, error } = useEsteiraPedido(c.bling_id);
+  const itens = Array.isArray(row?.items) ? (row!.items as any[]) : [];
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-border bg-muted/40">
+      {/* O cabeçalho continua sendo o BOTÃO que abre o card completo — mesmo
+          alvo de clique de antes, mesma função. O que mudou é que ele deixou de
+          ser a única coisa no cartão. */}
+      <button type="button" onClick={() => onVerPedido(c.bling_id!)}
+              className="flex w-full items-center gap-2.5 p-3 text-left transition-colors
+                         hover:bg-carbo-green/5">
+        <Package className="h-4 w-4 shrink-0 text-carbo-green" />
+        {/* ⚠️ O NÚMERO vem primeiro e SOZINHO na linha principal. Com a palavra
+            "Pedido" na frente ele saía cortado ("#26970326…") na largura real do
+            painel — e número cortado é a mesma doença do dropdown do /vender que
+            dizia só "Microdistribuidor R$ 11,50": identificador pela metade não
+            identifica nada. A palavra desceu para o subtítulo, onde pode truncar
+            sem custo.
+            ⚠️ Só apareceu RENDERIZANDO: nem o `tsc` nem o build sabem onde o
+            texto estoura. */}
+        <span className="min-w-0 flex-1">
+          <span className="block truncate font-mono text-[13px] font-semibold
+                           leading-tight tabular-nums text-carbo-green">
+            #{c.bling_id}
+          </span>
+          <span className="block truncate text-[11px] text-muted-foreground">
+            Pedido{c.sobre_a_etapa
+              ? ` · ${NOME_ETAPA[c.sobre_a_etapa] ?? c.sobre_a_etapa}`
+              : ""}
+          </span>
+        </span>
+        <Maximize2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      </button>
+
+      {/* ⚠️ Carregando, falha e "não está na esteira" são TRÊS respostas, e as
+          três aparecem. Colapsá-las em nada faria o painel ficar idêntico ao de
+          uma conversa sem pedido — e as ações são opostas. */}
+      {isLoading && (
+        <p className="flex items-center gap-1.5 border-t border-border px-3 py-2
+                      text-[11px] text-muted-foreground">
+          <Loader2 className="h-3 w-3 animate-spin" /> Carregando a compra…
+        </p>
+      )}
+
+      {!isLoading && error && (
+        <p className="flex items-start gap-1.5 border-t border-border px-3 py-2
+                      text-[11px] text-red-500">
+          <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
+          Não consegui ler a compra: {(error as Error).message}
+        </p>
+      )}
+
+      {!isLoading && !error && !row && (
+        <p className="flex items-start gap-1.5 border-t border-border px-3 py-2
+                      text-[11px] text-amber-500">
+          <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
+          Este pedido não está na Esteira do On-line — ou a venda não é de canal
+          on-line, ou ainda não chegou ao Bling.
+        </p>
+      )}
+
+      {row && (
+        <div className="border-t border-border">
+          {/* Valor e data: as duas perguntas que vêm antes de "o que foi". */}
+          <div className="flex items-baseline justify-between gap-2 px-3 py-2">
+            <span className="text-[13px] font-semibold tabular-nums">
+              {emReais(row.total ?? 0)}
+            </span>
+            {/* ⚠️ A DATA, e o canal só no `title`. Os dois na mesma linha
+                davam "28/06/2026 · Nuvem…" na largura real do painel — e canal
+                cortado não identifica canal nenhum. Quem compra o canal inteiro
+                é o card grande, a um clique daqui. */}
+            <span className="shrink-0 text-[10px] text-muted-foreground"
+                  title={row.canal ?? undefined}>
+              {row.data_pedido ? diaEmSP(row.data_pedido) : "—"}
+            </span>
+          </div>
+
+          {/* ⚠️ Os ITENS são o motivo desta seção existir, e o nome vem
+              INTEIRO: `break-words`, nunca `truncate`. "CarboZé Kit 5 Frascos
+              100ml" cortado em "CarboZé Kit 5 Fras…" tira exatamente a parte que
+              decide qual checkout oferecer. Em painel estreito, duas linhas
+              custam 14px e um nome pela metade custa a venda errada. */}
+          {itens.length > 0 ? (
+            <ul className="space-y-1.5 border-t border-border px-3 py-2">
+              {itens.map((it, i) => (
+                <li key={i} className="flex items-start gap-1.5 text-[11px] leading-snug">
+                  <span className="shrink-0 font-semibold tabular-nums text-carbo-green">
+                    {it?.quantidade ?? it?.quantity ?? 1}×
+                  </span>
+                  <span className="min-w-0 break-words text-foreground/90">
+                    {it?.descricao ?? it?.name ?? "Produto"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            /* O pedido existe na esteira e veio sem item — é o caso do ramo do
+               Bling 1, que não tem `raw_detalhe`. Dizer isso é diferente de não
+               mostrar nada. */
+            <p className="border-t border-border px-3 py-2 text-[10px] text-muted-foreground">
+              Os itens deste pedido não vieram no espelho do Bling.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Os atalhos de checkout.
+ *
+ * ⚠️ São COPIAR, nunca enviar. A oferta termina em "Bora repor?" sem link
+ * porque é uma pessoa que decide o preço de cada conversa; um botão que
+ * DISPARASSE o link daqui tiraria dela a última conferência antes de o cliente
+ * receber um desconto que ninguém autorizou. Copiar põe o link no cursor e
+ * deixa o gesto de mandar onde ele já estava.
+ *
+ * ⚠️ E a cópia tem RESERVA, porque ela falha calada sem HTTPS ou sem permissão:
+ * o `↗` abre o checkout e o endereço fica na barra do navegador. Sem essa
+ * segunda porta, o atalho viraria um botão que às vezes não faz nada — que é
+ * pior que atalho nenhum, porque ninguém descobre que não funcionou.
+ */
+function AtalhosDeCheckout() {
+  const copiar = (url: string, oque: string) => {
+    navigator.clipboard?.writeText(url)
+      .then(() => toast.success(`${oque} copiado`))
+      .catch(() => toast.error("Não consegui copiar — abra pelo ↗ e copie da barra do navegador."));
+  };
+
+  return (
+    <div className="space-y-2">
+      {/* ⚠️ Esta seção TEM cabeçalho, e é a única do painel que tem. As outras
+          se nomeiam sozinhas (um chip de etiqueta é uma etiqueta); três pares de
+          preço e link, sem título, leem-se como preços DESTA compra — que é
+          exatamente a leitura que não pode acontecer num painel que mostra a
+          compra original logo acima. */}
+      <p className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+        <Link2 className="h-3 w-3 shrink-0" /> Links para recompra
+      </p>
+
+      {CHECKOUTS.map((k) => (
+        <div key={k.kit} className="overflow-hidden rounded-lg border border-border bg-muted/40">
+          <p className="truncate border-b border-border px-2.5 py-1.5 text-[11px]
+                        font-semibold text-foreground" title={k.kit}>
+            {k.curto}
+          </p>
+          <ul>
+            {k.links.map((l) => (
+              <li key={l.url}
+                  className="flex items-center gap-1.5 border-b border-border/50 px-2.5 py-1.5
+                             last:border-b-0">
+                {/* ⚠️ A URL NÃO aparece. Ela saía truncada (`payt.site/6m…`),
+                    que é um endereço pela metade — e ninguém digita um link do
+                    Payt olhando: quem usa isto clica em copiar. Cada linha
+                    ganhou metade da altura, e seis linhas num painel estreito é
+                    a diferença entre caber e rolar.
+                    ⚠️ A reserva para quando a área de transferência falha (sem
+                    HTTPS, sem permissão) é o `↗`: abre o checkout e o endereço
+                    fica na barra do navegador, de onde dá para copiar. */}
+                <span className="min-w-0 flex-1 truncate text-[11px] leading-tight
+                                 text-foreground/90">
+                  {l.rotulo}
+                </span>
+                <span className="shrink-0 text-[11px] font-semibold tabular-nums">
+                  {emReais(l.preco)}
+                </span>
+                <button type="button" onClick={() => copiar(l.url, `Link ${l.rotulo}`)}
+                        title={`Copiar o link de ${k.kit} — ${l.rotulo}`}
+                        aria-label={`Copiar o link de ${k.kit} — ${l.rotulo}`}
+                        className="shrink-0 rounded-sm p-1 text-muted-foreground
+                                   transition-colors hover:text-carbo-green">
+                  <Copy className="h-3.5 w-3.5" />
+                </button>
+                <a href={l.url} target="_blank" rel="noreferrer"
+                   title={`Abrir o checkout de ${k.kit} — ${l.rotulo}`}
+                   aria-label={`Abrir o checkout de ${k.kit} — ${l.rotulo}`}
+                   className="shrink-0 rounded-sm p-1 text-muted-foreground
+                              transition-colors hover:text-carbo-green">
+                  <ArrowUpRight className="h-3.5 w-3.5" />
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function PainelContato({ c, meuId, onVerPedido }: {
   c: Conversa; meuId: string | null; onVerPedido: (blingId: number) => void;
 }) {
@@ -2932,34 +3151,12 @@ function PainelContato({ c, meuId, onVerPedido }: {
               ⚠️ O cabeçalho `PEDIDO` saiu e a palavra entrou NO CARD, na mesma
               linha do número: o título ocupava uma linha inteira para rotular um
               único elemento que já traz o ícone de caixa. */}
-          {c.bling_id && (
-            <button type="button" onClick={() => onVerPedido(c.bling_id!)}
-                    className="flex w-full items-center gap-2.5 rounded-lg border border-border
-                               bg-muted/40 p-3 text-left transition-colors
-                               hover:border-carbo-green/40 hover:bg-carbo-green/5">
-              <Package className="h-4 w-4 shrink-0 text-carbo-green" />
-              {/* ⚠️ O NÚMERO vem primeiro e SOZINHO na linha principal. Com a
-                  palavra "Pedido" na frente ele saía cortado ("#26970326…") na
-                  largura real do painel — e número cortado é a mesma doença do
-                  dropdown do /vender que dizia só "Microdistribuidor R$ 11,50":
-                  identificador pela metade não identifica nada. A palavra desceu
-                  para o subtítulo, onde pode truncar sem custo.
-                  ⚠️ Só apareceu RENDERIZANDO: nem o `tsc` nem o build sabem onde
-                  o texto estoura. */}
-              <span className="min-w-0 flex-1">
-                <span className="block truncate font-mono text-[13px] font-semibold
-                                 leading-tight tabular-nums text-carbo-green">
-                  #{c.bling_id}
-                </span>
-                <span className="block truncate text-[11px] text-muted-foreground">
-                  Pedido{c.sobre_a_etapa
-                    ? ` · ${NOME_ETAPA[c.sobre_a_etapa] ?? c.sobre_a_etapa}`
-                    : ""}
-                </span>
-              </span>
-              <Maximize2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-            </button>
-          )}
+          {c.bling_id && <CompraOriginal c={c} onVerPedido={onVerPedido} />}
+
+          {/* ── Os links de checkout ────────────────────────────────────────
+              DEPOIS do pedido, e a ordem é a do atendimento: primeiro se vê o
+              que a pessoa comprou, depois se escolhe o que oferecer. */}
+          <AtalhosDeCheckout />
         </div>
       </CarboCardContent>
     </CarboCard>
