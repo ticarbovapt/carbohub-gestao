@@ -146,9 +146,26 @@ end $sonda$;
 -- ⚠️ `timed_out = true` com `status_code` nulo NAO e erro da funcao: e o pg_net
 -- tendo desistido. Ela pode ter rodado inteira do outro lado.
 --
+-- ⚠️ FILTRA PELA URL, e a primeira versao NAO fazia isso. `order by created
+-- desc limit 4` sem filtro trouxe os quatro crons de minuto (`kanban-n8n`,
+-- `whatsapp-meta`, `bling2-auto-sync`) e ENTERROU a resposta da sonda debaixo
+-- do trafego normal — a consulta devolveu quatro `200` que nao tinham nada a
+-- ver com a pergunta. Resposta plausivel sobre a coisa errada e pior que
+-- resposta nenhuma; e o `Math.round` inventando `×1` na versao mais barata.
+--
+-- ⚠️ O join e por `net._http_request_queue`, que e onde a URL mora: a tabela de
+-- resposta nao a guarda. Ela e LIMPA periodicamente pelo pg_net, entao linha
+-- antiga perde o par e some daqui — por isso o `left join` com o `or` abaixo,
+-- que mantem a linha mesmo sem o pedido.
+--
 -- select r.id, r.status_code, r.timed_out, r.error_msg,
 --        r.created at time zone 'America/Sao_Paulo' as quando_brasilia,
 --        r.content
 -- from net._http_response r
+-- left join net.http_request_queue q on q.id = r.id
+-- where q.url like '%nfse-dps-teste%'
+--    or r.content like '%nfse-dps-teste%'
+--    or r.content like '%producaorestrita.nfse.gov.br%'
+--    or r.content like '%infDps_assinado%'
 -- order by r.created desc
--- limit 4;
+-- limit 6;
