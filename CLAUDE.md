@@ -3422,3 +3422,141 @@ que aconteceu com a `/integracoes/nfse`.
 XML (`nfse_imports`). Agora há duas telas sobre nota de serviço, com conjuntos
 diferentes — nenhuma com defeito, e é o caso conhecido de duas telas discordando
 sobre o mesmo dado. Decidir qual manda antes que alguém feche um mês por uma.
+
+### ⏸️ CarboVAPT emitir NFS-e pelo DPS — PAUSADO em 02/10/2026, e por quê
+Pedido do dono do processo: *"os pedidos de carbovapt no sistema não são como os
+de carbozé/carbopro… quando for carbovapt não deve ir para o rastreio de venda,
+ele deve apenas gerar no carbohub finanças para gerar a nf, mas essa nf não é no
+bling, é a nf do portal nacional"*, e depois, mais estreito: *"o botão emitir no
+portal nacional mande todos os dados preenchidos que já estão no sistema para o
+usuário apenas confirmar no portal nacional e emitir a nf, preciso disso apenas,
+nada a mais / além de enviar o rodapé com o número da venda e nome do vendedor
+para fazer o cruzamento"*.
+
+**Pausado porque o gov.br está com erro e não está sendo possível emitir NF.**
+Retomar com o serviço de pé — ver "o que falta medir" no fim.
+
+```
+supabase/functions/nfse-dps-teste/index.ts                     a sonda (JÁ NO AR)
+supabase/migrations/20261040000000_chamar_a_sonda_do_dps_pelo_sql_editor.sql
+                                                   como disparar pelo SQL Editor
+```
+
+⚠️ **A ORDEM DAS FASES FOI CORRIGIDA PELO DONO DO PROCESSO, e ele estava certo:**
+*"não teríamos que validar se é possível a fase 4 antes de fazer o restante? pq
+se o 4 não for possível, o 1 ao 3 é desnecessário"*. Assinar o DPS é a pergunta
+BINÁRIA e barata; tela, botão e cruzamento só existem se ela der sim. Eu tinha
+montado da ponta errada.
+
+⚠️ **O que NÃO se mexe enquanto isso: o CarboZé funciona como está.** Eu li
+*"meu sistema já funciona"* como se valesse para os dois e ele corrigiu — *"eu
+falei que funciona para o carbozé… realmente o carbovapt não funciona como está,
+pq como está não funciona, se não eu não ia fazer isso"*. As 6 vendas de serviço
+(R$ 50.400) estão `conta_metrica = false` com `motivo_fora = aguardando_nf`,
+esperando uma NF do **Bling** que nunca vai sair — a nota delas é NFS-e.
+
+#### O que JÁ está medido, e não precisa ser remedido
+1. **A forma do `infDPS` veio do GABARITO, não de manual.** O ADN embute o DPS
+   ORIGINAL dentro da NFS-e que devolve, então o `carbo_nfse_dfe` já tinha um
+   DPS que o Sistema Nacional ACEITOU, do nosso CNPJ, para o serviço certo.
+   Dali: `cTribNac 140101`, `cNBS 120013110`, `cLocEmi 2408102` (Natal),
+   `regTrib` do Simples (`opSimpNac 3 · regApTribSN 1 · regEspTrib 0`) e — o que
+   eu jamais teria adivinhado — o bloco **`IBSCBS`** da reforma tributária, hoje
+   obrigatório. Sem ele a rejeição seria por schema, sem dizer o que falta.
+2. ⚠️ **O `Id` tem forma fixa**, confirmada contra nota real:
+   `DPS + município(7) + tipoInscrição(1) + CNPJ(14) + série(5) + nDPS(15)`.
+3. ⚠️ **`infoCompl/xInfComp` mora DENTRO de `<serv>`, depois de `<cServ>`** — e
+   já é usado para o pedido do cliente (`"Pedido 4500787362"`) e texto de CPOM.
+   O rodapé do cruzamento **ACRESCENTA**, nunca substitui.
+4. ⚠️ **`ja_citam_o_pedido = 0` nas 353 notas nossas.** Nenhuma NFS-e emitida até
+   hoje cita o número da venda — é por isso que o cruzamento precisa ser
+   construído, e não descoberto.
+5. **Série 90000, NÃO a 70000 do emissor web.** `nDPS` é sequencial POR SÉRIE:
+   usar a mesma faria o nosso contador competir com o de quem digita no portal,
+   e duas fontes incrementando o mesmo número é nota duplicada no pior caso.
+6. ⚠️ **Eu quase construí a assinatura com os algoritmos do GOVERNO.** Medi
+   `exc-c14n#WithComments` + `rsa-sha256` no XML devolvido — e aquilo é a
+   assinatura **do ADN** (cert CN `APP10853.PRODUCAO.NFSE.GOV.BR`, SERPRO): ele
+   REMOVE a do contribuinte e põe a dele. O manual do contribuinte pede c14n
+   **INCLUSIVA** (`REC-xml-c14n-20010315`). **Medir a coisa certa e ler como se
+   respondesse outra pergunta é o erro mais barato de cometer e o mais caro de
+   descobrir.**
+7. ⚠️ **O hash é a ÚNICA coisa que não consegui medir** — NF-e/CT-e usam SHA-1
+   historicamente, o ADN usa SHA-256, os dois são plausíveis. Por isso `algo`
+   é PARÂMETRO e a sonda testa os dois: quem responde é a rejeição, não a minha
+   opinião.
+8. **O XML é gerado JÁ CANÔNICO**, com o `xmlns` MATERIALIZADO no `infDPS`. Não
+   existe C14N pronto no Deno e canonicalização genérica erra em silêncio
+   (digest diferente, rejeição que não diz onde) — gerando eu o XML, a
+   canonicalização vira quase identidade.
+
+#### Os três erros de rede, em ordem, e o que cada um PROVOU
+```
+1  endpoint requires HTTP/1.1              o Deno negocia h2 por ALPN; o SEFIN só fala 1.1
+2  Connection reset by peer (os error 104) depois de http1: true, http2: false
+3  ← e é AQUI que paramos
+```
+⚠️ **O erro nº 1 provou QUATRO coisas funcionando**, e é por isso que ele vale
+mais que um sucesso vago: a `etapa` foi `fetch` e não `assinar`, e o erro é de
+PROTOCOLO e não de TLS. Logo a `NFSE_KEY_PEM` está em PKCS#8 e importou, o
+`SignedInfo` foi assinado, o cliente mTLS subiu e o **handshake TLS COMPLETOU**
+com `189.9.67.145:443` — certificado recusado teria vindo como erro de TLS.
+
+⚠️ **E o nº 2 NÃO está interpretado — essa é a pendência.** `Connection reset`
+tem TRÊS causas com a MESMA cara (certificado recusado · caminho que não existe
+· corpo do POST) e agora uma QUARTA: **o gov estar fora**, que é o que foi
+informado no mesmo dia. Chamar o reset de "a nossa assinatura está errada" seria
+inventar resposta a partir de ausência — a doença do `Math.round` inventando
+`×1`.
+
+#### ⚠️ A minha consulta de conferência ENTERROU a resposta, e isso é lição
+`select … from net._http_response order by created desc limit 4`, **sem filtro**,
+trouxe os quatro crons de minuto (`kanban-n8n`, `whatsapp-meta`,
+`bling2-auto-sync`) e a resposta da sonda nunca apareceu. Quatro `200` que não
+tinham nada a ver com a pergunta. **Resposta plausível sobre a coisa errada é
+pior que resposta nenhuma.** Hoje filtra pela URL, com `left join
+net.http_request_queue` (a tabela de resposta não guarda a URL).
+
+#### O que falta medir ao RETOMAR, e já está pronto para rodar
+`{"diagnostico": true}` roda 12 casos numa chamada só, e o que os torna
+mensuráveis são os CONTROLES — sem eles o reset não prova nada:
+```
+A  CONTROLE+   adn/contribuintes/DFe/0 GET com cert   ← o que JÁ funciona
+B  CONTROLE-   o mesmo, SEM cert                      ← o par que isola
+C/D/E          o host do DPS fala HTTP com o cert?
+F/G/H          o POST que reseta: corpo cheio / {} / sem cert
+I/J/K/L        variações de CAMINHO e de HOST
+```
+**A leitura não é "qual deu 200" — é o PADRÃO:**
+```
+A responde e C/F resetam      o cert está OK; é host, caminho ou corpo
+A resetar também              é a rede do Supabase OU o gov fora — nada abaixo prova nada
+H/E responder e F/C resetar   o servidor está RECUSANDO o nosso certificado
+A e B iguais                  a leitura não exige mTLS, e A não serve de controle
+```
+⚠️ **Rode o diagnóstico ANTES de qualquer conclusão**, e com o gov de pé —
+medição feita durante indisponibilidade mede a indisponibilidade.
+
+#### Travas que NÃO se afrouxam
+1. ⚠️ **DUAS travas independentes contra emitir de verdade:** a URL é a de
+   produção restrita (a de produção fica **COMENTADA** no código, para
+   descomentar ser gesto deliberado e não parâmetro passado por engano) e
+   `tpAmb = 2` dentro do XML. `producao: true` no corpo é **RECUSADO**. **DPS
+   aceito em produção É NOTA FISCAL COM NÚMERO**, que só se desfaz com
+   cancelamento.
+2. ⚠️ **A lista de hosts é FECHADA**, como na `nfse-nacional`, e não é zelo:
+   esta função APRESENTA O CERTIFICADO A1 DA EMPRESA em cada requisição. Um
+   `&host=` livre a transformaria num proxy que assina, no CNPJ da Carbo, contra
+   qualquer servidor que alguém escolher. E só hosts de produção RESTRITA —
+   sondar produção com o certificado é bater na porta de quem emite de verdade.
+3. ⚠️ **`nDPS` DIFERENTE a cada tentativa.** Repetir o número faz o ADN recusar
+   por DUPLICIDADE em vez de por assinatura — responderia a pergunta errada com
+   cara de resposta. Já usados: 1, 2 (sha256/sha1), 3, 4, e 900 no diagnóstico.
+4. **A sonda não entra em cron nenhum**, e não deve entrar.
+
+#### O plano B, se a assinatura não for viável
+Mandar o DPS **pré-preenchido para o emissor web** em vez de assinar. É mais
+perto do que foi pedido (*"apenas confirmar no portal nacional e emitir"*) e
+**não exige a chave privada no servidor** — o que elimina o segredo mais
+sensível do projeto de um caminho novo. Só não foi o caminho de partida porque
+ninguém mediu se o emissor web aceita entrada pré-preenchida.
