@@ -133,6 +133,12 @@ jobs:
           # --no-verify-jwt porque quem chama é curl/pg_cron com o X-Cron-Secret,
           # sem Authorization. A portaria é o CRON_SECRET, validado por dentro.
           dep nfse-nacional --no-verify-jwt
+          # NFS-e: a SONDA de assinatura do DPS. Responde uma pergunta binaria —
+          # conseguimos assinar um DPS que o Sistema Nacional aceita? — e so
+          # fala com a PRODUCAO RESTRITA (tpAmb=2 no XML, URL de homologacao,
+          # e recusa `producao: true`). Nao entra em cron nenhum.
+          # --no-verify-jwt porque quem chama e curl com o X-Cron-Secret.
+          dep nfse-dps-teste --no-verify-jwt
           dep nuvemshop-auth --no-verify-jwt
           dep nuvemshop-lgpd --no-verify-jwt
           # Shopee. ⚠️ Estava no repo e no config.toml desde que foi escrita, e
