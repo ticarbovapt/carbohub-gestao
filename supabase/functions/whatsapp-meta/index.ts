@@ -216,15 +216,63 @@ Deno.serve(async (req: Request) => {
       // chegar, senão o treinamento acontece numa caixa e a operação em outra.
       const rr = await enviar(m.body, tpl.numero_id || phoneTeste);
       const okk = rr.status >= 200 && rr.status < 300;
+      const wamidTeste = rr.json?.messages?.[0]?.id ?? null;
+      const waIdTeste  = rr.json?.contacts?.[0]?.wa_id ?? numero;
+
+      // ── A mensagem enviada PRECISA aparecer na conversa ──────────────────
+      //
+      // ⚠️ Sem isto a tela mostrava a conversa com a RESPOSTA do cliente e sem
+      // a oferta que a provocou — e treinar o time numa conversa a que falta o
+      // que NÓS dissemos é treinar para ler pela metade. O dono do processo
+      // apontou no primeiro teste: *"ao enviar já tem que gerar a conversa aqui
+      // dos clientes, já com a mensagem que foi enviada que é o template"*.
+      //
+      // ⚠️ VAI PARA `carbo_wa_mensagens`, NUNCA para `carbo_msg_envios`. A PK
+      // daquela é `(bling_id, etapa)` — "uma mensagem por etapa por pedido,
+      // PARA SEMPRE" —, então um teste precisaria inventar um `bling_id`, e o
+      // inventado BLOQUEARIA o envio real daquele pedido mais tarde. Teste que
+      // consome a vaga do que ele está testando é pior que teste nenhum.
+      //
+      // No envio de VERDADE o balão vem do outro ramo da `carbo_wa_conversas`
+      // (`carbo_msg_envios`), que o laço da fila grava com wamid, wa_id e
+      // `numero_id`. São duas origens para a mesma linha do tempo, e isso já
+      // era assim antes desta mudança.
+      if (okk && wamidTeste) {
+        // O texto renderizado sai do MESMO `valores` que montou o envio — e
+        // não de uma segunda substituição aqui, que divergiria no dia em que
+        // alguém mudasse o formato de uma variável.
+        let textoRenderizado = String(tpl.texto ?? "");
+        for (const [chave, valor] of Object.entries(m.valores ?? {})) {
+          textoRenderizado = textoRenderizado.split(`{{${chave}}}`).join(valor);
+        }
+        const { error: erroMsg } = await supabase.from("carbo_wa_mensagens").upsert({
+          wamid: wamidTeste,
+          wa_id: waIdTeste,
+          numero_id: tpl.numero_id || phoneTeste,
+          direcao: "saida",
+          tipo: "template",
+          texto: textoRenderizado,
+          ocorrido_em: new Date().toISOString(),
+          payload: m.body,
+        }, { onConflict: "wamid" });
+        // ⚠️ Falha aqui NÃO é silenciosa: a mensagem foi para o cliente e a
+        // tela ficaria sem ela, que é exatamente o defeito que isto conserta.
+        if (erroMsg) console.error("[whatsapp-meta] teste: não gravei a conversa", erroMsg);
+      }
+
       return json({
         ok: okk, modo: "mensagem REAL para um número", etapa: etapaTeste,
         template: tpl.meta_template_nome, numero_id: tpl.numero_id,
         para: numero, status: rr.status,
-        wamid: rr.json?.messages?.[0]?.id ?? null,
+        wamid: wamidTeste,
         wa_id: rr.json?.contacts?.[0]?.wa_id ?? null,
         erro: okk ? null : detalheDoErro(rr.json),
+        // ⚠️ A conversa JÁ aparece (o balão do template foi gravado), mas o
+        // CAMPO DE RESPOSTA só libera quando o cliente escrever: a janela de
+        // 24 h da Meta abre com a mensagem DELE, não com a nossa. São duas
+        // coisas diferentes, e confundi-las faz alguém achar que a tela quebrou.
         nota: okk
-          ? "A conversa aparece na caixa deste número assim que o cliente RESPONDER — o envio por template não abre a janela sozinho."
+          ? "O balão do template já está na conversa. O campo de resposta só libera quando o cliente RESPONDER — a janela de 24 h abre com a mensagem dele, não com a nossa."
           : null,
       }, 200);
     }
