@@ -41,7 +41,13 @@ const supabase = createClient(
 );
 
 const TOKEN    = Deno.env.get("WHATSAPP_ACCESS_TOKEN") ?? "";
-const PHONE_ID = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID") ?? "1255756280958635";
+// ⚠️ O número NÃO é mais constante: desde 02/10/2026 o WABA tem TRÊS. Este
+// valor fica como RESERVA — o número de SERVIÇO, que era o único que existia —
+// e quem manda é quem CHAMA, porque a tela sabe em qual caixa a pessoa está.
+// Reserva FECHANDO (recusar sem número) pararia a resposta a cliente por causa
+// de um campo novo do front; reserva ABRINDO manda pelo número de serviço, que
+// é o comportamento de ontem.
+const PHONE_ID_SERVICO = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID") ?? "1255756280958635";
 const VERSAO   = Deno.env.get("WHATSAPP_API_VERSION") ?? "v25.0";
 
 
@@ -75,6 +81,8 @@ Deno.serve(async (req: Request) => {
   if (!TOKEN) return json({ error: "WHATSAPP_ACCESS_TOKEN não está configurado." }, 500);
 
   const corpo = await req.json().catch(() => ({}));
+  // De qual NÚMERO NOSSO esta resposta sai. A tela manda; a reserva é serviço.
+  const numeroId: string = String((corpo as any)?.numero_id || "") || PHONE_ID_SERVICO;
   const waId = String(corpo?.wa_id ?? "").replace(/\D/g, "");
   const texto = String(corpo?.texto ?? "").trim();
   if (!waId) return json({ error: "wa_id ausente" }, 400);
@@ -112,7 +120,7 @@ Deno.serve(async (req: Request) => {
 
   let resposta: any = null, status = 0;
   for (let tentativa = 0; tentativa <= 2; tentativa++) {
-    const res = await fetch(`https://graph.facebook.com/${VERSAO}/${PHONE_ID}/messages`, {
+    const res = await fetch(`https://graph.facebook.com/${VERSAO}/${numeroId}/messages`, {
       method: "POST",
       headers: { "Authorization": `Bearer ${TOKEN}`, "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -137,7 +145,7 @@ Deno.serve(async (req: Request) => {
   // quem atende responderia como se já tivesse dito aquilo.
   if (ok && wamid) {
     const { error: erroGrava } = await supabase.from("carbo_wa_mensagens").upsert({
-      wamid, wa_id: waId, direcao: "saida", tipo: "text", texto,
+      wamid, wa_id: waId, numero_id: numeroId, direcao: "saida", tipo: "text", texto,
       ocorrido_em: new Date().toISOString(),
       // ⚠️ AUTORIA EM COLUNA, não só no payload. O `payload.por` continua
       // (histórico já gravado depende dele), mas quem a tela lê é a coluna:
