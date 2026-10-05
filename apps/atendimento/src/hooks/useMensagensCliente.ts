@@ -44,6 +44,37 @@ export interface TemplateMsg {
   meta_variaveis: VarMeta[] | null;
   /** Coluna que alimenta o botão de rastreio. null = template sem botão. */
   meta_botao_url_de: string | null;
+  /** ⚠️ Por qual número da Cloud API a etapa sai (`carbo_wa_numeros`). Só vale
+   *  quando `canal_envio = 'meta'`; nulo cai no de serviço, como na fila. É ele,
+   *  e não `instancia`, que diz o número de uma etapa da Meta. */
+  numero_id?: string | null;
+}
+
+/** Um número da Cloud API, como a tela precisa para NOMEÁ-LO. */
+export interface NumeroWaCadastro {
+  phone_number_id: string;
+  rotulo: string;
+  numero_exibicao: string | null;
+}
+
+/**
+ * O cadastro dos números da Meta, só para escrever o nome certo na tela.
+ *
+ * ⚠️ Lido por `carbo_e_time_interno()`: fora do time ele volta vazio, e a tela
+ * cai no id cru em vez de inventar um nome. Ausência mostra o que se sabe.
+ */
+export function useNumerosWa() {
+  return useQuery({
+    queryKey: ["wa-numeros-cadastro"],
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<NumeroWaCadastro[]> => {
+      const { data, error } = await (supabase as any)
+        .from("carbo_wa_numeros")
+        .select("phone_number_id, rotulo, numero_exibicao");
+      if (error) throw error;
+      return (data ?? []) as NumeroWaCadastro[];
+    },
+  });
 }
 
 export interface EnvioMsg {

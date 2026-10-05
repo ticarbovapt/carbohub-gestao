@@ -14,7 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ConexaoWhatsApp } from "@/components/ConexaoWhatsApp";
 import {
-  useTemplatesMsg, useSalvarTemplate, useEnviosMsg, useFilaMsg,
+  useTemplatesMsg, useSalvarTemplate, useEnviosMsg, useFilaMsg, useNumerosWa,
   montarPreview, montarPreviewMeta, VARIAVEIS, EXEMPLO, EXEMPLO_META,
   type TemplateMsg, type EtapaMsg,
   GRUPOS, GRUPO_DA_ETAPA, type GrupoMsg,
@@ -306,6 +306,17 @@ export default function MensagensCliente() {
   const voltar = params.get("voltar") || "/ecommerce/esteira";
 
   const { data: templates, isLoading } = useTemplatesMsg();
+  const { data: numerosWa } = useNumerosWa();
+  const usaEvolution = (templates ?? []).some((t) => t.canal_envio !== "meta");
+  const nomeDoNumero = (t: TemplateMsg) => {
+    if (t.canal_envio !== "meta") return t.instancia ?? "padrão (atendimento)";
+    // Nulo cai no número de serviço — a MESMA reserva da `carbo_msg_fila`.
+    const id = t.numero_id ?? "1255756280958635";
+    const n = (numerosWa ?? []).find((x) => x.phone_number_id === id);
+    return n
+      ? `${n.rotulo}${n.numero_exibicao ? ` · ${n.numero_exibicao}` : ""} · API oficial`
+      : `${id} · API oficial`;
+  };
   const { data: envios } = useEnviosMsg();
   const { data: naFila } = useFilaMsg();
 
@@ -346,8 +357,15 @@ export default function MensagensCliente() {
       />
 
       {/* Antes dos textos: de nada adianta a redação estar perfeita se o
-          número que envia está desconectado. */}
-      <ConexaoWhatsApp />
+          número que envia está desconectado.
+
+          ⚠️ SÓ enquanto alguma etapa ainda sai pela Evolution. Este cartão é
+          a conexão DELA; com as três pipelines na Cloud API, ele dizia em
+          vermelho "os avisos automáticos não estão saindo" sobre uma tela onde
+          os avisos estavam saindo — pela Meta, que ele não enxerga. Alarme
+          sobre o canal errado ensina a ignorar alarme. Volta sozinho se
+          alguma etapa voltar para a Evolution. */}
+      {usaEvolution && <ConexaoWhatsApp />}
 
       {ligadas === 0 && (
         <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs text-amber-600 dark:text-amber-500">
@@ -396,7 +414,12 @@ export default function MensagensCliente() {
           {doGrupo.length > 0 && (
             <p className="text-[11px] text-muted-foreground">
               Sai pelo número{" "}
-              <strong>{doGrupo[0].instancia ?? "padrão (atendimento)"}</strong>
+              {/* ⚠️ Na Meta o número é `numero_id`, nunca `instancia` — que é o
+                  nome da instância na EVOLUTION. Lendo só ela, a aba da
+                  Recompra dizia "carbo-comercial" enquanto as ofertas saíam
+                  pelo Clube: o mesmo engano que este aviso existe para evitar,
+                  cometido pelo próprio aviso. */}
+              <strong>{nomeDoNumero(doGrupo[0])}</strong>
               {ligadasNoGrupo === 0 && " · nenhuma mensagem ligada neste grupo"}
             </p>
           )}
