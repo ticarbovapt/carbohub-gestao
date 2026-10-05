@@ -407,6 +407,27 @@ Deno.serve(async (req: Request) => {
     }
   }
 
+  // ── A oferta é para a PESSOA, não para o pedido ─────────────────────────
+  //
+  // ⚠️ A régua de recompra tem uma linha por PEDIDO entregue, e a fila herda
+  // isso. Medido em 05/10/2026, ao ligar: 321 ofertas para 296 pessoas — 25
+  // receberiam a MESMA mensagem duas vezes, provavelmente no mesmo minuto, o
+  // que lê como robô desgovernado e queima o número do Clube.
+  //
+  // A trava mora aqui, no ENVIO, e não na view: é o único lugar que sabe o que
+  // JÁ SAIU nesta rodada (as duas linhas da mesma pessoa podem vir no mesmo
+  // lote) e o que saiu em rodadas anteriores. A segunda vira `ignorado` com o
+  // motivo escrito — fica auditável e o card dela anda para "Ofertado", que é
+  // verdade: a pessoa foi ofertada, pelo outro pedido.
+  const ofertadosRecompra = new Set<string>();
+  if (numeros.length && (fila as LinhaFila[]).some((l) => l.etapa === "recompra")) {
+    const { data: jaRecompra } = await supabase
+      .from("carbo_msg_envios").select("telefone")
+      .eq("etapa", "recompra").in("telefone", numeros)
+      .in("status", ["enviado", "entregue", "lido", "erro"]);
+    for (const r of jaRecompra ?? []) if (r.telefone) ofertadosRecompra.add(String(r.telefone));
+  }
+
   for (const l of fila as LinhaFila[]) {
     if (tentativas >= TETO) break;
     const normalizado = normalizarBR(l.telefone);
@@ -475,6 +496,21 @@ Deno.serve(async (req: Request) => {
         adiados++; continue;
       }
     }
+
+    if (l.etapa === "recompra" && normalizado && ofertadosRecompra.has(normalizado)) {
+      if (!ensaio) {
+        await supabase.from("carbo_msg_envios").upsert({
+          bling_id: l.bling_id, etapa: l.etapa, status: "ignorado", canal: "meta",
+          numero_id: (l as any).numero_id ?? null,
+          motivo: "mesma pessoa já recebeu a oferta de recompra por outro pedido",
+          telefone: normalizado, enviado_em: new Date().toISOString(),
+        });
+      }
+      resultados.push({ bling_id: l.bling_id, etapa: l.etapa,
+                        decisao: "ignorada — a pessoa já recebeu a oferta" });
+      continue;
+    }
+    if (l.etapa === "recompra" && normalizado) ofertadosRecompra.add(normalizado);
 
     tentativas++;
     if (ensaio) {
