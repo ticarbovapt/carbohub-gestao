@@ -64,6 +64,25 @@ const VERSAO   = Deno.env.get("WHATSAPP_API_VERSION") ?? "v25.0";
 // Teto por rodada. O cron é de 1 minuto; 20 por rodada é muito acima do que a
 // operação gera num dia e segura qualquer surpresa — mesmo teto do kanban-n8n.
 const TETO = 20;
+/**
+ * ⚠️ Quantas linhas se LÊ da fila por rodada — separado do TETO de envios.
+ *
+ * Eram o mesmo número, e isso travou a recompra inteira no dia em que ela foi
+ * ligada (05/10/2026): 28 avisos de `etiqueta` esperando um dado que ainda não
+ * existia (linha `pendente`, que a fila devolve de propósito a cada rodada)
+ * ocupavam as 20 vagas de TODA rodada, porque a esteira vem antes do comercial
+ * na `prioridade`. A função lia os mesmos 20, segurava os 20, e as 321 ofertas
+ * nunca chegavam à vez — com o cron marcando `succeeded` de minuto em minuto.
+ *
+ * Linha segurada não custa envio (não chama a Meta), então ela não pode gastar
+ * vaga do teto. Lê-se fundo; o TETO conta só o que vai à Meta.
+ *
+ * ⚠️ 150, não "tudo": os telefones lidos vão numa consulta `.in(...)` que vira
+ * URL, e 300 números já passam de 4 KB. 150 cobre com folga os travados de hoje
+ * mais as 20 vagas — se um dia houver mais de 130 linhas seguradas ao mesmo
+ * tempo, o defeito volta, e a resposta certa é olhar por que tanto está preso.
+ */
+const LEITURA = 150;
 const PAUSA_MS = 250;
 
 const dormir = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -348,7 +367,7 @@ Deno.serve(async (req: Request) => {
     .from("carbo_msg_fila").select("*")
     .eq("canal_envio", "meta")
     .order("prioridade", { ascending: true })
-    .limit(TETO);
+    .limit(LEITURA);
   if (error) return json({ error: `fila: ${error.message}` }, 500);
   if (!fila?.length) return json({ ok: true, fila: 0, nota: "nada a avisar pela Meta" });
 
@@ -363,6 +382,8 @@ Deno.serve(async (req: Request) => {
   const agora = Date.now();
   const resultados: unknown[] = [];
   let enviados = 0, falhas = 0, adiados = 0, semFone = 0, segurados = 0;
+  // Quantas chegaram à Meta (ou chegariam, no ensaio). É ISTO que o TETO mede.
+  let tentativas = 0;
 
   // ── O número que o WhatsApp usa, não o que está no cadastro ─────────────
   //
@@ -387,6 +408,7 @@ Deno.serve(async (req: Request) => {
   }
 
   for (const l of fila as LinhaFila[]) {
+    if (tentativas >= TETO) break;
     const normalizado = normalizarBR(l.telefone);
     const numero = normalizado ? (conhecidos.get(normalizado) ?? normalizado) : null;
 
@@ -454,6 +476,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    tentativas++;
     if (ensaio) {
       resultados.push({
         bling_id: l.bling_id, etapa: l.etapa, template: l.meta_template_nome,
