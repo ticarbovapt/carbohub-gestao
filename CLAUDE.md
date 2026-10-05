@@ -3830,3 +3830,69 @@ rodada de 1 min ⇒ cerca de 15 minutos.
 
 ⚠️ **E alguém precisa atender.** A oferta termina em *"Bora repor?"* sem link —
 quem manda o link é uma pessoa, dentro da janela de 24 h.
+
+### ⏸️ Carrinho abandonado pela Meta: pronto e DESLIGADO (05/10/2026)
+A terceira pipeline saiu da Evolution e passou a sair pela Cloud API, pelo
+número da LOJA. Testado com os três templates reais no celular do dono do
+processo — os três chegaram, e o `R$ 149,00` do segundo saiu formatado.
+
+```
+carrinho_1  carrinho_lembrete_1  primeiro_nome · produtos · link_carrinho
+carrinho_2  carrinho_lembrete_2  primeiro_nome · valor(brl) · produtos · link_carrinho
+carrinho_3  carrinho_lembrete_3  primeiro_nome · link_carrinho
+número      1347087218483622 · (84) 98175-8713 · "CarboZé Loja" no nosso cadastro
+supabase/migrations/20261045000000_carrinho_sai_pela_meta.sql
+```
+
+**O interruptor, quando o dono do processo pedir:**
+
+```sql
+update public.carbo_carrinho_config
+   set inicio_em = now() - interval '24 hours'
+ where id;
+
+update public.carbo_msg_templates
+   set ativo = true
+ where etapa in ('carrinho_1','carrinho_2','carrinho_3');
+```
+
+1. ⚠️ **O MARCO ZERO ANDA JUNTO, e sem ele saem 157 mensagens.** Carrinho com
+   telefone que nunca recebeu aviso fica em `aberto` PARA SEMPRE — não há
+   prazo de validade —, e o `inicio_em` era o de quando a tabela nasceu.
+   Medido em 05/10: **157 abertos, o mais antigo de 08/08; com o marco em
+   24 h, saem 2.** "Vi que você começou um pedido" sobre um carrinho de dois
+   meses é spam com o nome da loja.
+   ⚠️ Isto NÃO contradiz o "nunca mover o marco zero" da dedução de estoque:
+   lá ele compete com o ledger; aqui ele é, por definição na própria tabela,
+   "o que impede a primeira sincronização de virar rajada". E só foi seguro
+   porque **nenhum carrinho estava no meio da sequência** (medido: zero linhas
+   `carrinho_*` em `carbo_msg_envios`) — `historico` vem ANTES de `msg1`/`msg2`
+   no CASE da pipeline, e um carrinho já avisado anterior ao marco perderia as
+   próximas mensagens. **Mova o marco de novo só depois de medir isso de novo.**
+2. ⚠️ **`valor` saía `149.00` pela Meta.** A fila entrega `numeric(12,2)` cru e
+   a Evolution formatava à mão no `kanban-n8n`. Hoje `meta_variaveis` aceita
+   `"formato": "brl"` POR VARIÁVEL (`_shared/metaTemplate.ts`). Declarado,
+   nunca deduzido: "é número, logo é dinheiro" formataria quantidade e pedido.
+3. **Reservas escolhidas lendo a frase inteira:** nome → "tudo bem", produtos →
+   "os produtos que você escolheu", valor → "compras" ("Seu carrinho de compras
+   continua salvo"). ⚠️ `link_carrinho` **não tem** reserva, de propósito: sem
+   link a mensagem não serve, e o envio espera.
+4. ⚠️ **O cliente vê "CarboZé Atendimento"**, que é o nome de exibição na
+   META. "CarboZé Loja" é só o nosso rótulo (seletor de Conversas, aba de
+   mensagens). Trocar o que o cliente vê é no WhatsApp Manager, com revisão.
+5. ⚠️ **Na conversa de carrinho, `bling_id` é o id do CHECKOUT.** A tela de
+   Conversas não abre card de pedido para etapa `carrinho_*`
+   (`pedidoDaConversa`) — antes, toda conversa da caixa nova abriria com
+   "Este pedido não está na Esteira". O carrinho está no próprio balão.
+6. **O teste** é o `&etapa=carrinho_N` do `whatsapp-meta`, com exemplos
+   coerentes (Kit 5 Frascos · R$ 149 · link Payt do mesmo kit), trocáveis por
+   `&produtos=`, `&valor=`, `&link=`. Não grava no ledger, então não ocupa a
+   vaga de carrinho nenhum.
+7. `teto_diario = 60` por etapa veio de antes e ficou: com ~2 carrinhos novos
+   por dia, nunca segura nada.
+
+⚠️ **Com isso, NADA mais sai pela Evolution.** O cartão "Desconectado" da
+Evolution em Mensagens ao cliente só aparece enquanto alguma etapa tiver
+`canal_envio <> 'meta'` — e a linha "Sai pelo número" passou a ler `numero_id`
+para etapa da Meta (ela dizia "carbo-comercial" na aba da Recompra enquanto as
+ofertas saíam pelo Clube).
