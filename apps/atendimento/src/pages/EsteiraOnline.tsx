@@ -801,7 +801,10 @@ function AvisosDoCliente({ row, avisos, templates }: {
       {ORDEM_ETAPAS.map((etapa) => {
         const e = avisos?.get(`${row.bling_id}:${etapa}`);
         const t = templates?.find((x) => x.etapa === etapa);
-        const marcoZero = e?.status === "ignorado" && !(e.motivo ?? "").startsWith("telefone");
+        const marcoZero = e?.status === "ignorado" && !(e.motivo ?? "").startsWith("telefone")
+          // ⚠️ A recompra ignora o 2º pedido da MESMA pessoa (o envio dedupe por
+          // telefone). Isso não é marco zero, e o motivo escrito é a explicação.
+          && !(e.motivo ?? "").startsWith("mesma pessoa");
 
         /* ⚠️ As etapas do CARRINHO não são do pedido.
            Elas são chaveadas pelo id do CHECKOUT, nunca pelo `bling_id` de um
