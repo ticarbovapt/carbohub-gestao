@@ -337,6 +337,83 @@ function ChipPrevisao({ r }: { r?: RastreioCard }) {
 const CHEGOU_AO_CLIENTE = new Set(["enviado", "entregue", "lido"]);
 const NAO_CHEGOU_POR_FALHA = new Set(["erro", "falhou"]);
 
+/**
+ * O telefone PARECE errado? — um aviso no card, nunca uma trava.
+ *
+ * Pedido do dono do processo em 05/10/2026, depois de medir as falhas da Meta:
+ * todas eram `131026` (o número não recebe WhatsApp), e a maior parte tinha
+ * cara de erro de DIGITAÇÃO — principalmente o 9 que se esquece depois do DDD
+ * (`84 87346304` em vez de `84 9 87346304`).
+ *
+ * ⚠️ AVISA, NÃO IMPEDE. O card anda na esteira normalmente: a regra é do
+ * pedido, não da mensagem, e travar a entrega por causa do telefone seria
+ * trocar um cliente sem aviso por um cliente sem produto.
+ *
+ * ⚠️ É PALPITE, e a tela diz que é ("parece"). Quem afirma é a Meta: quando há
+ * um `131026` registrado para o pedido, o texto deixa de ser palpite e passa a
+ * dizer que a entrega FOI recusada — fato vence regra.
+ *
+ * As regras são as do plano de numeração brasileiro, não chute:
+ *  - celular tem 9 dígitos depois do DDD e começa com 9 (desde 2016 em todo
+ *    o país);
+ *  - 8 dígitos começando com 6–9 é celular no formato ANTIGO, sem o 9;
+ *  - 8 dígitos começando com 2–5 é telefone FIXO, que não tem WhatsApp.
+ *
+ * ⚠️ Número estrangeiro ou de tamanho que não se reconhece NÃO gera aviso:
+ * acusar o que não se sabe ler seria o `Math.round` inventando `×1` — resposta
+ * no lugar de ausência.
+ */
+function avisoDoTelefone(fone: string | null): { titulo: string; detalhe: string } | null {
+  // `+` seguido de outro país: estrangeiro, e as regras abaixo não se aplicam.
+  // Sem esta guarda, `+1 415 555 0100` vira 11 dígitos e é lido como (14),
+  // um DDD brasileiro de verdade — e o aviso acusaria um número correto.
+  if (/^\s*\+(?!\s*55)/.test(fone ?? "")) return null;
+  let d = (fone ?? "").replace(/\D/g, "");
+  if (!d) return null;
+  if ((d.length === 12 || d.length === 13) && d.startsWith("55")) d = d.slice(2);
+  if (d.length !== 10 && d.length !== 11) return null;
+
+  const ddd = d.slice(0, 2);
+  const resto = d.slice(2);
+  /* ⚠️ Espaço e hífen INQUEBRÁVEIS dentro do número: renderizado, a sugestão
+     saía "(84) 9 8734-" numa linha e "6304" na outra — e número partido é
+     número que alguém copia pela metade. */
+  const fmt = (n: string, com9 = false) =>
+    `(${ddd})\u00a0${com9 ? "9\u00a0" : ""}${n.slice(0, 4)}\u2011${n.slice(4)}`;
+
+  // Preenchimento: o checkout exige telefone e o cliente digita qualquer coisa.
+  if (/^(\d)\1+$/.test(resto)) {
+    return {
+      titulo: "Telefone parece de preenchimento",
+      detalhe: `(${ddd}) ${resto} — o mesmo dígito repetido. Confirme o contato por e-mail.`,
+    };
+  }
+
+  if (resto.length === 8 && /^[6-9]/.test(resto)) {
+    return {
+      titulo: "Possível celular sem o 9 depois do DDD",
+      detalhe: `Cadastrado como ${fmt(resto)}. Provavelmente é ${fmt(resto, true)}.`,
+    };
+  }
+
+  if (resto.length === 8 && /^[2-5]/.test(resto)) {
+    return {
+      titulo: "Telefone parece FIXO",
+      detalhe: `${fmt(resto)} — telefone fixo não tem ` +
+               `WhatsApp, então os avisos não chegam. Peça um celular ao cliente.`,
+    };
+  }
+
+  if (resto.length === 9 && !resto.startsWith("9")) {
+    return {
+      titulo: "Telefone com formato incomum",
+      detalhe: `(${ddd}) ${resto} — celular com 9 dígitos começa com 9.`,
+    };
+  }
+
+  return null;
+}
+
 /* ── O aviso ao cliente, como sinal visual ─────────────────────────────────
  *
  * A pergunta que isto responde é "o cliente foi avisado desta etapa?", e ela
@@ -642,6 +719,78 @@ function Trajeto({ r, etapa }: { r?: RastreioCard; etapa?: EtapaEsteira }) {
  * mensagem, vem do rastreio, e omiti-la aqui faria a série parecer completa
  * quando não está.
  */
+/**
+ * A faixa de "possível número com erro" no topo do card.
+ *
+ * ⚠️ Duas fontes, e a ordem entre elas é a regra: a RECUSA da Meta (`131026`
+ * registrado em qualquer aviso do pedido) é fato e vence; o formato do número
+ * é palpite e só aparece sozinho. Quando os dois existem, o palpite vira a
+ * EXPLICAÇÃO do fato ("a Meta recusou — e o número parece sem o 9").
+ *
+ * Sem nenhum dos dois, não renderiza nada: faixa permanente em todo card é a
+ * doença do sininho com 70 itens.
+ */
+function AvisoDoTelefone({ row, avisos }: {
+  row: EsteiraRow; avisos?: Map<string, EnvioMsg>;
+}) {
+  let recusado = false;
+  let chegou = false;
+  if (avisos) {
+    const prefixo = `${row.bling_id}:`;
+    for (const [chave, e] of avisos) {
+      if (!chave.startsWith(prefixo)) continue;
+      if (e.status === "falhou" && e.erro_codigo === 131026) recusado = true;
+      if (e.status === "entregue" || e.status === "lido") chegou = true;
+    }
+  }
+
+  /* ⚠️ ENTREGA PROVADA CALA O PALPITE — e isto não é detalhe, é a regra.
+     Na Meta, muita conta brasileira antiga existe SEM o 9 (o `wa_id` volta com
+     12 dígitos) e recebe normalmente. Testado contra o pedido do João Luis, que
+     recebeu e reagiu à mensagem: sem esta linha, o card dele acusaria
+     "possível celular sem o 9" — um alarme sobre o número que FUNCIONA, no
+     exemplo que motivou o aviso. Fato vence regra nos dois sentidos: a recusa
+     confirma a suspeita, a entrega a desmente.
+     `enviado` NÃO conta como prova: é só a Meta aceitando o pedido de envio. */
+  const palpite = chegou ? null : avisoDoTelefone(row.cliente_fone);
+  /* E a entrega também vence a RECUSA antiga: o telefone do pedido pode ter
+     sido corrigido entre uma etapa e outra (medido: o pedido 26713027295 tem
+     dois números diferentes no histórico de falhas). Mensagem entregue depois
+     prova que o contato ATUAL funciona. */
+  if (chegou) recusado = false;
+
+  if (!palpite && !recusado) return null;
+
+  return (
+    <div className={`flex items-start gap-2 rounded-lg border px-3 py-2.5 text-xs ${
+      recusado ? "border-red-500/40 bg-red-500/10" : "border-amber-500/40 bg-amber-500/10"}`}>
+      <AlertTriangle className={`mt-px h-3.5 w-3.5 shrink-0 ${
+        recusado ? "text-red-500" : "text-amber-500"}`} />
+      <div className="min-w-0 space-y-0.5">
+        <p className={`font-medium ${recusado ? "text-red-500" : "text-amber-500"}`}>
+          {recusado
+            ? "A Meta não conseguiu entregar: este número não recebe WhatsApp"
+            : palpite!.titulo}
+        </p>
+        {palpite && (
+          <p className="leading-snug text-muted-foreground">
+            {recusado ? `${palpite.titulo}. ${palpite.detalhe}` : palpite.detalhe}
+          </p>
+        )}
+        {/* Dizer que o card NÃO para é parte do aviso: sem isso a pessoa
+            procura o pedido travado que não existe. */}
+        {/* ⚠️ "Não chegam" só com a recusa da Meta na mão. Sem ela é palpite,
+            e afirmar a consequência de um palpite é inventar o fato. */}
+        <p className="text-[11px] text-muted-foreground/70">
+          {recusado
+            ? "O pedido segue na esteira normalmente — só os avisos por WhatsApp não chegam."
+            : "O pedido segue na esteira normalmente — os avisos por WhatsApp podem não chegar."}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function AvisosDoCliente({ row, avisos, templates }: {
   row: EsteiraRow;
   avisos?: Map<string, EnvioMsg>;
@@ -834,6 +983,11 @@ export function Detalhe({ row, rastreio, avisos, templates, onClose }: {
         </DialogHeader>
 
         <div className="space-y-3 px-5 pb-5">
+          {/* ⚠️ O telefone vem ANTES do trajeto quando há suspeita: é a única
+              coisa do card que pede uma ação de quem abriu — pedir outro
+              contato — e embaixo de seis blocos ela não seria lida. */}
+          <AvisoDoTelefone row={row} avisos={avisos} />
+
           {/* Trajeto primeiro: é a pergunta mais frequente. Antes ele ficava
               no fim, depois de seis blocos de cadastro. */}
           {row.rastreio && (
