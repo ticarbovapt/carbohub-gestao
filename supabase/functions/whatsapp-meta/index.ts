@@ -419,14 +419,29 @@ Deno.serve(async (req: Request) => {
   // lote) e o que saiu em rodadas anteriores. A segunda vira `ignorado` com o
   // motivo escrito — fica auditável e o card dela anda para "Ofertado", que é
   // verdade: a pessoa foi ofertada, pelo outro pedido.
-  const ofertadosRecompra = new Set<string>();
+  //
+  // ⚠️ Guarda o PEDIDO de cada oferta, não só o telefone, por causa do
+  // `pendente`: oferta que a Meta devolveu com instabilidade volta à fila e é
+  // tentada de novo. Ela tem de BLOQUEAR o outro pedido da mesma pessoa (senão
+  // sai a do outro agora e a pendente depois — duas), e não pode bloquear a si
+  // mesma (senão a nova tentativa vira "mesma pessoa" e nunca sai).
+  const ofertadosRecompra = new Map<string, Set<number>>();
+  const marcarOfertado = (fone: string, bling: number) => {
+    const s = ofertadosRecompra.get(fone) ?? new Set<number>();
+    s.add(bling);
+    ofertadosRecompra.set(fone, s);
+  };
   if (numeros.length && (fila as LinhaFila[]).some((l) => l.etapa === "recompra")) {
     const { data: jaRecompra } = await supabase
-      .from("carbo_msg_envios").select("telefone")
+      .from("carbo_msg_envios").select("telefone, bling_id")
       .eq("etapa", "recompra").in("telefone", numeros)
-      .in("status", ["enviado", "entregue", "lido", "erro"]);
-    for (const r of jaRecompra ?? []) if (r.telefone) ofertadosRecompra.add(String(r.telefone));
+      .in("status", ["enviado", "entregue", "lido", "erro", "pendente"]);
+    for (const r of jaRecompra ?? []) {
+      if (r.telefone) marcarOfertado(String(r.telefone), Number(r.bling_id));
+    }
   }
+  const outroPedidoJaOfertado = (fone: string, bling: number) =>
+    [...(ofertadosRecompra.get(fone) ?? [])].some((b) => b !== bling);
 
   for (const l of fila as LinhaFila[]) {
     if (tentativas >= TETO) break;
@@ -497,7 +512,8 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    if (l.etapa === "recompra" && normalizado && ofertadosRecompra.has(normalizado)) {
+    if (l.etapa === "recompra" && normalizado
+        && outroPedidoJaOfertado(normalizado, Number(l.bling_id))) {
       if (!ensaio) {
         await supabase.from("carbo_msg_envios").upsert({
           bling_id: l.bling_id, etapa: l.etapa, status: "ignorado", canal: "meta",
@@ -510,7 +526,7 @@ Deno.serve(async (req: Request) => {
                         decisao: "ignorada — a pessoa já recebeu a oferta" });
       continue;
     }
-    if (l.etapa === "recompra" && normalizado) ofertadosRecompra.add(normalizado);
+    if (l.etapa === "recompra" && normalizado) marcarOfertado(normalizado, Number(l.bling_id));
 
     tentativas++;
     if (ensaio) {
@@ -542,6 +558,11 @@ Deno.serve(async (req: Request) => {
       // em vez do que o carteiro usou.
       const waId = resposta?.contacts?.[0]?.wa_id ?? null;
       const codigo = resposta?.error?.code ?? null;
+      // ⚠️ Temporário que sobreviveu às novas tentativas DENTRO da chamada
+      // não é definitivo. `falhou` tira a linha da fila para sempre; `pendente`
+      // a devolve na próxima rodada. Sem isto, um minuto ruim da Meta virava
+      // "esta pessoa nunca recebe" (15 ofertas da recompra, 05/10/2026).
+      const temporario = !ok && ehTransitorio(status, codigo);
 
       await supabase.from("carbo_msg_envios").upsert({
         bling_id: l.bling_id, etapa: l.etapa, canal: "meta",
@@ -551,8 +572,10 @@ Deno.serve(async (req: Request) => {
         numero_id: (l as any).numero_id ?? null,
         // `falhou` e não `erro`: a Meta respondeu, e o que ela disse está no
         // código. `erro` fica para o que nem chegou lá.
-        status: ok ? "enviado" : "falhou",
-        motivo: ok ? null : `meta ${codigo ?? status}`,
+        status: ok ? "enviado" : temporario ? "pendente" : "falhou",
+        motivo: ok ? null
+          : temporario ? `meta ${codigo ?? status} — instabilidade da Meta, tenta de novo na próxima rodada`
+          : `meta ${codigo ?? status}`,
         telefone: normalizado, wamid, wa_id: waId,
         erro_codigo: ok ? null : codigo,
         erro_detalhe: ok ? null : detalheDoErro(resposta),
