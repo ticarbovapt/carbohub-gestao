@@ -31,6 +31,35 @@ export interface VarTemplate {
    * variável é obrigatória e o envio ESPERA. O padrão é o seguro.
    */
   fallback?: string;
+  /**
+   * Como apresentar o valor. Hoje só `brl`: `149` → `R$ 149,00`.
+   *
+   * ⚠️ DECLARADO por variável, nunca deduzido. A fila entrega `valor` como
+   * número cru (`numeric(12,2)`) e o caminho antigo (Evolution, no
+   * `kanban-n8n`) formatava na mão; sem isto, a Meta mandaria "Seu carrinho de
+   * 149.00" — não seria recusado, chegaria assim ao cliente, que é pior.
+   * Adivinhar "é número, logo é dinheiro" formataria também quantidade e
+   * número de pedido.
+   */
+  formato?: "brl";
+}
+
+/**
+ * Reais com vírgula e milhar com ponto, montado à mão.
+ *
+ * ⚠️ Não é `toLocaleString`: aquele devolve `R$ 149,00`, com espaço
+ * INQUEBRÁVEL, e o resultado muda conforme o ICU do runtime. Parâmetro de
+ * template precisa sair igual em todo lugar — e o teste precisa conseguir dizer
+ * qual é. Valor que não é número devolve vazio, e vazio cai na regra de
+ * `fallback`/espera como qualquer outra variável.
+ */
+export function brl(v: unknown): string {
+  if (v === null || v === undefined || v === "") return "";
+  const n = Number(v);
+  if (!Number.isFinite(n)) return "";
+  const [inteiro, centavos] = Math.abs(n).toFixed(2).split(".");
+  const milhar = inteiro.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return `${n < 0 ? "-" : ""}R$ ${milhar},${centavos}`;
 }
 
 export interface PayloadMontado {
@@ -122,7 +151,8 @@ export function montarPayload(
   // (`parameter_name`), o que protege de trocar rastreio por número do pedido,
   // mas a Meta ainda espera os parâmetros na ordem em que aparecem no corpo.
   for (const v of vars ?? []) {
-    let texto = limparParametro(formatarValor(linha?.[v.de]));
+    const cru = linha?.[v.de];
+    let texto = limparParametro(v.formato === "brl" ? brl(cru) : formatarValor(cru));
     if (!texto) {
       // `fallback` só conta se ele próprio não for vazio — um fallback em
       // branco no banco reproduziria exatamente o 132000 que ele evita.

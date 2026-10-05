@@ -3,7 +3,7 @@ import {
   agruparConversas, janelaAberta, faltaDaJanela, nivelDaJanela, fracaoDaJanela,
   pareceEncerramento, statusEfetivo, foiReaberta,
   type MensagemConversa, type Atendimento, type StatusAtendimento,
-} from "../../../apps/admin/src/lib/conversas";
+} from "../../../apps/atendimento/src/lib/conversas";
 
 const AGORA = new Date("2026-08-23T12:00:00Z").getTime();
 
