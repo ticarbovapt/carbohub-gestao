@@ -146,7 +146,28 @@ const NOME_ETAPA: Record<string, string> = {
   confirmado: "Compra identificada", nf_emitida: "Nota fiscal emitida",
   etiqueta: "Aguardando coleta", em_transito: "A caminho",
   saiu_entrega: "Saiu para entrega", entregue: "Entregue",
+  // ⚠️ As do COMERCIAL entraram quando cada uma passou a sair pela Meta. Sem
+  // elas o balão dizia "automático · carrinho_1", em linguagem de banco — e o
+  // filtro de etapa da coluna nem oferecia a opção, porque ele lê ESTAS chaves.
+  recompra: "Hora de repor",
+  carrinho_1: "Carrinho · 1º lembrete",
+  carrinho_2: "Carrinho · 2º lembrete",
+  carrinho_3: "Carrinho · última mensagem",
 };
+
+/**
+ * O `bling_id` desta conversa é um PEDIDO?
+ *
+ * ⚠️ No carrinho ele NÃO é: `carbo_msg_envios` guarda ali o id do CHECKOUT
+ * (a chave é `(bling_id, etapa)` e as etapas `carrinho_*` são exclusivas, por
+ * isso não colide — ver o CLAUDE.md). Tratado como pedido, toda conversa de
+ * carrinho abriria com "Este pedido não está na Esteira", em âmbar, sobre um
+ * número que nunca foi pedido — e o atendente iria procurar um pedido que não
+ * existe. O que a pessoa deixou no carrinho já está no PRÓPRIO balão da
+ * mensagem (produtos, valor e link), então esconder o card não tira nada.
+ */
+const pedidoDaConversa = (c: { bling_id: number | null; sobre_a_etapa: string | null }) =>
+  c.sobre_a_etapa?.startsWith("carrinho_") ? null : c.bling_id;
 
 /** Cor por nível, num lugar só: o badge, a barra e a lista têm de contar a
  *  mesma história — badge verde com barra vermelha é pior que nenhum dos dois. */
@@ -1449,7 +1470,8 @@ function Conversa({ c, onVerPedido }: {
      Aproximação que se passa por certeza é como alguém responde sobre o pedido
      errado — por isso a marca aparece, discreta, mas aparece. */
   const msgDoPedido = [...c.mensagens].reverse().find((m) => m.bling_id != null);
-  const vinculoProvavel = c.bling_id != null && msgDoPedido?.vinculo_exato === false;
+  const pedidoId = pedidoDaConversa(c);
+  const vinculoProvavel = pedidoId != null && msgDoPedido?.vinculo_exato === false;
 
   /* O contador só existe perto do teto (4096 é o limite da Cloud API). Mostrar
      "3/4096" o tempo todo é ruído; mostrar nada até estourar é surpresa. */
@@ -1576,15 +1598,15 @@ function Conversa({ c, onVerPedido }: {
                 {/* O chip neutro do pedido: abre o card sem sair da conversa.
                     Fica no bloco `xl:hidden` porque, no `xl`, o painel tem o
                     card inteiro — número, etapa e o mesmo clique. */}
-                {c.bling_id != null && !vinculoProvavel && (
+                {pedidoId != null && !vinculoProvavel && (
                   <div className="mt-1.5">
-                    <button type="button" onClick={() => onVerPedido(c.bling_id!)}
+                    <button type="button" onClick={() => onVerPedido(pedidoId)}
                             title="Ver o pedido sem sair da conversa"
                             className="inline-flex items-center gap-1 rounded-md border bg-muted/40
                                        px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground
                                        transition-colors hover:bg-muted/70 hover:text-foreground">
                       <Package className="h-3 w-3" />
-                      <span className="font-mono">#{c.bling_id}</span>
+                      <span className="font-mono">#{pedidoId}</span>
                       <Maximize2 className="h-3 w-3 opacity-60" />
                     </button>
                   </div>
@@ -1601,14 +1623,14 @@ function Conversa({ c, onVerPedido }: {
                   não lido do `context.id` da resposta. Aproximação que se passa
                   por certeza é como alguém responde sobre o pedido errado. */}
               {vinculoProvavel && (
-                <button type="button" onClick={() => onVerPedido(c.bling_id!)}
+                <button type="button" onClick={() => onVerPedido(pedidoId!)}
                         title="Pedido deduzido do último aviso enviado a este número, não da resposta do cliente. Confirme antes de tratar como certo."
                         className="mt-1.5 inline-flex items-center gap-1 rounded-md border
                                    border-amber-500/30 bg-amber-500/5 px-1.5 py-0.5
                                    text-[10px] font-medium text-amber-500 transition-colors
                                    hover:bg-amber-500/10 xl:mt-0">
                   <HelpCircle className="h-3 w-3 shrink-0" />
-                  <span className="font-mono">#{c.bling_id}</span>
+                  <span className="font-mono">#{pedidoId}</span>
                   <span className="font-normal">· vínculo provável</span>
                   <Maximize2 className="h-3 w-3 opacity-60" />
                 </button>
@@ -3151,7 +3173,7 @@ function PainelContato({ c, meuId, onVerPedido }: {
               ⚠️ O cabeçalho `PEDIDO` saiu e a palavra entrou NO CARD, na mesma
               linha do número: o título ocupava uma linha inteira para rotular um
               único elemento que já traz o ícone de caixa. */}
-          {c.bling_id && <CompraOriginal c={c} onVerPedido={onVerPedido} />}
+          {pedidoDaConversa(c) != null && <CompraOriginal c={c} onVerPedido={onVerPedido} />}
 
           {/* ── Os links de checkout ────────────────────────────────────────
               DEPOIS do pedido, e a ordem é a do atendimento: primeiro se vê o

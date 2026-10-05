@@ -205,6 +205,18 @@ Deno.serve(async (req: Request) => {
         nome: nomeTeste,
         primeiro_nome: String(nomeTeste).trim().split(" ")[0],
       };
+      // ⚠️ O CARRINHO pede três variáveis que não existem sem um checkout por
+      // trás — e sem elas o teste seria recusado com "faltam variáveis", que
+      // está certo para a fila e errado para treinar. Os exemplos são COERENTES
+      // entre si (o kit, o preço e o link do MESMO kit a preço cheio), para o
+      // clique levar ao que a mensagem diz. `&produtos=`, `&valor=` e `&link=`
+      // trocam qualquer um. Valor de exemplo aqui é seguro: este modo nunca
+      // grava em `carbo_msg_envios`, então não ocupa a vaga de carrinho nenhum.
+      if (etapaTeste.startsWith("carrinho_")) {
+        linhaFalsa.produtos = url.searchParams.get("produtos") || "CarboZé Kit 5 Frascos 100ml";
+        linhaFalsa.valor = url.searchParams.get("valor") || "149";
+        linhaFalsa.link_carrinho = url.searchParams.get("link") || "https://payt.site/gGCmnnL";
+      }
       const m = montarPayload(
         numero, tpl.meta_template_nome, tpl.meta_idioma ?? "pt_BR",
         (tpl.meta_variaveis ?? []) as any, linhaFalsa, tpl.meta_botao_url_de,

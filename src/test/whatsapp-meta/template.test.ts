@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   normalizarBR, limparParametro, formatarValor, montarPayload,
-  ehTransitorio, detalheDoErro,
+  ehTransitorio, detalheDoErro, brl,
 } from "../../../supabase/functions/_shared/metaTemplate.ts";
 
 // As variáveis reais dos seis templates aprovados, copiadas do banco.
@@ -230,6 +230,72 @@ describe("montarPayload — a regra que substituiu 'apaga a linha'", () => {
   it("lista de variáveis vazia produz template sem components", () => {
     const r = montarPayload("5584987346304", "hello_world", "en_US", [], {}, null);
     expect((r.body!.template as any).components).toBeUndefined();
+  });
+});
+
+// ── Carrinho abandonado ─────────────────────────────────────────────────────
+// As variáveis dos três templates aprovados em 05/10/2026, na ordem do corpo.
+const VARS_CARRINHO_2 = [
+  { nome: "primeiro_nome", de: "primeiro_nome", fallback: "tudo bem" },
+  { nome: "valor", de: "valor", formato: "brl" as const },
+  { nome: "produtos", de: "produtos" },
+  { nome: "link_carrinho", de: "link_carrinho" },
+];
+const LINHA_CARRINHO = {
+  primeiro_nome: "Kristel", valor: 1234.5,
+  produtos: "CarboZé 100ml ×2 · Sachê 10ml",
+  link_carrinho: "https://loja.exemplo/checkout/v3/next/123/abc",
+};
+
+describe("brl", () => {
+  it("formata como o cliente lê", () => {
+    expect(brl(149)).toBe("R$ 149,00");
+    expect(brl("149")).toBe("R$ 149,00");
+    expect(brl(1234.5)).toBe("R$ 1.234,50");
+    expect(brl(1234567.891)).toBe("R$ 1.234.567,89");
+    expect(brl(0.5)).toBe("R$ 0,50");
+  });
+
+  it("⚠️ espaço COMUM, nunca o inquebrável do toLocaleString", () => {
+    expect(brl(149)).not.toContain("\u00a0");
+  });
+
+  it("ausência vira vazio — e vazio cai na regra de espera, não em R$ 0,00", () => {
+    expect(brl(null)).toBe("");
+    expect(brl(undefined)).toBe("");
+    expect(brl("")).toBe("");
+    expect(brl("abc")).toBe("");
+  });
+});
+
+describe("montarPayload — carrinho", () => {
+  it("o valor sai em reais, e só nesta variável", () => {
+    const r = montarPayload("5584987346304", "carrinho_lembrete_2", "pt_BR",
+      VARS_CARRINHO_2, LINHA_CARRINHO, null);
+    expect(r.faltando).toEqual([]);
+    expect(r.valores.valor).toBe("R$ 1.234,50");
+    // ⚠️ `formato` é por variável: o resto passa como veio.
+    expect(r.valores.produtos).toBe("CarboZé 100ml ×2 · Sachê 10ml");
+    expect(r.valores.link_carrinho).toBe(LINHA_CARRINHO.link_carrinho);
+  });
+
+  it("⚠️ sem `formato`, o número cru NÃO vira dinheiro sozinho", () => {
+    const r = montarPayload("5584987346304", "x", "pt_BR",
+      [{ nome: "valor", de: "valor" }], LINHA_CARRINHO, null);
+    expect(r.valores.valor).toBe("1234.5");
+  });
+
+  it("carrinho sem link ESPERA — botão de compra sem destino não sai", () => {
+    const r = montarPayload("5584987346304", "carrinho_lembrete_2", "pt_BR",
+      VARS_CARRINHO_2, { ...LINHA_CARRINHO, link_carrinho: null }, null);
+    expect(r.body).toBeNull();
+    expect(r.faltando).toEqual(["link_carrinho"]);
+  });
+
+  it("valor ausente ESPERA em vez de mandar 'R$ 0,00'", () => {
+    const r = montarPayload("5584987346304", "carrinho_lembrete_2", "pt_BR",
+      VARS_CARRINHO_2, { ...LINHA_CARRINHO, valor: null }, null);
+    expect(r.faltando).toEqual(["valor"]);
   });
 });
 
