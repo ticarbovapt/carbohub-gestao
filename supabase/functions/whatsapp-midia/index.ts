@@ -100,8 +100,15 @@ Deno.serve(async (req: Request) => {
   if (!veredito.ok) return json({ error: veredito.erro }, 400);
 
   // ── 3. A janela ─────────────────────────────────────────────────────────
-  const { data: contato } = await supabase
-    .from("carbo_wa_contatos").select("last_inbound_at").eq("wa_id", waId).maybeSingle();
+  // ⚠️ Do PAR, nunca só do `wa_id` — ver o mesmo trecho no `whatsapp-responder`.
+  // Sem o número, quem falou com dois números nossos tinha duas linhas, o
+  // `maybeSingle()` errava calado e a foto era recusada como "nunca escreveu".
+  const { data: contato, error: erroContato } = await supabase
+    .from("carbo_wa_contatos").select("last_inbound_at")
+    .eq("numero_id", numeroId).eq("wa_id", waId).maybeSingle();
+  if (erroContato) {
+    return json({ error: "Não consegui conferir a janela de 24 h.", detalhe: erroContato.message }, 500);
+  }
   const ultima = contato?.last_inbound_at ? new Date(contato.last_inbound_at).getTime() : 0;
   const fecha = ultima + 24 * 60 * 60 * 1000;
   if (!ultima || Date.now() >= fecha) {
