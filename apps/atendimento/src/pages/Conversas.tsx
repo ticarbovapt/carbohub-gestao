@@ -2777,7 +2777,7 @@ function AtalhosDeCheckout() {
           exatamente a leitura que não pode acontecer num painel que mostra a
           compra original logo acima. */}
       <p className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
-        <Link2 className="h-3 w-3 shrink-0" /> Links para recompra
+        <Link2 className="h-3 w-3 shrink-0" /> Links de checkout
       </p>
 
       {CHECKOUTS.map((k) => (
