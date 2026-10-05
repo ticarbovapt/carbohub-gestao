@@ -299,6 +299,16 @@ describe("montarPayload — carrinho", () => {
   });
 });
 
+describe("ehTransitorio — a Meta instável", () => {
+  it("⚠️ códigos 1 e 2 são da Meta, e passam sozinhos", () => {
+    expect(ehTransitorio(400, 2)).toBe(true);
+    expect(ehTransitorio(400, 1)).toBe(true);
+  });
+  it("número sem WhatsApp continua definitivo", () => {
+    expect(ehTransitorio(400, 131026)).toBe(false);
+  });
+});
+
 describe("ehTransitorio", () => {
   it("5xx e 429 valem repetir", () => {
     expect(ehTransitorio(500)).toBe(true);

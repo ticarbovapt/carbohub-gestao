@@ -216,7 +216,12 @@ export function ehTransitorio(status: number, codigo?: number | null): boolean {
   if (status >= 500 || status === 429) return true;
   // 130429 = rate limit da Cloud API; 131056 = muitas mensagens para o mesmo
   // par em pouco tempo. As duas passam sozinhas.
-  return codigo === 130429 || codigo === 131056;
+  // ⚠️ 1 e 2 são a própria Meta instável ("API Unknown" / "API Service —
+  // temporary issue due to downtime"). Medido em 05/10/2026, no primeiro
+  // disparo da recompra: 15 de 321 ofertas voltaram `meta 2` e, sem estar
+  // nesta lista, viraram `falhou` DEFINITIVO — 15 pessoas que nunca receberiam
+  // por causa de um soluço do servidor deles.
+  return codigo === 130429 || codigo === 131056 || codigo === 1 || codigo === 2;
 }
 
 /**
