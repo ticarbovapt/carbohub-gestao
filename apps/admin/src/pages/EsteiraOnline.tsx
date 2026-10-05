@@ -308,6 +308,35 @@ function ChipPrevisao({ r }: { r?: RastreioCard }) {
   );
 }
 
+/**
+ * ⚠️ O STATUS ANDA, e quem lê precisa andar junto.
+ *
+ * `pendente → enviado → entregue → lido`, com `falhou` ao lado (a escada é a
+ * `carbo_msg_status_rank`, e o webhook da Meta empurra o status para a frente
+ * sozinho). O tipo `EnvioMsg` já listava os sete valores; os TRÊS lugares desta
+ * tela que o leem conheciam só quatro — e o resultado é a doença conhecida
+ * deste repo ao contrário: **quanto MELHOR foi a entrega, pior a tela leu.**
+ *
+ * Medido em 05/10/2026 num pedido cuja mensagem está visível no chat, lida pelo
+ * cliente:
+ *
+ * ```
+ * status      card            lista de avisos        filtro
+ * entregue    chip NENHUM     "não enviado"          em nenhum dos três
+ * lido        chip NENHUM     "não enviado"          em nenhum dos três
+ * falhou      chip NENHUM     "não enviado"          em nenhum dos três
+ * ```
+ *
+ * ⚠️ A linha do `falhou` é a cara: uma mensagem que a Meta RECUSOU ficava
+ * idêntica a uma que nunca foi mandada, e sumia de "Aviso com erro" — que é o
+ * único lugar onde alguém iria procurar número com problema de recebimento.
+ *
+ * Estas duas listas existem para a resposta ser UMA só nos três lugares. Status
+ * novo entra aqui, nunca num `if` de tela.
+ */
+const CHEGOU_AO_CLIENTE = new Set(["enviado", "entregue", "lido"]);
+const NAO_CHEGOU_POR_FALHA = new Set(["erro", "falhou"]);
+
 /* ── O aviso ao cliente, como sinal visual ─────────────────────────────────
  *
  * A pergunta que isto responde é "o cliente foi avisado desta etapa?", e ela
@@ -343,8 +372,17 @@ function sinalDoAviso(e: EnvioMsg | undefined, esperado: boolean, temFone: boole
       : null;
   }
   if (e) {
-    if (e.status === "enviado")  return { tom: "text-emerald-500", rotulo: "avisado",      Icon: BellRing };
-    if (e.status === "erro")     return { tom: "text-red-500",     rotulo: "falhou",       Icon: BellOff  };
+    // ⚠️ `enviado`, `entregue` e `lido` dão o MESMO chip, de propósito. A
+    // diferença entre eles é informação de diagnóstico e mora na lista de
+    // avisos, em texto; no card ela viraria uma terceira cor num quadro que já
+    // tem cinco, e cor demais é como se aprende a não olhar nenhuma.
+    if (CHEGOU_AO_CLIENTE.has(e.status))
+      return { tom: "text-emerald-500", rotulo: "avisado", Icon: BellRing };
+    // ⚠️ `falhou` vem do webhook da Meta e é o caso que NÃO tinha chip nenhum:
+    // a Meta recusou a entrega e o card ficava idêntico a um pedido sem aviso
+    // esperado. É exatamente o "número com problema de recebimento".
+    if (NAO_CHEGOU_POR_FALHA.has(e.status))
+      return { tom: "text-red-500", rotulo: "falhou", Icon: BellOff };
     if (e.status === "pendente") return { tom: "text-amber-500",   rotulo: "na fila",      Icon: Clock    };
     // `ignorado` é duas coisas. Sem telefone é problema e aparece; marco zero
     // (pedido que já existia quando o aviso foi ligado) é decisão nossa e some.
@@ -616,14 +654,40 @@ function AvisosDoCliente({ row, avisos, templates }: {
         const t = templates?.find((x) => x.etapa === etapa);
         const marcoZero = e?.status === "ignorado" && !(e.motivo ?? "").startsWith("telefone");
 
-        // Quatro estados, quatro leituras diferentes — e é por isso que isto
-        // não é uma lista de ✓/✗.
+        /* ⚠️ As etapas do CARRINHO não são do pedido.
+           Elas são chaveadas pelo id do CHECKOUT, nunca pelo `bling_id` de um
+           pedido, então aqui nunca vão ter linha — e, com o template ligado,
+           três linhas fixas diziam "sem registro de envio" para avisos que não
+           têm como existir neste card. Aparecem só se houver registro, que é o
+           cuidado seguro: esconder nunca esconde dado. */
+        if (etapa.startsWith("carrinho_") && !e) return null;
+
+        /* ⚠️ "A etapa ainda não aconteceu" ≠ "o aviso não saiu", e as duas
+           pediam coisas opostas. Um pedido em separação mostrava CINCO linhas
+           em âmbar por avisos cujo FATO ainda não existe (a NF não foi
+           emitida, a etiqueta não foi gerada) — alarme permanente em cima do
+           funcionamento normal, que é como se ensina alguém a parar de ler
+           esta lista. */
+        const ondeEsta = ORDEM_ETAPAS.indexOf(row.etapa as EtapaMsg);
+        const aindaNao = !e && ondeEsta >= 0 && ORDEM_ETAPAS.indexOf(etapa) > ondeEsta;
+
+        // ⚠️ A ESCADA: `lido` vence `entregue`, que vence `enviado`. Os três
+        // são sucesso e saem em verde; o que muda é até onde a mensagem foi, e
+        // é esse detalhe que diz se um número está recebendo ou não.
         const { tom, texto } =
-          e?.status === "enviado"  ? { tom: "text-emerald-500", texto: `enviado ${dataHora(e.enviado_em)}` }
-        : e?.status === "erro"     ? { tom: "text-red-500",     texto: e.motivo ?? "falhou" }
+          e?.status === "lido"     ? { tom: "text-emerald-500", texto: `lido ${dataHora(e.lido_em ?? e.entregue_em ?? e.enviado_em)}` }
+        : e?.status === "entregue" ? { tom: "text-emerald-500", texto: `entregue ${dataHora(e.entregue_em ?? e.enviado_em)}` }
+        : e?.status === "enviado"  ? { tom: "text-emerald-500", texto: `enviado ${dataHora(e.enviado_em)}` }
+          // ⚠️ `falhou` é do webhook da Meta e NÃO trazia `motivo` — caía em
+          // "não enviado", em âmbar, igualzinho a nunca ter saído. O código da
+          // Meta (`131047`, `132000`…) é o que diz o que fazer, então ele é o
+          // texto quando não há motivo escrito.
+        : e && NAO_CHEGOU_POR_FALHA.has(e.status)
+                                   ? { tom: "text-red-500",     texto: e.motivo ?? (e.erro_codigo ? `meta ${e.erro_codigo}` : "falhou") }
         : e?.status === "pendente" ? { tom: "text-amber-500",   texto: e.motivo ?? "na fila" }
         : marcoZero                ? { tom: "text-muted-foreground/60", texto: "antes do aviso existir" }
         : e                        ? { tom: "text-amber-500",   texto: e.motivo ?? "não enviado" }
+        : aindaNao                 ? { tom: "text-muted-foreground/60", texto: "ainda não" }
         : t?.ativo                 ? { tom: "text-amber-500",   texto: "sem registro de envio" }
         :                            { tom: "text-muted-foreground/60", texto: "aviso desligado" };
 
@@ -1224,8 +1288,13 @@ export default function EsteiraOnline() {
       r = r.filter((x) => {
         if (x.etapa === "cancelado") return false;
         const e = avisos?.get(`${x.bling_id}:${x.etapa}`);
-        if (filtroAviso === "enviado") return e?.status === "enviado";
-        if (filtroAviso === "erro")    return e?.status === "erro";
+        // ⚠️ As MESMAS listas do chip. Antes era `status === "enviado"` aqui e
+        // `=== "erro"` abaixo: pedido entregue/lido não entrava em "Aviso
+        // enviado", e mensagem `falhou` não entrava em "Aviso com erro" — ou
+        // seja, nenhum dos três filtros mostrava os três status do webhook, e
+        // a falha era invisível justamente no lugar de procurar por ela.
+        if (filtroAviso === "enviado") return !!e && CHEGOU_AO_CLIENTE.has(e.status);
+        if (filtroAviso === "erro")    return !!e && NAO_CHEGOU_POR_FALHA.has(e.status);
         // "sem aviso" inclui a fila e o telefone inválido — as três formas de
         // o cliente NÃO ter recebido. Marco zero fica de fora: aquilo foi
         // decisão nossa, não falha.

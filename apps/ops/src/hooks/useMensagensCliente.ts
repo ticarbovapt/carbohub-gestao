@@ -60,6 +60,13 @@ export interface EnvioMsg {
   motivo: string | null;
   canal?: string | null;
   erro_codigo?: number | null;
+  /** ⚠️ Carimbos dos status do webhook. A consulta é `select("*")`, então eles
+   *  SEMPRE vieram no dado — faltavam só no tipo, e por isso a tela mostrava a
+   *  hora do `enviado` mesmo quando o que ela dizia era outra coisa.
+   *  Opcionais porque o canal Evolution não tem webhook: ali o status para em
+   *  `enviado` para sempre, e ausência aqui é o normal, não defeito. */
+  entregue_em?: string | null;
+  lido_em?: string | null;
 }
 
 /** Ordem do fluxo, não a alfabética — é a ordem em que o cliente recebe.
