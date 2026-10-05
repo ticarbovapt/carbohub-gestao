@@ -92,8 +92,23 @@ Deno.serve(async (req: Request) => {
   if (texto.length > 4096) return json({ error: "mensagem acima de 4096 caracteres" }, 400);
 
   // ── 2. A janela ─────────────────────────────────────────────────────────
-  const { data: contato } = await supabase
-    .from("carbo_wa_contatos").select("nome,last_inbound_at").eq("wa_id", waId).maybeSingle();
+  //
+  // ⚠️ A janela é do PAR (nosso número ↔ cliente), e a consulta tem de dizer o
+  // número. Filtrando só por `wa_id`, quem já falou com DOIS números nossos tem
+  // duas linhas, o `maybeSingle()` devolve erro, e o erro ignorado virava
+  // "este cliente nunca escreveu" — com a janela aberta na tela. Medido em
+  // 05/10/2026 no Clube: a resposta recusada com 409 a quem tinha acabado de
+  // escrever. É o item 9 da seção "TRÊS números" do CLAUDE.md, esquecido aqui.
+  //
+  // ⚠️ E o erro da consulta APARECE. Antes ele era descartado, e falha de banco
+  // tinha a mesma cara de "cliente nunca escreveu": ausência disfarçada de
+  // resposta.
+  const { data: contato, error: erroContato } = await supabase
+    .from("carbo_wa_contatos").select("nome,last_inbound_at")
+    .eq("numero_id", numeroId).eq("wa_id", waId).maybeSingle();
+  if (erroContato) {
+    return json({ error: "Não consegui conferir a janela de 24 h.", detalhe: erroContato.message }, 500);
+  }
 
   const ultima = contato?.last_inbound_at ? new Date(contato.last_inbound_at).getTime() : 0;
   const fecha = ultima + 24 * 60 * 60 * 1000;
