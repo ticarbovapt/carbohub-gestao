@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
-import { MessagesSquare, LayoutDashboard, KanbanSquare } from "lucide-react";
+import { MessagesSquare, LayoutDashboard, KanbanSquare, ShoppingBag } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAccessPing } from "@/hooks/useAccessPing";
@@ -51,6 +51,7 @@ export function Layout() {
     { items: [
         { to: "/", label: "Visão geral", icon: LayoutDashboard, end: true },
         { to: "/crm/pipelines", label: "Pipeline", icon: KanbanSquare },
+        { to: "/vendas", label: "Vendas", icon: ShoppingBag },
         { to: "/chat", label: "Carbo Chat", icon: MessagesSquare, badge: <ChatBadge /> },
     ] },
   ];

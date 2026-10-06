@@ -1,0 +1,1390 @@
+import { useState, useMemo, Fragment } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { format, startOfMonth, addMonths, subMonths, parseISO } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
+import { CarboBadge } from "@/components/ui/carbo-badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  ChevronLeft, ChevronRight, Search, ShoppingBag, TrendingUp,
+  Package, Users, ArrowRightCircle, CalendarDays, X, Trash2, Loader2, FileDown,
+  ChevronDown, Pencil, FileText, Lock, Ban, Gift,
+  Store, Factory, Globe, HelpCircle, Repeat, Package2, Wrench, Blend,
+} from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { generateQuotePdf } from "@/lib/quotePdf";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useVendedoresDir } from "@/hooks/useVendas";
+import {
+  useConvertQuote, useBulkAssignVendedor, useDeleteVenda,
+  useCancelVenda, fetchNfFiles,
+} from "@/hooks/useCarbozeVendas";
+// ⚠️ PORTADA de apps/crm/src/pages/Vendas.tsx (06/10/2026). A tela é a MESMA;
+// mudam três coisas, e só elas: (1) os dados vêm de `usePreVendasVendas` —
+// só as vendas que nasceram de card do SDR ou do closer, recortadas no banco;
+// (2) as colunas "Vendedor / Criado por" viraram "Closer / SDR"; (3) as duas
+// colunas aparecem para TODOS, não só para o gestor — o SDR precisa ver quem
+// fechou o que ele repassou. Corrigiu algo na tela do Sales? Traga para cá.
+import { usePreVendasVendas, type PreVendaRow as CarbozeVendaRow } from "@/hooks/usePreVendasVendas";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
+// Vendas e Orçamentos — FONTE ÚNICA: carboze_orders (mesma da VendasPage do Controle).
+// Traz Bling + legado + vendas nativas. Orçamento = status 'quote'.
+
+// A coluna STATUS reflete a ETAPA do kanban de rastreio (Pós-venda/Ops), para o
+// vendedor acompanhar em que coluna a venda dele está. Orçamento e Cancelado têm
+// precedência (não entram no funil de rastreio).
+type BadgeVariant = "success" | "warning" | "destructive" | "secondary" | "default";
+const STAGE_LABEL: Record<string, string> = {
+  nova_venda: "Nova Venda", separacao_pendente: "Pedido Recebido", criar_op: "Criar OP",
+  separando: "Em Separação", separado: "Separado", gerar_nf: "Gerar NF",
+  nf_finalizada: "NF Finalizada", emitir_etiqueta: "Emitir Etiqueta",
+  em_transporte: "Em Transporte", entregue: "Entregue", cancelado: "Cancelado",
+};
+const STAGE_VARIANT: Record<string, BadgeVariant> = {
+  nova_venda: "secondary", separacao_pendente: "secondary", criar_op: "warning",
+  separando: "warning", separado: "warning", gerar_nf: "warning",
+  nf_finalizada: "warning", emitir_etiqueta: "warning", em_transporte: "default",
+  entregue: "success", cancelado: "destructive",
+};
+/**
+ * Está cancelada? Lê OS DOIS campos.
+ *
+ * `status` é o que as contas de dinheiro usam; `fulfillment_stage` é o que a
+ * etiqueta mostra. Enquanto cada pedaço da tela escolhia um dos dois, um
+ * pedido divergente aparecia com etiqueta "Cancelado" e continuava somando no
+ * Total Faturado — foi o que aconteceu com o V2026070049.
+ *
+ * O trigger trg_carbo_sincroniza_cancelamento impede a divergência de nascer
+ * no banco. Esta função é a garantia de que, se alguma linha antiga escapar, a
+ * tela ainda assim se contradiga em NADA: badge, KPI e filtro passam todos por
+ * aqui. Uma pergunta, uma resposta.
+ */
+/** Já saiu nota? Espelha carbo_pedido_faturado() no banco — a trava real é o
+ *  trigger; aqui só evitamos oferecer um botão que daria erro. */
+const temNota = (v: any): boolean =>
+  !!v?.invoice_number || !!v?.nf_access_key || !!v?.bling_nf_id ||
+  ["invoiced", "shipped", "delivered"].includes(v?.status ?? "");
+
+const estaCancelada = (v: CarbozeVendaRow) =>
+  v.status === "cancelled" || v.fulfillment_stage === "cancelado";
+
+function statusBadge(v: CarbozeVendaRow): { label: string; variant: BadgeVariant } {
+  if (v.status === "quote") return { label: "Orçamento", variant: "secondary" };
+  if (estaCancelada(v)) return { label: "Cancelado", variant: "destructive" };
+  const stage = v.fulfillment_stage || "nova_venda";
+  return { label: STAGE_LABEL[stage] ?? stage, variant: STAGE_VARIANT[stage] ?? "secondary" };
+}
+
+const fmtBRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 0, maximumFractionDigits: 0 });
+// Valores do detalhe financeiro precisam dos centavos (desconto por item etc.).
+const fmtMoney = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const num = (v: unknown) => (v == null ? 0 : Number(v) || 0);
+const fmtDate = (s: string) => format(parseISO(s.length === 10 ? s + "T00:00:00" : s), "dd/MM/yyyy", { locale: ptBR });
+const effectiveDate = (r: CarbozeVendaRow) => r.sale_date ?? r.created_at.substring(0, 10);
+
+// ── Transbordo entre meses ───────────────────────────────────────────────────
+//
+// O par de datas que mede o transbordo é `created_at` × `data_efetiva`:
+//
+//   created_at    — quando a venda FOI FEITA (nasce com o pedido, nunca muda)
+//   data_efetiva  — coalesce(sale_date, created_at), e `sale_date` SEGUE O
+//                   FATURAMENTO (ver a nota em useCarbozeVendas)
+//
+// Quando o mês de criação é MENOR que o mês efetivo, a venda foi fechada num
+// mês e faturada no seguinte. É o caso do V2026080084 (Vonixx PB): criado em
+// 24/08, `sale_date` 01/09, NF 000407 — vendido em agosto por decisão
+// comercial, faturado em setembro.
+//
+// ⚠️ Por que NÃO `confirmed_at`/`invoiced_at`, que seriam os campos exatos:
+// `confirmed_at` tem 43 linhas de 1.376 (3%, nada antes de 13/07/2026) e
+// `invoiced_at` está 100% vazio. Este par aqui existe em todas as linhas.
+
+// ── Unidades de negócio ──────────────────────────────────────────────────────
+//
+// ⚠️ O BANCO SÓ ACEITA TRÊS. O CHECK de `carboze_orders` é:
+//     segmento IS NULL OR segmento = ANY ('consumo','revenda','online')
+// `microdistribuidor` NÃO é valor válido — pedir para gravá-lo hoje dá erro de
+// constraint. Ele entra aqui no dia em que a migração o permitir E existir
+// regra de classificação; até lá, uma opção vazia no filtro só faria o usuário
+// achar que não vendeu nada para o canal.
+//
+// A lista é a fonte única: acrescentar o quarto segmento é acrescentar uma
+// linha aqui e um valor no CHECK — a tabela, os cards e o filtro seguem juntos.
+const SEGMENTOS = [
+  { id: "revenda",  label: "Revenda",  icone: Store,      cor: "text-sky-400",    bg: "bg-sky-500/15" },
+  { id: "consumo",  label: "Consumo",  icone: Factory,    cor: "text-emerald-400", bg: "bg-emerald-500/15" },
+  { id: "online",   label: "On-line",  icone: Globe,      cor: "text-violet-400", bg: "bg-violet-500/15" },
+  // ⚠️ `null` é 123 pedidos hoje — um nono da base. Sem balde próprio eles
+  // sumiriam ao filtrar por qualquer segmento e ninguém saberia que existem.
+  { id: "__sem__",  label: "Sem classificação", icone: HelpCircle, cor: "text-muted-foreground", bg: "bg-muted" },
+] as const;
+
+type SegmentoId = typeof SEGMENTOS[number]["id"];
+
+const segmentoDe = (v: CarbozeVendaRow): SegmentoId =>
+  (SEGMENTOS.find((s) => s.id === v.segmento)?.id ?? "__sem__") as SegmentoId;
+
+/** Pedido de recorrência — `order_type` é o canônico, `is_recurring` é a flag
+ *  que a rotina de recorrência usa. Aceita as duas: depender de uma só faria a
+ *  marca sumir conforme o caminho que criou o pedido. */
+const ehRecorrente = (v: CarbozeVendaRow) =>
+  v.order_type === "recorrente" || v.is_recurring === true;
+
+// ── Produto × Serviço ────────────────────────────────────────────────────────
+//
+// O sinal CANÔNICO é `items[].kind === "service"`, não o nome do produto.
+//
+// Foi pedido "sempre que existir 'descarbonização' no nome do produto", e hoje
+// os dois critérios dão exatamente o mesmo: das 12 linhas com `kind=service`
+// as 12 têm "descarboniza" no nome, e das 1.478 sem `kind` nenhuma tem.
+// Concordam 100%.
+//
+// Mesmo assim o `kind` lidera, porque nome é texto que alguém digita:
+// "Descarb. G", "DESCARBONIZACAO" sem acento, ou um produto batizado "Kit
+// descarbonização" quebrariam a regra do nome em silêncio. E o `so_servico` do
+// `useVendas` já usa `kind` — decidir por outro critério aqui criaria duas
+// respostas para "isto é serviço?".
+//
+// O nome entra como REDE, não como regra: linha de descarbonização que algum
+// fluxo antigo tenha gravado sem `kind` continua classificada certo.
+const ehLinhaServico = (i: { kind?: string | null; name?: string | null }) =>
+  i?.kind === "service" || /descarboniza/i.test(i?.name ?? "");
+
+type TipoPedido = "produto" | "servico" | "misto";
+
+/**
+ * ⚠️ MISTO é um estado de verdade, não um detalhe de implementação.
+ *
+ * Hoje não existe nenhum (1.331 só produto, 11 só serviço, 0 mistos), mas nada
+ * impede vender aditivo + descarbonização no mesmo pedido. Empurrar o misto
+ * para um dos dois baldes faria o valor INTEIRO dele contar do lado errado, e
+ * ninguém veria. Melhor ele aparecer como o que é — o botão fica desabilitado
+ * enquanto a contagem for zero.
+ */
+const tipoDoPedido = (v: CarbozeVendaRow): TipoPedido => {
+  const itens = v.items ?? [];
+  const temServico = itens.some(ehLinhaServico);
+  const temProduto = itens.some((i) => !ehLinhaServico(i));
+  if (temServico && temProduto) return "misto";
+  return temServico ? "servico" : "produto";
+};
+
+const TIPOS = [
+  { id: "produto" as const, label: "Produto", icone: Package2, cor: "text-amber-400", bg: "bg-amber-500/15" },
+  { id: "servico" as const, label: "Serviço", icone: Wrench, cor: "text-rose-400", bg: "bg-rose-500/15" },
+  { id: "misto" as const, label: "Misto", icone: Blend, cor: "text-orange-400", bg: "bg-orange-500/15" },
+];
+
+/** Mês (YYYY-MM) de uma data ISO. */
+const mesDe = (iso: string) => iso.substring(0, 7);
+
+/** Pedido importado da ponte do Bling (BLING-123) — não nasceu nesta tela. */
+const ehPedidoBling = (v: CarbozeVendaRow) => /^BLING-/i.test(v.order_number ?? "");
+
+/**
+ * Vendido num mês, faturado/efetivado no seguinte: o transbordo que ENTROU.
+ *
+ * ⚠️ RECORRÊNCIA NÃO É TRANSBORDO, e por isso sai da conta.
+ *
+ * O pedido recorrente nasce com todas as parcelas de uma vez: assina-se em
+ * setembro e as entregas de out, nov, dez e jan já existem no banco naquele
+ * dia. O `created_at` delas é mais antigo que o mês efetivo SEMPRE — é a
+ * mecânica da recorrência, não uma venda que escorregou de mês.
+ *
+ * Contá-las enchia o card de ruído e escondia o número que importa. Em
+ * outubro/2026 o card dizia R$ 16.180 (98% do vendido) e os OITO pedidos eram
+ * recorrência; o transbordo real do mês era ZERO. Agosto e setembro não têm
+ * nenhuma recorrência no balde, então nada muda para trás — a correção limpa
+ * só o futuro, que era onde o número não queria dizer nada.
+ *
+ * Quem procura essas vendas tem a marca própria delas na coluna PEDIDO: 🔄.
+ */
+const veioDeMesAnterior = (v: CarbozeVendaRow) =>
+  !ehRecorrente(v) && mesDe(v.created_at) < mesDe(effectiveDate(v));
+
+/** Rótulo curto do mês de origem ("ago/26"), para marcar a linha. */
+const mesOrigemCurto = (v: CarbozeVendaRow) =>
+  format(parseISO(v.created_at.substring(0, 10) + "T00:00:00"), "MMM/yy", { locale: ptBR });
+
+// Endereço de entrega (colunas texto) → linha legível.
+function fmtEntrega(r: CarbozeVendaRow): string | null {
+  const cityUf = [r.delivery_city, r.delivery_state].filter(Boolean).join("/");
+  const cep = r.delivery_zip ? `CEP ${r.delivery_zip}` : "";
+  return [r.delivery_address, cityUf, cep].filter(Boolean).join(" — ") || null;
+}
+// Endereço de faturamento (jsonb) → linha legível.
+function fmtFaturamento(e: Record<string, unknown> | null): string | null {
+  if (!e) return null;
+  const s = (k: string) => (e[k] != null ? String(e[k]) : "");
+  const l1 = [s("logradouro"), s("numero")].filter(Boolean).join(", ");
+  const l2 = [s("bairro"), [s("cidade"), s("uf")].filter(Boolean).join("/")].filter(Boolean).join(" · ");
+  const cep = s("cep") ? `CEP ${s("cep")}` : "";
+  return [l1, l2, cep].filter(Boolean).join(" — ") || null;
+}
+
+export default function Vendas() {
+  const { user, isGestor } = useAuth();
+  const isHead = isGestor;
+
+  const [month, setMonth] = useState(() => startOfMonth(new Date()));
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+  const [search, setSearch] = useState("");
+  const [vendedorFilter, setVendedor] = useState("__all__");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // Filtro por KPI (clicar no card): mostra na tabela só o que alimenta o card.
+  const [kpiFilter, setKpiFilter] = useState<"vendido" | "faturado" | "aguardando" | "entrou" | "orcamento" | "cancelado" | null>(null);
+  // Pedidos da ponte do Bling saem da lista por padrão: não têm vendedor nem
+  // cidade (a ponte não atribui), então enchem a tabela de linhas que ninguém
+  // desta tela fez. Fica visível e reversível — ver o chip abaixo dos KPIs.
+  const [ocultarBling, setOcultarBling] = useState(true);
+  // Segmentos selecionados. Vazio = todos — e não "nenhum": filtro que começa
+  // escondendo tudo faz a tela parecer quebrada no primeiro carregamento.
+  const [segsAtivos, setSegsAtivos] = useState<Set<SegmentoId>>(new Set());
+  const [tiposAtivos, setTiposAtivos] = useState<Set<TipoPedido>>(new Set());
+
+  const hasCustomRange = !!(customFrom || customTo);
+  const clearCustomRange = () => { setCustomFrom(""); setCustomTo(""); };
+  const today = new Date();
+  const isCurrentMonth = month.getFullYear() === today.getFullYear() && month.getMonth() === today.getMonth();
+
+  // Dados reais — carboze_orders no período (o hook já aplica o filtro de data).
+  // Piso igual ao do hook: 1 caractere já busca, porque o casamento é por
+  // início de palavra e não por "contém".
+  const buscaAtiva = search.trim().length >= 1;
+
+  const { data: rows = [], isLoading } = usePreVendasVendas({
+    month, customFrom, customTo, vendedorFilter, isGestor, userId: user?.id, search,
+  });
+  const { data: dir = [] } = useVendedoresDir();
+  const convert = useConvertQuote();
+  const navigate = useNavigate();
+  const bulkAssign = useBulkAssignVendedor();
+  const deleteVenda = useDeleteVenda();
+  const cancelVenda = useCancelVenda();
+  const [assigning, setAssigning] = useState(false);
+  const [toDelete, setToDelete] = useState<CarbozeVendaRow | null>(null);
+  const [toCancel, setToCancel] = useState<CarbozeVendaRow | null>(null);
+  // Motivo é OBRIGATÓRIO no cancelamento. Sem ele o histórico registra que a
+  // venda caiu e não registra por quê — que é a única informação útil depois.
+  const [cancelReason, setCancelReason] = useState("");
+  const [nfLoadingId, setNfLoadingId] = useState<string | null>(null);
+
+  // Baixa a NF já vinculada (o faturamento/emissão é no Finanças). Abre o PDF;
+  // se só houver XML, abre o XML; se ainda não sincronizou, avisa.
+  /**
+   * Baixa UMA das notas do pedido (o faturamento/emissão é no Finanças).
+   *
+   * ⚠️ O parâmetro `qual` existe porque venda com brinde tem DUAS notas: a de
+   * venda e a remessa em bonificação. Sem ele o botão abriria sempre a
+   * primeira, e quem clicasse em "NF bonificação" receberia a nota errada —
+   * pior que não ter o botão, porque o arquivo abre e parece certo.
+   */
+  /**
+   * ⚠️ A nota pode estar na MATRIZ ou na FILIAL, e a tela precisa saber em qual.
+   *
+   * O pedido faturado em SP guarda a nota em `bling2_nf_id` — colunas próprias,
+   * porque as duas contas numeram do zero e um id da conta 2 em `bling_nf_id`
+   * casaria com uma nota REAL da conta 1 (nota cancelada de uma empresa
+   * derrubando venda da outra; já foi tentado e revertido).
+   *
+   * Era por isso que o botão não aparecia: o Sales só olhava as colunas da
+   * matriz. O pedido entrava no filtro de faturamento — aquilo lê
+   * `conta_metrica`, que já conhecia as duas contas — e o PDF sumia. Duas
+   * telas discordando sobre o mesmo pedido, e nenhuma com defeito aparente.
+   */
+  function notaDaVenda(venda: CarbozeVendaRow, qual: "venda" | "bonificacao") {
+    const daFilial = qual === "bonificacao"
+      ? venda.bling2_nf_bonificacao_id : venda.bling2_nf_id;
+    if (daFilial) {
+      return {
+        id: daFilial,
+        numero: qual === "bonificacao"
+          ? venda.invoice2_bonificacao_number : venda.invoice2_number,
+        conta: 2 as const,
+      };
+    }
+    const daMatriz = qual === "bonificacao"
+      ? venda.bling_nf_bonificacao_id : venda.bling_nf_id;
+    return {
+      id: daMatriz,
+      numero: qual === "bonificacao"
+        ? venda.invoice_bonificacao_number : venda.invoice_number,
+      conta: 1 as const,
+    };
+  }
+
+  async function baixarNF(venda: CarbozeVendaRow, qual: "venda" | "bonificacao" = "venda") {
+    const { id: nfId, numero: nfNumero, conta } = notaDaVenda(venda, qual);
+    if (!nfId) return;
+    setNfLoadingId(venda.id + qual);
+    try {
+      const f = await fetchNfFiles(nfId, conta);
+      if (f?.pdf_url) {
+        window.open(f.pdf_url, "_blank", "noopener");
+      } else if (f?.xml_url) {
+        window.open(f.xml_url, "_blank", "noopener");
+        toast.message("NF sem PDF sincronizado — abrindo o XML.");
+      } else {
+        // ⚠️ Diz QUAL conta. "não sincronizou do Bling" com duas contas no ar
+        // manda a pessoa conferir no painel errado — e conferir no painel
+        // errado devolve "a nota está lá, o sistema é que está quebrado".
+        toast.error(
+          `NF ${nfNumero ?? nfId} vinculada (${conta === 2 ? "filial SP" : "matriz"}), ` +
+          `mas o arquivo ainda não sincronizou do Bling.`,
+        );
+      }
+    } catch (e) {
+      toast.error("Erro ao buscar a NF: " + (e instanceof Error ? e.message : "tente de novo"));
+    } finally {
+      setNfLoadingId(null);
+    }
+  }
+
+  async function excluirVenda() {
+    if (!toDelete) return;
+    try {
+      await deleteVenda.mutateAsync({ id: toDelete.id });
+      if (expandedId === toDelete.id) setExpandedId(null);
+      setToDelete(null);
+    } catch { /* toast no hook */ }
+  }
+
+  async function cancelarVenda() {
+    if (!toCancel || !cancelReason.trim()) return;
+    try {
+      await cancelVenda.mutateAsync({ id: toCancel.id, reason: cancelReason.trim() });
+      setToCancel(null);
+      setCancelReason("");
+    } catch { /* toast no hook */ }
+  }
+
+  const VENDEDORES = useMemo(
+    () => dir.map((v) => ({ id: v.id, name: v.full_name || "—", avulso: !v.is_vendedor })),
+    [dir],
+  );
+  // Nome do vendedor: resolve pelo diretório (vendedor_id) e cai no vendedor_name gravado.
+  const nomeById = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const v of dir) m[v.id] = v.full_name || "—";
+    return m;
+  }, [dir]);
+
+  async function atribuirVendedor(vendedorId: string) {
+    if (!vendedorId) return;
+    setAssigning(true);
+    try {
+      const vendedorName = dir.find((d) => d.id === vendedorId)?.full_name ?? "vendedor";
+      await bulkAssign.mutateAsync({ orderIds: Array.from(selectedIds), vendedorId, vendedorName });
+      setSelectedIds(new Set());
+    } catch { /* toast no hook */ } finally {
+      setAssigning(false);
+    }
+  }
+
+  async function converterEmVenda(id: string) {
+    try {
+      await convert.mutateAsync(id);
+      toast.success("Orçamento convertido em venda!");
+    } catch (e) {
+      toast.error("Erro ao converter: " + (e instanceof Error ? e.message : "tente de novo"));
+    }
+  }
+
+  // Baixa o PDF do orçamento a partir do pedido (usa o snapshot do formulário
+  // quando existir; senão monta pelos campos gravados). Serve p/ regerar depois.
+  async function baixarPdf(id: string) {
+    try {
+      const { data, error } = await (supabase as any).from("carboze_orders").select("*").eq("id", id).maybeSingle();
+      if (error || !data) throw error ?? new Error("Pedido não encontrado");
+      const snap = data.quote_form_snapshot as Record<string, any> | null;
+      // ⚠️ `discount_amount` e `is_bonificacao` PRECISAM atravessar. Sem o
+      // primeiro, o PDF regerado cai no rateio e espalha por todas as linhas um
+      // desconto que foi dado em UMA — total certo, realidade errada (medido no
+      // V2026090056). Sem o segundo, a linha de bonificação entra na base de
+      // rateio e encolhe o desconto de todas as outras.
+      const items = (Array.isArray(data.items) ? data.items : []).map((it: any) => ({
+        name: it.name, product_code: it.product_code, quantity: it.quantity,
+        unit_price: it.unit_price, bonus_quantity: it.bonificacao,
+        discount_amount: it.discount_amount, is_bonificacao: it.is_bonificacao,
+      }));
+      await generateQuotePdf({
+        order_number: data.order_number ?? undefined,
+        customer_name: data.customer_name ?? undefined,
+        cnpj: data.cnpj ?? undefined,
+        ie: data.customer_ie ?? undefined,
+        endereco: snap?.endereco ?? { logradouro: data.delivery_address, cidade: data.delivery_city, uf: data.delivery_state, cep: data.delivery_zip },
+        endereco_faturamento: snap?.fatMesmo === false ? snap?.fatEndereco : (data.billing_address ?? null),
+        vendedor_name: data.vendedor_name ?? undefined,
+        items,
+        subtotal: data.subtotal ?? data.total, discount: data.discount ?? 0,
+        discount_percent: data.discount_percent ?? 0, total: data.total,
+        payment_terms: data.payment_terms ?? undefined,
+        notes: data.notes ?? undefined,
+        created_at: data.created_at, validityDays: 7,
+      });
+    } catch (e) {
+      toast.error("Erro ao gerar PDF: " + (e instanceof Error ? e.message : "tente de novo"));
+    }
+  }
+
+  const porVendedor = useMemo(() => {
+    // Com busca ativa o banco já devolveu o resultado certo (histórico inteiro,
+    // todos os campos). Refiltrar aqui por vendedor desfaria justamente o que
+    // a busca global promete.
+    if (buscaAtiva) return rows;
+    return rows.filter((v) => vendedorFilter === "__all__" || v.vendedor_id === vendedorFilter);
+  }, [rows, vendedorFilter, buscaAtiva]);
+
+  // Quantos pedidos Bling o recorte tem — contado ANTES de escondê-los, senão
+  // o chip não teria como dizer o que está fora.
+  const blingNoRecorte = useMemo(() => porVendedor.filter(ehPedidoBling), [porVendedor]);
+
+  // ⚠️ `filtered` alimenta TODOS os cards. Esconder Bling muda os totais, e é
+  // por isso que o chip logo abaixo dos KPIs diz quantos e quanto estão fora —
+  // total que muda sem explicação na tela é como se estivesse errado.
+  // Contagem por segmento, do recorte ANTES do filtro de segmento — é o que
+  // permite o botão mostrar quantos existem em cada um sem zerar a si mesmo
+  // assim que é clicado.
+  const semSegFiltro = useMemo(
+    () => (ocultarBling ? porVendedor.filter((v) => !ehPedidoBling(v)) : porVendedor),
+    [porVendedor, ocultarBling],
+  );
+  // ⚠️ Cada contagem sai do recorte SEM o seu próprio filtro, mas COM o outro
+  // aplicado. É o que faz os dois filtros se combinarem (Revenda + Serviço) sem
+  // que nenhum botão zere a si mesmo no instante em que é clicado.
+  //
+  // Daí as duas bases serem declaradas ANTES das contagens: `const` em escopo
+  // de função tem zona morta, e usá-las antes quebraria em tempo de execução,
+  // não de compilação.
+  const porTipoBase = useMemo(
+    () => (segsAtivos.size === 0 ? semSegFiltro : semSegFiltro.filter((v) => segsAtivos.has(segmentoDe(v)))),
+    [semSegFiltro, segsAtivos],
+  );
+  const porSegBase = useMemo(
+    () => (tiposAtivos.size === 0 ? semSegFiltro : semSegFiltro.filter((v) => tiposAtivos.has(tipoDoPedido(v)))),
+    [semSegFiltro, tiposAtivos],
+  );
+
+  const contagemPorSeg = useMemo(() => {
+    const m = new Map<SegmentoId, number>();
+    for (const v of porSegBase) m.set(segmentoDe(v), (m.get(segmentoDe(v)) ?? 0) + 1);
+    return m;
+  }, [porSegBase]);
+  const contagemPorTipo = useMemo(() => {
+    const m = new Map<TipoPedido, number>();
+    for (const v of porTipoBase) m.set(tipoDoPedido(v), (m.get(tipoDoPedido(v)) ?? 0) + 1);
+    return m;
+  }, [porTipoBase]);
+
+  const filtered = useMemo(
+    () => porTipoBase.filter((v) => tiposAtivos.size === 0 || tiposAtivos.has(tipoDoPedido(v))),
+    [porTipoBase, tiposAtivos],
+  );
+
+  const alternarSeg = (id: SegmentoId) =>
+    setSegsAtivos((cur) => {
+      const n = new Set(cur);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
+
+  const alternarTipo = (id: TipoPedido) =>
+    setTiposAtivos((cur) => {
+      const n = new Set(cur);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
+
+  const sum = (list: CarbozeVendaRow[]) => list.reduce((s, v) => s + v.total, 0);
+
+  // "Faturado" NÃO é regra desta tela — é `conta_metrica`, da view
+  // carbo_vendas_metrica, a mesma que o Dashboard Comercial do Admin usa.
+  //
+  // Antes daqui era: NF vinculada OU invoice_number OU status entregue. Mais
+  // frouxo que o resto do sistema: contava pedido cuja nota estava Pendente
+  // ou Rejeitada, e ignorava excluir_metricas. Por isso esta tela mostrava
+  // R$ 51.274 e o Admin, R$ 48 mil, no mesmo mês de julho.
+  //
+  // A view existe justamente para isso — o comentário dela abre dizendo que
+  // havia 14 definições de "venda que conta" em 26 lugares. Esta era uma das
+  // que sobraram. Se a regra mudar, muda lá e todas as telas acompanham.
+  const isActive = (v: CarbozeVendaRow) => !estaCancelada(v) && v.status !== "quote";
+  const isFaturada = (v: CarbozeVendaRow) => v.conta_metrica;
+  const isAguardando = (v: CarbozeVendaRow) => isActive(v) && !isFaturada(v);
+
+  const quotes = filtered.filter((v) => v.status === "quote");
+  const active = filtered.filter(isActive);
+  const faturadas = active.filter(isFaturada);
+  const aguardando = active.filter(isAguardando);
+  const totalFaturado = sum(faturadas);
+  const totalAguardando = sum(aguardando);
+  const totalOrcamento = sum(quotes);
+  const cancelled = filtered.filter(estaCancelada).length;
+
+  // ── TOTAL VENDIDO e o BACKLOG ──────────────────────────────────────────────
+  //
+  // "Vendido" é o que virou VENDA no mês — faturado ou não. É `active`, o mesmo
+  // conjunto que já alimenta os outros dois cards, então por construção:
+  //
+  //     Total vendido = Total faturado + Aguardando faturamento
+  //
+  // e o BACKLOG (o transbordo financeiro para o mês seguinte) é a diferença:
+  //
+  //     Backlog = Total vendido − Total faturado = Aguardando faturamento
+  //
+  // Somar `active` de novo em vez de `totalFaturado + totalAguardando` é de
+  // propósito: se um dia a regra de `isAguardando` mudar e deixar de ser o
+  // complemento exato de `isFaturada`, a conta aqui continua sendo "tudo que é
+  // venda" — e a diferença aparece na tela em vez de somar certo por acidente.
+  //
+  // ⚠️ DATA: usa `data_efetiva` (= coalesce(sale_date, created_at)), a MESMA que
+  // filtra o mês e que os outros quatro cards usam. NÃO usa `confirmed_at`, que
+  // seria o campo semanticamente exato de "conversão em venda": ele só tem 43
+  // linhas de 1.376 (3%, e nenhuma antes de 13/07/2026), e `invoiced_at` está
+  // 100% vazio. Um card sobre `confirmed_at` mostraria 7 vendas em setembro
+  // onde os outros mostram 370 — cinco cards que não conversam entre si.
+  const vendidas = active;
+  const totalVendido = sum(active);
+  // Quanto do que foi vendido no mês ainda não virou nota — o transbordo.
+  const pctBacklog = totalVendido > 0 ? (totalAguardando / totalVendido) * 100 : 0;
+
+  // ── O BACKLOG QUE ENTROU ───────────────────────────────────────────────────
+  //
+  // O card "Aguardando" mede o que SAI: vendido neste mês, ainda sem nota, vai
+  // pesar no mês que vem. Faltava o outro lado — o que ENTROU: venda fechada
+  // em mês anterior que só apareceu no resultado deste.
+  //
+  // Sem os dois, o mês parece ter vendido o que faturou. Em setembro/2026,
+  // R$ 74.432 dos R$ 196.033 (38%) foram fechados em agosto ou antes.
+  //
+  // ⚠️ Estes pedidos JÁ ESTÃO dentro de "Total vendido" — o card é um recorte
+  // dele, não uma parcela a somar. Somar os seis daria o mês duas vezes.
+  const veioAntes = active.filter(veioDeMesAnterior);
+  const totalVeioAntes = sum(veioAntes);
+  const pctVeioAntes = totalVendido > 0 ? (totalVeioAntes / totalVendido) * 100 : 0;
+
+  // Filtro do card clicado — só sobre a TABELA (os totais dos KPIs seguem no total).
+  const tableRows = filtered.filter((v) => {
+    if (!kpiFilter) return true;
+    if (kpiFilter === "vendido") return isActive(v);
+    if (kpiFilter === "faturado") return isFaturada(v);
+    if (kpiFilter === "aguardando") return isAguardando(v);
+    if (kpiFilter === "entrou") return isActive(v) && veioDeMesAnterior(v);
+    if (kpiFilter === "orcamento") return v.status === "quote";
+    return estaCancelada(v);
+  });
+  const toggleKpi = (k: NonNullable<typeof kpiFilter>) => setKpiFilter((cur) => (cur === k ? null : k));
+  const KPI_LABEL: Record<NonNullable<typeof kpiFilter>, string> = {
+    vendido: "Total vendido", faturado: "Total faturado", aguardando: "Aguardando faturamento",
+    entrou: "Veio de meses anteriores", orcamento: "Em orçamento", cancelado: "Canceladas",
+  };
+
+  return (
+    <div className="p-4 md:p-6">
+      {/* ⚠️ 1500px, o mesmo teto do `CRM.tsx` e do `Pdvs.tsx` — as telas de
+          lista irmãs neste app. Estava em `max-w-6xl` (1152px), o mais estreito
+          de todas, e a coluna de ações ("Editar / Confirmar") saía cortada
+          enquanto sobrava margem vazia dos dois lados. O `p-4 md:p-6` de fora é
+          quem dá as bordas; teto e borda são coisas diferentes. */}
+      <div className="space-y-5 max-w-[1500px] mx-auto">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold flex items-center gap-2"><ShoppingBag className="h-6 w-6 text-carbo-green" /> Vendas e Orçamentos</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">Acompanhamento de pedidos e orçamentos por vendedor</p>
+          </div>
+          <div className="flex flex-col items-end gap-2 shrink-0">
+            {!hasCustomRange && (
+              <div className="flex items-center gap-1 bg-muted/40 rounded-lg px-2 py-1.5">
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setMonth((m) => startOfMonth(subMonths(m, 1)))}><ChevronLeft className="h-4 w-4" /></Button>
+                <span className="text-sm font-semibold w-32 text-center capitalize">{format(month, "MMM 'de' yyyy", { locale: ptBR })}</span>
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setMonth((m) => startOfMonth(addMonths(m, 1)))} disabled={isCurrentMonth}><ChevronRight className="h-4 w-4" /></Button>
+              </div>
+            )}
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              <div className="flex items-center gap-1 text-xs text-muted-foreground"><CalendarDays className="h-3.5 w-3.5" /> Período:</div>
+              <Input type="date" className="h-8 w-36 text-xs" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} title="Data início" />
+              <span className="text-xs text-muted-foreground">até</span>
+              <Input type="date" className="h-8 w-36 text-xs" value={customTo} onChange={(e) => setCustomTo(e.target.value)} title="Data fim" />
+              {hasCustomRange && <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground px-2" onClick={clearCustomRange}><X className="h-3 w-3 mr-1" /> Limpar</Button>}
+            </div>
+            {hasCustomRange && <p className="text-[11px] text-primary font-medium">Exibindo período personalizado</p>}
+          </div>
+        </div>
+
+        {/* KPIs — o mês inteiro em uma equação que fecha:
+              Total vendido = Total faturado + Aguardando faturamento
+            e o que está "Aguardando" É o backlog que transborda para o mês que
+            vem. Orçamento e Cancelada ficam de fora da conta de propósito:
+            orçamento ainda não é venda, cancelada deixou de ser.
+            Para colaborador (vê só o próprio), a query já limita ao vendedor. */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          <CarboCard onClick={() => toggleKpi("vendido")}
+            className={`cursor-pointer transition ${kpiFilter === "vendido" ? "ring-2 ring-violet-400/60" : "hover:bg-muted/20"}`}>
+            <CarboCardContent className="p-3 text-center">
+              <p className="text-xl font-bold text-violet-400 tabular-nums">{fmtBRL(totalVendido)}</p>
+              <p className="text-xs text-muted-foreground">Total vendido</p>
+              <p className="text-[10px] text-muted-foreground/70 mt-0.5">{vendidas.length} venda(s) no mês</p>
+            </CarboCardContent>
+          </CarboCard>
+          <CarboCard onClick={() => toggleKpi("faturado")}
+            className={`cursor-pointer transition ${kpiFilter === "faturado" ? "ring-2 ring-carbo-green/60" : "hover:bg-muted/20"}`}>
+            <CarboCardContent className="p-3 text-center">
+              <p className="text-xl font-bold text-carbo-green tabular-nums">{fmtBRL(totalFaturado)}</p>
+              <p className="text-xs text-muted-foreground">Total faturado</p>
+              <p className="text-[10px] text-muted-foreground/70 mt-0.5">{faturadas.length} venda(s) faturada(s)</p>
+            </CarboCardContent>
+          </CarboCard>
+          <CarboCard onClick={() => toggleKpi("aguardando")}
+            className={`cursor-pointer transition ${kpiFilter === "aguardando" ? "ring-2 ring-amber-400/60" : "hover:bg-muted/20"}`}>
+            <CarboCardContent className="p-3 text-center">
+              <p className="text-xl font-bold text-amber-400 tabular-nums">{fmtBRL(totalAguardando)}</p>
+              <p className="text-xs text-muted-foreground">Aguardando faturamento</p>
+              {/* É esta linha que responde "quanto transborda": o card sozinho
+                  dá o valor, mas é a fração do vendido que diz se o mês fechou
+                  o próprio caixa ou empurrou metade para o seguinte. */}
+              <p className="text-[10px] text-muted-foreground/70 mt-0.5">
+                {aguardando.length} venda(s) a faturar
+                {totalVendido > 0 && ` · ${pctBacklog.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}% do vendido`}
+              </p>
+            </CarboCardContent>
+          </CarboCard>
+          <CarboCard onClick={() => toggleKpi("entrou")}
+            className={`cursor-pointer transition ${kpiFilter === "entrou" ? "ring-2 ring-cyan-400/60" : "hover:bg-muted/20"}`}>
+            <CarboCardContent className="p-3 text-center">
+              <p className="text-xl font-bold text-cyan-400 tabular-nums">{fmtBRL(totalVeioAntes)}</p>
+              <p className="text-xs text-muted-foreground">Veio de meses anteriores</p>
+              <p className="text-[10px] text-muted-foreground/70 mt-0.5">
+                {veioAntes.length} venda(s) transbordada(s)
+                {totalVendido > 0 && ` · ${pctVeioAntes.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}% do vendido`}
+              </p>
+            </CarboCardContent>
+          </CarboCard>
+          <CarboCard onClick={() => toggleKpi("orcamento")}
+            className={`cursor-pointer transition ${kpiFilter === "orcamento" ? "ring-2 ring-sky-400/60" : "hover:bg-muted/20"}`}>
+            <CarboCardContent className="p-3 text-center">
+              <p className="text-xl font-bold text-sky-400 tabular-nums">{fmtBRL(totalOrcamento)}</p>
+              <p className="text-xs text-muted-foreground">Em orçamento</p>
+              <p className="text-[10px] text-muted-foreground/70 mt-0.5">{quotes.length} orçamento(s)</p>
+            </CarboCardContent>
+          </CarboCard>
+          <CarboCard onClick={() => toggleKpi("cancelado")}
+            className={`cursor-pointer transition ${kpiFilter === "cancelado" ? "ring-2 ring-red-400/60" : "hover:bg-muted/20"}`}>
+            <CarboCardContent className="p-3 text-center">
+              <p className="text-2xl font-bold text-red-400 tabular-nums">{cancelled}</p>
+              <p className="text-xs text-muted-foreground">Canceladas</p>
+            </CarboCardContent>
+          </CarboCard>
+        </div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground -mt-2">
+          {kpiFilter && (
+            <span className="flex items-center gap-2">
+              Filtrando por <strong className="text-foreground">{KPI_LABEL[kpiFilter]}</strong> ({tableRows.length})
+              <button className="inline-flex items-center gap-1 text-primary hover:underline" onClick={() => setKpiFilter(null)}>
+                <X className="h-3 w-3" /> limpar
+              </button>
+            </span>
+          )}
+
+          {/* ⚠️ O chip aparece mesmo com zero Bling no recorte, de propósito:
+              é ele que explica por que o total desta tela pode não bater com
+              outra. Escondido quando não há nada escondido, a pessoa procuraria
+              a diferença no lugar errado. */}
+          <label className="flex cursor-pointer items-center gap-1.5 select-none">
+            <input
+              type="checkbox"
+              className="h-3.5 w-3.5 accent-current cursor-pointer"
+              checked={ocultarBling}
+              onChange={(e) => setOcultarBling(e.target.checked)}
+            />
+            <span>
+              Ocultar pedidos Bling
+              {blingNoRecorte.length > 0 && (
+                <strong className="text-foreground">
+                  {" "}({blingNoRecorte.length} · {fmtBRL(blingNoRecorte.reduce((s, v) => s + v.total, 0))})
+                </strong>
+              )}
+            </span>
+          </label>
+        </div>
+
+        {/* ── Unidade de negócio ──
+            Botões, não um <select>: são quatro, combinam entre si (dá para ver
+            Revenda + Consumo juntos) e cada um carrega a contagem — coisas que
+            um select de escolha única não faz. */}
+        <div className="flex flex-wrap items-center gap-2 -mt-1">
+          <span className="text-xs text-muted-foreground">Unidade de negócio:</span>
+          {SEGMENTOS.map((s) => {
+            const Icone = s.icone;
+            const ativo = segsAtivos.has(s.id);
+            const qtd = contagemPorSeg.get(s.id) ?? 0;
+            return (
+              <button
+                key={s.id}
+                onClick={() => alternarSeg(s.id)}
+                disabled={qtd === 0 && !ativo}
+                title={qtd === 0 ? `Nenhum pedido em ${s.label} neste período` : `Filtrar por ${s.label}`}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition
+                  ${ativo ? `${s.bg} border-current ${s.cor} font-medium` : "border-border text-muted-foreground hover:bg-muted/40"}
+                  ${qtd === 0 && !ativo ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
+              >
+                <Icone className="h-3.5 w-3.5" />
+                {s.label}
+                <span className="tabular-nums opacity-70">{qtd}</span>
+              </button>
+            );
+          })}
+          {segsAtivos.size > 0 && (
+            <button className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+              onClick={() => setSegsAtivos(new Set())}>
+              <X className="h-3 w-3" /> limpar
+            </button>
+          )}
+        </div>
+
+        {/* ── Produto × Serviço ──
+            Linha própria, e combina com a de cima: Revenda + Serviço filtra os
+            dois ao mesmo tempo. "Serviço" é a linha com `kind=service` (hoje,
+            toda descarbonização). */}
+        <div className="flex flex-wrap items-center gap-2 -mt-1">
+          <span className="text-xs text-muted-foreground">Tipo:</span>
+          {TIPOS.map((t) => {
+            const Icone = t.icone;
+            const ativo = tiposAtivos.has(t.id);
+            const qtd = contagemPorTipo.get(t.id) ?? 0;
+            return (
+              <button
+                key={t.id}
+                onClick={() => alternarTipo(t.id)}
+                disabled={qtd === 0 && !ativo}
+                title={t.id === "misto"
+                  ? "Pedido com produto E serviço na mesma venda"
+                  : qtd === 0 ? `Nenhum pedido de ${t.label} neste período` : `Filtrar por ${t.label}`}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition
+                  ${ativo ? `${t.bg} border-current ${t.cor} font-medium` : "border-border text-muted-foreground hover:bg-muted/40"}
+                  ${qtd === 0 && !ativo ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
+              >
+                <Icone className="h-3.5 w-3.5" />
+                {t.label}
+                <span className="tabular-nums opacity-70">{qtd}</span>
+              </button>
+            );
+          })}
+          {tiposAtivos.size > 0 && (
+            <button className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+              onClick={() => setTiposAtivos(new Set())}>
+              <X className="h-3 w-3" /> limpar
+            </button>
+          )}
+        </div>
+
+        {/* Filtros */}
+        <div className="flex gap-2 flex-wrap">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input placeholder="Cliente, cidade, CNPJ/CPF, IE, telefone, CEP, e-mail ou nº do pedido…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8" />
+          </div>
+          {isHead && (
+            <Select value={vendedorFilter} onValueChange={setVendedor}>
+              <SelectTrigger className="w-[220px]"><SelectValue placeholder="Todos os closers" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">Todos os closers</SelectItem>
+                {VENDEDORES.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>
+                    <span className="flex items-center gap-2">
+                      {m.name}
+                      {m.avulso
+                        ? <span className="text-[10px] font-semibold text-amber-500 border border-amber-500/30 rounded px-1">Avulso</span>
+                        : <span className="text-[10px] font-semibold text-carbo-green border border-carbo-green/30 rounded px-1">Vendedor</span>}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+
+        {/* Busca ativa: os filtros de período e vendedor ficam de fora, e isso
+            precisa estar ESCRITO — senão o KPI muda e parece defeito. */}
+        {buscaAtiva && (
+          <div className="flex items-start gap-2 rounded-lg border border-carbo-green/30 bg-carbo-green/[0.06] px-3 py-2 text-xs">
+            <Search className="h-3.5 w-3.5 shrink-0 mt-0.5 text-carbo-green" />
+            <span className="text-muted-foreground">
+              Buscando <b className="text-foreground">"{search.trim()}"</b> em todo o histórico —
+              os filtros de período e de vendedor estão sendo ignorados.
+              {" "}
+              <button type="button" onClick={() => setSearch("")}
+                className="font-semibold text-carbo-green hover:underline">
+                Limpar busca
+              </button>
+            </span>
+          </div>
+        )}
+
+        {/* Tabela */}
+        {isLoading ? (
+          <CarboCard><CarboCardContent className="py-16 text-center text-muted-foreground">Carregando…</CarboCardContent></CarboCard>
+        ) : tableRows.length === 0 ? (
+          <CarboCard><CarboCardContent className="py-16 text-center space-y-3"><TrendingUp className="h-12 w-12 mx-auto text-muted-foreground/30" /><p className="text-muted-foreground">{buscaAtiva ? "Nada encontrado no histórico para essa busca." : "Nenhum registro encontrado neste período."}</p></CarboCardContent></CarboCard>
+        ) : (
+          <CarboCard padding="none">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/30">
+                    {isHead && (
+                      <th className="w-10 p-3">
+                        <Checkbox checked={tableRows.length > 0 && selectedIds.size === tableRows.length}
+                          onCheckedChange={(c) => { if (c) setSelectedIds(new Set(tableRows.map((v) => v.id))); else setSelectedIds(new Set()); }}
+                          aria-label="Selecionar todos" />
+                      </th>
+                    )}
+                    <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Status</th>
+                    <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Pedido</th>
+                    <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Data</th>
+                    <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Cliente</th>
+                    <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Cidade/UF</th>
+                    {/* ⚠️ "Vendedor" e "Criado por" são perguntas DIFERENTES e
+                        andam juntas: a primeira é de quem é a venda (e a
+                        comissão), a segunda é quem digitou. Elas coincidem na
+                        maioria das linhas — e é justamente por isso que a
+                        divergência precisa aparecer, em vez de ser presumida. */}
+                    <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">SDR</th>
+                    <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Closer</th>
+                    <th className="text-right p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Total</th>
+                    <th className="text-right p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide whitespace-nowrap">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tableRows.map((venda) => {
+                    const isQuote = venda.status === "quote";
+                    // Financeiro defensivo: pedidos antigos podem não ter subtotal/discount.
+                    const itemsBruto = venda.items.reduce((s, it) => s + num(it.quantity) * num(it.unit_price), 0);
+                    const itemsDesc = venda.items.reduce((s, it) => s + num(it.discount_amount), 0);
+                    const subtotalDet = venda.subtotal != null ? num(venda.subtotal) : (itemsBruto || null);
+                    const descontoDet = venda.discount != null ? num(venda.discount) : itemsDesc;
+                    const percentDet = venda.discount_percent != null
+                      ? num(venda.discount_percent)
+                      : (subtotalDet && subtotalDet > 0 ? Math.round((descontoDet / subtotalDet) * 10000) / 100 : 0);
+                    // Closer = o vendedor do pedido (quem fechou). O nome vem do
+                    // banco, porque o diretório de vendedores não alcança todo SDR.
+                    const vendedorNome = venda.closer_name || (venda.vendedor_id && nomeById[venda.vendedor_id]) || venda.vendedor_name || null;
+                    const sdrNome = venda.sdr_name ?? null;
+                    const criadorNome: string | null = null;
+                    // Compara NOME contra NOME porque é o que os dois lados têm:
+                    // `vendedorNome` já vem resolvido do diretório, e o criador é
+                    // desnormalizado. Homônimo empataria — e empatar aqui só deixa
+                    // de destacar uma linha, nunca inventa uma divergência.
+                    const criadorDiferente = !!criadorNome && !!vendedorNome && criadorNome !== vendedorNome;
+                    const buyerNotes = venda.buyer_notes && venda.buyer_notes !== venda.notes ? venda.buyer_notes : null;
+                    const generalNotes = venda.general_notes && venda.general_notes !== venda.notes && venda.general_notes !== venda.buyer_notes ? venda.general_notes : null;
+                    return (
+                      <Fragment key={venda.id}>
+                        <tr
+                          className={`border-b transition-colors cursor-pointer hover:bg-muted/20 ${isQuote ? "bg-amber-500/3 border-l-2 border-l-amber-500/30" : estaCancelada(venda) ? "opacity-50" : ""} ${expandedId === venda.id ? "bg-muted/20" : ""} ${selectedIds.has(venda.id) ? "bg-carbo-green/5" : ""}`}
+                          onClick={() => setExpandedId(expandedId === venda.id ? null : venda.id)}
+                        >
+                          {isHead && (
+                            <td className="p-3" onClick={(e) => e.stopPropagation()}>
+                              <Checkbox checked={selectedIds.has(venda.id)}
+                                onCheckedChange={(c) => setSelectedIds((prev) => { const next = new Set(prev); if (c) next.add(venda.id); else next.delete(venda.id); return next; })}
+                                aria-label={`Selecionar ${venda.order_number}`} />
+                            </td>
+                          )}
+                          <td className="p-3">{(() => { const b = statusBadge(venda); return <CarboBadge variant={b.variant} size="sm">{b.label}</CarboBadge>; })()}</td>
+                          {/* Número + as duas marcas do pedido: unidade de
+                              negócio e recorrência. Ficam aqui, coladas no
+                              número, porque é a coluna que o olho procura
+                              primeiro ao varrer a lista. */}
+                          <td className="p-3 font-mono text-xs font-medium">
+                            <span className="inline-flex items-center gap-1.5">
+                              {venda.order_number}
+                              {(() => {
+                                const s = SEGMENTOS.find((x) => x.id === segmentoDe(venda))!;
+                                const Icone = s.icone;
+                                return (
+                                  <span className="inline-flex shrink-0" title={`Unidade de negócio: ${s.label}`} aria-label={s.label}>
+                                    <Icone className={`h-3.5 w-3.5 ${s.cor}`} />
+                                  </span>
+                                );
+                              })()}
+                              {ehRecorrente(venda) && (
+                                <span
+                                  className="inline-flex items-center rounded bg-teal-500/15 p-0.5 text-teal-400"
+                                  title="Pedido recorrente"
+                                  aria-label="Pedido recorrente"
+                                >
+                                  <Repeat className="h-3 w-3" />
+                                </span>
+                              )}
+                            </span>
+                          </td>
+                          {/* ⚠️ TRÊS casos, e cada um tem uma marca — ou marca
+                              nenhuma. A distinção é o ponto:
+
+                              ↩ mês (ciano) = venda fechada num mês e faturada
+                                  no seguinte. É o transbordo de verdade.
+                              ✱ (âmbar)     = `sale_date` corrigida à mão; pode
+                                  ser dentro do mesmo mês, não diz nada de caixa.
+                              recorrente    = NADA aqui. A data dela sempre
+                                  difere da criação, porque quem a move é o
+                                  agendador — não é correção nem transbordo. A
+                                  marca dela é o 🔄 na coluna PEDIDO.
+
+                              Sem o corte da recorrência, outubro mostrava ↩ em
+                              oito linhas e o card dizia 98% de transbordo, num
+                              mês cujo transbordo real era zero. */}
+                          <td className="p-3 text-muted-foreground whitespace-nowrap">
+                            {fmtDate(effectiveDate(venda))}
+                            {veioDeMesAnterior(venda) ? (
+                              <span
+                                className="ml-1.5 rounded bg-cyan-500/15 px-1 py-0.5 text-[9px] font-semibold uppercase text-cyan-400"
+                                title={`Vendido em ${mesOrigemCurto(venda)} e faturado neste mês — transbordo`}
+                              >
+                                ↩ {mesOrigemCurto(venda)}
+                              </span>
+                            ) : (
+                              !ehRecorrente(venda) &&
+                              venda.sale_date && venda.sale_date !== venda.created_at.substring(0, 10) && (
+                                <span className="ml-1 text-[10px] text-amber-500 font-medium" title="Data da venda corrigida">✱</span>
+                              )
+                            )}
+                          </td>
+                          <td className="p-3 font-medium max-w-[180px] truncate">{venda.customer_name}</td>
+                          <td className="p-3 text-muted-foreground whitespace-nowrap">{[venda.delivery_city, venda.delivery_state].filter(Boolean).join("/") || "—"}</td>
+                          <td className="p-3 text-muted-foreground whitespace-nowrap">{sdrNome || "—"}</td>
+                          <td className="p-3 text-muted-foreground whitespace-nowrap">{vendedorNome || "—"}</td>
+                          <td className="p-3 text-right font-bold tabular-nums">{fmtBRL(venda.total)}</td>
+                          <td className="p-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center justify-end gap-1.5">
+                              {isQuote ? (
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <button className="h-8 px-2.5 inline-flex items-center gap-1 rounded-md text-xs font-medium whitespace-nowrap bg-carbo-green/10 text-carbo-green hover:bg-carbo-green/20 border border-carbo-green/30 transition-colors" title="Editar ou converter o orçamento">
+                                      <span className="hidden sm:inline">Editar / Converter</span><span className="sm:hidden">Ações</span>
+                                      <ChevronDown className="h-3 w-3" />
+                                    </button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" className="w-48">
+                                    <DropdownMenuItem onClick={() => navigate(`/vender?edit=${venda.id}`)}>
+                                      <Pencil className="h-3.5 w-3.5 mr-2" /> Editar orçamento
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => converterEmVenda(venda.id)}>
+                                      <ArrowRightCircle className="h-3.5 w-3.5 mr-2" /> Converter em venda
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => baixarPdf(venda.id)}>
+                                      <FileText className="h-3.5 w-3.5 mr-2" /> Baixar PDF
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              ) : (
+                                <>
+                                  {/* ⚠️ `notaDaVenda` e não `venda.bling_nf_id`: a
+                                      nota da FILIAL mora em coluna própria, e
+                                      olhar só a da matriz era o motivo de o
+                                      botão não aparecer para pedido faturado em
+                                      SP. */}
+                                  {notaDaVenda(venda, "venda").id && (
+                                    <button
+                                      onClick={() => baixarNF(venda, "venda")}
+                                      disabled={nfLoadingId === venda.id + "venda"}
+                                      className="h-8 px-2.5 inline-flex items-center gap-1 rounded-md text-xs font-medium whitespace-nowrap bg-carbo-green/10 text-carbo-green hover:bg-carbo-green/20 border border-carbo-green/30 transition-colors disabled:opacity-50"
+                                      title={`Baixar NF ${notaDaVenda(venda, "venda").numero ?? notaDaVenda(venda, "venda").id}`}
+                                    >
+                                      {nfLoadingId === venda.id + "venda" ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileDown className="h-3 w-3" />}
+                                      <span className="hidden sm:inline">Baixar NF</span>
+                                    </button>
+                                  )}
+                                  {/* ⚠️ Botão PRÓPRIO, âmbar, e não um segundo "Baixar NF".
+                                      As duas notas têm significados opostos — uma é receita,
+                                      a outra é produto dado — e dois botões iguais lado a
+                                      lado fariam a pessoa baixar a errada sem perceber. */}
+                                  {notaDaVenda(venda, "bonificacao").id && (
+                                    <button
+                                      onClick={() => baixarNF(venda, "bonificacao")}
+                                      disabled={nfLoadingId === venda.id + "bonificacao"}
+                                      className="h-8 px-2.5 inline-flex items-center gap-1 rounded-md text-xs font-medium whitespace-nowrap bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border border-amber-500/30 transition-colors disabled:opacity-50"
+                                      title={`Baixar NF de bonificação ${notaDaVenda(venda, "bonificacao").numero ?? notaDaVenda(venda, "bonificacao").id}`}
+                                    >
+                                      {nfLoadingId === venda.id + "bonificacao" ? <Loader2 className="h-3 w-3 animate-spin" /> : <Gift className="h-3 w-3" />}
+                                      <span className="hidden sm:inline">NF bonif.</span>
+                                    </button>
+                                  )}
+                                  <button onClick={() => baixarPdf(venda.id)} title="Baixar orçamento (PDF)"
+                                    className="h-8 px-2.5 inline-flex items-center gap-1 rounded-md text-xs font-medium whitespace-nowrap border border-border/60 text-muted-foreground hover:bg-muted transition-colors">
+                                    <FileText className="h-3 w-3" /><span className="hidden sm:inline">PDF</span>
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                        {expandedId === venda.id && (
+                          <tr className="border-b bg-muted/10">
+                            {/* ⚠️ +1 no ramo `isHead`: entrou a coluna "Criado por".
+                                colSpan errado não dá erro — desalinha a faixa de
+                                detalhe e some com a borda da última coluna. */}
+                            <td colSpan={isHead ? 10 : 9} className="px-6 py-4 space-y-4">
+                              {/* Cliente */}
+                              <div>
+                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Cliente</p>
+                                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-1 text-xs">
+                                  <div><span className="text-muted-foreground">Nome:</span> <span className="font-medium">{venda.customer_name}</span></div>
+                                  <div><span className="text-muted-foreground">CNPJ/CPF:</span> <span className="font-medium">{venda.customer_doc || "—"}</span></div>
+                                  <div><span className="text-muted-foreground">Inscr. Estadual:</span> <span className="font-medium">{venda.customer_ie || "—"}</span></div>
+                                  <div><span className="text-muted-foreground">Contato:</span> <span className="font-medium">{[venda.customer_email, venda.customer_phone].filter(Boolean).join(" · ") || "—"}</span></div>
+                                </div>
+                              </div>
+
+                              {/* Endereços */}
+                              <div className="grid sm:grid-cols-2 gap-4">
+                                <div>
+                                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Endereço de Entrega</p>
+                                  <p className="text-xs">{fmtEntrega(venda) || <span className="text-muted-foreground">—</span>}</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Endereço de Faturamento (NF)</p>
+                                  <p className="text-xs">{venda.billing_address ? fmtFaturamento(venda.billing_address) : <span className="text-muted-foreground">Mesmo da entrega</span>}</p>
+                                </div>
+                              </div>
+
+                              {/* ── As notas do pedido ────────────────────────────
+                                  ⚠️ Quando há bonificação são DUAS, e cada uma é
+                                  rotulada: "Nota Fiscal" sozinho, com duas notas
+                                  emitidas, não diz qual está ali. */}
+                              {(venda.invoice_number || venda.bling_nf_id) && (
+                                <div className="text-xs">
+                                  <span className="text-muted-foreground">
+                                    {venda.bling_nf_bonificacao_id ? "NF da venda: " : "Nota Fiscal: "}
+                                  </span>
+                                  <span className="font-medium">{venda.invoice_number || `#${venda.bling_nf_id}`}</span>
+                                </div>
+                              )}
+                              {venda.bling_nf_bonificacao_id && (
+                                <div className="text-xs">
+                                  <span className="text-muted-foreground">NF de bonificação: </span>
+                                  <span className="font-medium text-amber-500">
+                                    {venda.invoice_bonificacao_number || `#${venda.bling_nf_bonificacao_id}`}
+                                  </span>
+                                  {/* Dito em uma linha: a segunda nota não é receita.
+                                      Sem isto, duas notas num pedido de R$ 2.088 fazem
+                                      quem confere somar os dois valores. */}
+                                  <span className="text-muted-foreground"> · remessa, não gera receita</span>
+                                </div>
+                              )}
+
+                              {/* Produtos */}
+                              <div>
+                                <div className="flex items-center gap-2 mb-2"><Package className="h-3.5 w-3.5 text-muted-foreground" /><p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Produtos</p></div>
+                                {venda.items.length === 0 ? (
+                                  <p className="text-xs text-muted-foreground">Sem itens.</p>
+                                ) : (
+                                  <div className="grid gap-1.5">
+                                    {venda.items.map((item, idx) => {
+                                      const bruto = num(item.quantity) * num(item.unit_price);
+                                      const desc = num(item.discount_amount);
+                                      const liquido = item.total != null ? num(item.total) : bruto - desc;
+                                      const descLabel = desc > 0
+                                        ? (item.discount_type === "percent" && bruto > 0
+                                            ? `− ${(Math.round((desc / bruto) * 10000) / 100)}%`
+                                            : `− ${fmtMoney(desc)}`)
+                                        : null;
+                                      return (
+                                        <div key={idx} className="flex items-start justify-between gap-3 text-xs">
+                                          <div className="min-w-0">
+                                            <span className="font-medium">{item.name}</span>
+                                            {num(item.bonus_quantity) > 0 && (
+                                              <span className="ml-1.5 text-[10px] font-semibold text-carbo-green border border-carbo-green/30 rounded px-1">+{num(item.bonus_quantity)} bonif.</span>
+                                            )}
+                                          </div>
+                                          <div className="flex items-center gap-3 text-muted-foreground whitespace-nowrap">
+                                            <span>{num(item.quantity)} × {fmtMoney(num(item.unit_price))}</span>
+                                            {descLabel && <span className="text-destructive">{descLabel}</span>}
+                                            <span className="font-semibold text-foreground">{fmtMoney(liquido)}</span>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Resumo financeiro */}
+                              <div className="flex justify-end">
+                                <div className="w-full sm:w-64 space-y-0.5 text-xs">
+                                  {subtotalDet != null && (
+                                    <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span className="tabular-nums">{fmtMoney(subtotalDet)}</span></div>
+                                  )}
+                                  {descontoDet > 0 && (
+                                    <div className="flex justify-between text-destructive"><span>Desconto{percentDet > 0 ? ` (${percentDet}%)` : ""}</span><span className="tabular-nums">− {fmtMoney(descontoDet)}</span></div>
+                                  )}
+                                  <div className="flex justify-between border-t pt-0.5 font-bold text-sm"><span>Total</span><span className="tabular-nums">{fmtMoney(num(venda.total))}</span></div>
+                                </div>
+                              </div>
+
+                              {/* Pagamento e frete */}
+                              {(venda.payment_terms || venda.freight_type || (venda.shipping_cost ?? 0) > 0) && (
+                                <div>
+                                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Pagamento</p>
+                                  <div className="grid sm:grid-cols-2 gap-x-6 gap-y-1 text-xs">
+                                    {venda.payment_terms && <div><span className="text-muted-foreground">Forma/condição:</span> <span className="font-medium">{venda.payment_terms}</span></div>}
+                                    {(venda.freight_type || (venda.shipping_cost ?? 0) > 0) && (
+                                      <div><span className="text-muted-foreground">Frete:</span> <span className="font-medium">{[venda.freight_type, (venda.shipping_cost ?? 0) > 0 ? fmtMoney(num(venda.shipping_cost)) : null].filter(Boolean).join(" · ") || "—"}</span></div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Prazo de entrega */}
+                              {(venda.agreed_delivery_date || venda.ppf_date || venda.ppe_date) && (
+                                <div>
+                                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Prazo de Entrega</p>
+                                  <div className="grid sm:grid-cols-3 gap-x-6 gap-y-1 text-xs">
+                                    {venda.agreed_delivery_date && <div><span className="text-muted-foreground">Combinada:</span> <span className="font-medium">{fmtDate(venda.agreed_delivery_date)}</span></div>}
+                                    {venda.ppf_date && <div><span className="text-muted-foreground">Fabricar até (PPF):</span> <span className="font-medium">{fmtDate(venda.ppf_date)}</span></div>}
+                                    {venda.ppe_date && <div><span className="text-muted-foreground">Expedir até (PPE):</span> <span className="font-medium">{fmtDate(venda.ppe_date)}</span></div>}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Vendedor / Criado por / Nº pedido de compra do cliente */}
+                              {(vendedorNome || sdrNome || venda.po_number) && (
+                                <div className="grid sm:grid-cols-2 gap-x-6 gap-y-1 text-xs">
+                                  {sdrNome && <div><span className="text-muted-foreground">SDR:</span> <span className="font-medium">{sdrNome}</span></div>}
+                                  {vendedorNome && <div><span className="text-muted-foreground">Closer:</span> <span className="font-medium">{vendedorNome}</span></div>}
+                                  {/* ⚠️ Só aparece quando DIFERE do vendedor. Repetir o
+                                      mesmo nome duas linhas abaixo não informa nada e
+                                      esconde o caso que importa no meio do ruído — a
+                                      faixa de detalhe já é longa. Na TABELA ela aparece
+                                      sempre, porque lá a coluna precisa existir para
+                                      poder ser comparada linha a linha. */}
+                                  {criadorDiferente && (
+                                    <div>
+                                      <span className="text-muted-foreground">Criado por:</span>{" "}
+                                      <span className="font-medium text-amber-500">{criadorNome}</span>
+                                    </div>
+                                  )}
+                                  {venda.po_number && <div><span className="text-muted-foreground">Nº pedido de compra (cliente):</span> <span className="font-medium">{venda.po_number}</span></div>}
+                                </div>
+                              )}
+
+                              {/* Observações EXTERNAS — o que o cliente vê (vai pro orçamento
+                                  em PDF e pra NF). `whitespace-pre-line` porque o campo é
+                                  textarea: sem isso as quebras de linha somem e vira parede. */}
+                              {(venda.notes || buyerNotes || generalNotes) && (
+                                <div className="space-y-1">
+                                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Observações (o cliente vê)</p>
+                                  {venda.notes && <p className="text-xs whitespace-pre-line">{venda.notes}</p>}
+                                  {buyerNotes && <p className="text-xs whitespace-pre-line"><span className="text-muted-foreground">Comprador:</span> {buyerNotes}</p>}
+                                  {generalNotes && <p className="text-xs whitespace-pre-line"><span className="text-muted-foreground">Gerais:</span> {generalNotes}</p>}
+                                </div>
+                              )}
+
+                              {/* Notas internas — gravadas pela tela Vender em `internal_notes`
+                                  (notas + dados estratégicos do ponto) e que NUNCA apareciam
+                                  aqui: quem escrevia não conseguia reler.
+
+                                  Fundo âmbar e o aviso não são enfeite. Este bloco é o único
+                                  do painel que não pode ser lido para o cliente, e o painel
+                                  inteiro é o que o vendedor vira pra tela numa visita. */}
+                              {venda.internal_notes && (
+                                <div className="space-y-1 rounded-lg border border-amber-500/25 bg-amber-500/5 p-2.5">
+                                  <p className="text-xs font-semibold text-amber-600 dark:text-amber-500 uppercase tracking-wide flex items-center gap-1.5">
+                                    <Lock className="h-3 w-3" /> Notas internas — não mostrar ao cliente
+                                  </p>
+                                  <p className="text-xs whitespace-pre-line">{venda.internal_notes}</p>
+                                </div>
+                              )}
+
+                              {/* Ações destrutivas.
+                                  CANCELAR (gestor ou o vendedor dono) mantém o registro, tira
+                                  do faturamento e estorna o estoque — é o caso comum.
+                                  EXCLUIR (só gestor) apaga a linha e libera o número — só
+                                  serve para venda lançada errada.
+                                  Cancelar vem primeiro e com peso visual maior justamente
+                                  porque é o que quase sempre se quer. */}
+                              {(isHead || venda.vendedor_id === user?.id) && !estaCancelada(venda) && (
+                                <div className="flex justify-end gap-1 pt-2 border-t border-border/60">
+                                  {/* Editar usa a MESMA porta do orçamento (/vender?edit=…) —
+                                      a tela de venda já sabe carregar o pedido e salvar. Some
+                                      quando há NF: aí o pedido tem de espelhar a nota, e o
+                                      banco recusaria a alteração de qualquer forma. */}
+                                  {!temNota(venda) && (
+                                    <Button
+                                      variant="outline" size="sm"
+                                      className="h-8 text-xs mr-auto"
+                                      onClick={() => navigate(`/vender?edit=${venda.id}`)}
+                                    >
+                                      <Pencil className="h-3.5 w-3.5 mr-1.5" /> Editar venda
+                                    </Button>
+                                  )}
+                                  <Button
+                                    variant="outline" size="sm"
+                                    className="h-8 text-xs text-amber-600 dark:text-amber-500 border-amber-500/40 hover:bg-amber-500/10"
+                                    onClick={() => setToCancel(venda)}
+                                  >
+                                    <Ban className="h-3.5 w-3.5 mr-1.5" /> Cancelar venda
+                                  </Button>
+                                  {isHead && (
+                                    <Button
+                                      variant="ghost" size="sm"
+                                      className="h-8 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                                      onClick={() => setToDelete(venda)}
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Excluir venda
+                                    </Button>
+                                  )}
+                                </div>
+                              )}
+                              {/* Venda já cancelada: só gestor, e só excluir. Reabrir é no
+                                  Rastreio do Ops, que sabe estornar/rededuzir a etapa certa. */}
+                              {isHead && estaCancelada(venda) && (
+                                <div className="flex justify-end pt-2 border-t border-border/60">
+                                  <Button
+                                    variant="ghost" size="sm"
+                                    className="h-8 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                                    onClick={() => setToDelete(venda)}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Excluir venda
+                                  </Button>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </CarboCard>
+        )}
+
+        <p className="text-xs text-muted-foreground text-center">
+          Vendas e orçamentos de <code>carboze_orders</code> (Bling + legado + nativas). Selecione pedidos para atribuir vendedor em massa.
+        </p>
+      </div>
+
+      {/* Barra de ação em massa */}
+      {isHead && selectedIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-2xl border border-border bg-background/95 backdrop-blur px-4 py-3 shadow-lg">
+          <span className="text-sm font-semibold"><span className="text-carbo-green">{selectedIds.size}</span> pedido(s) selecionado(s)</span>
+          <Select value="" onValueChange={atribuirVendedor}>
+            <SelectTrigger className="h-8 w-[210px] text-sm"><span className="flex items-center gap-1.5"><Users className="h-3.5 w-3.5" /> {assigning ? "Atribuindo..." : "Atribuir vendedor"}</span></SelectTrigger>
+            <SelectContent>
+              {dir.map((v) => (
+                <SelectItem key={v.id} value={v.id}>
+                  <span className="flex items-center gap-2">{v.full_name || "—"}{!v.is_vendedor && <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground border">Avulso</span>}</span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <button className="h-8 px-3 rounded-lg text-sm text-muted-foreground hover:text-foreground border border-border transition-colors" onClick={() => setSelectedIds(new Set())}>Cancelar</button>
+        </div>
+      )}
+
+      {/* Confirmação de exclusão (gestor) */}
+      <AlertDialog open={!!toDelete} onOpenChange={(o) => { if (!o) setToDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir esta venda?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm">
+                <p>
+                  A venda <strong className="font-mono">{toDelete?.order_number}</strong> de{" "}
+                  <strong>{toDelete?.customer_name}</strong> ({toDelete ? fmtBRL(toDelete.total) : ""}) será
+                  removida do sistema. O número volta a ficar livre e as próximas vendas seguem a sequência.
+                </p>
+                <p className="text-muted-foreground">
+                  Excluir some com o histórico. Se a venda existiu e caiu (cliente desistiu, boleto não
+                  pagou, NF cancelada), o certo é <strong>Cancelar venda</strong> — tira do faturamento,
+                  estorna o estoque e mantém o registro.
+                </p>
+                <p className="text-muted-foreground">Esta ação não pode ser desfeita.</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteVenda.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); excluirVenda(); }}
+              disabled={deleteVenda.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteVenda.isPending ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Excluindo…</> : <><Trash2 className="h-3.5 w-3.5 mr-1.5" /> Excluir</>}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Confirmação de cancelamento (gestor ou vendedor dono) */}
+      <AlertDialog
+        open={!!toCancel}
+        onOpenChange={(o) => { if (!o) { setToCancel(null); setCancelReason(""); } }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar esta venda?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-sm">
+                <p>
+                  A venda <strong className="font-mono">{toCancel?.order_number}</strong> de{" "}
+                  <strong>{toCancel?.customer_name}</strong> ({toCancel ? fmtBRL(toCancel.total) : ""}) sai
+                  do faturamento e vai para "Cancelado" no rastreio.
+                </p>
+                {/* Dito antes de confirmar, não depois: se o pedido já foi separado, o
+                    estoque volta pro HUB-RN e alguém precisa saber que o número mudou. */}
+                <p className="text-muted-foreground">
+                  Se o estoque já tinha sido deduzido (pedido separado), ele é{" "}
+                  <strong>devolvido ao HUB-RN</strong> automaticamente. A venda continua no
+                  histórico — para apagar de vez, use Excluir.
+                </p>
+                <div className="space-y-1.5">
+                  <label htmlFor="cancel-reason" className="text-xs font-medium">
+                    Motivo do cancelamento <span className="text-destructive">*</span>
+                  </label>
+                  <Textarea
+                    id="cancel-reason"
+                    value={cancelReason}
+                    onChange={(e) => setCancelReason(e.target.value)}
+                    placeholder="Ex.: cliente desistiu; boleto não pago; NF cancelada no Bling"
+                    rows={2}
+                    autoFocus
+                  />
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancelVenda.isPending}>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); cancelarVenda(); }}
+              disabled={cancelVenda.isPending || !cancelReason.trim()}
+              className="bg-amber-600 text-white hover:bg-amber-600/90"
+            >
+              {cancelVenda.isPending
+                ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Cancelando…</>
+                : <><Ban className="h-3.5 w-3.5 mr-1.5" /> Cancelar venda</>}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
