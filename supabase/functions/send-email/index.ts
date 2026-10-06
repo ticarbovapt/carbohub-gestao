@@ -31,9 +31,25 @@ const ALLOWED_ORIGINS = [
   "http://localhost:3000",
 ];
 
+// ⚠️ Lista + qualquer subdomínio HTTPS de carbohub.com.br. A lista sozinha
+// ficou para trás a cada app novo: TI, Marketing, Atendimento e Pré-Vendas
+// nunca entraram, e o navegador recusava a chamada ANTES de ela chegar aqui —
+// `Failed to fetch`, sem linha nenhuma no log. A fronteira é a mesma do SSO
+// (cookie em `.carbohub.com.br`): app que roda ali já é do ecossistema. Quem
+// protege o dado continua sendo o JWT + a checagem de funcionário abaixo.
+function origemPermitida(origin: string): boolean {
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  try {
+    const { protocol, hostname } = new URL(origin);
+    return protocol === "https:" && hostname.endsWith(".carbohub.com.br");
+  } catch {
+    return false;
+  }
+}
+
 function getCorsHeaders(req: Request) {
   const origin = req.headers.get("origin") || "";
-  const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  const allowedOrigin = origemPermitida(origin) ? origin : ALLOWED_ORIGINS[0];
   return {
     "Access-Control-Allow-Origin": allowedOrigin,
     "Access-Control-Allow-Methods": "POST, OPTIONS",
