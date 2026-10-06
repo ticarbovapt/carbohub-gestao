@@ -3977,3 +3977,19 @@ supabase/migrations/20261046…        carbo_interface_e_interna: É time intern
    endereço VAZIO escrito no código; hoje os dois caminhos usam
    `leadParaVender()`. Campo novo no faturamento precisa atravessar essa função
    e o efeito `fromLead` do `Vender.tsx`.
+10. **`/vendas` do Pré-Vendas = a tela do Sales PORTADA**, com três diferenças e
+    só elas: os dados vêm da RPC `carbo_prevendas_vendas` (`20261049`) — só o
+    pedido ligado por `crm_lead_orders` a card f14/f15 —, as colunas "Vendedor /
+    Criado por" viram **SDR / Closer**, e as duas aparecem para TODOS.
+    ⚠️ **A tela do Sales NÃO muda**: a venda do Pré-Vendas aparece lá como
+    qualquer outra (dono do processo, 06/10/2026).
+    ⚠️ O recorte mora no BANCO, não na tela: a RLS de `carboze_orders` mostra ao
+    colaborador só o que ele vendeu, e o SDR não é o vendedor — sem a função ele
+    nunca veria a venda que originou. Gestor vê todas, SDR as que repassou,
+    closer as que fechou. SECURITY DEFINER guardada por `carbo_e_time_interno()`.
+    ⚠️ Ela é plpgsql e devolve `jsonb` para NÃO virar dependente da
+    `carbo_vendas_metrica` (republicá-la já derrubou tela). Chamada no SQL
+    Editor volta VAZIA — sem usuário, a guarda devolve nada; isso está certo.
+    ⚠️ `pages/Vendas.tsx` do Pré-Vendas é CÓPIA divergente da do `crm`, não
+    idêntica: corrigiu algo lá, traga para cá. A chave do hook começa com
+    `carboze_vendas` para as mutações do `useCarbozeVendas` a invalidarem.

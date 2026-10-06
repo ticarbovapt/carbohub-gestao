@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { Target, MessagesSquare, ShoppingCart, Bug, UserCircle, ArrowRight, type LucideIcon, KanbanSquare } from "lucide-react";
+import { Target, MessagesSquare, ShoppingCart, Bug, UserCircle, ArrowRight, type LucideIcon, KanbanSquare, ShoppingBag } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { useAuth } from "@/contexts/AuthContext";
@@ -23,6 +23,7 @@ type Atalho = { to: string; label: string; hint: string; icon: LucideIcon };
 // card apontando para tela vazia é pior que card ausente.
 const ATALHOS: Atalho[] = [
   { to: "/crm/pipelines", label: "Pipeline", hint: "Os leads em cada etapa, do contato ao closer", icon: KanbanSquare },
+  { to: "/vendas", label: "Vendas", hint: "O que o closer fechou a partir do SDR", icon: ShoppingBag },
   { to: "/chat", label: "Carbo Chat", hint: "Falar com o time, ao vivo", icon: MessagesSquare },
   { to: "/vender", label: "Vender", hint: "Registrar uma venda ou orçamento", icon: ShoppingCart },
   { to: "/bugs", label: "Bugs e sugestões", hint: "O que você reportou ao TI", icon: Bug },
