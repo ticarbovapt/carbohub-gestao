@@ -16,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { ptBR } from "date-fns/locale";
@@ -1473,7 +1473,11 @@ export default function Vender() {
           </div>
           {coords ? (
             <div className="space-y-1.5">
-              <div className="rounded-xl overflow-hidden border" style={{ height: 260 }}>
+              {/* ⚠️ `isolate`: o Leaflet põe os painéis em z-index 400–1000 e,
+                  sem contexto de empilhamento próprio, o mapa passava POR CIMA
+                  dos menus (z-50, renderizados no body) — o dropdown de
+                  produto abria escondido atrás dele. */}
+              <div className="relative isolate z-0 rounded-xl overflow-hidden border" style={{ height: 260 }}>
                 <MapContainer key={`${coords.lat},${coords.lng}`} center={[coords.lat, coords.lng]} zoom={15} style={{ height: "100%", width: "100%" }} scrollWheelZoom={false}>
                   <TileLayer attribution='&copy; OpenStreetMap' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                   <CircleMarker center={[coords.lat, coords.lng]} radius={11} pathOptions={{ color: "#16A34A", fillColor: "#16A34A", fillOpacity: 0.5, weight: 2 }}>
@@ -1599,27 +1603,35 @@ export default function Vender() {
                           linha VAZIA carregando um produto real — e salvar
                           perderia o item, sem erro nenhum. */}
                       <SelectContent>
-                        {gruposDeProduto.map((g) => {
-                          const visiveis = g.opcoes.filter(
-                            (o) => o.p.aparece_no_vender || o.p.id === r.productId,
-                          );
-                          if (!visiveis.length) return null;
-                          return (
-                            <SelectGroup key={g.pai.id}>
-                              <SelectLabel className="text-foreground">{g.pai.name}</SelectLabel>
+                        {/* ⚠️ O PRODUTO e as OPÇÕES dele não podem ter a mesma
+                            cara. Na primeira versão o cabeçalho e as opções
+                            tinham o mesmo recuo e o mesmo tamanho, e o menu
+                            lia-se como uma lista corrida — "Bonificação" do
+                            CarboPRO colado em "CarboZé 1 Litro", fácil de
+                            escolher a opção do produto vizinho. Hoje: linha
+                            separando os produtos, cabeçalho com ícone e sem
+                            recuo, opções recuadas e o PREÇO numa coluna à
+                            direita, que é onde o olho compara. */}
+                        {gruposDeProduto
+                          .map((g) => ({
+                            g,
+                            visiveis: g.opcoes.filter((o) => o.p.aparece_no_vender || o.p.id === r.productId),
+                          }))
+                          .filter((x) => x.visiveis.length > 0)
+                          .map(({ g, visiveis }, gi) => (
+                            <SelectGroup key={g.pai.id} className={gi > 0 ? "pt-1" : ""}>
+                              {gi > 0 && <SelectSeparator className="mb-1.5" />}
+                              <SelectLabel className="flex items-center gap-2 pl-2 pt-1.5 pb-1 text-xs font-semibold text-foreground">
+                                <Package className="h-3.5 w-3.5 shrink-0 text-carbo-green" />
+                                <span className="truncate">{g.pai.name}</span>
+                              </SelectLabel>
                               {visiveis.map((o) => (
-                                <SelectItem key={o.p.id} value={o.p.id} className="pl-8">
-                                  <span className="inline-flex items-baseline gap-2 whitespace-nowrap">
+                                <SelectItem key={o.p.id} value={o.p.id} className="pl-8 [&>span:last-child]:flex-1">
+                                  <span className="flex w-full items-baseline justify-between gap-6 whitespace-nowrap">
                                     <span>{o.rotulo}</span>
                                     {/* ⚠️ UMA informação por opção, e ela é o
-                                        PREÇO. A primeira versão levava chip
-                                        colorido + preço + a dica da faixa na
-                                        mesma linha: o texto estourava a largura
-                                        do menu e era cortado na direita, e o
-                                        menu ficava tão alto que cortava uma
-                                        opção no meio. Quem estava fazendo a
-                                        tela não entendeu a própria tela — e o
-                                        vendedor tem de entender em um olhar. */}
+                                        PREÇO — chip e dica na mesma linha
+                                        estouravam a largura do menu. */}
                                     {o.bonificacao ? (
                                       <span className="text-amber-600 font-medium">grátis</span>
                                     ) : o.p.sale_price == null ? (
@@ -1631,8 +1643,7 @@ export default function Vender() {
                                 </SelectItem>
                               ))}
                             </SelectGroup>
-                          );
-                        })}
+                          ))}
                       </SelectContent>
                     </Select>
                     {/* ── O que foi escolhido, por extenso ──────────────────
