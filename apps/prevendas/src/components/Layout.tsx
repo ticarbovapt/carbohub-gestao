@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
-import { MessagesSquare, LayoutDashboard } from "lucide-react";
+import { MessagesSquare, LayoutDashboard, KanbanSquare } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAccessPing } from "@/hooks/useAccessPing";
@@ -50,6 +50,7 @@ export function Layout() {
   const sections: ShellNavSection[] = [
     { items: [
         { to: "/", label: "Visão geral", icon: LayoutDashboard, end: true },
+        { to: "/crm/pipelines", label: "Pipeline", icon: KanbanSquare },
         { to: "/chat", label: "Carbo Chat", icon: MessagesSquare, badge: <ChatBadge /> },
     ] },
   ];
