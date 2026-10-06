@@ -4,13 +4,13 @@
 // Mantido sem dependências além de lucide-react (só ícones).
 import {
   Home, Building2, TrendingUp, Boxes, Handshake, Store, Warehouse, Wallet, ShieldCheck, Megaphone, LifeBuoy,
-  MessagesSquare, Target,
+  MessagesSquare, Target, GraduationCap,
   type LucideIcon,
 } from "lucide-react";
 
 export const HUB_URL = "https://carbohub.com.br";
 
-export type AppKey = "controle" | "prevendas" | "crm" | "ops" | "licenciados" | "lojas" | "md" | "financas" | "mkt" | "admin" | "ti" | "atendimento";
+export type AppKey = "controle" | "prevendas" | "crm" | "ops" | "licenciados" | "lojas" | "md" | "financas" | "mkt" | "admin" | "ti" | "atendimento" | "academy";
 
 export interface EcoApp {
   key: AppKey;
@@ -46,6 +46,28 @@ export const HUB_APPS: EcoApp[] = [
 export const ADMIN_APP: EcoApp = {
   key: "admin", name: "Carbo Admin", tag: "Identidades e acessos",
   href: "https://admin.carbohub.com.br", icon: ShieldCheck, accent: "#64748B",
+};
+
+// ⚠️ O Carbo Academy (06/10/2026) aparece para TODO MUNDO, sem flag — e por
+// isso fica FORA do `HUB_APPS`, montado à parte como o Admin.
+//
+// Fora do catálogo também por um segundo motivo: `HUB_APPS` alimenta a tela de
+// avisos do TI e o `appKeyAtual()`, e o Academy não monta a tarja de status
+// (ele mora no carbohub-produtos, que não usa este pacote). Listá-lo lá
+// ofereceria ao TI um alvo de aviso que nunca aparece em tela nenhuma.
+//
+// Sem flag porque aprender é de todo mundo logado: quem decide o que cada um
+// vê é o banco (`academy_vejo_curso`). Uma caixinha `carbo_academy` não abriria
+// porta nenhuma — e ⚠️ ela NUNCA deve entrar em `carbo_interface_e_interna()`:
+// o Academy atende também micro, lojista e licenciado, e a flag ali faria um
+// deles contar como "time interno" (sininho com o faturamento, RLS aberta).
+//
+// Cor #C322C3 escolhida por MEDIDA: 300°, a 29° do roxo do Atendimento e 30°
+// do rosa do Marketing — o maior vão da grade. A MESMA do azulejo do Hub
+// (`ACADEMY_APP` em carbohub-landing/src/lib/apps.ts). Mudou um, mude o outro.
+export const ACADEMY_APP: EcoApp = {
+  key: "academy", name: "Carbo Academy", tag: "Cursos · Vídeos e PDFs",
+  href: "https://academy.carbohub.com.br", icon: GraduationCap, accent: "#C322C3",
 };
 
 // interface (allowed_interfaces) → app do catálogo.
@@ -163,9 +185,10 @@ export function temFlagAdmin(allowedInterfaces?: string[] | null): boolean {
 export function buildSwitcherApps(profile: SwitcherProfile | null | undefined, currentKey: string): SwitcherApp[] {
   const wanted = new Set<string>(resolveAllowedApps(profile?.allowed_interfaces).map((a) => a.key));
   if (temFlagAdmin(profile?.allowed_interfaces)) wanted.add("admin");
+  wanted.add("academy"); // para todos — ver `ACADEMY_APP`
   if (currentKey) wanted.add(currentKey); // garante o app atual na lista
 
-  const registry: EcoApp[] = [...HUB_APPS, ADMIN_APP];
+  const registry: EcoApp[] = [...HUB_APPS, ADMIN_APP, ACADEMY_APP];
   const list: SwitcherApp[] = registry
     .filter((a) => wanted.has(a.key))
     .map((a) => ({ ...a, current: a.key === currentKey }));
