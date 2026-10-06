@@ -24,9 +24,25 @@ const ALLOWED_ORIGINS = [
   "http://localhost:3000",
 ];
 
+// ⚠️ Lista + qualquer subdomínio HTTPS de carbohub.com.br. A lista sozinha
+// ficou para trás a cada app novo: TI, Marketing, Atendimento e Pré-Vendas
+// nunca entraram, e o navegador recusava a chamada ANTES de ela chegar aqui —
+// `Failed to fetch`, sem linha nenhuma no log. A fronteira é a mesma do SSO
+// (cookie em `.carbohub.com.br`): app que roda ali já é do ecossistema. Quem
+// protege o dado continua sendo o JWT + a checagem de funcionário abaixo.
+function origemPermitida(origin: string): boolean {
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  try {
+    const { protocol, hostname } = new URL(origin);
+    return protocol === "https:" && hostname.endsWith(".carbohub.com.br");
+  } catch {
+    return false;
+  }
+}
+
 function getCorsHeaders(req: Request) {
   const origin = req.headers.get("origin") || "";
-  const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  const allowed = origemPermitida(origin) ? origin : ALLOWED_ORIGINS[0];
   return {
     "Access-Control-Allow-Origin": allowed,
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -53,11 +69,15 @@ serve(async (req) => {
   // 1) Sessão do usuário (JWT do Supabase no header).
   const authHeader = req.headers.get("Authorization") ?? "";
   if (!authHeader.startsWith("Bearer ")) return json(cors, 401, { error: "sem sessão" });
-  const token = authHeader.replace("Bearer ", "");
+  // ⚠️ `jwt`, não `token`: o nome `token` é o do LiveKit, lá embaixo. Os dois
+  // chegaram a se chamar `token` no mesmo escopo, e esse arquivo NÃO compilava
+  // (`The symbol "token" has already been declared`) — ele estava fora da
+  // lista de deploy, então ninguém via.
+  const jwt = authHeader.replace("Bearer ", "");
   const supa = createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: authHeader } } });
   // Passa o token EXPLÍCITO (na Edge Function não há sessão local; getUser() sem
   // argumento retornaria "sessão ausente" → 401).
-  const { data: userData, error: userErr } = await supa.auth.getUser(token);
+  const { data: userData, error: userErr } = await supa.auth.getUser(jwt);
   const user = userData?.user;
   if (userErr || !user) return json(cors, 401, { error: "não autenticado" });
 

@@ -126,6 +126,13 @@ jobs:
           # é chamada pelo NAVEGADOR, por gente logada, e derrubar o WhatsApp
           # da empresa não pode depender de um segredo que anda na URL.
           dep evolution-instancia
+          # Chamada de voz do Carbo Chat (token do LiveKit) e o "enviar
+          # orçamento por e-mail" do /vender. SEM --no-verify-jwt: quem chama é
+          # o navegador, por gente logada, e as duas conferem `is_employee`.
+          # Ficaram FORA desta lista até 06/10/2026 — e por isso a lista de
+          # origens delas nunca aprendeu TI, Marketing, Atendimento e Pré-Vendas.
+          dep call-token
+          dep send-email
           dep ml-auth --no-verify-jwt
           dep ml-token-refresh --no-verify-jwt
           dep ml-estoque-full --no-verify-jwt
