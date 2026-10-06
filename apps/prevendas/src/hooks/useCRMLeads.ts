@@ -383,6 +383,10 @@ export function useAdvanceLeadStage() {
       queryClient.invalidateQueries({ queryKey: ["crm-leads"] });
       queryClient.invalidateQueries({ queryKey: ["crm-lead", variables.id] });
       queryClient.invalidateQueries({ queryKey: ["crm-stats"] });
+      // A linha "Etapa alterada" da timeline é gravada pelo TRIGGER, na mesma
+      // transação do update — então ela já existe quando chegamos aqui. Sem
+      // esta invalidação o card aberto só a mostrava depois de fechar e abrir.
+      queryClient.invalidateQueries({ queryKey: ["crm-lead-activities", variables.id] });
       // Sucesso: som + toast disparam no gesto (ver Pipelines.notifyMove), para
       // o áudio não esbarrar na autoplay policy.
     },
@@ -404,6 +408,10 @@ export function useCRMLeadsRealtime() {
         qc.invalidateQueries({ queryKey: ["crm-leads"] });
         qc.invalidateQueries({ queryKey: ["crm-stats"] });
         qc.invalidateQueries({ queryKey: ["crm-all-stats"] });
+        // Timeline do card aberto: quando OUTRA pessoa move o card, a linha de
+        // etapa chega aqui também. Só refaz as consultas montadas (o card
+        // aberto), então o custo é uma leitura.
+        qc.invalidateQueries({ queryKey: ["crm-lead-activities"] });
       }, 300);
     };
     const ch = supabase
@@ -434,9 +442,10 @@ export function useMarkLeadLost() {
       // registros de perda nascia com a etapa de origem nula.
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (_d, v) => {
       queryClient.invalidateQueries({ queryKey: ["crm-leads"] });
       queryClient.invalidateQueries({ queryKey: ["crm-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["crm-lead-activities", v.id] });
       playMoveSuccess();
       toast.success("Lead marcado como perdido");
     },
