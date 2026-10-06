@@ -251,7 +251,7 @@ export default function Vendas() {
   // Pedidos da ponte do Bling saem da lista por padrão: não têm vendedor nem
   // cidade (a ponte não atribui), então enchem a tabela de linhas que ninguém
   // desta tela fez. Fica visível e reversível — ver o chip abaixo dos KPIs.
-  const [ocultarBling, setOcultarBling] = useState(true);
+  const ocultarBling = true;   // Pré-Vendas: sempre — ver o comentário no lugar da caixinha.
   // Segmentos selecionados. Vazio = todos — e não "nenhum": filtro que começa
   // escondendo tudo faz a tela parecer quebrada no primeiro carregamento.
   const [segsAtivos, setSegsAtivos] = useState<Set<SegmentoId>>(new Set());
@@ -701,98 +701,14 @@ export default function Vendas() {
             </span>
           )}
 
-          {/* ⚠️ O chip aparece mesmo com zero Bling no recorte, de propósito:
-              é ele que explica por que o total desta tela pode não bater com
-              outra. Escondido quando não há nada escondido, a pessoa procuraria
-              a diferença no lugar errado. */}
-          <label className="flex cursor-pointer items-center gap-1.5 select-none">
-            <input
-              type="checkbox"
-              className="h-3.5 w-3.5 accent-current cursor-pointer"
-              checked={ocultarBling}
-              onChange={(e) => setOcultarBling(e.target.checked)}
-            />
-            <span>
-              Ocultar pedidos Bling
-              {blingNoRecorte.length > 0 && (
-                <strong className="text-foreground">
-                  {" "}({blingNoRecorte.length} · {fmtBRL(blingNoRecorte.reduce((s, v) => s + v.total, 0))})
-                </strong>
-              )}
-            </span>
-          </label>
+          {/* Pré-Vendas: os pedidos do Bling ficam SEMPRE ocultos e não há
+              caixinha. Venda daqui nasce de card pelo /vender, nunca da ponte
+              do Bling — a opção só faria a lista parecer ter o que não tem. */}
         </div>
 
-        {/* ── Unidade de negócio ──
-            Botões, não um <select>: são quatro, combinam entre si (dá para ver
-            Revenda + Consumo juntos) e cada um carrega a contagem — coisas que
-            um select de escolha única não faz. */}
-        <div className="flex flex-wrap items-center gap-2 -mt-1">
-          <span className="text-xs text-muted-foreground">Unidade de negócio:</span>
-          {SEGMENTOS.map((s) => {
-            const Icone = s.icone;
-            const ativo = segsAtivos.has(s.id);
-            const qtd = contagemPorSeg.get(s.id) ?? 0;
-            return (
-              <button
-                key={s.id}
-                onClick={() => alternarSeg(s.id)}
-                disabled={qtd === 0 && !ativo}
-                title={qtd === 0 ? `Nenhum pedido em ${s.label} neste período` : `Filtrar por ${s.label}`}
-                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition
-                  ${ativo ? `${s.bg} border-current ${s.cor} font-medium` : "border-border text-muted-foreground hover:bg-muted/40"}
-                  ${qtd === 0 && !ativo ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
-              >
-                <Icone className="h-3.5 w-3.5" />
-                {s.label}
-                <span className="tabular-nums opacity-70">{qtd}</span>
-              </button>
-            );
-          })}
-          {segsAtivos.size > 0 && (
-            <button className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-              onClick={() => setSegsAtivos(new Set())}>
-              <X className="h-3 w-3" /> limpar
-            </button>
-          )}
-        </div>
-
-        {/* ── Produto × Serviço ──
-            Linha própria, e combina com a de cima: Revenda + Serviço filtra os
-            dois ao mesmo tempo. "Serviço" é a linha com `kind=service` (hoje,
-            toda descarbonização). */}
-        <div className="flex flex-wrap items-center gap-2 -mt-1">
-          <span className="text-xs text-muted-foreground">Tipo:</span>
-          {TIPOS.map((t) => {
-            const Icone = t.icone;
-            const ativo = tiposAtivos.has(t.id);
-            const qtd = contagemPorTipo.get(t.id) ?? 0;
-            return (
-              <button
-                key={t.id}
-                onClick={() => alternarTipo(t.id)}
-                disabled={qtd === 0 && !ativo}
-                title={t.id === "misto"
-                  ? "Pedido com produto E serviço na mesma venda"
-                  : qtd === 0 ? `Nenhum pedido de ${t.label} neste período` : `Filtrar por ${t.label}`}
-                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition
-                  ${ativo ? `${t.bg} border-current ${t.cor} font-medium` : "border-border text-muted-foreground hover:bg-muted/40"}
-                  ${qtd === 0 && !ativo ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
-              >
-                <Icone className="h-3.5 w-3.5" />
-                {t.label}
-                <span className="tabular-nums opacity-70">{qtd}</span>
-              </button>
-            );
-          })}
-          {tiposAtivos.size > 0 && (
-            <button className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-              onClick={() => setTiposAtivos(new Set())}>
-              <X className="h-3 w-3" /> limpar
-            </button>
-          )}
-        </div>
-
+        {/* Sem "Unidade de negócio" e sem "Tipo" (Produto × Serviço): no
+            Pré-Vendas os dois filtros não decidiam nada — pedido do dono do
+            processo, 06/10/2026. Os estados continuam vazios = "todos". */}
         {/* Filtros */}
         <div className="flex gap-2 flex-wrap">
           <div className="relative flex-1 min-w-[200px]">
@@ -914,15 +830,6 @@ export default function Vendas() {
                           <td className="p-3 font-mono text-xs font-medium">
                             <span className="inline-flex items-center gap-1.5">
                               {venda.order_number}
-                              {(() => {
-                                const s = SEGMENTOS.find((x) => x.id === segmentoDe(venda))!;
-                                const Icone = s.icone;
-                                return (
-                                  <span className="inline-flex shrink-0" title={`Unidade de negócio: ${s.label}`} aria-label={s.label}>
-                                    <Icone className={`h-3.5 w-3.5 ${s.cor}`} />
-                                  </span>
-                                );
-                              })()}
                               {ehRecorrente(venda) && (
                                 <span
                                   className="inline-flex items-center rounded bg-teal-500/15 p-0.5 text-teal-400"
