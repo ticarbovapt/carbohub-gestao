@@ -32,7 +32,7 @@ const hojeISO = () => new Date().toISOString().slice(0, 10);
 import type { FunnelType, CRMLead } from "@/types/crm";
 import { toast } from "sonner";
 import { playMoveSuccess } from "@/lib/sfx";
-import { SEGMENTS, segmentOf, isFunilDeSdr, stageLabelAnywhere } from "@/types/crm";
+import { SEGMENTS, segmentOf, isFunilDeSdr, stageLabelAnywhere, funilDoCloser } from "@/types/crm";
 import { FUNIS_VISIVEIS, FUNIL_PADRAO, USA_SEGMENTO, MOSTRA_QUENTES_E_TENTATIVAS } from "@/lib/funisDoApp";
 
 // Só as pipelines vivas viram aba. As antigas seguem em FUNNEL_CONFIG para
@@ -641,7 +641,7 @@ export default function Pipelines() {
           <DialogHeader><DialogTitle>Passar ao closer</DialogTitle></DialogHeader>
           <div className="py-2 space-y-3">
             <p className="text-sm text-muted-foreground">
-              Um card novo nasce no <strong>Inbound</strong>, na fila, com todo o histórico e os
+              Um card novo nasce no <strong>{FUNNEL_CONFIG[funilDoCloser(repasseLead?.funnel_type ?? ft)].name}</strong>, na fila, com todo o histórico e os
               comentários deste aqui. O seu card fica em "{stageLabelAnywhere("repassado", (repasseLead?.funnel_type ?? ft) as FunnelType)}" — ele conta como
               SQL entregue, nunca como receita.
             </p>

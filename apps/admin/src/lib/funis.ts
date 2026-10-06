@@ -14,7 +14,7 @@ export const FUNIL_NOME: Record<string, string> = {
   f1: "Vendas", f2: "Licenciados", f3: "Frotistas", f4: "PDVs CarboZé",
   f5: "PDVs CarboPRO", f6: "Frotistas Lic.", f7: "Motores", f8: "Estoque Comb.",
   f9: "Subdistribuidor", f10: "Follow up", f11: "Inbound", f12: "Outbound",
-  f13: "Comercial Expansão", f14: "Pré-Vendas",
+  f13: "Comercial Expansão", f14: "Pré-Vendas", f15: "Closer (Pré-Vendas)",
 };
 
 export const ETAPA_NOME: Record<string, string> = {

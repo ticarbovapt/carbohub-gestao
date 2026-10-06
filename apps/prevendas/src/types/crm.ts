@@ -1,4 +1,4 @@
-export type FunnelType = "f1" | "f2" | "f3" | "f4" | "f5" | "f6" | "f7" | "f8" | "f9" | "f10" | "f11" | "f12" | "f13" | "f14";
+export type FunnelType = "f1" | "f2" | "f3" | "f4" | "f5" | "f6" | "f7" | "f8" | "f9" | "f10" | "f11" | "f12" | "f13" | "f14" | "f15";
 
 export type LeadStage =
   | "a_contatar" | "tentativa_1" | "tentativa_2"
@@ -311,6 +311,7 @@ export const FUNNEL_CONFIG: Record<FunnelType, FunnelConfig> = {
   f11:{ id: "f11", name: "Inbound",                          shortName: "Inbound",       description: "Closers — anúncios e qualificados", icon: "🎯", color: "#3BC770", cycleLabel: "1-15 dias", stages: STAGES_INBOUND },
   f12:{ id: "f12", name: "Outbound",                         shortName: "Outbound",      description: "SDR — prospecção ativa",    icon: "🔎", color: "#6366F1", cycleLabel: "1-30 dias", stages: STAGES_OUTBOUND },
   f13:{ id: "f13", name: "Comercial Expansão",               shortName: "Comercial Expansão", description: "PDVs, frotistas, licenciados e contas com motores/estoque", icon: "🚀", color: "#3BC770", cycleLabel: "7-60 dias", stages: STAGES_EXPANSAO },
+  f15:{ id: "f15", name: "Closer",                           shortName: "Closer",        description: "Closer — fecha o que o SDR qualificou", icon: "💼", color: "#16A34A", cycleLabel: "1-15 dias", stages: STAGES_INBOUND },
   f14:{ id: "f14", name: "Pré-Vendas",                       shortName: "Pré-Vendas",    description: "SDR — qualifica o lead e repassa ao closer", icon: "🎯", color: "#65A30D", cycleLabel: "1-30 dias", stages: STAGES_PREVENDAS },
 };
 
@@ -320,6 +321,16 @@ export const FUNNEL_CONFIG: Record<FunnelType, FunnelConfig> = {
  * para lembrar.
  */
 export const FUNIS_DE_SDR: readonly FunnelType[] = ["f12", "f14"];
+
+/**
+ * Para onde vai o card que o SDR repassa. O Pré-Vendas tem o PRÓPRIO closer
+ * (f15, mesmas etapas do Inbound), independente do Sales; o Outbound continua
+ * caindo no Inbound (f11). Espelha o CASE da RPC `crm_sales_lead_repassar`
+ * (migração 20261048) — mudou um, mude o outro, senão a tela promete um funil
+ * e o card aparece no outro.
+ */
+export const funilDoCloser = (ft: string | null | undefined): FunnelType =>
+  ft === "f14" ? "f15" : "f11";
 export const isFunilDeSdr = (ft: string | null | undefined) =>
   !!ft && (FUNIS_DE_SDR as readonly string[]).includes(ft);
 
@@ -492,6 +503,30 @@ export const sourceLabel = (id: string | null | undefined): string =>
 
 /** @deprecated Use SOURCES. Mantido só para não quebrar import antigo. */
 export const SOURCE_OPTIONS = SOURCES.map((s) => s.label);
+
+/**
+ * O que o card leva para o /vender (`location.state.fromLead`). UMA função para
+ * os dois caminhos — o "Gerar venda" do detalhe e o popup depois de mover para
+ * Orçamento/Ganho. Eram duas cópias, e a do detalhe mandava endereço VAZIO
+ * escrito no código e nem levava número, CEP, IE e razão social: o SDR
+ * preenchia o faturamento no card e a venda abria em branco.
+ */
+export function leadParaVender(lead: CRMLead) {
+  return {
+    id: lead.id,
+    name: lead.legal_name || lead.trade_name || lead.contact_name || "",
+    cnpj: lead.cnpj || "",
+    phone: lead.contact_phone || "",
+    email: lead.contact_email || "",
+    city: lead.city || "", state: lead.state || "",
+    address: lead.address || "", bairro: lead.bairro || "",
+    numero: lead.numero || "", cep: lead.cep || "", ie: lead.customer_ie || "",
+    legalName: lead.legal_name || "",
+  };
+}
+
+/** UFs na mesma ordem do seletor do /vender. */
+export const UFS = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"] as const;
 
 export function getStagesForFunnel(funnelType: FunnelType): StageConfig[] {
   return FUNNEL_CONFIG[funnelType]?.stages || STAGES_COMMERCIAL;

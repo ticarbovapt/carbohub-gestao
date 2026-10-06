@@ -15,7 +15,7 @@ import type { CRMLead, FunnelType } from "@/types/crm";
 import {
   FUNNEL_CONFIG, getCloseReasons, getStagesForFunnel, getNextStage, getLostStage,
   isTerminalStage, isHandoffStage, isWonStage, getDaysSinceUpdate, SEGMENTS, segmentOf,
-  stageLabelAnywhere, sourceLabel, WAITING_OPTIONS, waitingLabel, esperaVencida, isFunilDeSdr } from "@/types/crm";
+  stageLabelAnywhere, sourceLabel, WAITING_OPTIONS, waitingLabel, esperaVencida, isFunilDeSdr, funilDoCloser, leadParaVender, UFS } from "@/types/crm";
 
 import {
   useAdvanceLeadStage, useMarkLeadLost, useTransferLead, useLeadOwnerLog,
@@ -179,10 +179,18 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
   const [fNumero, setFNumero]     = useState(lead.numero ?? "");
   const [fBairro, setFBairro]     = useState(lead.bairro ?? "");
   const [fCep, setFCep]           = useState(lead.cep ?? "");
+  // Cidade e UF entram AQUI também, porque o /vender as pede no Endereço. Antes
+  // o bloco dizia "ficam em Cliente / Contato" — e lá elas eram só leitura, ou
+  // seja: não havia lugar nenhum do card onde preenchê-las. São as MESMAS
+  // colunas (`city`/`state`) que o Cliente / Contato mostra.
+  const [fCidade, setFCidade]     = useState(lead.city ?? "");
+  const [fUf, setFUf]             = useState(lead.state ?? "");
+  const fIsento = /^isento$/i.test(fIe.trim());
   const startEditFat = () => {
     setFCnpj(lead.cnpj ?? ""); setFRazao(lead.legal_name ?? ""); setFIe(lead.customer_ie ?? "");
     setFEndereco(lead.address ?? ""); setFNumero(lead.numero ?? "");
     setFBairro(lead.bairro ?? ""); setFCep(lead.cep ?? "");
+    setFCidade(lead.city ?? ""); setFUf(lead.state ?? "");
     setEditFat(true);
   };
   async function saveFat() {
@@ -196,6 +204,8 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
       numero: fNumero.trim() || null,
       bairro: fBairro.trim() || null,
       cep: fCep.replace(/\D/g, "") || null,
+      city: fCidade.trim() || null,
+      state: fUf || null,
     });
     setEditFat(false);
   }
@@ -357,14 +367,7 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
   }
 
   function handleGerarVenda() {
-    navigate("/vender", { state: { fromLead: {
-      id: lead.id,
-      name: lead.legal_name || lead.trade_name || lead.contact_name || "",
-      cnpj: lead.cnpj || "",
-      phone: lead.contact_phone || "",
-      email: lead.contact_email || "",
-      city: lead.city || "", state: lead.state || "", address: "", bairro: "",
-    } } });
+    navigate("/vender", { state: { fromLead: leadParaVender(lead) } });
     onClose();
   }
 
@@ -712,13 +715,46 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
             >
               {editFat ? (
                 <>
+                  {/* Os MESMOS campos, na MESMA ordem, do /vender (Informações do
+                      Cliente + Endereço) — é para lá que eles vão preenchidos. */}
                   <LabeledInput label="CNPJ / CPF" value={fCnpj} onChange={setFCnpj} placeholder="00.000.000/0000-00" />
-                  <LabeledInput label="Razão social" value={fRazao} onChange={setFRazao} placeholder="Nome na Receita Federal" />
-                  <LabeledInput label="Inscrição Estadual" value={fIe} onChange={setFIe} placeholder="Isento, se não tiver" />
-                  <LabeledInput label="Endereço" value={fEndereco} onChange={setFEndereco} placeholder="Rua, avenida…" />
-                  <LabeledInput label="Número" value={fNumero} onChange={setFNumero} placeholder="123" />
-                  <LabeledInput label="Bairro" value={fBairro} onChange={setFBairro} placeholder="Bairro" />
+                  <LabeledInput label="Nome / Razão Social" value={fRazao} onChange={setFRazao} placeholder="Nome na Receita Federal" />
+                  <div>
+                    <div className="mb-1 flex items-center justify-between">
+                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Inscrição Estadual</p>
+                      <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer">
+                        <input type="checkbox" checked={fIsento} onChange={(e) => setFIe(e.target.checked ? "ISENTO" : "")} />
+                        Isento (sem IE)
+                      </label>
+                    </div>
+                    <input
+                      className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm disabled:opacity-50"
+                      value={fIsento ? "ISENTO" : fIe} disabled={fIsento}
+                      onChange={(e) => setFIe(e.target.value)} placeholder="Nº da Inscrição Estadual"
+                    />
+                  </div>
                   <LabeledInput label="CEP" value={fCep} onChange={setFCep} placeholder="00000-000" />
+                  <LabeledInput label="Logradouro" value={fEndereco} onChange={setFEndereco} placeholder="Rua, Avenida, etc." />
+                  <div>
+                    <p className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Número</p>
+                    <div className="flex gap-2">
+                      <input className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                        value={fNumero} onChange={(e) => setFNumero(e.target.value)} placeholder="Nº" />
+                      <Button type="button" size="sm" variant="outline" className="h-9 shrink-0" onClick={() => setFNumero("S/N")}>S/N</Button>
+                    </div>
+                  </div>
+                  <LabeledInput label="Bairro" value={fBairro} onChange={setFBairro} placeholder="Bairro" />
+                  <div className="grid grid-cols-[1fr_96px] gap-2">
+                    <LabeledInput label="Cidade" value={fCidade} onChange={setFCidade} placeholder="Cidade" />
+                    <div>
+                      <p className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Estado</p>
+                      <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                        value={fUf} onChange={(e) => setFUf(e.target.value)}>
+                        <option value="">UF</option>
+                        {UFS.map((u) => <option key={u} value={u}>{u}</option>)}
+                      </select>
+                    </div>
+                  </div>
                   <div className="flex gap-2 pt-1">
                     <Button size="sm" onClick={saveFat} disabled={updateLead.isPending}>
                       {updateLead.isPending ? "Salvando..." : "Salvar"}
@@ -726,13 +762,13 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
                     <Button size="sm" variant="outline" onClick={() => setEditFat(false)} disabled={updateLead.isPending}>Cancelar</Button>
                   </div>
                   <p className="mt-1 text-[11px] text-muted-foreground">
-                    Cidade e UF ficam em Cliente / Contato.
+                    Vai preenchido para a tela de venda. Telefone e e-mail vêm de Cliente / Contato.
                   </p>
                 </>
               ) : temFaturamento ? (
                 <>
                   <Field label={docLabel} value={formatDoc(lead.cnpj)} />
-                  <Field label="Razão social" value={lead.legal_name} />
+                  <Field label="Nome / Razão Social" value={lead.legal_name} />
                   <Field label="Inscrição Estadual" value={lead.customer_ie} />
                   <Field label="Endereço" value={enderecoCompleto} />
                 </>
@@ -895,7 +931,7 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
             <DialogHeader>
               <DialogTitle>Passar ao closer</DialogTitle>
               <DialogDescription>
-                Um card novo nasce no Inbound, na fila, com todo o histórico e os comentários
+                Um card novo nasce no {FUNNEL_CONFIG[funilDoCloser(funnelType)].name}, na fila, com todo o histórico e os comentários
                 deste aqui. Este card fica em "{stageLabelAnywhere("repassado", funnelType)}" — conta como SQL entregue,
                 nunca como receita.
               </DialogDescription>

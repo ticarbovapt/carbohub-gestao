@@ -8,10 +8,10 @@
 // Expansão, mas continuam em FUNNEL_CONFIG: links antigos e a timeline ainda
 // resolvem nome/ícone. Apagá-las deixaria o detalhe do lead em tela branca.
 //
-// ⚠️ O f14 (Pré-Vendas) é do app dos SDRs e fica FORA daqui, inclusive da
+// ⚠️ O f14 e o f15 (SDR e closer do Pré-Vendas) ficam FORA daqui, inclusive da
 // visão "Todos": a pipeline deles "não tem nada a ver com o Sales" (dono do
-// processo, 06/10/2026). O que chega ao Sales é o card que o repasse cria no
-// Inbound — esse é do closer.
+// processo, 06/10/2026). Nem o repasse cruza: o SDR do Pré-Vendas repassa ao
+// closer do Pré-Vendas (f15), e o Outbound do Sales ao Inbound do Sales (f11).
 // ─────────────────────────────────────────────────────────────────────────────
 import type { FunnelType } from "@/types/crm";
 
@@ -26,8 +26,9 @@ export const FUNIL_PADRAO: FunnelType = "f13";
  * Pré-Vendas — e não "só as visíveis", porque lead remanescente de f1..f9 ainda
  * aparecia ali, e esconder isso agora seria mudar o Sales de lambuja.
  */
-export function recorteDoApp<Q extends { neq: (c: string, v: string) => Q }>(q: Q): Q {
-  return q.neq("funnel_type", "f14");
+export function recorteDoApp<Q extends { not: (c: string, op: string, v: string) => Q }>(q: Q): Q {
+  // f14 (SDR) e f15 (closer) são do Pré-Vendas.
+  return q.not("funnel_type", "in", "(f14,f15)");
 }
 
 /**

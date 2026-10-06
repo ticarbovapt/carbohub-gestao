@@ -5,6 +5,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import type { CRMLead } from "@/types/crm";
+import { leadParaVender } from "@/types/crm";
 import { useOrcamentoVigente } from "@/hooks/useLeadOrcamento";
 
 const brl = (v: number) =>
@@ -30,19 +31,7 @@ export function AcaoPosMove({
   const nome = lead.trade_name || lead.legal_name || lead.contact_name || "este lead";
 
   function montarNovo() {
-    navigate("/vender", { state: { fromLead: {
-      id: lead.id,
-      name: lead.legal_name || lead.trade_name || lead.contact_name || "",
-      cnpj: lead.cnpj || "",
-      phone: lead.contact_phone || "",
-      email: lead.contact_email || "",
-      city: lead.city || "", state: lead.state || "",
-      // Antes estes dois iam como string vazia FIXA no código: o cano existia,
-      // mas o lead não tinha onde guardar endereço. Agora tem.
-      address: lead.address || "", bairro: lead.bairro || "",
-      numero: lead.numero || "", cep: lead.cep || "", ie: lead.customer_ie || "",
-      legalName: lead.legal_name || "",
-    } } });
+    navigate("/vender", { state: { fromLead: leadParaVender(lead) } });
     onClose();
   }
 
