@@ -33,7 +33,7 @@ import type { FunnelType, CRMLead } from "@/types/crm";
 import { toast } from "sonner";
 import { playMoveSuccess } from "@/lib/sfx";
 import { SEGMENTS, segmentOf, isFunilDeSdr, stageLabelAnywhere } from "@/types/crm";
-import { FUNIS_VISIVEIS, FUNIL_PADRAO } from "@/lib/funisDoApp";
+import { FUNIS_VISIVEIS, FUNIL_PADRAO, USA_SEGMENTO, MOSTRA_QUENTES_E_TENTATIVAS } from "@/lib/funisDoApp";
 
 // Só as pipelines vivas viram aba. As antigas seguem em FUNNEL_CONFIG para
 // resolver nome/ícone de histórico e links antigos.
@@ -472,12 +472,12 @@ export default function Pipelines() {
             <CarboKPI title="Funis" value={FUNNELS.length} icon={KanbanSquare} iconColor="green" />
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div className={`grid grid-cols-2 gap-3 ${MOSTRA_QUENTES_E_TENTATIVAS ? "md:grid-cols-5" : "md:grid-cols-3"}`}>
             <CarboKPI title="Total Leads" value={stats?.total || 0} icon={Users} iconColor="blue" loading={!stats} />
-            <CarboKPI title="Quentes" value={stats?.hot || 0} icon={Flame} iconColor="warning" loading={!stats} />
+            {MOSTRA_QUENTES_E_TENTATIVAS && <CarboKPI title="Quentes" value={stats?.hot || 0} icon={Flame} iconColor="warning" loading={!stats} />}
             <CarboKPI title="Sem Atividade >3d" value={stats?.stale || 0} icon={AlertTriangle} iconColor="warning" loading={!stats} />
             <CarboKPI title="Pipeline (R$)" value={new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(stats?.totalRevenue || 0)} icon={TrendingUp} iconColor="green" loading={!stats} />
-            <CarboKPI title="Média Tentativas" value={stats?.avgAttempts || 0} icon={Users} iconColor="blue" loading={!stats} />
+            {MOSTRA_QUENTES_E_TENTATIVAS && <CarboKPI title="Média Tentativas" value={stats?.avgAttempts || 0} icon={Users} iconColor="blue" loading={!stats} />}
           </div>
         )}
 
@@ -521,7 +521,7 @@ export default function Pipelines() {
 
         {/* Segmento — o que o lead É. Substitui as pipelines por tipo: o
             vendedor filtra sem precisar trocar de quadro. */}
-        <div className="flex flex-wrap items-center gap-1.5">
+        {USA_SEGMENTO && (<div className="flex flex-wrap items-center gap-1.5">
           <span className="text-[11px] text-muted-foreground mr-1">Segmento:</span>
           {SEGMENTS.filter((sg) => (countBySegment[sg.id] ?? 0) > 0 || segFilter.includes(sg.id)).map((sg) => {
             const on = segFilter.includes(sg.id);
@@ -540,7 +540,7 @@ export default function Pipelines() {
               limpar
             </button>
           )}
-        </div>
+        </div>)}
 
         {/* Filtros */}
         <div className="flex flex-wrap items-center gap-3">

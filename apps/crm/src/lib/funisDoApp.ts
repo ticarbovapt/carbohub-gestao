@@ -29,3 +29,20 @@ export const FUNIL_PADRAO: FunnelType = "f13";
 export function recorteDoApp<Q extends { neq: (c: string, v: string) => Q }>(q: Q): Q {
   return q.neq("funnel_type", "f14");
 }
+
+/**
+ * O lead tem SEGMENTO (PDV, frotista, licenciado…)? No Sales sim: é o que
+ * substituiu as 9 pipelines por tipo. No Pré-Vendas não — o lead vem sempre do
+ * SDR, e escolher segmento ali era um campo obrigatório que não decidia nada.
+ * Desligado, some do formulário, do card, do detalhe e do filtro; o valor
+ * gravado continua `a_definir`, e o closer o define no Sales depois do repasse.
+ */
+export const USA_SEGMENTO = true;
+
+/**
+ * Os cartões "Quentes" e "Média Tentativas" no topo da pipeline. Desligados no
+ * Pré-Vendas a pedido do dono do processo (06/10/2026): a etapa do SDR não tem
+ * como dizer que um lead é quente, e "tentativas" só é contada nas colunas
+ * Tentativa 1/2 do Sales — lá o número existe; aqui seria sempre zero.
+ */
+export const MOSTRA_QUENTES_E_TENTATIVAS = true;

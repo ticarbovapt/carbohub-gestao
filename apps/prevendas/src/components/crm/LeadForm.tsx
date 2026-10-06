@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { FunnelType } from "@/types/crm";
 import { SOURCES, FUNNEL_CONFIG, SEGMENTS, isFunilDeSdr } from "@/types/crm";
-import { FUNIS_VISIVEIS } from "@/lib/funisDoApp";
+import { FUNIS_VISIVEIS, USA_SEGMENTO } from "@/lib/funisDoApp";
 import { useCreateCRMLead } from "@/hooks/useCRMLeads";
 
 // Só as pipelines vivas — ninguém deve conseguir criar lead numa das 9 que
@@ -133,12 +133,14 @@ export function LeadForm({ funnelType, initialStage, onClose }: LeadFormProps) {
           </Field>
 
           {/* Segmento — o que o lead É (substitui as pipelines por tipo) */}
-          <Field label="Segmento" required>
-            <select className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
-              value={form.lead_segment} onChange={(e) => set("lead_segment", e.target.value)}>
-              {SEGMENTS.map((sg) => <option key={sg.id} value={sg.id}>{sg.icon} {sg.label}</option>)}
-            </select>
-          </Field>
+          {USA_SEGMENTO && (
+            <Field label="Segmento" required>
+              <select className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
+                value={form.lead_segment} onChange={(e) => set("lead_segment", e.target.value)}>
+                {SEGMENTS.map((sg) => <option key={sg.id} value={sg.id}>{sg.icon} {sg.label}</option>)}
+              </select>
+            </Field>
+          )}
 
           {/* Contato */}
           <SectionLabel>Contato</SectionLabel>
