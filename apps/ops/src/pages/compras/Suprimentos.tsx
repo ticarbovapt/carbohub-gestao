@@ -150,8 +150,18 @@ export default function Suprimentos() {
   const periodoValido = (v: string) => ["7d", "30d", "mes", "custom"].includes(v) || /^\d{4}-\d{2}$/.test(v);
   const pUrl = searchParams.get("periodo") ?? "";
   const periodo = periodoValido(pUrl) ? pUrl : (periodoValido(leiaLocal("ops_sup_periodo")) ? leiaLocal("ops_sup_periodo") : "7d");
-  const customFrom = searchParams.get("de") ?? (pUrl ? "" : leiaLocal("ops_sup_from"));
-  const customTo = searchParams.get("ate") ?? (pUrl ? "" : leiaLocal("ops_sup_to"));
+  // ⚠️ Data de período é conferida ANTES de virar `Date`. O campo de data do
+  // Chrome deixa digitar ano de 5 dígitos ("20261-10-05"); isso ia para a URL E
+  // para o localStorage, `new Date()` devolvia Invalid Date e o `toISOString()`
+  // das movimentações derrubava a TELA INTEIRA — tela preta, só para quem
+  // digitou, em TODA visita seguinte, porque o valor ficava guardado no
+  // navegador dele (06/10/2026, um usuário do Ops sem conseguir abrir
+  // Suprimentos). Data inválida agora é tratada como ausente.
+  const dataValida = (v: string) =>
+    /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(new Date(`${v}T00:00:00`).getTime());
+  const soValida = (v: string) => (dataValida(v) ? v : "");
+  const customFrom = soValida(searchParams.get("de") ?? (pUrl ? "" : leiaLocal("ops_sup_from")));
+  const customTo = soValida(searchParams.get("ate") ?? (pUrl ? "" : leiaLocal("ops_sup_to")));
   // ── Filtros da aba Movimentações ────────────────────────────────────────
   // Na URL, como o período: o link copiado da barra leva o recorte junto, e o
   // F5 não devolve a lista inteira. Sem `localStorage` de propósito — período
@@ -255,7 +265,7 @@ export default function Suprimentos() {
     [products, stockId],
   );
   // Intervalo [from, to] do período escolhido (rápido, mês específico ou custom).
-  const range = useMemo(() => {
+  const rangeBruto = useMemo(() => {
     const now = new Date();
     if (periodo === "7d") { const f = new Date(); f.setDate(f.getDate() - 7); return { from: f, to: now }; }
     if (periodo === "30d") { const f = new Date(); f.setDate(f.getDate() - 30); return { from: f, to: now }; }
@@ -270,6 +280,16 @@ export default function Suprimentos() {
     if (y && mth) return { from: new Date(y, mth - 1, 1), to: new Date(y, mth, 0, 23, 59, 59) };
     const f = new Date(); f.setDate(f.getDate() - 7); return { from: f, to: now };
   }, [periodo, customFrom, customTo]);
+  // ⚠️ A última rede: se ainda assim sair data inválida (um mês "2026-13"
+  // passa no regex do seletor), a tela cai nos 7 dias em vez de cair inteira.
+  // Um filtro errado é corrigível na tela; uma tela preta, não.
+  const range = useMemo(() => {
+    if (!Number.isNaN(rangeBruto.from.getTime()) && !Number.isNaN(rangeBruto.to.getTime())) {
+      return rangeBruto;
+    }
+    const f = new Date(); f.setDate(f.getDate() - 7);
+    return { from: f, to: new Date() };
+  }, [rangeBruto]);
   // Movimentações do hub no período — hub e janela filtrados NO SERVIDOR.
   // Antes vinham as 300 mais recentes de todos os hubs e a tela recortava
   // depois; bastava um hub movimentar muito para os outros ficarem com a aba
