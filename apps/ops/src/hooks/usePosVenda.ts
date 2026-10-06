@@ -96,23 +96,60 @@ export async function fetchNfFiles(blingNfId: number, conta: 1 | 2 = 1): Promise
 
 export interface PosVendaItem { name?: string; quantity?: number; unit_price?: number; total?: number; product_id?: string | null; product_code?: string | null; }
 
-// Estoque do HUB-RN (Natal) por produto — fonte de verdade warehouse_stock.
-// Usado no portão do pós-venda: compara a quantidade do item com o disponível.
-export function useHubRnStock(productIds: string[], enabled: boolean) {
-  const ids = [...new Set(productIds.filter(Boolean))] as string[];
+// ─────────────────────────────────────────────────────────────────────────────
+// Itens do pedido → o produto FÍSICO e quanto sai dele.
+//
+// ⚠️ Pela MESMA função que a dedução usa no banco (`carbo_itens_para_estoque`),
+// nunca por `item.product_id` cru. A linha de faixa de preço (`CarboZé 100ml -
+// PDV`, `preco_de`) e o gêmeo de bonificação (`bonificacao_de`) NÃO são produto
+// de prateleira: são o MESMO CarboZé 100ml com outro preço. Olhar o id deles
+// dava "estoque 0" com o pai cheio no galpão — e o portão mandava PRODUZIR o que
+// já existe, com a OP nascendo para um SKU que não tem BOM.
+//
+// A função também soma `bonificacao` (modelo antigo) e pula serviço, e agrupa:
+// CZ100 + CZ100-PDV no mesmo pedido viram UMA linha, com a soma — que é o que
+// sai da mesma prateleira.
+// ─────────────────────────────────────────────────────────────────────────────
+export async function itensParaEstoque(items: unknown[]): Promise<{ product_id: string; qty: number }[]> {
+  const rr = await db.rpc("carbo_itens_para_estoque", { p_items: items ?? [] });
+  if (rr.error) throw rr.error;
+  return ((rr.data ?? []) as any[]).map((r) => ({ product_id: String(r.product_id), qty: Number(r.qty) || 0 }));
+}
+
+export interface LinhaEstoquePedido { product_id: string; name: string; needed: number; available: number }
+
+// Estoque do HUB-RN (Natal) do que o pedido consome — fonte de verdade warehouse_stock.
+// Usado no portão do pós-venda: compara o que sai com o disponível, por produto FÍSICO.
+export function useEstoqueDoPedido(items: unknown[], enabled: boolean) {
+  const chave = JSON.stringify(items);
   return useQuery({
-    queryKey: ["ops", "hubrn-stock", [...ids].sort()],
-    enabled: enabled && ids.length > 0,
-    queryFn: async (): Promise<Record<string, number>> => {
-      const wh = await db.from("warehouses").select("id").eq("code", "HUB-RN").maybeSingle();
-      const whId = wh.data?.id;
-      if (!whId) return {};
-      const st = await db
-        .from("warehouse_stock").select("product_id, quantity")
-        .eq("warehouse_id", whId).in("product_id", ids);
+    queryKey: ["ops", "hubrn-stock", chave],
+    enabled: enabled && items.length > 0,
+    queryFn: async (): Promise<LinhaEstoquePedido[]> => {
+      const linhas = await itensParaEstoque(items);
+      if (!linhas.length) return [];
+      const ids = linhas.map((l) => l.product_id);
+      const [wh, prods] = await Promise.all([
+        db.from("warehouses").select("id").eq("code", "HUB-RN").maybeSingle(),
+        db.from("mrp_products").select("id, name").in("id", ids),
+      ]);
+      if (wh.error) throw wh.error;
+      if (prods.error) throw prods.error;
       const map: Record<string, number> = {};
-      for (const r of (st.data ?? [])) map[r.product_id] = Number(r.quantity) || 0;
-      return map;
+      if (wh.data?.id) {
+        const st = await db
+          .from("warehouse_stock").select("product_id, quantity")
+          .eq("warehouse_id", wh.data.id).in("product_id", ids);
+        if (st.error) throw st.error;
+        for (const r of (st.data ?? [])) map[r.product_id] = Number(r.quantity) || 0;
+      }
+      const nome = new Map<string, string>(((prods.data ?? []) as any[]).map((p) => [p.id, p.name]));
+      return linhas.map((l) => ({
+        product_id: l.product_id,
+        name: nome.get(l.product_id) ?? "Produto",
+        needed: l.qty,
+        available: map[l.product_id] ?? 0,
+      }));
     },
   });
 }
@@ -409,13 +446,28 @@ async function ensureProductionOrderForOrder(orderId: string): Promise<boolean> 
   const producible = items.filter((it) => it?.kind !== "service");
   // Pedido só de serviço (sem item produzível) não cria OP nenhuma.
   if (items.length > 0 && producible.length === 0) return false;
-  const source: (any | null)[] = producible.length ? producible : [null];
+
+  // ⚠️ A OP é do produto FÍSICO (ver `itensParaEstoque`): "CarboZé 100ml - PDV"
+  // e o gêmeo de bonificação se produzem como CarboZé 100ml. Item sem produto
+  // vinculado continua virando OP própria pelo nome, como antes.
+  const fisicos = await itensParaEstoque(producible);
+  const nomes = fisicos.length
+    ? await db.from("mrp_products").select("id, name").in("id", fisicos.map((f) => f.product_id))
+    : { data: [], error: null };
+  if (nomes.error) throw nomes.error;
+  const nomeDe = new Map<string, string>(((nomes.data ?? []) as any[]).map((p) => [p.id, p.name]));
+  const semVinculo = producible.filter((it) => !it?.product_id);
+  const source: { product_id: string | null; qty: number; label: string }[] = [
+    ...fisicos.map((f) => ({ product_id: f.product_id, qty: Math.ceil(f.qty) || 1, label: nomeDe.get(f.product_id) ?? "Produto" })),
+    ...semVinculo.map((it) => ({ product_id: null, qty: Number(it.quantity) || 1, label: String(it.name ?? "Produto") })),
+  ];
+  if (!source.length) source.push({ product_id: null, qty: 1, label: `Pedido ${ord.data.order_number ?? ""}`.trim() });
   const rows = source.map((it) => {
-    const qty = it ? (Number(it.quantity) || 1) : 1;
-    const label = it ? String(it.name ?? "Produto") : `Pedido ${ord.data.order_number ?? ""}`.trim();
+    const qty = it.qty;
+    const label = it.label;
     return {
       sku_id: null,
-      product_id: it ? (it.product_id || null) : null,
+      product_id: it.product_id,
       planned_quantity: qty,
       need_date: need,                 // prazo herdado do pedido (KPI "Atrasadas")
       op_status: "rascunho",           // → coluna Backlog

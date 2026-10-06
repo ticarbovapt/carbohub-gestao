@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import {
   usePosVendaOrders, usePosVendaRealtime, useUpdateFulfillmentStage, useUpdateShipmentInfo,
-  useHubRnStock, useOpsBySource, fetchNfFiles, type NfFiles,
+  useEstoqueDoPedido, useOpsBySource, fetchNfFiles, type NfFiles,
   POSVENDA_STAGES, type FulfillmentStage, type PosVendaOrder,
 } from "@/hooks/usePosVenda";
 import { gerarEtiquetaPDF, type EtiquetaData } from "@/lib/etiquetaPdf";
@@ -492,17 +492,15 @@ export default function PosVenda() {
     () => (Array.isArray(pending?.order.items) ? pending!.order.items : []),
     [pending],
   );
-  const pendingProductIds = useMemo(
-    () => pendingItems.map((i) => i.product_id).filter(Boolean) as string[],
-    [pendingItems],
-  );
-  const { data: stockMap = {}, isLoading: stockLoading } = useHubRnStock(pendingProductIds, !!pending);
-  const stockLines = pendingItems.map((it) => {
-    const needed = Number(it.quantity) || 0;
-    const pid = it.product_id ?? null;
-    const available = pid ? (stockMap[pid] ?? 0) : null; // null = item sem vínculo de produto
-    return { name: it.name ?? "Item", needed, available, linked: !!pid, ok: available != null && available >= needed };
-  });
+  const { data: linhasEstoque = [], isLoading: stockLoading } = useEstoqueDoPedido(pendingItems, !!pending);
+  // Uma linha por produto FÍSICO (a linha PDV e a bonificação caem no pai), mais
+  // os itens sem produto vinculado, que não dá para conferir.
+  const stockLines = [
+    ...linhasEstoque.map((l) => ({ name: l.name, needed: l.needed, available: l.available as number | null, linked: true, ok: l.available >= l.needed })),
+    ...pendingItems
+      .filter((it) => !it.product_id && (it as { kind?: string }).kind !== "service")
+      .map((it) => ({ name: it.name ?? "Item", needed: Number(it.quantity) || 0, available: null as number | null, linked: false, ok: false })),
+  ];
   const allInStock = stockLines.length > 0 && stockLines.every((l) => l.linked && l.ok);
   const anyUnlinked = stockLines.some((l) => !l.linked);
   const stockKnown = stockLines.length > 0 && !anyUnlinked;
