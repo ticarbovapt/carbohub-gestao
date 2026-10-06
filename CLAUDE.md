@@ -180,7 +180,15 @@ supabase/migrations/20261019000000_faixa_de_preco_por_tipo_de_cliente.sql
    junto** — `useStock`, `useMrpProducts`, `useSkuMapeamento` (Ops) e a view
    `vendedor_estoque`. Sem isso a grade de Suprimentos ganha uma linha ZERADA
    por produto POR FAIXA.
-7. ⚠️ **PENDENTE, e é decisão do dono do processo:** nada impede o vendedor
+8. ⚠️ **TELA também tem de resolver o pai, não só o banco** (06/10/2026). A
+   dedução sempre esteve certa, mas o Rastreio do Ops conferia estoque e criava
+   a OP pelo `product_id` CRU: "CarboZé 100ml - PDV" aparecia com estoque 0 (o
+   saldo é do pai) e o portão mandava PRODUZIR o que estava na prateleira.
+   Hoje `useEstoqueDoPedido` e `ensureProductionOrderForOrder` (`usePosVenda`)
+   chamam `carbo_itens_para_estoque` — a MESMA função da dedução —, e o
+   `faltaNaCaixa` do `/vender` resolve `preco_de`. Lugar novo que leia item de
+   pedido para estoque ou produção passa pela função, nunca pelo id do item.
+9. ⚠️ **PENDENTE, e é decisão do dono do processo:** nada impede o vendedor
    escolher "Microdistribuidor" para quem compra uma vez. A faixa é propriedade
    do CLIENTE e virou propriedade do PRODUTO — foi o que ele pediu, e o custo é
    este. A trava possível é o `/vender` só oferecer a faixa compatível com o
@@ -3993,3 +4001,12 @@ supabase/migrations/20261046…        carbo_interface_e_interna: É time intern
     ⚠️ `pages/Vendas.tsx` do Pré-Vendas é CÓPIA divergente da do `crm`, não
     idêntica: corrigiu algo lá, traga para cá. A chave do hook começa com
     `carboze_vendas` para as mutações do `useCarbozeVendas` a invalidarem.
+11. **`/resultados` do Pré-Vendas** — repassados, fechados, conversão, receita e
+    tempo até fechar, por closer e por SDR. RPC `carbo_prevendas_repasses`
+    (`20261050`), mesmo recorte e mesma guarda da `carbo_prevendas_vendas`.
+    ⚠️ É COORTE pela data do REPASSE (o `created_at` do card f15): "dos que
+    repassei em outubro, quantos fecharam", mesmo fechando em novembro. Filtrar
+    pela data do fechamento misturaria meses e a taxa passaria de 100%.
+    ⚠️ Quem não é gestor vê só o que ELE repassou, mesmo que a função também
+    devolva o que ele pegou como closer — a visão do closer é outra tela,
+    combinada para depois.
