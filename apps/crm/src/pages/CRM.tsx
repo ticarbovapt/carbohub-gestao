@@ -2,7 +2,8 @@ import { useNavigate } from "react-router-dom";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { Users, AlertTriangle, Flame, Trophy, BarChart3, KanbanSquare, ArrowRight } from "lucide-react";
 import { useCRMAllStats } from "@/hooks/useCRMLeads";
-import { FUNNEL_CONFIG, FUNIS_VISIVEIS, SEGMENTS } from "@/types/crm";
+import { FUNNEL_CONFIG, SEGMENTS } from "@/types/crm";
+import { FUNIS_VISIVEIS } from "@/lib/funisDoApp";
 
 // Visão geral do CRM. Depois da consolidação das pipelines, o recorte principal
 // deixou de ser "funil" e passou a ser SEGMENTO (o que o lead É) — as 9

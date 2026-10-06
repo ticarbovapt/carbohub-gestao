@@ -3944,3 +3944,23 @@ supabase/migrations/20261046…        carbo_interface_e_interna: É time intern
    app novo, e o `call-token` do repo nem compilava. ⚠️ O `_shared/cors.ts` do
    WhatsApp continua FECHADO de propósito (escreve pelo número da empresa); o
    Pré-Vendas não o usa.
+7. **A pipeline dos SDRs é o `f14`, na MESMA tabela do Sales** (`crm_sales_leads`)
+   — é isso que faz a coluna "Oportunidade Qualificada" repassar ao closer sem
+   código novo (RPC `crm_sales_lead_repassar` → card no Inbound/f11).
+   ```
+   Prospecção · Primeiro Contato · Qualificação · Conexão com Decisor ·
+   Agendamento · Reunião Realizada · Oportunidade Qualificada · Follow-up · Descartado
+   ```
+   ⚠️ **Os arquivos do CRM são IDÊNTICOS no `crm` e no `prevendas`** (14,
+   conferidos por `cmp`): `types/crm.ts`, `pages/Pipelines.tsx`,
+   `components/crm/*` (menos `LeadDrawer`), `components/kanban/KanbanDnd.tsx`,
+   `useCRMLeads`, `useRepasse`, `useLeadPorId`, `useArquivarLead`, `lib/sfx.ts`.
+   Fonte da verdade = `apps/crm`; editou lá, copie. A ÚNICA diferença mora em
+   `lib/funisDoApp.ts`, PRÓPRIO de cada app: quais pipelines aparecem, a padrão,
+   e o recorte da visão "Todos" (o Sales exclui o f14; o Pré-Vendas só o f14).
+   ⚠️ Dois ids reaproveitados de propósito: `repassado` (= "Oportunidade
+   Qualificada", é o que dispara o repasse) e `descartado` (pede motivo). Id novo
+   ali daria a coluna sem o comportamento, calado.
+   ⚠️ `funnel === "f12"` virou `isFunilDeSdr()` — descarte em vez de perda e o
+   bloco de qualificação valem para os DOIS funis de SDR.
+   ⚠️ Sem linha em `crm_stage_sla` para o f14: prazo por etapa é do gerente.

@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { Target, MessagesSquare, ShoppingCart, Bug, UserCircle, ArrowRight, type LucideIcon } from "lucide-react";
+import { Target, MessagesSquare, ShoppingCart, Bug, UserCircle, ArrowRight, type LucideIcon, KanbanSquare } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { useAuth } from "@/contexts/AuthContext";
@@ -22,6 +22,7 @@ type Atalho = { to: string; label: string; hint: string; icon: LucideIcon };
 // Só o que EXISTE hoje. As telas de pré-vendas entram aqui quando existirem —
 // card apontando para tela vazia é pior que card ausente.
 const ATALHOS: Atalho[] = [
+  { to: "/crm/pipelines", label: "Pipeline", hint: "Os leads em cada etapa, do contato ao closer", icon: KanbanSquare },
   { to: "/chat", label: "Carbo Chat", hint: "Falar com o time, ao vivo", icon: MessagesSquare },
   { to: "/vender", label: "Vender", hint: "Registrar uma venda ou orçamento", icon: ShoppingCart },
   { to: "/bugs", label: "Bugs e sugestões", hint: "O que você reportou ao TI", icon: Bug },
@@ -38,7 +39,7 @@ export default function Home() {
       <div className="space-y-5 max-w-[1400px] mx-auto">
         <CarboPageHeader
           title={primeiroNome ? `Olá, ${primeiroNome}` : "Carbo Pré-Vendas"}
-          description="O app da pré-venda. Por enquanto ele traz a casca do ecossistema — chat, vendas e o canal com o TI; as telas de qualificação entram aqui."
+          description="O app da pré-venda: a pipeline dos SDRs, do primeiro contato ao repasse para o closer."
           icon={Target}
         />
 

@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
-import { isManager, fnKey, type Identity, type FnAccessMap } from "@/lib/access";
+import { isManager, fnKey, scopeFromLevel, type Identity, type FnAccessMap, type DataScope } from "@/lib/access";
 
 export interface Profile extends Identity {
   id: string;
@@ -22,6 +22,10 @@ interface AuthContextType {
   /** Gate de ENTRADA no app de Pré-Vendas: precisa da flag carbo_prevendas
    *  liberada no Admin (profiles.allowed_interfaces). */
   hasPrevendasInterface: boolean;
+  /** Escopo de dado do CRM: gestor vê a pipeline de todos, SDR vê os seus.
+   *  É o que o `useCRMLeads` (idêntico ao do Sales) lê — mesma regra do Sales,
+   *  e a RLS de `crm_sales_leads` é quem garante de verdade. */
+  scope: DataScope;
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -109,6 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user, session, profile,
       canAdmin: isManager(profile, fnMap),
       isGestor: isManager(profile, fnMap),
+      scope: scopeFromLevel(isManager(profile, fnMap) ? "gestor" : "colaborador"),
       // Sem perfil em `profiles` NÃO entra: o portal de lojas e o de licenciados
       // usam a MESMA tabela, e `profile == null` (usuário sem cadastro interno)
       // tem de cair no bloqueio junto com a flag ausente — não basta testar a lista.

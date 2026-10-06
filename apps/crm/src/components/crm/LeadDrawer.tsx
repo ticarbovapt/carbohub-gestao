@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import type { CRMLead, FunnelType } from "@/types/crm";
-import { FUNNEL_CONFIG, getCloseReasons, getDaysSinceUpdate, getNextStage, isTerminalStage, isHandoffStage, isWonStage, sourceLabel } from "@/types/crm";
+import { FUNNEL_CONFIG, getCloseReasons, getDaysSinceUpdate, getNextStage, isTerminalStage, isHandoffStage, isWonStage, sourceLabel, isFunilDeSdr } from "@/types/crm";
 import { useAdvanceLeadStage, useMarkLeadLost, useTransferLead, useLeadOwnerLog, useLeadActivities, useAddLeadActivity } from "@/hooks/useCRMLeads";
 import { useArquivarLead } from "@/hooks/useArquivarLead";
 import { useVendedoresDir } from "@/hooks/useVendas";
@@ -28,7 +28,7 @@ export function LeadDrawer({ lead, funnelType, onClose }: LeadDrawerProps) {
   const [lostReason, setLostReason] = useState("");
   // O SDR descarta ("fora do perfil"), o closer perde ("preço"). Listas distintas.
   const closeReasons = getCloseReasons(funnelType);
-  const isOutbound = funnelType === "f12";
+  const isOutbound = isFunilDeSdr(funnelType);
 
   const navigate = useNavigate();
   const advance  = useAdvanceLeadStage();

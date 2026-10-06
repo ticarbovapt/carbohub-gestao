@@ -14,7 +14,7 @@ export const FUNIL_NOME: Record<string, string> = {
   f1: "Vendas", f2: "Licenciados", f3: "Frotistas", f4: "PDVs CarboZé",
   f5: "PDVs CarboPRO", f6: "Frotistas Lic.", f7: "Motores", f8: "Estoque Comb.",
   f9: "Subdistribuidor", f10: "Follow up", f11: "Inbound", f12: "Outbound",
-  f13: "Comercial Expansão",
+  f13: "Comercial Expansão", f14: "Pré-Vendas",
 };
 
 export const ETAPA_NOME: Record<string, string> = {
@@ -32,6 +32,12 @@ export const ETAPA_NOME: Record<string, string> = {
   fechamento: "Fechamento", ganho: "Ganho", recomprou: "Recomprou",
   repassado: "Passado ao Closer", perdido: "Perdido", descartado: "Descartado",
   sem_interesse: "Sem Interesse",
+  // Pré-Vendas (f14). ⚠️ Lá o `repassado` se chama "Oportunidade Qualificada";
+  // este dicionário é plano (sem funil), então ele aparece como "Passado ao
+  // Closer" aqui — o mesmo fato com o nome do Outbound.
+  primeiro_contato: "Primeiro Contato", qualificacao: "Qualificação",
+  conexao_decisor: "Conexão com Decisor", agendamento: "Agendamento",
+  reuniao_realizada: "Reunião Realizada", follow_up: "Follow-up",
 };
 
 export const funilNome = (id: string) => FUNIL_NOME[id] ?? id;
