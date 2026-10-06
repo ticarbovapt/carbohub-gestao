@@ -3933,3 +3933,14 @@ supabase/migrations/20261046…        carbo_interface_e_interna: É time intern
    de Vendas; ciano caía a 10° do TI). Ela aparece em quatro lugares — Home do
    app, chip do `interfaces.ts`, `packages/shell`, azulejo do Hub — e os quatro
    têm de concordar.
+6. ⚠️ **Conferido 1:1 contra o `atendimento` no dia seguinte, e havia um
+   QUINTO lugar.** Edge function chamada pelo NAVEGADOR tem lista própria de
+   origens (CORS), e duas que todo app usa estavam paradas no tempo:
+   `call-token` (chamada de voz do Carbo Chat) e `send-email` ("enviar
+   orçamento por e-mail" no `/vender`). Recusavam TI, Marketing, Atendimento e
+   Pré-Vendas — `Failed to fetch`, sem linha no log. Hoje aceitam qualquer
+   `https://*.carbohub.com.br` (a fronteira do SSO), como o `bling-sync` já
+   fazia. As duas estavam FORA da lista `dep` — por isso a lista não aprendia
+   app novo, e o `call-token` do repo nem compilava. ⚠️ O `_shared/cors.ts` do
+   WhatsApp continua FECHADO de propósito (escreve pelo número da empresa); o
+   Pré-Vendas não o usa.
