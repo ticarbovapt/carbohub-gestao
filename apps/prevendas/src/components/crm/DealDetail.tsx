@@ -28,6 +28,8 @@ import { useOrcamentoVigente } from "@/hooks/useLeadOrcamento";
 import { useVendedoresDir } from "@/hooks/useVendas";
 import { useAuth } from "@/contexts/AuthContext";
 import { StageProgressBar, getStageGroup } from "./StageProgressBar";
+import { playMoveSuccess } from "@/lib/sfx";
+import { USA_SEGMENTO } from "@/lib/funisDoApp";
 
 const hojeISO = () => new Date().toISOString().slice(0, 10);
 // Data-só vira UTC em new Date("2026-07-30") e volta um dia no fuso do Brasil.
@@ -285,6 +287,18 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
   // vai falhar.
   const canDelete = isGestor || (!!user?.id && lead.created_by === user.id);
 
+  // O MESMO som e o MESMO toast de quando o card é arrastado no board
+  // (Pipelines.notifyMove). Toca ANTES do await, ainda dentro do clique: depois
+  // da resposta do banco o navegador já não considera aquilo um gesto e a
+  // política de autoplay pode recusar o áudio. Se o banco recusar, o onError
+  // do hook toca o som de erro e avisa.
+  function avisaMovimento(de: string, para: string) {
+    playMoveSuccess();
+    toast.success("Card movido", {
+      description: `${stageLabelAnywhere(de, funnelType)}  →  ${stageLabelAnywhere(para, funnelType)}`,
+    });
+  }
+
   // Clique numa etapa: se for etapa de PERDA, abre o fluxo "Perdido" (motivo);
   // senão, seta a etapa direto via useAdvanceLeadStage (registra na timeline).
   async function handleStageClick(target: { id: string }) {
@@ -294,6 +308,7 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
     }
     // Repassar cria um card no Inbound — não é um avanço de etapa comum.
     if (isHandoffStage(target.id)) { setShowRepasse(true); return; }
+    avisaMovimento(stage, target.id);
     await advance.mutateAsync({ id: lead.id, newStage: target.id, funnelType });
     setStage(target.id);
   }
@@ -301,6 +316,7 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
   async function handleAdvance() {
     if (!nextStage) return;
     if (isHandoffStage(nextStage)) { setShowRepasse(true); return; }
+    avisaMovimento(stage, nextStage);
     await advance.mutateAsync({ id: lead.id, newStage: nextStage, funnelType });
     setStage(nextStage);
   }
@@ -377,7 +393,7 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
               <Badge variant="outline" className="text-xs">{funnelCfg.icon} {funnelCfg.shortName}</Badge>
               {stageCfg && <Badge variant="outline" className="text-xs">{stageCfg.icon} {stageCfg.label}</Badge>}
-              {segmentOf(lead.lead_segment) && (
+              {USA_SEGMENTO && segmentOf(lead.lead_segment) && (
                 <span className="text-xs font-medium rounded-full px-2 py-0.5"
                   style={{ background: segmentOf(lead.lead_segment)!.color + "1a", color: segmentOf(lead.lead_segment)!.color }}>
                   {segmentOf(lead.lead_segment)!.icon} {segmentOf(lead.lead_segment)!.shortName}
@@ -575,7 +591,7 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
             <Card title="Sobre o negócio">
               <Field label="Etapa" value={stageCfg ? `${stageCfg.icon} ${stageCfg.label}` : stage} />
               {/* Segmento — editável: quem tagueou errado precisa poder corrigir */}
-              <div>
+              {USA_SEGMENTO && <div>
                 <p className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Segmento</p>
                 <select
                   className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground"
@@ -586,7 +602,7 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
                     <option key={sg.id} value={sg.id}>{sg.icon} {sg.label}</option>
                   ))}
                 </select>
-              </div>
+              </div>}
               <div>
                 <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Valor</p>
                 <p className="text-2xl font-semibold text-foreground">{brl(lead.estimated_revenue)}</p>

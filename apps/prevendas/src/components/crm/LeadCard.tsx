@@ -2,6 +2,7 @@ import { Phone, ChevronRight, AlertTriangle, ArrowLeftRight, Megaphone, Hourglas
 import { Button } from "@/components/ui/button";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import type { CRMLead, FunnelType } from "@/types/crm";
+import { USA_SEGMENTO } from "@/lib/funisDoApp";
 import {
   getDaysSinceUpdate, segmentOf, sourceLabel, FUNNEL_CONFIG,
   waitingLabel, esperaVencida,
@@ -90,7 +91,7 @@ export function LeadCard({ lead, funnelType: _funnelType, owner, onAdvance, onMa
   // Ordem de prioridade: o que o lead É vem antes de onde ele veio, e o ramo
   // por último — é o que menos muda a decisão de quem olha a fila.
   const metas: MetaItem[] = [];
-  if (seg) metas.push({ chave: "seg", cor: seg.color, texto: seg.shortName });
+  if (seg && USA_SEGMENTO) metas.push({ chave: "seg", cor: seg.color, texto: seg.shortName });
   if (lead.origin_lead_id) {
     metas.push({
       chave: "repasse", cor: "#6366F1", icone: "repasse",
