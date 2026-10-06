@@ -707,9 +707,15 @@ export default function Vender() {
     const pedido = new Map<string, { nome: string; qtd: number }>();
     for (const i of validItems()) {
       if (!i.product_id) continue;
-      const a = pedido.get(i.product_id) ?? { nome: i.name, qtd: 0 };
+      // ⚠️ A linha de faixa (`CarboZé 100ml - PDV`) é o MESMO frasco do pai: a
+      // caixa só tem saldo do pai, e é dele que o banco baixa
+      // (`carbo_itens_para_estoque`). Sem resolver aqui, o aviso dizia "falta"
+      // com a caixa cheia. A bonificação já chega com o id do pai.
+      const pai = produtos.find((p) => p.id === produtos.find((q) => q.id === i.product_id)?.preco_de);
+      const id = pai?.id ?? i.product_id;
+      const a = pedido.get(id) ?? { nome: pai?.name ?? i.name, qtd: 0 };
       a.qtd += (i.quantity || 0) + (i.bonus_quantity || 0);
-      pedido.set(i.product_id, a);
+      pedido.set(id, a);
     }
     const saldo = meuEstoque?.saldo ?? {};
     return [...pedido.entries()]
