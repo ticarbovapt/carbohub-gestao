@@ -32,7 +32,7 @@ export function useRepassarLead() {
       qc.invalidateQueries({ queryKey: ["crm-leads"] });
       qc.invalidateQueries({ queryKey: ["crm-stats"] });
       toast.success("Repassado ao closer", {
-        description: "O card está na fila do Inbound, com todo o histórico.",
+        description: "O card está na fila do closer, com todo o histórico.",
       });
     },
     onError: (e: unknown) => toast.error(msgDoErro(e, "Não foi possível repassar.")),

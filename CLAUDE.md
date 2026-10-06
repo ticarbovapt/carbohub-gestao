@@ -3964,3 +3964,16 @@ supabase/migrations/20261046…        carbo_interface_e_interna: É time intern
    ⚠️ `funnel === "f12"` virou `isFunilDeSdr()` — descarte em vez de perda e o
    bloco de qualificação valem para os DOIS funis de SDR.
    ⚠️ Sem linha em `crm_stage_sla` para o f14: prazo por etapa é do gerente.
+8. **O closer do Pré-Vendas é o `f15`** — as MESMAS etapas do Inbound
+   (`STAGES_INBOUND`), numa pipeline independente do Sales. O repasse do f14
+   cai no f15, nunca no Inbound: a RPC `crm_sales_lead_repassar` ganhou um
+   CASE no destino (`20261048`, trocado no texto VIVO da função, com trava que
+   aborta se ele não for o esperado), espelhado por `funilDoCloser()` em
+   `types/crm.ts`. ⚠️ Mudou um, mude o outro. O Sales exclui f14 **e** f15 da
+   visão "Todos" (`recorteDoApp`).
+9. **"Dados de faturamento" do card = os campos do `/vender`**, na mesma ordem,
+   inclusive Cidade e UF (antes: "ficam em Cliente / Contato", onde eram só
+   leitura — não havia onde preenchê-las). E o "Gerar venda" do detalhe mandava
+   endereço VAZIO escrito no código; hoje os dois caminhos usam
+   `leadParaVender()`. Campo novo no faturamento precisa atravessar essa função
+   e o efeito `fromLead` do `Vender.tsx`.
