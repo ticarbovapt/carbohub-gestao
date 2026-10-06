@@ -11,6 +11,7 @@
 //   portal_micro      → Portal de Microdistribuidores (md.carbohub.com.br)
 //   carbo_admin       → Carbo Admin
 //   carbo_atendimento → Carbo Atendimento (atendimento.carbohub.com.br)
+//   carbo_prevendas   → Carbo Pré-Vendas (prevendas.carbohub.com.br)
 //
 // IMPORTANTE: esta lista espelha 1:1 os azulejos do Hub — assim dá pra liberar
 // qualquer sistema, antecipando (mesmo os "em breve").
@@ -61,6 +62,7 @@ export const SYSTEMS: SystemOption[] = [
   { iface: "carbo_mkt",         label: "Carbo Marketing",   hint: "Marketing — campanhas e ações" },
   { iface: "carbo_ti",          label: "Carbo TI",          hint: "Central de demandas do TI — bugs, sugestões e execução (ti.carbohub.com.br)" },
   { iface: "carbo_atendimento", label: "Carbo Atendimento", hint: "Atendimento ao cliente — conversas do WhatsApp e pós-venda (atendimento.carbohub.com.br)" },
+  { iface: "carbo_prevendas",   label: "Carbo Pré-Vendas",  hint: "Pré-venda — os SDRs qualificam o lead e repassam ao closer (prevendas.carbohub.com.br)" },
   { iface: "carbo_admin",       label: "Carbo Admin",       hint: "Identidades e acessos — marcar aqui LIBERA a entrada no Admin" },
 ];
 
@@ -83,6 +85,8 @@ export const SYSTEM_BRAND: Record<string, SystemBrand> = {
   carbo_mkt:         { short: "Marketing",   chip: "bg-pink-500/10 text-pink-600 ring-1 ring-inset ring-pink-500/20",       dot: "bg-pink-500" },
   carbo_ti:          { short: "TI",          chip: "bg-sky-500/10 text-sky-600 ring-1 ring-inset ring-sky-500/20",         dot: "bg-sky-500" },
   carbo_atendimento: { short: "Atendimento", chip: "bg-purple-500/10 text-purple-600 ring-1 ring-inset ring-purple-500/20", dot: "bg-purple-500" },
+  // Lima, a MESMA do seletor e do azulejo (#65A30D = lime-600).
+  carbo_prevendas:   { short: "Pré-Vendas",  chip: "bg-lime-600/10 text-lime-700 ring-1 ring-inset ring-lime-600/20",     dot: "bg-lime-600" },
   carbo_admin:       { short: "Admin",       chip: "bg-slate-500/10 text-slate-600 ring-1 ring-inset ring-slate-500/20",   dot: "bg-slate-500" },
 };
 export const brandOf = (iface: string): SystemBrand =>

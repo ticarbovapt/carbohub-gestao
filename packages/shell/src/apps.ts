@@ -4,13 +4,13 @@
 // Mantido sem dependências além de lucide-react (só ícones).
 import {
   Home, Building2, TrendingUp, Boxes, Handshake, Store, Warehouse, Wallet, ShieldCheck, Megaphone, LifeBuoy,
-  MessagesSquare,
+  MessagesSquare, Target,
   type LucideIcon,
 } from "lucide-react";
 
 export const HUB_URL = "https://carbohub.com.br";
 
-export type AppKey = "controle" | "crm" | "ops" | "licenciados" | "lojas" | "md" | "financas" | "mkt" | "admin" | "ti" | "atendimento";
+export type AppKey = "controle" | "prevendas" | "crm" | "ops" | "licenciados" | "lojas" | "md" | "financas" | "mkt" | "admin" | "ti" | "atendimento";
 
 export interface EcoApp {
   key: AppKey;
@@ -25,6 +25,11 @@ export interface EcoApp {
 // Catálogo (mesmos hrefs/nome do Hub). Ícones lucide + cor de destaque por app.
 export const HUB_APPS: EcoApp[] = [
   { key: "controle",    name: "Carbo Controle",   tag: "Gestão Interna",              href: "https://controle.carbohub.com.br",    icon: Building2,   accent: "#3B82F6" },
+  // ⚠️ Antes do Sales de propósito: a ordem do catálogo É a do seletor, e
+  // pré-venda qualifica o lead que o Sales (o closer) fecha — 06/10/2026.
+  // Lima (#65A30D) por MEDIDA: a 47° do Ops e a 57° do Portal de Vendas, a única
+  // candidata acima de 45° de qualquer cor já usada aqui.
+  { key: "prevendas",   name: "Carbo Pré-Vendas",  tag: "Pré-venda · Qualificação",    href: "https://prevendas.carbohub.com.br",   icon: Target,      accent: "#65A30D" },
   { key: "crm",         name: "Carbo Sales",       tag: "Comercial · Vendas",          href: "https://sales.carbohub.com.br",       icon: TrendingUp,  accent: "#6366F1" },
   { key: "ops",         name: "Carbo Ops",         tag: "Operação · Logística",        href: "https://ops.carbohub.com.br",         icon: Boxes,       accent: "#F59E0B" },
   { key: "licenciados", name: "Carbo Licenciados", tag: "Portal do Licenciado",        href: "https://licenciados.carbohub.com.br", icon: Handshake,   accent: "#38BDF8" },
@@ -69,6 +74,8 @@ const INTERFACE_TO_APPS: Record<string, AppKey[]> = {
   // APARECE no seletor de apps de nenhum dos sete — sem erro em lugar nenhum. A
   // resolucao abaixo e estrita: interface sem entrada aqui nao vira app.
   carbo_atendimento: ["atendimento"],
+  // Mesma razão da linha de cima: sem ela, a flag existe e o app não aparece.
+  carbo_prevendas: ["prevendas"],
   // ⚠️ `carbo_admin` NAO entra aqui: o Admin nao esta em `HUB_APPS` (e o
   // `ADMIN_APP`, somado a parte no `buildSwitcherApps`). Quem decide e a flag,
   // conferida la — ver o comentario daquela funcao.

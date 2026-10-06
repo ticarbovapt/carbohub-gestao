@@ -3896,3 +3896,40 @@ Evolution em Mensagens ao cliente só aparece enquanto alguma etapa tiver
 `canal_envio <> 'meta'` — e a linha "Sai pelo número" passou a ler `numero_id`
 para etapa da Meta (ela dizia "carbo-comercial" na aba da Recompra enquanto as
 ofertas saíam pelo Clube).
+
+### Carbo Pré-Vendas — o OITAVO app (06/10/2026)
+`prevendas.carbohub.com.br`, flag `carbo_prevendas`, cor lima `#65A30D`. É o
+app dos SDRs: qualificam o lead e repassam ao closer (que trabalha no Sales).
+Nasceu como o `atendimento` nasceu: **só a casca**, sem tela de pré-venda —
+as telas entram quando o dono do processo descrever a lógica.
+
+```
+apps/prevendas/                      cópia do atendimento SEM Conversas/Esteira/Mensagens
+packages/shell/src/apps.ts           seletor (antes do Sales: pré-venda → venda)
+apps/{admin,ti}/src/lib/interfaces.ts a caixinha de acesso
+carbohub-landing/src/lib/apps.ts     o azulejo do Hub (OUTRO repo)
+supabase/migrations/20261046…        carbo_interface_e_interna: É time interno
+```
+
+1. ⚠️ **Ele CARREGA cópias dos arquivos replicados**, e eles passam a ser
+   OITO, não sete: `pages/Vender.tsx`, `lib/quotePdf.ts`, `useVendas`,
+   `useCarbozeVendas`, `useLeadOrcamento`, `useDescarbOS`, `useMeuEstoque`,
+   `BugButton`, `BloqueioAoVivo`, `sfxVenda`, `useEcommerceNotifications`,
+   `ui/select.tsx` e `lib/sso.ts` — todos byte a byte iguais aos do
+   `atendimento` no dia da criação (conferido por md5). As seções acima ainda
+   dizem "sete"; **onde disser sete, conte este também.**
+2. **A entrada é o MESMO portão do `atendimento`**: exige cadastro em `profiles`
+   **e** a flag. `profile == null` não entra — lojista e licenciado usam a MESMA
+   tabela. Liberar alguém é marcar "Carbo Pré-Vendas" no Admin; não há regra
+   por perfil (head/TI) aqui, igual ao atendimento.
+3. **Sem `lib/interfaces.ts` no app**, de propósito: a cópia do `atendimento`
+   não é importada por nada (código morto, e já divergente das do admin/ti).
+   Uma terceira cópia morta seria mais uma para divergir.
+4. ⚠️ **Passos FORA do código, sem os quais ele não abre:** projeto no Vercel
+   com Root Directory `apps/prevendas`; o DNS do subdomínio; e
+   `https://prevendas.carbohub.com.br` em Supabase → Auth → URL Configuration →
+   Redirect URLs.
+5. A cor foi escolhida por MEDIDA de matiz (lima a 47° do Ops e 57° do Portal
+   de Vendas; ciano caía a 10° do TI). Ela aparece em quatro lugares — Home do
+   app, chip do `interfaces.ts`, `packages/shell`, azulejo do Hub — e os quatro
+   têm de concordar.
