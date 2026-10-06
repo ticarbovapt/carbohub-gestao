@@ -42,6 +42,12 @@ const APP_LABEL: Record<string, string> = {
   carbo_ops: "Carbo Controle",
   portal_licenciado: "Licenciados",
   portal_pdv: "Lojas",
+  // ⚠️ Faltavam os apps mais novos, e o fallback mostrava a chave crua
+  // ("carbo_atendimento"). Entram junto com o Pré-Vendas (06/10/2026).
+  portal_micro: "Microdistribuidores",
+  carbo_ti: "Carbo TI",
+  carbo_atendimento: "Carbo Atendimento",
+  carbo_prevendas: "Carbo Pré-Vendas",
 };
 const appLabel = (a: string | null) => (a ? APP_LABEL[a] ?? a : null);
 const pretty = (s: string | null) => (s ? s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "—");

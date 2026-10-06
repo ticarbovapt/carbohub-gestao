@@ -1,0 +1,418 @@
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Vendas e Orçamentos do Carbo Sales — FONTE ÚNICA: carboze_orders.
+// Espelha a query da VendasPage do Controle: janela por created_at (±1 mês) e
+// refino client-side pela data efetiva (sale_date ?? created_at) dentro do
+// período. Orçamento = status 'quote'; pedido = demais status.
+// ─────────────────────────────────────────────────────────────────────────────
+const db = supabase as unknown as {
+  from: (t: string) => any;
+  rpc: (fn: string, args?: Record<string, unknown>) => Promise<{ data: any; error: any }>;
+};
+
+export interface VendaItem {
+  name: string; quantity: number; unit_price: number; total: number;
+  product_code?: string | null;
+  bonus_quantity?: number;
+  // Desconto POR ITEM (gravado no ato da venda).
+  discount_type?: string;     // 'percent' | 'value' | 'none'
+  discount_value?: number;    // número digitado (% ou R$)
+  discount_amount?: number;   // R$ abatido na linha
+}
+
+export interface CarbozeVendaRow {
+  id: string;
+  order_number: string;
+  created_at: string;
+  sale_date: string | null;
+  customer_name: string;
+  customer_doc: string | null;
+  customer_ie: string | null;
+  customer_email: string | null;
+  customer_phone: string | null;
+  delivery_address: string | null;
+  delivery_city: string | null;
+  delivery_state: string | null;
+  delivery_zip: string | null;
+  billing_address: Record<string, unknown> | null;
+  notes: string | null;
+  items: VendaItem[];
+  total: number;
+  // Financeiro do pedido (carboze_orders).
+  subtotal: number | null;
+  discount: number | null;
+  discount_percent: number | null;
+  // Pagamento / frete.
+  payment_terms: string | null;
+  freight_type: string | null;
+  shipping_cost: number | null;
+  // Prazos.
+  agreed_delivery_date: string | null;
+  ppf_date: string | null;
+  ppe_date: string | null;
+  // Extras.
+  po_number: string | null;
+  buyer_notes: string | null;
+  general_notes: string | null;
+  // Notas internas + dados estratégicos (o que a tela Vender grava no bloco
+  // "Notas Internas"). Nunca saiu na tela de Vendas — o vendedor escrevia e
+  // não conseguia reler.
+  internal_notes: string | null;
+  /** A REGRA: esta venda conta como faturamento? Vem da carbo_vendas_metrica. */
+  conta_metrica: boolean;
+  /** Por que não conta: orcamento | cancelado | excluido_manualmente |
+   *  nf_invalida | aguardando_nf. Null quando conta. */
+  motivo_fora: string | null;
+  status: string;             // quote | pending | confirmed | invoiced | shipped | delivered | cancelled
+  fulfillment_stage: string | null; // etapa no kanban de rastreio (Pós-venda/Ops)
+  vendedor_id: string | null;
+  vendedor_name: string | null;
+  invoice_number: string | null;
+  bling_nf_id: number | null;
+  /** A SEGUNDA nota: a remessa de bonificação.
+   *
+   * ⚠️ Venda com brinde gera DUAS notas — a de venda, com valor cheio, e a de
+   * remessa em bonificação, que não é receita. Elas moram em colunas separadas
+   * (`20260903`) e a tela precisa das duas: quem confere quer ver o documento
+   * do que foi dado, e a logística despacha com as duas em mãos.
+   *
+   * O `select("*")` sempre trouxe estas colunas; era este mapeamento que as
+   * descartava — e campo descartado aqui some da tela sem erro nenhum. */
+  invoice_bonificacao_number: string | null;
+  bling_nf_bonificacao_id: number | null;
+  /** Qual conta Bling faturou este pedido: 1 = matriz, 2 = filial SP. */
+  bling_conta: number | null;
+  /**
+   * As notas da FILIAL, em colunas PRÓPRIAS.
+   *
+   * ⚠️ Nunca em `bling_nf_id`. As duas contas Bling numeram do zero, e
+   * `carbo_vendas_metrica` junta `bling_nfe` por aquele id: um id da conta 2
+   * ali casaria com uma nota REAL da conta 1 — nota cancelada de uma empresa
+   * derrubando venda da outra. Já foi tentado e revertido.
+   *
+   * ⚠️ E o `select("*")` SEMPRE trouxe estas colunas. Quem as descartava era o
+   * mapeamento abaixo — a mesma armadilha que já tinha sumido com a nota de
+   * bonificação da matriz: campo que não atravessa o `map` some da tela sem
+   * erro nenhum.
+   */
+  bling2_nf_id: number | null;
+  invoice2_number: string | null;
+  bling2_nf_bonificacao_id: number | null;
+  invoice2_bonificacao_number: string | null;
+  external_ref: string | null;    // "bling-<id>" quando o pedido já foi enviado ao Bling
+}
+
+interface Params {
+  month: Date;
+  customFrom?: string;
+  customTo?: string;
+  vendedorFilter?: string;        // "__all__" | profile id
+  isGestor: boolean;
+  userId?: string;
+  /** Busca global. Com termo, MANDA: varre todo o histórico e ignora mês e
+   *  vendedor. Sem termo, o comportamento é o de sempre (mês + vendedor). */
+  search?: string;
+}
+
+/** Lê carboze_orders no período. RLS já limita o colaborador ao próprio escopo;
+ *  o filtro por vendedor só é aplicado para gestor. */
+export function useCarbozeVendas({ month, customFrom, customTo, vendedorFilter, isGestor, userId, search }: Params) {
+  const hasCustom = !!(customFrom || customTo);
+  // NÃO usar trim(): o espaço no fim é significativo — é ele que pede a
+  // palavra inteira ("a " = só onde "a" é palavra sozinha).
+  const termo = search ?? "";
+  // 1 caractere já vale: a busca casa por INÍCIO DE PALAVRA, então "a" traz
+  // quem começa com "a", não todo mundo que tem "a" no meio.
+  const buscando = termo.trim().length >= 1;
+
+  return useQuery({
+    queryKey: ["carboze_vendas", month.toISOString().slice(0, 7), customFrom, customTo, vendedorFilter, isGestor, userId, buscando ? termo : ""],
+    enabled: !!userId,
+    queryFn: async (): Promise<CarbozeVendaRow[]> => {
+      // ── Busca global: manda em cima de mês e vendedor ──────────────────
+      // A RPC é SECURITY INVOKER, então a RLS continua valendo: colaborador
+      // segue vendo só as próprias vendas por mais amplo que seja o termo.
+      if (buscando) {
+        const { data, error } = await db.rpc("carbo_vendas_busca", { p_termo: termo, p_limit: 300 });
+        if (error) throw error;
+        return ((data ?? []) as any[]).map(mapVenda);
+      }
+
+      // ⚠️ Só DUAS datas agora, as duas em `AAAA-MM-DD`. Antes havia quatro:
+      // `rangeStart`/`rangeEnd` (o recorte, por data da venda) e
+      // `qStart`/`qEnd` (a janela do banco, por data de criação, com um
+      // colchão de ±1 mês no modo mês e NENHUM no modo período). Eram duas
+      // perguntas diferentes sobre "quando foi essa venda", e foi a segunda
+      // que escondeu pedido faturado fora do mês em que nasceu.
+      let rangeStart: string, rangeEnd: string;
+      if (hasCustom) {
+        rangeStart = customFrom || "2000-01-01";
+        rangeEnd = customTo || "2099-12-31";
+      } else {
+        const yr = month.getFullYear(), mo = month.getMonth() + 1;
+        const lastDay = new Date(yr, mo, 0).getDate();
+        rangeStart = `${yr}-${String(mo).padStart(2, "0")}-01`;
+        rangeEnd = `${yr}-${String(mo).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+      }
+
+      let query = db
+        // ⚠️ carbo_vendas_metrica, NÃO carboze_orders.
+        //
+        // A view devolve todas as colunas do pedido MAIS `conta_metrica` — a
+        // regra única de "esta venda conta como faturamento". Antes esta tela
+        // tinha regra própria (NF vinculada OU invoice_number OU status
+        // entregue) que era mais frouxa que a do resto do sistema: contava
+        // pedido com nota Pendente ou Rejeitada. Resultado: o Total Faturado
+        // do Sales dava R$ 51.274 e o Dashboard do Admin, R$ 48 mil, no mesmo
+        // mês. Duas telas, dois números, nenhum errado por bug — errado por
+        // haver duas definições.
+        //
+        // A view é security_invoker: a RLS de carboze_orders continua valendo.
+        .from("carbo_vendas_metrica")
+        .select("*")
+        .neq("excluir_metricas", true)
+        // ⚠️ Filtra por `data_efetiva` (= coalesce(sale_date, created_at::date)),
+        // a MESMA data que o recorte de baixo usa — e NÃO por `created_at`.
+        //
+        // Eram duas datas diferentes: o banco mandava uma janela por data de
+        // CRIAÇÃO e a tela recortava por data EFETIVA da venda. Enquanto as
+        // duas coincidiam ninguém via; desde que `sale_date` passou a seguir o
+        // faturamento elas se separaram, e o que nasceu fora da janela nunca
+        // chegava para ser recortado — sumia dos dois meses, calado.
+        //
+        // No modo "por período" não havia nem colchão: `qStart`/`qEnd` eram as
+        // datas digitadas, então todo pedido criado antes do início e faturado
+        // dentro dele desaparecia.
+        //
+        // ⚠️ E `data_efetiva` é DATE, não timestamp: some junto o erro de fuso
+        // de comparar `"2026-09-01T00:00:00.000Z"` (UTC) com um dia de
+        // Brasília, que jogava as vendas depois das 21h para o dia seguinte.
+        .gte("data_efetiva", rangeStart)
+        .lte("data_efetiva", rangeEnd)
+        // Ordena pela mesma data que filtra; `created_at` desempata dentro do
+        // dia. É a ordem que a RPC `carbo_vendas_busca` já usava.
+        .order("data_efetiva", { ascending: false })
+        .order("created_at", { ascending: false });
+
+      if (!isGestor) {
+        query = query.eq("vendedor_id", userId);
+      } else if (vendedorFilter && vendedorFilter !== "__all__") {
+        query = query.eq("vendedor_id", vendedorFilter);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      // O recorte por data saiu daqui: quem filtra é o banco, pela MESMA
+      // coluna. Refiltrar em memória não protegia de nada — o que faltava
+      // nunca chegava — e mantinha viva a segunda definição de "data da
+      // venda", que era o defeito.
+      return ((data ?? []) as any[]).map(mapVenda);
+    },
+  });
+}
+
+/** Linha crua de carboze_orders → CarbozeVendaRow. Uma só, para os dois
+ *  caminhos (janela por mês e busca global) devolverem exatamente o mesmo
+ *  formato — senão a tela renderiza diferente dependendo de como chegou. */
+function mapVenda(row: any): CarbozeVendaRow {
+  return ({
+          id: row.id,
+          order_number: row.order_number,
+          created_at: row.created_at,
+          sale_date: row.sale_date ?? null,
+          customer_name: row.customer_name ?? "—",
+          customer_doc: row.cnpj ?? null,
+          customer_ie: row.customer_ie ?? null,
+          customer_email: row.customer_email ?? null,
+          customer_phone: row.customer_phone ?? null,
+          delivery_address: row.delivery_address ?? null,
+          delivery_city: row.delivery_city ?? null,
+          delivery_state: row.delivery_state ?? null,
+          delivery_zip: row.delivery_zip ?? null,
+          billing_address: (row.billing_address ?? null) as Record<string, unknown> | null,
+          notes: row.notes ?? null,
+          items: Array.isArray(row.items) ? (row.items as VendaItem[]) : [],
+          total: Number(row.total || 0),
+          subtotal: row.subtotal != null ? Number(row.subtotal) : null,
+          discount: row.discount != null ? Number(row.discount) : null,
+          discount_percent: row.discount_percent != null ? Number(row.discount_percent) : null,
+          payment_terms: row.payment_terms ?? null,
+          freight_type: row.freight_type ?? null,
+          shipping_cost: row.shipping_cost != null ? Number(row.shipping_cost) : null,
+          agreed_delivery_date: row.agreed_delivery_date ?? null,
+          ppf_date: row.ppf_date ?? null,
+          ppe_date: row.ppe_date ?? null,
+          po_number: row.po_number ?? null,
+          buyer_notes: row.buyer_notes ?? null,
+          general_notes: row.general_notes ?? null,
+          internal_notes: row.internal_notes ?? null,
+          conta_metrica: row.conta_metrica === true,
+          motivo_fora: row.motivo_fora ?? null,
+          status: row.status,
+          fulfillment_stage: row.fulfillment_stage ?? null,
+          vendedor_id: row.vendedor_id ?? null,
+          vendedor_name: row.vendedor_name ?? null,
+          invoice_number: row.invoice_number ?? null,
+          bling_nf_id: row.bling_nf_id ?? null,
+          invoice_bonificacao_number: row.invoice_bonificacao_number ?? null,
+          bling_nf_bonificacao_id: row.bling_nf_bonificacao_id ?? null,
+          bling_conta: row.bling_conta ?? null,
+          bling2_nf_id: row.bling2_nf_id ?? null,
+          invoice2_number: row.invoice2_number ?? null,
+          bling2_nf_bonificacao_id: row.bling2_nf_bonificacao_id ?? null,
+          invoice2_bonificacao_number: row.invoice2_bonificacao_number ?? null,
+          external_ref: row.external_ref ?? null,
+  });
+}
+
+/** Converte orçamento (status 'quote') em pedido ('pending'). Idempotente. */
+export function useConvertQuote() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data: u } = await supabase.auth.getUser();
+      const { data, error } = await db
+        .from("carboze_orders")
+        .update({ status: "pending", confirmed_at: new Date().toISOString() })
+        .eq("id", id)
+        .eq("status", "quote")
+        .select("id")
+        .single();
+      if (error) throw error;
+      if (!data) throw new Error("Orçamento não encontrado ou já convertido.");
+      try {
+        await db.from("order_status_history").insert({
+          order_id: id, status: "pending",
+          notes: "Orçamento aprovado e convertido em venda", changed_by: u?.user?.id ?? null,
+        });
+      } catch { /* ignore */ }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["carboze_vendas"] }),
+  });
+}
+
+/** Exclui uma venda (só gestor — validado no banco). Grava log auditável
+ *  (carboze_order_deletions) antes de apagar e libera o número da venda. */
+export function useDeleteVenda() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason?: string }) => {
+      const { error } = await db.rpc("carboze_order_delete", { p_id: id, p_reason: reason ?? null });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["carboze_vendas"] });
+      toast.success("Venda excluída.");
+    },
+    onError: (e: Error) => toast.error("Erro ao excluir venda: " + e.message),
+  });
+}
+
+/**
+ * Cancela uma venda sem apagá-la.
+ *
+ * A diferença que importa: EXCLUIR apaga a linha e libera o número — serve
+ * para venda lançada errada, que nunca deveria ter existido. CANCELAR mantém
+ * o registro, tira do faturamento e ESTORNA o estoque que já tinha sido
+ * deduzido. É o caso comum: cliente desistiu, boleto não pagou, NF caiu.
+ *
+ * Toda a lógica vive na RPC `carboze_order_cancel` (permissão, estorno,
+ * status + etapa, histórico) porque é a única forma de os cinco apps se
+ * comportarem igual — e de o estorno e a mudança de status serem atômicos.
+ */
+export function useCancelVenda() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason?: string }) => {
+      const { error } = await db.rpc("carboze_order_cancel", { p_id: id, p_reason: reason ?? null });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["carboze_vendas"] });
+      toast.success("Venda cancelada. Saiu do faturamento e o estoque foi estornado.");
+    },
+    onError: (e: Error) => toast.error("Erro ao cancelar venda: " + e.message),
+  });
+}
+
+// Arquivos da NF já vinculada (o faturamento/emissão acontece no Finanças; aqui
+// o Sales só BAIXA a NF que já casou com o pedido). O pedido guarda
+// `bling_nf_id` (= bling_nfe.bling_id); a bling_nfe tem os links de PDF/XML.
+export interface NfFiles {
+  pdf_url: string | null;
+  xml_url: string | null;
+  chave_acesso: string | null;
+  numero: string | null;
+}
+
+/**
+ * Busca os arquivos (PDF/XML) da NF vinculada a um pedido, pelo bling_nf_id.
+ *
+ * A lista do Bling NÃO traz o link do DANFE — só o detalhe GET /nfe/{id}. Por
+ * isso o `bling_nfe.pdf_url` do cache costuma vir null. Quando faltar, buscamos
+ * o link AO VIVO na edge function `bling-sync` (entity `nfe_links`), que busca
+ * no Bling e cacheia — mesmo caminho do Finanças (useNfeLinks). Assim o botão
+ * "Baixar NF" do Sales funciona sem depender do cache estar preenchido.
+ */
+export async function fetchNfFiles(blingNfId: number, conta: 1 | 2 = 1): Promise<NfFiles | null> {
+  // ⚠️ A TABELA depende da CONTA, e isto não é detalhe: as duas numeram do
+  // zero. Procurar um id da filial em `bling_nfe` ou acha NADA, ou — pior —
+  // acha a nota de OUTRA empresa com o mesmo número e entrega o PDF errado
+  // para o cliente. É a mesma razão pela qual a esteira entra com o `bling_id`
+  // do Bling 1 negativo.
+  const tabela = conta === 2 ? "bling2_nfe" : "bling_nfe";
+  const { data, error } = await db
+    .from(tabela)
+    .select("pdf_url, xml_url, chave_acesso, numero")
+    .eq("bling_id", blingNfId)
+    .maybeSingle();
+  if (error) throw error;
+
+  const cached = (data as NfFiles) ?? null;
+  if (cached?.pdf_url || cached?.xml_url) return cached;
+
+  // ⚠️ A filial NÃO tem busca ao vivo: o `bling2-sync` não expõe uma entidade
+  // `nfe_links`. Sem link no espelho, a resposta honesta é "ainda não
+  // sincronizou" — chamar o `bling-sync` aqui bateria na conta ERRADA e
+  // devolveria "não encontrada" para uma nota que existe, o que manda quem
+  // opera procurar defeito no lugar errado.
+  if (conta === 2) return cached;
+
+  // Cache sem link — busca ao vivo no Bling (e cacheia pdf_url pra próxima vez).
+  const res = await supabase.functions.invoke("bling-sync", {
+    body: { entity: "nfe_links", bling_nf_id: blingNfId },
+  });
+  if (!res.data?.success) {
+    // Deixa o cache (pode ter chave/numero) e sinaliza que não veio arquivo.
+    return cached;
+  }
+  return {
+    pdf_url: res.data.pdf ?? cached?.pdf_url ?? null,
+    xml_url: res.data.xml ?? cached?.xml_url ?? null,
+    chave_acesso: cached?.chave_acesso ?? null,
+    numero: cached?.numero ?? null,
+  };
+}
+
+/** Atribui vendedor (perfil) a vários pedidos de uma vez — grava vendedor_id/name. */
+export function useBulkAssignVendedor() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ orderIds, vendedorId, vendedorName }: { orderIds: string[]; vendedorId: string; vendedorName: string }) => {
+      const { error } = await db
+        .from("carboze_orders")
+        .update({ vendedor_id: vendedorId, vendedor_name: vendedorName, updated_at: new Date().toISOString() })
+        .in("id", orderIds);
+      if (error) throw error;
+    },
+    onSuccess: (_d, { orderIds }) => {
+      qc.invalidateQueries({ queryKey: ["carboze_vendas"] });
+      toast.success(`${orderIds.length} pedido(s) atribuído(s) com sucesso!`);
+    },
+    onError: (e: Error) => toast.error("Erro ao atribuir vendedor: " + e.message),
+  });
+}
