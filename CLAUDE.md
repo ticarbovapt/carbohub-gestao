@@ -3892,6 +3892,12 @@ update public.carbo_msg_templates
    Conversas não abre card de pedido para etapa `carrinho_*`
    (`pedidoDaConversa`) — antes, toda conversa da caixa nova abriria com
    "Este pedido não está na Esteira". O carrinho está no próprio balão.
+5b. ⚠️ **E o NOME também não vem da view.** `carbo_wa_conversas` busca o nome
+   do cliente na esteira pelo `bling_id`, e checkout não está lá — a conversa
+   nascia "Sem nome" até a pessoa responder. O `useConversas` completa
+   `cliente_pedido` lendo `nuvemshop_carrinhos.cliente` para as etapas
+   `carrinho_*`. O nome do WhatsApp só existe depois que o cliente ESCREVE
+   (vem do webhook de entrada; a resposta do envio não traz perfil).
 6. **O teste** é o `&etapa=carrinho_N` do `whatsapp-meta`, com exemplos
    coerentes (Kit 5 Frascos · R$ 149 · link Payt do mesmo kit), trocáveis por
    `&produtos=`, `&valor=`, `&link=`. Não grava no ledger, então não ocupa a
