@@ -556,6 +556,9 @@ export type ColunaCarrinho =
   // Calculada na TELA (`colunaCarrinhoNaTela`), nunca na view — ver a mesma
   // nota em `ColunaRecompra`.
   | "erro_envio"
+  // Também da TELA: o cliente respondeu e a sequência parou
+  // (`carbo_carrinho_respostas`, migração 20261051).
+  | "respondeu"
   // As três que ficam FORA do quadro: nenhuma delas vai receber mensagem.
   // `duplicado` é tentativa anterior da mesma pessoa — quem erra o cartão e
   // tenta de novo cria um checkout novo, e sem essa separação receberia a
@@ -600,6 +603,7 @@ export const COLUNAS_CARRINHO: Array<{ key: ColunaCarrinho; label: string; descr
   { key: "msg1",         label: "1ª mensagem",  descricao: "lembrete enviado",                 color: "#0ea5e9" },
   { key: "msg2",         label: "2ª mensagem",  descricao: "segunda tentativa",                color: "#6366f1" },
   { key: "msg3",         label: "3ª mensagem",  descricao: "última — depois desta, não insiste", color: "#9333ea" },
+  { key: "respondeu",    label: "Respondeu",    descricao: "parou — uma pessoa assume na conversa", color: "#14b8a6" },
   { key: "recuperado",   label: "Recuperado",   descricao: "voltou e comprou",                 color: "#10b981" },
   { key: "perdido",      label: "Perdido",      descricao: "não voltou — base de campanha",    color: "#64748b" },
 ];
@@ -615,10 +619,41 @@ export const COLUNAS_CARRINHO_RECOLHIDAS: Array<{ key: ColunaCarrinho; label: st
 
 /** A coluna que a TELA mostra. Só desvia o carrinho cuja ÚLTIMA mensagem falhou.
  *  ⚠️ `recuperado` nunca sai do lugar: comprou é desfecho. */
-export function colunaCarrinhoNaTela(r: CarrinhoRow, envio?: EnvioMsg): ColunaCarrinho {
+export function colunaCarrinhoNaTela(r: CarrinhoRow, envio?: EnvioMsg, resposta?: RespostaCarrinho): ColunaCarrinho {
   if (r.coluna === "recuperado") return r.coluna;
+  // ⚠️ Antes do erro: quem respondeu está falando com a gente, e o que importa
+  // é que alguém atenda. E as colunas da view NÃO servem aqui — o freio grava
+  // 'ignorado' nas etapas que faltavam, e a view leria isso como mensagem
+  // enviada, empurrando o card para "3ª mensagem" ou "Perdido".
+  if (resposta && ["aberto", "msg1", "msg2", "msg3", "perdido"].includes(r.coluna)) return "respondeu";
   if (envio && FALHOU.has(envio.status)) return "erro_envio";
   return r.coluna;
+}
+
+/** Quem respondeu a uma mensagem de carrinho. Casado no banco por IDENTIDADE
+ *  (o `wa_id` que a Meta devolveu no envio + o mesmo número nosso). */
+export interface RespostaCarrinho {
+  checkout_id: number;
+  wa_id: string;
+  numero_id: string | null;
+  respondeu_em: string;
+}
+
+export function useCarrinhoRespostas() {
+  return useQuery({
+    queryKey: ["carrinho-respostas"],
+    queryFn: async (): Promise<Map<number, RespostaCarrinho>> => {
+      const { data, error } = await (supabase as any)
+        .from("carbo_carrinho_respostas")
+        .select("checkout_id, wa_id, numero_id, respondeu_em");
+      // ⚠️ Antes da migração 20261051 a tabela não existe: o quadro tem de
+      // continuar como era, não sumir. O erro vai ao console para não passar
+      // calado.
+      if (error) { console.warn("[esteira] carbo_carrinho_respostas:", error.message); return new Map(); }
+      return new Map(((data ?? []) as RespostaCarrinho[]).map((r) => [Number(r.checkout_id), r]));
+    },
+    refetchInterval: 60_000,
+  });
 }
 
 export function useCarrinhoPipeline() {
