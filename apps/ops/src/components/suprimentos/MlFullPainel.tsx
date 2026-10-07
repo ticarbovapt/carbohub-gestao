@@ -143,12 +143,23 @@ export function MlFullPainel() {
                     return (
                       <tr key={`${l.item_id}-${l.variation_id ?? ""}`} className="border-b last:border-0">
                         <td className="p-3">
+                          {/* ⚠️ O nome é o do ANÚNCIO, não o do produto nosso
+                              (dono do processo, 07/10/2026). Cada anúncio é um
+                              estoque separado no Full, e vários apontam para o
+                              MESMO produto — com o nome interno, três linhas
+                              diziam "CarboZé 100ml" e não dava para saber qual
+                              era qual. O produto nosso fica embaixo, para a
+                              remessa. */}
                           <div className="font-medium">
-                            {l.produto ?? l.titulo_anuncio ?? l.item_id}
+                            {l.titulo_anuncio ?? l.produto ?? l.item_id}
                           </div>
-                          <div className="text-xs text-muted-foreground font-mono">
-                            {l.product_code ?? l.seller_sku ?? "—"}
-                            {l.variation_id ? ` · var ${l.variation_id}` : ""}
+                          <div className="text-xs text-muted-foreground">
+                            <span className="font-mono">
+                              {l.item_id}{l.variation_id ? ` · var ${l.variation_id}` : ""}
+                            </span>
+                            {l.product_id && (
+                              <> · sai como {l.produto}{l.product_code ? ` (${l.product_code})` : ""}</>
+                            )}
                           </div>
                           {/* Dito na linha, baixinho: o número do ML está ali
                               ao lado e vale; o que falta é só poder despachar. */}
@@ -247,8 +258,11 @@ export function MlFullPainel() {
 
           <div className="space-y-3">
             <div className="text-sm">
-              <div className="font-medium">{alvo?.produto ?? alvo?.titulo_anuncio}</div>
-              <div className="text-xs text-muted-foreground font-mono">{alvo?.product_code}</div>
+              <div className="font-medium">{alvo?.titulo_anuncio ?? alvo?.produto}</div>
+              <div className="text-xs text-muted-foreground">
+                sai do galpão como {alvo?.produto}
+                {alvo?.product_code ? ` (${alvo.product_code})` : ""}
+              </div>
             </div>
             <div>
               <Label htmlFor="qtd">Quantidade</Label>
