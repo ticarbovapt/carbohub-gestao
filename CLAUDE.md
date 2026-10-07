@@ -625,7 +625,11 @@ apps/*/src/components/BloqueioAoVivo.tsx   o popup — REPLICADO nos SETE
    (decisão do dono do processo, 07/10/2026 — antes ficava na lista, marcado).
    Uma lista OU a outra: o clique alterna. ⚠️ O chip fica à vista com a
    contagem enquanto houver bloqueado — é o que impede quem perdeu o acesso de
-   sumir da cabeça de quem revisa. Contagens do topo seguem a lista visível.
+   sumir da cabeça de quem revisa.
+   A barra é FILTRO em tudo, com a mesma forma: abas **Ativos | Bloqueados**,
+   abas **Todos os níveis | Gestores**, e pílulas de **Sistema** (uma escolha;
+   cor só na bolinha). Cada número é contado com os OUTROS filtros aplicados e
+   o dele solto (`passa(p, menos)`), senão a opção contaria a si mesma.
 12. ⚠️ **Os dois PORTAIS ficaram de fora** (outro repo): login deles ainda
    mostraria `User is banned` em inglês, e não têm o popup. A trava vale lá
    igual — o que falta é a tradução e o aviso.
