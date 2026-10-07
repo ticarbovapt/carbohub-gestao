@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import {
   useEsteiraOnline,
   useEsteiraParados, useRastreios, useEcommerceAguardando, useFontesSaude,
-  useAvisosDoPedido, useRecompraPipeline, useRecompraConfig, useEnviosRecompra, colunaRecompraNaTela, useEnviosCarrinho, colunaCarrinhoNaTela, useCarrinhoRespostas, type RespostaCarrinho, useEsteiraTravadosAntigos,
+  useAvisosDoPedido, useRecompraPipeline, useRecompraConfig, useEnviosRecompra, colunaRecompraNaTela, useEnviosCarrinho, colunaCarrinhoNaTela, useCarrinhoRespostas, type RespostaCarrinho, useNaoContatarLista, useEsteiraTravadosAntigos,
   useCarrinhoPipeline, useCarrinhoConfig,
   ETAPAS, COLUNAS_RECOMPRA, COLUNAS_RECOMPRA_RECOLHIDAS, COLUNAS_CARRINHO, COLUNAS_CARRINHO_RECOLHIDAS,
   type EsteiraRow, type EtapaEsteira, type RastreioCard, type AguardandoRow,
@@ -1520,6 +1520,7 @@ export default function EsteiraOnline() {
   // Recolhidas por padrão — elas existem para TIRAR ruído do quadro.
   const { data: enviosCarrinho } = useEnviosCarrinho();
   const { data: respostasCarrinho } = useCarrinhoRespostas();
+  const { data: naoContatar } = useNaoContatarLista();
   const [abertas, setAbertas] = useState<Set<string>>(() => new Set());
   const alternarColuna = (k: string) =>
     setAbertas((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
@@ -1624,10 +1625,10 @@ export default function EsteiraOnline() {
     for (const c of [...COLUNAS_RECOMPRA, ...COLUNAS_RECOMPRA_RECOLHIDAS]) m.set(c.key, []);
     for (const r of recompra) {
       if (r.coluna === "historico") continue;
-      m.get(colunaRecompraNaTela(r, enviosRecompra?.get(r.bling_id)))?.push(r);
+      m.get(colunaRecompraNaTela(r, enviosRecompra?.get(r.bling_id), naoContatar))?.push(r);
     }
     return m;
-  }, [recompra, enviosRecompra]);
+  }, [recompra, enviosRecompra, naoContatar]);
 
   const historico = useMemo(
     () => recompra.filter((r) => r.coluna === "historico"),
@@ -1642,10 +1643,10 @@ export default function EsteiraOnline() {
     const m = new Map<ColunaCarrinho, CarrinhoRow[]>();
     for (const c of [...COLUNAS_CARRINHO, ...COLUNAS_CARRINHO_RECOLHIDAS]) m.set(c.key, []);
     for (const r of carrinhos) {
-      m.get(colunaCarrinhoNaTela(r, enviosCarrinho?.get(r.checkout_id), respostasCarrinho?.get(r.checkout_id)))?.push(r);
+      m.get(colunaCarrinhoNaTela(r, enviosCarrinho?.get(r.checkout_id), respostasCarrinho?.get(r.checkout_id), naoContatar))?.push(r);
     }
     return m;
-  }, [carrinhos, enviosCarrinho, respostasCarrinho]);
+  }, [carrinhos, enviosCarrinho, respostasCarrinho, naoContatar]);
 
   const foraDaRegua = useMemo(
     () => carrinhos.filter((r) => r.coluna === "historico"

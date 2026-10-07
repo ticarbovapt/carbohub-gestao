@@ -37,7 +37,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
-  normalizarBR, montarPayload, ehTransitorio, detalheDoErro,
+  normalizarBR, montarPayload, ehTransitorio, detalheDoErro, chaveDoFone,
   type VarTemplate,
 } from "../_shared/metaTemplate.ts";
 
@@ -443,10 +443,54 @@ Deno.serve(async (req: Request) => {
   const outroPedidoJaOfertado = (fone: string, bling: number) =>
     [...(ofertadosRecompra.get(fone) ?? [])].some((b) => b !== bling);
 
+  // ── "Não contatar": quem pediu para parar sai de TODA mensagem COMERCIAL ──
+  //
+  // ⚠️ Só o comercial (recompra e carrinho). Os avisos do pedido — NF, saiu
+  // para entrega — são serviço que a pessoa comprou, e seguem.
+  //
+  // ⚠️ Se a lista NÃO puder ser lida, o comercial desta rodada é SEGURADO
+  // (fica na fila, tenta no próximo minuto), nunca enviado sem a checagem: é
+  // um pedido de privacidade, e "não consegui conferir" não autoriza mandar.
+  // Inclui o intervalo entre o deploy e a migração 20261053, em que a tabela
+  // ainda não existe.
+  const ehComercial = (etapa: string) => etapa === "recompra" || etapa.startsWith("carrinho_");
+  const naoContatar = new Set<string>();
+  let listaNaoContatarOk = true;
+  if ((fila as LinhaFila[]).some((l) => ehComercial(l.etapa))) {
+    const { data: bloqueados, error: errBloq } = await supabase
+      .from("carbo_wa_nao_contatar").select("chave").is("removido_em", null);
+    if (errBloq) {
+      listaNaoContatarOk = false;
+      console.error("[whatsapp-meta] lista não contatar ilegível — comercial segurado:", errBloq.message);
+    }
+    for (const b of bloqueados ?? []) if (b.chave) naoContatar.add(String(b.chave));
+  }
+  let naoContatados = 0;
+
   for (const l of fila as LinhaFila[]) {
     if (tentativas >= TETO) break;
     const normalizado = normalizarBR(l.telefone);
     const numero = normalizado ? (conhecidos.get(normalizado) ?? normalizado) : null;
+
+    if (ehComercial(l.etapa)) {
+      if (!listaNaoContatarOk) { segurados++; continue; }
+      const chave = chaveDoFone(numero ?? l.telefone);
+      if (chave && naoContatar.has(chave)) {
+        naoContatados++;
+        if (!ensaio) {
+          // ⚠️ O prefixo `não contatar:` é CONTRATO com a Esteira, que separa
+          // estes cards dos sem telefone pelo início do motivo.
+          await supabase.from("carbo_msg_envios").upsert({
+            bling_id: l.bling_id, etapa: l.etapa, status: "ignorado", canal: "meta",
+            numero_id: (l as any).numero_id ?? null,
+            motivo: "não contatar: o cliente pediu para não receber mais mensagens",
+            telefone: normalizado ?? l.telefone, enviado_em: new Date().toISOString(),
+          });
+        }
+        resultados.push({ bling_id: l.bling_id, etapa: l.etapa, decisao: "ignorada — não contatar" });
+        continue;
+      }
+    }
 
     if (!numero) {
       semFone++;
@@ -602,7 +646,7 @@ Deno.serve(async (req: Request) => {
 
   const resumo = {
     ok: true, ensaio, fila: fila.length,
-    enviados, falhas, adiados, segurados, sem_telefone: semFone,
+    enviados, falhas, adiados, segurados, sem_telefone: semFone, nao_contatar: naoContatados,
     ...(ensaio ? { faria: resultados } : { resultados }),
   };
   console.log("[whatsapp-meta]", JSON.stringify({ ...resumo, faria: undefined }));

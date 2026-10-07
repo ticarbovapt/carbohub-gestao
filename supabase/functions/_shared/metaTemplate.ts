@@ -95,6 +95,25 @@ export function normalizarBR(bruto: string | null | undefined): string | null {
 }
 
 /**
+ * A CHAVE da pessoa para a lista "não contatar": DDD + últimos 8 dígitos.
+ *
+ * ⚠️ Frouxa de propósito, e só serve onde errar para "não mandar" é o lado
+ * seguro. O 9º dígito varia entre o cadastro e o `wa_id` que a Meta devolve
+ * (mandamos 5584987346304, ela responde 558487346304), e casar exato deixaria
+ * passar justamente quem pediu para parar.
+ *
+ * ⚠️ CÓPIA da `public.carbo_fone_chave` (migração 20261053) — mudou uma, mude
+ * a outra, e o espelho da tela em `useEsteiraOnline.ts`.
+ */
+export function chaveDoFone(bruto: string | null | undefined): string | null {
+  const d = String(bruto ?? "").replace(/\D/g, "");
+  if (!d) return null;
+  if (d.startsWith("55") && (d.length === 12 || d.length === 13)) return d.slice(2, 4) + d.slice(-8);
+  if (d.length === 10 || d.length === 11) return d.slice(0, 2) + d.slice(-8);
+  return d;
+}
+
+/**
  * Deixa o valor aceitável como parâmetro de template.
  *
  * Quebra de linha, tab e espaços múltiplos são recusa 132007. Colapsar em um

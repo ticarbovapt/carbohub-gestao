@@ -3905,6 +3905,70 @@ Evolution em Mensagens ao cliente só aparece enquanto alguma etapa tiver
 para etapa da Meta (ela dizia "carbo-comercial" na aba da Recompra enquanto as
 ofertas saíam pelo Clube).
 
+### Réguas de recompra e carrinho — o que a TELA calcula e o que o BANCO trava (07/10/2026)
+Uma rodada de pedidos do dono do processo no mesmo dia. A regra que atravessa
+todos: **a `carbo_recompra_pipeline`, a `carbo_carrinho_pipeline` e a
+`carbo_msg_fila` NÃO foram republicadas** — as três alimentam o WhatsApp, e
+mexer nelas é mexer no gatilho. O que mudou de lugar foi a TELA; o que mudou
+de comportamento usa o freio que a fila JÁ respeita: linha `ignorado` em
+`carbo_msg_envios` (a fila não entrega etapa com linha ≠ `pendente`).
+
+```
+colunas recolhidas     tela   Sem telefone · Erro ao enviar · Não contatar
+Respondeu (carrinho)   20261051  carbo_carrinho_respostas + cron 1 min
+PayT no carrinho       20261052  lost_cart → nuvemshop_carrinhos, cron 5 min
+Não contatar           20261053  carbo_wa_nao_contatar + trava no whatsapp-meta
+comprou na outra loja  20261053  passo 3 do carbo_payt_carrinhos_sincronizar
+?pipeline=             tela   a régua escolhida mora na URL
+```
+
+1. **As colunas recolhidas são calculadas na TELA** (`colunaRecompraNaTela`,
+   `colunaCarrinhoNaTela`, em `useEsteiraOnline.ts`), lendo `carbo_msg_envios`,
+   `carbo_carrinho_respostas` e `carbo_wa_nao_contatar`. ⚠️ `recomprou`,
+   `recuperado` e `historico` nunca mudam de lugar — comprar é desfecho. O
+   trilho é um componente só (`ColunasRecolhidas`) para as duas réguas, e as
+   fechadas dividem UM trilho estreito (lado a lado, a segunda caía fora da tela
+   em 1366/1440).
+2. ⚠️ **Por que a tela, e não a view, decide "Respondeu"**: o freio grava
+   `ignorado` nas etapas que faltavam, e a view lê isso como mensagem enviada
+   (`msg2_em = coalesce(enviado_em, detectado_em)`) — o card "andaria" para
+   3ª mensagem e Perdido. Quem diz onde ele aparece é a tabela de respostas.
+3. **Respondeu = qualquer resposta**, sem ler "sim/não" (a leitura erra, e o
+   erro é uma mensagem a mais para quem disse não). Casamento por IDENTIDADE:
+   `wa_id` devolvido pela Meta no envio + mesmo `numero_id` + resposta depois do
+   primeiro envio. Cron, não gatilho em `carbo_wa_mensagens`: erro no gatilho
+   abortaria a gravação da mensagem do cliente, que só existe no celular dele.
+   Só na régua de CARRINHO — na recompra é uma mensagem só (decisão do dono).
+4. **PayT no carrinho entra NA MESMA TABELA** (`nuvemshop_carrinhos`), com
+   `checkout_id` NEGATIVO (hash do `cart_id`, mascarado em 52 bits — a tela é
+   JavaScript e número acima de 2^53 perde dígitos calado) e `token =
+   payt:<cart_id>`. ⚠️ Contato = o mais recente PREENCHIDO entre os avisos;
+   abandono = o PRIMEIRO (reenvio não pode empurrar o relógio). A tela diz a
+   loja pelo sinal do id. A recompra já tinha a PayT (ela passa pelo Bling 2).
+5. **Não contatar vale para o COMERCIAL** (`recompra`, `carrinho_*`), nunca para
+   os avisos do pedido. A trava mora no `whatsapp-meta` (único ponto por onde
+   toda mensagem automática passa), e ⚠️ **lista ilegível SEGURA o comercial**,
+   nunca o envia sem conferir — inclusive no intervalo entre o deploy e a
+   migração. ⚠️ A chave é DDD + últimos 8 dígitos e é FROUXA DE PROPÓSITO: o 9º
+   dígito varia entre o cadastro e o `wa_id`, e aqui errar é deixar de mandar,
+   o lado seguro. Ela existe em TRÊS cópias: `carbo_fone_chave` (SQL),
+   `chaveDoFone` em `_shared/metaTemplate.ts` e em `useEsteiraOnline.ts`.
+   Mudou uma, mude as três. O botão mora em Conversas (app Atendimento), com
+   confirmação na tela; desmarcar grava `removido_em`, nunca apaga.
+   ⚠️ O prefixo `não contatar:` no `motivo` é CONTRATO com a Esteira.
+6. **Comprou na outra loja**: a view só reconhecia compra NUVEMSHOP pelo e-mail.
+   O passo 3 do `carbo_payt_carrinhos_sincronizar` preenche `completado_em` de
+   qualquer carrinho cujo dono comprou pela PayT depois do abandono (e-mail ou
+   chave do telefone). ⚠️ E `trg_carrinho_nao_descompleta` impede o sync da
+   Nuvemshop (upsert a cada 15 min, sem saber da PayT) de apagar a marca — sem
+   ele ela sumiria e voltaria 5 min depois, e nesse intervalo a mensagem saía.
+7. `dias_para_desistir` foi para **2** (dono do processo, 07/10). Ele só decide
+   a COLUNA (Ofertado → Sem retorno); nenhum envio depende dele.
+8. ⚠️ **Ligar a recuperação de carrinho** continua sendo os dois interruptores
+   da seção "Carrinho abandonado pela Meta" (marco zero em 24 h + `ativo`). Os
+   carrinhos da PayT anteriores ao marco caem em "fora da régua" junto com os
+   da Nuvemshop.
+
 ### Carbo Pré-Vendas — o OITAVO app (06/10/2026)
 `prevendas.carbohub.com.br`, flag `carbo_prevendas`, cor lima `#65A30D`. É o
 app dos SDRs: qualificam o lead e repassam ao closer (que trabalha no Sales).

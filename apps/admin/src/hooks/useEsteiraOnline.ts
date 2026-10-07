@@ -406,7 +406,7 @@ export type ColunaRecompra =
   // (`colunaRecompraNaTela`). A view alimenta a fila de WhatsApp, e
   // republicá-la para mudar a ARRUMAÇÃO do quadro seria mexer no gatilho por
   // causa de uma questão de exibição.
-  | "sem_telefone" | "erro_envio";
+  | "sem_telefone" | "erro_envio" | "nao_contatar";
 
 export interface RecompraRow {
   bling_id: number;
@@ -443,6 +443,7 @@ export const COLUNAS_RECOMPRA: Array<{ key: ColunaRecompra; label: string; descr
 export const COLUNAS_RECOMPRA_RECOLHIDAS: Array<{ key: ColunaRecompra; label: string; descricao: string; color: string }> = [
   { key: "sem_telefone", label: "Sem telefone",     descricao: "não dá para ofertar pelo WhatsApp", color: "#94a3b8" },
   { key: "erro_envio",   label: "Erro ao enviar",   descricao: "a oferta saiu e não chegou",        color: "#ef4444" },
+  { key: "nao_contatar", label: "Não contatar",     descricao: "pediu para não receber ofertas",    color: "#a855f7" },
 ];
 
 const FALHOU = new Set(["erro", "falhou"]);
@@ -450,8 +451,19 @@ const FALHOU = new Set(["erro", "falhou"]);
 /** A coluna que a TELA mostra. Parte da coluna da view e só desvia dois casos:
  *  ⚠️ `recomprou` e `historico` nunca saem do lugar — recompra é desfecho, e
  *  vale mais que o motivo de não termos falado com a pessoa. */
-export function colunaRecompraNaTela(r: RecompraRow, envio?: EnvioMsg): ColunaRecompra {
+/** O pedido de "não contatar" veio no envio (o `whatsapp-meta` o gravou) ou
+ *  está na lista — a lista é o que mostra quem ainda NÃO chegou à fila. */
+const pediuParaParar = (fone: string | null, envio: EnvioMsg | undefined, lista?: Set<string>) =>
+  (envio?.status === "ignorado" && (envio.motivo ?? "").startsWith("não contatar"))
+  || (!!lista && !!chaveDoFone(fone) && lista.has(chaveDoFone(fone)!));
+
+export function colunaRecompraNaTela(r: RecompraRow, envio?: EnvioMsg, lista?: Set<string>): ColunaRecompra {
   if (r.coluna === "recomprou" || r.coluna === "historico") return r.coluna;
+  // Só antes ou no lugar da oferta: quem já foi ofertado e DEPOIS pediu para
+  // parar continua em Ofertado/Sem retorno — a oferta saiu, é fato.
+  if ((r.coluna === "entregue" || r.coluna === "ofertar" || r.coluna === "ofertado")
+      && pediuParaParar(r.cliente_fone, envio, lista)
+      && !(r.coluna === "ofertado" && envio && envio.status !== "ignorado")) return "nao_contatar";
   if (envio && FALHOU.has(envio.status)) return "erro_envio";
   const semFone = !(r.cliente_fone ?? "").trim()
     || (envio?.status === "ignorado" && (envio.motivo ?? "").startsWith("telefone"));
@@ -459,6 +471,34 @@ export function colunaRecompraNaTela(r: RecompraRow, envio?: EnvioMsg): ColunaRe
   // a história da oferta, não da falta.
   if (semFone && (r.coluna === "entregue" || r.coluna === "ofertar")) return "sem_telefone";
   return r.coluna;
+}
+
+/** DDD + últimos 8 dígitos — a chave da lista "não contatar".
+ *  ⚠️ CÓPIA de `public.carbo_fone_chave` e de `chaveDoFone` no
+ *  `_shared/metaTemplate.ts`: frouxa de propósito (o 9º dígito varia entre o
+ *  cadastro e o `wa_id` da Meta), porque aqui errar é deixar de mandar.
+ *  Mudou uma, mude as três. */
+export function chaveDoFone(bruto: string | null | undefined): string | null {
+  const d = String(bruto ?? "").replace(/\D/g, "");
+  if (!d) return null;
+  if (d.startsWith("55") && (d.length === 12 || d.length === 13)) return d.slice(2, 4) + d.slice(-8);
+  if (d.length === 10 || d.length === 11) return d.slice(0, 2) + d.slice(-8);
+  return d;
+}
+
+/** As chaves de quem pediu para não receber ofertas (valendo agora). */
+export function useNaoContatarLista() {
+  return useQuery({
+    queryKey: ["nao-contatar-lista"],
+    queryFn: async (): Promise<Set<string>> => {
+      const { data, error } = await (supabase as any)
+        .from("carbo_wa_nao_contatar").select("chave").is("removido_em", null);
+      // Antes da migração 20261053 a tabela não existe: a tela segue como era.
+      if (error) { console.warn("[esteira] carbo_wa_nao_contatar:", error.message); return new Set(); }
+      return new Set(((data ?? []) as { chave: string }[]).map((r) => r.chave));
+    },
+    refetchInterval: 60_000,
+  });
 }
 
 /** Os envios das etapas pedidas, por `bling_id` (no carrinho é o id do
@@ -555,7 +595,7 @@ export type ColunaCarrinho =
   | "recuperado" | "perdido" | "sem_telefone"
   // Calculada na TELA (`colunaCarrinhoNaTela`), nunca na view — ver a mesma
   // nota em `ColunaRecompra`.
-  | "erro_envio"
+  | "erro_envio" | "nao_contatar"
   // Também da TELA: o cliente respondeu e a sequência parou
   // (`carbo_carrinho_respostas`, migração 20261051).
   | "respondeu"
@@ -615,12 +655,18 @@ export const COLUNAS_CARRINHO: Array<{ key: ColunaCarrinho; label: string; descr
 export const COLUNAS_CARRINHO_RECOLHIDAS: Array<{ key: ColunaCarrinho; label: string; descricao: string; color: string }> = [
   { key: "sem_telefone", label: "Sem telefone",   descricao: "só e-mail — não dá para avisar", color: "#94a3b8" },
   { key: "erro_envio",   label: "Erro ao enviar", descricao: "a mensagem saiu e não chegou",   color: "#ef4444" },
+  { key: "nao_contatar", label: "Não contatar",   descricao: "pediu para não receber ofertas", color: "#a855f7" },
 ];
 
 /** A coluna que a TELA mostra. Só desvia o carrinho cuja ÚLTIMA mensagem falhou.
  *  ⚠️ `recuperado` nunca sai do lugar: comprou é desfecho. */
-export function colunaCarrinhoNaTela(r: CarrinhoRow, envio?: EnvioMsg, resposta?: RespostaCarrinho): ColunaCarrinho {
+export function colunaCarrinhoNaTela(r: CarrinhoRow, envio?: EnvioMsg, resposta?: RespostaCarrinho,
+                                     lista?: Set<string>): ColunaCarrinho {
   if (r.coluna === "recuperado") return r.coluna;
+  // ⚠️ Antes de "Respondeu": quem respondeu E pediu para parar já foi
+  // atendido — o caso está resolvido, não esperando alguém.
+  if (["aberto", "msg1", "msg2", "msg3", "perdido"].includes(r.coluna)
+      && pediuParaParar(r.telefone, envio, lista)) return "nao_contatar";
   // ⚠️ Antes do erro: quem respondeu está falando com a gente, e o que importa
   // é que alguém atenda. E as colunas da view NÃO servem aqui — o freio grava
   // 'ignorado' nas etapas que faltavam, e a view leria isso como mensagem
