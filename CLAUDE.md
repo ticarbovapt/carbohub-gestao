@@ -3964,6 +3964,16 @@ comprou na outra loja  20261053  passo 3 do carbo_payt_carrinhos_sincronizar
    ele ela sumiria e voltaria 5 min depois, e nesse intervalo a mensagem saía.
 7. `dias_para_desistir` foi para **2** (dono do processo, 07/10). Ele só decide
    a COLUNA (Ofertado → Sem retorno); nenhum envio depende dele.
+9. **Cadência por HORA DO DIA** (`20261054`, pedido do dono do processo): 1ª
+   15 min após o abandono · 2ª às 9h do dia seguinte ao da 1ª · 3ª às 9h de
+   2 dias depois da 2ª (= D+1 e D+3 no caso comum). ⚠️ O dia conta da mensagem
+   ANTERIOR, não do abandono: quem abandona às 22h30 recebe a 1ª às 8h, e
+   contando do abandono a 2ª sairia uma hora depois. A conta mora em
+   `carbo_carrinho_horas_ate()` e as DUAS views a usam no lugar de
+   `horas_2`/`horas_3` — trocado no texto VIVO (`pg_get_viewdef`), com o antes
+   guardado em `carbo_backup_viewdef`. `hora_2`/`hora_3` nulos voltam às horas
+   corridas. O sync da Nuvemshop foi para 5 min (`alter_job`; o NOME do job
+   continua "-15min"), senão a 1ª sairia com até ~30 min.
 8. ⚠️ **Ligar a recuperação de carrinho** continua sendo os dois interruptores
    da seção "Carrinho abandonado pela Meta" (marco zero em 24 h + `ativo`). Os
    carrinhos da PayT anteriores ao marco caem em "fora da régua" junto com os

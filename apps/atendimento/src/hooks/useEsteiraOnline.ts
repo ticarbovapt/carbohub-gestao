@@ -727,6 +727,12 @@ export interface CarrinhoConfig {
   minutos_1: number;
   horas_2: number;
   horas_3: number;
+  /** Hora do dia (Brasília) da 2ª/3ª mensagem. null = horas corridas
+   *  (`horas_2`/`horas_3`). Opcionais: antes da `20261054` não existem. */
+  hora_2?: number | null;
+  dias_2?: number | null;
+  hora_3?: number | null;
+  dias_3?: number | null;
   horas_desistir: number;
   valor_minimo: number;
   inicio_em: string;
@@ -738,7 +744,10 @@ export function useCarrinhoConfig() {
     queryFn: async (): Promise<CarrinhoConfig | null> => {
       const { data, error } = await (supabase as any)
         .from("carbo_carrinho_config")
-        .select("minutos_1, horas_2, horas_3, horas_desistir, valor_minimo, inicio_em")
+        // ⚠️ `*`, e não a lista: as colunas da `20261054` podem ainda não
+        // existir, e pedir coluna ausente derruba a consulta inteira — a
+        // legenda sumiria em vez de cair no texto antigo.
+        .select("*")
         .maybeSingle();
       if (error) throw error;
       return (data ?? null) as CarrinhoConfig | null;
