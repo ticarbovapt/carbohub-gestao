@@ -1,6 +1,8 @@
 import { useMemo, useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Percent, DollarSign, Wallet, Receipt, CheckCircle2 } from "lucide-react";
+import { Percent, DollarSign, Wallet, Receipt, CheckCircle2, FileText, Download, Loader2 } from "lucide-react";
+import { useNfeLinks } from "@/hooks/useNfeLinks";
+import { toast } from "sonner";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboButton } from "@/components/ui/carbo-button";
@@ -22,7 +24,7 @@ import {
   useComissaoAgregado, useComissaoDescarb, useCommissionStatements, useCreateStatement, useAddPayment,
   useCommissionRules, useUpsertCommissionRule, useStatementItems, useStatementPayments,
   type CommissionStatement,
-  useNfsDaComissao, useNfsDosFechamentos,
+  useNfsDaComissao, useNfsDosFechamentos, type NfDaBase,
 } from "@/hooks/useComissao";
 
 const brl = (v: number) => (v ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -333,8 +335,8 @@ function CalcularTab() {
                       <CarboTableCell className="font-medium">{r.vendedor_name || "—"}</CarboTableCell>
                       <CarboTableCell className="text-right">
                         {brl(r.prod)}
-                        <span className="block text-[11px] text-muted-foreground">{r.prodQtd} NF(s)</span>
-                        <NfsDaBase nfs={nfsPorVendedor?.get(r.vendedor_id)} carregando={r.prodQtd > 0 && loadingNfs} />
+                        <BotaoNfs titulo={r.vendedor_name || "vendedor"} qtd={r.prodQtd}
+                          nfs={nfsPorVendedor?.get(r.vendedor_id)} carregando={r.prodQtd > 0 && loadingNfs} />
                       </CarboTableCell>
                       <CarboTableCell className="text-right">
                         {r.descarb > 0 ? (
@@ -637,7 +639,8 @@ function PagamentosTab() {
                             NF {brl(s.base_produto)} · descarb. {brl(s.base_descarb)}
                           </span>
                         )}
-                        <NfsDaBase nfs={nfsFech?.porFechamento.get(s.id)} carregando={loadingNfsFech} />
+                        <BotaoNfs titulo={`${s.vendedor_name || "vendedor"} · ${fmtDate(s.period_start)} – ${fmtDate(s.period_end)}`}
+                          nfs={nfsFech?.porFechamento.get(s.id)} carregando={loadingNfsFech} />
                       </CarboTableCell>
                       <CarboTableCell className="text-center">
                         {Number(s.rate_pct)}%
@@ -674,21 +677,81 @@ function PagamentosTab() {
   );
 }
 
-/** Números das NFs que formam a base. Mostra até `max` e diz quantas faltam —
- *  a lista inteira fica no `title` e, no fechamento, na Memória. */
-function NfsDaBase({ nfs, carregando, max = 6 }: { nfs?: string[]; carregando?: boolean; max?: number }) {
-  if (carregando && !nfs) return <span className="block text-[11px] text-muted-foreground/60">carregando NFs…</span>;
-  if (!nfs || nfs.length === 0) return null;
-  const mostra = nfs.slice(0, max);
+/** Botão "N NF(s)" que abre a lista das notas da base, com DANFE e XML. */
+function BotaoNfs({ titulo, nfs, carregando, qtd }: {
+  titulo: string; nfs?: NfDaBase[]; carregando?: boolean; qtd?: number;
+}) {
+  const [aberto, setAberto] = useState(false);
+  const n = nfs?.length ?? qtd ?? 0;
+  if (!carregando && n === 0) return null;
   return (
-    <span className="mt-0.5 flex flex-wrap justify-end gap-1" title={`NF ${nfs.join(", ")}`}>
-      {mostra.map((n) => (
-        <span key={n} className="rounded border border-border bg-muted/40 px-1 font-mono text-[10px] text-muted-foreground">
-          {n}
-        </span>
-      ))}
-      {nfs.length > max && <span className="text-[10px] text-muted-foreground">+{nfs.length - max}</span>}
-    </span>
+    <>
+      <button type="button" onClick={() => setAberto(true)} disabled={carregando && !nfs}
+        className="mt-1 inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-0.5 text-[11px] font-medium text-muted-foreground hover:text-foreground hover:border-foreground/30 disabled:opacity-60">
+        <FileText className="h-3 w-3" />
+        {carregando && !nfs ? "carregando NFs…" : `${n} NF(s)`}
+      </button>
+      <Dialog open={aberto} onOpenChange={setAberto}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Notas fiscais — {titulo}</DialogTitle>
+            <DialogDescription>As NFs que formam a base da comissão. Baixe o DANFE (PDF) ou o XML de cada uma.</DialogDescription>
+          </DialogHeader>
+          <div className="rounded-lg border divide-y text-sm">
+            {(nfs ?? []).map((nf) => <LinhaNf key={nf.bling_nf_id} nf={nf} />)}
+          </div>
+          {nfs && qtd != null && qtd > nfs.length && (
+            <p className="text-[11px] text-muted-foreground">
+              {qtd - nfs.length} pedido(s) da base ainda sem a nota no espelho do Bling — aparecem aqui quando ela chegar.
+            </p>
+          )}
+          <DialogFooter><CarboButton variant="outline" onClick={() => setAberto(false)}>Fechar</CarboButton></DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+function LinhaNf({ nf }: { nf: NfDaBase }) {
+  const links = useNfeLinks();
+  const [qual, setQual] = useState<"pdf" | "xml" | null>(null);
+  // O link do DANFE costuma faltar no espelho (a listagem do Bling não traz):
+  // usa o guardado e, se não houver, busca ao vivo no `bling-sync`.
+  const abrir = (tipo: "pdf" | "xml") => {
+    const guardado = tipo === "pdf" ? nf.pdf_url : nf.xml_url;
+    if (guardado) { window.open(guardado, "_blank", "noopener"); return; }
+    setQual(tipo);
+    links.mutate(nf.bling_nf_id, {
+      onSuccess: (r) => {
+        const url = tipo === "pdf" ? r.pdf : r.xml;
+        if (url) window.open(url, "_blank", "noopener");
+        else toast.error(`O Bling não devolveu o ${tipo === "pdf" ? "PDF" : "XML"} da NF ${nf.numero ?? ""}.`);
+      },
+      onError: (e: Error) => toast.error("Erro ao buscar a NF: " + e.message),
+      onSettled: () => setQual(null),
+    });
+  };
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+      <div className="min-w-0">
+        <p className="font-medium">NF {nf.numero ?? "— (ainda não sincronizada)"}</p>
+        <p className="truncate text-[11px] text-muted-foreground">
+          {nf.order_number ?? "—"} · {nf.customer_name ?? "—"}
+          {nf.emissao ? ` · ${fmtDate(nf.emissao)}` : ""}
+        </p>
+      </div>
+      <div className="flex items-center gap-2">
+        {nf.valor != null && <span className="tabular-nums text-xs">{brl(nf.valor)}</span>}
+        <CarboButton size="sm" variant="outline" onClick={() => abrir("pdf")} disabled={links.isPending}>
+          {qual === "pdf" ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Download className="h-3.5 w-3.5 mr-1" />}
+          DANFE
+        </CarboButton>
+        <CarboButton size="sm" variant="outline" onClick={() => abrir("xml")} disabled={links.isPending}>
+          {qual === "xml" ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Download className="h-3.5 w-3.5 mr-1" />}
+          XML
+        </CarboButton>
+      </div>
+    </div>
   );
 }
 
@@ -763,9 +826,9 @@ function MemoriaDialog({ st, onClose }: { st: CommissionStatement | null; onClos
                   <div className="min-w-0">
                     <p className="font-mono truncate">
                       {i.order_number || "—"}
-                      {i.order_id && nfsMem?.porPedido.get(i.order_id) && (
+                      {i.order_id && nfsMem?.porPedido.get(i.order_id)?.numero && (
                         <span className="ml-2 rounded border border-border bg-muted/40 px-1 text-[11px] text-muted-foreground">
-                          NF {nfsMem.porPedido.get(i.order_id)}
+                          NF {nfsMem.porPedido.get(i.order_id)!.numero}
                         </span>
                       )}
                     </p>
