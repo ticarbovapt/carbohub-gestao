@@ -51,6 +51,10 @@ import { DatePickerInput } from "@/components/ui/date-picker-input";
  */
 
 const brl = (v: number) => (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+/** "do dia seguinte" / "de 2 dias depois" — a régua do carrinho por hora do dia. */
+const diasDepois = (d?: number | null) =>
+  !d || d === 1 ? "do dia seguinte ao" : `de ${d} dias depois`;
 const dia = (s: string | null) => (s ? new Date(s + "T12:00:00").toLocaleDateString("pt-BR") : "—");
 
 const fmtDoc = (v: string | null) => {
@@ -1864,8 +1868,12 @@ export default function EsteiraOnline() {
         {pipeline === "carrinho" && cfgCarrinho && (
           <span className="text-[11px] text-muted-foreground">
             1ª {cfgCarrinho.minutos_1} min após o abandono ·
-            {" "}2ª {cfgCarrinho.horas_2}h após a 1ª ·
-            {" "}3ª {cfgCarrinho.horas_3}h após a 2ª
+            {" "}2ª {cfgCarrinho.hora_2 != null
+              ? `${cfgCarrinho.hora_2}h ${diasDepois(cfgCarrinho.dias_2)} da 1ª`
+              : `${cfgCarrinho.horas_2}h após a 1ª`} ·
+            {" "}3ª {cfgCarrinho.hora_3 != null
+              ? `${cfgCarrinho.hora_3}h ${diasDepois(cfgCarrinho.dias_3)} da 2ª`
+              : `${cfgCarrinho.horas_3}h após a 2ª`}
             {cfgCarrinho.valor_minimo > 0 && ` · mínimo ${brl(cfgCarrinho.valor_minimo)}`}
           </span>
         )}
