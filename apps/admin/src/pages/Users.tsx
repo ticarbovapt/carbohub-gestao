@@ -94,11 +94,11 @@ export default function Users() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return profiles.filter((p) => {
-      // ⚠️ Bloqueado NÃO some da lista por padrão — ele fica, marcado. Esconder
-      // quem perdeu o acesso é como se descobre meses depois que a pessoa
-      // continuava com tudo liberado: some da tela e some da cabeça de quem
-      // revisa. O chip "Bloqueados" é um FILTRO, não uma gaveta.
-      if (soBloqueados && !bloqueados.has(p.id)) return false;
+      // Bloqueado sai da lista de funcionários e mora no chip "Bloqueados"
+      // (dono do processo, 07/10/2026): uma lista OU a outra, nunca as duas.
+      // ⚠️ O chip continua à vista enquanto houver bloqueado, com a contagem —
+      // é ele que impede quem perdeu o acesso de sumir da cabeça de quem revisa.
+      if (soBloqueados !== bloqueados.has(p.id)) return false;
       // Filtro por departamento considera o 1º E o 2º departamento.
       if (deptFilter && p.department !== deptFilter && p.secondary_department !== deptFilter) return false;
       if (!q) return true;
@@ -197,7 +197,7 @@ export default function Users() {
             <button
               type="button"
               onClick={() => setSoBloqueados((v) => !v)}
-              title="Mostrar só quem está com o acesso bloqueado"
+              title={soBloqueados ? "Voltar para a lista de funcionários" : "Ver quem está com o acesso bloqueado"}
               className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border transition-colors ${
                 soBloqueados
                   ? "bg-destructive text-white border-destructive"
