@@ -433,7 +433,7 @@ export const COLUNAS_RECOMPRA: Array<{ key: ColunaRecompra; label: string; descr
   { key: "ofertar",     label: "Hora de ofertar",  descricao: "passou a janela, sem oferta",     color: "#f59e0b" },
   { key: "ofertado",    label: "Ofertado",         descricao: "mensagem enviada, aguardando",    color: "#0ea5e9" },
   { key: "recomprou",   label: "Recomprou",        descricao: "voltou a comprar após a entrega", color: "#9333ea" },
-  { key: "sem_retorno", label: "Sem retorno",      descricao: "não voltou — base de campanha",   color: "#64748b" },
+  { key: "sem_retorno", label: "Sem retorno",      descricao: "não voltou ou anterior à régua",  color: "#64748b" },
 ];
 
 /** Colunas que nascem RECOLHIDAS, ao fim do quadro. Quem está nelas nunca vai
@@ -599,7 +599,7 @@ export type ColunaCarrinho =
   // Também da TELA: o cliente respondeu e a sequência parou
   // (`carbo_carrinho_respostas`, migração 20261051).
   | "respondeu"
-  // As três que ficam FORA do quadro: nenhuma delas vai receber mensagem.
+  // As três que nenhuma mensagem alcança — a TELA as mostra em "Perdido".
   // `duplicado` é tentativa anterior da mesma pessoa — quem erra o cartão e
   // tenta de novo cria um checkout novo, e sem essa separação receberia a
   // mesma mensagem duas ou três vezes, em minutos, sobre a mesma compra.
@@ -630,10 +630,10 @@ export interface CarrinhoRow {
   coluna: ColunaCarrinho;
 }
 
-/** As colunas do quadro, na ordem do fluxo.
+/** As colunas do quadro, na ordem do fluxo. `historico`, `ignorado` e
+ * `duplicado` aparecem em "Perdido" (ver `colunaCarrinhoNaTela`).
  *
- * ⚠️ `sem_telefone` ESTÁ aqui, e as outras três de fora (`historico`,
- * `ignorado`, e nada mais) não. O carrinho sem telefone é a única exceção que
+ * ⚠️ `sem_telefone` é a única exceção que vira coluna própria. O carrinho sem telefone é a única exceção que
  * merece coluna: ele é trabalho real e possível — dá para mandar e-mail, dá
  * para ligar — e é o número que mede quanto a loja perde por não pedir o
  * telefone antes do fim do checkout. Escondê-lo faria a conta de recuperação
@@ -645,7 +645,7 @@ export const COLUNAS_CARRINHO: Array<{ key: ColunaCarrinho; label: string; descr
   { key: "msg3",         label: "3ª mensagem",  descricao: "última — depois desta, não insiste", color: "#9333ea" },
   { key: "respondeu",    label: "Respondeu",    descricao: "parou — uma pessoa assume na conversa", color: "#14b8a6" },
   { key: "recuperado",   label: "Recuperado",   descricao: "voltou e comprou",                 color: "#10b981" },
-  { key: "perdido",      label: "Perdido",      descricao: "não voltou — base de campanha",    color: "#64748b" },
+  { key: "perdido",      label: "Perdido",      descricao: "não voltou ou anterior à régua",   color: "#64748b" },
 ];
 
 /** Recolhidas ao fim do quadro, como na régua de recompra. ⚠️ `sem_telefone`
@@ -663,6 +663,12 @@ export const COLUNAS_CARRINHO_RECOLHIDAS: Array<{ key: ColunaCarrinho; label: st
 export function colunaCarrinhoNaTela(r: CarrinhoRow, envio?: EnvioMsg, resposta?: RespostaCarrinho,
                                      lista?: Set<string>): ColunaCarrinho {
   if (r.coluna === "recuperado") return r.coluna;
+  // ⚠️ Fora da régua (anterior ao marco zero, abaixo do mínimo, tentativa
+  // anterior da mesma pessoa) vai para "Perdido" e só (dono do processo,
+  // 07/10/2026). Nenhum deles recebe mensagem; a faixa própria que existia
+  // embaixo do quadro só poluía a tela. Comprou depois → a view já diz
+  // `recuperado`, que vem antes.
+  if (r.coluna === "historico" || r.coluna === "ignorado" || r.coluna === "duplicado") return "perdido";
   // ⚠️ Antes de "Respondeu": quem respondeu E pediu para parar já foi
   // atendido — o caso está resolvido, não esperando alguém.
   if (["aberto", "msg1", "msg2", "msg3", "perdido"].includes(r.coluna)

@@ -3988,6 +3988,11 @@ comprou na outra loja  20261053  passo 3 do carbo_payt_carrinhos_sincronizar
    etapa ligada MULTIPLICAVA o custo. Hoje é `base AS MATERIALIZED`, e a
    cadência das 9h voltou escrita na consulta (subselect sobre `cfg`, sem
    função). ⚠️ **Etapa nova na fila: meça a fila com o template LIGADO.**
+10. **Fora da régua vai para "Perdido" e só** (dono do processo, 07/10/2026):
+   `historico`, `ignorado` e `duplicado` são desviados na TELA
+   (`colunaCarrinhoNaTela`); a faixa "N fora da régua" e o aviso de "colunas
+   vazias por causa do marco zero" saíram — poluíam a tela. A view não mudou,
+   então a fila continua sem mandar nada para eles.
 8. ⚠️ **Ligar a recuperação de carrinho** continua sendo os dois interruptores
    da seção "Carrinho abandonado pela Meta" (marco zero em 24 h + `ativo`). Os
    carrinhos da PayT anteriores ao marco caem em "fora da régua" junto com os

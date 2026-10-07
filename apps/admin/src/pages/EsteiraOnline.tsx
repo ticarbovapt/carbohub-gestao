@@ -1639,10 +1639,8 @@ export default function EsteiraOnline() {
     [recompra],
   );
 
-  // Carrinho: mesma ideia. `historico` (anterior ao marco zero) e `ignorado`
-  // (abaixo do valor mínimo) ficam FORA do quadro — nenhum dos dois é etapa, os
-  // dois são "nunca vai ser perseguido", e misturá-los com os abertos faria a
-  // coluna de trabalho parecer maior do que é.
+  // Carrinho: `historico`, `ignorado` e `duplicado` caem em "Perdido"
+  // (`colunaCarrinhoNaTela`) — nenhum recebe mensagem.
   const porColunaCarrinho = useMemo(() => {
     const m = new Map<ColunaCarrinho, CarrinhoRow[]>();
     for (const c of [...COLUNAS_CARRINHO, ...COLUNAS_CARRINHO_RECOLHIDAS]) m.set(c.key, []);
@@ -1651,13 +1649,6 @@ export default function EsteiraOnline() {
     }
     return m;
   }, [carrinhos, enviosCarrinho, respostasCarrinho, naoContatar]);
-
-  const foraDaRegua = useMemo(
-    () => carrinhos.filter((r) => r.coluna === "historico"
-                               || r.coluna === "ignorado"
-                               || r.coluna === "duplicado"),
-    [carrinhos],
-  );
 
   /* Os números do topo, quando o quadro é o do carrinho.
    *
@@ -2029,65 +2020,6 @@ export default function EsteiraOnline() {
                               erro={col.key === "erro_envio" ? enviosCarrinho?.get(r.checkout_id) : undefined} />
               )} />
           </div>
-
-          {/* ⚠️ O quadro inteiro vazio COM carrinhos no banco é a leitura errada
-              mais provável desta tela — "não está aparecendo os carrinhos" foi
-              literalmente a primeira reação de quem abriu. Seis colunas dizendo
-              "ninguém aqui" enquanto 21 existem parece defeito, e não é: é o
-              marco zero fazendo o trabalho dele.
-
-              A faixa embaixo já mostrava o número, mas fechada e no rodapé ela
-              lê como legenda. Este aviso ocupa o vazio do quadro, que é para
-              onde a pessoa está olhando. */}
-          {porColunaCarrinho.get("aberto")?.length === 0 && foraDaRegua.length > 0 && (
-            <div className="shrink-0 rounded-xl border border-dashed bg-muted/20 p-4 text-center">
-              <p className="text-xs font-medium">
-                As colunas estão vazias porque os {foraDaRegua.length} carrinhos já
-                sincronizados são <strong>anteriores ao marco zero</strong>
-                {cfgCarrinho && ` (${new Date(cfgCarrinho.inicio_em).toLocaleString("pt-BR", {
-                  day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
-                })})`}.
-              </p>
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                Eles estão logo abaixo, em "fora da régua", e não recebem mensagem — é o que
-                impede o disparo em massa ao ligar a função. O quadro enche sozinho com o
-                próximo carrinho abandonado a partir de agora.
-              </p>
-            </div>
-          )}
-
-          {/* ⚠️ Fora da régua: anteriores ao marco zero, abaixo do valor mínimo
-              e tentativa anterior da mesma pessoa. Fechado e fora do quadro pelo
-              mesmo motivo do histórico da recompra — nenhum deles vai receber
-              mensagem, e deixá-los entre os abertos faria a coluna de trabalho
-              parecer maior do que é. */}
-          {foraDaRegua.length > 0 && (
-            <details className="shrink-0 rounded-xl border p-3">
-              <summary className="flex cursor-pointer items-center gap-1.5 text-xs font-medium">
-                <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                {foraDaRegua.length} fora da régua —{" "}
-                {brl(foraDaRegua.reduce((s, r) => s + (r.total || 0), 0))}
-              </summary>
-              <p className="mt-2 text-[11px] text-muted-foreground">
-                Nenhum destes recebe mensagem automática. São três casos:
-                abandonados <strong>antes</strong> desta pipeline existir
-                {cfgCarrinho && ` (marco zero: ${new Date(cfgCarrinho.inicio_em).toLocaleDateString("pt-BR")})`},
-                abaixo do valor mínimo, ou <strong>tentativa anterior</strong> da mesma
-                pessoa — quem erra o cartão e refaz o checkout cria um carrinho novo, e
-                só o mais recente é perseguido. Ofertar a esta base é campanha à parte.
-              </p>
-              <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3 xl:grid-cols-5">
-                {foraDaRegua.slice(0, 30).map((r) => (
-                  <CardCarrinho key={r.checkout_id} row={r} cor="#64748b" />
-                ))}
-              </div>
-              {foraDaRegua.length > 30 && (
-                <p className="mt-2 text-[11px] text-muted-foreground">
-                  mostrando 30 de {foraDaRegua.length}
-                </p>
-              )}
-            </details>
-          )}
 
           <p className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground">
             <ShoppingBag className="h-3 w-3 shrink-0" />
