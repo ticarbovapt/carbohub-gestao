@@ -461,22 +461,30 @@ export function colunaRecompraNaTela(r: RecompraRow, envio?: EnvioMsg): ColunaRe
   return r.coluna;
 }
 
-/** Os envios da etapa `recompra`, por pedido. Paginado: a régua passa de mil
- *  linhas cedo, e o teto silencioso do PostgREST cortaria o resto sem aviso. */
-export function useEnviosRecompra() {
+/** Os envios das etapas pedidas, por `bling_id` (no carrinho é o id do
+ *  checkout). Com mais de uma etapa, vale a ÚLTIMA da lista que existir — é a
+ *  mensagem mais recente que diz se o carrinho está com erro AGORA.
+ *  Paginado: passa de mil linhas cedo, e o teto silencioso do PostgREST
+ *  cortaria o resto sem aviso. */
+function useEnviosPorEtapa(etapas: string[]) {
   return useQuery({
-    queryKey: ["msg-envios-recompra"],
+    queryKey: ["msg-envios-etapas", etapas.join(",")],
     queryFn: async (): Promise<Map<number, EnvioMsg>> => {
       const mapa = new Map<number, EnvioMsg>();
+      const ordem = (e: string) => etapas.indexOf(e);
       for (let de = 0; de < 200_000; de += 1000) {
         const { data, error } = await (supabase as any)
           .from("carbo_msg_envios")
           .select("*")
-          .eq("etapa", "recompra")
+          .in("etapa", etapas)
           .order("bling_id")
+          .order("etapa")
           .range(de, de + 999);
         if (error) throw error;
-        for (const e of (data ?? []) as EnvioMsg[]) mapa.set(e.bling_id, e);
+        for (const e of (data ?? []) as EnvioMsg[]) {
+          const atual = mapa.get(e.bling_id);
+          if (!atual || ordem(e.etapa) > ordem(atual.etapa)) mapa.set(e.bling_id, e);
+        }
         if (!data || data.length < 1000) break;
       }
       return mapa;
@@ -484,6 +492,9 @@ export function useEnviosRecompra() {
     refetchInterval: 60_000,
   });
 }
+
+export const useEnviosRecompra = () => useEnviosPorEtapa(["recompra"]);
+export const useEnviosCarrinho = () => useEnviosPorEtapa(["carrinho_1", "carrinho_2", "carrinho_3"]);
 
 export function useRecompraPipeline() {
   return useQuery({
@@ -542,6 +553,9 @@ export function useRecompraConfig() {
 export type ColunaCarrinho =
   | "aberto" | "msg1" | "msg2" | "msg3"
   | "recuperado" | "perdido" | "sem_telefone"
+  // Calculada na TELA (`colunaCarrinhoNaTela`), nunca na view — ver a mesma
+  // nota em `ColunaRecompra`.
+  | "erro_envio"
   // As três que ficam FORA do quadro: nenhuma delas vai receber mensagem.
   // `duplicado` é tentativa anterior da mesma pessoa — quem erra o cartão e
   // tenta de novo cria um checkout novo, e sem essa separação receberia a
@@ -588,8 +602,24 @@ export const COLUNAS_CARRINHO: Array<{ key: ColunaCarrinho; label: string; descr
   { key: "msg3",         label: "3ª mensagem",  descricao: "última — depois desta, não insiste", color: "#9333ea" },
   { key: "recuperado",   label: "Recuperado",   descricao: "voltou e comprou",                 color: "#10b981" },
   { key: "perdido",      label: "Perdido",      descricao: "não voltou — base de campanha",    color: "#64748b" },
-  { key: "sem_telefone", label: "Sem telefone", descricao: "só e-mail — não dá para avisar",   color: "#f43f5e" },
 ];
+
+/** Recolhidas ao fim do quadro, como na régua de recompra. ⚠️ `sem_telefone`
+ *  continua CONTADO à vista no trilho — esconder o número faria a conta de
+ *  recuperação parecer melhor do que é —, só deixou de disputar espaço com os
+ *  carrinhos que dá para avisar. */
+export const COLUNAS_CARRINHO_RECOLHIDAS: Array<{ key: ColunaCarrinho; label: string; descricao: string; color: string }> = [
+  { key: "sem_telefone", label: "Sem telefone",   descricao: "só e-mail — não dá para avisar", color: "#94a3b8" },
+  { key: "erro_envio",   label: "Erro ao enviar", descricao: "a mensagem saiu e não chegou",   color: "#ef4444" },
+];
+
+/** A coluna que a TELA mostra. Só desvia o carrinho cuja ÚLTIMA mensagem falhou.
+ *  ⚠️ `recuperado` nunca sai do lugar: comprou é desfecho. */
+export function colunaCarrinhoNaTela(r: CarrinhoRow, envio?: EnvioMsg): ColunaCarrinho {
+  if (r.coluna === "recuperado") return r.coluna;
+  if (envio && FALHOU.has(envio.status)) return "erro_envio";
+  return r.coluna;
+}
 
 export function useCarrinhoPipeline() {
   return useQuery({
