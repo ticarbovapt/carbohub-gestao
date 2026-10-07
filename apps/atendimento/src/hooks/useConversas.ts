@@ -161,6 +161,25 @@ export function useConversas(dias = 30, numeroId?: string | null) {
         }
       }
 
+      // ⚠️ A reserva GERAL: conversa que ficou sem nome pelo pedido, pelo
+      // carrinho e pelo WhatsApp (envio de teste, cliente que não respondeu)
+      // ganha o nome pelo TELEFONE (`carbo_wa_nomes_por_fone`, migração
+      // 20261057). Só apresentação — não liga a conversa a pedido nenhum.
+      const comNome = new Set(lista.filter((m) => m.cliente_pedido || m.nome_whatsapp)
+                                   .map((m) => m.wa_id));
+      const semNome = [...new Set(lista.map((m) => m.wa_id))].filter((w) => !comNome.has(w));
+      if (semNome.length > 0) {
+        const { data: porFone, error: errFone } = await (supabase as any)
+          .rpc("carbo_wa_nomes_por_fone", { p_wa_ids: semNome });
+        // Falhar não derruba a caixa (inclusive antes de a migração rodar).
+        if (errFone) console.error("[conversas] nome pelo telefone:", errFone.message);
+        const nomes = new Map<string, string>();
+        for (const r of (porFone ?? []) as any[]) if (r.nome) nomes.set(r.wa_id, r.nome);
+        for (const m of lista) {
+          if (!m.cliente_pedido && nomes.has(m.wa_id)) m.cliente_pedido = nomes.get(m.wa_id)!;
+        }
+      }
+
       return agruparConversas(lista, janelas,
                               resolvidos, atendimentos, tagsPorConversa);
     },
