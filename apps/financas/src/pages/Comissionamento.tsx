@@ -22,6 +22,7 @@ import {
   useComissaoAgregado, useComissaoDescarb, useCommissionStatements, useCreateStatement, useAddPayment,
   useCommissionRules, useUpsertCommissionRule, useStatementItems, useStatementPayments,
   type CommissionStatement,
+  useNfsDaComissao, useNfsDosFechamentos,
 } from "@/hooks/useComissao";
 
 const brl = (v: number) => (v ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -252,6 +253,8 @@ function CalcularTab() {
   }, [merged, regras]);
 
   const vendedores = useMemo(() => merged.map((a) => ({ id: a.vendedor_id, name: a.vendedor_name || "—" })), [merged]);
+  const comNf = useMemo(() => merged.filter((a) => a.prodQtd > 0).map((a) => a.vendedor_id), [merged]);
+  const { data: nfsPorVendedor, isLoading: loadingNfs } = useNfsDaComissao(from, to, comNf);
   const rows = vendFilter === "__all__" ? merged : merged.filter((a) => a.vendedor_id === vendFilter);
   const totalBase = rows.reduce((s, r) => s + r.prod + r.descarb, 0);
   const totalDescarb = rows.reduce((s, r) => s + r.descarb, 0);
@@ -331,6 +334,7 @@ function CalcularTab() {
                       <CarboTableCell className="text-right">
                         {brl(r.prod)}
                         <span className="block text-[11px] text-muted-foreground">{r.prodQtd} NF(s)</span>
+                        <NfsDaBase nfs={nfsPorVendedor?.get(r.vendedor_id)} carregando={r.prodQtd > 0 && loadingNfs} />
                       </CarboTableCell>
                       <CarboTableCell className="text-right">
                         {r.descarb > 0 ? (
@@ -500,6 +504,7 @@ function PagamentosTab() {
    * um diálogo que parece continuar de onde parou.
    */
   const [paying, setPaying] = useState<CommissionStatement | null>(null);
+  const { data: nfsFech, isLoading: loadingNfsFech } = useNfsDosFechamentos(statements.map((s) => s.id));
 
   const vendFiltro = sp.get(PARAM_PG_VENDEDOR) || "__all__";
   const statusFiltro = sp.get(PARAM_PG_STATUS) || "__all__";
@@ -632,6 +637,7 @@ function PagamentosTab() {
                             NF {brl(s.base_produto)} · descarb. {brl(s.base_descarb)}
                           </span>
                         )}
+                        <NfsDaBase nfs={nfsFech?.porFechamento.get(s.id)} carregando={loadingNfsFech} />
                       </CarboTableCell>
                       <CarboTableCell className="text-center">
                         {Number(s.rate_pct)}%
@@ -668,12 +674,31 @@ function PagamentosTab() {
   );
 }
 
+/** Números das NFs que formam a base. Mostra até `max` e diz quantas faltam —
+ *  a lista inteira fica no `title` e, no fechamento, na Memória. */
+function NfsDaBase({ nfs, carregando, max = 6 }: { nfs?: string[]; carregando?: boolean; max?: number }) {
+  if (carregando && !nfs) return <span className="block text-[11px] text-muted-foreground/60">carregando NFs…</span>;
+  if (!nfs || nfs.length === 0) return null;
+  const mostra = nfs.slice(0, max);
+  return (
+    <span className="mt-0.5 flex flex-wrap justify-end gap-1" title={`NF ${nfs.join(", ")}`}>
+      {mostra.map((n) => (
+        <span key={n} className="rounded border border-border bg-muted/40 px-1 font-mono text-[10px] text-muted-foreground">
+          {n}
+        </span>
+      ))}
+      {nfs.length > max && <span className="text-[10px] text-muted-foreground">+{nfs.length - max}</span>}
+    </span>
+  );
+}
+
 // ── Dialog: memória de cálculo (NFs que compõem o fechamento) ─────────────────
 function MemoriaDialog({ st, onClose }: { st: CommissionStatement | null; onClose: () => void }) {
   const { data: items = [], isLoading } = useStatementItems(st?.id ?? null);
   // Pagamentos já lançados. A data e a forma eram gravadas e não apareciam em
   // lugar nenhum — dado que ninguém vê não serve para conferir nada.
   const { data: pagamentos = [] } = useStatementPayments(st?.id ?? null);
+  const { data: nfsMem } = useNfsDosFechamentos(st ? [st.id] : []);
   if (!st) return null;
   const soma = items.reduce((s, i) => s + Number(i.total), 0);
   return (
@@ -736,7 +761,14 @@ function MemoriaDialog({ st, onClose }: { st: CommissionStatement | null; onClos
               {items.map((i) => (
                 <div key={i.id} className="flex items-center justify-between text-sm border-b border-border pb-1.5">
                   <div className="min-w-0">
-                    <p className="font-mono truncate">{i.order_number || "—"}</p>
+                    <p className="font-mono truncate">
+                      {i.order_number || "—"}
+                      {i.order_id && nfsMem?.porPedido.get(i.order_id) && (
+                        <span className="ml-2 rounded border border-border bg-muted/40 px-1 text-[11px] text-muted-foreground">
+                          NF {nfsMem.porPedido.get(i.order_id)}
+                        </span>
+                      )}
+                    </p>
                     <p className="text-[11px] text-muted-foreground truncate">{i.customer_name || "—"}{i.sale_date ? ` · ${fmtDate(i.sale_date)}` : ""}</p>
                   </div>
                   <span className="font-medium shrink-0">{brl(Number(i.total))}</span>

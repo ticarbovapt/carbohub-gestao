@@ -2916,6 +2916,12 @@ Corrigido na `20260982`, com a MESMA regra nas duas funções.
    null`: pedido faturado só na filial nunca entra nessa base. Acrescentar
    `bling2_nfe` seria código morto disfarçado de cuidado.
 
+4. **A tela mostra QUAIS NFs** (07/10/2026), nas duas abas: em Calcular pelo
+   `crm_comissao_detalhe` (a MESMA lista que vira memória ao gerar), em
+   Pagamentos pelos `commission_statement_items` CONGELADOS — nunca recalculado,
+   senão o fechamento antigo mostraria nota que entrou depois. O número sai de
+   `bling_nfe.numero` via `carboze_orders.bling_nf_id` (`useComissao.ts`).
+
 ⚠️ **PENDÊNCIA MEDIDA, não resolvida: a comissão paga sobre NF CANCELADA.** Ela
 só testa se `bling_nf_id` está preenchido, nunca se a nota vale — enquanto o
 faturamento tem `carbo_vendas_nf_cancelada` justamente para isso. Trocar a base

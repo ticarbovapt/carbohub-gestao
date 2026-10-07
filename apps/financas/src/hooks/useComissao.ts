@@ -203,7 +203,7 @@ export function useUpsertCommissionRule() {
 }
 
 // ── Memória de cálculo de um fechamento ───────────────────────────────────────
-export interface StatementItem { id: string; order_number: string | null; customer_name: string | null; total: number; sale_date: string | null; }
+export interface StatementItem { id: string; order_id: string | null; order_number: string | null; customer_name: string | null; total: number; sale_date: string | null; }
 export function useStatementItems(statementId: string | null) {
   return useQuery({
     queryKey: ["commission_items", statementId],
@@ -268,5 +268,92 @@ export function useAddPayment() {
       toast.success("Pagamento registrado!");
     },
     onError: (e: Error) => toast.error("Erro ao registrar pagamento: " + e.message),
+  });
+}
+
+// ─── Números das NFs que formam a base ───────────────────────────────────────
+// A comissão chama de "faturado" o pedido com `bling_nf_id` (conta 1 — ver
+// `crm_comissao_detalhe`), então o número sai de `bling_nfe` por esse id. A
+// tela mostrava "2 NF(s)" sem dizer QUAIS — e conferir comissão é bater NF.
+
+const LOTE = 200;
+const fatias = <T,>(xs: T[]) => Array.from({ length: Math.ceil(xs.length / LOTE) }, (_, i) => xs.slice(i * LOTE, (i + 1) * LOTE));
+
+/** order_id → número da NF (ex.: "000303"). Pedido sem nota no espelho fica de fora. */
+async function nfsDosPedidos(orderIds: string[]): Promise<Map<string, string>> {
+  const ids = [...new Set(orderIds.filter(Boolean))];
+  const out = new Map<string, string>();
+  if (!ids.length) return out;
+  const pedidoNf = new Map<string, string>();
+  for (const f of fatias(ids)) {
+    const { data, error } = await db.from("carboze_orders").select("id, bling_nf_id").in("id", f);
+    if (error) throw error;
+    for (const o of (data ?? []) as any[]) if (o.bling_nf_id != null) pedidoNf.set(o.id, String(o.bling_nf_id));
+  }
+  const nfIds = [...new Set(pedidoNf.values())];
+  const numero = new Map<string, string>();
+  for (const f of fatias(nfIds)) {
+    const { data, error } = await db.from("bling_nfe").select("bling_id, numero").in("bling_id", f);
+    if (error) throw error;
+    for (const n of (data ?? []) as any[]) if (n.numero) numero.set(String(n.bling_id), String(n.numero));
+  }
+  for (const [pedido, nf] of pedidoNf) {
+    const n = numero.get(nf);
+    if (n) out.set(pedido, n);
+  }
+  return out;
+}
+
+const ordenarNfs = (xs: string[]) => [...new Set(xs)].sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true }));
+
+/** Aba Calcular: as NFs de cada vendedor no período — a MESMA lista que vira
+ *  memória de cálculo ao gerar a comissão (`crm_comissao_detalhe`). */
+export function useNfsDaComissao(from: string, to: string, vendedorIds: string[]) {
+  const chave = [...vendedorIds].sort().join(",");
+  return useQuery({
+    queryKey: ["comissao_nfs", from, to, chave],
+    enabled: !!from && !!to && vendedorIds.length > 0,
+    staleTime: 60_000,
+    queryFn: async (): Promise<Map<string, string[]>> => {
+      const porVendedor = new Map<string, string[]>();
+      const detalhes = await Promise.all(vendedorIds.map(async (vid) => {
+        const { data, error } = await db.rpc("crm_comissao_detalhe", { p_vendedor: vid, p_from: from, p_to: to });
+        if (error) throw error;
+        return [vid, ((data ?? []) as any[]).map((o) => String(o.order_id))] as const;
+      }));
+      const nfs = await nfsDosPedidos(detalhes.flatMap(([, ids]) => ids));
+      for (const [vid, ids] of detalhes) {
+        porVendedor.set(vid, ordenarNfs(ids.map((i) => nfs.get(i)).filter(Boolean) as string[]));
+      }
+      return porVendedor;
+    },
+  });
+}
+
+/** Aba Pagamentos: as NFs CONGELADAS em cada fechamento (`commission_statement_items`).
+ *  Devolve também o mapa por pedido, para a memória de cálculo. */
+export function useNfsDosFechamentos(statementIds: string[]) {
+  const chave = [...statementIds].sort().join(",");
+  return useQuery({
+    queryKey: ["fechamento_nfs", chave],
+    enabled: statementIds.length > 0,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const itens: { statement_id: string; order_id: string }[] = [];
+      for (const f of fatias(statementIds)) {
+        const { data, error } = await db.from("commission_statement_items")
+          .select("statement_id, order_id").in("statement_id", f);
+        if (error) throw error;
+        itens.push(...((data ?? []) as any[]));
+      }
+      const porPedido = await nfsDosPedidos(itens.map((i) => i.order_id));
+      const porFechamento = new Map<string, string[]>();
+      for (const i of itens) {
+        const n = porPedido.get(i.order_id);
+        if (n) (porFechamento.get(i.statement_id) ?? porFechamento.set(i.statement_id, []).get(i.statement_id)!).push(n);
+      }
+      for (const [k, v] of porFechamento) porFechamento.set(k, ordenarNfs(v));
+      return { porFechamento, porPedido };
+    },
   });
 }
