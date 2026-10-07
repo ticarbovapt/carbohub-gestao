@@ -279,32 +279,59 @@ export function useAddPayment() {
 const LOTE = 200;
 const fatias = <T,>(xs: T[]) => Array.from({ length: Math.ceil(xs.length / LOTE) }, (_, i) => xs.slice(i * LOTE, (i + 1) * LOTE));
 
-/** order_id → número da NF (ex.: "000303"). Pedido sem nota no espelho fica de fora. */
-async function nfsDosPedidos(orderIds: string[]): Promise<Map<string, string>> {
+/** Uma NF da base de comissão, com o pedido que ela fatura. */
+export interface NfDaBase {
+  order_id: string;
+  order_number: string | null;
+  customer_name: string | null;
+  bling_nf_id: number;
+  numero: string | null;
+  valor: number | null;
+  emissao: string | null;
+  pdf_url: string | null;
+  xml_url: string | null;
+}
+
+/** order_id → a NF dele (conta 1). Pedido sem `bling_nf_id` fica de fora; nota
+ *  que ainda não chegou ao espelho volta com `numero` nulo — e APARECE assim,
+ *  em vez de sumir da lista. */
+async function nfsDosPedidos(orderIds: string[]): Promise<Map<string, NfDaBase>> {
   const ids = [...new Set(orderIds.filter(Boolean))];
-  const out = new Map<string, string>();
+  const out = new Map<string, NfDaBase>();
   if (!ids.length) return out;
-  const pedidoNf = new Map<string, string>();
+  const pedidos: any[] = [];
   for (const f of fatias(ids)) {
-    const { data, error } = await db.from("carboze_orders").select("id, bling_nf_id").in("id", f);
+    const { data, error } = await db.from("carboze_orders")
+      .select("id, order_number, customer_name, bling_nf_id").in("id", f);
     if (error) throw error;
-    for (const o of (data ?? []) as any[]) if (o.bling_nf_id != null) pedidoNf.set(o.id, String(o.bling_nf_id));
+    pedidos.push(...((data ?? []) as any[]).filter((o) => o.bling_nf_id != null));
   }
-  const nfIds = [...new Set(pedidoNf.values())];
-  const numero = new Map<string, string>();
+  const nfIds = [...new Set(pedidos.map((o) => Number(o.bling_nf_id)))];
+  const nota = new Map<number, any>();
   for (const f of fatias(nfIds)) {
-    const { data, error } = await db.from("bling_nfe").select("bling_id, numero").in("bling_id", f);
+    const { data, error } = await db.from("bling_nfe")
+      .select("bling_id, numero, valor_total, data_emissao, pdf_url, xml_url").in("bling_id", f);
     if (error) throw error;
-    for (const n of (data ?? []) as any[]) if (n.numero) numero.set(String(n.bling_id), String(n.numero));
+    for (const n of (data ?? []) as any[]) nota.set(Number(n.bling_id), n);
   }
-  for (const [pedido, nf] of pedidoNf) {
-    const n = numero.get(nf);
-    if (n) out.set(pedido, n);
+  for (const o of pedidos) {
+    const n = nota.get(Number(o.bling_nf_id));
+    out.set(o.id, {
+      order_id: o.id, order_number: o.order_number ?? null, customer_name: o.customer_name ?? null,
+      bling_nf_id: Number(o.bling_nf_id), numero: n?.numero ?? null,
+      valor: n?.valor_total != null ? Number(n.valor_total) : null,
+      emissao: n?.data_emissao ?? null, pdf_url: n?.pdf_url ?? null, xml_url: n?.xml_url ?? null,
+    });
   }
   return out;
 }
 
-const ordenarNfs = (xs: string[]) => [...new Set(xs)].sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true }));
+const ordenarNfs = (xs: NfDaBase[]) => {
+  const unicas = new Map<number, NfDaBase>();
+  for (const x of xs) if (!unicas.has(x.bling_nf_id)) unicas.set(x.bling_nf_id, x);
+  return [...unicas.values()].sort((a, b) =>
+    (a.numero ?? "").localeCompare(b.numero ?? "", "pt-BR", { numeric: true }));
+};
 
 /** Aba Calcular: as NFs de cada vendedor no período — a MESMA lista que vira
  *  memória de cálculo ao gerar a comissão (`crm_comissao_detalhe`). */
@@ -314,16 +341,16 @@ export function useNfsDaComissao(from: string, to: string, vendedorIds: string[]
     queryKey: ["comissao_nfs", from, to, chave],
     enabled: !!from && !!to && vendedorIds.length > 0,
     staleTime: 60_000,
-    queryFn: async (): Promise<Map<string, string[]>> => {
-      const porVendedor = new Map<string, string[]>();
+    queryFn: async (): Promise<Map<string, NfDaBase[]>> => {
       const detalhes = await Promise.all(vendedorIds.map(async (vid) => {
         const { data, error } = await db.rpc("crm_comissao_detalhe", { p_vendedor: vid, p_from: from, p_to: to });
         if (error) throw error;
         return [vid, ((data ?? []) as any[]).map((o) => String(o.order_id))] as const;
       }));
       const nfs = await nfsDosPedidos(detalhes.flatMap(([, ids]) => ids));
+      const porVendedor = new Map<string, NfDaBase[]>();
       for (const [vid, ids] of detalhes) {
-        porVendedor.set(vid, ordenarNfs(ids.map((i) => nfs.get(i)).filter(Boolean) as string[]));
+        porVendedor.set(vid, ordenarNfs(ids.map((i) => nfs.get(i)).filter(Boolean) as NfDaBase[]));
       }
       return porVendedor;
     },
@@ -347,12 +374,13 @@ export function useNfsDosFechamentos(statementIds: string[]) {
         itens.push(...((data ?? []) as any[]));
       }
       const porPedido = await nfsDosPedidos(itens.map((i) => i.order_id));
-      const porFechamento = new Map<string, string[]>();
+      const juntas = new Map<string, NfDaBase[]>();
       for (const i of itens) {
         const n = porPedido.get(i.order_id);
-        if (n) (porFechamento.get(i.statement_id) ?? porFechamento.set(i.statement_id, []).get(i.statement_id)!).push(n);
+        if (n) (juntas.get(i.statement_id) ?? juntas.set(i.statement_id, []).get(i.statement_id)!).push(n);
       }
-      for (const [k, v] of porFechamento) porFechamento.set(k, ordenarNfs(v));
+      const porFechamento = new Map<string, NfDaBase[]>();
+      for (const [k, v] of juntas) porFechamento.set(k, ordenarNfs(v));
       return { porFechamento, porPedido };
     },
   });

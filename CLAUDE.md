@@ -2921,6 +2921,9 @@ Corrigido na `20260982`, com a MESMA regra nas duas funções.
    Pagamentos pelos `commission_statement_items` CONGELADOS — nunca recalculado,
    senão o fechamento antigo mostraria nota que entrou depois. O número sai de
    `bling_nfe.numero` via `carboze_orders.bling_nf_id` (`useComissao.ts`).
+   É um BOTÃO "N NF(s)" que abre a lista com DANFE e XML por nota (pedido do
+   dono do processo — ver o número não basta, é preciso BAIXAR). O link usa o
+   guardado em `bling_nfe` e, faltando, busca ao vivo (`useNfeLinks`).
 
 ⚠️ **PENDÊNCIA MEDIDA, não resolvida: a comissão paga sobre NF CANCELADA.** Ela
 só testa se `bling_nf_id` está preenchido, nunca se a nota vale — enquanto o
