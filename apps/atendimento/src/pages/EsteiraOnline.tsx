@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import {
   useEsteiraOnline,
   useEsteiraParados, useRastreios, useEcommerceAguardando, useFontesSaude,
-  useAvisosDoPedido, useRecompraPipeline, useRecompraConfig, useEnviosRecompra, colunaRecompraNaTela, useEnviosCarrinho, colunaCarrinhoNaTela, useEsteiraTravadosAntigos,
+  useAvisosDoPedido, useRecompraPipeline, useRecompraConfig, useEnviosRecompra, colunaRecompraNaTela, useEnviosCarrinho, colunaCarrinhoNaTela, useCarrinhoRespostas, type RespostaCarrinho, useEsteiraTravadosAntigos,
   useCarrinhoPipeline, useCarrinhoConfig,
   ETAPAS, COLUNAS_RECOMPRA, COLUNAS_RECOMPRA_RECOLHIDAS, COLUNAS_CARRINHO, COLUNAS_CARRINHO_RECOLHIDAS,
   type EsteiraRow, type EtapaEsteira, type RastreioCard, type AguardandoRow,
@@ -1239,7 +1239,7 @@ function CardRecompra({ row, cor, erro }: { row: RecompraRow; cor: string; erro?
 // ⚠️ O produto aparece no card, e não só na mensagem. Sem ele o quadro vira uma
 // lista de valores anônimos — e a primeira pergunta de quem olha ("o que essa
 // gente estava comprando?") exigiria abrir a loja para responder.
-function CardCarrinho({ row, cor, erro }: { row: CarrinhoRow; cor: string; erro?: EnvioMsg }) {
+function CardCarrinho({ row, cor, erro, resposta }: { row: CarrinhoRow; cor: string; erro?: EnvioMsg; resposta?: RespostaCarrinho }) {
   const min = row.minutos_parado;
   const idade = min < 60 ? `há ${Math.max(1, Math.round(min))} min`
               : min < 60 * 48 ? `há ${Math.floor(min / 60)}h`
@@ -1272,7 +1272,8 @@ function CardCarrinho({ row, cor, erro }: { row: CarrinhoRow; cor: string; erro?
 
       <div className="mt-1 flex items-baseline gap-2 text-[11px] leading-4 text-muted-foreground">
         <span className="min-w-0 flex-1 truncate">{idade}</span>
-        {proxima && (
+        {/* Quem respondeu não tem "próxima": a sequência parou. */}
+        {proxima && !resposta && (
           <span className="flex shrink-0 items-center gap-1 tabular-nums">
             <Timer className="h-3 w-3" />{proxima}
           </span>
@@ -1303,6 +1304,31 @@ function CardCarrinho({ row, cor, erro }: { row: CarrinhoRow; cor: string; erro?
         </a>
       )}
       {erro && <LinhaDeErro erro={erro} />}
+      {resposta && <LinhaDeResposta resposta={resposta} />}
+    </div>
+  );
+}
+
+// ⚠️ A conversa mora SÓ no app de Atendimento (`/conversas`), então o link é
+// absoluto: a Esteira também existe no Admin e no Ops, onde um caminho
+// relativo cairia no catch-all e abriria a home. O número vai junto porque a
+// mesma pessoa em dois números nossos são duas conversas.
+function LinhaDeResposta({ resposta }: { resposta: RespostaCarrinho }) {
+  const min = Math.max(0, (Date.now() - new Date(resposta.respondeu_em).getTime()) / 60000);
+  const ha = min < 60 ? `há ${Math.max(1, Math.round(min))} min`
+           : min < 60 * 48 ? `há ${Math.floor(min / 60)}h`
+           : `há ${Math.floor(min / 1440)}d`;
+  const p = new URLSearchParams({ de: resposta.wa_id });
+  if (resposta.numero_id) p.set("numero", resposta.numero_id);
+  return (
+    <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] leading-4">
+      <span className="flex items-center gap-1 text-teal-600 dark:text-teal-400">
+        <MessageSquare className="h-3 w-3" />respondeu {ha}
+      </span>
+      <a href={`https://atendimento.carbohub.com.br/conversas?${p.toString()}`}
+         className="font-medium text-teal-600 hover:underline dark:text-teal-400">
+        abrir conversa
+      </a>
     </div>
   );
 }
@@ -1471,6 +1497,7 @@ export default function EsteiraOnline() {
   const { data: enviosRecompra } = useEnviosRecompra();
   // Recolhidas por padrão — elas existem para TIRAR ruído do quadro.
   const { data: enviosCarrinho } = useEnviosCarrinho();
+  const { data: respostasCarrinho } = useCarrinhoRespostas();
   const [abertas, setAbertas] = useState<Set<string>>(() => new Set());
   const alternarColuna = (k: string) =>
     setAbertas((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
@@ -1592,9 +1619,11 @@ export default function EsteiraOnline() {
   const porColunaCarrinho = useMemo(() => {
     const m = new Map<ColunaCarrinho, CarrinhoRow[]>();
     for (const c of [...COLUNAS_CARRINHO, ...COLUNAS_CARRINHO_RECOLHIDAS]) m.set(c.key, []);
-    for (const r of carrinhos) m.get(colunaCarrinhoNaTela(r, enviosCarrinho?.get(r.checkout_id)))?.push(r);
+    for (const r of carrinhos) {
+      m.get(colunaCarrinhoNaTela(r, enviosCarrinho?.get(r.checkout_id), respostasCarrinho?.get(r.checkout_id)))?.push(r);
+    }
     return m;
-  }, [carrinhos, enviosCarrinho]);
+  }, [carrinhos, enviosCarrinho, respostasCarrinho]);
 
   const foraDaRegua = useMemo(
     () => carrinhos.filter((r) => r.coluna === "historico"
@@ -1614,16 +1643,17 @@ export default function EsteiraOnline() {
    * mensagens). Recuperado e perdido ficam fora: um já virou, o outro não vira
    * mais. */
   const carrinhoResumo = useMemo(() => {
-    const ativos = carrinhos.filter(
-      (r) => r.coluna === "aberto" || r.coluna === "msg1"
-          || r.coluna === "msg2"   || r.coluna === "msg3");
+    // Das colunas DA TELA: quem respondeu saiu da perseguição, e contá-lo aqui
+    // diria que o sistema ainda vai mandar mensagem para ele.
+    const ativos = (["aberto", "msg1", "msg2", "msg3"] as const)
+      .flatMap((k) => porColunaCarrinho.get(k) ?? []);
     return {
       ativos: ativos.length,
       valor: ativos.reduce((s, r) => s + (r.total || 0), 0),
       recuperados: carrinhos.filter((r) => r.coluna === "recuperado").length,
       semFone: carrinhos.filter((r) => r.coluna === "sem_telefone").length,
     };
-  }, [carrinhos]);
+  }, [carrinhos, porColunaCarrinho]);
 
   const pagos = useMemo(() => {
     let r = aguardando ?? [];
@@ -1950,7 +1980,8 @@ export default function EsteiraOnline() {
                   </div>
                   <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain p-2">
                     {cards.map((r) => (
-                      <CardCarrinho key={r.checkout_id} row={r} cor={col.color} />
+                      <CardCarrinho key={r.checkout_id} row={r} cor={col.color}
+                                    resposta={col.key === "respondeu" ? respostasCarrinho?.get(r.checkout_id) : undefined} />
                     ))}
                     {cards.length === 0 && (
                       <p className="px-2 py-4 text-center text-[11px] text-muted-foreground/60">ninguém aqui</p>
