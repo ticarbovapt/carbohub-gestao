@@ -401,7 +401,12 @@ export function useAvisosDoPedido(blingIds: number[]) {
  */
 
 export type ColunaRecompra =
-  | "entregue" | "ofertar" | "ofertado" | "recomprou" | "sem_retorno" | "historico";
+  | "entregue" | "ofertar" | "ofertado" | "recomprou" | "sem_retorno" | "historico"
+  // ⚠️ As duas abaixo NÃO vêm da view: são calculadas na TELA
+  // (`colunaRecompraNaTela`). A view alimenta a fila de WhatsApp, e
+  // republicá-la para mudar a ARRUMAÇÃO do quadro seria mexer no gatilho por
+  // causa de uma questão de exibição.
+  | "sem_telefone" | "erro_envio";
 
 export interface RecompraRow {
   bling_id: number;
@@ -430,6 +435,55 @@ export const COLUNAS_RECOMPRA: Array<{ key: ColunaRecompra; label: string; descr
   { key: "recomprou",   label: "Recomprou",        descricao: "voltou a comprar após a entrega", color: "#9333ea" },
   { key: "sem_retorno", label: "Sem retorno",      descricao: "não voltou — base de campanha",   color: "#64748b" },
 ];
+
+/** Colunas que nascem RECOLHIDAS, ao fim do quadro. Quem está nelas nunca vai
+ *  receber a oferta (sem telefone) ou já tentou e não chegou (erro): deixá-las
+ *  em "Entregue" e "Hora de ofertar" fazia o trabalho parecer maior do que é —
+ *  os ~90 do Mercado Livre sem telefone, sozinhos, enchiam a coluna. */
+export const COLUNAS_RECOMPRA_RECOLHIDAS: Array<{ key: ColunaRecompra; label: string; descricao: string; color: string }> = [
+  { key: "sem_telefone", label: "Sem telefone",     descricao: "não dá para ofertar pelo WhatsApp", color: "#94a3b8" },
+  { key: "erro_envio",   label: "Erro ao enviar",   descricao: "a oferta saiu e não chegou",        color: "#ef4444" },
+];
+
+const FALHOU = new Set(["erro", "falhou"]);
+
+/** A coluna que a TELA mostra. Parte da coluna da view e só desvia dois casos:
+ *  ⚠️ `recomprou` e `historico` nunca saem do lugar — recompra é desfecho, e
+ *  vale mais que o motivo de não termos falado com a pessoa. */
+export function colunaRecompraNaTela(r: RecompraRow, envio?: EnvioMsg): ColunaRecompra {
+  if (r.coluna === "recomprou" || r.coluna === "historico") return r.coluna;
+  if (envio && FALHOU.has(envio.status)) return "erro_envio";
+  const semFone = !(r.cliente_fone ?? "").trim()
+    || (envio?.status === "ignorado" && (envio.motivo ?? "").startsWith("telefone"));
+  // Só antes da oferta: quem já foi ofertado TINHA telefone, e o card dele conta
+  // a história da oferta, não da falta.
+  if (semFone && (r.coluna === "entregue" || r.coluna === "ofertar")) return "sem_telefone";
+  return r.coluna;
+}
+
+/** Os envios da etapa `recompra`, por pedido. Paginado: a régua passa de mil
+ *  linhas cedo, e o teto silencioso do PostgREST cortaria o resto sem aviso. */
+export function useEnviosRecompra() {
+  return useQuery({
+    queryKey: ["msg-envios-recompra"],
+    queryFn: async (): Promise<Map<number, EnvioMsg>> => {
+      const mapa = new Map<number, EnvioMsg>();
+      for (let de = 0; de < 200_000; de += 1000) {
+        const { data, error } = await (supabase as any)
+          .from("carbo_msg_envios")
+          .select("*")
+          .eq("etapa", "recompra")
+          .order("bling_id")
+          .range(de, de + 999);
+        if (error) throw error;
+        for (const e of (data ?? []) as EnvioMsg[]) mapa.set(e.bling_id, e);
+        if (!data || data.length < 1000) break;
+      }
+      return mapa;
+    },
+    refetchInterval: 60_000,
+  });
+}
 
 export function useRecompraPipeline() {
   return useQuery({
