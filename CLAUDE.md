@@ -3898,6 +3898,12 @@ update public.carbo_msg_templates
    `cliente_pedido` lendo `nuvemshop_carrinhos.cliente` para as etapas
    `carrinho_*`. O nome do WhatsApp só existe depois que o cliente ESCREVE
    (vem do webhook de entrada; a resposta do envio não traz perfil).
+   ⚠️ **E a reserva GERAL é o telefone** (`carbo_wa_nomes_por_fone`,
+   `20261057`): conversa sem nome por nenhum caminho (envio de teste, cliente
+   que não respondeu) ganha o nome mais recente do mesmo `carbo_fone_chave` em
+   `nuvemshop_carrinhos`/`ecommerce_orders`. Vale nas TRÊS caixas. Só
+   apresentação — não liga a conversa a pedido. SECURITY DEFINER, guardada por
+   `carbo_e_time_interno()` (no SQL Editor volta vazia, e está certo).
 6. **O teste** é o `&etapa=carrinho_N` do `whatsapp-meta`, com exemplos
    coerentes (Kit 5 Frascos · R$ 149 · link Payt do mesmo kit), trocáveis por
    `&produtos=`, `&valor=`, `&link=`. Não grava no ledger, então não ocupa a
