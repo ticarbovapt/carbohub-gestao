@@ -621,9 +621,11 @@ apps/*/src/components/BloqueioAoVivo.tsx   o popup — REPLICADO nos SETE
    foco (`focus` **e** `visibilitychange`, porque nem todo navegador dispara os
    dois). E ela lê a ÚLTIMA linha: "existe algum bloqueio?" derrubaria quem já
    foi desbloqueado, para sempre.
-10. **Bloqueado NÃO some da lista de Usuários** — fica marcado no nome, e o chip
-   "Bloqueados" é filtro, não gaveta. Esconder quem perdeu o acesso é como se
-   descobre meses depois que ele continuava liberado.
+10. **Bloqueado SAI da lista de Usuários e mora no chip "Bloqueados"**
+   (decisão do dono do processo, 07/10/2026 — antes ficava na lista, marcado).
+   Uma lista OU a outra: o clique alterna. ⚠️ O chip fica à vista com a
+   contagem enquanto houver bloqueado — é o que impede quem perdeu o acesso de
+   sumir da cabeça de quem revisa. Contagens do topo seguem a lista visível.
 12. ⚠️ **Os dois PORTAIS ficaram de fora** (outro repo): login deles ainda
    mostraria `User is banned` em inglês, e não têm o popup. A trava vale lá
    igual — o que falta é a tradução e o aviso.
