@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import {
   Truck, Package, FileText, CheckCircle2, ShoppingCart, Copy, XCircle, Loader2, MapPin, Phone,
@@ -15,9 +15,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import {
   useEsteiraOnline,
   useEsteiraParados, useRastreios, useEcommerceAguardando, useFontesSaude,
-  useAvisosDoPedido, useRecompraPipeline, useRecompraConfig, useEnviosRecompra, colunaRecompraNaTela, useEsteiraTravadosAntigos,
+  useAvisosDoPedido, useRecompraPipeline, useRecompraConfig, useEnviosRecompra, colunaRecompraNaTela, useEnviosCarrinho, colunaCarrinhoNaTela, useEsteiraTravadosAntigos,
   useCarrinhoPipeline, useCarrinhoConfig,
-  ETAPAS, COLUNAS_RECOMPRA, COLUNAS_RECOMPRA_RECOLHIDAS, COLUNAS_CARRINHO,
+  ETAPAS, COLUNAS_RECOMPRA, COLUNAS_RECOMPRA_RECOLHIDAS, COLUNAS_CARRINHO, COLUNAS_CARRINHO_RECOLHIDAS,
   type EsteiraRow, type EtapaEsteira, type RastreioCard, type AguardandoRow,
   type ParadoRow,
   type RecompraRow, type ColunaRecompra,
@@ -1225,13 +1225,7 @@ function CardRecompra({ row, cor, erro }: { row: RecompraRow; cor: string; erro?
         )}
       </div>
 
-      {/* Na coluna de erro, o PORQUÊ vem junto: "não chegou" sem motivo manda
-          a pessoa abrir o WhatsApp Manager para descobrir o que já sabemos. */}
-      {erro && (
-        <p className="mt-1 line-clamp-2 text-[10px] leading-4 text-red-500">
-          {[erro.erro_codigo ? `Meta ${erro.erro_codigo}` : null, erro.motivo].filter(Boolean).join(" · ") || "a Meta recusou o envio"}
-        </p>
-      )}
+      {erro && <LinhaDeErro erro={erro} />}
     </div>
   );
 }
@@ -1245,7 +1239,7 @@ function CardRecompra({ row, cor, erro }: { row: RecompraRow; cor: string; erro?
 // ⚠️ O produto aparece no card, e não só na mensagem. Sem ele o quadro vira uma
 // lista de valores anônimos — e a primeira pergunta de quem olha ("o que essa
 // gente estava comprando?") exigiria abrir a loja para responder.
-function CardCarrinho({ row, cor }: { row: CarrinhoRow; cor: string }) {
+function CardCarrinho({ row, cor, erro }: { row: CarrinhoRow; cor: string; erro?: EnvioMsg }) {
   const min = row.minutos_parado;
   const idade = min < 60 ? `há ${Math.max(1, Math.round(min))} min`
               : min < 60 * 48 ? `há ${Math.floor(min / 60)}h`
@@ -1308,7 +1302,94 @@ function CardCarrinho({ row, cor }: { row: CarrinhoRow; cor: string }) {
           <ExternalLink className="h-3 w-3" />abrir o carrinho
         </a>
       )}
+      {erro && <LinhaDeErro erro={erro} />}
     </div>
+  );
+}
+
+// O PORQUÊ do erro vem no card: "não chegou" sem motivo manda a pessoa abrir o
+// WhatsApp Manager para descobrir o que já sabemos.
+function LinhaDeErro({ erro }: { erro: EnvioMsg }) {
+  return (
+    <p className="mt-1 line-clamp-2 text-[10px] leading-4 text-red-500">
+      {[erro.erro_codigo ? `Meta ${erro.erro_codigo}` : null, erro.motivo].filter(Boolean).join(" · ") || "a Meta recusou o envio"}
+    </p>
+  );
+}
+
+// ── Colunas recolhidas (régua de recompra e carrinho) ───────────────────────
+//
+// Abertas viram coluna normal; FECHADAS dividem UM trilho estreito, uma sobre a
+// outra — duas faixas lado a lado empurravam a segunda para fora da tela em
+// monitor de 1366/1440. ⚠️ A contagem fica sempre à vista no trilho: esconder
+// quem não pode ser avisado faria a régua parecer melhor do que é.
+type ColDef = { key: string; label: string; descricao: string; color: string };
+function ColunasRecolhidas<T extends { total: number }>({ cols, porColuna, abertas, alternar, chave, card }: {
+  cols: ColDef[];
+  porColuna: Map<any, T[]>;
+  abertas: Set<string>;
+  alternar: (k: string) => void;
+  chave: (r: T) => number;
+  card: (r: T, col: ColDef) => React.ReactNode;
+}) {
+  const fechadas = cols.filter((c) => !abertas.has(c.key));
+  return (
+    <>
+      {cols.filter((c) => abertas.has(c.key)).map((col) => {
+        const cards = porColuna.get(col.key) ?? [];
+        const valor = cards.reduce((s, r) => s + (r.total || 0), 0);
+        return (
+          <div key={col.key}
+               className="flex max-h-full min-w-[86vw] max-w-[92vw] snap-start shrink-0 grow basis-0 sm:min-w-[240px] sm:max-w-[400px] flex-col overflow-hidden rounded-xl border border-dashed bg-muted/10">
+            <div className="shrink-0 border-b bg-muted/30 px-3 py-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: col.color }} />
+                  <span className="truncate text-xs font-semibold">{col.label}</span>
+                </span>
+                <span className="flex shrink-0 items-center gap-1">
+                  <span className="rounded bg-background px-1.5 text-[11px] font-medium tabular-nums">{cards.length}</span>
+                  <button type="button" onClick={() => alternar(col.key)} aria-label={`Recolher ${col.label}`}
+                          className="rounded p-0.5 text-muted-foreground hover:bg-background hover:text-foreground">
+                    <ChevronsRightLeft className="h-3.5 w-3.5" />
+                  </button>
+                </span>
+              </div>
+              <div className="mt-0.5 flex items-center justify-between gap-2">
+                <span className="truncate text-[10px] leading-tight text-muted-foreground">{col.descricao}</span>
+                {cards.length > 0 && (
+                  <span className="shrink-0 text-[10px] font-medium tabular-nums text-muted-foreground">{brl(valor)}</span>
+                )}
+              </div>
+            </div>
+            <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain p-2">
+              {cards.map((r) => <Fragment key={chave(r)}>{card(r, col)}</Fragment>)}
+              {cards.length === 0 && (
+                <p className="px-2 py-4 text-center text-[11px] text-muted-foreground/60">ninguém aqui</p>
+              )}
+            </div>
+          </div>
+        );
+      })}
+      {fechadas.length > 0 && (
+        <div className="flex max-h-full w-11 shrink-0 snap-start flex-col gap-2 self-stretch">
+          {fechadas.map((col) => (
+            <button key={col.key} type="button" onClick={() => alternar(col.key)}
+                    title={`${col.label} — ${col.descricao}. Clique para abrir.`}
+                    className="flex min-h-0 flex-1 flex-col items-center gap-2 rounded-xl border border-dashed bg-muted/10 py-3 text-muted-foreground transition-colors hover:bg-muted/30 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <ChevronsLeftRight className="h-3.5 w-3.5 shrink-0" />
+              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: col.color }} />
+              <span className="rounded bg-background px-1 text-[11px] font-semibold tabular-nums text-foreground">
+                {(porColuna.get(col.key) ?? []).length}
+              </span>
+              <span className="whitespace-nowrap text-xs font-semibold [writing-mode:vertical-rl] rotate-180">
+                {col.label}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </>
   );
 }
 
@@ -1389,8 +1470,9 @@ export default function EsteiraOnline() {
   const { data: recompra = [] } = useRecompraPipeline();
   const { data: enviosRecompra } = useEnviosRecompra();
   // Recolhidas por padrão — elas existem para TIRAR ruído do quadro.
-  const [abertas, setAbertas] = useState<Set<ColunaRecompra>>(() => new Set());
-  const alternarColuna = (k: ColunaRecompra) =>
+  const { data: enviosCarrinho } = useEnviosCarrinho();
+  const [abertas, setAbertas] = useState<Set<string>>(() => new Set());
+  const alternarColuna = (k: string) =>
     setAbertas((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
   const { data: cfgRecompra } = useRecompraConfig();
   const { data: carrinhos = [] } = useCarrinhoPipeline();
@@ -1509,10 +1591,10 @@ export default function EsteiraOnline() {
   // coluna de trabalho parecer maior do que é.
   const porColunaCarrinho = useMemo(() => {
     const m = new Map<ColunaCarrinho, CarrinhoRow[]>();
-    for (const c of COLUNAS_CARRINHO) m.set(c.key, []);
-    for (const r of carrinhos) m.get(r.coluna)?.push(r);
+    for (const c of [...COLUNAS_CARRINHO, ...COLUNAS_CARRINHO_RECOLHIDAS]) m.set(c.key, []);
+    for (const r of carrinhos) m.get(colunaCarrinhoNaTela(r, enviosCarrinho?.get(r.checkout_id)))?.push(r);
     return m;
-  }, [carrinhos]);
+  }, [carrinhos, enviosCarrinho]);
 
   const foraDaRegua = useMemo(
     () => carrinhos.filter((r) => r.coluna === "historico"
@@ -1877,6 +1959,13 @@ export default function EsteiraOnline() {
                 </div>
               );
             })}
+            <ColunasRecolhidas cols={COLUNAS_CARRINHO_RECOLHIDAS} porColuna={porColunaCarrinho}
+              abertas={abertas} alternar={alternarColuna}
+              chave={(r) => r.checkout_id}
+              card={(r, col) => (
+                <CardCarrinho row={r} cor={col.color}
+                              erro={col.key === "erro_envio" ? enviosCarrinho?.get(r.checkout_id) : undefined} />
+              )} />
           </div>
 
           {/* ⚠️ O quadro inteiro vazio COM carrinhos no banco é a leitura errada
@@ -1992,69 +2081,13 @@ export default function EsteiraOnline() {
                 vista: o número continua visível (esconder quem não pode ser
                 avisado faria a régua parecer melhor do que é), mas os cards
                 não disputam espaço com quem dá para ofertar. */}
-            {/* Abertas viram coluna normal; FECHADAS dividem UM trilho estreito,
-                uma sobre a outra — duas faixas lado a lado empurravam a
-                segunda para fora da tela em monitor de 1366/1440. */}
-            {COLUNAS_RECOMPRA_RECOLHIDAS.filter((c) => abertas.has(c.key)).map((col) => {
-              const cards = porColunaRecompra.get(col.key) ?? [];
-              const valor = cards.reduce((s, r) => s + (r.total || 0), 0);
-              return (
-                <div key={col.key}
-                     className="flex max-h-full min-w-[86vw] max-w-[92vw] snap-start shrink-0 grow basis-0 sm:min-w-[240px] sm:max-w-[400px] flex-col overflow-hidden rounded-xl border border-dashed bg-muted/10">
-                  <div className="shrink-0 border-b bg-muted/30 px-3 py-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="flex min-w-0 items-center gap-1.5">
-                        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: col.color }} />
-                        <span className="truncate text-xs font-semibold">{col.label}</span>
-                      </span>
-                      <span className="flex shrink-0 items-center gap-1">
-                        <span className="rounded bg-background px-1.5 text-[11px] font-medium tabular-nums">{cards.length}</span>
-                        <button type="button" onClick={() => alternarColuna(col.key)} aria-label={`Recolher ${col.label}`}
-                                className="rounded p-0.5 text-muted-foreground hover:bg-background hover:text-foreground">
-                          <ChevronsRightLeft className="h-3.5 w-3.5" />
-                        </button>
-                      </span>
-                    </div>
-                    <div className="mt-0.5 flex items-center justify-between gap-2">
-                      <span className="truncate text-[10px] leading-tight text-muted-foreground">{col.descricao}</span>
-                      {cards.length > 0 && (
-                        <span className="shrink-0 text-[10px] font-medium tabular-nums text-muted-foreground">{brl(valor)}</span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain p-2">
-                    {cards.map((r) => (
-                      <CardRecompra key={r.bling_id} row={r} cor={col.color}
-                                    erro={col.key === "erro_envio" ? enviosRecompra?.get(r.bling_id) : undefined} />
-                    ))}
-                    {cards.length === 0 && (
-                      <p className="px-2 py-4 text-center text-[11px] text-muted-foreground/60">ninguém aqui</p>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-            {COLUNAS_RECOMPRA_RECOLHIDAS.some((c) => !abertas.has(c.key)) && (
-              <div className="flex max-h-full w-11 shrink-0 snap-start flex-col gap-2 self-stretch">
-                {COLUNAS_RECOMPRA_RECOLHIDAS.filter((c) => !abertas.has(c.key)).map((col) => {
-                  const cards = porColunaRecompra.get(col.key) ?? [];
-                  return (
-                    <button key={col.key} type="button" onClick={() => alternarColuna(col.key)}
-                              title={`${col.label} — ${col.descricao}. Clique para abrir.`}
-                              className="flex min-h-0 flex-1 flex-col items-center gap-2 rounded-xl border border-dashed bg-muted/10 py-3 text-muted-foreground transition-colors hover:bg-muted/30 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                        <ChevronsLeftRight className="h-3.5 w-3.5 shrink-0" />
-                        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: col.color }} />
-                        <span className="rounded bg-background px-1 text-[11px] font-semibold tabular-nums text-foreground">
-                          {cards.length}
-                        </span>
-                        <span className="whitespace-nowrap text-xs font-semibold [writing-mode:vertical-rl] rotate-180">
-                          {col.label}
-                        </span>
-                      </button>
-                  );
-                })}
-              </div>
-            )}
+            <ColunasRecolhidas cols={COLUNAS_RECOMPRA_RECOLHIDAS} porColuna={porColunaRecompra}
+              abertas={abertas} alternar={alternarColuna}
+              chave={(r) => r.bling_id}
+              card={(r, col) => (
+                <CardRecompra row={r} cor={col.color}
+                              erro={col.key === "erro_envio" ? enviosRecompra?.get(r.bling_id) : undefined} />
+              )} />
           </div>
 
           {/* ⚠️ O histórico fica fechado e fora do quadro de propósito. São
