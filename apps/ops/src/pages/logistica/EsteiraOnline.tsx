@@ -1451,7 +1451,6 @@ export default function EsteiraOnline() {
    * dividir a largura faria os três ficarem apertados para servir a perguntas
    * que ninguém faz ao mesmo tempo. */
   type Pipeline = "entrega" | "recompra" | "carrinho";
-  const [pipeline, setPipeline] = useState<Pipeline>("entrega");
   const [filtroAviso, setFiltroAviso] = useState("all");
   const [periodo, setPeriodo] = useState("30");
   const [de, setDe]   = useState(() => menosDias(30));
@@ -1482,6 +1481,25 @@ export default function EsteiraOnline() {
    */
   const [params, setParams] = useSearchParams();
   const cardParam = params.get("card");
+
+  /* ⚠️ A pipeline mora na URL (`?pipeline=recompra`), não num `useState`: com
+   * estado, todo F5 devolvia "Da venda à entrega" e não dava para mandar o link
+   * da régua de recompra para ninguém. Mesma regra do `?card=` e do período do
+   * e-commerce. "entrega" é o padrão e por isso NÃO vai para a URL — o endereço
+   * de sempre continua sendo o da esteira de entrega.
+   * Valor desconhecido cai no padrão: link velho ou digitado errado abre a tela,
+   * não uma tela em branco. */
+  const PIPELINES: Pipeline[] = ["entrega", "recompra", "carrinho"];
+  const pipelineDaUrl = params.get("pipeline") as Pipeline | null;
+  const pipeline: Pipeline = pipelineDaUrl && PIPELINES.includes(pipelineDaUrl) ? pipelineDaUrl : "entrega";
+  const setPipeline = (v: Pipeline) =>
+    setParams((p) => {
+      const n = new URLSearchParams(p);
+      if (v === "entrega") n.delete("pipeline"); else n.set("pipeline", v);
+      // O card aberto é da esteira de entrega; trocar de quadro o fecha.
+      n.delete("card");
+      return n;
+    }, { replace: true });
   const [soProblemas, setSoProblemas] = useState(false);
   // ⚠️ O caminho da Esteira difere entre os apps (/ecommerce/esteira no admin,
   // /logistica/esteira no Ops) e este arquivo é byte a byte idêntico nos dois.
