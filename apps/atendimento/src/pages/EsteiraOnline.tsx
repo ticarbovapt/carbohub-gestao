@@ -3,7 +3,7 @@ import { Link, useLocation, useSearchParams } from "react-router-dom";
 import {
   Truck, Package, FileText, CheckCircle2, ShoppingCart, Copy, XCircle, Loader2, MapPin, Phone,
   CalendarClock, ExternalLink, MessageSquare, AlertTriangle, Clock, Box, User, Hash, Search,
-  Settings2, Link2, BellRing, BellOff, Repeat2, ShoppingBag, Mail, Timer,
+  Settings2, Link2, BellRing, BellOff, Repeat2, ShoppingBag, Mail, Timer, ChevronsLeftRight, ChevronsRightLeft,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
@@ -15,9 +15,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import {
   useEsteiraOnline,
   useEsteiraParados, useRastreios, useEcommerceAguardando, useFontesSaude,
-  useAvisosDoPedido, useRecompraPipeline, useRecompraConfig, useEsteiraTravadosAntigos,
+  useAvisosDoPedido, useRecompraPipeline, useRecompraConfig, useEnviosRecompra, colunaRecompraNaTela, useEsteiraTravadosAntigos,
   useCarrinhoPipeline, useCarrinhoConfig,
-  ETAPAS, COLUNAS_RECOMPRA, COLUNAS_CARRINHO,
+  ETAPAS, COLUNAS_RECOMPRA, COLUNAS_RECOMPRA_RECOLHIDAS, COLUNAS_CARRINHO,
   type EsteiraRow, type EtapaEsteira, type RastreioCard, type AguardandoRow,
   type ParadoRow,
   type RecompraRow, type ColunaRecompra,
@@ -1191,7 +1191,7 @@ function CardPago({ row }: { row: AguardandoRow }) {
 // Deliberadamente diferente do card de entrega: aqui não há NF, transportadora
 // nem previsão — o pedido acabou. O que importa é quem é a pessoa, quanto tempo
 // faz que ela recebeu, e se dá para falar com ela.
-function CardRecompra({ row, cor }: { row: RecompraRow; cor: string }) {
+function CardRecompra({ row, cor, erro }: { row: RecompraRow; cor: string; erro?: EnvioMsg }) {
   const dias = row.dias_desde_entrega;
   return (
     <div className="relative rounded-lg border bg-card px-3 py-2.5 pl-3.5">
@@ -1224,6 +1224,14 @@ function CardRecompra({ row, cor }: { row: RecompraRow; cor: string }) {
           <span className="shrink-0 text-amber-500">data estimada</span>
         )}
       </div>
+
+      {/* Na coluna de erro, o PORQUÊ vem junto: "não chegou" sem motivo manda
+          a pessoa abrir o WhatsApp Manager para descobrir o que já sabemos. */}
+      {erro && (
+        <p className="mt-1 line-clamp-2 text-[10px] leading-4 text-red-500">
+          {[erro.erro_codigo ? `Meta ${erro.erro_codigo}` : null, erro.motivo].filter(Boolean).join(" · ") || "a Meta recusou o envio"}
+        </p>
+      )}
     </div>
   );
 }
@@ -1379,6 +1387,11 @@ export default function EsteiraOnline() {
   // Pedido travado ANTES do período escolhido. Ver useEsteiraTravadosAntigos.
   const { data: travadosAntigos = [] } = useEsteiraTravadosAntigos(de);
   const { data: recompra = [] } = useRecompraPipeline();
+  const { data: enviosRecompra } = useEnviosRecompra();
+  // Recolhidas por padrão — elas existem para TIRAR ruído do quadro.
+  const [abertas, setAbertas] = useState<Set<ColunaRecompra>>(() => new Set());
+  const alternarColuna = (k: ColunaRecompra) =>
+    setAbertas((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
   const { data: cfgRecompra } = useRecompraConfig();
   const { data: carrinhos = [] } = useCarrinhoPipeline();
   const { data: cfgCarrinho } = useCarrinhoConfig();
@@ -1477,13 +1490,13 @@ export default function EsteiraOnline() {
   // etapa da régua, é a base que existia antes dela, com data estimada.
   const porColunaRecompra = useMemo(() => {
     const m = new Map<ColunaRecompra, RecompraRow[]>();
-    for (const c of COLUNAS_RECOMPRA) m.set(c.key, []);
+    for (const c of [...COLUNAS_RECOMPRA, ...COLUNAS_RECOMPRA_RECOLHIDAS]) m.set(c.key, []);
     for (const r of recompra) {
       if (r.coluna === "historico") continue;
-      m.get(r.coluna)?.push(r);
+      m.get(colunaRecompraNaTela(r, enviosRecompra?.get(r.bling_id)))?.push(r);
     }
     return m;
-  }, [recompra]);
+  }, [recompra, enviosRecompra]);
 
   const historico = useMemo(
     () => recompra.filter((r) => r.coluna === "historico"),
@@ -1973,6 +1986,75 @@ export default function EsteiraOnline() {
                 </div>
               );
             })}
+
+            {/* ── Recolhidas: sem telefone e erro ao enviar ──────────────
+                ⚠️ Fechadas por padrão, numa faixa estreita com a contagem à
+                vista: o número continua visível (esconder quem não pode ser
+                avisado faria a régua parecer melhor do que é), mas os cards
+                não disputam espaço com quem dá para ofertar. */}
+            {/* Abertas viram coluna normal; FECHADAS dividem UM trilho estreito,
+                uma sobre a outra — duas faixas lado a lado empurravam a
+                segunda para fora da tela em monitor de 1366/1440. */}
+            {COLUNAS_RECOMPRA_RECOLHIDAS.filter((c) => abertas.has(c.key)).map((col) => {
+              const cards = porColunaRecompra.get(col.key) ?? [];
+              const valor = cards.reduce((s, r) => s + (r.total || 0), 0);
+              return (
+                <div key={col.key}
+                     className="flex max-h-full min-w-[86vw] max-w-[92vw] snap-start shrink-0 grow basis-0 sm:min-w-[240px] sm:max-w-[400px] flex-col overflow-hidden rounded-xl border border-dashed bg-muted/10">
+                  <div className="shrink-0 border-b bg-muted/30 px-3 py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: col.color }} />
+                        <span className="truncate text-xs font-semibold">{col.label}</span>
+                      </span>
+                      <span className="flex shrink-0 items-center gap-1">
+                        <span className="rounded bg-background px-1.5 text-[11px] font-medium tabular-nums">{cards.length}</span>
+                        <button type="button" onClick={() => alternarColuna(col.key)} aria-label={`Recolher ${col.label}`}
+                                className="rounded p-0.5 text-muted-foreground hover:bg-background hover:text-foreground">
+                          <ChevronsRightLeft className="h-3.5 w-3.5" />
+                        </button>
+                      </span>
+                    </div>
+                    <div className="mt-0.5 flex items-center justify-between gap-2">
+                      <span className="truncate text-[10px] leading-tight text-muted-foreground">{col.descricao}</span>
+                      {cards.length > 0 && (
+                        <span className="shrink-0 text-[10px] font-medium tabular-nums text-muted-foreground">{brl(valor)}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain p-2">
+                    {cards.map((r) => (
+                      <CardRecompra key={r.bling_id} row={r} cor={col.color}
+                                    erro={col.key === "erro_envio" ? enviosRecompra?.get(r.bling_id) : undefined} />
+                    ))}
+                    {cards.length === 0 && (
+                      <p className="px-2 py-4 text-center text-[11px] text-muted-foreground/60">ninguém aqui</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+            {COLUNAS_RECOMPRA_RECOLHIDAS.some((c) => !abertas.has(c.key)) && (
+              <div className="flex max-h-full w-11 shrink-0 snap-start flex-col gap-2 self-stretch">
+                {COLUNAS_RECOMPRA_RECOLHIDAS.filter((c) => !abertas.has(c.key)).map((col) => {
+                  const cards = porColunaRecompra.get(col.key) ?? [];
+                  return (
+                    <button key={col.key} type="button" onClick={() => alternarColuna(col.key)}
+                              title={`${col.label} — ${col.descricao}. Clique para abrir.`}
+                              className="flex min-h-0 flex-1 flex-col items-center gap-2 rounded-xl border border-dashed bg-muted/10 py-3 text-muted-foreground transition-colors hover:bg-muted/30 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                        <ChevronsLeftRight className="h-3.5 w-3.5 shrink-0" />
+                        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: col.color }} />
+                        <span className="rounded bg-background px-1 text-[11px] font-semibold tabular-nums text-foreground">
+                          {cards.length}
+                        </span>
+                        <span className="whitespace-nowrap text-xs font-semibold [writing-mode:vertical-rl] rotate-180">
+                          {col.label}
+                        </span>
+                      </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* ⚠️ O histórico fica fechado e fora do quadro de propósito. São
