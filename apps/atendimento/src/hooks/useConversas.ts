@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, FUNCTIONS_URL } from "@/integrations/supabase/client";
+import { chaveDoFone } from "@/hooks/useEsteiraOnline";
 import {
   JANELA_MS, agruparConversas,
   type Conversa, type MensagemConversa, type Atendimento,
@@ -862,5 +863,47 @@ export function useApagarResposta() {
       if (count === 0) throw new Error("Essa resposta é de outra pessoa — só quem escreveu (ou a chefia) pode apagar.");
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["wa-respostas"] }); },
+  });
+}
+
+/* ── "Não contatar" — quem pediu para parar de receber ofertas ─────────────
+ *
+ * ⚠️ Vale para o COMERCIAL (oferta de recompra e lembrete de carrinho), nunca
+ * para os avisos do pedido. Quem barra é o `whatsapp-meta`, no envio; aqui só
+ * se marca e se mostra. A chave é DDD + últimos 8 dígitos (`chaveDoFone`):
+ * marcar no número do Clube vale para a pessoa em todos os números nossos.
+ * Escrita só pelas RPCs (migração 20261053) — a tabela não tem policy de
+ * escrita. */
+export interface NaoContatar { chave: string; motivo: string | null; marcado_em: string }
+
+export function useNaoContatar(wa_id: string | null) {
+  const chave = chaveDoFone(wa_id);
+  return useQuery({
+    queryKey: ["nao-contatar", chave],
+    enabled: !!chave,
+    queryFn: async (): Promise<NaoContatar | null> => {
+      const { data, error } = await (supabase as any)
+        .from("carbo_wa_nao_contatar").select("chave, motivo, marcado_em")
+        .eq("chave", chave).is("removido_em", null).maybeSingle();
+      if (error) throw error;
+      return (data ?? null) as NaoContatar | null;
+    },
+  });
+}
+
+export function useMarcarNaoContatar() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ wa_id, numero_id, parar }: { wa_id: string; numero_id?: string | null; parar: boolean }) => {
+      const { error } = parar
+        ? await (supabase as any).rpc("carbo_wa_nao_contatar_marcar",
+            { p_wa_id: wa_id, p_numero_id: numero_id ?? null, p_motivo: "marcado na conversa" })
+        : await (supabase as any).rpc("carbo_wa_nao_contatar_desmarcar", { p_wa_id: wa_id });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["nao-contatar"] });
+      qc.invalidateQueries({ queryKey: ["nao-contatar-lista"] });
+    },
   });
 }

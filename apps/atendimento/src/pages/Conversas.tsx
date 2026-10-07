@@ -41,6 +41,7 @@ import {
   useNotas, useAnotar, useApagarNota, type Nota,
   useDefinirStatus, useDefinirResponsavel, useAtendentes,
   useTags, useCriarTag, useMarcarTag,
+  useNaoContatar, useMarcarNaoContatar,
   type StatusAtendimento, type TagConversa,
   type Conversa, type MensagemConversa, type EstadoConversa,
 } from "@/hooks/useConversas";
@@ -2847,6 +2848,9 @@ function PainelContato({ c, meuId, onVerPedido }: {
      gesto só e o rótulo "Passar para" devolve sentido único ao `Sem
      responsável`, que é a opção de REMOVER o dono, não o estado da conversa. */
   const [verResponsavel, setVerResponsavel] = useState(false);
+  const { data: naoContatar } = useNaoContatar(c.wa_id);
+  const marcarNaoContatar = useMarcarNaoContatar();
+  const [confirmarParar, setConfirmarParar] = useState(false);
 
   const minhas = new Set(c.tags.map((t) => t.id));
   const souEu = !!meuId && c.responsavel === meuId;
@@ -3082,6 +3086,62 @@ function PainelContato({ c, meuId, onVerPedido }: {
                 </select>
               </div>
             )}
+
+            {/* ── Não contatar ───────────────────────────────────────────────
+                ⚠️ Fica na caixa de AÇÃO, abaixo do responsável, e não junto da
+                identidade: é uma decisão de quem atende, tomada na conversa em
+                que o cliente pediu. Vale para a PESSOA em todos os números
+                nossos, e só para oferta e lembrete de carrinho — os avisos do
+                pedido continuam, e a frase de confirmação diz isso antes do
+                clique, que é quando a dúvida aparece.
+                ⚠️ Confirmação NA TELA, não `confirm()`: o gesto tira a pessoa de
+                toda campanha, e um clique solto não pode fazer isso. */}
+            <div className="border-t border-border pt-2.5">
+              {naoContatar ? (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="inline-flex min-w-0 items-center gap-1.5 rounded-md border border-purple-500/30
+                                   bg-purple-500/10 px-2 py-1 text-[11px] font-medium text-purple-600 dark:text-purple-300">
+                    <BellOff className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">Não recebe ofertas desde {new Date(naoContatar.marcado_em).toLocaleDateString("pt-BR")}</span>
+                  </span>
+                  <button type="button"
+                          disabled={marcarNaoContatar.isPending}
+                          onClick={() => marcarNaoContatar.mutate({ wa_id: c.wa_id, numero_id: c.numero_id, parar: false },
+                            { onSuccess: () => toast.success("Voltou a receber ofertas."),
+                              onError: (e) => toast.error((e as Error).message) })}
+                          className="shrink-0 text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">
+                    Voltar a enviar
+                  </button>
+                </div>
+              ) : confirmarParar ? (
+                <div className="space-y-2">
+                  <p className="text-[11px] leading-snug text-muted-foreground">
+                    Este cliente deixa de receber oferta de recompra e lembrete de carrinho, em todos os
+                    números. Os avisos do pedido continuam.
+                  </p>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <Button size="sm" variant="outline" className="h-8 text-[11px]"
+                            onClick={() => setConfirmarParar(false)}>
+                      Cancelar
+                    </Button>
+                    <Button size="sm" className="h-8 bg-purple-600 text-[11px] text-white hover:bg-purple-700"
+                            disabled={marcarNaoContatar.isPending}
+                            onClick={() => marcarNaoContatar.mutate({ wa_id: c.wa_id, numero_id: c.numero_id, parar: true },
+                              { onSuccess: () => { setConfirmarParar(false); toast.success("Não recebe mais ofertas."); },
+                                onError: (e) => toast.error((e as Error).message) })}>
+                      Parar ofertas
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <button type="button" onClick={() => setConfirmarParar(true)}
+                        className="flex w-full items-center gap-1.5 text-[11px] text-muted-foreground
+                                   hover:text-foreground">
+                  <BellOff className="h-3.5 w-3.5 shrink-0" />
+                  Parar de enviar ofertas a este cliente
+                </button>
+              )}
+            </div>
           </div>
 
           {/* ── Etiquetas: os CHIPS são o rótulo ────────────────────────────
