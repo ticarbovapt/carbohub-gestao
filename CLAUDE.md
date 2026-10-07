@@ -3974,6 +3974,14 @@ comprou na outra loja  20261053  passo 3 do carbo_payt_carrinhos_sincronizar
    guardado em `carbo_backup_viewdef`. `hora_2`/`hora_3` nulos voltam às horas
    corridas. O sync da Nuvemshop foi para 5 min (`alter_job`; o NOME do job
    continua "-15min"), senão a 1ª sairia com até ~30 min.
+   ⚠️ **REVERTIDO no mesmo dia (`20261055`) — a fila estourou o timeout.** A
+   função tem FROM no corpo, o planejador não a embute, e chamada por linha
+   dentro da `carbo_msg_fila` levou a consulta de ~8 s para além do limite:
+   23 timeouts em 30 min, e com a fila em timeout NENHUMA mensagem da Meta
+   sai, nem as da esteira. **Fonte que dispara mensagem não ganha função por
+   linha sem medir o tempo da fila antes e depois** (`explain analyze`).
+   ⚠️ E a medição mostrou que a fila JÁ beirava o limite antes (1 a 4
+   timeouts por meia hora desde a manhã) — é a doença dos 18 dias voltando.
 8. ⚠️ **Ligar a recuperação de carrinho** continua sendo os dois interruptores
    da seção "Carrinho abandonado pela Meta" (marco zero em 24 h + `ativo`). Os
    carrinhos da PayT anteriores ao marco caem em "fora da régua" junto com os
