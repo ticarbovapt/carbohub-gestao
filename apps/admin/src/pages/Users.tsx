@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
   UserPlus, Loader2, Copy, CheckCircle2, KeyRound, Users as UsersIcon, Pencil, Search, Crown,
@@ -45,6 +45,42 @@ function NivelBadge({ gestor }: { gestor: boolean }) {
   );
 }
 
+/** Aba de um seletor segmentado (Ativos/Bloqueados, Todos/Gestores). */
+function AbaSituacao({ ativa, onClick, icone, rotulo, n, perigo }: {
+  ativa: boolean; onClick: () => void; icone?: ReactNode; rotulo: string; n: number; perigo?: boolean;
+}) {
+  return (
+    <button type="button" onClick={onClick} aria-pressed={ativa}
+      className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+        ativa
+          ? `bg-background shadow-sm ${perigo ? "text-destructive" : "text-foreground"}`
+          : `text-muted-foreground hover:text-foreground ${perigo ? "hover:text-destructive" : ""}`
+      }`}>
+      {icone}{rotulo}
+      <span className={`tabular-nums rounded px-1.5 text-[11px] ${
+        ativa ? (perigo ? "bg-destructive/10" : "bg-muted") : "bg-transparent"}`}>{n}</span>
+    </button>
+  );
+}
+
+/** Pílula do filtro de sistema — mesma forma para todos, a cor só na bolinha. */
+function PilulaSistema({ ativa, onClick, dot, rotulo, n }: {
+  ativa: boolean; onClick: () => void; dot?: string; rotulo: string; n: number;
+}) {
+  return (
+    <button type="button" onClick={onClick} aria-pressed={ativa}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+        ativa
+          ? "border-primary bg-primary/10 text-foreground"
+          : "border-border bg-background text-muted-foreground hover:text-foreground hover:border-foreground/30"
+      }`}>
+      {dot && <span className={`h-2 w-2 rounded-full ${dot}`} />}
+      {rotulo}
+      <span className="tabular-nums text-[11px] opacity-70">{n}</span>
+    </button>
+  );
+}
+
 export default function Users() {
   const { data: profiles = [], isLoading: loadingList } = useProfiles();
   const { data: bloqueados = new Set<string>() } = useUsuariosBloqueados();
@@ -65,6 +101,8 @@ export default function Users() {
   const [search, setSearch] = useState("");
   const [deptFilter, setDeptFilter] = useState("");
   const [soBloqueados, setSoBloqueados] = useState(false);
+  const [sistemaFiltro, setSistemaFiltro] = useState("");
+  const [soGestores, setSoGestores] = useState(false);
 
   const deptLabel = useMemo<Record<string, string>>(() => {
     const m: Record<string, string> = {};
@@ -91,20 +129,28 @@ export default function Users() {
     return m;
   }, [allFunctions]);
 
-  const filtered = useMemo(() => {
+  // ⚠️ Os filtros são independentes, e cada contagem da barra é calculada com
+  // TODOS os OUTROS filtros aplicados e o DELA solto — senão o número ao lado
+  // de uma opção diria quantos há "no que já está filtrado por ela mesma".
+  type Filtro = "status" | "sistema" | "nivel";
+  const passa = (p: AdminProfile, menos?: Filtro) => {
+    // Bloqueado sai da lista de funcionários e mora na aba "Bloqueados"
+    // (dono do processo, 07/10/2026): uma lista OU a outra, nunca as duas.
+    if (menos !== "status" && soBloqueados !== bloqueados.has(p.id)) return false;
+    if (menos !== "sistema" && sistemaFiltro && !(p.allowed_interfaces ?? []).includes(sistemaFiltro)) return false;
+    if (menos !== "nivel" && soGestores && !isManager(p, fnMap)) return false;
+    // Filtro por departamento considera o 1º E o 2º departamento.
+    if (deptFilter && p.department !== deptFilter && p.secondary_department !== deptFilter) return false;
     const q = search.trim().toLowerCase();
-    return profiles.filter((p) => {
-      // Bloqueado sai da lista de funcionários e mora no chip "Bloqueados"
-      // (dono do processo, 07/10/2026): uma lista OU a outra, nunca as duas.
-      // ⚠️ O chip continua à vista enquanto houver bloqueado, com a contagem —
-      // é ele que impede quem perdeu o acesso de sumir da cabeça de quem revisa.
-      if (soBloqueados !== bloqueados.has(p.id)) return false;
-      // Filtro por departamento considera o 1º E o 2º departamento.
-      if (deptFilter && p.department !== deptFilter && p.secondary_department !== deptFilter) return false;
-      if (!q) return true;
-      return (p.full_name ?? "").toLowerCase().includes(q) || (p.username ?? "").toLowerCase().includes(q);
-    });
-  }, [profiles, search, deptFilter, soBloqueados, bloqueados]);
+    if (!q) return true;
+    return (p.full_name ?? "").toLowerCase().includes(q) || (p.username ?? "").toLowerCase().includes(q);
+  };
+
+  const filtered = useMemo(
+    () => profiles.filter((p) => passa(p)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [profiles, search, deptFilter, soBloqueados, bloqueados, sistemaFiltro, soGestores, fnMap],
+  );
 
   // Linhas enriquecidas (reaproveitadas pela tabela e pelos cartões do mobile).
   const rows = useMemo(() => filtered.map((p) => ({
@@ -116,12 +162,22 @@ export default function Users() {
       : null,
   })), [filtered, fnMap, fnLabel]);
 
-  const gestoresCount = useMemo(() => rows.filter((r) => r.gestor).length, [rows]);
-  const appCounts = useMemo(() => {
-    const m: Record<string, number> = {};
-    for (const p of filtered) for (const i of (p.allowed_interfaces ?? [])) m[i] = (m[i] ?? 0) + 1;
-    return m;
-  }, [filtered]);
+  const contagem = useMemo(() => {
+    const semStatus = profiles.filter((p) => passa(p, "status"));
+    const semSistema = profiles.filter((p) => passa(p, "sistema"));
+    const semNivel = profiles.filter((p) => passa(p, "nivel"));
+    const porSistema: Record<string, number> = {};
+    for (const p of semSistema) for (const i of (p.allowed_interfaces ?? [])) porSistema[i] = (porSistema[i] ?? 0) + 1;
+    return {
+      ativos: semStatus.filter((p) => !bloqueados.has(p.id)).length,
+      bloqueados: semStatus.filter((p) => bloqueados.has(p.id)).length,
+      sistemasTotal: semSistema.length,
+      porSistema,
+      nivelTotal: semNivel.length,
+      gestores: semNivel.filter((p) => isManager(p, fnMap)).length,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profiles, search, deptFilter, soBloqueados, bloqueados, sistemaFiltro, soGestores, fnMap]);
 
   const selectedFn = deptFunctions.find((f) => f.function_key === funcao);
   const canSubmit = fullName.trim().length > 0 && department !== "" && interfaces.length > 0;
@@ -182,46 +238,31 @@ export default function Users() {
           </Button>
         </div>
 
-        {/* ── Resumo (chips) ── */}
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-card border">
-            <UsersIcon className="h-3.5 w-3.5 text-muted-foreground" /> {filtered.length} usuários
-          </span>
-          <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-600 border border-amber-500/20">
-            <Crown className="h-3.5 w-3.5" /> {gestoresCount} gestores
-          </span>
-          {/* ⚠️ O chip só aparece quando HÁ bloqueado — e some quando o último
-              é liberado. Um "0 bloqueados" permanente vira paisagem, e aí o dia
-              em que aparecer um ninguém vê. */}
-          {(bloqueados.size > 0 || soBloqueados) && (
-            <button
-              type="button"
-              onClick={() => setSoBloqueados((v) => !v)}
-              title={soBloqueados ? "Voltar para a lista de funcionários" : "Ver quem está com o acesso bloqueado"}
-              className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border transition-colors ${
-                soBloqueados
-                  ? "bg-destructive text-white border-destructive"
-                  : "bg-destructive/10 text-destructive border-destructive/20 hover:bg-destructive/20"
-              }`}
-            >
-              <Lock className="h-3.5 w-3.5" /> Bloqueados · {bloqueados.size}
-            </button>
-          )}
-          <span className="h-4 w-px bg-border mx-1 hidden sm:block" />
-          {SYSTEMS.filter((s) => appCounts[s.iface]).map((s) => {
-            const b = brandOf(s.iface);
-            return (
-              <span key={s.iface} className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${b.chip}`}>
-                <span className={`h-1.5 w-1.5 rounded-full ${b.dot}`} /> {b.short} · {appCounts[s.iface]}
-              </span>
-            );
-          })}
-        </div>
-
         {/* ── Lista de usuários ── */}
         <section className="rounded-2xl border bg-card overflow-hidden">
+          {/* Situação: Ativos | Bloqueados — duas abas, nunca as duas listas juntas.
+              ⚠️ A aba "Bloqueados" aparece sempre que existe bloqueado, com o
+              número: é o que impede quem perdeu o acesso de sumir da cabeça de
+              quem revisa. */}
+          <div className="px-4 sm:px-5 pt-3 flex flex-wrap items-center justify-between gap-3">
+            <div className="inline-flex rounded-lg border bg-muted/40 p-0.5">
+              <AbaSituacao ativa={!soBloqueados} onClick={() => setSoBloqueados(false)}
+                icone={<UsersIcon className="h-3.5 w-3.5" />} rotulo="Ativos" n={contagem.ativos} />
+              {(bloqueados.size > 0 || soBloqueados) && (
+                <AbaSituacao ativa={soBloqueados} onClick={() => setSoBloqueados(true)} perigo
+                  icone={<Lock className="h-3.5 w-3.5" />} rotulo="Bloqueados" n={contagem.bloqueados} />
+              )}
+            </div>
+            <div className="inline-flex rounded-lg border bg-muted/40 p-0.5">
+              <AbaSituacao ativa={!soGestores} onClick={() => setSoGestores(false)}
+                rotulo="Todos os níveis" n={contagem.nivelTotal} />
+              <AbaSituacao ativa={soGestores} onClick={() => setSoGestores(true)}
+                icone={<Crown className="h-3.5 w-3.5" />} rotulo="Gestores" n={contagem.gestores} />
+            </div>
+          </div>
+
           {/* Busca + filtro por departamento */}
-          <div className="px-4 sm:px-5 py-3 border-b flex flex-col sm:flex-row gap-2">
+          <div className="px-4 sm:px-5 pt-3 flex flex-col sm:flex-row gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input className="pl-9" placeholder="Buscar por nome ou usuário..."
@@ -231,6 +272,20 @@ export default function Users() {
               <option value="">Todos os departamentos</option>
               {departments.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
             </select>
+          </div>
+
+          {/* Sistema: filtro de UMA escolha. Todos os botões têm a mesma forma;
+              a cor do sistema fica só na bolinha. */}
+          <div className="px-4 sm:px-5 py-2.5 border-b flex flex-wrap items-center gap-1.5">
+            <span className="mr-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Sistema</span>
+            <PilulaSistema ativa={!sistemaFiltro} onClick={() => setSistemaFiltro("")}
+              rotulo="Todos" n={contagem.sistemasTotal} />
+            {SYSTEMS.filter((sy) => contagem.porSistema[sy.iface] || sistemaFiltro === sy.iface).map((sy) => (
+              <PilulaSistema key={sy.iface} ativa={sistemaFiltro === sy.iface}
+                onClick={() => setSistemaFiltro(sistemaFiltro === sy.iface ? "" : sy.iface)}
+                dot={brandOf(sy.iface).dot} rotulo={brandOf(sy.iface).short}
+                n={contagem.porSistema[sy.iface] ?? 0} />
+            ))}
           </div>
 
           {loadingList ? (
@@ -253,7 +308,7 @@ export default function Users() {
                 <Search className="h-6 w-6 text-muted-foreground" />
               </div>
               <p className="font-medium">Nenhum usuário encontrado</p>
-              <p className="text-sm text-muted-foreground mt-0.5">Ajuste a busca ou o filtro de departamento.</p>
+              <p className="text-sm text-muted-foreground mt-0.5">Ajuste a busca ou os filtros acima.</p>
             </div>
           ) : (
             <>
