@@ -133,7 +133,35 @@ export function useConversas(dias = 30, numeroId?: string | null) {
         (tagsPorConversa[v.wa_id] ??= []).push({ id: t.id, nome: t.nome, cor: t.cor });
       }
 
-      return agruparConversas((msgs ?? []) as MensagemConversa[], janelas,
+      // ⚠️ Na régua de CARRINHO o `bling_id` é o id do CHECKOUT, e a view
+      // procura o nome do cliente na ESTEIRA — que não tem checkout nenhum.
+      // Sem isto toda conversa da caixa da loja nasce "Sem nome" até a pessoa
+      // responder (só aí existe o nome do WhatsApp). O nome vem do próprio
+      // carrinho, que é o cadastro desta régua, como o pedido é o da outra.
+      const lista = (msgs ?? []) as MensagemConversa[];
+      const checkouts = [...new Set(lista
+        .filter((m) => !m.cliente_pedido && m.bling_id != null
+                       && m.sobre_a_etapa?.startsWith("carrinho_"))
+        .map((m) => m.bling_id as number))];
+      if (checkouts.length > 0) {
+        // Falhar aqui não pode derrubar a caixa: sem o nome, a conversa
+        // continua aparecendo — como aparecia antes.
+        const { data: carrinhos, error: errCar } = await (supabase as any)
+          .from("nuvemshop_carrinhos").select("checkout_id, cliente")
+          .in("checkout_id", checkouts);
+        if (errCar) console.error("[conversas] nome do carrinho:", errCar.message);
+        const nomes = new Map<number, string>();
+        for (const c of (carrinhos ?? []) as any[]) {
+          if (c.cliente?.trim()) nomes.set(Number(c.checkout_id), c.cliente.trim());
+        }
+        for (const m of lista) {
+          if (!m.cliente_pedido && m.bling_id != null && m.sobre_a_etapa?.startsWith("carrinho_")) {
+            m.cliente_pedido = nomes.get(Number(m.bling_id)) ?? null;
+          }
+        }
+      }
+
+      return agruparConversas(lista, janelas,
                               resolvidos, atendimentos, tagsPorConversa);
     },
     // ⚠️ CONTINUA existindo mesmo com o Realtime abaixo, e não é redundância:
