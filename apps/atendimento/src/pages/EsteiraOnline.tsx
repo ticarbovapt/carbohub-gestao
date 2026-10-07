@@ -1271,7 +1271,11 @@ function CardCarrinho({ row, cor, erro, resposta }: { row: CarrinhoRow; cor: str
       )}
 
       <div className="mt-1 flex items-baseline gap-2 text-[11px] leading-4 text-muted-foreground">
-        <span className="min-w-0 flex-1 truncate">{idade}</span>
+        {/* ⚠️ A loja sai do SINAL do id: carrinho da PayT entra com
+            `checkout_id` negativo (migração 20261052), o da Nuvemshop é
+            positivo. O link "abrir o carrinho" leva a lojas diferentes, e
+            quem atende precisa saber em qual o cliente estava. */}
+        <span className="min-w-0 flex-1 truncate">{row.checkout_id < 0 ? "PayT" : "Nuvemshop"} · {idade}</span>
         {/* Quem respondeu não tem "próxima": a sequência parou. */}
         {proxima && !resposta && (
           <span className="flex shrink-0 items-center gap-1 tabular-nums">
