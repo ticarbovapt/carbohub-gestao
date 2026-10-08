@@ -120,6 +120,9 @@ function Arquivos({ boardId, setOcupado }: { boardId: string; setOcupado: (b: bo
     if (!pendentes?.length) return;
     parar.current = false; setRodando(true); setOcupado(true); setFalhas([]); setCopiados(0);
     const fila = [...pendentes];
+    // Erro que é do CAMINHO (não do arquivo) falha igual em todos: 5 seguidos
+    // sem nenhum acerto param a fila, em vez de listar 481 vezes a mesma frase.
+    let seguidas = 0, algumOk = false;
     // Dois de cada vez: o Trello e o Storage aguentam, e um arquivo grande não
     // segura a fila inteira atrás dele.
     const trabalhador = async () => {
@@ -127,8 +130,11 @@ function Arquivos({ boardId, setOcupado }: { boardId: string; setOcupado: (b: bo
         if (parar.current) return;
         const a = fila.shift();
         if (!a) return;
-        try { await chamar({ acao: "anexo", attachment_id: a.id }); setCopiados((n) => n + 1); }
-        catch (e) { setFalhas((f) => [...f, { nome: a.name, erro: e instanceof Error ? e.message : String(e) }]); }
+        try { await chamar({ acao: "anexo", attachment_id: a.id }); setCopiados((n) => n + 1); seguidas = 0; algumOk = true; }
+        catch (e) {
+          setFalhas((f) => [...f, { nome: a.name, erro: e instanceof Error ? e.message : String(e) }]);
+          if (!algumOk && ++seguidas >= 5) parar.current = true;
+        }
       }
     };
     await Promise.all([trabalhador(), trabalhador()]);
