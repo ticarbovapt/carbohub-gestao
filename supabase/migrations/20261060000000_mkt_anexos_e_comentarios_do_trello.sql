@@ -19,8 +19,20 @@ alter table public.mkt_card_attachments
 
 -- ⚠️ O CHECK de nascimento é ('drive','link'). Valor novo fora dele é INSERT /
 -- UPDATE falhando — e a função diria "erro" para cada um dos 481 arquivos.
-alter table public.mkt_card_attachments
-  drop constraint if exists mkt_card_attachments_kind_check;
+-- ⚠️ E ele é procurado pelo CONTEÚDO, não pelo nome: se o nome no banco não
+-- for o que se supõe, `drop if exists` não faz nada e o CHECK antigo continua
+-- recusando 'arquivo' — com o novo convivendo ao lado.
+do $$
+declare r record;
+begin
+  for r in
+    select con.conname from pg_constraint con
+    where con.conrelid = 'public.mkt_card_attachments'::regclass and con.contype = 'c'
+      and pg_get_constraintdef(con.oid) ilike '%kind%drive%'
+  loop
+    execute format('alter table public.mkt_card_attachments drop constraint %I', r.conname);
+  end loop;
+end $$;
 alter table public.mkt_card_attachments
   add constraint mkt_card_attachments_kind_check
   check (kind in ('drive', 'link', 'arquivo'));
