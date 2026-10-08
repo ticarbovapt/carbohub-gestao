@@ -104,7 +104,14 @@ function CardFace({ card, labels }: { card: CardSummary; labels: Label[] }) {
       <div className="mkt-meta-row flex-wrap">
         {card.due_date && (
           <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md ${overdue ? "bg-destructive/10 text-destructive" : card.is_complete ? "bg-success/10 text-success" : "bg-muted"}`}>
-            <Clock className="h-3.5 w-3.5" /> {fmtDue(card.due_date)}
+            <Clock className="h-3.5 w-3.5" /> {card.start_date ? `${fmtDue(card.start_date)} – ` : ""}{fmtDue(card.due_date)}
+          </span>
+        )}
+        {/* Só início, sem entrega: o Trello mostra "Começou: 28 de set." e o
+            quadro importado parecia ter perdido a data. */}
+        {!card.due_date && card.start_date && (
+          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md ${card.is_complete ? "bg-success/10 text-success" : "bg-muted"}`}>
+            <Clock className="h-3.5 w-3.5" /> Começou: {fmtDue(card.start_date)}
           </span>
         )}
         {card.checklistOverdue && (
@@ -195,6 +202,9 @@ function BoardColumn({
   return (
     <div ref={setNodeRef} style={style} className="w-80 shrink-0 flex flex-col max-h-full">
       <div className="mkt-column flex flex-col max-h-full">
+        {/* Lista com cor ganha a faixa de acento no topo (no Trello a lista
+            inteira é colorida; aqui a superfície fica neutra e a cor vai na faixa). */}
+        {list.color && <span className="mkt-accent-bar -mt-px -mx-px" style={{ ["--mkt-accent" as string]: accent }} />}
         <div className="mkt-column-header">
           <button className="p-1 -ml-1 cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground" {...attributes} {...listeners}>
             <GripVertical className="h-4 w-4" />
