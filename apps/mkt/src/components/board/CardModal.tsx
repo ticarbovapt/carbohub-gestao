@@ -271,6 +271,13 @@ export function CardModal({ cardId, boardId, labels, onClose }: {
                 {/* Datas */}
                 <div className="space-y-2">
                   <p className="mkt-meta-label flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" /> Datas</p>
+                  {/* Início existia no banco e na Tabela/Timeline, mas não aqui:
+                      o cartão importado do Trello parecia sem data. */}
+                  <span className="block text-xs text-muted-foreground">Início</span>
+                  <input type="date" value={data.card.start_date ? toLocalInput(data.card.start_date).slice(0, 10) : ""}
+                    onChange={(e) => mut.updateCard.mutate({ start_date: e.target.value ? new Date(e.target.value + "T12:00:00").toISOString() : null })}
+                    className="mkt-field w-full text-sm" />
+                  <span className="block text-xs text-muted-foreground">Entrega</span>
                   <input type="datetime-local" value={toLocalInput(data.card.due_date)}
                     onChange={(e) => mut.updateCard.mutate({ due_date: e.target.value ? new Date(e.target.value).toISOString() : null })}
                     className="mkt-field w-full text-sm" />
