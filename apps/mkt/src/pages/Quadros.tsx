@@ -10,6 +10,7 @@ import { getAccent, ACCENT_SWATCHES } from "@/lib/mktTheme";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { pedirTexto } from "@carbo/shell";
+import { ImportarTrello } from "@/components/board/ImportarTrello";
 
 const HEADING_FONT = "'IBM Plex Sans', 'Inter', system-ui, sans-serif";
 
@@ -60,6 +61,10 @@ export default function Quadros() {
         <Button asChild size="sm" variant="outline" className="h-8 text-xs gap-1.5">
           <Link to="/todos/tabela"><Table2 className="h-3.5 w-3.5 text-accent" /> Tabela geral</Link>
         </Button>
+        <ImportarTrello
+          pessoas={team.map((m) => ({ id: m.id, full_name: m.full_name }))}
+          titulosExistentes={boards.map((b) => b.title)}
+        />
       </div>
 
       {/* Grade de quadros */}

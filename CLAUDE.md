@@ -2238,6 +2238,25 @@ Fechar = remover o secret e fazer deploy. ⚠️ E o deploy é o push em `main`
 (`ecommerce-webhook` está na lista `dep`) — remover o secret sozinho não basta
 se a função no ar for antiga.
 
+### Importar quadro do Trello — Quadros do Marketing (08/10/2026)
+Botão **"Importar do Trello"** em `mkt.carbohub.com.br/quadros`: lê o JSON de
+export do Trello e cria um quadro NOVO. `apps/mkt/src/lib/trelloImport.ts` é
+PURO (monta as linhas e o resumo); `components/board/ImportarTrello.tsx` mostra
+o resumo ANTES e grava na ordem das FKs. Falhou no meio ⇒ apaga o quadro criado.
+
+1. ⚠️ **Arquivado entra arquivado, nada é descartado** — o pedido foi "não
+   perder os dados". O primeiro quadro tinha 37 cartões visíveis e 471 de
+   histórico.
+2. ⚠️ **Anexo enviado ao Trello (`isUpload`) vira LINK para o Trello**: abre só
+   com login lá e morre com o quadro de lá (no primeiro quadro: 481 arquivos,
+   2,3 GB). Trazer o arquivo exigiria a chave de API do Trello. O resumo AVISA.
+3. ⚠️ **O export traz só as últimas 1.000 ações**, e é de lá que vêm os
+   comentários — o resumo diz a data de corte.
+4. Pessoa casa por PRIMEIRO NOME e só se o casamento for ÚNICO; comentário de
+   quem não casou entra com o nome no texto, em nome de quem importou.
+5. ⚠️ **Toda linha leva TODAS as colunas**: no insert em lote o PostgREST usa a
+   união das chaves, e coluna ausente numa linha vira NULL, não o default.
+
 ### Regras anti-confusão (OBRIGATÓRIAS)
 1. **Todo pedido nomeia o alvo.** "no CRM" → `apps/crm`; "no controle"/"atual" → raiz (`src/`).
 2. **Na dúvida, PERGUNTE — nunca adivinhe.** Se a tela existe em mais de um app, liste os candidatos antes de mexer.
