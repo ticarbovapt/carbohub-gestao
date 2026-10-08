@@ -2,7 +2,6 @@ import { Input } from "@/components/ui/input";
 import { LABEL_COLORS, tintedLabelStyle } from "@/lib/mktTheme";
 import type { SearchCriteria } from "@/lib/mktFilter";
 import type { Label } from "@/hooks/useBoards";
-import type { TeamMember } from "@/hooks/useTeamMembers";
 
 // Controles de filtro reusados no quadro e na busca entre quadros.
 // Etiquetas só aparecem quando o contexto tem etiquetas (per-quadro).
@@ -10,7 +9,7 @@ export function FilterControls({ value, onChange, labels, team }: {
   value: SearchCriteria;
   onChange: (v: SearchCriteria) => void;
   labels?: Label[];
-  team: TeamMember[];
+  team: { id: string; full_name: string | null }[];
 }) {
   const set = (patch: Partial<SearchCriteria>) => onChange({ ...value, ...patch });
   const labelIds = value.labelIds ?? [];

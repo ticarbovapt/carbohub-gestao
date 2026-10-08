@@ -71,7 +71,9 @@ export function useWorkspaceData(workspaceId: string | null) {
       const listTitle = new Map(lists.map((l) => [l.id, l.title]));
 
       // Só cartões próprios (ignora espelhos — o original já aparece no seu quadro).
-      const raw = ((cardsRes.data ?? []) as Record<string, unknown>[]).filter((c) => !c.mirror_of);
+      // Cartão de lista arquivada some com a lista (ver useBoard).
+      const listasAtivas = new Set(lists.map((l) => l.id));
+      const raw = ((cardsRes.data ?? []) as Record<string, unknown>[]).filter((c) => !c.mirror_of && listasAtivas.has(c.list_id as string));
       const cardIds = raw.map((c) => c.id as string);
 
       let cardLabels: { card_id: string; label_id: string }[] = [];

@@ -5,7 +5,7 @@ import {
   type DragStartEvent, type DragMoveEvent, type DragEndEvent,
 } from "@dnd-kit/core";
 import { ArrowLeft, GanttChartSquare, CalendarOff } from "lucide-react";
-import { useBoard, useBoardLive, useBoardMutations, type CardSummary } from "@/hooks/useBoards";
+import { useBoard, useBoardLive, useBoardMutations, type CardSummary, pessoasDoQuadro } from "@/hooks/useBoards";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { LIST_DOT, LIST_PALETTE, getAccent, tintedLabelStyle } from "@/lib/mktTheme";
 import { ymd, ymdOfIso, diffDays, shiftYmd, isoForDay, addDays } from "@/lib/mktCalendar";
@@ -76,7 +76,8 @@ export default function BoardTimeline() {
   const { data, isLoading } = useBoard(boardId ?? null);
   useBoardLive(boardId ?? null);
   const m = useBoardMutations(boardId);
-  const { data: team = [] } = useTeamMembers();
+  const { data: timeDept = [] } = useTeamMembers();
+  const team = pessoasDoQuadro(data, timeDept);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
   const [zoom, setZoom] = useState<"dia" | "semana" | "mes">("semana");

@@ -40,12 +40,16 @@ function Section({ icon: Icon, title, children }: { icon: React.ElementType; tit
   );
 }
 
-export function CardModal({ cardId, boardId, labels, onClose }: {
+export function CardModal({ cardId, boardId, labels, onClose, pessoas = [] }: {
   cardId: string; boardId: string; labels: Label[]; onClose: () => void;
+  // Pessoas do QUADRO (vêm do Board): sem elas, quem é de outro departamento
+  // que o de quem olha aparecia sem foto e não podia ser escolhido.
+  pessoas?: { id: string; full_name: string | null; avatar_url: string | null }[];
 }) {
   const { data, isLoading } = useCardDetail(cardId);
   const mut = useCardMutations(cardId, boardId);
-  const { data: team = [] } = useTeamMembers();
+  const { data: timeDept = [] } = useTeamMembers();
+  const team = [...pessoas, ...timeDept.filter((t) => !pessoas.some((p) => p.id === t.id))];
   const { data: fields = [] } = useCustomFields(boardId);
 
   const [title, setTitle] = useState("");

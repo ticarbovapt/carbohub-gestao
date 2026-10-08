@@ -5,7 +5,7 @@ import {
   PieChart, Pie, LabelList,
 } from "recharts";
 import { ArrowLeft, LayoutDashboard, CheckCircle2, AlertTriangle, CalendarOff, Layers } from "lucide-react";
-import { useBoard, useBoardLive, type CardSummary } from "@/hooks/useBoards";
+import { useBoard, useBoardLive, type CardSummary, pessoasDoQuadro } from "@/hooks/useBoards";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { LIST_DOT, LIST_PALETTE, getAccent } from "@/lib/mktTheme";
 import { ymd, ymdOfIso, diffDays } from "@/lib/mktCalendar";
@@ -37,7 +37,8 @@ export default function BoardDashboard() {
   const { boardId } = useParams();
   const { data, isLoading } = useBoard(boardId ?? null);
   useBoardLive(boardId ?? null);
-  const { data: team = [] } = useTeamMembers();
+  const { data: timeDept = [] } = useTeamMembers();
+  const team = pessoasDoQuadro(data, timeDept);
   const [openCardId, setOpenCardId] = useState<string | null>(null);
 
   const memberName = useMemo(() => new Map(team.map((t) => [t.id, t.full_name ?? "Usuário"])), [team]);

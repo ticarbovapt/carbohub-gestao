@@ -2276,6 +2276,24 @@ Três defeitos, todos de EXIBIÇÃO, nenhum de dado:
 E o checklist mostrava data + responsável VAZIOS em cada item (88 campos num
 checklist de 44): agora só aparecem preenchidos ou ao passar o mouse.
 
+⚠️ **Segunda rodada (08/10/2026), comparando lado a lado com o Trello:**
+1. ⚠️ **Cartão de LISTA ARQUIVADA aparecia na Tabela** — 382 das 419 linhas. O
+   cartão em si não estava arquivado; a LISTA estava. `useBoard`, `useAllCards` e
+   `useWorkspace` agora só trazem cartão de lista ativa, então Quadro, Tabela,
+   Calendário, Timeline, Dashboard e Mapa concordam.
+2. **Filtro de membros = pessoas do QUADRO** (`pessoasDoQuadro`), com o time do
+   departamento só de reserva. A lista do departamento não tinha a Mirian nem a
+   Emmily, que são exatamente quem trabalha no quadro.
+3. **Capa CHEIA** é `cover = 'full:<cor>'` (sem migração): cartão inteiro na cor,
+   só o título. Capa e lista usam o TOM (`tomDaCapa`/`fundoDaLista`, `color-mix`
+   com o fundo do cartão) — a cor cheia da paleta gritava mais que o título.
+4. **Etiqueta é BARRINHA**; clicar abre o texto de todas (preferência no
+   `localStorage`, como no Trello).
+5. ⚠️ **Empate de `pos`** existe no Trello (Eloi × Formulário na lista Mirian) e
+   ele desempata pela ORDEM do arquivo — o import soma `ordem × 1e-6`.
+6. ⚠️ **Comentário além das 1.000 ações** (no primeiro quadro: 1.245 em 255
+   cartões) só vem pela API do Trello — junto com a cópia dos anexos.
+
 ### Regras anti-confusão (OBRIGATÓRIAS)
 1. **Todo pedido nomeia o alvo.** "no CRM" → `apps/crm`; "no controle"/"atual" → raiz (`src/`).
 2. **Na dúvida, PERGUNTE — nunca adivinhe.** Se a tela existe em mais de um app, liste os candidatos antes de mexer.
