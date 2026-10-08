@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { startOfMonth, endOfMonth, getDaysInMonth, getDate, format } from "date-fns";
 import { toast } from "sonner";
+import { lerTudo } from "@/lib/lerTudo";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Dia e mês são os de QUEM VENDE, não os de UTC
@@ -165,22 +166,31 @@ export function useMetaTargets(month: Date) {
 // Fetch actual ecommerce revenue for a given month (by platform + vindi)
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function useMetaActuals(month: Date) {
+export function useMetaActuals(month: Date, ate?: Date | null) {
   const start = startOfMonth(month).toISOString();
-  const end   = endOfMonth(month).toISOString();
+  // ⚠️ `ate` corta o mês num INSTANTE — é o que torna a comparação com o mês
+  // anterior proporcional ("1 a 8 de setembro" contra "1 a 8 de outubro"). Sem
+  // ele, o mês corrente parcial era comparado com o anterior INTEIRO e todo
+  // início de mês aparecia como queda de 60% a 80%. Nunca passa do fim do mês.
+  const fimMes = endOfMonth(month);
+  const end = (ate && ate < fimMes ? ate : fimMes).toISOString();
 
   return useQuery({
-    queryKey: ["meta_ecommerce_actuals", start],
+    queryKey: ["meta_ecommerce_actuals", start, end],
     queryFn: async () => {
       // 1. Marketplace orders (grouped by platform)
-      const { data: orders, error: ordersError } = await (supabase as any)
-        .from("ecommerce_orders")
-        .select("platform, total, ordered_at, status")
-        .gte("ordered_at", start)
-        .lte("ordered_at", end)
-        .in("status", VENDA_STATUSES);
-
-      if (ordersError) throw ordersError;
+      // ⚠️ `lerTudo`: sem paginação o PostgREST corta em 1.000 linhas calado,
+      // e a tabela tem uma linha por ITEM — um mês cheio passa disso.
+      // Ordem estável (plataforma + pedido) para a página não repetir linha.
+      const orders = await lerTudo<{ platform: string; total: number | null }>((de, ateLinha) =>
+        (supabase as any)
+          .from("ecommerce_orders")
+          .select("platform, total, ordered_at, status, order_id")
+          .gte("ordered_at", start)
+          .lte("ordered_at", end)
+          .in("status", VENDA_STATUSES)
+          .order("platform").order("order_id")
+          .range(de, ateLinha));
 
       // Sum per platform
       const platformRevenue: Record<string, number> = {};
@@ -200,6 +210,9 @@ export function useMetaActuals(month: Date) {
       return { platformRevenue, total };
     },
     refetchInterval: 30_000, // refresh every 30s for near-real-time
+    // O corte do mês anterior anda a cada minuto (chave nova); sem isto o
+    // selo de comparação piscaria vazio a cada virada de minuto.
+    placeholderData: (anterior) => anterior,
   });
 }
 
