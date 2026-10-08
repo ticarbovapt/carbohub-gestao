@@ -20,6 +20,7 @@ import { ListChecks } from "lucide-react";
 import type { Label } from "@/hooks/useBoards";
 import { diceBearUrl } from "@/components/ui/profile-avatar";
 import { confirmar } from "@carbo/shell";
+import { TextoRico } from "@/lib/textoRico";
 
 const toLocalInput = (iso: string | null) => {
   if (!iso) return "";
@@ -130,9 +131,17 @@ export function CardModal({ cardId, boardId, labels, onClose }: {
                     </div>
                   </div>
                 ) : (
-                  <button onClick={() => setEditDesc(true)} className="w-full min-w-0 text-left text-sm rounded-[var(--radius)] bg-muted/40 hover:bg-muted/60 transition-colors p-3 min-h-[48px] text-foreground whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
-                    {data.card.description || <span className="text-muted-foreground">Adicionar uma descrição…</span>}
-                  </button>
+                  // Não é <button>: a descrição tem LINKS, e clicar num link
+                  // dentro de um botão abriria o editor junto. Clique no texto
+                  // edita; clique no link só abre o link.
+                  <div role="button" tabIndex={0}
+                    onClick={(e) => { if (!(e.target as HTMLElement).closest("a")) setEditDesc(true); }}
+                    onKeyDown={(e) => { if (e.key === "Enter" && e.target === e.currentTarget) setEditDesc(true); }}
+                    className="w-full min-w-0 text-left text-sm rounded-[var(--radius)] bg-muted/40 hover:bg-muted/60 transition-colors p-3 min-h-[48px] text-foreground cursor-text">
+                    {data.card.description
+                      ? <TextoRico texto={data.card.description} />
+                      : <span className="text-muted-foreground">Adicionar uma descrição…</span>}
+                  </div>
                 )}
               </Section>
 
@@ -165,7 +174,11 @@ export function CardModal({ cardId, boardId, labels, onClose }: {
                                   <span className={`text-sm flex-1 ${it.is_done ? "line-through text-muted-foreground" : "text-foreground"}`}>{it.text}</span>
                                   <button onClick={() => mut.removeItem.mutate({ id: it.id })} className="p-0.5 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"><X className="h-3.5 w-3.5" /></button>
                                 </div>
-                                <div className="flex items-center gap-2 pl-6 mt-1">
+                                {/* Data e responsável só ficam à vista quando preenchidos;
+                                    vazios, aparecem ao passar o mouse/focar (no celular,
+                                    sempre). Num checklist de 44 itens, 88 campos vazios
+                                    escondiam os itens. */}
+                                <div className={`items-center gap-2 pl-6 mt-1 ${it.due_date || it.assignee_id ? "flex" : "hidden group-hover:flex group-focus-within:flex max-sm:flex"}`}>
                                   <input type="date" value={it.due_date ? it.due_date.slice(0, 10) : ""}
                                     onChange={(e) => mut.updateItem.mutate({ id: it.id, patch: { due_date: e.target.value ? new Date(e.target.value + "T12:00:00").toISOString() : null } })}
                                     className={`h-7 text-xs rounded-md border bg-card px-2 ${itemOverdue ? "text-destructive border-destructive/40" : "text-muted-foreground border-border"}`} />
@@ -243,7 +256,7 @@ export function CardModal({ cardId, boardId, labels, onClose }: {
                         <img src={c.authorAvatar || diceBearUrl(c.user_id)} className="h-7 w-7 rounded-full object-cover shrink-0 ring-1 ring-border" />
                         <div className="min-w-0">
                           <p className="text-xs"><strong className="text-foreground">{c.authorName ?? "Usuário"}</strong> <span className="text-muted-foreground">{new Date(c.created_at).toLocaleString("pt-BR")}</span></p>
-                          <p className="text-sm text-foreground bg-card border border-border shadow-[var(--shadow-card)] rounded-[var(--radius)] px-3 py-2 mt-1 whitespace-pre-wrap">{c.body}</p>
+                          <TextoRico texto={c.body} className="text-sm text-foreground bg-card border border-border shadow-[var(--shadow-card)] rounded-[var(--radius)] px-3 py-2 mt-1" />
                         </div>
                       </div>
                     ))}

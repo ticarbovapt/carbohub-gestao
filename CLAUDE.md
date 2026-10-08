@@ -2252,10 +2252,29 @@ o resumo ANTES e grava na ordem das FKs. Falhou no meio ⇒ apaga o quadro criad
    2,3 GB). Trazer o arquivo exigiria a chave de API do Trello. O resumo AVISA.
 3. ⚠️ **O export traz só as últimas 1.000 ações**, e é de lá que vêm os
    comentários — o resumo diz a data de corte.
-4. Pessoa casa por PRIMEIRO NOME e só se o casamento for ÚNICO; comentário de
-   quem não casou entra com o nome no texto, em nome de quem importou.
+4. Pessoa casa por PRIMEIRO NOME e só se o casamento for ÚNICO (desempate:
+   sobrenome, usuário do Trello, time de quem importa); comentário de quem não
+   casou entra com o nome no texto, em nome de quem importou. ⚠️ A lista é o
+   time INTERNO inteiro (`profiles` com departamento) — só o departamento de
+   quem importa deixou a Mirian (Marketing) de fora quando importou alguém do
+   TI. E o diálogo deixa ESCOLHER a pessoa à mão antes de gravar.
 5. ⚠️ **Toda linha leva TODAS as colunas**: no insert em lote o PostgREST usa a
    união das chaves, e coluna ausente numa linha vira NULL, não o default.
+
+⚠️ **Importar não basta: o quadro chegou ILEGÍVEL**, e só renderizando se viu.
+Três defeitos, todos de EXIBIÇÃO, nenhum de dado:
+1. Descrição e comentário do Trello são MARKDOWN, com link no formato
+   `[url](url "smartCard-inline")`. Mostrado cru, virava parede de colchetes.
+   Hoje `lib/textoRico.tsx` renderiza (sem HTML injetado, sem biblioteca) e dá
+   NOME ao link sem rótulo ("Planilha Google", "Pasta no Drive").
+2. A capa guarda a CHAVE da paleta e o cartão pintava a chave crua:
+   `"lime"` = verde-néon, `"sky"` = faixa INVISÍVEL. Hoje passa por `LABEL_COLORS`.
+3. Os 4 campos personalizados eram `cardFront: true` no Trello e aqui só
+   apareciam no detalhe — parecia dado perdido. Hoje vão para a FRENTE do
+   cartão (`CamposNaFrente`, por contexto). Vale para todo quadro, não só o
+   importado: campo preenchido aparece na frente.
+E o checklist mostrava data + responsável VAZIOS em cada item (88 campos num
+checklist de 44): agora só aparecem preenchidos ou ao passar o mouse.
 
 ### Regras anti-confusão (OBRIGATÓRIAS)
 1. **Todo pedido nomeia o alvo.** "no CRM" → `apps/crm`; "no controle"/"atual" → raiz (`src/`).

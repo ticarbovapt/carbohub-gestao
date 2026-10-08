@@ -28,7 +28,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type J = any;
 
-export interface PessoaDaqui { id: string; full_name: string | null }
+export interface PessoaDaqui { id: string; full_name: string | null; doTime?: boolean }
 
 export interface Importacao {
   board: Record<string, unknown>;
@@ -51,7 +51,7 @@ export interface Importacao {
     etiquetas: number; campos: number;
     anexosLink: number; anexosNoTrello: number; anexosNoTrelloMB: number;
     comentarios: number; comentariosDesde: string | null;
-    pessoas: { trello: string; casou: string | null }[];
+    pessoas: { idTrello: string; trello: string; casou: string | null; casouId: string | null }[];
   };
 }
 
@@ -83,29 +83,38 @@ function criadoEm(idTrello: string): string | null {
   return Number.isFinite(s) && s > 0 ? new Date(s * 1000).toISOString() : null;
 }
 
-const chaveNome = (s: string | null | undefined) =>
-  (s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase()
-    .replace(/[|].*$/, "").trim().split(/\s+/)[0] ?? "";
-
-export function montarImportacao(t: J, ctx: { userId: string; workspaceId: string | null; pessoas: PessoaDaqui[] }): Importacao {
+export function montarImportacao(t: J, ctx: { userId: string; workspaceId: string | null; pessoas: PessoaDaqui[]; escolhidos?: Record<string, string | null> }): Importacao {
   if (!t || !Array.isArray(t.lists) || !Array.isArray(t.cards)) {
     throw new Error("Este arquivo não é um export de quadro do Trello (faltam listas e cartões).");
   }
 
-  // Pessoas: casamento ÚNICO pelo primeiro nome.
-  const porChave = new Map<string, PessoaDaqui[]>();
-  for (const p of ctx.pessoas) {
-    const k = chaveNome(p.full_name);
-    if (!k) continue;
-    porChave.set(k, [...(porChave.get(k) ?? []), p]);
-  }
+  // Pessoas: casamento ÚNICO. Primeiro nome; com empate, desempata por
+  // sobrenome, depois pelo USUÁRIO do Trello ("mirianguedesb" contém
+  // "mirianguedes"), depois por ser do time de quem importa. Sobrando dois,
+  // não escolhe — atribuir à pessoa errada é pior que deixar sem.
+  // ⚠️ A lista é a do time INTERNO inteiro, não só o departamento de quem
+  // importa: com só o departamento, a Mirian (Marketing) não casava quando
+  // quem importava era do TI, e os comentários dela saíram em nome de outro.
+  const tokens = (s: string | null | undefined) =>
+    (s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+      .replace(/[|].*$/, "").replace(/[^a-z\s]/g, " ").trim().split(/\s+/).filter(Boolean);
   const membro = new Map<string, string>(); // id Trello → profile id
   const pessoas: Importacao["resumo"]["pessoas"] = [];
   for (const m of t.members ?? []) {
-    const cands = porChave.get(chaveNome(m.fullName)) ?? [];
-    const achou = cands.length === 1 ? cands[0] : null;
+    const tt = tokens(m.fullName);
+    const usuario = String(m.username ?? "").toLowerCase().replace(/[^a-z]/g, "");
+    let cands = ctx.pessoas.filter((p) => tt[0] && tokens(p.full_name)[0] === tt[0]);
+    const estreitar = (f: (p: PessoaDaqui) => boolean) => { const x = cands.filter(f); if (x.length > 0) cands = x; };
+    if (cands.length > 1 && tt.length > 1) estreitar((p) => tt.every((k) => tokens(p.full_name).includes(k)));
+    if (cands.length > 1 && usuario) estreitar((p) => { const pt = tokens(p.full_name); return pt.length > 1 && usuario.includes(pt[0] + pt[1]); });
+    if (cands.length > 1) estreitar((p) => !!p.doTime);
+    // Escolha feita na tela vence o automático (inclusive "ninguém" = null).
+    const escolha = ctx.escolhidos && m.id in ctx.escolhidos ? ctx.escolhidos[m.id] : undefined;
+    const achou = escolha !== undefined
+      ? (escolha ? ctx.pessoas.find((p) => p.id === escolha) ?? null : null)
+      : (cands.length === 1 ? cands[0] : null);
     if (achou) membro.set(m.id, achou.id);
-    pessoas.push({ trello: m.fullName ?? m.username, casou: achou?.full_name ?? null });
+    pessoas.push({ idTrello: m.id, trello: m.fullName ?? m.username, casou: achou?.full_name ?? null, casouId: achou?.id ?? null });
   }
   const nomeTrello = new Map<string, string>((t.members ?? []).map((m: J) => [m.id, m.fullName ?? m.username]));
 
