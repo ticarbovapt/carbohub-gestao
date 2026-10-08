@@ -117,11 +117,27 @@ async function enviarEmPartes(corpo: ReadableStream<Uint8Array>, tamanho: number
   return enviado;
 }
 
+// ⚠️ Colar no painel do Supabase costuma levar uma QUEBRA DE LINHA junto, e
+// ela fazia o cabeçalho OAuth ficar inválido. Limpa aqui, sempre.
+const KEY = (Deno.env.get("TRELLO_KEY") ?? "").trim();
+const TOKEN = (Deno.env.get("TRELLO_TOKEN") ?? "").trim();
+
+// ⚠️ NADA que sai daqui pode conter a chave ou o token. O erro do fetch repete
+// o cabeçalho inteiro ("Invalid header value: OAuth oauth_consumer_key=…") e
+// chegou à tela assim. Toda resposta passa por esta peneira.
+function semSegredo(texto: string): string {
+  let t = texto;
+  for (const v of [KEY, TOKEN, Deno.env.get("TRELLO_KEY") ?? "", Deno.env.get("TRELLO_TOKEN") ?? ""]) {
+    if (v && v.trim().length >= 8) t = t.split(v).join("***").split(v.trim()).join("***");
+  }
+  return t.replace(/oauth_(consumer_key|token)="[^"]*"/g, 'oauth_$1="***"');
+}
+
 Deno.serve(async (req) => {
   const h = cors(req);
   if (req.method === "OPTIONS") return new Response(null, { headers: h });
   const json = (status: number, obj: unknown) =>
-    new Response(JSON.stringify(obj), { status, headers: { ...h, "content-type": "application/json" } });
+    new Response(semSegredo(JSON.stringify(obj)), { status, headers: { ...h, "content-type": "application/json" } });
   // ⚠️ Exceção que escapa vira 500 do runtime SEM os cabeçalhos de CORS, e o
   // navegador só diz "Failed to send a request" — o erro real some. Todo
   // caminho devolve JSON com CORS, inclusive o inesperado.
@@ -134,9 +150,11 @@ Deno.serve(async (req) => {
 
 async function atender(req: Request, json: (status: number, obj: unknown) => Response): Promise<Response> {
 
-  const KEY = Deno.env.get("TRELLO_KEY");
-  const TOKEN = Deno.env.get("TRELLO_TOKEN");
   if (!KEY || !TOKEN) return json(500, { ok: false, erro: "TRELLO_KEY / TRELLO_TOKEN ausentes em Supabase → Edge Functions → Secrets" });
+  // Formato errado (aspas, espaço no meio, o "Segredo" no lugar do token) é
+  // dito por NOME, nunca mostrando o valor.
+  if (!/^[0-9a-f]{32}$/i.test(KEY)) return json(500, { ok: false, erro: "TRELLO_KEY não parece a Chave de API do Trello (32 caracteres hexadecimais). Confira o Secret." });
+  if (!/^[A-Za-z0-9]{40,}$/.test(TOKEN)) return json(500, { ok: false, erro: "TRELLO_TOKEN não parece um token do Trello (texto comprido, só letras e números). Confira o Secret." });
 
   // Quem chama: gente logada E do time interno.
   // O JWT de QUEM CHAMA vai no Authorization, então `auth.uid()` é dele — a
