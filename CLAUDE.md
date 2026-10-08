@@ -274,6 +274,22 @@ não classificado R$ 616.815,56   84,8%
    já guarda `modality` (P/M/G) em cada linha de serviço; o que falta é essa
    informação chegar ao dashboard. Deduzir da nota depois é o que não dá.
 
+### ⚠️ Parcela de recorrência EDITADA tem de continuar `agendado` (08/10/2026)
+A ativação mensal (`carboze_ativar_parcelas_devidas`, cron 03:10 UTC) procura
+`status = 'agendado'`, e o card do Rastreio mora em `fulfillment_stage`. Editar
+a parcela pelo `/vender` gravava `status = 'pending'` (`useUpdateVendaFull`) e
+deixava a etapa em `agendado`: o card ficava na coluna e a ativação nunca mais o
+via. Medido no `order_audit_logs`: as 2 parcelas de outubro da M Construções
+(editadas em 15/09) não andaram em 01/10 e foram movidas à mão em 08/10; as
+outras 6 parcelas do mês andaram sozinhas às 00:10.
+
+`trg_parcela_agendada_continua_agendada` (`20261059`) segura SÓ a transição da
+edição — `agendado → pending` com a etapa ainda `agendado`. ⚠️ Ativação (status
++ etapa no mesmo update) e cancelamento passam; segurar "qualquer saída de
+agendado" faria cancelar uma parcela futura reagendá-la, calado.
+⚠️ Para investigar etapa que "não andou", o `order_audit_logs` tem antes/depois
+e quem fez (`user_id` nulo = automático) — é ele que separa travado de manual.
+
 ### Estoque do vendedor / pronta entrega
 Cada vendedor tem uma caixa física: um `warehouse` com `kind='vendedor'` e
 `owner_id`. Reusar `warehouses` (e não criar tabela nova) é o que faz o fluxo
