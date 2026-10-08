@@ -2,7 +2,8 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import logoUrl from "@/assets/logo-grupo-carbo.png";
 
-// Orçamento em PDF com a identidade do Grupo Carbo.
+// Orçamento (ou PEDIDO, depois de convertido — ver `status`) em PDF com a
+// identidade do Grupo Carbo.
 // ⚠️ DADOS DA EMPRESA: confirme/ajuste em COMPANY abaixo (CNPJ, endereço, contato).
 const COMPANY = {
   name: "Carbo Soluções LTDA",
@@ -60,6 +61,11 @@ export interface QuotePdfData {
   created_at?: string | null;
   notes?: string | null;
   validityDays?: number;
+  /** Status CRU de `carboze_orders`. ⚠️ Decide o TÍTULO do papel: `quote` (ou
+   *  ausente — o /vender gera antes de existir venda) é ORÇAMENTO; qualquer
+   *  outro é PEDIDO. Depois de convertido, o cliente recebia um "orçamento
+   *  válido até…" de uma compra que já tinha fechado. */
+  status?: string | null;
 }
 
 // Modalidades exibidas como "aceitas" no PDF. NÃO listamos "Boleto faturado" aqui
@@ -141,6 +147,7 @@ export async function generateQuotePdf(order: QuotePdfData, opts?: { download?: 
   const GREEN_SOFT: [number, number, number] = [205, 224, 214];
   const BAND_H = 30;
 
+  const ehPedido = !!order.status && order.status !== "quote";
   const created = dateBR(order.created_at);
   const validity = order.validityDays ?? 7;
   const validUntilDate = new Date(order.created_at ? new Date(order.created_at) : new Date());
@@ -169,11 +176,12 @@ export async function generateQuotePdf(order: QuotePdfData, opts?: { download?: 
   const boxW = 60, boxH = 20, boxX = pageW - M - boxW, boxY = 4;
   doc.setFillColor(...LIME); doc.roundedRect(boxX, boxY, boxW, boxH, 2, 2, "F");
   doc.setTextColor(...GREEN); doc.setFont("helvetica", "bold"); doc.setFontSize(13);
-  doc.text("ORÇAMENTO", boxX + boxW / 2, boxY + 6.8, { align: "center" });
+  doc.text(ehPedido ? "PEDIDO" : "ORÇAMENTO", boxX + boxW / 2, boxY + 6.8, { align: "center" });
   doc.setFont("helvetica", "normal"); doc.setFontSize(7.5);
   if (order.order_number) doc.text(`Nº ${order.order_number}`, boxX + boxW / 2, boxY + 11.4, { align: "center" });
   doc.text(`Emissão: ${created}`, boxX + boxW / 2, boxY + 15.2, { align: "center" });
-  doc.text(`Válido até: ${validUntil}`, boxX + boxW / 2, boxY + 18.4, { align: "center" });
+  // Validade é de PROPOSTA: pedido fechado não "vence".
+  if (!ehPedido) doc.text(`Válido até: ${validUntil}`, boxX + boxW / 2, boxY + 18.4, { align: "center" });
 
   // Linha da empresa (branco suave) na base da faixa.
   doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(...GREEN_SOFT);
@@ -499,11 +507,13 @@ export async function generateQuotePdf(order: QuotePdfData, opts?: { download?: 
   // ── Rodapé ───────────────────────────────────────────────────────────────────
   doc.setFontSize(8); doc.setTextColor(150);
   doc.text(
-    "Este documento é um orçamento e não possui valor fiscal. Valores sujeitos a confirmação.",
+    ehPedido
+      ? "Este documento é um pedido e não possui valor fiscal. O documento fiscal é a nota fiscal."
+      : "Este documento é um orçamento e não possui valor fiscal. Valores sujeitos a confirmação.",
     pageW / 2, pageH - 10, { align: "center" },
   );
 
-  const filename = `orcamento-${order.order_number || "carbo"}.pdf`;
+  const filename = `${ehPedido ? "pedido" : "orcamento"}-${order.order_number || "carbo"}.pdf`;
   if (opts?.download !== false) doc.save(filename);
   // base64 (sem o prefixo data:) — para anexar no envio por e-mail (send-email)
   const base64 = doc.output("datauristring").split(",")[1] ?? "";
