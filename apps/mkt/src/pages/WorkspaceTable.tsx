@@ -1,3 +1,4 @@
+import { useCartaoDaUrl } from "@/lib/cartaoNaUrl";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, Table2, CalendarClock, ArrowUp, ArrowDown, Maximize2, Search } from "lucide-react";
@@ -30,6 +31,7 @@ export default function WorkspaceTable() {
   const [memberId, setMemberId] = useState("");
   const [boardId, setBoardId] = useState("");
   const [openCardId, setOpenCardId] = useState<string | null>(null);
+  useCartaoDaUrl((cid) => setOpenCardId(cid));
 
   const labelById = useMemo(() => new Map((data?.labels ?? []).map((l) => [l.id, l])), [data?.labels]);
   const memberById = useMemo(() => new Map(team.map((t) => [t.id, t])), [team]);

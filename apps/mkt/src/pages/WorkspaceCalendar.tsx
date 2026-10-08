@@ -1,3 +1,4 @@
+import { useCartaoDaUrl } from "@/lib/cartaoNaUrl";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, ChevronLeft, ChevronRight, CalendarClock, Table2, LayoutGrid } from "lucide-react";
@@ -20,6 +21,7 @@ export default function WorkspaceCalendar() {
   const [mode, setMode] = useState<"month" | "week">("month");
   const [colorBy, setColorBy] = useState<"label" | "board">("board");
   const [openCardId, setOpenCardId] = useState<string | null>(null);
+  useCartaoDaUrl((cid) => setOpenCardId(cid));
 
   const boardColor = useMemo(() => {
     const idx = new Map((data?.boards ?? []).map((b, i) => [b.id, i]));

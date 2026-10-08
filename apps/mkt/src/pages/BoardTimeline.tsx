@@ -1,3 +1,4 @@
+import { useCartaoDaUrl } from "@/lib/cartaoNaUrl";
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
@@ -83,6 +84,7 @@ export default function BoardTimeline() {
   const [zoom, setZoom] = useState<"dia" | "semana" | "mes">("semana");
   const [groupBy, setGroupBy] = useState<"list" | "member">("list");
   const [openCardId, setOpenCardId] = useState<string | null>(null);
+  useCartaoDaUrl((cid) => setOpenCardId(cid));
   const [drag, setDrag] = useState<DragState | null>(null);
   const [delta, setDelta] = useState(0);
   const dayWidth = DAY_WIDTH[zoom];

@@ -1,3 +1,4 @@
+import { useCartaoDaUrl } from "@/lib/cartaoNaUrl";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
@@ -380,16 +381,9 @@ export default function Board() {
     return n;
   });
 
-  // Abre o cartão vindo da busca entre quadros (?card=…), uma vez, e limpa o param.
-  useEffect(() => {
-    const cid = searchParams.get("card");
-    // `&anexo=` vem do "Copiar link" de um arquivo: abre o cartão JÁ no arquivo.
-    const aid = searchParams.get("anexo");
-    if (cid) {
-      setOpenCardId(cid); setAnexoInicial(aid);
-      searchParams.delete("card"); searchParams.delete("anexo"); setSearchParams(searchParams, { replace: true });
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // `?card=` (F5, busca entre quadros, link) abre o cartão; `&anexo=` (link de
+  // um arquivo) abre o cartão JÁ no arquivo.
+  useCartaoDaUrl((cid, aid) => { setOpenCardId(cid); setAnexoInicial(aid); });
 
   const cardsByList = useMemo(() => {
     const map = new Map<string, CardSummary[]>();

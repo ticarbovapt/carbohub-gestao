@@ -25,6 +25,7 @@ import { confirmar } from "@carbo/shell";
 import { TextoRico } from "@/lib/textoRico";
 import { EditorDescricao } from "@/components/board/EditorDescricao";
 import { Anexos } from "@/components/board/Anexos";
+import { useCartaoNoEndereco } from "@/lib/cartaoNaUrl";
 import { supabase } from "@/integrations/supabase/client";
 import type { Attachment, Comment } from "@/hooks/useCardDetail";
 
@@ -55,6 +56,7 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [], anex
   pessoas?: { id: string; full_name: string | null; avatar_url: string | null }[];
 }) {
   const { data, isLoading } = useCardDetail(cardId);
+  useCartaoNoEndereco(cardId);
   const mut = useCardMutations(cardId, boardId);
   const { data: timeDept = [] } = useTeamMembers();
   const team = [...pessoas, ...timeDept.filter((t) => !pessoas.some((p) => p.id === t.id))];
