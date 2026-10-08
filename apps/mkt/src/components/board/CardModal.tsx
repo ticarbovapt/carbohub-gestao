@@ -16,7 +16,7 @@ import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { useCustomFields } from "@/hooks/useCustomFields";
 import { CustomFieldInput } from "@/components/board/CustomFieldInput";
 import { LABEL_COLORS, LABEL_COLOR_KEYS, tintedLabelStyle } from "@/lib/mktTheme";
-import { ListChecks } from "lucide-react";
+import { ListChecks, Play, Music, Image as ImageIcon, ChevronUp } from "lucide-react";
 import type { Label } from "@/hooks/useBoards";
 import { diceBearUrl } from "@/components/ui/profile-avatar";
 import { confirmar } from "@carbo/shell";
@@ -450,31 +450,86 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [] }: {
 
 // Arquivo guardado no bucket PRIVADO `mkt-anexos`: abre por URL assinada (1 h),
 // nunca por link público. Imagem ganha miniatura pela mesma URL.
+// Tipo do arquivo pelo mime e, na falta, pela extensão — o Trello nem sempre
+// mandou `mimeType`, e o anexo antigo ficaria "arquivo" sem player.
+type TipoArquivo = "video" | "audio" | "imagem" | "pdf" | "outro";
+function tipoDoArquivo(mime: string | null, nome: string): TipoArquivo {
+  const m = (mime ?? "").toLowerCase();
+  const ext = (nome.split(".").pop() ?? "").toLowerCase();
+  if (m.startsWith("video/") || ["mp4", "mov", "m4v", "webm", "avi", "mkv"].includes(ext)) return "video";
+  if (m.startsWith("audio/") || ["mp3", "wav", "m4a", "ogg", "aac", "opus"].includes(ext)) return "audio";
+  if (m.startsWith("image/") || ["jpg", "jpeg", "png", "gif", "webp", "svg"].includes(ext)) return "imagem";
+  if (m === "application/pdf" || ext === "pdf") return "pdf";
+  return "outro";
+}
+const ROTULO_TIPO: Record<TipoArquivo, string> = { video: "Vídeo", audio: "Áudio", imagem: "Imagem", pdf: "PDF", outro: "Arquivo" };
+
 function AnexoArquivo({ a, onRemove }: { a: Attachment; onRemove: () => void }) {
   const [url, setUrl] = useState<string | null>(null);
   const [falhou, setFalhou] = useState(false);
+  const [aberto, setAberto] = useState(false);
+  const [naoToca, setNaoToca] = useState(false);
   useEffect(() => {
     let vivo = true;
     supabase.storage.from("mkt-anexos").createSignedUrl(a.storage_path!, 3600)
       .then(({ data, error }) => { if (!vivo) return; if (error || !data) setFalhou(true); else setUrl(data.signedUrl); });
     return () => { vivo = false; };
   }, [a.storage_path]);
-  const imagem = (a.mime_type ?? "").startsWith("image/");
+  const tipo = tipoDoArquivo(a.mime_type, a.name);
+  const visualizavel = tipo !== "outro" && !!url;
+  const Icone = tipo === "audio" ? Music : tipo === "imagem" ? ImageIcon : FileText;
   return (
-    <div className="flex items-center gap-2.5 rounded-[var(--radius)] border border-border bg-card p-2 shadow-[var(--shadow-card)] group">
-      {imagem && url ? (
-        <img src={url} alt="" className="h-10 w-14 rounded-md object-cover bg-muted" />
-      ) : (
-        <div className="h-10 w-14 rounded-md bg-muted flex items-center justify-center text-muted-foreground">
-          <FileText className="h-5 w-5" />
+    <div className="rounded-[var(--radius)] border border-border bg-card shadow-[var(--shadow-card)] group overflow-hidden">
+      <div className="flex items-center gap-2.5 p-2">
+        <button type="button" disabled={!visualizavel} onClick={() => setAberto((v) => !v)}
+          className="relative h-10 w-14 shrink-0 rounded-md bg-muted overflow-hidden flex items-center justify-center text-muted-foreground disabled:cursor-default"
+          title={visualizavel ? (aberto ? "Fechar" : "Ver aqui") : undefined}>
+          {tipo === "imagem" && url ? (
+            <img src={url} alt="" className="h-full w-full object-cover" />
+          ) : tipo === "video" && url ? (
+            <>
+              {/* Só os metadados: o quadro de capa sem baixar o vídeo inteiro. */}
+              <video src={url + "#t=0.5"} preload="metadata" muted playsInline className="h-full w-full object-cover" />
+              <span className="absolute inset-0 flex items-center justify-center bg-black/30 text-white"><Play className="h-4 w-4 fill-current" /></span>
+            </>
+          ) : (
+            <Icone className="h-5 w-5" />
+          )}
+        </button>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm text-foreground truncate">{a.name}</p>
+          <span className="text-xs text-muted-foreground">
+            {falhou ? "Arquivo indisponível" : ROTULO_TIPO[tipo]}
+            {visualizavel && (
+              <button type="button" onClick={() => setAberto((v) => !v)} className="ml-2 text-primary hover:underline">
+                {aberto ? "fechar" : tipo === "video" ? "assistir" : tipo === "audio" ? "ouvir" : "ver aqui"}
+              </button>
+            )}
+          </span>
+        </div>
+        {url && <a href={url} target="_blank" rel="noreferrer" className="p-1.5 text-muted-foreground hover:text-foreground rounded-md hover:bg-muted/60" title="Abrir em nova guia"><ExternalLink className="h-4 w-4" /></a>}
+        {aberto && <button type="button" onClick={() => setAberto(false)} className="p-1.5 text-muted-foreground hover:text-foreground rounded-md hover:bg-muted/60" title="Fechar"><ChevronUp className="h-4 w-4" /></button>}
+        <button onClick={onRemove} className="p-1.5 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100" title="Remover"><Trash2 className="h-4 w-4" /></button>
+      </div>
+      {aberto && url && (
+        <div className="border-t border-border bg-black/90">
+          {tipo === "video" && (
+            naoToca ? (
+              <p className="p-4 text-sm text-white/80">
+                O navegador não consegue tocar este vídeo aqui (formato ou codec, comum em .mov do iPhone).{" "}
+                <a href={url} target="_blank" rel="noreferrer" download className="underline">Baixar o arquivo</a>
+              </p>
+            ) : (
+              <video src={url} controls autoPlay playsInline onError={() => setNaoToca(true)} className="block w-full max-h-[70vh] bg-black" />
+            )
+          )}
+          {tipo === "audio" && <audio src={url} controls autoPlay className="block w-full p-2" />}
+          {tipo === "imagem" && (
+            <a href={url} target="_blank" rel="noreferrer"><img src={url} alt={a.name} className="block mx-auto max-h-[70vh] object-contain" /></a>
+          )}
+          {tipo === "pdf" && <iframe src={url} title={a.name} className="block w-full h-[70vh] bg-white" />}
         </div>
       )}
-      <div className="min-w-0 flex-1">
-        <p className="text-sm text-foreground truncate">{a.name}</p>
-        <span className="text-xs text-muted-foreground">{falhou ? "Arquivo indisponível" : "Arquivo"}</span>
-      </div>
-      {url && <a href={url} target="_blank" rel="noreferrer" className="p-1.5 text-muted-foreground hover:text-foreground rounded-md hover:bg-muted/60" title="Abrir"><ExternalLink className="h-4 w-4" /></a>}
-      <button onClick={onRemove} className="p-1.5 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100" title="Remover"><Trash2 className="h-4 w-4" /></button>
     </div>
   );
 }
