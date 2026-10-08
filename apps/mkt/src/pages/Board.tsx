@@ -355,6 +355,7 @@ export default function Board() {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const [openCardId, setOpenCardId] = useState<string | null>(null);
+  const [anexoInicial, setAnexoInicial] = useState<string | null>(null);
   const [fieldsOpen, setFieldsOpen] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [addingList, setAddingList] = useState(false);
@@ -382,7 +383,12 @@ export default function Board() {
   // Abre o cartão vindo da busca entre quadros (?card=…), uma vez, e limpa o param.
   useEffect(() => {
     const cid = searchParams.get("card");
-    if (cid) { setOpenCardId(cid); searchParams.delete("card"); setSearchParams(searchParams, { replace: true }); }
+    // `&anexo=` vem do "Copiar link" de um arquivo: abre o cartão JÁ no arquivo.
+    const aid = searchParams.get("anexo");
+    if (cid) {
+      setOpenCardId(cid); setAnexoInicial(aid);
+      searchParams.delete("card"); searchParams.delete("anexo"); setSearchParams(searchParams, { replace: true });
+    }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const cardsByList = useMemo(() => {
@@ -572,7 +578,7 @@ export default function Board() {
       </div>
 
       {openCardId && (
-        <CardModal cardId={openCardId} boardId={boardId} labels={labels} pessoas={data.people} onClose={() => setOpenCardId(null)} />
+        <CardModal cardId={openCardId} boardId={boardId} labels={labels} pessoas={data.people} anexoInicial={anexoInicial} onClose={() => { setOpenCardId(null); setAnexoInicial(null); }} />
       )}
       {fieldsOpen && <BoardFieldsDialog boardId={boardId} onClose={() => setFieldsOpen(false)} />}
     </div>

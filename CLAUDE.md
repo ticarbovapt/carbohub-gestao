@@ -2340,6 +2340,27 @@ o `TextoRico` lê. Conferido no navegador: ida e volta preserva título, listas,
 citação, linha e até o `"smartCard-inline"` dos links do Trello. ⚠️ Sublinhado
 está DESLIGADO de propósito: markdown não o guarda, e ele sumiria ao salvar.
 
+**O time SOBE, SUBSTITUI e EXCLUI arquivo no cartão** (`20261061`,
+`components/board/Anexos.tsx` + `Visualizador.tsx` + `lib/mktArquivos.ts`). É o
+diferencial pedido: acabar com "subir no Drive, voltar ao cartão, trocar o link
+em todo lugar". O "Copiar link" leva a `?card=…&anexo=…` e continua valendo
+depois de substituir — o ANEXO é o mesmo, só o conteúdo muda.
+1. ⚠️ **Substituir grava objeto NOVO e só depois apaga o antigo.** Envio que cai
+   no meio deixa o anexo apontando para o arquivo que existe. Sem policy de
+   UPDATE no bucket, de propósito: objeto novo = cache do navegador nunca serve
+   a versão velha.
+2. ⚠️ **Excluir apaga o OBJETO antes da linha** — ao contrário sobraria arquivo
+   no bucket que tela nenhuma mostra.
+3. ⚠️ **O ORIGINAL NÃO é recomprimido**: é a entrega do designer, e recomprimir
+   no navegador pioraria a peça. Leve é o que a tela CARREGA: a lista mostra só
+   a CAPA (`poster_path`, jpeg de 480 px gerado no navegador); o vídeo só é
+   pedido quando alguém clica, e vem em faixas de bytes. Anexo sem capa (os do
+   Trello) ganha uma na PRIMEIRA abertura.
+4. Envio acima de 6 MB vai em partes (TUS, `tus-js-client`), com progresso e
+   retomada; o Storage exige exatamente 6 MB por parte.
+5. ⚠️ **.MOV de iPhone (HEVC) não toca no Chrome** — o player diz isso e oferece
+   o original. Converter exigiria transcodificar no servidor; não existe hoje.
+
 ### Regras anti-confusão (OBRIGATÓRIAS)
 1. **Todo pedido nomeia o alvo.** "no CRM" → `apps/crm`; "no controle"/"atual" → raiz (`src/`).
 2. **Na dúvida, PERGUNTE — nunca adivinhe.** Se a tela existe em mais de um app, liste os candidatos antes de mexer.

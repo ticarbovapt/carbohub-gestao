@@ -27,6 +27,10 @@ export interface Attachment {
   external_url: string; drive_file_id: string | null; thumbnail_url: string | null;
   /** Arquivo NOSSO, no bucket privado `mkt-anexos` (kind = "arquivo"). */
   storage_path?: string | null;
+  /** Capa leve (jpeg) no mesmo bucket: é o que a lista mostra. */
+  poster_path?: string | null;
+  tamanho?: number | null;
+  atualizado_em?: string | null;
   mime_type: string | null; created_at: string;
 }
 export interface CardDetail {

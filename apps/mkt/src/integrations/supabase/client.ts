@@ -13,6 +13,10 @@ const SUPABASE_URL =
 const SUPABASE_PUBLISHABLE_KEY =
   (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined) || DEFAULT_SUPABASE_ANON_KEY;
 
+// Exportados para o envio em partes (TUS) do Marketing, que fala direto com o
+// Storage e precisa do endereço e da chave pública.
+export { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY };
+
 // SSO: sessão num cookie .carbohub.com.br (lib/sso.ts), storageKey IDÊNTICO ao
 // Hub/CRM/Ops → login único entre os subdomínios.
 export const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
