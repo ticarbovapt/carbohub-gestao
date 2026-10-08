@@ -3559,7 +3559,12 @@ esperando uma NF do **Bling** que nunca vai sair — a nota delas é NFS-e.
 4. ⚠️ **`ja_citam_o_pedido = 0` nas 353 notas nossas.** Nenhuma NFS-e emitida até
    hoje cita o número da venda — é por isso que o cruzamento precisa ser
    construído, e não descoberto.
-5. **Série 90000, NÃO a 70000 do emissor web.** `nDPS` é sequencial POR SÉRIE:
+5. ⚠️ **Série na faixa 00001–49999 (aplicativo próprio/API), NUNCA 90000.**
+   Medido em 08/10/2026, no primeiro envio que chegou ao SEFIN: `E1235 … The
+   value '90000' is invalid according to its datatype TSSerieDPS`. As faixas
+   são por TIPO DE EMISSOR (50000–69999 móvel, 70000–79999 emissor web), e a
+   série errada é recusada no ESQUEMA. A sonda usa a série **1**.
+   Antes: **Série 90000, NÃO a 70000 do emissor web.** `nDPS` é sequencial POR SÉRIE:
    usar a mesma faria o nosso contador competir com o de quem digita no portal,
    e duas fontes incrementando o mesmo número é nota duplicada no pior caso.
 6. ⚠️ **Eu quase construí a assinatura com os algoritmos do GOVERNO.** Medi

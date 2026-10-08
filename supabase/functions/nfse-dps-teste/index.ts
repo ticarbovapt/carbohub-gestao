@@ -330,7 +330,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const dAmostra: DadosDps = {
       tpAmb: "2", cLocEmi: "2408102", cnpjPrest: "36060692000100",
       fonePrest: "8432075055", emailPrest: "fiscal@carbovapt.com.br",
-      serie: "90000", nDPS: "900", dhEmi: "2026-10-02T12:00:00-03:00",
+      serie: "1", nDPS: "900", dhEmi: "2026-10-02T12:00:00-03:00",
       dCompet: "2026-10-02", tomaCnpj: "04601397000128",
       tomaNome: "TESTE", tomaMun: "2310803", tomaCep: "63460000",
       tomaLgr: "RUA TESTE", tomaNro: "S/N", tomaBairro: "CENTRO",
@@ -464,7 +464,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     // SÉRIE — usar a mesma faria o nosso contador competir com o de quem
     // digita no portal. Duas fontes incrementando o mesmo número é nota
     // duplicada no pior caso.
-    serie: String(body.serie ?? "90000"),
+    serie: String(body.serie ?? "1"),
     nDPS: String(body.nDPS ?? "1"),
     dhEmi: iso,
     dCompet: hoje,
