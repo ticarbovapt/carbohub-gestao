@@ -1,3 +1,4 @@
+import { useCartaoDaUrl } from "@/lib/cartaoNaUrl";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, ChevronLeft, ChevronRight, CalendarClock } from "lucide-react";
@@ -20,10 +21,7 @@ export default function BoardCalendar() {
   const [colorBy, setColorBy] = useState<"label" | "list">("list");
   const [openCardId, setOpenCardId] = useState<string | null>(null);
 
-  useEffect(() => {
-    const cid = searchParams.get("card");
-    if (cid) { setOpenCardId(cid); searchParams.delete("card"); setSearchParams(searchParams, { replace: true }); }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useCartaoDaUrl((cid) => setOpenCardId(cid));
 
   const listColorMap = useMemo(() => {
     const idx = new Map((data?.lists ?? []).map((l, i) => [l.id, i]));

@@ -1,3 +1,4 @@
+import { useCartaoDaUrl } from "@/lib/cartaoNaUrl";
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
@@ -33,6 +34,7 @@ export default function BoardMap() {
   const { data, isLoading } = useBoard(boardId ?? null);
   useBoardLive(boardId ?? null);
   const [openCardId, setOpenCardId] = useState<string | null>(null);
+  useCartaoDaUrl((cid) => setOpenCardId(cid));
 
   const located = useMemo(
     () => (data?.cards ?? []).filter((c) => c.location_lat != null && c.location_lng != null),

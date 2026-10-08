@@ -1,3 +1,4 @@
+import { useCartaoDaUrl } from "@/lib/cartaoNaUrl";
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, Table2, ArrowUp, ArrowDown, Maximize2, SearchX } from "lucide-react";
@@ -33,6 +34,7 @@ export default function BoardTable() {
   const [labelId, setLabelId] = useState("");
   const [memberId, setMemberId] = useState("");
   const [openCardId, setOpenCardId] = useState<string | null>(null);
+  useCartaoDaUrl((cid) => setOpenCardId(cid));
 
   const listById = useMemo(() => new Map((data?.lists ?? []).map((l: List) => [l.id, l])), [data?.lists]);
   const labelById = useMemo(() => new Map((data?.labels ?? []).map((l: Label) => [l.id, l])), [data?.labels]);

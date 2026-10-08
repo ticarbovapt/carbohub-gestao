@@ -1,3 +1,4 @@
+import { useCartaoDaUrl } from "@/lib/cartaoNaUrl";
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
@@ -40,6 +41,7 @@ export default function BoardDashboard() {
   const { data: timeDept = [] } = useTeamMembers();
   const team = pessoasDoQuadro(data, timeDept);
   const [openCardId, setOpenCardId] = useState<string | null>(null);
+  useCartaoDaUrl((cid) => setOpenCardId(cid));
 
   const memberName = useMemo(() => new Map(team.map((t) => [t.id, t.full_name ?? "Usuário"])), [team]);
 
