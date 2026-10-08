@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useParamUrl } from "@carbo/shell";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboButton } from "@/components/ui/carbo-button";
 import { CarboKPI } from "@/components/ui/carbo-kpi";
@@ -19,8 +20,10 @@ import { cn } from "@/lib/utils";
 
 export default function Skus() {
   const canManage = true;
-  const [searchQuery, setSearchQuery] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("all");
+  // ⚠️ Busca e filtro na URL (`?busca=&categoria=`): F5 e link mantêm a lista, e o
+  // Voltar desfaz a troca de filtro. A busca grava com `replace` (uma entrada por letra não).
+  const [searchQuery, setSearchQuery] = useParamUrl("busca", "", { replace: true });
+  const [categoryFilter, setCategoryFilter] = useParamUrl("categoria", "all");
   const [createOpen, setCreateOpen] = useState(false);
   const [editSku, setEditSku] = useState<Sku | null>(null);
   const [deleteSku, setDeleteSku] = useState<Sku | null>(null);

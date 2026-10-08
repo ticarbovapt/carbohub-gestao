@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import { useParamUrl } from "@carbo/shell";
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList,
 } from "recharts";
@@ -180,12 +181,12 @@ function SerieMensal({
           vertical é o que dá ar aos rótulos em cima das barras. */}
       <ResponsiveContainer width="100%" height={260}>
         <ComposedChart data={dados} margin={{ top: 26, right: 10, bottom: 0, left: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
           {/* `interval={0}` obriga a mostrar TODOS os meses: deixar o Recharts
               decidir faz ele pular rótulo quando aperta, e mês faltando num
               eixo se lê como mês sem venda. */}
-          <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} dy={4} interval={0} />
-          <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false}
+          <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} dy={4} interval={0} />
+          <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false}
                  width={moeda ? 48 : 32} tickFormatter={moeda ? kAxis : undefined} />
           <Tooltip cursor={{ fill: "rgba(148,163,184,0.08)" }}
                    content={moeda ? <DarkTip fmt={brl} /> : <DarkTip unit=" vendas" />} />
@@ -209,8 +210,31 @@ function SerieMensal({
 
 export default function DashboardComercial() {
   const { canAdmin } = useAuth();
-  const [filters, setFilters] = useState<DashFilters>(EMPTY_FILTERS);
-  const [modoClientes, setModoClientes] = useState<"acum" | "ativos" | "novos">("acum");
+  // ⚠️ Filtros e modo de clientes na URL (`?de=&ate=&vendedor=&canal=&clientes=`):
+  // F5 e link compartilhado mantêm o recorte, e o Voltar desfaz a troca.
+  // A barra troca VÁRIOS campos num clique só ("Limpar"), então a gravação é UMA
+  // escrita com todos eles: o updater funcional do `setSearchParams` lê os
+  // parâmetros do RENDER, e quatro `useParamUrl` chamados em sequência
+  // apagariam um ao outro.
+  const [params, setParams] = useSearchParams();
+  const pFrom = params.get("de") ?? "", pTo = params.get("ate") ?? "";
+  const pVend = params.get("vendedor") ?? "all", pSeg = params.get("canal") ?? "all";
+  const filters = useMemo<DashFilters>(
+    () => ({ ...EMPTY_FILTERS, from: pFrom, to: pTo, vendedor: pVend, segmento: pSeg }),
+    [pFrom, pTo, pVend, pSeg],
+  );
+  const setFilters = (f: DashFilters) =>
+    setParams((atual) => {
+      const p = new URLSearchParams(atual);
+      const grava = (k: string, v: string, padrao: string) => (v && v !== padrao ? p.set(k, v) : p.delete(k));
+      grava("de", f.from, ""); grava("ate", f.to, "");
+      grava("vendedor", f.vendedor, "all"); grava("canal", f.segmento, "all");
+      return p;
+    });
+  const [modoUrl, setModoUrl] = useParamUrl("clientes", "acum");
+  const modoClientes: "acum" | "ativos" | "novos" =
+    modoUrl === "ativos" || modoUrl === "novos" ? modoUrl : "acum";
+  const setModoClientes = (v: "acum" | "ativos" | "novos") => setModoUrl(v);
   const [metasOpen, setMetasOpen] = useState(false);
 
   const vendedorId = filters.vendedor === "all" ? null : filters.vendedor;
@@ -595,9 +619,9 @@ export default function DashboardComercial() {
             <div className="px-4 pt-4 pb-4">
               <ResponsiveContainer width="100%" height={260}>
                 <ComposedChart data={annualGrowth} margin={{ top: 24, right: 10, bottom: 0, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} dy={4} interval={0} />
-                  <YAxis tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={48} tickFormatter={kAxis} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} dy={4} interval={0} />
+                  <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} width={48} tickFormatter={kAxis} />
                   <Tooltip content={<DarkTip fmt={fmtK} />} />
                   <Bar dataKey="real" name="Real" fill="rgba(16,185,129,0.55)" stroke="#10b981" strokeWidth={1.5} radius={[4, 4, 0, 0]} maxBarSize={40} isAnimationActive={false}>
                     <LabelList dataKey="real" position="top" formatter={(v: any) => (v != null ? fmtK(v) : "")} style={{ fontSize: 11, fill: "#6ee7b7", fontWeight: 700 }} />
@@ -723,9 +747,9 @@ export default function DashboardComercial() {
             <div className="px-4 pt-4 pb-4">
               <ResponsiveContainer width="100%" height={200}>
                 <ComposedChart data={clientesChart} margin={{ top: 22, right: 8, bottom: 0, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
-                  <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} dy={4} />
-                  <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={28} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                  <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} dy={4} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} width={28} />
                   <Tooltip cursor={{ stroke: "rgba(148,163,184,0.2)" }} content={<DarkTip unit=" clientes" />} />
                   <Line type="monotone" dataKey="b2b" name="B2B (Consumo)" stroke="#3b82f6" strokeWidth={2.5} dot={{ r: 3, fill: "#3b82f6", stroke: "#fff", strokeWidth: 1.5 }} activeDot={{ r: 5 }} isAnimationActive={false}>
                     <LabelList dataKey="b2b" position="top" style={{ fontSize: 10, fill: "#60a5fa", fontWeight: 700 }} />
@@ -767,9 +791,9 @@ export default function DashboardComercial() {
                 <p className="text-[10px] text-board-muted mb-1.5">{c.note}</p>
                 <ResponsiveContainer width="100%" height={160}>
                   <ComposedChart data={canalSeries?.[c.key] ?? []} margin={{ top: 16, right: 6, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
-                    <XAxis dataKey="mes" tick={{ fontSize: 9, fill: "#94a3b8" }} axisLine={false} tickLine={false} interval={1} />
-                    <YAxis tick={{ fontSize: 9, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={34} tickFormatter={kAxis} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                    <XAxis dataKey="mes" tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} interval={1} />
+                    <YAxis tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} width={34} tickFormatter={kAxis} />
                     <Tooltip content={<DarkTip fmt={fmtK} />} />
                     <Bar dataKey="real" name="Real" fill={c.color} fillOpacity={0.75} radius={[3, 3, 0, 0]} maxBarSize={26} isAnimationActive={false} />
                     <Line dataKey="meta" name="Meta" type="monotone" stroke="#fb923c" strokeWidth={2} strokeDasharray="5 3" dot={false} connectNulls isAnimationActive={false} />

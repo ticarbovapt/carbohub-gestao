@@ -7,6 +7,7 @@ import {
   useDepartments, useCreateDepartment, useUpdateDepartment, useDeleteDepartment, useUpdateFunction,
 } from "@/hooks/useStructure";
 import { useDeptFunctions, useCreateFunction, useDeleteFunction } from "@/hooks/useAdminUsers";
+import { confirmar } from "@carbo/shell";
 
 const selectCls =
   "flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
@@ -75,7 +76,7 @@ function DepartmentsPanel({
   }
 
   async function remove(id: string, label: string) {
-    if (!confirm(`Remover o departamento "${label}"? Usuários já atribuídos mantêm o registro.`)) return;
+    if (!(await confirmar({ titulo: `Remover o departamento "${label}"?`, mensagem: "Usuários já atribuídos mantêm o registro.", confirmar: "Remover", perigo: true }))) return;
     try { await deleteDept.mutateAsync(id); toast.success("Departamento removido."); }
     catch (e) { toast.error(e instanceof Error ? e.message : "Erro"); }
   }
@@ -181,7 +182,7 @@ function FunctionsPanel({ department }: { department: string }) {
   }
 
   async function remove(id: string, label: string) {
-    if (!confirm(`Apagar a função "${label}"? Usuários já atribuídos mantêm o registro.`)) return;
+    if (!(await confirmar({ titulo: `Apagar a função "${label}"?`, mensagem: "Usuários já atribuídos mantêm o registro.", confirmar: "Apagar", perigo: true }))) return;
     try { await deleteFn.mutateAsync(id); toast.success("Função removida."); }
     catch (e) { toast.error(e instanceof Error ? e.message : "Erro"); }
   }

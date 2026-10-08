@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import { MessagesSquare } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
-import { Sidebar, type ShellNavSection, StatusTarja } from "@carbo/shell";
+import { Sidebar, type ShellNavSection, StatusTarja, usePaginaAtual } from "@carbo/shell";
 import logoCarbo from "@/assets/logo-carbo.png";
 import { HUB_URL } from "@/lib/sso";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -69,6 +69,10 @@ export function Layout() {
     else toggleCollapsed();
   };
 
+  // Título da guia por tela e rolagem ao topo a cada troca de página.
+  const mainRef = useRef<HTMLElement>(null);
+  usePaginaAtual({ appName: "Carbo Ops", sections, mainRef });
+
   return (
     <ChatProvider supabase={supabase} currentUser={chatUser} navigate={navigate}
       loadCallEngine={() => import("@carbo/call").then((m) => m.loadCall())}>
@@ -81,7 +85,7 @@ export function Layout() {
 
       <div className="flex flex-1 min-h-0">
         <Sidebar
-          brand={{ appName: "Carbo Ops", logoSrc: logoCarbo, onLogoClick: () => { window.location.href = `${HUB_URL}/home`; } }}
+          brand={{ appName: "Carbo Ops", logoSrc: logoCarbo, href: `${HUB_URL}/home` }}
           sections={sections}
           collapsed={collapsed}
           onToggleCollapse={toggleCollapsed}
@@ -89,7 +93,7 @@ export function Layout() {
           onMobileOpenChange={setMobileOpen}
         />
 
-        <main className="flex-1 min-w-0 overflow-y-auto">
+        <main ref={mainRef} className="flex-1 min-w-0 overflow-y-auto">
           <Outlet />
         </main>
       </div>

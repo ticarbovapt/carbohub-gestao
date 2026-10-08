@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useParamUrl } from "@carbo/shell";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboKPI } from "@/components/ui/carbo-kpi";
 import { CarboBadge } from "@/components/ui/carbo-badge";
@@ -19,8 +20,11 @@ const STATUS_VARIANT: Record<MachineStatus, "success" | "warning" | "secondary" 
 const dt = (s: string | null) => (s ? new Date(s + "T00:00:00").toLocaleDateString("pt-BR") : "—");
 
 export default function Maquinas() {
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<MachineStatus | "all">("all");
+  // ⚠️ Busca e filtro na URL (`?busca=&status=`): F5 e link mantêm a lista, e o
+  // Voltar desfaz a troca de filtro. A busca grava com `replace` (uma entrada por letra não).
+  const [search, setSearch] = useParamUrl("busca", "", { replace: true });
+  const [statusUrl, setStatusFilter] = useParamUrl("status", "all");
+  const statusFilter: MachineStatus | "all" = statusUrl in STATUS_LABELS ? (statusUrl as MachineStatus) : "all";
   const [createOpen, setCreateOpen] = useState(false);
   const [editValues, setEditValues] = useState<MachineDialogValues | null>(null);
 

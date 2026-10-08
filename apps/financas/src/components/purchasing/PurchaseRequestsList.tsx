@@ -321,7 +321,7 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
               {selectedRC.items?.length > 0 && (
                 <div>
                   <p className="text-sm text-muted-foreground mb-2">Itens</p>
-                  <div className="border border-border rounded-lg overflow-hidden">
+                  <div className="border border-border rounded-lg overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead className="bg-muted/50">
                         <tr>

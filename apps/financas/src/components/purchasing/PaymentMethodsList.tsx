@@ -136,6 +136,7 @@ export function PaymentMethodsList() {
           <DialogHeader>
             <DialogTitle>{editPM ? "Editar forma de pagamento" : "Nova forma de pagamento"}</DialogTitle>
           </DialogHeader>
+          <form noValidate className="grid gap-4" onSubmit={(e) => { e.preventDefault(); handleSave(); }}>
           <div className="space-y-4">
             <div>
               <Label>Apelido *</Label>
@@ -185,11 +186,12 @@ export function PaymentMethodsList() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowForm(false)}>Cancelar</Button>
-            <Button onClick={handleSave} disabled={!form.apelido.trim() || create.isPending || update.isPending} className="carbo-gradient text-white">
+            <Button type="button" variant="outline" onClick={() => setShowForm(false)}>Cancelar</Button>
+            <Button type="submit" disabled={!form.apelido.trim() || create.isPending || update.isPending} className="carbo-gradient text-white">
               {editPM ? "Salvar" : "Cadastrar"}
             </Button>
           </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 

@@ -78,6 +78,7 @@ export function LotFormDialog({ open, onOpenChange, mode, id, initial }: LotForm
             {isEdit ? "Atualize os dados do lote (produto e volume inicial são fixos)." : "Registre um novo lote de reagente recebido."}
           </DialogDescription>
         </DialogHeader>
+        <form noValidate className="grid gap-4" onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
 
         <div className="space-y-4">
           {/* Produto */}
@@ -137,10 +138,11 @@ export function LotFormDialog({ open, onOpenChange, mode, id, initial }: LotForm
 
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>Cancelar</Button>
-          <Button type="button" onClick={handleSubmit} disabled={pending}>
+          <Button type="submit" disabled={pending}>
             {pending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Salvando…</> : (isEdit ? "Salvar" : "Criar Lote")}
           </Button>
         </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

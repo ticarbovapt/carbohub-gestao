@@ -178,7 +178,7 @@ export function MrpProductFormDialog({ open, onOpenChange, mode, id, initial }: 
 
           <div className="space-y-2">
             <Label>Estoque de Segurança (referência)</Label>
-            <Input type="number" placeholder="0" value={safetyStock} onChange={(e) => setSafetyStock(e.target.value)} />
+            <Input type="number" min={0} placeholder="0" value={safetyStock} onChange={(e) => setSafetyStock(e.target.value)} />
             <p className="text-[11px] text-muted-foreground">O mínimo por hub que aciona a reposição é configurado em Suprimentos → Política de Estoque.</p>
           </div>
 

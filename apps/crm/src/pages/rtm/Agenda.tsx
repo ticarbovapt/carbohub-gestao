@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   addDays, addMonths, eachDayOfInterval, endOfMonth, endOfWeek,
   format, isSameMonth, startOfMonth, startOfWeek, subDays,
@@ -282,8 +282,8 @@ export default function RtmAgenda() {
             visões: no calendário não há botão de continuar, e continuar é a
             única coisa que importa nessa hora. */}
         {emAndamento && (
-          <button
-            onClick={() => navigate(`/rtm/visita?v=${emAndamento.client_uuid}`)}
+          <Link
+            to={`/rtm/visita?v=${emAndamento.client_uuid}`}
             className="sticky top-0 z-30 w-full flex items-center gap-3 rounded-lg border-2
                        border-blue-400 bg-blue-50 dark:bg-blue-950/40 px-3 py-2.5 text-left shadow-sm"
           >
@@ -295,7 +295,7 @@ export default function RtmAgenda() {
               </p>
             </div>
             <ChevronRight className="h-4 w-4 shrink-0 text-blue-600" />
-          </button>
+          </Link>
         )}
 
         {/* ── Estado da conexão e da fila ───────────────────────────────────
@@ -444,7 +444,7 @@ export default function RtmAgenda() {
                       <LinhaAgenda l={l} podeIniciar meu={l.vendedor_id === user?.id}
                         iniciando={iniciando === l.planejada_id}
                         onIniciar={() => iniciar(l)}
-                        onAbrir={() => navigate(`/rtm/visita?v=${l.visita_id}&ver=1`)} />
+                        abrirEm={`/rtm/visita?v=${l.visita_id}&ver=1`} />
                     </div>
                   ))}
                 </section>
@@ -486,7 +486,7 @@ export default function RtmAgenda() {
                     meu={l.vendedor_id === user?.id}
                     iniciando={iniciando === l.planejada_id}
                     onIniciar={() => iniciar(l)}
-                    onAbrir={() => navigate(`/rtm/visita?v=${l.visita_id}&ver=1`)}
+                    abrirEm={`/rtm/visita?v=${l.visita_id}&ver=1`}
                     onCancelar={() => setCancelando(l)} />
                 ))}
               </section>
@@ -528,7 +528,7 @@ export default function RtmAgenda() {
                     <LinhaAgenda key={l.planejada_id} l={l} podeIniciar={false}
                       meu={l.vendedor_id === user?.id} iniciando={false}
                       onIniciar={() => {}}
-                      onAbrir={() => navigate(`/rtm/visita?v=${l.visita_id}&ver=1`)}
+                      abrirEm={`/rtm/visita?v=${l.visita_id}&ver=1`}
                       onCancelar={() => setCancelando(l)} />
                   ))}
                 </section>
@@ -776,10 +776,10 @@ function Resumo({ label, valor, alerta, ativo, onClick }: {
 }
 
 function LinhaAgenda({
-  l, podeIniciar, meu, iniciando, onIniciar, onAbrir, onCancelar,
+  l, podeIniciar, meu, iniciando, onIniciar, abrirEm, onCancelar,
 }: {
   l: RtmAgendaRow; podeIniciar: boolean; meu: boolean; iniciando: boolean;
-  onIniciar: () => void; onAbrir: () => void; onCancelar?: () => void;
+  onIniciar: () => void; abrirEm: string; onCancelar?: () => void;
 }) {
   const temCoord = l.pdv_lat != null && l.pdv_lng != null;
   const endereco = [l.endereco, [l.cidade, l.uf].filter(Boolean).join("/")]
@@ -866,8 +866,9 @@ function LinhaAgenda({
               </Button>
             )}
             {(l.situacao === "concluida" || l.situacao === "em_andamento") && l.visita_id && (
-              <Button variant="outline" className="flex-1 sm:flex-none h-11 sm:h-9"
-                      onClick={onAbrir}>Ver</Button>
+              <Button asChild variant="outline" className="flex-1 sm:flex-none h-11 sm:h-9">
+                <Link to={abrirEm}>Ver</Link>
+              </Button>
             )}
             {destino && (
               // Abre o app de mapas do celular. É a função mais usada da tela

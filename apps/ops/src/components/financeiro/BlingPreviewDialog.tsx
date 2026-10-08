@@ -53,7 +53,7 @@ export function BlingPreviewDialog({ order, open, onOpenChange }: Props) {
           </div>
 
           {/* Itens */}
-          <div className="rounded-lg border overflow-hidden">
+          <div className="rounded-lg border overflow-x-auto">
             <table className="w-full text-xs">
               <thead className="bg-muted/40 text-muted-foreground">
                 <tr><th className="text-left p-2 font-medium">Item</th><th className="text-right p-2 font-medium">Qtd</th><th className="text-right p-2 font-medium">Subtotal</th></tr>

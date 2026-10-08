@@ -90,7 +90,7 @@ export function VendaDetailsDialog({ vendaId, open, onOpenChange }: Props) {
               {itens.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Sem itens.</p>
               ) : (
-                <div className="rounded-lg border overflow-hidden">
+                <div className="rounded-lg border overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead className="bg-muted/40 text-muted-foreground text-xs">
                       <tr><th className="text-left p-2 font-medium">Produto</th><th className="text-right p-2 font-medium">Qtd</th><th className="text-right p-2 font-medium">Preço un.</th><th className="text-right p-2 font-medium">Bonif.</th><th className="text-right p-2 font-medium">Subtotal</th></tr>

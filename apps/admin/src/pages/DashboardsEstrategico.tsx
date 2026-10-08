@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useParamUrl } from "@carbo/shell";
 import {
   Target, FileText, AlertTriangle, Users, DollarSign, Cpu, TrendingUp, TrendingDown,
   ShieldAlert, ShieldCheck, BarChart3, Trophy, CheckCircle2,
@@ -63,9 +63,13 @@ export default function DashboardsEstrategico() {
   const { data: metas = [] } = useMetasVendedores(month, weekStart);
 
   // Blocos espelhados do CeoDashboard
-  const [salesPeriod, setSalesPeriod] = useState<SalesPeriod>("semanas");
-  const [periodFrom, setPeriodFrom] = useState("");
-  const [periodTo, setPeriodTo] = useState("");
+  // ⚠️ Período do gráfico de vendas na URL (`?periodo=&de=&ate=`): F5 e link
+  // compartilhado mantêm a visão, e o Voltar desfaz a troca.
+  const [periodoUrl, setSalesPeriod] = useParamUrl("periodo", "semanas");
+  const salesPeriod: SalesPeriod = (["semanas", "meses", "periodo"] as SalesPeriod[]).includes(periodoUrl as SalesPeriod)
+    ? (periodoUrl as SalesPeriod) : "semanas";
+  const [periodFrom, setPeriodFrom] = useParamUrl("de");
+  const [periodTo, setPeriodTo] = useParamUrl("ate");
   const { data: salesData = [] } = useCeoSales(salesPeriod, periodFrom, periodTo);
   const { data: osByDept = [] } = useOsByDepartment();
   const { data: alerts = [] } = useCeoAlerts();
@@ -211,11 +215,11 @@ export default function DashboardsEstrategico() {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" vertical={false} />
-                  <XAxis dataKey="name" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false}
+                  <XAxis dataKey="name" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} axisLine={false} tickLine={false}
                     tickFormatter={(x: number) => (x >= 1000 ? `${Math.round(x / 1000)}k` : String(x))} />
                   <Tooltip
-                    contentStyle={{ background: "var(--background)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }}
+                    contentStyle={{ background: "hsl(var(--background))", border: "1px solid hsl(var(--border))", borderRadius: 10, fontSize: 12 }}
                     formatter={(v: number, n: string) => n === "receita" ? [fmtBRL(v), "Receita"] : [v, "Vendas"]} />
                   <Area type="monotone" dataKey="receita" stroke="#22c55e" strokeWidth={2} fill="url(#ceoSales)" />
                 </AreaChart>
@@ -239,7 +243,7 @@ export default function DashboardsEstrategico() {
                   <Pie data={osByDept} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={45} outerRadius={80} paddingAngle={2}>
                     {(osByDept as any[]).map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
                   </Pie>
-                  <Tooltip contentStyle={{ background: "var(--background)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }} formatter={(v: number) => [`${v} OP`, ""]} />
+                  <Tooltip contentStyle={{ background: "hsl(var(--background))", border: "1px solid hsl(var(--border))", borderRadius: 10, fontSize: 12 }} formatter={(v: number) => [`${v} OP`, ""]} />
                   <Legend formatter={(v) => <span className="text-xs">{v}</span>} />
                 </PieChart>
               </ResponsiveContainer>

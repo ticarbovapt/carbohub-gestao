@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useParamUrl } from "@carbo/shell";
 import {
   TrendingUp, DollarSign, ShoppingCart, Trophy, AlertTriangle,
   Repeat2, ArrowUpRight, ArrowDownRight, Minus, Users, Receipt,
@@ -30,7 +30,8 @@ const fmtK = (v: number) =>
 
 export default function DashboardsComercial() {
   const { canAdmin } = useAuth();
-  const [vendedor, setVendedor] = useState("all");
+  // ⚠️ Vendedor na URL (`?vendedor=`): F5 e link mantêm o recorte; o Voltar desfaz.
+  const [vendedor, setVendedor] = useParamUrl("vendedor", "all");
   const vendedorId = vendedor === "all" ? null : vendedor;
   const { data } = useDashComercial(vendedorId, 12);
 

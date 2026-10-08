@@ -19,6 +19,7 @@ import { LABEL_COLORS, LABEL_COLOR_KEYS, tintedLabelStyle } from "@/lib/mktTheme
 import { ListChecks } from "lucide-react";
 import type { Label } from "@/hooks/useBoards";
 import { diceBearUrl } from "@/components/ui/profile-avatar";
+import { confirmar } from "@carbo/shell";
 
 const toLocalInput = (iso: string | null) => {
   if (!iso) return "";
@@ -394,7 +395,7 @@ export function CardModal({ cardId, boardId, labels, onClose }: {
 
                 <div className="border-t border-border pt-2 mt-2">
                   <Button size="sm" variant="ghost" className="w-full justify-start gap-2 text-destructive hover:text-destructive hover:bg-destructive/10"
-                    onClick={() => { if (confirm("Arquivar este cartão?")) { mut.updateCard.mutate({ is_archived: true, archived_at: new Date().toISOString() }, { onSuccess: onClose }); toast.success("Cartão arquivado."); } }}>
+                    onClick={async () => { if (await confirmar({ titulo: "Arquivar este cartão?", confirmar: "Arquivar" })) { mut.updateCard.mutate({ is_archived: true, archived_at: new Date().toISOString() }, { onSuccess: onClose }); toast.success("Cartão arquivado."); } }}>
                     <Archive className="h-3.5 w-3.5" /> Arquivar
                   </Button>
                 </div>

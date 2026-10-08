@@ -758,12 +758,12 @@ function PlatformView({ platform, period, custom }: { platform: EcommercePlatfor
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={m.dailySales} margin={{ top: 4, right: 12, left: -10, bottom: 0 }} barCategoryGap="25%" barGap={2}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" vertical={false} />
-                <XAxis dataKey="label" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                <XAxis dataKey="label" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} axisLine={false} tickLine={false} />
                 <Tooltip
-                  contentStyle={{ background: "var(--background)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }}
+                  contentStyle={{ background: "hsl(var(--background))", border: "1px solid hsl(var(--border))", borderRadius: 10, fontSize: 12 }}
                   formatter={(v: number, n: string) => [fmtNum(v), n === "orders" ? "Pedidos" : "Unidades reais"]}
-                  cursor={{ fill: "var(--muted)", opacity: 0.3 }}
+                  cursor={{ fill: "hsl(var(--muted))", opacity: 0.3 }}
                 />
                 <Legend iconType="square" iconSize={10} formatter={v => v === "orders" ? "Pedidos" : "Unidades reais"} />
                 <Bar dataKey="orders" name="orders" fill={cfg.color} radius={[4, 4, 0, 0]} maxBarSize={28} />
@@ -1196,12 +1196,12 @@ function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?:
                   <Pie
                     data={pieData} dataKey="value" nameKey="name"
                     cx="50%" cy="50%" innerRadius={58} outerRadius={88} paddingAngle={2}
-                    stroke="var(--background)" strokeWidth={2}
+                    stroke="hsl(var(--background))" strokeWidth={2}
                   >
                     {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                   </Pie>
                   <Tooltip
-                    contentStyle={{ background: "var(--background)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }}
+                    contentStyle={{ background: "hsl(var(--background))", border: "1px solid hsl(var(--border))", borderRadius: 10, fontSize: 12 }}
                     formatter={(v: number, n: string) => [`${fmtBRL(v)} · ${pct(v, totalRevenue)}`, n]}
                   />
                   <Legend iconType="circle" iconSize={9} />
@@ -1245,15 +1245,15 @@ function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?:
                     ))}
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <XAxis dataKey="label" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} axisLine={false} tickLine={false} />
                   <YAxis
-                    tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={metric === "revenue" ? 44 : 28}
+                    tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} axisLine={false} tickLine={false} width={metric === "revenue" ? 44 : 28}
                     tickFormatter={v => metric === "revenue" ? (v === 0 ? "0" : `${(v / 1000).toFixed(0)}k`) : fmtNum(v)}
                   />
                   <Tooltip
-                    contentStyle={{ background: "var(--background)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }}
+                    contentStyle={{ background: "hsl(var(--background))", border: "1px solid hsl(var(--border))", borderRadius: 10, fontSize: 12 }}
                     formatter={(v: number, name: string) => [evoFmt(v), PMAP[name as EcommercePlatform]?.label ?? name]}
-                    cursor={{ stroke: "var(--muted-foreground)", strokeOpacity: 0.3 }}
+                    cursor={{ stroke: "hsl(var(--muted-foreground))", strokeOpacity: 0.3 }}
                   />
                   <Legend iconType="circle" iconSize={9} formatter={v => PMAP[v as EcommercePlatform]?.label ?? v} />
                   {selected.map(p => (
@@ -1586,13 +1586,13 @@ function HistoricoMensalView() {
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={barData} margin={{ top: 20, right: 16, left: 8, bottom: 0 }} barCategoryGap="28%" barGap={3}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={60}
+                  <XAxis dataKey="label" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} axisLine={false} tickLine={false} width={60}
                     tickFormatter={v => v === 0 ? "R$0" : `R$${(v / 1000).toFixed(0)}k`} />
                   <Tooltip
-                    contentStyle={{ background: "var(--background)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }}
+                    contentStyle={{ background: "hsl(var(--background))", border: "1px solid hsl(var(--border))", borderRadius: 10, fontSize: 12 }}
                     formatter={(v: number, name: string) => [fmtBRL(v), PMAP[name.replace("_receita","") as EcommercePlatform]?.label ?? name]}
-                    cursor={{ fill: "var(--muted)", opacity: 0.3 }}
+                    cursor={{ fill: "hsl(var(--muted))", opacity: 0.3 }}
                   />
                   <Legend iconType="square" iconSize={10}
                     formatter={v => PMAP[v.replace("_receita","") as EcommercePlatform]?.label ?? v} />
@@ -1614,12 +1614,12 @@ function HistoricoMensalView() {
               <ResponsiveContainer width="100%" height={250}>
                 <BarChart data={barData} margin={{ top: 20, right: 16, left: 8, bottom: 0 }} barCategoryGap="28%" barGap={3}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={38} />
+                  <XAxis dataKey="label" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} axisLine={false} tickLine={false} width={38} />
                   <Tooltip
-                    contentStyle={{ background: "var(--background)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }}
+                    contentStyle={{ background: "hsl(var(--background))", border: "1px solid hsl(var(--border))", borderRadius: 10, fontSize: 12 }}
                     formatter={(v: number, name: string) => [fmtNum(v) + " vendas", PMAP[name.replace("_pedidos","") as EcommercePlatform]?.label ?? name]}
-                    cursor={{ fill: "var(--muted)", opacity: 0.3 }}
+                    cursor={{ fill: "hsl(var(--muted))", opacity: 0.3 }}
                   />
                   <Legend iconType="square" iconSize={10}
                     formatter={v => PMAP[v.replace("_pedidos","") as EcommercePlatform]?.label ?? v} />
@@ -1642,13 +1642,13 @@ function HistoricoMensalView() {
                 <ResponsiveContainer width="100%" height={210}>
                   <BarChart data={barData} margin={{ top: 20, right: 16, left: 8, bottom: 0 }} barCategoryGap="28%" barGap={3}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" vertical={false} />
-                    <XAxis dataKey="label" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={54}
+                    <XAxis dataKey="label" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} axisLine={false} tickLine={false} width={54}
                       tickFormatter={v => `R$${v.toFixed(0)}`} />
                     <Tooltip
-                      contentStyle={{ background: "var(--background)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }}
+                      contentStyle={{ background: "hsl(var(--background))", border: "1px solid hsl(var(--border))", borderRadius: 10, fontSize: 12 }}
                       formatter={(v: number, name: string) => [fmtBRL(v), PMAP[name.replace("_ticket","") as EcommercePlatform]?.label ?? name]}
-                      cursor={{ fill: "var(--muted)", opacity: 0.3 }}
+                      cursor={{ fill: "hsl(var(--muted))", opacity: 0.3 }}
                     />
                     <Legend iconType="square" iconSize={10}
                       formatter={v => PMAP[v.replace("_ticket","") as EcommercePlatform]?.label ?? v} />
@@ -1669,13 +1669,13 @@ function HistoricoMensalView() {
                 <ResponsiveContainer width="100%" height={210}>
                   <BarChart data={barData} margin={{ top: 20, right: 16, left: 8, bottom: 0 }} barCategoryGap="28%" barGap={3}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" vertical={false} />
-                    <XAxis dataKey="label" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={36}
+                    <XAxis dataKey="label" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} axisLine={false} tickLine={false} width={36}
                       tickFormatter={v => `${v}%`} />
                     <Tooltip
-                      contentStyle={{ background: "var(--background)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }}
+                      contentStyle={{ background: "hsl(var(--background))", border: "1px solid hsl(var(--border))", borderRadius: 10, fontSize: 12 }}
                       formatter={(v: number, name: string) => [`${(v as number).toFixed(1)}%`, PMAP[name.replace("_cancel","") as EcommercePlatform]?.label ?? name]}
-                      cursor={{ fill: "var(--muted)", opacity: 0.3 }}
+                      cursor={{ fill: "hsl(var(--muted))", opacity: 0.3 }}
                     />
                     <Legend iconType="square" iconSize={10}
                       formatter={v => PMAP[v.replace("_cancel","") as EcommercePlatform]?.label ?? v} />

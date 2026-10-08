@@ -1,5 +1,6 @@
 import { Fragment, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { useParamUrl } from "@carbo/shell";
 import {
   Receipt, FileText, ChevronLeft, ChevronRight, CheckCircle2, DollarSign, Store, Building2, Lock, Link2, Files, Package, Gift, Globe,
 } from "lucide-react";
@@ -108,8 +109,21 @@ const nfUnlocked = (o: FaturamentoOrder) => {
 
 export default function Faturamento() {
   const [naturezaOpen, setNaturezaOpen] = useState(false);
-  const [month, setMonth] = useState(() => new Date());
-  const [search, setSearch] = useState("");
+  // ⚠️ Mês e busca moram na URL (`?mes=AAAA-MM&busca=`), junto da aba (`?tab=`):
+  // F5 e link compartilhado mantêm a tela, e o Voltar desfaz a troca de mês. A
+  // busca grava com `replace` para não criar uma entrada por letra digitada.
+  const hoje = new Date();
+  const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}`;
+  const [mesUrl, setMesUrl] = useParamUrl("mes", mesAtual);
+  const month = useMemo(() => {
+    const [a, m] = mesUrl.split("-").map(Number);
+    return a && m ? new Date(a, m - 1, 1) : new Date();
+  }, [mesUrl]);
+  const setMonth = (v: Date | ((m: Date) => Date)) => {
+    const d = typeof v === "function" ? v(month) : v;
+    setMesUrl(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  };
+  const [search, setSearch] = useParamUrl("busca", "", { replace: true });
   // Aba ativa persistida na URL (?tab=…), pra não voltar pro "sistema" a cada F5.
   const [searchParams, setSearchParams] = useSearchParams();
   // ⚠️ ABA NOVA ENTRA AQUI TAMBÉM — são DOIS lugares, e esquecer o segundo não
@@ -124,7 +138,7 @@ export default function Faturamento() {
   const rawTab = searchParams.get("tab") || "sistema";
   const activeTab = VALID_TABS.includes(rawTab) ? rawTab : "sistema";
   const setActiveTab = (v: string) =>
-    setSearchParams((prev) => { prev.set("tab", v); return prev; }, { replace: true });
+    setSearchParams((prev) => { prev.set("tab", v); return prev; });
   // Padrão: mostra TODOS os pedidos do mês (com e sem NF) — é uma tela de
   // rastreabilidade/faturamento. Desligar "Mostrar já faturados" filtra para
   // ver só os pendentes (sem NF vinculada).

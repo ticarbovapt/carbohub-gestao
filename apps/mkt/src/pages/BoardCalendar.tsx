@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, ChevronLeft, ChevronRight, CalendarClock } from "lucide-react";
 import { useBoard, useBoardLive, useBoardMutations, type CardSummary } from "@/hooks/useBoards";
 import { LABEL_COLORS, LIST_DOT, LIST_PALETTE, getAccent } from "@/lib/mktTheme";
@@ -10,7 +10,6 @@ import { ViewSwitcher } from "@/components/board/ViewSwitcher";
 
 export default function BoardCalendar() {
   const { boardId } = useParams();
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { data, isLoading } = useBoard(boardId ?? null);
   useBoardLive(boardId ?? null);
@@ -61,7 +60,7 @@ export default function BoardCalendar() {
     <div className="fixed inset-0 top-14 flex flex-col mkt-canvas">
       {/* Cabeçalho */}
       <div className="mkt-toolbar header-depth-glow flex-wrap gap-2">
-        <button onClick={() => navigate("/quadros")} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground"><ArrowLeft className="h-4 w-4" /></button>
+        <Link to="/quadros" aria-label="Voltar aos quadros" className="inline-flex p-1.5 rounded-md hover:bg-muted text-muted-foreground"><ArrowLeft className="h-4 w-4" /></Link>
         <span className="mkt-dot" style={{ ["--mkt-accent" as any]: accent }} />
         <CalendarClock className="h-5 w-5 text-primary" />
         <h1 className="mkt-view-title">{board.title}</h1>

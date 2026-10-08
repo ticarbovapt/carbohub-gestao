@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -30,7 +30,6 @@ function FitBounds({ points }: { points: [number, number][] }) {
 
 export default function BoardMap() {
   const { boardId } = useParams();
-  const navigate = useNavigate();
   const { data, isLoading } = useBoard(boardId ?? null);
   useBoardLive(boardId ?? null);
   const [openCardId, setOpenCardId] = useState<string | null>(null);
@@ -63,7 +62,7 @@ export default function BoardMap() {
   return (
     <div className="fixed inset-0 top-14 flex flex-col bg-background">
       <div className="mkt-toolbar header-depth-glow flex-wrap">
-        <button onClick={() => navigate("/quadros")} className="p-1.5 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition"><ArrowLeft className="h-4 w-4" /></button>
+        <Link to="/quadros" aria-label="Voltar aos quadros" className="inline-flex p-1.5 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition"><ArrowLeft className="h-4 w-4" /></Link>
         <span className="mkt-dot shrink-0" style={{ ["--mkt-accent" as any]: accent }} />
         <MapPin className="h-5 w-5 text-primary shrink-0" />
         <h1 className="mkt-view-title truncate">{board.title}</h1>

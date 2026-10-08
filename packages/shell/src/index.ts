@@ -12,6 +12,10 @@ export type { AppSwitcherProps } from "./AppSwitcher";
 export { StatusTarja } from "./StatusTarja";
 export type { StatusTarjaProps, StatusAviso, StatusSeveridade } from "./StatusTarja";
 export { cn } from "./cn";
+export { usePaginaAtual, PaginaNaoEncontrada, tituloDaRota } from "./pagina";
+export { useParamUrl } from "./urlState";
+export { useVoltarFecha, FecharComVoltar } from "./voltarFecha";
+export { confirmar, pedirTexto } from "./confirmar";
 export {
   DESCARB_MODALIDADES, DESCARB_SERVICE_TYPES, DESCARB_EXTRAS,
   modalidadePrice, modalidadeLabel, modalidadeHint, extraLabel,

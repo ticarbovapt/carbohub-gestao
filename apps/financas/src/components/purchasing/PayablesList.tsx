@@ -282,6 +282,7 @@ export function PayablesList({ initialStatus }: { initialStatus?: string } = {})
           <DialogHeader>
             <DialogTitle>Confirmar Pagamento</DialogTitle>
           </DialogHeader>
+          <form noValidate className="grid gap-4" onSubmit={(e) => { e.preventDefault(); handlePay(); }}>
           {payingPayable ? (
             <div className="space-y-2 text-sm">
               <p className="text-muted-foreground">Marcar esta conta como paga?</p>
@@ -299,12 +300,13 @@ export function PayablesList({ initialStatus }: { initialStatus?: string } = {})
             <p className="text-sm text-muted-foreground">Deseja marcar esta conta como paga?</p>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPayingId(null)}>Cancelar</Button>
-            <Button onClick={handlePay} disabled={updateStatus.isPending} className="gap-1.5 carbo-gradient text-white">
+            <Button type="button" variant="outline" onClick={() => setPayingId(null)}>Cancelar</Button>
+            <Button type="submit" disabled={updateStatus.isPending} className="gap-1.5 carbo-gradient text-white">
               <CheckCircle2 className="h-4 w-4" />
               Confirmar Pagamento
             </Button>
           </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

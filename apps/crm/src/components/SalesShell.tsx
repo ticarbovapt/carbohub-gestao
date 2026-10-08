@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import {
   KanbanSquare, ClipboardList, TrendingUp, Target, BarChart3, LayoutDashboard,
@@ -6,7 +6,7 @@ import {
   CalendarCheck, PackageCheck,
 } from "lucide-react";
 import { ChatBadge, ChatProvider } from "@carbo/chat";
-import { Sidebar, type ShellNavSection, StatusTarja } from "@carbo/shell";
+import { Sidebar, type ShellNavSection, StatusTarja, usePaginaAtual } from "@carbo/shell";
 import { supabase } from "@/integrations/supabase/client";
 import { useMemo } from "react";
 import { TopBar } from "@/components/TopBar";
@@ -75,6 +75,10 @@ export function SalesShell() {
     else toggleCollapsed();
   };
 
+  // Título da guia por tela e rolagem ao topo a cada troca de página.
+  const mainRef = useRef<HTMLElement>(null);
+  usePaginaAtual({ appName: "Carbo Sales", sections, mainRef });
+
   return (
     <ChatProvider supabase={supabase} currentUser={chatUser} navigate={navigate}
       loadCallEngine={() => import("@carbo/call").then((m) => m.loadCall())}>
@@ -87,7 +91,7 @@ export function SalesShell() {
 
       <div className="flex flex-1 min-h-0">
         <Sidebar
-          brand={{ appName: "Carbo Sales", logoSrc: logoCarbo, onLogoClick: () => { window.location.href = `${HUB_URL}/home`; } }}
+          brand={{ appName: "Carbo Sales", logoSrc: logoCarbo, href: `${HUB_URL}/home` }}
           sections={sections}
           collapsed={collapsed}
           onToggleCollapse={toggleCollapsed}
@@ -95,7 +99,7 @@ export function SalesShell() {
           onMobileOpenChange={setMobileOpen}
         />
 
-        <main className="flex-1 min-w-0 flex flex-col overflow-y-auto">
+        <main ref={mainRef} className="flex-1 min-w-0 flex flex-col overflow-y-auto">
           <Outlet />
         </main>
       </div>

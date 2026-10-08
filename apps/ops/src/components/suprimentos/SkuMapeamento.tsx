@@ -22,6 +22,7 @@ import {
   useSkuMapeamentos, useSkusSemMapa,
   type SkuMapeamento as Mapeamento,
 } from "@/hooks/useSkuMapeamento";
+import { confirmar } from "@carbo/shell";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Cadastro do mapa SKU → produto (aba "Mapeamento SKU" de Suprimentos, CD SP).
@@ -305,8 +306,8 @@ export function SkuMapeamento() {
                             size="icon"
                             variant="ghost"
                             className="h-7 w-7 text-destructive hover:text-destructive"
-                            onClick={() => {
-                              if (!confirm(`Apagar o mapa do SKU ${m.platform_sku}?`)) return;
+                            onClick={async () => {
+                              if (!(await confirmar({ titulo: `Apagar o mapa do SKU ${m.platform_sku}?`, mensagem: "As vendas desse SKU deixam de baixar estoque até ele ser mapeado de novo.", confirmar: "Apagar", perigo: true }))) return;
                               apagar.mutate(m.id, {
                                 onSuccess: () => toast.success("Mapeamento removido"),
                                 onError: (e: any) =>

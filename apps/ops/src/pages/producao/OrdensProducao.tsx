@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useParamUrl } from "@carbo/shell";
 import {
   DndContext, PointerSensor, useSensor, useSensors, useDraggable, useDroppable, closestCorners,
   DragOverlay, type DragStartEvent, type DragEndEvent,
@@ -156,14 +157,20 @@ export default function OrdensProducao() {
   useEffect(() => {
     try { localStorage.setItem("ops:op-view", viewMode); } catch { /* ignora */ }
   }, [viewMode]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [priorityFilter, setPriorityFilter] = useState("all");
+  // ⚠️ Busca e filtros na URL (`?busca=&status=&prioridade=&criticos=1`): F5 e
+  // link mantêm a lista, e o Voltar desfaz a troca de filtro. A busca grava com
+  // `replace`. A visão (lista/kanban) continua no localStorage: é preferência.
+  const [searchQuery, setSearchQuery] = useParamUrl("busca", "", { replace: true });
+  const [statusFilter, setStatusFilter] = useParamUrl("status", "all");
+  const [priorityFilter, setPriorityFilter] = useParamUrl("prioridade", "all");
 
   const [createOpen, setCreateOpen] = useState(false);
   const { data: parcelas = [] } = useParcelasAgendadas();
   const [createInitial, setCreateInitial] = useState<{ product_id: string; planned_quantity?: number; demand_source?: string } | null>(null);
-  const [onlyCritical, setOnlyCritical] = useState(false);
+  const [criticosUrl, setCriticosUrl] = useParamUrl("criticos");
+  const onlyCritical = criticosUrl === "1";
+  const setOnlyCritical = (v: boolean | ((cur: boolean) => boolean)) =>
+    setCriticosUrl((typeof v === "function" ? v(onlyCritical) : v) ? "1" : null);
   const [lossOpen, setLossOpen] = useState(false);
   const { data: materialLosses = [] } = useMaterialLosses();
   // Reposição começa FECHADA (não ocupa a tela no load) e lembra a escolha.

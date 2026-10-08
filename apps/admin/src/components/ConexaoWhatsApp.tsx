@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { Button } from "@/components/ui/button";
+import { confirmar } from "@carbo/shell";
 
 /**
  * Conexão do WhatsApp que envia os avisos (Evolution API).
@@ -176,8 +177,8 @@ export function ConexaoWhatsApp() {
               {estado === "conectado" && (
                 <Button size="sm" variant="outline" className="h-8 gap-1.5"
                         disabled={desconectar.isPending}
-                        onClick={() => {
-                          if (!confirm("Desconectar o WhatsApp? Os avisos automáticos param de sair até outro número ser conectado.")) return;
+                        onClick={async () => {
+                          if (!(await confirmar({ titulo: "Desconectar o WhatsApp?", mensagem: "Os avisos automáticos param de sair até outro número ser conectado.", confirmar: "Desconectar", perigo: true }))) return;
                           desconectar.mutate();
                         }}>
                   {desconectar.isPending

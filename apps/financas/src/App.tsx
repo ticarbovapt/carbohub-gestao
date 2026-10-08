@@ -18,6 +18,7 @@ import BugReports from "./pages/BugReports";
 import Vender from "./pages/Vender";
 import Comissionamento from "./pages/Comissionamento";
 import Funcionarios from "./pages/Funcionarios";
+import { PaginaNaoEncontrada } from "@carbo/shell";
 
 // Carbo Finanças. Acesso liberado pelo Admin via flag carbo_financas
 // (ProtectedRoute). Telas portadas 1:1 do Carbo Controle.
@@ -53,7 +54,8 @@ export default function App() {
         <Route path="/equipe" element={<MinhaEquipe />} />
         <Route path="/bugs" element={<BugReports />} />
         <Route path="/vender" element={<Vender />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        {/* Rota inexistente: diz que não existe, em vez de cair na home calado. */}
+        <Route path="*" element={<PaginaNaoEncontrada />} />
       </Route>
     </Routes>
   );

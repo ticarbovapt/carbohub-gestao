@@ -238,7 +238,7 @@ export default function DashboardsFranqueados() {
               ) : (
                 <ResponsiveContainer width="100%" height={280}>
                   <ComposedChart data={serie} margin={{ top: 16, right: 8, bottom: 0, left: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                     <XAxis dataKey="label" tick={AXIS_TICK} axisLine={false} tickLine={false} />
                     <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} width={48} allowDecimals={false}
                       tickFormatter={(v: number) => metrica === "receita"

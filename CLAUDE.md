@@ -1271,6 +1271,39 @@ copia o bloco.
 relê o cookie ao voltar ao foco. `localStorage` fica de reserva (localhost).
 ⚠️ App novo copia o arquivo; Hub e portais (outros repos) ainda não leem o cookie.
 
+### Comportamento de app "natural" — mora no `packages/shell` (08/10/2026)
+Pedido do dono do processo: polimento básico nos oito apps. Tudo o que vale
+para todos mora num lugar só:
+
+```
+usePaginaAtual       título da guia por tela + rolagem do <main> ao topo   (cada Layout)
+PaginaNaoEncontrada  rota inexistente diz que não existe                    (catch-all de cada App.tsx)
+useParamUrl          filtro/aba/busca na URL: F5, link e Voltar             (as telas)
+FecharComVoltar      o Voltar fecha diálogo/gaveta/confirmação              (ui/dialog, sheet, alert-dialog)
+confirmar/pedirTexto no lugar de window.confirm/prompt                     (as telas)
+brand.href           o logo da barra lateral é LINK (nova guia)             (Sidebar/MobileDrawer)
+```
+
+1. ⚠️ **Navegação é `<Link>`/`<a href>`, nunca `onClick={() => navigate(...)}`**
+   — só link de verdade abre em nova guia (botão do meio, Ctrl+clique). A
+   exceção é navegação com `state` do roteador, que se perde numa guia nova.
+2. ⚠️ **`useParamUrl` parte de `window.location.search`, não do `prev`** do
+   `setSearchParams`: no RR 6.30 o `prev` é o do último render e dois filtros
+   trocados no mesmo clique apagavam um ao outro. Duas trocas no mesmo clique
+   viram UMA entrada no histórico. Busca digitada usa `{ replace: true }`.
+3. ⚠️ **O título vem do MENU** (`sections` do Layout, prefixo mais longo). Tela
+   nova que entra no menu ganha título sozinha; fora do menu, o nome do app.
+4. ⚠️ **`FecharComVoltar` empurra uma entrada no histórico ao abrir** e a tira
+   ao fechar — só se ela ainda for a do topo (senão desfaria a navegação de um
+   link clicado dentro do diálogo). O Voltar vira um Escape, então diálogo que
+   recusa Escape continua recusando. Testado no navegador: aninhado fecha só o
+   de cima.
+5. ⚠️ **`confirmar` usa o Radix do APP** (`@radix-ui/react-alert-dialog` está no
+   `dedupe` dos oito `vite.config.ts`). Com uma `div` própria, aberto por cima
+   de outro diálogo, o de baixo tomava o foco e fechava no clique.
+6. ⚠️ **`packages/shell` entrou no `content` do Tailwind dos oito apps.** Antes
+   as classes do shell só existiam por coincidência com as do app.
+
 ### E-commerce: a tabela tem uma linha por ITEM, não por pedido
 `ecommerce_orders` grava `order_id = '<pedido>-<item>'` — de propósito, porque
 (platform, order_id) é a chave do upsert e assim webhook e sync podem rodar em

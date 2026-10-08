@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { Users, AlertTriangle, Flame, Trophy, BarChart3, KanbanSquare, ArrowRight } from "lucide-react";
 import { useCRMAllStats } from "@/hooks/useCRMLeads";
@@ -21,7 +21,6 @@ const brl = (v: number) =>
     : `R$ ${v.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}`;
 
 export default function CRM() {
-  const navigate = useNavigate();
   const { data: stats, isLoading } = useCRMAllStats();
 
   const kpiValue = (key: string) => {
@@ -78,9 +77,9 @@ export default function CRM() {
                 Clique para abrir o quadro já filtrado
               </p>
             </div>
-            <button onClick={() => navigate("/crm/pipelines")} className="text-xs font-semibold text-primary hover:underline inline-flex items-center gap-1">
+            <Link to="/crm/pipelines" className="text-xs font-semibold text-primary hover:underline inline-flex items-center gap-1">
               <KanbanSquare className="h-3.5 w-3.5" /> Ver pipelines
-            </button>
+            </Link>
           </div>
 
           {isLoading ? (
@@ -99,10 +98,10 @@ export default function CRM() {
                 const conv = s.ganhos + s.perdidos > 0
                   ? Math.round((s.ganhos / (s.ganhos + s.perdidos)) * 100) : null;
                 return (
-                  <button
+                  <Link
                     key={cfg.id}
-                    onClick={() => navigate(`/crm/pipelines?funil=f13&seg=${cfg.id}`)}
-                    className="group relative overflow-hidden rounded-2xl border border-border bg-board-surface p-4 text-left transition-all hover:-translate-y-1 hover:shadow-lg"
+                    to={`/crm/pipelines?funil=f13&seg=${cfg.id}`}
+                    className="group relative block overflow-hidden rounded-2xl border border-border bg-board-surface p-4 text-left transition-all hover:-translate-y-1 hover:shadow-lg"
                   >
                     <div className="absolute top-0 left-0 h-1 w-full" style={{ background: cfg.color }} />
 
@@ -142,7 +141,7 @@ export default function CRM() {
                         Receita ganha: <strong className="text-foreground">{brl(s.receita)}</strong>
                       </p>
                     )}
-                  </button>
+                  </Link>
                 );
               })}
             </div>
@@ -156,14 +155,14 @@ export default function CRM() {
             {FUNIS_VISIVEIS.map((id) => {
               const cfg = FUNNEL_CONFIG[id];
               return (
-                <button key={id} onClick={() => navigate(`/crm/pipelines?funil=${id}`)}
+                <Link key={id} to={`/crm/pipelines?funil=${id}`}
                   className="flex items-center gap-2 rounded-xl border border-border bg-board-surface px-3 py-2.5 text-left transition-all hover:-translate-y-0.5 hover:shadow">
                   <span className="text-base shrink-0">{cfg.icon}</span>
                   <span className="text-xs font-medium truncate flex-1">{cfg.shortName}</span>
                   <span className="text-[11px] font-semibold tabular-nums shrink-0" style={{ color: cfg.color }}>
                     {stats?.byFunnel?.[id] ?? 0}
                   </span>
-                </button>
+                </Link>
               );
             })}
           </div>

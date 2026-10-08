@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, Table2, ArrowUp, ArrowDown, Maximize2, SearchX } from "lucide-react";
 import { useBoard, useBoardLive, useBoardMutations, type CardSummary, type List, type Label } from "@/hooks/useBoards";
 import { useCustomFields, useBoardFieldValues, useCustomFieldMutations, type CustomField } from "@/hooks/useCustomFields";
@@ -19,7 +19,6 @@ type SortDir = "asc" | "desc";
 
 export default function BoardTable() {
   const { boardId } = useParams();
-  const navigate = useNavigate();
   const { data, isLoading } = useBoard(boardId ?? null);
   useBoardLive(boardId ?? null);
   const { data: fields = [] } = useCustomFields(boardId ?? null);
@@ -102,7 +101,7 @@ export default function BoardTable() {
     <div className="fixed inset-0 top-14 flex flex-col bg-background">
       {/* Cabeçalho */}
       <div className="flex items-center gap-3 min-h-14 px-4 py-2 bg-card border-b border-border header-depth-glow flex-wrap">
-        <button onClick={() => navigate("/quadros")} className="p-1.5 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"><ArrowLeft className="h-4 w-4" /></button>
+        <Link to="/quadros" aria-label="Voltar aos quadros" className="inline-flex p-1.5 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"><ArrowLeft className="h-4 w-4" /></Link>
         <h1 className="mkt-view-title flex items-center gap-2 text-foreground">
           <span className="h-2 w-2 rounded-full shrink-0" style={{ background: accent }} />
           <Table2 className="h-5 w-5 text-primary" />

@@ -8,6 +8,7 @@ import {
   Link2, Unlink, RefreshCw, Loader2, CheckCircle, XCircle, Clock, ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
+import { confirmar } from "@carbo/shell";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Bling 2 — segunda conta, espelho isolado
@@ -127,9 +128,11 @@ export default function Bling2Integracao() {
     // Diferente do Bling 1, desconectar aqui NÃO afeta o resto do ecossistema
     // — e a mensagem diz isso, para ninguém hesitar achando que vai derrubar
     // a integração que está no ar.
-    if (!window.confirm(
-      "Desconectar o Bling 2? Isto NÃO afeta a integração Bling principal — só esta segunda conta. Os dados já sincronizados continuam no sistema."
-    )) return;
+    if (!(await confirmar({
+      titulo: "Desconectar o Bling 2?",
+      mensagem: "Isto NÃO afeta a integração Bling principal — só esta segunda conta. Os dados já sincronizados continuam no sistema.",
+      confirmar: "Desconectar", perigo: true,
+    }))) return;
     try {
       const resp = await supabase.functions.invoke("bling2-auth", { body: { action: "disconnect" } });
       if (!resp.data?.success) throw new Error(resp.data?.error || "Erro ao desconectar");

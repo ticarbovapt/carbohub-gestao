@@ -83,15 +83,15 @@ export function PollDialog({ channelId, onClose }: { channelId: string; onClose:
           <div className="space-y-2 rounded-lg border p-3">
             <label className="flex items-center justify-between text-sm">
               <span>Permitir múltipla escolha</span>
-              <input type="checkbox" checked={multipla} onChange={(e) => setMultipla(e.target.checked)} className="h-4 w-4 accent-[var(--primary)]" />
+              <input type="checkbox" checked={multipla} onChange={(e) => setMultipla(e.target.checked)} className="h-4 w-4 accent-[hsl(var(--primary))]" />
             </label>
             <label className="flex items-center justify-between text-sm">
               <span>Voto anônimo <span className="text-xs text-muted-foreground">(esconde quem votou)</span></span>
-              <input type="checkbox" checked={anonima} onChange={(e) => setAnonima(e.target.checked)} className="h-4 w-4 accent-[var(--primary)]" />
+              <input type="checkbox" checked={anonima} onChange={(e) => setAnonima(e.target.checked)} className="h-4 w-4 accent-[hsl(var(--primary))]" />
             </label>
             <label className="flex items-center justify-between text-sm">
               <span>Definir prazo</span>
-              <input type="checkbox" checked={comPrazo} onChange={(e) => setComPrazo(e.target.checked)} className="h-4 w-4 accent-[var(--primary)]" />
+              <input type="checkbox" checked={comPrazo} onChange={(e) => setComPrazo(e.target.checked)} className="h-4 w-4 accent-[hsl(var(--primary))]" />
             </label>
             {comPrazo && (
               <input type="datetime-local" value={prazo} onChange={(e) => setPrazo(e.target.value)}

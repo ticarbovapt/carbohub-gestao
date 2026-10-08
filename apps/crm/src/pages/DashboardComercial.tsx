@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
+import { useParamUrl } from "@carbo/shell";
 import {
   TrendingUp, ShoppingCart, DollarSign, Trophy, BarChart3, Repeat2,
   ArrowUpRight, ArrowDownRight, Minus, CalendarRange, User,
@@ -53,7 +54,8 @@ const TooltipQty = ({ active, payload, label }: any) => {
 
 export default function DashboardComercial() {
   const { isGestor, user } = useAuth();
-  const [vendedor, setVendedor] = useState("all");
+  // ⚠️ Vendedor na URL (`?vendedor=`): F5 e link mantêm o recorte; o Voltar desfaz.
+  const [vendedor, setVendedor] = useParamUrl("vendedor", "all");
   const { data: vendas = [] } = useVendas("all");
   const { data: metasAno = [] } = useMetasAno(new Date().getFullYear());
 
@@ -455,12 +457,12 @@ export default function DashboardComercial() {
               </div>
               <ResponsiveContainer width="100%" height={190}>
                 <ComposedChart data={monthlyData} margin={{ top: 22, right: 8, bottom: 0, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
-                  <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} dy={4} />
-                  <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={44} tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v))} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                  <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} dy={4} />
+                  <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} width={44} tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v))} />
                   <Tooltip cursor={{ fill: "rgba(148,163,184,0.08)" }} content={<TooltipBRL />} />
                   <Bar dataKey="faturado" fill="rgba(26,122,74,0.18)" stroke="#1a7a4a" strokeWidth={1.5} radius={[4, 4, 0, 0]} maxBarSize={48} isAnimationActive={false}>
-                    <LabelList dataKey="faturado" position="top" formatter={(v: number) => (v >= 1000 ? `R$${(v / 1000).toFixed(0)}k` : v > 0 ? `R$${v}` : "")} style={{ fontSize: 10, fill: "#1a7a4a", fontWeight: 700 }} />
+                    <LabelList dataKey="faturado" position="top" formatter={(v: number) => (v >= 1000 ? `R$${(v / 1000).toFixed(0)}k` : v > 0 ? `R$${v}` : "")} style={{ fontSize: 10, fill: "hsl(var(--success))", fontWeight: 700 }} />
                   </Bar>
                   <Line type="monotoneX" dataKey="faturado" stroke="#1a7a4a" strokeWidth={2.5} dot={{ r: 3, fill: "#1a7a4a", stroke: "#fff", strokeWidth: 2 }} activeDot={{ r: 5 }} isAnimationActive={false} />
                 </ComposedChart>
@@ -477,12 +479,12 @@ export default function DashboardComercial() {
               </div>
               <ResponsiveContainer width="100%" height={190}>
                 <ComposedChart data={monthlyData} margin={{ top: 22, right: 8, bottom: 0, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
-                  <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} dy={4} />
-                  <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={28} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                  <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} dy={4} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} width={28} />
                   <Tooltip cursor={{ fill: "rgba(148,163,184,0.08)" }} content={<TooltipQty />} />
                   <Bar dataKey="pedidos" fill="rgba(59,110,165,0.75)" radius={[5, 5, 0, 0]} maxBarSize={48} isAnimationActive={false}>
-                    <LabelList dataKey="pedidos" position="top" formatter={(v: number) => (v > 0 ? String(v) : "")} style={{ fontSize: 11, fill: "#94a3b8", fontWeight: 700 }} />
+                    <LabelList dataKey="pedidos" position="top" formatter={(v: number) => (v > 0 ? String(v) : "")} style={{ fontSize: 11, fill: "hsl(var(--muted-foreground))", fontWeight: 700 }} />
                   </Bar>
                   <Line type="monotoneX" dataKey="pedidos" stroke="#3b6ea5" strokeWidth={2.5} strokeDasharray="5 3" dot={{ r: 3, fill: "#3b6ea5", stroke: "#fff", strokeWidth: 2 }} activeDot={{ r: 5 }} isAnimationActive={false} />
                 </ComposedChart>
@@ -508,9 +510,9 @@ export default function DashboardComercial() {
             <div className="px-4 pt-4 pb-4">
               <ResponsiveContainer width="100%" height={175}>
                 <ComposedChart data={annualGrowthData} margin={{ top: 20, right: 8, bottom: 0, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} dy={4} />
-                  <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={44} tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v))} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} dy={4} />
+                  <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} width={44} tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v))} />
                   <Tooltip cursor={{ fill: "rgba(148,163,184,0.08)" }} content={({ active, payload, label: lbl }: any) => {
                     if (!active || !payload?.length) return null;
                     const rv = payload.find((p: any) => p.dataKey === "real")?.value;
@@ -546,9 +548,9 @@ export default function DashboardComercial() {
             <div className="px-4 pt-4 pb-4">
               <ResponsiveContainer width="100%" height={175}>
                 <ComposedChart data={monthlyData} margin={{ top: 22, right: 8, bottom: 0, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
-                  <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} dy={4} />
-                  <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={48} tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v))} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                  <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} dy={4} />
+                  <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} width={48} tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v))} />
                   <Tooltip cursor={{ fill: "rgba(148,163,184,0.08)" }} content={({ active, payload, label }: any) => {
                     if (!active || !payload?.length) return null;
                     const v = payload.find((p: any) => p.type === "bar")?.value ?? payload[0]?.value ?? 0;

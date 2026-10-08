@@ -1,5 +1,5 @@
 import { Boxes, ShieldCheck, LogOut, UserCircle, Kanban } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { CRM_MANIFEST, CAPABILITIES, can } from "@/lib/access";
@@ -8,7 +8,6 @@ import { CRM_MANIFEST, CAPABILITIES, can } from "@/lib/access";
 // mostra a identidade logada, o nível derivado e quais capabilities ela tem.
 export default function Home() {
   const { profile, level, scope, isGestor, signOut } = useAuth();
-  const navigate = useNavigate();
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -69,8 +68,8 @@ export default function Home() {
         </div>
 
         {/* CTA para Leads */}
-        <div
-          onClick={() => navigate("/leads")}
+        <Link
+          to="/leads"
           className="rounded-2xl border bg-card p-5 cursor-pointer hover:shadow-md transition-shadow flex items-center gap-3"
         >
           <Kanban className="h-8 w-8 text-carbo-green flex-shrink-0" />
@@ -81,7 +80,7 @@ export default function Home() {
             </p>
           </div>
           <span className="ml-auto text-muted-foreground text-xs">→</span>
-        </div>
+        </Link>
       </main>
     </div>
   );

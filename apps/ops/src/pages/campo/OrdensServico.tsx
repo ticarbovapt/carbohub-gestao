@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
+import { useParamUrl } from "@carbo/shell";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
@@ -37,8 +38,12 @@ function toView(o: OSRow): OSView {
 }
 
 export default function OrdensServico() {
-  const [search, setSearch] = useState("");
-  const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
+  // ⚠️ Busca e visão na URL (`?busca=&visao=`): F5 e link mantêm a tela, e o
+  // Voltar desfaz a troca de visão. A busca grava com `replace`.
+  const [search, setSearch] = useParamUrl("busca", "", { replace: true });
+  const [visaoUrl, setVisaoUrl] = useParamUrl("visao", "kanban");
+  const viewMode: "kanban" | "list" = visaoUrl === "list" ? "list" : "kanban";
+  const setViewMode = (v: "kanban" | "list") => setVisaoUrl(v);
 
   const { data, isLoading, isError, refetch, isFetching } = useOS();
   const all = useMemo(() => (data ?? []).map(toView), [data]);

@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 // Alternador de views do quadro (Quadro/Kanban, Calendário, e futuras).
 const VIEWS: { key: string; label: string; path: (id: string) => string }[] = [
@@ -11,15 +11,15 @@ const VIEWS: { key: string; label: string; path: (id: string) => string }[] = [
 ];
 
 export function ViewSwitcher({ boardId, current }: { boardId: string; current: string }) {
-  const navigate = useNavigate();
   return (
     <div className="mkt-segmented">
       {VIEWS.map((v) => (
-        <button key={v.key} onClick={() => navigate(v.path(boardId))}
+        <Link key={v.key} to={v.path(boardId)}
           data-active={current === v.key}
+          aria-current={current === v.key ? "page" : undefined}
           className={`mkt-segmented-item ${current === v.key ? "is-active" : ""}`}>
           {v.label}
-        </button>
+        </Link>
       ))}
     </div>
   );

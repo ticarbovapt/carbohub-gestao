@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
+import { useParamUrl } from "@carbo/shell";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboKPI } from "@/components/ui/carbo-kpi";
 import { CarboButton } from "@/components/ui/carbo-button";
@@ -178,8 +179,11 @@ export default function Pipelines() {
     setSearchParams((prev) => { prev.set("funil", v); return prev; }, { replace: true });
   };
 
-  const [searchQuery, setSearchQuery] = useState("");
-  const [stageFilter, setStageFilter] = useState("all");
+  // Busca, etapa, vendedor, situação e modo de exibição moram na URL — F5 e
+  // link compartilhado mantêm o recorte. Busca com `replace` (uma entrada no
+  // histórico por letra faria o Voltar apagar a busca letra a letra).
+  const [searchQuery, setSearchQuery] = useParamUrl("busca", "", { replace: true });
+  const [stageFilter, setStageFilter] = useParamUrl("etapa", "all");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [formStage, setFormStage] = useState<string | undefined>(undefined);
   const [lostDialogLead, setLostDialogLead] = useState<CRMLead | null>(null);
@@ -222,12 +226,15 @@ export default function Pipelines() {
     if (drawerLead?.id === leadParam) return;
     if (leadDoLink.data?.lead) setDrawerLead(leadDoLink.data.lead);
   }, [leadParam, leadDoLink.data]); // eslint-disable-line react-hooks/exhaustive-deps
-  const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
-  const [vendedorFilter, setVendedorFilter] = useState("all");
+  const [viewModeUrl, setViewMode] = useParamUrl("ver", "kanban");
+  const viewMode = (viewModeUrl === "list" ? "list" : "kanban") as "kanban" | "list";
+  const [vendedorFilter, setVendedorFilter] = useParamUrl("vendedor", "all");
   // Chips de situação. Respondem "o que exige a MINHA atenção agora?", que é
   // uma pergunta diferente de "em que etapa está?" — por isso filtro, e não
   // coluna.
-  const [situacao, setSituacao] = useState<"all" | "meus" | "aguardando" | "sem_passo" | "vencido">("all");
+  type Situacao = "all" | "meus" | "aguardando" | "sem_passo" | "vencido";
+  const [situacaoUrl, setSituacao] = useParamUrl("situacao", "all");
+  const situacao = situacaoUrl as Situacao;
   // Segmento: multi-seleção. O vendedor que só cuida de PDV volta ao CRM já no
   // mundo dele — é o que faz a fusão das pipelines não parecer perda de foco.
   const SEG_KEY = "crm:segmentos";

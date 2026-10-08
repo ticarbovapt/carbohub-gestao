@@ -1127,6 +1127,7 @@ export function EditPedidoDialog({ vendaId, open, onOpenChange, canEditSensitive
                           <FormControl>
                             <Input
                               type="number"
+                              min={0}
                               placeholder="ex: 12345678"
                               value={field.value ?? ""}
                               onChange={e => field.onChange(e.target.value ? Number(e.target.value) : null)}

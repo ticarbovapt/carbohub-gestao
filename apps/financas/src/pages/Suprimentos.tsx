@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useParamUrl } from "@carbo/shell";
 import { Package, ArrowDownToLine, ArrowUpFromLine, BarChart3, AlertTriangle, Layers, History, Lightbulb, Shield } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
@@ -16,7 +17,8 @@ import { PendingSuggestions } from "@/components/suprimentos/PendingSuggestions"
 import { SkuStockPolicy } from "@/components/suprimentos/SkuStockPolicy";
 
 export default function Suprimentos() {
-  const [activeTab, setActiveTab] = useState("estoque");
+  // ⚠️ Aba na URL (`?aba=`): F5 e link mantêm a aba, e o Voltar desfaz a troca.
+  const [activeTab, setActiveTab] = useParamUrl("aba", "estoque");
   const [planningMode, setPlanningMode] = useState(false);
   const { data: kpis } = useSuprimentosKPIs();
   const { gestor } = useAuth();

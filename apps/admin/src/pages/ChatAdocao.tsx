@@ -119,8 +119,8 @@ export default function ChatAdocao() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
-                <XAxis dataKey="dia" tickFormatter={dayLabel} fontSize={11} minTickGap={24} />
-                <YAxis fontSize={11} allowDecimals={false} />
+                <XAxis dataKey="dia" tickFormatter={dayLabel} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} minTickGap={24} />
+                <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} allowDecimals={false} />
                 <Tooltip labelFormatter={(v) => fmtDate(String(v))} />
                 <Legend />
                 <Area type="monotone" dataKey="usuarios_ativos" name="Usuários ativos" stroke={GREEN} fill="url(#gAtivos)" strokeWidth={2} />
@@ -142,8 +142,8 @@ export default function ChatAdocao() {
               <ResponsiveContainer width="100%" height={260}>
                 <BarChart data={byDept.data ?? []} layout="vertical" margin={{ left: 8, right: 16 }}>
                   <CartesianGrid strokeDasharray="3 3" opacity={0.15} horizontal={false} />
-                  <XAxis type="number" fontSize={11} allowDecimals={false} />
-                  <YAxis type="category" dataKey="departamento" fontSize={11} width={110} />
+                  <XAxis type="number" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} allowDecimals={false} />
+                  <YAxis type="category" dataKey="departamento" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} width={110} />
                   <Tooltip />
                   <Bar dataKey="mensagens" name="Mensagens" fill={GREEN} radius={[0, 4, 4, 0]} />
                 </BarChart>

@@ -17,6 +17,7 @@ import {
   Clock,
 } from "lucide-react";
 import { toast } from "sonner";
+import { confirmar } from "@carbo/shell";
 
 interface SyncResult {
   synced: number;
@@ -166,7 +167,11 @@ export default function BlingIntegration() {
     if (!gestor) { toast.error("Só gestor pode desconectar o Bling."); return; }
     // A integração Bling é COMPARTILHADA com o Controle e demais apps —
     // desconectar aqui afeta TODOS. Confirma e desativa (reversível), sem apagar.
-    if (!window.confirm("Isto desconecta o Bling de TODO o ecossistema (Controle, Ops, etc.), não só do Finanças. Deseja continuar?")) return;
+    if (!(await confirmar({
+      titulo: "Desconectar o Bling?",
+      mensagem: "Isto desconecta o Bling de TODO o ecossistema (Controle, Ops, etc.), não só do Finanças.",
+      confirmar: "Desconectar", perigo: true,
+    }))) return;
     try {
       const { error } = await (supabase as any)
         .from("bling_integration")

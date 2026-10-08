@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useParamUrl } from "@carbo/shell";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -41,7 +42,8 @@ export default function Viagens() {
   const { data: userId } = useCurrentUserId();
   const { approve, reject } = useViagemMutations();
 
-  const [tab, setTab] = useState("todas");
+  // ⚠️ Aba na URL (`?aba=`): F5 e link mantêm a aba, e o Voltar desfaz a troca.
+  const [tab, setTab] = useParamUrl("aba", "todas");
   const pendentes = viagens.filter((v) => v.status === "pendente");
   const minhas = viagens.filter((v) => v.created_by && v.created_by === userId);
   const rows = tab === "pendentes" ? pendentes : tab === "minhas" ? minhas : viagens;

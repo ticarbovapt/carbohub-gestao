@@ -3,6 +3,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ComposedChart, Line, Cell,
 } from "recharts";
 import { CarboCard, CarboCardContent, CarboCardHeader, CarboCardTitle } from "@/components/ui/carbo-card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { usePersistedState } from "@/hooks/usePersistedState";
 import { useFinAging } from "@/hooks/useFinanceDashboard";
 import { useFinCashflow, useFinReceivablesAging, useFinReceivablesOnTime } from "@/hooks/useReceivables";
@@ -28,9 +29,9 @@ const empty = <p className="text-muted-foreground text-sm text-center py-12">Sem
 
 export default function FluxoCaixa() {
   const [source, setSource] = usePersistedState<string>("fin.caixa.source", "all");
-  const { data: cashflow = [] } = useFinCashflow(source, 8);
+  const { data: cashflow = [], isLoading: cashLoading, isError: cashError } = useFinCashflow(source, 8);
   const { data: payAging = [] } = useFinAging(source);
-  const { data: recAging = [] } = useFinReceivablesAging(source);
+  const { data: recAging = [], isLoading: recLoading, isError: recError } = useFinReceivablesAging(source);
   const { data: onTime } = useFinReceivablesOnTime(source);
 
   // Fluxo semanal: entrada, saída e saldo ACUMULADO ao longo das semanas.
@@ -63,12 +64,22 @@ export default function FluxoCaixa() {
         <span className="text-[11px] text-muted-foreground">Contas em BRL. Origem "{source === "all" ? "todas" : source}".</span>
       </div>
 
-      {/* KPIs */}
+      {/* KPIs — enquanto carrega, esqueleto; se a consulta falha, diz que falhou.
+          Mostrar R$ 0,00 nos dois casos se lê como "não houve movimento". */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <CarboCard variant="kpi" padding="sm"><CarboCardContent><p className="text-xs text-muted-foreground mb-1">Entradas (8 sem.)</p><p className="text-lg font-bold kpi-number text-success">{brl(totalEntrada)}</p></CarboCardContent></CarboCard>
-        <CarboCard variant="kpi" padding="sm"><CarboCardContent><p className="text-xs text-muted-foreground mb-1">Saídas (8 sem.)</p><p className="text-lg font-bold kpi-number text-destructive">{brl(totalSaida)}</p></CarboCardContent></CarboCard>
-        <CarboCard variant="kpi" padding="sm"><CarboCardContent><p className="text-xs text-muted-foreground mb-1">Saldo projetado (8 sem.)</p><p className={`text-lg font-bold kpi-number ${saldo8s < 0 ? "text-destructive" : "text-success"}`}>{brl(saldo8s)}</p></CarboCardContent></CarboCard>
-        <CarboCard variant="kpi" padding="sm"><CarboCardContent><p className="text-xs text-muted-foreground mb-1">Inadimplência (vencido a receber)</p><p className="text-lg font-bold kpi-number text-destructive">{brl(inadimplencia)}</p></CarboCardContent></CarboCard>
+        {[
+          { label: "Entradas (8 sem.)", valor: totalEntrada, cor: "text-success", loading: cashLoading, error: cashError },
+          { label: "Saídas (8 sem.)", valor: totalSaida, cor: "text-destructive", loading: cashLoading, error: cashError },
+          { label: "Saldo projetado (8 sem.)", valor: saldo8s, cor: saldo8s < 0 ? "text-destructive" : "text-success", loading: cashLoading, error: cashError },
+          { label: "Inadimplência (vencido a receber)", valor: inadimplencia, cor: "text-destructive", loading: recLoading, error: recError },
+        ].map((k) => (
+          <CarboCard key={k.label} variant="kpi" padding="sm"><CarboCardContent>
+            <p className="text-xs text-muted-foreground mb-1">{k.label}</p>
+            {k.loading ? <Skeleton className="h-7 w-28" />
+              : k.error ? <p className="text-sm text-destructive">Erro ao carregar</p>
+              : <p className={`text-lg font-bold kpi-number ${k.cor}`}>{brl(k.valor)}</p>}
+          </CarboCardContent></CarboCard>
+        ))}
       </div>
 
       <CarboCard>

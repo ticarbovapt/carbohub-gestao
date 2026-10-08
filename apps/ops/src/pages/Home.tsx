@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import {
   Factory, ArrowRight, AlertTriangle, MessageSquare, Package, Truck,
   Wrench, Loader2, CheckCircle2, Clock,
@@ -37,7 +37,7 @@ const msgErro = (e: unknown) =>
 
 /** Bloco com estado próprio: carregando, erro, vazio ou conteúdo. */
 function Bloco({
-  titulo, icon: Icon, cor, estado, onClick, children, vazio,
+  titulo, icon: Icon, cor, estado, to, children, vazio,
 }: {
   titulo: string;
   // `style` no tipo porque a cor do bloco vem de variável, não de classe
@@ -45,7 +45,8 @@ function Bloco({
   icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
   cor: string;
   estado: BlocoEstado;
-  onClick?: () => void;
+  /** Destino do cabeçalho — link de verdade, abre em nova aba com Ctrl/meio. */
+  to?: string;
   children: React.ReactNode;
   /** Mostrado quando carregou bem e não há nada pendente. */
   vazio?: string;
@@ -53,14 +54,21 @@ function Bloco({
   return (
     <div className="relative overflow-hidden rounded-2xl border border-border bg-board-surface p-4 min-w-0">
       <div className="absolute inset-x-0 top-0 h-1" style={{ background: cor }} />
-      <button onClick={onClick} disabled={!onClick}
-        className="w-full flex items-center justify-between gap-2 mb-3 group disabled:cursor-default">
-        <span className="flex items-center gap-2 min-w-0">
-          <Icon className="h-4 w-4 shrink-0" style={{ color: cor }} />
-          <span className="font-semibold text-sm truncate">{titulo}</span>
-        </span>
-        {onClick && <ArrowRight className="h-3.5 w-3.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />}
-      </button>
+      {(() => {
+        const cab = (
+          <>
+            <span className="flex items-center gap-2 min-w-0">
+              <Icon className="h-4 w-4 shrink-0" style={{ color: cor }} />
+              <span className="font-semibold text-sm truncate">{titulo}</span>
+            </span>
+            {to && <ArrowRight className="h-3.5 w-3.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />}
+          </>
+        );
+        const cls = "w-full flex items-center justify-between gap-2 mb-3 group";
+        return to
+          ? <Link to={to} className={cls}>{cab}</Link>
+          : <div className={`${cls} cursor-default`}>{cab}</div>;
+      })()}
 
       {estado.carregando ? (
         <div className="flex items-center gap-2 py-3 text-xs text-muted-foreground">
@@ -94,7 +102,6 @@ function Num({ valor, label, alerta }: { valor: number | string; label: string; 
 }
 
 export default function Home() {
-  const navigate = useNavigate();
   const { producao, suprimentos, logistica, campo } = useOpsResumo();
   const { data: conversas = [], isLoading: chatLoading, error: chatErro } = useConversations();
 
@@ -128,10 +135,10 @@ export default function Home() {
             <div className="flex flex-wrap items-center gap-2">
               <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
               {urgencias.map((u) => (
-                <button key={u.txt} onClick={() => navigate(u.to)}
+                <Link key={u.txt} to={u.to}
                   className="rounded-md bg-amber-500/10 px-2 py-1 text-xs font-medium text-amber-500 hover:bg-amber-500/20 transition-colors">
                   {u.txt}
-                </button>
+                </Link>
               ))}
             </div>
           </div>
@@ -143,14 +150,14 @@ export default function Home() {
             titulo={totalNaoLidas > 0 ? `Carbo Chat · ${totalNaoLidas} não lidas` : "Carbo Chat"}
             icon={MessageSquare} cor="#3b82f6"
             estado={{ carregando: chatLoading, erro: msgErro(chatErro) }}
-            onClick={() => navigate("/chat")}
+            to="/chat"
             vazio={!chatLoading && !chatErro && conversas.length === 0 ? "nenhuma conversa" : undefined}
           >
             <div className="space-y-1.5">
               {/* Não lidas primeiro; sem nenhuma, as mais recentes — a home
                   serve para saber se perdi algo, não só o que está vermelho. */}
               {(naoLidas.length > 0 ? naoLidas : conversas).slice(0, 4).map((c) => (
-                <button key={c.channel.id} onClick={() => navigate("/chat")}
+                <Link key={c.channel.id} to="/chat"
                   className="w-full flex items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-muted transition-colors min-w-0">
                   <span className="flex-1 min-w-0">
                     <span className="flex items-center gap-1.5 min-w-0">
@@ -166,14 +173,14 @@ export default function Home() {
                     </span>
                   </span>
                   <span className="shrink-0 text-[10px] text-muted-foreground">{fmtHora(c.lastAt)}</span>
-                </button>
+                </Link>
               ))}
             </div>
           </Bloco>
 
           {/* ── Produção ─────────────────────────────────────────────── */}
           <Bloco titulo="Produção" icon={Factory} cor="#22c55e" estado={producao}
-            onClick={() => navigate("/producao/ordens")}
+            to="/producao/ordens"
             vazio={producao.abertas === 0 ? "nenhuma OP em aberto" : undefined}>
             <div className="grid grid-cols-3 gap-2">
               <Num valor={producao.abertas} label="OPs em aberto" />
@@ -189,7 +196,7 @@ export default function Home() {
 
           {/* ── Estoque ──────────────────────────────────────────────── */}
           <Bloco titulo="Estoque" icon={Package} cor="#f59e0b" estado={suprimentos}
-            onClick={() => navigate("/suprimentos/hub-natal/estoque")}
+            to="/suprimentos/hub-natal/estoque"
             vazio={suprimentos.zerados + suprimentos.abaixo === 0 ? "tudo acima do mínimo" : undefined}>
             <div className="grid grid-cols-2 gap-2">
               <Num valor={suprimentos.zerados} label="zerados em algum hub" alerta={suprimentos.zerados > 0} />
@@ -213,7 +220,7 @@ export default function Home() {
 
           {/* ── Logística ────────────────────────────────────────────── */}
           <Bloco titulo="Logística" icon={Truck} cor="#06b6d4" estado={logistica}
-            onClick={() => navigate("/logistica")}
+            to="/logistica"
             vazio={logistica.aSeparar + logistica.separando + logistica.prontas + logistica.emTransporte === 0
               ? "nenhuma remessa em aberto" : undefined}>
             <div className="grid grid-cols-4 gap-2">
@@ -226,7 +233,7 @@ export default function Home() {
 
           {/* ── Operação de campo ────────────────────────────────────── */}
           <Bloco titulo="Operação de campo" icon={Wrench} cor="#a78bfa" estado={campo}
-            onClick={() => navigate("/campo/os")}
+            to="/campo/os"
             vazio={campo.abertas === 0 ? "nenhuma OS em aberto" : undefined}>
             <div className="grid grid-cols-3 gap-2">
               <Num valor={campo.hoje} label="agendadas hoje" alerta={campo.hoje > 0} />
@@ -254,11 +261,11 @@ export default function Home() {
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-1 px-4 pb-4">
             {OPS_GROUPS.flatMap((g) =>
               g.items.map((item) => (
-                <button key={item.path} onClick={() => navigate(item.path)}
+                <Link key={item.path} to={item.path}
                   className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors min-w-0">
                   <item.icon className="h-3.5 w-3.5 shrink-0" />
                   <span className="truncate">{item.label}</span>
-                </button>
+                </Link>
               )),
             )}
           </div>

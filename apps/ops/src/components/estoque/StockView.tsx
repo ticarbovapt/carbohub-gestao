@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useParamUrl } from "@carbo/shell";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Input } from "@/components/ui/input";
@@ -15,9 +16,15 @@ import { AjustarEstoqueDialog, type AjusteTarget } from "@/components/estoque/Aj
 // Visão de estoque de UM hub. `editable` decide se mostra ações de edição
 // (Suprimentos) ou se é só leitura (Estoque).
 export function StockView({ hub, editable }: { hub: Hub; editable: boolean }) {
-  const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("all");
-  const [onlyLow, setOnlyLow] = useState(false);
+  // ⚠️ Busca e filtros na URL (`?busca=&categoria=&baixo=1`): F5 e link mantêm a
+  // grade, e o Voltar desfaz a troca de filtro. A busca grava com `replace`.
+  // (Suprimentos já usa `periodo`, `de`, `ate`, `mov`, `tipo`, `card` — chaves distintas.)
+  const [search, setSearch] = useParamUrl("busca", "", { replace: true });
+  const [category, setCategory] = useParamUrl("categoria", "all");
+  const [baixoUrl, setBaixoUrl] = useParamUrl("baixo");
+  const onlyLow = baixoUrl === "1";
+  const setOnlyLow = (v: boolean | ((cur: boolean) => boolean)) =>
+    setBaixoUrl((typeof v === "function" ? v(onlyLow) : v) ? "1" : null);
   const [novaEntradaOpen, setNovaEntradaOpen] = useState(false);
   const [ajuste, setAjuste] = useState<AjusteTarget | null>(null);
 

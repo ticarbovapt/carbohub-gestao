@@ -2,6 +2,7 @@ import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 
+import { FecharComVoltar } from "@carbo/shell";
 import { cn } from "@/lib/utils";
 
 const Dialog = DialogPrimitive.Root;
@@ -42,6 +43,8 @@ const DialogContent = React.forwardRef<
       {...props}
     >
       {children}
+      {/* O Voltar do navegador fecha o diálogo (ver packages/shell/src/voltarFecha.ts). */}
+      <FecharComVoltar />
       <DialogPrimitive.Close className="absolute right-3 top-3 h-8 w-8 inline-flex items-center justify-center rounded-md text-muted-foreground opacity-80 hover:opacity-100 hover:bg-muted hover:text-foreground transition-colors disabled:pointer-events-none">
         <X className="h-4 w-4" />
         <span className="sr-only">Close</span>

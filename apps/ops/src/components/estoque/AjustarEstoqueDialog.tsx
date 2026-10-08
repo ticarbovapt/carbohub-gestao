@@ -44,6 +44,7 @@ export function AjustarEstoqueDialog({ target, hub, open, onOpenChange }: { targ
             <Pencil className="h-4 w-4 text-carbo-blue" /> Ajustar Estoque — {target?.name ?? ""}
           </DialogTitle>
         </DialogHeader>
+        <form noValidate className="grid gap-4" onSubmit={(e) => { e.preventDefault(); submit(); }}>
 
         {target && (
           <div className="space-y-4">
@@ -68,11 +69,12 @@ export function AjustarEstoqueDialog({ target, hub, open, onOpenChange }: { targ
         )}
 
         <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={setStock.isPending}>Cancelar</Button>
-          <Button onClick={submit} disabled={setStock.isPending} className="carbo-gradient text-white">
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={setStock.isPending}>Cancelar</Button>
+          <Button type="submit" disabled={setStock.isPending} className="carbo-gradient text-white">
             {setStock.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Salvando…</> : "Salvar Ajuste"}
           </Button>
         </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

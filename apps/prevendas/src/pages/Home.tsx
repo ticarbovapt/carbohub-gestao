@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Target, MessagesSquare, ShoppingCart, Bug, UserCircle, ArrowRight, type LucideIcon, KanbanSquare, ShoppingBag, BarChart3 } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
@@ -32,7 +32,6 @@ const ATALHOS: Atalho[] = [
 ];
 
 export default function Home() {
-  const navigate = useNavigate();
   const { profile } = useAuth();
   const primeiroNome = (profile?.full_name ?? "").split(" ")[0];
 
@@ -47,7 +46,8 @@ export default function Home() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
           {ATALHOS.map(({ to, label, hint, icon: Icon }) => (
-            <CarboCard key={to} variant="interactive" padding="none" onClick={() => navigate(to)}>
+            <Link key={to} to={to} className="block rounded-xl">
+            <CarboCard variant="interactive" padding="none" className="h-full">
               <CarboCardContent className="p-4 flex items-start gap-3">
                 <span
                   className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0"
@@ -63,6 +63,7 @@ export default function Home() {
                 </span>
               </CarboCardContent>
             </CarboCard>
+            </Link>
           ))}
         </div>
       </div>

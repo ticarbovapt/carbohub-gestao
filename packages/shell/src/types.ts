@@ -37,6 +37,11 @@ export interface ShellBrand {
   logoSrc: string;
   /** e.g. go to Hub */
   onLogoClick?: () => void;
+  /**
+   * Endereço do logo (ex.: o Hub). Com ele o logo vira LINK de verdade e abre
+   * em nova guia (botão do meio, Ctrl+clique). Vence o `onLogoClick`.
+   */
+  href?: string;
 }
 
 export interface SidebarProps {
