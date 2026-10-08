@@ -44,8 +44,9 @@ const NS_DSIG = "http://www.w3.org/2000/09/xmldsig#";
 
 // ⚠️ Produção restrita. A de produção fica COMENTADA de propósito: descomentar
 // é um gesto deliberado, não um parâmetro que se passa por engano.
+// ⚠️ O ENVIO é feito pelo `nfse-relay` (apps/financas/api), que tem o destino
+// fixo `/SefinNacional/nfse`. Esta constante só serve ao `diagnostico`.
 const URL_RESTRITA = "https://sefin.producaorestrita.nfse.gov.br/sefinnacional/dps";
-// const URL_PRODUCAO = "https://sefin.nfse.gov.br/sefinnacional/dps";
 
 function json(corpo: unknown, status = 200) {
   return new Response(JSON.stringify(corpo, null, 2), {
@@ -519,54 +520,39 @@ Deno.serve(async (req: Request): Promise<Response> => {
     });
   }
 
-  let cliente: Deno.HttpClient;
-  try {
-    // ⚠️ `http1: true, http2: false` NÃO é ajuste fino — sem isso a chamada
-    // morre antes de o ADN ver o XML. Medido em 02/10/2026, na primeira
-    // tentativa real:
-    //
-    //   http2 error: stream error received: endpoint requires HTTP/1.1
-    //
-    // O Deno negocia HTTP/2 por ALPN e o `sefin...nfse.gov.br` exige 1.1.
-    //
-    // ⚠️ E a notícia BOA está escondida nesse erro: a `etapa` foi `fetch`, não
-    // `assinar`, e o erro é de PROTOCOLO, não de TLS. Ou seja, a chave abriu, a
-    // assinatura foi montada, o cliente mTLS subiu e o handshake TLS COMPLETOU
-    // com o gov.br — certificado recusado teria vindo como erro de TLS. Um erro
-    // que prova quatro coisas funcionando vale mais que um sucesso que não
-    // prova nenhuma.
-    //
-    // ⚠️ O cast existe porque `http1`/`http2` são opções instáveis e podem não
-    // estar na tipagem desta versão do Deno — mesmo molde da `nfse-nacional`.
-    // O comportamento em tempo de execução é o que importa.
-    cliente = Deno.createHttpClient(
-      { cert, key, http1: true, http2: false } as Deno.CreateHttpClientOptions,
-    );
-  } catch (e) {
-    return json({ ok: false, etapa: "createHttpClient", erro: String(e) }, 500);
+  // ⚠️ O ENVIO NÃO SAI DAQUI. Medido em 08/10/2026: o SEFIN (IIS) só pede o
+  // certificado por RENEGOCIAÇÃO TLS 1.2 quando vê `/SefinNacional/...`, e o
+  // rustls do Deno não renegocia — a conexão caía com `Connection reset by
+  // peer`, com e sem certificado, com e sem corpo. Quem transporta é o
+  // `nfse-relay` (Node/OpenSSL, no Vercel do Finanças). Aqui continua a
+  // montagem e a assinatura; lá, só o mTLS para um destino FIXO.
+  const relayUrl = Deno.env.get("NFSE_RELAY_URL") ?? "https://finance.carbohub.com.br/api/nfse-relay";
+  const relaySecret = Deno.env.get("NFSE_RELAY_SECRET");
+  if (!relaySecret) {
+    return json({ ok: false, etapa: "relay", erro: "NFSE_RELAY_SECRET ausente no Supabase" }, 500);
   }
 
   try {
-    const res = await fetch(URL_RESTRITA, {
-      client: cliente,
+    const res = await fetch(relayUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      headers: { "Content-Type": "application/json", "X-Relay-Secret": relaySecret },
       body: JSON.stringify({ dpsXmlGZipB64: compactado }),
     });
     const texto = await res.text();
+    let relay: unknown = texto.slice(0, 20000);
+    try { relay = JSON.parse(texto); } catch { /* corpo não-JSON vai cru */ }
     return json({
-      ok: res.ok,
-      modo: "ENVIADO à produção restrita",
+      ok: res.ok && (relay as { ok?: boolean })?.ok === true,
+      modo: "ENVIADO à produção restrita (via nfse-relay)",
       algo,
       id,
-      url: URL_RESTRITA,
-      status: res.status,
-      // ⚠️ O corpo vai CRU e inteiro. A rejeição do ADN diz qual campo, e
+      relay_status: res.status,
+      // ⚠️ O corpo vai CRU e inteiro. A rejeição do SEFIN diz qual campo, e
       // resumir isso aqui é perder a única informação que a sonda existe para
       // trazer — a mesma lição do card que devolvia `[]` em vez do erro.
-      resposta: texto.slice(0, 4000),
+      relay,
     }, 200);
   } catch (e) {
-    return json({ ok: false, etapa: "fetch", url: URL_RESTRITA, erro: String(e) }, 500);
+    return json({ ok: false, etapa: "relay", url: relayUrl, erro: String(e) }, 500);
   }
 });
