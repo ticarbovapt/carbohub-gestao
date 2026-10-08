@@ -21,7 +21,6 @@ import { createClient } from "npm:@supabase/supabase-js@2.39.3";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
 const BUCKET = "mkt-anexos";
 // O Storage exige pedaço de EXATAMENTE 6 MB no upload em partes (menos o
 // último). É o que deixa um arquivo de 243 MB passar sem caber na memória.
@@ -123,14 +122,31 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: h });
   const json = (status: number, obj: unknown) =>
     new Response(JSON.stringify(obj), { status, headers: { ...h, "content-type": "application/json" } });
+  // ⚠️ Exceção que escapa vira 500 do runtime SEM os cabeçalhos de CORS, e o
+  // navegador só diz "Failed to send a request" — o erro real some. Todo
+  // caminho devolve JSON com CORS, inclusive o inesperado.
+  try {
+    return await atender(req, json);
+  } catch (e) {
+    return json(500, { ok: false, erro: `Falha inesperada: ${e instanceof Error ? e.message : String(e)}` });
+  }
+});
+
+async function atender(req: Request, json: (status: number, obj: unknown) => Response): Promise<Response> {
 
   const KEY = Deno.env.get("TRELLO_KEY");
   const TOKEN = Deno.env.get("TRELLO_TOKEN");
   if (!KEY || !TOKEN) return json(500, { ok: false, erro: "TRELLO_KEY / TRELLO_TOKEN ausentes em Supabase → Edge Functions → Secrets" });
 
   // Quem chama: gente logada E do time interno.
-  const usuario = createClient(SUPABASE_URL, ANON, {
-    global: { headers: { authorization: req.headers.get("authorization") ?? "" } },
+  // O JWT de QUEM CHAMA vai no Authorization, então `auth.uid()` é dele — a
+  // chave aqui só abre a porta do PostgREST (as outras funções do projeto não
+  // dependem de SUPABASE_ANON_KEY, e esta também não).
+  const jwt = req.headers.get("authorization") ?? "";
+  if (!/^Bearer\s+\S+/i.test(jwt)) return json(401, { ok: false, erro: "Sem sessão" });
+  const usuario = createClient(SUPABASE_URL, SERVICE_ROLE, {
+    global: { headers: { Authorization: jwt } },
+    auth: { persistSession: false, autoRefreshToken: false },
   });
   const { data: interno, error: eInterno } = await usuario.rpc("carbo_e_time_interno");
   if (eInterno) return json(401, { ok: false, erro: `Não deu para conferir o acesso: ${eInterno.message}` });
@@ -202,4 +218,4 @@ Deno.serve(async (req) => {
   }
 
   return json(400, { ok: false, erro: "acao desconhecida" });
-});
+}
