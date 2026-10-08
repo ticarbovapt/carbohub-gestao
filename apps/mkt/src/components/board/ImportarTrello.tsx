@@ -33,6 +33,15 @@ export function ImportarTrello({ pessoas, titulosExistentes }: { pessoas: Pessoa
   const [imp, setImp] = useState<Importacao | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [gravando, setGravando] = useState<string | null>(null);
+  // Guardados para RECALCULAR quando alguém escolhe a pessoa à mão.
+  const [base, setBase] = useState<{ json: unknown; userId: string; ws: string | null; lista: PessoaDaqui[] } | null>(null);
+  const [escolhidos, setEscolhidos] = useState<Record<string, string | null>>({});
+  const escolher = (idTrello: string, profileId: string) => {
+    if (!base) return;
+    const novo = { ...escolhidos, [idTrello]: profileId || null };
+    setEscolhidos(novo);
+    setImp(montarImportacao(base.json, { userId: base.userId, workspaceId: base.ws, pessoas: base.lista, escolhidos: novo }));
+  };
 
   const ler = async (f: File) => {
     setErro(null); setImp(null);
@@ -41,7 +50,17 @@ export function ImportarTrello({ pessoas, titulosExistentes }: { pessoas: Pessoa
       const { data } = await db.auth.getUser();
       if (!data.user) throw new Error("Sessão expirada. Entre de novo.");
       const ws = await db.from("mkt_workspaces").select("id").order("created_at").limit(1).maybeSingle();
-      setImp(montarImportacao(json, { userId: data.user.id, workspaceId: ws.data?.id ?? null, pessoas }));
+      // Todo o time INTERNO (quem tem departamento), não só o de quem importa;
+      // o time de quem importa vem marcado e só serve para desempatar.
+      const todos = await db.from("profiles").select("id, full_name").not("department", "is", null);
+      const doTime = new Set(pessoas.map((p) => p.id));
+      const lista: PessoaDaqui[] = [
+        ...((todos.data ?? []) as PessoaDaqui[]).map((p) => ({ ...p, doTime: doTime.has(p.id) })),
+        ...pessoas.filter((p) => !(todos.data ?? []).some((x: PessoaDaqui) => x.id === p.id)).map((p) => ({ ...p, doTime: true })),
+      ];
+      setBase({ json, userId: data.user.id, ws: ws.data?.id ?? null, lista });
+      setEscolhidos({});
+      setImp(montarImportacao(json, { userId: data.user.id, workspaceId: ws.data?.id ?? null, pessoas: lista }));
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Não consegui ler o arquivo.");
     }
@@ -121,11 +140,17 @@ export function ImportarTrello({ pessoas, titulosExistentes }: { pessoas: Pessoa
               <div className="space-y-1">
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Pessoas</p>
                 {r.pessoas.map((p) => (
-                  <p key={p.trello} className="text-xs">
-                    {p.trello} → {p.casou
-                      ? <span className="text-foreground">{p.casou}</span>
-                      : <span className="text-amber-600 dark:text-amber-400">sem correspondente (cartões ficam sem essa pessoa; comentários levam o nome no texto)</span>}
-                  </p>
+                  <div key={p.idTrello} className="flex items-center gap-2 text-xs">
+                    <span className="w-40 shrink-0 truncate" title={p.trello}>{p.trello}</span>
+                    <span className="text-muted-foreground">→</span>
+                    <select value={p.casouId ?? ""} onChange={(e) => escolher(p.idTrello, e.target.value)}
+                      className={`h-7 w-0 flex-1 min-w-0 rounded-md border bg-card px-2 ${p.casouId ? "border-border text-foreground" : "border-amber-500/50 text-amber-700 dark:text-amber-400"}`}>
+                      <option value="">ninguém (o nome vai no texto)</option>
+                      {[...(base?.lista ?? [])].sort((a, b) => (a.full_name ?? "").localeCompare(b.full_name ?? "")).map((x) => (
+                        <option key={x.id} value={x.id}>{x.full_name ?? "(sem nome)"}</option>
+                      ))}
+                    </select>
+                  </div>
                 ))}
               </div>
 

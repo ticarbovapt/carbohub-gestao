@@ -69,6 +69,8 @@ const PADROES: { re: RegExp; f: (m: RegExpExecArray) => ReactNode }[] = [
   { re: /\*([^*\s][^*]*?)\*/, f: (m) => <em>{inline(m[1])}</em> },
   { re: /`([^`]+)`/, f: (m) => <code className="rounded bg-muted px-1 py-0.5 text-[0.85em]">{m[1]}</code> },
   { re: /:([a-z0-9_+-]+):/, f: (m) => EMOJI[m[1]] ?? m[0] },
+  // Menção do Trello (@usuario). O lookbehind impede pegar e-mail (a@b.com).
+  { re: /(?<![\w.])@([A-Za-z0-9_]{3,})/, f: (m) => <span className="rounded bg-muted px-1 text-[0.9em] font-medium text-foreground/80">@{m[1]}</span> },
 ];
 
 function inline(texto: string): ReactNode {

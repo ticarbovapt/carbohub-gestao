@@ -2252,8 +2252,12 @@ o resumo ANTES e grava na ordem das FKs. Falhou no meio ⇒ apaga o quadro criad
    2,3 GB). Trazer o arquivo exigiria a chave de API do Trello. O resumo AVISA.
 3. ⚠️ **O export traz só as últimas 1.000 ações**, e é de lá que vêm os
    comentários — o resumo diz a data de corte.
-4. Pessoa casa por PRIMEIRO NOME e só se o casamento for ÚNICO; comentário de
-   quem não casou entra com o nome no texto, em nome de quem importou.
+4. Pessoa casa por PRIMEIRO NOME e só se o casamento for ÚNICO (desempate:
+   sobrenome, usuário do Trello, time de quem importa); comentário de quem não
+   casou entra com o nome no texto, em nome de quem importou. ⚠️ A lista é o
+   time INTERNO inteiro (`profiles` com departamento) — só o departamento de
+   quem importa deixou a Mirian (Marketing) de fora quando importou alguém do
+   TI. E o diálogo deixa ESCOLHER a pessoa à mão antes de gravar.
 5. ⚠️ **Toda linha leva TODAS as colunas**: no insert em lote o PostgREST usa a
    união das chaves, e coluna ausente numa linha vira NULL, não o default.
 
