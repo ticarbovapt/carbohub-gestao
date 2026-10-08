@@ -258,7 +258,9 @@ function BoardColumn({
 
   return (
     <div ref={setNodeRef} style={style} className="w-72 shrink-0 flex flex-col max-h-full">
-      <div className="mkt-column flex flex-col max-h-full" style={fundo ? { background: fundo, borderColor: "transparent" } : undefined}>
+      {/* min-h-0, não max-h-full: o pai só tem max-height, então 100% dele não
+          resolve e a coluna crescia com os cartões em vez de rolar. */}
+      <div className="mkt-column flex flex-col min-h-0" style={fundo ? { background: fundo, borderColor: "transparent" } : undefined}>
         <div className="mkt-column-header">
           <button className="p-1 -ml-1 cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground" {...attributes} {...listeners}>
             <GripVertical className="h-4 w-4" />
