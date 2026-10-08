@@ -16,7 +16,7 @@ import { Fragment, type ReactNode } from "react";
 // `title`, para quem passa o mouse.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const EMOJI: Record<string, string> = {
+export const EMOJI: Record<string, string> = {
   white_check_mark: "✅", heavy_check_mark: "✔️", x: "❌", warning: "⚠️", rocket: "🚀",
   movie_camera: "🎥", fire: "🔥", star: "⭐", pushpin: "📌", calendar: "📅", point_right: "👉",
   tada: "🎉", eyes: "👀", bulb: "💡", memo: "📝", link: "🔗", camera: "📷", red_circle: "🔴",
