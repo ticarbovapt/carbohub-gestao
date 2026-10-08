@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { CarboCard, CarboCardContent, CarboCardHeader, CarboCardTitle } from "@/components/ui/carbo-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,13 +58,13 @@ function barColor(revenue: number, target: number) {
 // (`formatBRLInput` saiu junto: só o diálogo removido o usava.)
 
 // Delta badge vs mês anterior
-function DeltaBadge({ current, prev }: { current: number; prev: number }) {
+function DeltaBadge({ current, prev, title }: { current: number; prev: number; title?: string }) {
   if (prev <= 0 && current <= 0) return null;
   if (prev <= 0) return <span className="text-[10px] text-muted-foreground">novo</span>;
   const delta = ((current - prev) / prev) * 100;
   const up = delta >= 0;
   return (
-    <span className={`inline-flex items-center gap-0.5 text-[10px] font-semibold ${up ? "text-green-500" : "text-red-500"}`}>
+    <span title={title} className={`inline-flex items-center gap-0.5 text-[10px] font-semibold ${up ? "text-green-500" : "text-red-500"}`}>
       {up ? <TrendingUp className="h-2.5 w-2.5" /> : <TrendingDown className="h-2.5 w-2.5" />}
       {up ? "+" : ""}{delta.toFixed(1)}%
     </span>
@@ -101,9 +101,9 @@ function SmartProgressBar({
 // ─────────────────────────────────────────────────────────────────────────────
 
 function PlatformCard({
-  stats, prevRevenue,
+  stats, prevRevenue, rotuloComparacao,
 }: {
-  stats: PlatformMetaStats; prevRevenue: number;
+  stats: PlatformMetaStats; prevRevenue: number; rotuloComparacao: string;
 }) {
   const colors = COLOR_MAP[stats.progressColor];
   return (
@@ -136,7 +136,7 @@ function PlatformCard({
           <div className="flex flex-col items-end gap-0.5">
             <DeltaBadge current={stats.actual} prev={prevRevenue} />
             {prevRevenue > 0 && (
-              <span className="text-[9px] text-muted-foreground">vs mês ant.</span>
+              <span className="text-[9px] text-muted-foreground">{rotuloComparacao}</span>
             )}
           </div>
         </div>
@@ -537,8 +537,29 @@ export default function EcommerceMetas() {
 
   const { totalStats, platformStats, isLoading } = useMetaStats(month);
 
-  // Dados do mês anterior para comparativo
-  const { data: prevActuals } = useMetaActuals(subMonths(month, 1));
+  // ── Comparativo com o mês anterior: MESMO PERÍODO, nunca o mês inteiro ──
+  // ⚠️ No mês corrente, compara 1→hoje (até o minuto) com 1→o mesmo dia e
+  // hora do mês anterior. Antes comparava com o mês anterior FECHADO, e no dia
+  // 8 a tela dizia −57% para um mês que andava igual ao outro — o número só
+  // ficava verdadeiro no último dia. Mês passado consultado: mês cheio contra
+  // mês cheio, que aí é a comparação certa.
+  // O dia é limitado ao tamanho do mês anterior (31/out contra 30/set).
+  const agora = new Date();
+  const minuto = Math.floor(agora.getTime() / 60_000);
+  const mesAnterior = subMonths(month, 1);
+  const ehMesCorrente =
+    month.getFullYear() === agora.getFullYear() && month.getMonth() === agora.getMonth();
+  const corteAnterior = useMemo(() => {
+    if (!ehMesCorrente) return null;
+    const dia = Math.min(getDate(agora), getDaysInMonth(mesAnterior));
+    return new Date(mesAnterior.getFullYear(), mesAnterior.getMonth(), dia,
+                    agora.getHours(), agora.getMinutes(), 59, 999);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ehMesCorrente, minuto, mesAnterior.getTime()]);
+  const { data: prevActuals } = useMetaActuals(mesAnterior, corteAnterior);
+  const rotuloComparacao = corteAnterior
+    ? `vs 1–${getDate(corteAnterior)} ${format(corteAnterior, "MMM", { locale: ptBR })}`
+    : "vs mês ant.";
 
   // dataUpdatedAt para "atualizado às HH:mm"
   const { dataUpdatedAt } = useMetaActuals(month);
@@ -628,11 +649,11 @@ export default function EcommerceMetas() {
                   <CarboBadge variant="secondary" size="sm">
                     Esperado hoje: {fmtPct(totalStats.expectedPct)}
                   </CarboBadge>
-                  {/* Delta mês anterior */}
+                  {/* Delta vs o MESMO PERÍODO do mês anterior */}
                   {prevTotal > 0 && (
                     <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-muted/40">
                       <DeltaBadge current={totalStats.actual} prev={prevTotal} />
-                      <span className="text-muted-foreground text-[10px]">vs mês ant.</span>
+                      <span className="text-muted-foreground text-[10px]">{rotuloComparacao}</span>
                     </span>
                   )}
                 </div>
@@ -723,6 +744,7 @@ export default function EcommerceMetas() {
                   key={String(stats.platform)}
                   stats={stats}
                   prevRevenue={prevActuals?.platformRevenue[stats.platform as string] ?? 0}
+                  rotuloComparacao={rotuloComparacao}
                 />
               ))}
             </div>
@@ -752,7 +774,7 @@ export default function EcommerceMetas() {
                       <span className="text-base w-6 text-center">{stats.emoji}</span>
                       <div className="w-24 min-w-0">
                         <p className="text-sm font-medium truncate">{stats.label}</p>
-                        <DeltaBadge current={stats.actual} prev={prev} />
+                        <DeltaBadge current={stats.actual} prev={prev} title={rotuloComparacao} />
                       </div>
                       <div className="flex-1 relative h-6 bg-muted rounded-md overflow-hidden">
                         <div
