@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, Table2, ArrowUp, ArrowDown, Maximize2, SearchX } from "lucide-react";
-import { useBoard, useBoardLive, useBoardMutations, type CardSummary, type List, type Label } from "@/hooks/useBoards";
+import { useBoard, useBoardLive, useBoardMutations, type CardSummary, type List, type Label, pessoasDoQuadro } from "@/hooks/useBoards";
 import { useCustomFields, useBoardFieldValues, useCustomFieldMutations, type CustomField } from "@/hooks/useCustomFields";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { LABEL_COLORS, getAccent, tintedLabelStyle } from "@/lib/mktTheme";
@@ -23,7 +23,8 @@ export default function BoardTable() {
   useBoardLive(boardId ?? null);
   const { data: fields = [] } = useCustomFields(boardId ?? null);
   const { data: fieldValues } = useBoardFieldValues(boardId ?? null);
-  const { data: team = [] } = useTeamMembers();
+  const { data: timeDept = [] } = useTeamMembers();
+  const team = pessoasDoQuadro(data, timeDept);
   const m = useBoardMutations(boardId);
   const fm = useCustomFieldMutations(boardId ?? null);
 

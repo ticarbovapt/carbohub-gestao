@@ -152,15 +152,19 @@ export function montarImportacao(t: J, ctx: { userId: string; workspaceId: strin
   const listaAtiva = new Set((t.lists as J[]).filter((l) => !l.closed).map((l) => l.id));
   let visiveis = 0, arquivados = 0;
 
-  for (const c of t.cards as J[]) {
+  (t.cards as J[]).forEach((c, ordem) => {
     const lid = listId.get(c.idList);
-    if (!lid) continue; // cartão de lista que não veio no arquivo: não há onde pô-lo
+    if (!lid) return; // cartão de lista que não veio no arquivo: não há onde pô-lo
     const id = uuid(); cardId.set(c.id, id);
     const coord = c.coordinates;
     cards.push({
       id, list_id: lid, board_id: boardId, title: c.name || "(sem título)", description: c.desc || null,
-      position: Number(c.pos) || 0, start_date: c.start ?? null, due_date: c.due ?? null,
-      is_complete: !!c.dueComplete, cover: c.cover?.color ? corEtiqueta(c.cover.color) : null,
+      // Empate de `pos` existe (2 cartões na lista Mirian); o Trello desempata
+      // pela ordem do arquivo, então a ordem entra como fração.
+      position: (Number(c.pos) || 0) + ordem * 1e-6, start_date: c.start ?? null, due_date: c.due ?? null,
+      is_complete: !!c.dueComplete, cover: c.cover?.color
+        ? (c.cover.size === "full" ? "full:" : "") + corEtiqueta(c.cover.color)
+        : null,
       location_lat: coord?.latitude ?? null, location_lng: coord?.longitude ?? null,
       location_name: c.locationName ?? c.address ?? null,
       is_archived: !!c.closed, archived_at: c.closed ? (c.dateClosed ?? agora) : null,
@@ -179,7 +183,7 @@ export function montarImportacao(t: J, ctx: { userId: string; workspaceId: strin
         created_at: a.date ?? agora,
       });
     }
-  }
+  });
 
   const checklists: Record<string, unknown>[] = [];
   const checklistItems: Record<string, unknown>[] = [];

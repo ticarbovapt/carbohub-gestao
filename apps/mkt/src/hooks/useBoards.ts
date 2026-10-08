@@ -32,7 +32,20 @@ export interface CardSummary {
   // Espelho: quando não-nulo, o conteúdo acima vem do cartão ORIGINAL (mirrorOf).
   mirrorOf: string | null; mirrorSourceBoard: string | null; mirrorSourceList: string | null;
 }
-export interface BoardData { board: Board; lists: List[]; cards: CardSummary[]; labels: Label[]; }
+// Quem está nos cartões DESTE quadro, com nome e foto. É a lista do filtro de
+// membros e das fotos na frente do cartão: o departamento de quem olha não
+// serve, porque o quadro do Marketing visto por alguém do TI listava o TI e
+// não tinha a Mirian.
+export interface BoardPerson { id: string; full_name: string | null; avatar_url: string | null }
+// Pessoas para filtro/agrupamento/nome: as do QUADRO; quadro sem ninguém nos
+// cartões cai no time de quem olha (para dar o que escolher ao atribuir).
+export function pessoasDoQuadro<T extends { id: string; full_name: string | null; avatar_url?: string | null }>(
+  data: { people: BoardPerson[] } | null | undefined, time: T[],
+): BoardPerson[] {
+  const p = data?.people ?? [];
+  return p.length > 0 ? p : time.map((t) => ({ id: t.id, full_name: t.full_name, avatar_url: t.avatar_url ?? null }));
+}
+export interface BoardData { board: Board; lists: List[]; cards: CardSummary[]; labels: Label[]; people: BoardPerson[]; }
 
 const num = (v: unknown) => Number(v) || 0;
 
@@ -80,7 +93,12 @@ export function useBoard(boardId: string | null) {
       if (cardsRes.error) throw cardsRes.error;
       if (labelsRes.error) throw labelsRes.error;
 
-      const boardCards = (cardsRes.data ?? []) as Record<string, unknown>[];
+      // ⚠️ Cartão de LISTA arquivada some junto com a lista. O kanban escondia
+      // por acaso (monta colunas pelas listas); Tabela, Calendário, Timeline,
+      // Dashboard e Mapa leem `cards` direto e mostravam 382 cartões de 24
+      // listas arquivadas do quadro importado do Trello, com a lista "—".
+      const listasAtivas = new Set(((listsRes.data ?? []) as { id: string }[]).map((l) => l.id));
+      const boardCards = ((cardsRes.data ?? []) as Record<string, unknown>[]).filter((c) => listasAtivas.has(c.list_id as string));
       const cardIds: string[] = boardCards.map((c) => c.id as string);
       // Originais dos espelhos deste quadro (podem estar em OUTROS quadros).
       const originalIds = [...new Set(boardCards.map((c) => c.mirror_of as string | null).filter(Boolean) as string[])];
@@ -179,7 +197,14 @@ export function useBoard(boardId: string | null) {
         };
       });
 
-      return { board: boardRes.data as Board, lists: (listsRes.data ?? []) as List[], cards, labels: (labelsRes.data ?? []) as Label[] };
+      const pessoaIds = [...new Set(cards.flatMap((c) => c.memberIds))];
+      let people: BoardPerson[] = [];
+      if (pessoaIds.length > 0) {
+        const pRes = await db.from("profiles").select("id, full_name, avatar_url").in("id", pessoaIds);
+        people = ((pRes.data ?? []) as BoardPerson[]).sort((a, b) => (a.full_name ?? "").localeCompare(b.full_name ?? ""));
+      }
+
+      return { board: boardRes.data as Board, lists: (listsRes.data ?? []) as List[], cards, labels: (labelsRes.data ?? []) as Label[], people };
     },
   });
 }
@@ -197,14 +222,21 @@ export function useAllCards(enabled: boolean) {
     queryFn: async (): Promise<AllCard[]> => {
       const cardsRes = await db.from("mkt_cards").select("id, title, due_date, board_id, list_id, mirror_of").eq("is_archived", false);
       if (cardsRes.error) throw cardsRes.error;
-      const cards = ((cardsRes.data ?? []) as Record<string, unknown>[]).filter((c) => !c.mirror_of); // originais (ignora espelhos)
+      // Quadro e lista ARQUIVADOS levam os cartões junto (senão a busca acharia
+      // a cópia arquivada de um quadro reimportado, e o histórico do Trello).
+      const [bRes, lRes] = await Promise.all([
+        db.from("mkt_boards").select("id, title").eq("is_archived", false),
+        db.from("mkt_lists").select("id, title").eq("is_archived", false),
+      ]);
+      const boardsAtivos = new Set((bRes.data ?? []).map((b: { id: string }) => b.id));
+      const listasAtivas = new Set((lRes.data ?? []).map((l: { id: string }) => l.id));
+      const cards = ((cardsRes.data ?? []) as Record<string, unknown>[])
+        .filter((c) => !c.mirror_of && boardsAtivos.has(c.board_id as string) && listasAtivas.has(c.list_id as string)); // originais (ignora espelhos)
       const ids = cards.map((c) => c.id as string);
       if (ids.length === 0) return [];
-      const [clRes, cmRes, bRes, lRes] = await Promise.all([
+      const [clRes, cmRes] = await Promise.all([
         db.from("mkt_card_labels").select("card_id, label_id").in("card_id", ids),
         db.from("mkt_card_members").select("card_id, user_id").in("card_id", ids),
-        db.from("mkt_boards").select("id, title"),
-        db.from("mkt_lists").select("id, title"),
       ]);
       const labelsByCard = new Map<string, string[]>();
       for (const cl of (clRes.data ?? []) as { card_id: string; label_id: string }[]) (labelsByCard.get(cl.card_id) ?? labelsByCard.set(cl.card_id, []).get(cl.card_id)!).push(cl.label_id);

@@ -13,10 +13,10 @@ import { ArrowLeft, Plus, X, GripVertical, MoreHorizontal, Clock, CheckSquare, M
 import { toast } from "sonner";
 import {
   useBoard, useBoardLive, useBoardMutations, POS_GAP,
-  type CardSummary, type List, type Label,
-} from "@/hooks/useBoards";
+  type CardSummary, type List, type Label, pessoasDoQuadro } from "@/hooks/useBoards";
 import { positionForIndex } from "@/lib/mktPosition";
-import { LABEL_COLORS, getAccent, tintedLabelStyle, ACCENT_SWATCHES } from "@/lib/mktTheme";
+import { LABEL_COLORS, getAccent, tintedLabelStyle, ACCENT_SWATCHES, lerCapa, tomDaCapa, fundoDaLista } from "@/lib/mktTheme";
+import { diceBearUrl } from "@/components/ui/profile-avatar";
 import { CardModal } from "@/components/board/CardModal";
 import { useCustomFields, useBoardFieldValues, type CustomField } from "@/hooks/useCustomFields";
 import { BoardFieldsDialog } from "@/components/board/BoardFieldsDialog";
@@ -38,7 +38,35 @@ const fmtDue = (iso: string) => {
 // atravessar Lista → Cartão → Face (e o DragOverlay) como prop. Existe porque o
 // Trello mostra esses campos na frente ("Canal de Publicação: Instagram") e o
 // quadro importado parecia ter perdido o dado — ele estava só no detalhe.
-const CamposCtx = createContext<{ campos: CustomField[]; valores: Map<string, Record<string, unknown>> }>({ campos: [], valores: new Map() });
+const CamposCtx = createContext<{
+  campos: CustomField[]; valores: Map<string, Record<string, unknown>>;
+  pessoas: Map<string, { full_name: string | null; avatar_url: string | null }>;
+  etiquetasAbertas: boolean; alternarEtiquetas: () => void;
+}>({ campos: [], valores: new Map(), pessoas: new Map(), etiquetasAbertas: false, alternarEtiquetas: () => {} });
+
+// Etiqueta na frente do cartão é BARRINHA, como no Trello; clicar numa abre o
+// texto de TODAS (e fecha de novo). A escolha é de quem olha, então fica no
+// navegador — e tem de sobreviver a localStorage bloqueado.
+const CHAVE_ETIQUETAS = "mkt-etiquetas-abertas";
+function lerEtiquetasAbertas(): boolean {
+  try { return localStorage.getItem(CHAVE_ETIQUETAS) === "1"; } catch { return false; }
+}
+
+function FotosDosMembros({ ids }: { ids: string[] }) {
+  const { pessoas } = useContext(CamposCtx);
+  if (ids.length === 0) return null;
+  const vis = ids.slice(0, 3);
+  return (
+    <span className="ml-auto flex -space-x-1.5">
+      {vis.map((id) => {
+        const p = pessoas.get(id);
+        return <img key={id} src={p?.avatar_url || diceBearUrl(id)} title={p?.full_name ?? ""} alt={p?.full_name ?? ""}
+          className="h-6 w-6 rounded-full ring-2 ring-card object-cover" />;
+      })}
+      {ids.length > 3 && <span className="h-6 w-6 rounded-full ring-2 ring-card bg-muted text-[10px] grid place-items-center">+{ids.length - 3}</span>}
+    </span>
+  );
+}
 
 function textoDoCampo(f: CustomField, v: unknown): { texto: string; cor?: string } | null {
   if (v === null || v === undefined || v === "" || (Array.isArray(v) && v.length === 0)) return null;
@@ -63,9 +91,9 @@ function CamposNaFrente({ cardId }: { cardId: string }) {
     <div className="flex flex-wrap gap-1">
       {itens.map(({ f, x }) => (
         <span key={f.id} title={f.name}
-          className="inline-flex items-center gap-1 max-w-full h-5 px-1.5 rounded-md border text-[11px] leading-none truncate"
-          style={x!.cor ? tintedLabelStyle(LABEL_COLORS[x!.cor] ?? x!.cor) : undefined}>
-          <span className="opacity-70 truncate">{f.name}:</span><span className="font-medium truncate">{x!.texto}</span>
+          className="inline-flex items-center gap-1 max-w-full h-5 px-1.5 rounded-sm text-[11px] leading-none truncate bg-muted text-foreground"
+          style={x!.cor ? { background: tomDaCapa(LABEL_COLORS[x!.cor] ?? x!.cor) } : undefined}>
+          <span className="opacity-80 truncate">{f.name}:</span><span className="font-medium truncate">{x!.texto}</span>
         </span>
       ))}
     </div>
@@ -76,22 +104,46 @@ function CamposNaFrente({ cardId }: { cardId: string }) {
 function CardFace({ card, labels }: { card: CardSummary; labels: Label[] }) {
   const cardLabels = labels.filter((l) => card.labelIds.includes(l.id));
   const overdue = card.due_date && !card.is_complete && new Date(card.due_date) < new Date();
+  const capa = lerCapa(card.cover);
+  const { etiquetasAbertas, alternarEtiquetas } = useContext(CamposCtx);
+
+  // Capa CHEIA: o cartão é a cor, com o título por cima e nada mais — é como
+  // o Trello mostra a LEGENDA, e ali a cor É a informação.
+  if (capa?.cheia) {
+    return (
+      <div className="-m-3 rounded-[inherit] p-3 min-h-[3.5rem] flex items-end" style={{ background: tomDaCapa(capa.cor) }}>
+        <p className="mkt-card-title font-semibold">{card.title}</p>
+      </div>
+    );
+  }
 
   return (
     <>
       {/* A capa guarda a CHAVE da paleta ("sky", "lime"); pintar a chave crua
           dava verde-néon em "lime" e faixa invisível em "sky". */}
-      {card.cover && <div className="h-8 rounded-md -mx-0.5 -mt-0.5" style={{ background: LABEL_COLORS[card.cover] ?? card.cover }} />}
+      {/* Capa de ponta a ponta no topo, como no Trello — e no tom ESCURO da
+          cor: o amarelo cheio da paleta gritava mais que o próprio título. */}
+      {capa && !capa.cheia && (
+        <div className="h-8 -mx-3 -mt-3 mb-1"
+          style={{ background: tomDaCapa(capa.cor), borderRadius: "inherit", borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }} />
+      )}
       {cardLabels.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
-          {cardLabels.map((l) => (
-            <span key={l.id}
-              className={`inline-flex items-center h-5 rounded-md text-xs font-medium ${l.name ? "px-2 border" : "w-9"}`}
-              style={l.name ? tintedLabelStyle(LABEL_COLORS[l.color] ?? l.color) : { background: LABEL_COLORS[l.color] ?? l.color }}
-              title={l.name || "(sem nome)"}>
-              {l.name}
-            </span>
-          ))}
+          {cardLabels.map((l) => {
+            const cor = LABEL_COLORS[l.color] ?? l.color;
+            const aberta = etiquetasAbertas && !!l.name;
+            return (
+              <button key={l.id} type="button"
+                onClick={(e) => { e.stopPropagation(); alternarEtiquetas(); }}
+                className={aberta
+                  ? "inline-flex items-center h-5 px-2 rounded-md border text-xs font-medium"
+                  : "h-2 w-10 rounded-full"}
+                style={aberta ? tintedLabelStyle(cor) : { background: cor }}
+                title={l.name || "(sem nome)"}>
+                {aberta ? l.name : null}
+              </button>
+            );
+          })}
         </div>
       )}
       {card.mirrorOf && (
@@ -127,6 +179,7 @@ function CardFace({ card, labels }: { card: CardSummary; labels: Label[] }) {
           <span className="inline-flex items-center gap-1"><CheckSquare className="h-3.5 w-3.5" />{card.checklistDone}/{card.checklistTotal}</span>
         )}
         {card.commentCount > 0 && <span className="inline-flex items-center gap-1"><MessageSquare className="h-3.5 w-3.5" />{card.commentCount}</span>}
+        <FotosDosMembros ids={card.memberIds} />
       </div>
     </>
   );
@@ -178,6 +231,9 @@ function BoardColumn({
   const [title, setTitle] = useState(list.title);
   const [menuOpen, setMenuOpen] = useState(false);
   const accent = getAccent(list.color, index);
+  // No Trello a lista INTEIRA tem a cor; cinza/escuro ficam neutras (lá o
+  // cinza é o fundo padrão de lista).
+  const fundo = list.color && list.color !== "gray" && list.color !== "dark" ? fundoDaLista(accent) : undefined;
 
   const submit = () => {
     const t = text.trim();
@@ -200,17 +256,14 @@ function BoardColumn({
   }
 
   return (
-    <div ref={setNodeRef} style={style} className="w-80 shrink-0 flex flex-col max-h-full">
-      <div className="mkt-column flex flex-col max-h-full">
-        {/* Lista com cor ganha a faixa de acento no topo (no Trello a lista
-            inteira é colorida; aqui a superfície fica neutra e a cor vai na faixa). */}
-        {list.color && <span className="mkt-accent-bar -mt-px -mx-px" style={{ ["--mkt-accent" as string]: accent }} />}
+    <div ref={setNodeRef} style={style} className="w-72 shrink-0 flex flex-col max-h-full">
+      <div className="mkt-column flex flex-col max-h-full" style={fundo ? { background: fundo, borderColor: "transparent" } : undefined}>
         <div className="mkt-column-header">
           <button className="p-1 -ml-1 cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground" {...attributes} {...listeners}>
             <GripVertical className="h-4 w-4" />
           </button>
           <button onClick={() => onToggleCollapse(list.id)} className="p-1 text-muted-foreground hover:text-foreground" title="Recolher lista"><ChevronLeft className="h-4 w-4" /></button>
-          <span className="mkt-dot" style={{ ["--mkt-accent" as any]: accent }} />
+          {!fundo && <span className="mkt-dot" style={{ ["--mkt-accent" as any]: accent }} />}
           {editTitle ? (
             <Input autoFocus value={title} onChange={(e) => setTitle(e.target.value)}
               onBlur={() => { setEditTitle(false); if (title.trim() && title !== list.title) onRename(list.id, title.trim()); }}
@@ -218,7 +271,9 @@ function BoardColumn({
               className="h-8 text-sm font-semibold" />
           ) : (
             <button onClick={() => setEditTitle(true)} className="flex-1 flex items-center gap-2 text-left min-w-0 px-1">
-              <span className="mkt-column-title truncate">{list.title}</span>
+              {/* Quebra em até duas linhas: "Demandas para Seman…" escondia
+                  justamente a parte que distingue uma lista da outra. */}
+              <span className="mkt-column-title break-words">{list.title}</span>
               <span className="mkt-column-count">{cards.length}</span>
             </button>
           )}
@@ -284,7 +339,16 @@ export default function Board() {
   const { data: team = [] } = useTeamMembers();
   const { data: camposDoQuadro = [] } = useCustomFields(boardId ?? null);
   const { data: valoresDosCampos } = useBoardFieldValues(boardId ?? null);
-  const camposCtx = useMemo(() => ({ campos: camposDoQuadro, valores: valoresDosCampos ?? new Map() }), [camposDoQuadro, valoresDosCampos]);
+  const [etiquetasAbertas, setEtiquetasAbertas] = useState(lerEtiquetasAbertas);
+  const camposCtx = useMemo(() => ({
+    campos: camposDoQuadro, valores: valoresDosCampos ?? new Map(),
+    pessoas: new Map((data?.people ?? []).map((p) => [p.id, p])),
+    etiquetasAbertas,
+    alternarEtiquetas: () => setEtiquetasAbertas((v) => {
+      try { localStorage.setItem(CHAVE_ETIQUETAS, v ? "0" : "1"); } catch { /* só não lembra */ }
+      return !v;
+    }),
+  }), [camposDoQuadro, valoresDosCampos, data?.people, etiquetasAbertas]);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const [openCardId, setOpenCardId] = useState<string | null>(null);
@@ -428,7 +492,7 @@ export default function Board() {
           </button>
           {filterOpen && (
             <div className="absolute right-0 z-30 mt-1 w-80 max-w-[calc(100vw-2rem)] rounded-[var(--radius)] border border-border bg-popover shadow-[var(--shadow-elevated)] p-4 space-y-3 text-foreground">
-              <FilterControls value={criteria} onChange={setCriteria} labels={labels} team={team} />
+              <FilterControls value={criteria} onChange={setCriteria} labels={labels} team={pessoasDoQuadro(data, team)} />
               <div className="flex items-center gap-2">
                 <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setCriteria(emptyCriteria())}>Limpar</Button>
                 <Button size="sm" className="h-8 text-xs disabled:bg-transparent disabled:text-muted-foreground disabled:border disabled:border-border disabled:opacity-100 disabled:shadow-none" disabled={!filterActive}
@@ -504,7 +568,7 @@ export default function Board() {
       </div>
 
       {openCardId && (
-        <CardModal cardId={openCardId} boardId={boardId} labels={labels} onClose={() => setOpenCardId(null)} />
+        <CardModal cardId={openCardId} boardId={boardId} labels={labels} pessoas={data.people} onClose={() => setOpenCardId(null)} />
       )}
       {fieldsOpen && <BoardFieldsDialog boardId={boardId} onClose={() => setFieldsOpen(false)} />}
     </div>

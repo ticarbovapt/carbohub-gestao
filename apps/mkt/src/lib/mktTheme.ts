@@ -28,6 +28,26 @@ export const LABEL_COLORS: Record<string, string> = {
 };
 export const LABEL_COLOR_KEYS = Object.keys(LABEL_COLORS);
 
+// Capa do cartão: "yellow" = faixa no topo; "full:yellow" = cartão INTEIRO
+// colorido com o título por cima (a capa "cheia" do Trello, usada na lista
+// LEGENDAS). Fica no mesmo texto da coluna `cover` para não exigir migração.
+export function lerCapa(cover: string | null | undefined): { cor: string; cheia: boolean } | null {
+  if (!cover) return null;
+  const cheia = cover.startsWith("full:");
+  const chave = cheia ? cover.slice(5) : cover;
+  return { cor: LABEL_COLORS[chave] ?? chave, cheia };
+}
+
+// A paleta é a cor CHEIA (boa para etiqueta-barrinha). Em superfície grande
+// — capa, lista inteira — ela grita; o Trello usa o tom escuro no tema escuro
+// e o claro no claro. Misturar com o fundo do cartão dá os dois de uma vez.
+export function tomDaCapa(cor: string): string {
+  return `color-mix(in srgb, ${cor} 58%, hsl(var(--card)))`;
+}
+export function fundoDaLista(cor: string): string {
+  return `color-mix(in srgb, ${cor} 45%, hsl(var(--card)))`;
+}
+
 // Cor sólida por chave de fundo de lista (BOARD_BG keys) — p/ pontos/chips.
 export const LIST_DOT: Record<string, string> = {
   blue: "#0079BF", green: "#519839", orange: "#D29034", red: "#B04632",
