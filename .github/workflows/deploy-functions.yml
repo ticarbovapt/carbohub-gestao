@@ -133,6 +133,11 @@ jobs:
           # origens delas nunca aprendeu TI, Marketing, Atendimento e Pré-Vendas.
           dep call-token
           dep send-email
+          # Quadros do Marketing: traz do Trello os ARQUIVOS e os comentários que o
+          # JSON não traz. SEM --no-verify-jwt: quem chama é o navegador, por
+          # gente logada, e a função ainda confere carbo_e_time_interno(). A
+          # chave/token do Trello (TRELLO_KEY/TRELLO_TOKEN) só existem aqui.
+          dep trello-migrar
           dep ml-auth --no-verify-jwt
           dep ml-token-refresh --no-verify-jwt
           dep ml-estoque-full --no-verify-jwt

@@ -2294,6 +2294,36 @@ checklist de 44): agora só aparecem preenchidos ou ao passar o mouse.
 6. ⚠️ **Comentário além das 1.000 ações** (no primeiro quadro: 1.245 em 255
    cartões) só vem pela API do Trello — junto com a cópia dos anexos.
 
+⚠️ **Terceira rodada: os ARQUIVOS e os comentários vêm pela API** (botão
+**"Trello"** no cabeçalho do quadro, só aparece em quadro importado). Objetivo
+do dono do processo: *tudo no nosso banco*, o Trello deixa de ser necessário.
+
+```
+supabase/functions/trello-migrar           a ÚNICA que fala com o Trello
+apps/mkt/src/components/board/TrazerDoTrello.tsx
+supabase/migrations/20261060000000_mkt_anexos_e_comentarios_do_trello.sql
+bucket mkt-anexos (PRIVADO, 300 MB/arquivo)   Secrets TRELLO_KEY / TRELLO_TOKEN
+```
+
+1. ⚠️ **Chave e token só na função.** Destino FIXO (`trello.com/1/cards/…/
+   download/…` e `api.trello.com/1/boards/<id>/actions`), sem URL livre — senão
+   vira proxy que leva o token para qualquer servidor. O "Segredo" da tela do
+   Trello NÃO é usado. Terminada a migração, revogar o token e remover a função.
+2. **Upload em partes de 6 MB (TUS)** — o maior arquivo tem 243 MB e não cabe
+   na memória da função. O limite GLOBAL do Storage (Settings) tem de ser
+   ≥ 300 MB, senão os 8 maiores falham.
+3. ⚠️ **A linha só vira `kind='arquivo'` DEPOIS de o arquivo estar no bucket.**
+   Marcar antes tiraria da lista de pendentes um anexo que não abre. Rodar de
+   novo é o jeito de retomar.
+4. **Comentário casa pelo INSTANTE de criação do cartão** (o id do Trello o
+   carrega, e o import gravou exatamente ele) — o nome pode ter mudado depois.
+   Empate no mesmo segundo sem nome que desempate: não escolhe. Duplicata cai
+   por `trello_action_id` (índice único) ou, nos 104 que vieram no JSON, por
+   cartão + instante.
+5. **`casarPessoas` é a MESMA regra do import** (extraída de
+   `montarImportacao`). Duas cópias divergiriam e o mesmo autor sairia com
+   nomes diferentes no mesmo cartão.
+
 ### Regras anti-confusão (OBRIGATÓRIAS)
 1. **Todo pedido nomeia o alvo.** "no CRM" → `apps/crm`; "no controle"/"atual" → raiz (`src/`).
 2. **Na dúvida, PERGUNTE — nunca adivinhe.** Se a tela existe em mais de um app, liste os candidatos antes de mexer.

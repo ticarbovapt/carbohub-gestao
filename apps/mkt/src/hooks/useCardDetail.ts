@@ -23,8 +23,10 @@ export interface ChecklistItem {
 export interface Checklist { id: string; card_id: string; title: string; position: number; items: ChecklistItem[]; }
 export interface Comment { id: string; card_id: string; user_id: string; body: string; created_at: string; authorName: string | null; authorAvatar: string | null; }
 export interface Attachment {
-  id: string; card_id: string; kind: "drive" | "link"; name: string;
+  id: string; card_id: string; kind: "drive" | "link" | "arquivo"; name: string;
   external_url: string; drive_file_id: string | null; thumbnail_url: string | null;
+  /** Arquivo NOSSO, no bucket privado `mkt-anexos` (kind = "arquivo"). */
+  storage_path?: string | null;
   mime_type: string | null; created_at: string;
 }
 export interface CardDetail {

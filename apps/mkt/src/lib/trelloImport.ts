@@ -78,9 +78,46 @@ function corLista(c: string | null | undefined): string | null {
 }
 
 // O id do Trello carrega o instante de criação nos 8 primeiros hex (segundos).
-function criadoEm(idTrello: string): string | null {
+export function criadoEm(idTrello: string): string | null {
   const s = parseInt(String(idTrello).slice(0, 8), 16);
   return Number.isFinite(s) && s > 0 ? new Date(s * 1000).toISOString() : null;
+}
+
+// Pessoas: casamento ÚNICO. Primeiro nome; com empate, desempata por
+// sobrenome, depois pelo USUÁRIO do Trello ("mirianguedesb" contém
+// "mirianguedes"), depois por ser do time de quem importa. Sobrando dois,
+// não escolhe — atribuir à pessoa errada é pior que deixar sem.
+// ⚠️ A lista é a do time INTERNO inteiro, não só o departamento de quem
+// importa: com só o departamento, a Mirian (Marketing) não casava quando
+// quem importava era do TI, e os comentários dela saíram em nome de outro.
+// Usada pelo import e pelo "Trazer do Trello" — a MESMA regra nos dois.
+export function casarPessoas(
+  membros: { id: string; fullName?: string | null; username?: string | null }[],
+  daqui: PessoaDaqui[],
+  escolhidos?: Record<string, string | null>,
+) {
+  const tokens = (s: string | null | undefined) =>
+    (s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+      .replace(/[|].*$/, "").replace(/[^a-z\s]/g, " ").trim().split(/\s+/).filter(Boolean);
+  const membro = new Map<string, string>(); // id Trello → profile id
+  const pessoas: Importacao["resumo"]["pessoas"] = [];
+  for (const m of membros) {
+    const tt = tokens(m.fullName);
+    const usuario = String(m.username ?? "").toLowerCase().replace(/[^a-z]/g, "");
+    let cands = daqui.filter((p) => tt[0] && tokens(p.full_name)[0] === tt[0]);
+    const estreitar = (f: (p: PessoaDaqui) => boolean) => { const x = cands.filter(f); if (x.length > 0) cands = x; };
+    if (cands.length > 1 && tt.length > 1) estreitar((p) => tt.every((k) => tokens(p.full_name).includes(k)));
+    if (cands.length > 1 && usuario) estreitar((p) => { const pt = tokens(p.full_name); return pt.length > 1 && usuario.includes(pt[0] + pt[1]); });
+    if (cands.length > 1) estreitar((p) => !!p.doTime);
+    // Escolha feita na tela vence o automático (inclusive "ninguém" = null).
+    const escolha = escolhidos && m.id in escolhidos ? escolhidos[m.id] : undefined;
+    const achou = escolha !== undefined
+      ? (escolha ? daqui.find((p) => p.id === escolha) ?? null : null)
+      : (cands.length === 1 ? cands[0] : null);
+    if (achou) membro.set(m.id, achou.id);
+    pessoas.push({ idTrello: m.id, trello: m.fullName ?? m.username ?? "", casou: achou?.full_name ?? null, casouId: achou?.id ?? null });
+  }
+  return { membro, pessoas };
 }
 
 export function montarImportacao(t: J, ctx: { userId: string; workspaceId: string | null; pessoas: PessoaDaqui[]; escolhidos?: Record<string, string | null> }): Importacao {
@@ -88,34 +125,7 @@ export function montarImportacao(t: J, ctx: { userId: string; workspaceId: strin
     throw new Error("Este arquivo não é um export de quadro do Trello (faltam listas e cartões).");
   }
 
-  // Pessoas: casamento ÚNICO. Primeiro nome; com empate, desempata por
-  // sobrenome, depois pelo USUÁRIO do Trello ("mirianguedesb" contém
-  // "mirianguedes"), depois por ser do time de quem importa. Sobrando dois,
-  // não escolhe — atribuir à pessoa errada é pior que deixar sem.
-  // ⚠️ A lista é a do time INTERNO inteiro, não só o departamento de quem
-  // importa: com só o departamento, a Mirian (Marketing) não casava quando
-  // quem importava era do TI, e os comentários dela saíram em nome de outro.
-  const tokens = (s: string | null | undefined) =>
-    (s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
-      .replace(/[|].*$/, "").replace(/[^a-z\s]/g, " ").trim().split(/\s+/).filter(Boolean);
-  const membro = new Map<string, string>(); // id Trello → profile id
-  const pessoas: Importacao["resumo"]["pessoas"] = [];
-  for (const m of t.members ?? []) {
-    const tt = tokens(m.fullName);
-    const usuario = String(m.username ?? "").toLowerCase().replace(/[^a-z]/g, "");
-    let cands = ctx.pessoas.filter((p) => tt[0] && tokens(p.full_name)[0] === tt[0]);
-    const estreitar = (f: (p: PessoaDaqui) => boolean) => { const x = cands.filter(f); if (x.length > 0) cands = x; };
-    if (cands.length > 1 && tt.length > 1) estreitar((p) => tt.every((k) => tokens(p.full_name).includes(k)));
-    if (cands.length > 1 && usuario) estreitar((p) => { const pt = tokens(p.full_name); return pt.length > 1 && usuario.includes(pt[0] + pt[1]); });
-    if (cands.length > 1) estreitar((p) => !!p.doTime);
-    // Escolha feita na tela vence o automático (inclusive "ninguém" = null).
-    const escolha = ctx.escolhidos && m.id in ctx.escolhidos ? ctx.escolhidos[m.id] : undefined;
-    const achou = escolha !== undefined
-      ? (escolha ? ctx.pessoas.find((p) => p.id === escolha) ?? null : null)
-      : (cands.length === 1 ? cands[0] : null);
-    if (achou) membro.set(m.id, achou.id);
-    pessoas.push({ idTrello: m.id, trello: m.fullName ?? m.username, casou: achou?.full_name ?? null, casouId: achou?.id ?? null });
-  }
+  const { membro, pessoas } = casarPessoas(t.members ?? [], ctx.pessoas, ctx.escolhidos);
   const nomeTrello = new Map<string, string>((t.members ?? []).map((m: J) => [m.id, m.fullName ?? m.username]));
 
   // ⚠️ Toda linha leva TODAS as colunas: no insert em lote o PostgREST usa a
