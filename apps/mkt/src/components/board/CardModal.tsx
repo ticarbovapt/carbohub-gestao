@@ -21,6 +21,8 @@ import type { Label } from "@/hooks/useBoards";
 import { diceBearUrl } from "@/components/ui/profile-avatar";
 import { confirmar } from "@carbo/shell";
 import { TextoRico } from "@/lib/textoRico";
+import { supabase } from "@/integrations/supabase/client";
+import type { Attachment } from "@/hooks/useCardDetail";
 
 const toLocalInput = (iso: string | null) => {
   if (!iso) return "";
@@ -224,7 +226,9 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [] }: {
                   <Button size="sm" disabled={!attachUrl.trim()} onClick={() => mut.addAttachment.mutate({ url: attachUrl }, { onSuccess: () => setAttachUrl("") })}>Anexar</Button>
                 </div>
                 <div className="space-y-2 mt-1">
-                  {data.attachments.map((a) => (
+                  {data.attachments.map((a) => a.kind === "arquivo" && a.storage_path ? (
+                    <AnexoArquivo key={a.id} a={a} onRemove={() => mut.removeAttachment.mutate({ id: a.id })} />
+                  ) : (
                     <div key={a.id} className="flex items-center gap-2.5 rounded-[var(--radius)] border border-border bg-card p-2 shadow-[var(--shadow-card)] group">
                       {a.thumbnail_url ? (
                         <img src={a.thumbnail_url} alt="" className="h-10 w-14 rounded-md object-cover bg-muted" referrerPolicy="no-referrer"
@@ -441,5 +445,36 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [] }: {
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+// Arquivo guardado no bucket PRIVADO `mkt-anexos`: abre por URL assinada (1 h),
+// nunca por link público. Imagem ganha miniatura pela mesma URL.
+function AnexoArquivo({ a, onRemove }: { a: Attachment; onRemove: () => void }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [falhou, setFalhou] = useState(false);
+  useEffect(() => {
+    let vivo = true;
+    supabase.storage.from("mkt-anexos").createSignedUrl(a.storage_path!, 3600)
+      .then(({ data, error }) => { if (!vivo) return; if (error || !data) setFalhou(true); else setUrl(data.signedUrl); });
+    return () => { vivo = false; };
+  }, [a.storage_path]);
+  const imagem = (a.mime_type ?? "").startsWith("image/");
+  return (
+    <div className="flex items-center gap-2.5 rounded-[var(--radius)] border border-border bg-card p-2 shadow-[var(--shadow-card)] group">
+      {imagem && url ? (
+        <img src={url} alt="" className="h-10 w-14 rounded-md object-cover bg-muted" />
+      ) : (
+        <div className="h-10 w-14 rounded-md bg-muted flex items-center justify-center text-muted-foreground">
+          <FileText className="h-5 w-5" />
+        </div>
+      )}
+      <div className="min-w-0 flex-1">
+        <p className="text-sm text-foreground truncate">{a.name}</p>
+        <span className="text-xs text-muted-foreground">{falhou ? "Arquivo indisponível" : "Arquivo"}</span>
+      </div>
+      {url && <a href={url} target="_blank" rel="noreferrer" className="p-1.5 text-muted-foreground hover:text-foreground rounded-md hover:bg-muted/60" title="Abrir"><ExternalLink className="h-4 w-4" /></a>}
+      <button onClick={onRemove} className="p-1.5 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100" title="Remover"><Trash2 className="h-4 w-4" /></button>
+    </div>
   );
 }

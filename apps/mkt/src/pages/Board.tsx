@@ -20,6 +20,7 @@ import { diceBearUrl } from "@/components/ui/profile-avatar";
 import { CardModal } from "@/components/board/CardModal";
 import { useCustomFields, useBoardFieldValues, type CustomField } from "@/hooks/useCustomFields";
 import { BoardFieldsDialog } from "@/components/board/BoardFieldsDialog";
+import { TrazerDoTrello } from "@/components/board/TrazerDoTrello";
 import { FilterControls } from "@/components/board/FilterControls";
 import { ViewSwitcher } from "@/components/board/ViewSwitcher";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
@@ -515,6 +516,7 @@ export default function Board() {
           )}
         </div>
 
+        <TrazerDoTrello boardId={boardId} />
         <button onClick={() => setFieldsOpen(true)} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md px-2.5 py-1.5 transition-colors" title="Campos personalizados">
           <Settings2 className="h-4 w-4" /> Campos
         </button>
