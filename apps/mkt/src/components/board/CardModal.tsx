@@ -23,6 +23,7 @@ import type { Label } from "@/hooks/useBoards";
 import { diceBearUrl } from "@/components/ui/profile-avatar";
 import { confirmar } from "@carbo/shell";
 import { TextoRico } from "@/lib/textoRico";
+import { EditorDescricao } from "@/components/board/EditorDescricao";
 import { supabase } from "@/integrations/supabase/client";
 import type { Attachment, Comment } from "@/hooks/useCardDetail";
 
@@ -297,14 +298,9 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [] }: {
                   {!editDesc && data.card.description && <Button size="sm" variant="secondary" className="h-7" onClick={() => setEditDesc(true)}>Editar</Button>}
                 </div>
                 {editDesc ? (
-                  <div className="space-y-2">
-                    <textarea autoFocus value={desc} onChange={(e) => setDesc(e.target.value)} rows={8}
-                      className="w-full text-sm rounded-[var(--input-radius)] border border-border bg-card p-2.5 resize-y break-words focus:outline-none focus:ring-2 focus:ring-primary/40" />
-                    <div className="flex gap-2 items-center">
-                      <Button size="sm" onClick={() => { mut.updateCard.mutate({ description: desc }); setEditDesc(false); }}>Salvar</Button>
-                      <button onClick={() => { setDesc(data.card.description ?? ""); setEditDesc(false); }} className="p-1.5 text-muted-foreground hover:text-foreground rounded-md hover:bg-muted/60"><X className="h-4 w-4" /></button>
-                    </div>
-                  </div>
+                  <EditorDescricao inicial={data.card.description ?? ""}
+                    onSalvar={(md) => { mut.updateCard.mutate({ description: md || null }); setDesc(md); setEditDesc(false); }}
+                    onCancelar={() => setEditDesc(false)} />
                 ) : data.card.description ? (
                   // Longa, ela fica recolhida com "Mostrar mais" — senão empurra
                   // checklist e anexos para longe, como no Trello.

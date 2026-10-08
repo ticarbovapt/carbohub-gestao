@@ -2333,6 +2333,13 @@ Responder/Editar/Excluir — editar e excluir só no PRÓPRIO na tela (a RLS de
 `mkt_comments` é aberta ao time). "Mostrar detalhes" mistura o `mkt_activity`
 na linha do tempo, sem o `comment.add` (repetiria o comentário).
 
+**A descrição tem editor VISUAL** (`components/board/EditorDescricao.tsx`,
+TipTap + `@tiptap/markdown`), com barra igual à do Trello e o **M↓** para o
+texto cru. ⚠️ O que se GRAVA continua MARKDOWN — é o formato importado e o que
+o `TextoRico` lê. Conferido no navegador: ida e volta preserva título, listas,
+citação, linha e até o `"smartCard-inline"` dos links do Trello. ⚠️ Sublinhado
+está DESLIGADO de propósito: markdown não o guarda, e ele sumiria ao salvar.
+
 ### Regras anti-confusão (OBRIGATÓRIAS)
 1. **Todo pedido nomeia o alvo.** "no CRM" → `apps/crm`; "no controle"/"atual" → raiz (`src/`).
 2. **Na dúvida, PERGUNTE — nunca adivinhe.** Se a tela existe em mais de um app, liste os candidatos antes de mexer.
