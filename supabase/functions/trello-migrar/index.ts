@@ -59,12 +59,22 @@ function b64(s: string) {
   return btoa(String.fromCharCode(...new TextEncoder().encode(s)));
 }
 
+// ⚠️ A chave do projeto pode ser a NOVA (`sb_secret_…`), que não é JWT: no
+// `Authorization: Bearer` o Storage recusa com "Invalid Compact JWS". Ela vai
+// no `apikey` (o gateway a troca por um JWT de service role); só a chave
+// antiga, que É um JWT, vai também no Authorization.
+function credStorage(): Record<string, string> {
+  return SERVICE_ROLE.startsWith("eyJ")
+    ? { apikey: SERVICE_ROLE, authorization: `Bearer ${SERVICE_ROLE}` }
+    : { apikey: SERVICE_ROLE };
+}
+
 // Upload em partes (TUS) — lê do Trello e grava no Storage de 6 em 6 MB.
 async function enviarEmPartes(corpo: ReadableStream<Uint8Array>, tamanho: number, caminho: string, tipo: string) {
   const ini = await fetch(`${SUPABASE_URL}/storage/v1/upload/resumable`, {
     method: "POST",
     headers: {
-      authorization: `Bearer ${SERVICE_ROLE}`,
+      ...credStorage(),
       "tus-resumable": "1.0.0",
       "upload-length": String(tamanho),
       "x-upsert": "true",
@@ -90,7 +100,7 @@ async function enviarEmPartes(corpo: ReadableStream<Uint8Array>, tamanho: number
     const r = await fetch(destino, {
       method: "PATCH",
       headers: {
-        authorization: `Bearer ${SERVICE_ROLE}`,
+        ...credStorage(),
         "tus-resumable": "1.0.0",
         "upload-offset": String(enviado),
         "content-type": "application/offset+octet-stream",
