@@ -1255,6 +1255,15 @@ navegador, não estimado) e os sete `select.tsx` estão byte a byte iguais.
    uma correção como concluída enquanto ela valia para 1/7. Ao escrever "hoje
    é X" aqui, diga **em quantos apps** — e confira, não presuma.
 
+### Tooltip de gráfico no tema escuro — corrigido no `index.css`, não no gráfico
+As variáveis de cor são TRIPLETOS HSL; `background: var(--background)` (em ~20
+gráficos) é cor inválida, descartada calada — o tooltip ficava transparente. E
+o Recharts pinta o item de `#000` e o cursor da barra de `#ccc`. No claro
+passava; no escuro era preto sobre escuro. O bloco "Tooltip dos gráficos" no
+fim dos OITO `apps/*/src/index.css` corrige para todos (idêntico nos oito).
+⚠️ Gráfico novo: use `hsl(var(--popover))`, nunca `var(--x)` cru. App novo
+copia o bloco.
+
 ### E-commerce: a tabela tem uma linha por ITEM, não por pedido
 `ecommerce_orders` grava `order_id = '<pedido>-<item>'` — de propósito, porque
 (platform, order_id) é a chave do upsert e assim webhook e sync podem rodar em
