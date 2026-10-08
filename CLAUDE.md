@@ -3682,6 +3682,23 @@ Finanças, decidido pelo dono do processo em 08/10):
 6. ⚠️ O caminho de emissão é **`/SefinNacional/nfse`** (POST), não
    `/sefinnacional/dps` — `/dps/{id}` é consulta.
 
+#### ✅ EMITIU — 08/10/2026, 12:03, produção restrita
+Os dois DPS de teste voltaram **201** com `chaveAcesso` e `nfseXmlGZipB64`:
+`sha256` (nDPS 202610081) **e** `sha1` (202610082) — o SEFIN aceita os dois.
+**Use `sha256`.** A pergunta binária da fase 4 está respondida: montar,
+assinar e enviar pela API FUNCIONA, com o transporte pelo `nfse-relay`.
+
+Tropeços do caminho, em ordem:
+1. `E1235` série 90000 fora do `TSSerieDPS` → série **1**.
+2. `E0014` "conjunto série/número já existe" — a homologação é COMPARTILHADA e
+   alguém já tinha usado 1 e 2 na série 1 com o nosso CNPJ. ⚠️ Em produção o
+   próximo número tem de vir de um CONTADOR NOSSO, e o `E0014` é a rede: ele
+   recusa em vez de duplicar.
+3. Segredos: o `.pfx` vira PEM com `openssl pkcs12 … | openssl x509` (cert) e
+   `… -nocerts -nodes | openssl pkcs8 -topk8 -nocrypt` (chave). ⚠️ No Git Bash,
+   colar várias linhas depois de um `read -rsp` faz a linha seguinte virar a
+   senha — um comando por vez.
+
 #### O plano B, se a assinatura não for viável
 Mandar o DPS **pré-preenchido para o emissor web** em vez de assinar. É mais
 perto do que foi pedido (*"apenas confirmar no portal nacional e emitir"*) e
