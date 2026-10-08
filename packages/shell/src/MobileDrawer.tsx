@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { NavLink } from "react-router-dom";
 import { Lock } from "lucide-react";
 import { cn } from "./cn";
+import { AcademyNavLink } from "./AcademyNavLink";
 import type { ShellBrand, ShellNavItem, ShellNavSection } from "./types";
 
 interface MobileDrawerProps {
@@ -222,6 +223,7 @@ export function MobileDrawer({
               onNavigate={closeOnNavigate}
             />
           ))}
+          <AcademyNavLink onNavigate={closeOnNavigate} />
         </nav>
 
         {footer && (
