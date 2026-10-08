@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { cn } from "./cn";
 import { MobileDrawer } from "./MobileDrawer";
+import { AcademyNavLink } from "./AcademyNavLink";
 import type { ShellNavItem, ShellNavSection, SidebarProps } from "./types";
 
 /* ------------------------------------------------------------------ */
@@ -288,6 +289,7 @@ export function Sidebar({
               collapsed={collapsed}
             />
           ))}
+          <AcademyNavLink collapsed={collapsed} />
         </nav>
 
         {/* Footer */}
