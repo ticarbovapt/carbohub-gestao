@@ -1264,6 +1264,13 @@ fim dos OITO `apps/*/src/index.css` corrige para todos (idêntico nos oito).
 ⚠️ Gráfico novo: use `hsl(var(--popover))`, nunca `var(--x)` cru. App novo
 copia o bloco.
 
+### Tema claro/escuro é UM para o ecossistema (08/10/2026)
+`hooks/useTheme.ts`, IDÊNTICO nos oito apps. A escolha vai num cookie
+`carbo-theme` com `domain=.carbohub.com.br` (a fronteira do SSO); antes era só
+`localStorage`, isolado por subdomínio, e cada app lembrava o seu tema. A aba
+relê o cookie ao voltar ao foco. `localStorage` fica de reserva (localhost).
+⚠️ App novo copia o arquivo; Hub e portais (outros repos) ainda não leem o cookie.
+
 ### E-commerce: a tabela tem uma linha por ITEM, não por pedido
 `ecommerce_orders` grava `order_id = '<pedido>-<item>'` — de propósito, porque
 (platform, order_id) é a chave do upsert e assim webhook e sync podem rodar em
