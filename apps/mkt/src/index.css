@@ -1044,3 +1044,34 @@
     }
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Tooltip dos gráficos (Recharts) — legível nos DOIS temas.
+
+   ⚠️ As variáveis de cor aqui são TRIPLETOS HSL ("210 20% 98%"), não cores.
+   `background: var(--background)` (escrito assim em ~20 gráficos) é cor
+   INVÁLIDA e o navegador a descarta calado: o tooltip fica TRANSPARENTE. No
+   tema claro isso passava despercebido (texto escuro sobre página clara); no
+   escuro virou texto preto sobre fundo escuro.
+
+   E o Recharts pinta o item de PRETO (`#000`) quando a série não tem cor
+   própria — barra colorida por <Cell>, por exemplo — e o "cursor" da barra
+   em cinza-claro (`#ccc`), que no escuro é um bloco claro cobrindo o gráfico.
+
+   Corrigido AQUI, uma vez por app, e não gráfico a gráfico: são dezenas, em
+   oito apps, e o próximo gráfico copiado de um antigo traria o defeito de
+   volta. Este bloco é IDÊNTICO nos oito `index.css`.
+   ───────────────────────────────────────────────────────────────────────── */
+.recharts-default-tooltip {
+  background-color: hsl(var(--popover)) !important;
+  border-color: hsl(var(--border)) !important;
+  color: hsl(var(--popover-foreground));
+}
+/* Só o preto PADRÃO vira cor do tema — item com cor de série a mantém. */
+.dark .recharts-tooltip-item[style*="color: rgb(0, 0, 0)"] {
+  color: hsl(var(--popover-foreground)) !important;
+}
+.dark .recharts-tooltip-cursor[fill="#ccc"] {
+  fill: hsl(var(--muted-foreground));
+  fill-opacity: 0.15;
+}
