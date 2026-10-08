@@ -58,16 +58,21 @@ function AppRow({
     );
   }
 
+  // ⚠️ LINK de verdade (<a href>), não botão com `location.href`: só assim o
+  // navegador oferece "abrir em nova guia" no botão direito, abre com o botão
+  // do meio e com Ctrl/Cmd+clique. A sessão vai junto porque o SSO grava o
+  // cookie em `.carbohub.com.br`. O clique simples segue o link normalmente;
+  // `onNavigate` só fecha o menu.
   return (
-    <button
-      type="button"
+    <a
+      href={app.href}
       role="menuitem"
       onClick={() => onNavigate(app)}
-      className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-muted focus:bg-muted focus:outline-none"
+      className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left no-underline transition-colors hover:bg-muted focus:bg-muted focus:outline-none"
     >
       {chip}
       {label}
-    </button>
+    </a>
   );
 }
 
@@ -112,9 +117,9 @@ export function AppSwitcher(props: AppSwitcherProps) {
     };
   }, [open]);
 
-  const navigate = (app: SwitcherApp) => {
+  // A navegação é do próprio <a>; aqui só se fecha o menu.
+  const navigate = (_app: SwitcherApp) => {
     setOpen(false);
-    if (typeof window !== "undefined") window.location.href = app.href;
   };
 
   const hub = apps.find((a) => a.isHub);
