@@ -3,7 +3,7 @@ export { MobileDrawer } from "./MobileDrawer";
 export { AppSwitcher } from "./AppSwitcher";
 export { useAppSwitcher } from "./useAppSwitcher";
 export {
-  HUB_APPS, ADMIN_APP, HUB_HOME, HUB_URL,
+  HUB_APPS, ADMIN_APP, ACADEMY_APP, HUB_HOME, HUB_URL,
   resolveAllowedApps, seesEverything, temFlagAdmin, buildSwitcherApps,
   appKeyAtual,
 } from "./apps";
