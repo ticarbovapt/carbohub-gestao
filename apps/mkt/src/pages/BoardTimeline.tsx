@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import {
   DndContext, PointerSensor, useSensor, useSensors, useDraggable,
   type DragStartEvent, type DragMoveEvent, type DragEndEvent,
@@ -73,7 +73,6 @@ function Bar({ card, rangeStart, dayWidth, color, preview, onOpen }: {
 
 export default function BoardTimeline() {
   const { boardId } = useParams();
-  const navigate = useNavigate();
   const { data, isLoading } = useBoard(boardId ?? null);
   useBoardLive(boardId ?? null);
   const m = useBoardMutations(boardId);
@@ -190,7 +189,7 @@ export default function BoardTimeline() {
   return (
     <div className="fixed inset-0 top-14 flex flex-col mkt-canvas">
       <div className="mkt-toolbar header-depth-glow flex-wrap">
-        <button onClick={() => navigate("/quadros")} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground transition-colors"><ArrowLeft className="h-4 w-4" /></button>
+        <Link to="/quadros" aria-label="Voltar aos quadros" className="inline-flex p-1.5 rounded-md hover:bg-muted text-muted-foreground transition-colors"><ArrowLeft className="h-4 w-4" /></Link>
         <span className="mkt-dot" style={{ ["--mkt-accent" as string]: getAccent(board.background) }} />
         <GanttChartSquare className="h-5 w-5 text-primary" />
         <h1 className="mkt-view-title">{board.title}</h1>

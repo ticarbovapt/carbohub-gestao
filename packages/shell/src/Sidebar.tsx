@@ -228,26 +228,34 @@ export function Sidebar({
             collapsed ? "flex-col justify-center gap-1 px-0" : "gap-2.5 px-4",
           )}
         >
-          <button
-            type="button"
-            onClick={brand.onLogoClick}
-            title={brand.appName}
-            className={cn(
+          {(() => {
+            const cls = cn(
               "flex items-center overflow-hidden text-left",
               collapsed ? "justify-center" : "flex-1 gap-2.5",
-            )}
-          >
-            <img
-              src={brand.logoSrc}
-              alt={brand.appName}
-              className="h-7 w-auto shrink-0"
-            />
-            {!collapsed && (
-              <span className="truncate text-sm font-bold text-foreground">
-                {brand.appName}
-              </span>
-            )}
-          </button>
+            );
+            const miolo = (
+              <>
+                <img
+                  src={brand.logoSrc}
+                  alt={brand.appName}
+                  className="h-7 w-auto shrink-0"
+                />
+                {!collapsed && (
+                  <span className="truncate text-sm font-bold text-foreground">
+                    {brand.appName}
+                  </span>
+                )}
+              </>
+            );
+            // Link de verdade quando há endereço: abre em nova guia.
+            return brand.href ? (
+              <a href={brand.href} title={brand.appName} className={cls}>{miolo}</a>
+            ) : (
+              <button type="button" onClick={brand.onLogoClick} title={brand.appName} className={cls}>
+                {miolo}
+              </button>
+            );
+          })()}
 
           <button
             type="button"

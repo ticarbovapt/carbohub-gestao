@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
+import { useParamUrl } from "@carbo/shell";
 import {
   UserPlus, Loader2, Copy, CheckCircle2, KeyRound, Users as UsersIcon, Pencil, Search, Crown,
   Lock,
@@ -98,11 +99,18 @@ export default function Users() {
   const [credentials, setCredentials] = useState<{ username: string; password: string } | null>(null);
   const [editing, setEditing] = useState<AdminProfile | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const [deptFilter, setDeptFilter] = useState("");
-  const [soBloqueados, setSoBloqueados] = useState(false);
-  const [sistemaFiltro, setSistemaFiltro] = useState("");
-  const [soGestores, setSoGestores] = useState(false);
+  // ⚠️ Busca e filtros moram na URL (`?busca=&depto=&situacao=&sistema=&nivel=`):
+  // F5 e link compartilhado mantêm a lista, e o Voltar desfaz a troca de filtro.
+  // A busca grava com `replace` para não criar uma entrada por letra digitada.
+  const [search, setSearch] = useParamUrl("busca", "", { replace: true });
+  const [deptFilter, setDeptFilter] = useParamUrl("depto");
+  const [situacaoUrl, setSituacaoUrl] = useParamUrl("situacao");
+  const soBloqueados = situacaoUrl === "bloqueados";
+  const setSoBloqueados = (v: boolean) => setSituacaoUrl(v ? "bloqueados" : null);
+  const [sistemaFiltro, setSistemaFiltro] = useParamUrl("sistema");
+  const [nivelUrl, setNivelUrl] = useParamUrl("nivel");
+  const soGestores = nivelUrl === "gestores";
+  const setSoGestores = (v: boolean) => setNivelUrl(v ? "gestores" : null);
 
   const deptLabel = useMemo<Record<string, string>>(() => {
     const m: Record<string, string> = {};

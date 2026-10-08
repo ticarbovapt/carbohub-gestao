@@ -13,6 +13,7 @@ import {
   useMlFullEstoque, useMlFullRemessas, useRegistrarRemessa,
   useReceberRemessa, useCancelarRemessa, type LinhaMlFull,
 } from "@/hooks/useMlFull";
+import { pedirTexto } from "@carbo/shell";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ML Full — o galpão do Mercado Livre, visto daqui.
@@ -229,8 +230,16 @@ export function MlFullPainel() {
                     <PackageCheck className="h-3.5 w-3.5" /> Chegou
                   </Button>
                   <Button size="sm" variant="ghost" className="gap-1.5 text-destructive"
-                          onClick={() => {
-                            const motivo = window.prompt("Por que está cancelando esta remessa?");
+                          onClick={async () => {
+                            const motivo = await pedirTexto({
+                              titulo: "Cancelar esta remessa?",
+                              mensagem: "O estoque volta para o galpão de origem.",
+                              rotulo: "Motivo",
+                              obrigatorio: true,
+                              confirmar: "Cancelar remessa",
+                              cancelar: "Voltar",
+                              perigo: true,
+                            });
                             if (motivo) cancelar.mutate({ id: r.id, motivo });
                           }}
                           disabled={cancelar.isPending}>

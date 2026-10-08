@@ -119,7 +119,7 @@ export function SkuFormDialog({ open, onOpenChange, mode, id, initial }: SkuForm
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Volume (ml) *</Label>
-                <Input type="number" placeholder="100" value={packagingMl} onChange={(e) => setPackagingMl(e.target.value)} />
+                <Input type="number" min={0} placeholder="100" value={packagingMl} onChange={(e) => setPackagingMl(e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label>Unidade</Label>
@@ -134,11 +134,11 @@ export function SkuFormDialog({ open, onOpenChange, mode, id, initial }: SkuForm
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Estoque de Segurança</Label>
-                <Input type="number" placeholder="0" value={safetyStock} onChange={(e) => setSafetyStock(e.target.value)} />
+                <Input type="number" min={0} placeholder="0" value={safetyStock} onChange={(e) => setSafetyStock(e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label>Cobertura Alvo (dias)</Label>
-                <Input type="number" placeholder="30" value={coverageDays} onChange={(e) => setCoverageDays(e.target.value)} />
+                <Input type="number" min={0} placeholder="30" value={coverageDays} onChange={(e) => setCoverageDays(e.target.value)} />
               </div>
             </div>
           </div>

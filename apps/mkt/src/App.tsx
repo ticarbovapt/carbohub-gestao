@@ -17,6 +17,7 @@ import WorkspaceTable from "./pages/WorkspaceTable";
 import Profile from "./pages/Profile";
 import MinhaEquipe from "./pages/MinhaEquipe";
 import BugReports from "./pages/BugReports";
+import { PaginaNaoEncontrada } from "@carbo/shell";
 
 // Carbo Marketing — app novo do ecossistema. Login único pelo Hub; acesso
 // liberado pelo Admin via allowed_interfaces (carbo_mkt). Esqueleto inicial:
@@ -41,7 +42,8 @@ export default function App() {
         <Route path="/perfil" element={<Profile />} />
         <Route path="/equipe" element={<MinhaEquipe />} />
         <Route path="/bugs" element={<BugReports />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        {/* Rota inexistente: diz que não existe, em vez de cair na home calado. */}
+        <Route path="*" element={<PaginaNaoEncontrada />} />
       </Route>
     </Routes>
   );

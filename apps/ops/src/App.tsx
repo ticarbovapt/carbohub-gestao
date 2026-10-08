@@ -27,6 +27,7 @@ import Maquinas from "./pages/campo/Maquinas";
 import Alertas from "./pages/campo/Alertas";
 import AcompMetasVendedores from "./pages/acompanhamento/MetasVendedores";
 import { OPS_ALL_ITEMS } from "@/lib/opsNav";
+import { PaginaNaoEncontrada } from "@carbo/shell";
 
 /**
  * Apelido `/ecommerce/esteira` → `/logistica/esteira`, com a query INTACTA.
@@ -128,8 +129,9 @@ export default function App() {
             element={<EmBreve title={i.label} icon={i.icon} from={i.from} mirror={i.mirror} />}
           />
         ))}
+        {/* Rota inexistente: diz que não existe, em vez de cair na home calado. */}
+        <Route path="*" element={<PaginaNaoEncontrada />} />
       </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

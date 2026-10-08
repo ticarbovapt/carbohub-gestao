@@ -57,6 +57,7 @@ export function NovaContaPagarDialog({ open, onOpenChange }: { open: boolean; on
           <DialogTitle>Lançar Conta a Pagar</DialogTitle>
           <DialogDescription>A partir de uma OC recebida ou manual.</DialogDescription>
         </DialogHeader>
+        <form noValidate className="grid gap-4" onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
 
         <div className="space-y-4">
           <div className="space-y-1.5">
@@ -92,11 +93,12 @@ export function NovaContaPagarDialog({ open, onOpenChange }: { open: boolean; on
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={create.isPending}>Cancelar</Button>
-          <Button onClick={handleSubmit} disabled={create.isPending}>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={create.isPending}>Cancelar</Button>
+          <Button type="submit" disabled={create.isPending}>
             {create.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Lançando…</> : "Lançar Conta"}
           </Button>
         </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

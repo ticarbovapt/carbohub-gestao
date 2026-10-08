@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Trello, Plus, X, Filter, Bookmark, Trash2, Clock, CalendarClock, Table2, Search, LayoutGrid } from "lucide-react";
 import { useBoards, useBoardMutations, useAllCards } from "@/hooks/useBoards";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
@@ -9,6 +9,7 @@ import { FilterControls } from "@/components/board/FilterControls";
 import { getAccent, ACCENT_SWATCHES } from "@/lib/mktTheme";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { pedirTexto } from "@carbo/shell";
 
 const HEADING_FONT = "'IBM Plex Sans', 'Inter', system-ui, sans-serif";
 
@@ -53,11 +54,11 @@ export default function Quadros() {
       {/* Ver todos os quadros (visão da área de trabalho — cruza todos os quadros) */}
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground mr-1">Ver todos os quadros</span>
-        <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={() => navigate("/todos/calendario")}>
-          <CalendarClock className="h-3.5 w-3.5 text-accent" /> Calendário geral
+        <Button asChild size="sm" variant="outline" className="h-8 text-xs gap-1.5">
+          <Link to="/todos/calendario"><CalendarClock className="h-3.5 w-3.5 text-accent" /> Calendário geral</Link>
         </Button>
-        <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={() => navigate("/todos/tabela")}>
-          <Table2 className="h-3.5 w-3.5 text-accent" /> Tabela geral
+        <Button asChild size="sm" variant="outline" className="h-8 text-xs gap-1.5">
+          <Link to="/todos/tabela"><Table2 className="h-3.5 w-3.5 text-accent" /> Tabela geral</Link>
         </Button>
       </div>
 
@@ -93,9 +94,9 @@ export default function Quadros() {
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
             {boards.map((b) => (
-              <button
+              <Link
                 key={b.id}
-                onClick={() => navigate(`/quadros/${b.id}`)}
+                to={`/quadros/${b.id}`}
                 className="mkt-board-card group relative overflow-hidden flex flex-col text-left p-4 min-h-32"
                 style={{ ["--mkt-accent" as string]: getAccent(b.background) }}
               >
@@ -110,7 +111,7 @@ export default function Quadros() {
                   <span className="mkt-dot" />
                   <span>Abrir quadro</span>
                 </div>
-              </button>
+              </Link>
             ))}
 
             {creating ? (
@@ -149,7 +150,7 @@ export default function Quadros() {
         <div className="flex items-center gap-2 flex-wrap">
           <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setCriteria(emptyCriteria())}>Limpar</Button>
           <Button size="sm" className="h-8 text-xs disabled:bg-transparent disabled:text-muted-foreground disabled:border disabled:border-border disabled:opacity-100 disabled:shadow-none" disabled={!active}
-            onClick={() => { const name = prompt("Nome da busca salva:"); if (name?.trim()) savedMut.create.mutate({ name: name.trim(), scope: "all", criteria }); }}>
+            onClick={async () => { const name = await pedirTexto({ titulo: "Salvar busca", rotulo: "Nome da busca", obrigatorio: true, confirmar: "Salvar" }); if (name?.trim()) savedMut.create.mutate({ name: name.trim(), scope: "all", criteria }); }}>
             Salvar busca
           </Button>
           {saved.data && saved.data.length > 0 && (
@@ -178,14 +179,14 @@ export default function Quadros() {
             ) : (
               <div className="divide-y divide-border max-h-72 overflow-y-auto">
                 {results.map((c) => (
-                  <button key={c.id} onClick={() => navigate(`/quadros/${c.board_id}?card=${c.id}`)}
+                  <Link key={c.id} to={`/quadros/${c.board_id}?card=${c.id}`}
                     className="w-full text-left py-2.5 px-2 flex items-center justify-between gap-2 hover:bg-muted/50 rounded-md transition">
                     <div className="min-w-0">
                       <p className="text-sm text-foreground truncate">{c.title}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">{c.boardTitle} · {c.listTitle}</p>
                     </div>
                     {c.due_date && <span className="text-xs text-muted-foreground inline-flex items-center gap-1 shrink-0"><Clock className="h-3.5 w-3.5" /> {new Date(c.due_date).toLocaleDateString("pt-BR")}</span>}
-                  </button>
+                  </Link>
                 ))}
               </div>
             )}

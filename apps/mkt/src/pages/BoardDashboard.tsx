@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell,
   PieChart, Pie, LabelList,
@@ -35,7 +35,6 @@ function Tile({ label, value, sub, accent, icon: Icon }: { label: string; value:
 
 export default function BoardDashboard() {
   const { boardId } = useParams();
-  const navigate = useNavigate();
   const { data, isLoading } = useBoard(boardId ?? null);
   useBoardLive(boardId ?? null);
   const { data: team = [] } = useTeamMembers();
@@ -97,7 +96,7 @@ export default function BoardDashboard() {
   return (
     <div className="fixed inset-0 top-14 flex flex-col bg-background">
       <div className="flex items-center gap-2 px-4 min-h-14 border-b border-border bg-card header-depth-glow flex-wrap">
-        <button onClick={() => navigate("/quadros")} className="p-1.5 rounded-md text-muted-foreground hover:bg-muted"><ArrowLeft className="h-4 w-4" /></button>
+        <Link to="/quadros" aria-label="Voltar aos quadros" className="inline-flex p-1.5 rounded-md text-muted-foreground hover:bg-muted"><ArrowLeft className="h-4 w-4" /></Link>
         <h1 className="mkt-view-title flex items-center gap-2">
           <span className="h-2 w-2 rounded-full shrink-0" style={{ background: boardAccent }} />
           <LayoutDashboard className="h-5 w-5 text-primary" /> {board.title}

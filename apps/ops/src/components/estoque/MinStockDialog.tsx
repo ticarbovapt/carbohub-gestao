@@ -43,6 +43,7 @@ export function MinStockDialog({ open, onOpenChange, productId, productName, hub
           <DialogTitle className="flex items-center gap-2"><Shield className="h-4 w-4 text-carbo-green" /> Estoque Mínimo</DialogTitle>
           <DialogDescription>{productName} — {hubLabel}</DialogDescription>
         </DialogHeader>
+        <form noValidate className="grid gap-4" onSubmit={(e) => { e.preventDefault(); submit(); }}>
 
         <div className="space-y-2">
           <Label>Estoque mínimo de segurança (unidades)</Label>
@@ -51,11 +52,12 @@ export function MinStockDialog({ open, onOpenChange, productId, productName, hub
         </div>
 
         <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={setMin.isPending}>Cancelar</Button>
-          <Button onClick={submit} disabled={setMin.isPending} className="carbo-gradient text-white gap-1.5">
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={setMin.isPending}>Cancelar</Button>
+          <Button type="submit" disabled={setMin.isPending} className="carbo-gradient text-white gap-1.5">
             {setMin.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando…</> : <><Save className="h-4 w-4" /> Salvar</>}
           </Button>
         </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

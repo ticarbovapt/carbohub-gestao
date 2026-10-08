@@ -26,6 +26,7 @@ import MeuEstoque from "./pages/MeuEstoque";
 import RtmAgenda from "./pages/rtm/Agenda";
 import RtmVisita from "./pages/rtm/Visita";
 import { isCarbohubDomain, goToHubLogin } from "@/lib/sso";
+import { PaginaNaoEncontrada } from "@carbo/shell";
 
 // Login é ÚNICO no Hub: /login direto em produção é redirecionado pra lá.
 // Em dev/preview (fora do domínio) mostra o login local standalone.
@@ -82,8 +83,9 @@ export default function App() {
         <Route path="/perfil" element={<Profile />} />
         <Route path="/bugs" element={<BugReports />} />
         <Route path="/equipe" element={<MinhaEquipe />} />
+        {/* Rota inexistente: diz que não existe, em vez de cair na home calado. */}
+        <Route path="*" element={<PaginaNaoEncontrada />} />
       </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

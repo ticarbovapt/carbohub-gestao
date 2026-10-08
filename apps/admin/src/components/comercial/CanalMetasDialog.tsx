@@ -56,6 +56,7 @@ export function CanalMetasDialog({ open, onOpenChange, ano }: Props) {
           <DialogTitle>Metas por Canal — {ano}</DialogTitle>
           <DialogDescription>Defina a meta mensal de cada canal. Salva apenas os campos preenchidos.</DialogDescription>
         </DialogHeader>
+        <form noValidate className="grid gap-4" onSubmit={(e) => { e.preventDefault(); save(); }}>
         <div className="space-y-4 py-2">
           <div className="space-y-1.5">
             <Label className="text-xs">Mês</Label>
@@ -83,11 +84,12 @@ export function CanalMetasDialog({ open, onOpenChange, ano }: Props) {
           ))}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={upsert.isPending}>Cancelar</Button>
-          <Button onClick={save} disabled={upsert.isPending}>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={upsert.isPending}>Cancelar</Button>
+          <Button type="submit" disabled={upsert.isPending}>
             {upsert.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null} Salvar metas
           </Button>
         </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

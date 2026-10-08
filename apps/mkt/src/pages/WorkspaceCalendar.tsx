@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { ArrowLeft, ChevronLeft, ChevronRight, CalendarClock, Table2, LayoutGrid } from "lucide-react";
 import { useBoardMutations, type CardSummary } from "@/hooks/useBoards";
 import { useDefaultWorkspace, useWorkspaceData, useWorkspaceLive } from "@/hooks/useWorkspace";
@@ -10,7 +10,6 @@ import { CalendarGrid } from "@/components/board/CalendarGrid";
 
 // Calendário geral — cruza todos os quadros da área de trabalho (D6).
 export default function WorkspaceCalendar() {
-  const navigate = useNavigate();
   const { data: ws } = useDefaultWorkspace();
   const wsId = ws?.id ?? null;
   const { data, isLoading } = useWorkspaceData(wsId);
@@ -65,14 +64,14 @@ export default function WorkspaceCalendar() {
     <div className="mkt-canvas fixed inset-0 top-14 flex flex-col">
       {/* Cabeçalho */}
       <div className="mkt-toolbar header-depth-glow flex-wrap gap-2 py-2.5">
-        <button onClick={() => navigate("/quadros")} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground"><ArrowLeft className="h-4 w-4" /></button>
+        <Link to="/quadros" aria-label="Voltar aos quadros" className="inline-flex p-1.5 rounded-md hover:bg-muted text-muted-foreground"><ArrowLeft className="h-4 w-4" /></Link>
         <span className="mkt-dot" style={{ ["--mkt-accent" as any]: getAccent("blue") }} />
         <CalendarClock className="h-5 w-5 text-primary" />
         <h1 className="mkt-view-title flex items-center gap-2">Todos os quadros · Calendário</h1>
         {/* alternar entre as views gerais */}
         <div className="mkt-segmented ml-1">
           <button className="mkt-segmented-item is-active"><CalendarClock className="h-3.5 w-3.5" /> Calendário</button>
-          <button onClick={() => navigate("/todos/tabela")} className="mkt-segmented-item"><Table2 className="h-3.5 w-3.5" /> Tabela</button>
+          <Link to="/todos/tabela" className="mkt-segmented-item"><Table2 className="h-3.5 w-3.5" /> Tabela</Link>
         </div>
 
         <div className="ml-auto flex items-center gap-2 flex-wrap">
@@ -100,9 +99,9 @@ export default function WorkspaceCalendar() {
         <div className="flex items-center gap-3 px-4 py-2 bg-card/60 border-b border-border flex-wrap">
           <LayoutGrid className="h-3.5 w-3.5 text-muted-foreground" />
           {data.boards.map((b) => (
-            <button key={b.id} onClick={() => navigate(`/quadros/${b.id}/calendario`)} className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
+            <Link key={b.id} to={`/quadros/${b.id}/calendario`} className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
               <span className="h-2 w-2 rounded-full" style={{ background: boardColor(b.id) }} /> {b.title}
-            </button>
+            </Link>
           ))}
         </div>
       )}

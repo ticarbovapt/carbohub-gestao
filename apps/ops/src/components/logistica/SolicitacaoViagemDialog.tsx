@@ -74,6 +74,7 @@ export function SolicitacaoViagemDialog({ open, onOpenChange }: SolicitacaoViage
             Preencha os dados da viagem corporativa para aprovação.
           </DialogDescription>
         </DialogHeader>
+        <form noValidate className="grid gap-4" onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
 
         <div className="space-y-4">
           <div className="space-y-1.5">
@@ -141,13 +142,14 @@ export function SolicitacaoViagemDialog({ open, onOpenChange }: SolicitacaoViage
         </div>
 
         <DialogFooter className="gap-2 sm:gap-0">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={create.isPending}>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={create.isPending}>
             Cancelar
           </Button>
-          <Button onClick={handleSubmit} disabled={create.isPending}>
+          <Button type="submit" disabled={create.isPending}>
             {create.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Enviando…</> : "Enviar Solicitação"}
           </Button>
         </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

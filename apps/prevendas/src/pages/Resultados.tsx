@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { addMonths, format, startOfMonth, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -313,7 +313,15 @@ export default function Resultados() {
                       <tr key={x.lead_id}
                         onClick={() => navigate(`/crm/pipelines?funil=f15&lead=${x.lead_id}`)}
                         className="cursor-pointer border-b last:border-0 hover:bg-muted/40">
-                        <td className="max-w-[260px] truncate px-5 py-3 font-medium">{x.cliente}</td>
+                        <td className="max-w-[260px] truncate px-5 py-3 font-medium">
+                          {/* Link de verdade no nome: Ctrl/meio-clique abre o card em
+                              outra aba. O stopPropagation evita que a linha navegue
+                              junto na aba atual. */}
+                          <Link to={`/crm/pipelines?funil=f15&lead=${x.lead_id}`}
+                            onClick={(e) => e.stopPropagation()} className="hover:underline">
+                            {x.cliente}
+                          </Link>
+                        </td>
                         <td className="whitespace-nowrap px-5 py-3 text-muted-foreground">
                           {format(new Date(x.repassado_em), "dd/MM")}
                           <span className="ml-1.5 text-xs">· {fmtIdade(dias(x.repassado_em))}</span>

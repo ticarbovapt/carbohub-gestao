@@ -28,6 +28,7 @@ import {
 } from "@/hooks/useMetaEcommerce";
 import { DistribuirMetaCard } from "@/components/DistribuirMetaCard";
 import type { ItemDistribuivel } from "@/hooks/useDistribuicaoMeta";
+import { confirmar } from "@carbo/shell";
 
 function fmtBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -334,7 +335,10 @@ export default function MetaConfigPage() {
                         </Button>
                         {t.source === "month" && t.override_id && (
                           <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive hover:text-destructive gap-1"
-                            onClick={() => deleteMeta.mutate(t.override_id!)}>
+                            onClick={async () => {
+                              if (await confirmar({ titulo: "Voltar à meta padrão?", mensagem: "A meta específica deste mês é apagada e passa a valer a meta padrão.", confirmar: "Voltar ao padrão", perigo: true }))
+                                deleteMeta.mutate(t.override_id!);
+                            }}>
                             <Trash2 className="h-3 w-3" /> Voltar ao padrão
                           </Button>
                         )}

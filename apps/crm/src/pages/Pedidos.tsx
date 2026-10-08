@@ -17,7 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useVendas, useVendedorNomes, useVendedoresDir } from "@/hooks/useVendas";
@@ -65,7 +65,6 @@ const LINHA_LABELS: Record<string, string> = {
 const fmtBRL = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
 export default function Pedidos() {
-  const navigate = useNavigate();
   const { isGestor } = useAuth();        // gestor (head/command/ti) → filtro por vendedor
   const canManageOrders = true;          // todos podem vender e ver detalhes do próprio
 
@@ -259,7 +258,7 @@ export default function Pedidos() {
                 </DropdownMenuContent>
               </DropdownMenu>
               {canManageOrders && (
-                <CarboButton onClick={() => navigate("/vender")}><Plus className="h-4 w-4 mr-1" /> Nova Venda</CarboButton>
+                <CarboButton asChild><Link to="/vender"><Plus className="h-4 w-4 mr-1" /> Nova Venda</Link></CarboButton>
               )}
             </>
           }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { LogOut, UserCircle, Moon, Sun, Menu, Bug } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -59,7 +59,6 @@ function useRoleLabels(p: {
 export function TopBar({ appName, appKey, onMenu }: { appName: string; appKey: string; onMenu?: () => void }) {
   const { user, profile, signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  const navigate = useNavigate();
   const { primary, secondary } = useRoleLabels(profile);
 
   // Foto vem do banco (igual ao Meu Perfil) → imagem real em todos os apps,
@@ -117,11 +116,11 @@ export function TopBar({ appName, appKey, onMenu }: { appName: string; appKey: s
                 {secondary && <span className="text-[11px] font-normal text-muted-foreground">{secondary}</span>}
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => navigate("/perfil")}>
-                <UserCircle className="h-4 w-4 mr-2" /> Meu Perfil
+              <DropdownMenuItem asChild>
+                <Link to="/perfil"><UserCircle className="h-4 w-4 mr-2" /> Meu Perfil</Link>
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate("/bugs")}>
-                <Bug className="h-4 w-4 mr-2" /> Bugs e sugestões
+              <DropdownMenuItem asChild>
+                <Link to="/bugs"><Bug className="h-4 w-4 mr-2" /> Bugs e sugestões</Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={signOut} className="text-destructive focus:text-destructive">

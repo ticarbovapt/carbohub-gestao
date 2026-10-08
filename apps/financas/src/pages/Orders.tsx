@@ -46,7 +46,7 @@ import { DatePickerInput } from "@/components/ui/date-picker-input";
 import { useOrders, useOrderStats, OrderStatus, ORDER_STATUS_LABELS, ORDER_TYPE_LABELS, CarbozeOrder, OrderItem } from "@/hooks/useCarbozeOrders";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { OrdersAnalytics } from "@/components/orders/OrdersAnalytics";
@@ -243,9 +243,11 @@ export default function Orders() {
               </DropdownMenu>
 
               {gestor && (
-                <CarboButton onClick={() => navigate("/vender")}>
-                  <Plus className="h-4 w-4 mr-1" />
-                  Novo Pedido
+                <CarboButton asChild>
+                  <Link to="/vender">
+                    <Plus className="h-4 w-4 mr-1" />
+                    Novo Pedido
+                  </Link>
                 </CarboButton>
               )}
             </>

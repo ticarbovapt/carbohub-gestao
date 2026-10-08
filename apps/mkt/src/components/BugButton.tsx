@@ -3,7 +3,7 @@ import {
   Bug, Lightbulb, Plus, CheckCircle2, ImagePlus, X, Paperclip,
   ChevronDown, ArrowRight,
 } from "lucide-react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMyBugReports, useSubmitBugReport, type BugKind, type BugStatus } from "@/hooks/useBugReports";
 import { KINDS, kindOf, kindUi } from "@carbo/demandas";
@@ -120,7 +120,6 @@ const ROTULO_DESCRICAO: Record<string, string> = {
 export function BugButton() {
   const { user, profile } = useAuth();
   const location = useLocation();
-  const navigate = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [open, setOpen] = useState(false);
@@ -302,12 +301,13 @@ export function BugButton() {
                   </div>
                 ))}
               </div>
-              <button
-                onClick={() => { setOpen(false); navigate("/bugs"); }}
+              <Link
+                to="/bugs"
+                onClick={() => setOpen(false)}
                 className="w-full px-4 py-2.5 border-t text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors flex items-center justify-center gap-1"
               >
                 Ver todos ({bugs.length}) <ArrowRight className="h-3 w-3" />
-              </button>
+              </Link>
             </>
           )}
         </PopoverContent>
@@ -340,8 +340,8 @@ export function BugButton() {
                 </p>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => { setDialogOpen(false); navigate("/bugs"); }}>
-                  Acompanhar
+                <Button variant="outline" size="sm" asChild>
+                  <Link to="/bugs" onClick={() => setDialogOpen(false)}>Acompanhar</Link>
                 </Button>
                 <Button size="sm" onClick={() => setEnviado(false)}>Reportar outro</Button>
               </div>

@@ -12,6 +12,7 @@ import Vender from "./pages/Vender";
 import Chat from "./pages/Chat";
 import ChatAdocao from "./pages/ChatAdocao";
 import { isCarbohubDomain, goToHubLogin } from "@/lib/sso";
+import { PaginaNaoEncontrada } from "@carbo/shell";
 
 // Login é ÚNICO no Hub: /login direto em produção é redirecionado pra lá.
 // Em dev/preview (fora do domínio) mostra o login local standalone.
@@ -37,8 +38,8 @@ export default function App() {
         <Route path="/chat/adocao" element={<ChatAdocao />} />
         <Route path="/perfil" element={<Profile />} />
         <Route path="/equipe" element={<MinhaEquipe />} />
-        {/* Rota desconhecida → volta pra Central de Demandas */}
-        <Route path="*" element={<Navigate to="/" replace />} />
+        {/* Rota inexistente: diz que não existe, em vez de cair na home calado. */}
+        <Route path="*" element={<PaginaNaoEncontrada />} />
       </Route>
     </Routes>
   );

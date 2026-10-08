@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useParamUrl } from "@carbo/shell";
 import { format, startOfMonth, addMonths, subMonths, getDaysInMonth, getDate } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
@@ -176,10 +176,28 @@ function WeeklyPanel({ entries, targetMap, elapsedDays, canSeeValues }: {
 
 // ── Página ───────────────────────────────────────────────────────────────
 export default function Metas() {
-  const [month, setMonth] = useState(() => startOfMonth(new Date()));
-  const [teamFilter, setTeamFilter] = useState<TeamFilter>("todos");
-  const [periodView, setPeriodView] = useState<PeriodView>("mensal");
-  const [weekStart, setWeekStart] = useState(() => commercialWeekStartOf(new Date()));
+  // ⚠️ Mês, semana, visão e equipe moram na URL (`?mes=&semana=&visao=&equipe=`):
+  // F5 e link compartilhado mantêm a tela, e o Voltar desfaz a troca.
+  const mesAtual = format(startOfMonth(new Date()), "yyyy-MM");
+  const [mesUrl, setMesUrl] = useParamUrl("mes", mesAtual);
+  const month = useMemo(() => {
+    const [a, m] = mesUrl.split("-").map(Number);
+    return a && m ? new Date(a, m - 1, 1) : startOfMonth(new Date());
+  }, [mesUrl]);
+  const setMonth = (v: Date | ((m: Date) => Date)) =>
+    setMesUrl(format(typeof v === "function" ? v(month) : v, "yyyy-MM"));
+  const [equipeUrl, setTeamFilter] = useParamUrl("equipe", "todos");
+  const teamFilter: TeamFilter = equipeUrl === "cgc" || equipeUrl === "expansao" ? equipeUrl : "todos";
+  const [visaoUrl, setPeriodView] = useParamUrl("visao", "mensal");
+  const periodView: PeriodView = visaoUrl === "semanal" ? "semanal" : "mensal";
+  const semanaAtual = format(commercialWeekStartOf(new Date()), "yyyy-MM-dd");
+  const [semanaUrl, setSemanaUrl] = useParamUrl("semana", semanaAtual);
+  const weekStart = useMemo(() => {
+    const [a, m, d] = semanaUrl.split("-").map(Number);
+    return commercialWeekStartOf(a && m && d ? new Date(a, m - 1, d) : new Date());
+  }, [semanaUrl]);
+  const setWeekStart = (v: Date | ((w: Date) => Date)) =>
+    setSemanaUrl(format(typeof v === "function" ? v(weekStart) : v, "yyyy-MM-dd"));
 
   const canSeeValues = true;
 

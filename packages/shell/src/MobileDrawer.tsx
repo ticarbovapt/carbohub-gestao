@@ -177,23 +177,40 @@ export function MobileDrawer({
       >
         {/* Brand header (no collapse toggle on mobile) */}
         <div className="flex h-14 shrink-0 items-center gap-2.5 border-b border-border px-4">
-          <button
-            type="button"
-            onClick={() => {
-              brand.onLogoClick?.();
-              onOpenChange(false);
-            }}
-            className="flex items-center gap-2.5 overflow-hidden text-left"
-          >
-            <img
-              src={brand.logoSrc}
-              alt={brand.appName}
-              className="h-7 w-auto shrink-0"
-            />
-            <span className="truncate text-sm font-bold text-foreground">
-              {brand.appName}
-            </span>
-          </button>
+          {brand.href ? (
+            <a
+              href={brand.href}
+              onClick={() => onOpenChange(false)}
+              className="flex items-center gap-2.5 overflow-hidden text-left"
+            >
+              <img
+                src={brand.logoSrc}
+                alt={brand.appName}
+                className="h-7 w-auto shrink-0"
+              />
+              <span className="truncate text-sm font-bold text-foreground">
+                {brand.appName}
+              </span>
+            </a>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                brand.onLogoClick?.();
+                onOpenChange(false);
+              }}
+              className="flex items-center gap-2.5 overflow-hidden text-left"
+            >
+              <img
+                src={brand.logoSrc}
+                alt={brand.appName}
+                className="h-7 w-auto shrink-0"
+              />
+              <span className="truncate text-sm font-bold text-foreground">
+                {brand.appName}
+              </span>
+            </button>
+          )}
         </div>
 
         {/* Nav */}

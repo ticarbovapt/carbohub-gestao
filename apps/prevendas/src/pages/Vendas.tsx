@@ -2,6 +2,7 @@ import { useState, useMemo, Fragment } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format, startOfMonth, addMonths, subMonths, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useParamUrl } from "@carbo/shell";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Button } from "@/components/ui/button";
@@ -239,15 +240,30 @@ export default function Vendas() {
   const { user, isGestor } = useAuth();
   const isHead = isGestor;
 
-  const [month, setMonth] = useState(() => startOfMonth(new Date()));
-  const [customFrom, setCustomFrom] = useState("");
-  const [customTo, setCustomTo] = useState("");
-  const [search, setSearch] = useState("");
-  const [vendedorFilter, setVendedor] = useState("__all__");
+  // ⚠️ Mês, intervalo, busca, vendedor e filtro de KPI moram na URL
+  // (`?mes=&de=&ate=&busca=&vendedor=&kpi=`): F5 e link compartilhado mantêm a
+  // tela, e o Voltar desfaz a troca de mês/filtro. A busca grava com `replace`
+  // para não criar uma entrada no histórico por letra digitada.
+  const mesAtual = format(startOfMonth(new Date()), "yyyy-MM");
+  const [mesUrl, setMesUrl] = useParamUrl("mes", mesAtual);
+  const month = useMemo(() => {
+    const [a, m] = mesUrl.split("-").map(Number);
+    return a && m ? new Date(a, m - 1, 1) : startOfMonth(new Date());
+  }, [mesUrl]);
+  const setMonth = (v: Date | ((m: Date) => Date)) =>
+    setMesUrl(format(typeof v === "function" ? v(month) : v, "yyyy-MM"));
+  const [customFrom, setCustomFrom] = useParamUrl("de");
+  const [customTo, setCustomTo] = useParamUrl("ate");
+  const [search, setSearch] = useParamUrl("busca", "", { replace: true });
+  const [vendedorFilter, setVendedor] = useParamUrl("vendedor", "__all__");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   // Filtro por KPI (clicar no card): mostra na tabela só o que alimenta o card.
-  const [kpiFilter, setKpiFilter] = useState<"vendido" | "faturado" | "aguardando" | "entrou" | "orcamento" | "cancelado" | null>(null);
+  type KpiFiltro = "vendido" | "faturado" | "aguardando" | "entrou" | "orcamento" | "cancelado";
+  const [kpiUrl, setKpiUrl] = useParamUrl("kpi");
+  const kpiFilter = (kpiUrl || null) as KpiFiltro | null;
+  const setKpiFilter = (v: KpiFiltro | null | ((cur: KpiFiltro | null) => KpiFiltro | null)) =>
+    setKpiUrl(typeof v === "function" ? v(kpiFilter) : v);
   // Pedidos da ponte do Bling saem da lista por padrão: não têm vendedor nem
   // cidade (a ponte não atribui), então enchem a tabela de linhas que ninguém
   // desta tela fez. Fica visível e reversível — ver o chip abaixo dos KPIs.

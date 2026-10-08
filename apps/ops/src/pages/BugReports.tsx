@@ -11,6 +11,7 @@ import {
   useAllBugReports, useResolveBugReport, useDeclineBugReport, useReopenBugReport, useDeleteBugReport,
   type BugReport, type BugKind, type BugStatus,
 } from "@/hooks/useBugReports";
+import { confirmar } from "@carbo/shell";
 
 const dtFmt = (s: string) => new Date(s).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 type StatusTab = "open" | "resolved" | "declined" | "all";
@@ -148,7 +149,7 @@ export default function BugReports() {
                           <RotateCcw className="h-3 w-3" /> Reabrir
                         </Button>
                       )}
-                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => remove.mutate(b.id)} title="Remover">
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={async () => { if (await confirmar({ titulo: "Remover este chamado?", mensagem: b.title, confirmar: "Remover", perigo: true })) remove.mutate(b.id); }} title="Remover">
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>

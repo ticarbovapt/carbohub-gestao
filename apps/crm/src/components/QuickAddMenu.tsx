@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Plus, ShoppingCart } from "lucide-react";
@@ -12,11 +12,10 @@ import { cn } from "@/lib/utils";
 // universal de topo. O dialog continua onde ele faz sentido — em
 // /descarbonizacao/agendamentos e /descarbonizacao/ordens-servico.
 export function QuickAddMenu() {
-  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
 
   const actions = [
-    { key: "venda", icon: ShoppingCart, label: "+ Nova Venda", primary: true, onClick: () => navigate("/vender") },
+    { key: "venda", icon: ShoppingCart, label: "+ Nova Venda", primary: true, to: "/vender" },
   ];
 
   return (
@@ -32,10 +31,12 @@ export function QuickAddMenu() {
       </PopoverTrigger>
       <PopoverContent align="end" sideOffset={8} className="w-56 p-1.5 rounded-xl">
         <div className="space-y-0.5">
-          {actions.map(({ key, icon: Icon, label, primary, onClick }) => (
-            <button
+          {actions.map(({ key, icon: Icon, label, primary, to }) => (
+            // Link de verdade: abre em nova guia com o botão do meio/Ctrl+clique.
+            <Link
               key={key}
-              onClick={() => { onClick(); setOpen(false); }}
+              to={to}
+              onClick={() => setOpen(false)}
               className={cn(
                 "flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm transition-all",
                 primary
@@ -45,7 +46,7 @@ export function QuickAddMenu() {
             >
               <Icon className={cn("h-4 w-4 flex-shrink-0", primary && "text-carbo-green")} />
               {label}
-            </button>
+            </Link>
           ))}
         </div>
       </PopoverContent>

@@ -23,6 +23,6 @@ export default defineConfig({
       // packages/chat e não acha nada — não há node_modules na raiz.
       "react-easy-crop": path.resolve(__dirname, "node_modules/react-easy-crop"),
     },
-    dedupe: ["react", "react-dom", "react-router-dom", "@tanstack/react-query", "@supabase/supabase-js", "lucide-react", "sonner"],
+    dedupe: ["react", "react-dom", "react-router-dom", "@tanstack/react-query", "@supabase/supabase-js", "lucide-react", "sonner", "@radix-ui/react-alert-dialog"],
   },
 });

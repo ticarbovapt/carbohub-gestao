@@ -15,6 +15,7 @@ import {
   useCustomFields, useCustomFieldMutations, FIELD_TYPE_LABELS,
   type CustomField, type FieldType, type FieldOption,
 } from "@/hooks/useCustomFields";
+import { confirmar } from "@carbo/shell";
 
 const TYPES = Object.keys(FIELD_TYPE_LABELS) as FieldType[];
 const hasOptions = (t: FieldType) => t === "select" || t === "multiselect";
@@ -50,7 +51,7 @@ function FieldRow({ field, onUpdate, onDelete }: {
           <SelectTrigger className="h-9 w-40 text-sm"><SelectValue /></SelectTrigger>
           <SelectContent>{TYPES.map((t) => <SelectItem key={t} value={t}>{FIELD_TYPE_LABELS[t]}</SelectItem>)}</SelectContent>
         </Select>
-        <button onClick={() => { if (confirm(`Excluir o campo "${field.name || "sem nome"}"? Isso apaga o valor dele em todos os cartões.`)) onDelete(); }}
+        <button onClick={async () => { if (await confirmar({ titulo: `Excluir o campo "${field.name || "sem nome"}"?`, mensagem: "Isso apaga o valor dele em todos os cartões.", confirmar: "Excluir", perigo: true })) onDelete(); }}
           className="p-2 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" title="Excluir campo"><Trash2 className="h-4 w-4" /></button>
       </div>
 

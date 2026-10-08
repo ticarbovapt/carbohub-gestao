@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
   DndContext, PointerSensor, useSensor, useSensors, closestCorners, DragOverlay,
   type DragStartEvent, type DragEndEvent,
@@ -26,6 +26,7 @@ import { useSavedSearches, useSavedSearchMutations } from "@/hooks/useSavedSearc
 import { emptyCriteria, criteriaActive, matchCard, type SearchCriteria } from "@/lib/mktFilter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { confirmar, pedirTexto } from "@carbo/shell";
 
 const fmtDue = (iso: string) => {
   const d = new Date(iso);
@@ -184,7 +185,7 @@ function BoardColumn({
                   ))}
                 </div>
                 <button onClick={() => { setMenuOpen(false); onToggleCollapse(list.id); }} className="w-full text-left text-sm px-2 py-1.5 rounded-md hover:bg-muted">Recolher lista</button>
-                <button onClick={() => { setMenuOpen(false); if (confirm("Arquivar esta lista?")) onArchive(list.id); }} className="w-full text-left text-sm px-2 py-1.5 rounded-md hover:bg-muted text-destructive">Arquivar lista</button>
+                <button onClick={async () => { setMenuOpen(false); if (await confirmar({ titulo: "Arquivar esta lista?", confirmar: "Arquivar" })) onArchive(list.id); }} className="w-full text-left text-sm px-2 py-1.5 rounded-md hover:bg-muted text-destructive">Arquivar lista</button>
               </div>
             )}
           </div>
@@ -223,7 +224,6 @@ function BoardColumn({
 
 export default function Board() {
   const { boardId } = useParams();
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const qc = useQueryClient();
   const { data, isLoading } = useBoard(boardId ?? null);
@@ -359,7 +359,7 @@ export default function Board() {
     <div className="fixed inset-0 top-14 mkt-canvas bg-dot-grid flex flex-col">
       {/* Cabeçalho do quadro */}
       <div className="mkt-toolbar header-depth-glow gap-2">
-        <button onClick={() => navigate("/quadros")} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" /></button>
+        <Link to="/quadros" aria-label="Voltar aos quadros" className="inline-flex p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" /></Link>
         <span className="mkt-dot" style={{ ["--mkt-accent" as any]: boardAccent }} />
         <h1 className="mkt-view-title truncate">{board.title}</h1>
         <ViewSwitcher boardId={boardId} current="kanban" />
@@ -376,7 +376,7 @@ export default function Board() {
               <div className="flex items-center gap-2">
                 <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setCriteria(emptyCriteria())}>Limpar</Button>
                 <Button size="sm" className="h-8 text-xs disabled:bg-transparent disabled:text-muted-foreground disabled:border disabled:border-border disabled:opacity-100 disabled:shadow-none" disabled={!filterActive}
-                  onClick={() => { const name = prompt("Nome da busca salva:"); if (name?.trim()) savedMut.create.mutate({ name: name.trim(), scope: "board", boardId, criteria }); }}>
+                  onClick={async () => { const name = await pedirTexto({ titulo: "Salvar busca", rotulo: "Nome da busca", obrigatorio: true, confirmar: "Salvar" }); if (name?.trim()) savedMut.create.mutate({ name: name.trim(), scope: "board", boardId, criteria }); }}>
                   Salvar busca
                 </Button>
               </div>

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useParamUrl } from "@carbo/shell";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboButton } from "@/components/ui/carbo-button";
 import { CarboKPI } from "@/components/ui/carbo-kpi";
@@ -33,8 +34,10 @@ export default function Lotes() {
   const canManage = true; // acesso (gestor vs membro) entra na fase de permissões
   const { data: lots = [], isLoading, isFetching, refetch } = useLots();
   const { remove } = useLotMutations();
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  // ⚠️ Busca e filtro na URL (`?busca=&status=`): F5 e link mantêm a lista, e o
+  // Voltar desfaz a troca de filtro. A busca grava com `replace` (uma entrada por letra não).
+  const [searchQuery, setSearchQuery] = useParamUrl("busca", "", { replace: true });
+  const [statusFilter, setStatusFilter] = useParamUrl("status", "all");
   const [createOpen, setCreateOpen] = useState(false);
   const [editLot, setEditLot] = useState<Lot | null>(null);
   const [deleteLot, setDeleteLot] = useState<Lot | null>(null);

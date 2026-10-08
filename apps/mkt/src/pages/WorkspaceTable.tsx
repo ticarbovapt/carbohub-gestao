@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { ArrowLeft, Table2, CalendarClock, ArrowUp, ArrowDown, Maximize2, Search } from "lucide-react";
 import { useBoardMutations } from "@/hooks/useBoards";
 import { useDefaultWorkspace, useWorkspaceData, useWorkspaceLive, type WorkspaceCard } from "@/hooks/useWorkspace";
@@ -17,7 +17,6 @@ type SortDir = "asc" | "desc";
 
 // Tabela geral — planilha cruzando todos os quadros da área de trabalho (D6).
 export default function WorkspaceTable() {
-  const navigate = useNavigate();
   const { data: ws } = useDefaultWorkspace();
   const wsId = ws?.id ?? null;
   const { data, isLoading } = useWorkspaceData(wsId);
@@ -95,10 +94,10 @@ export default function WorkspaceTable() {
     <div className="fixed inset-0 top-14 flex flex-col bg-background">
       {/* Cabeçalho */}
       <div className="mkt-toolbar header-depth-glow flex items-center gap-2 min-h-14 px-4 border-b border-border bg-card flex-wrap">
-        <button onClick={() => navigate("/quadros")} className="p-1.5 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"><ArrowLeft className="h-4 w-4" /></button>
+        <Link to="/quadros" aria-label="Voltar aos quadros" className="inline-flex p-1.5 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"><ArrowLeft className="h-4 w-4" /></Link>
         <h1 className="mkt-view-title text-lg font-bold text-foreground tracking-tight flex items-center gap-2"><Table2 className="h-5 w-5 text-primary" /> Todos os quadros · Tabela</h1>
         <div className="mkt-segmented flex gap-0.5 bg-muted rounded-md p-0.5">
-          <button onClick={() => navigate("/todos/calendario")} className="mkt-segmented-item px-2.5 py-1 text-xs font-semibold rounded text-muted-foreground hover:text-foreground inline-flex items-center gap-1"><CalendarClock className="h-3.5 w-3.5" /> Calendário</button>
+          <Link to="/todos/calendario" className="mkt-segmented-item px-2.5 py-1 text-xs font-semibold rounded text-muted-foreground hover:text-foreground inline-flex items-center gap-1"><CalendarClock className="h-3.5 w-3.5" /> Calendário</Link>
           <button className="mkt-segmented-item is-active px-2.5 py-1 text-xs font-semibold rounded bg-card shadow-[var(--shadow-card)] text-foreground inline-flex items-center gap-1"><Table2 className="h-3.5 w-3.5" /> Tabela</button>
         </div>
         <div className="ml-auto flex items-center gap-2 flex-wrap">
@@ -142,10 +141,10 @@ export default function WorkspaceTable() {
                 </td>
                 <td className="px-1 py-1"><EditableTitle value={c.title} onSave={(t) => m.renameCard.mutate({ id: c.id, title: t })} /></td>
                 <td className="px-2 py-1 whitespace-nowrap">
-                  <button onClick={() => navigate(`/quadros/${c.board_id}`)} className="inline-flex items-center gap-1.5 hover:underline">
+                  <Link to={`/quadros/${c.board_id}`} className="inline-flex items-center gap-1.5 hover:underline">
                     <span className="h-2 w-2 rounded-full shrink-0" style={{ background: getAccent(boardById.get(c.board_id)?.background) }} />
                     <CarboBadge variant="outline" size="sm">{c.boardTitle}</CarboBadge>
-                  </button>
+                  </Link>
                 </td>
                 <td className="px-2 py-1 whitespace-nowrap"><CarboBadge variant="secondary" size="sm">{c.listTitle}</CarboBadge></td>
                 <td className="px-2 py-1">

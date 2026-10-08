@@ -52,6 +52,7 @@ export function NovaEntradaDialog({ hub, open, onOpenChange }: { hub: Hub; open:
             <ArrowDownToLine className="h-4 w-4 text-carbo-green" /> Nova Entrada de Estoque
           </DialogTitle>
         </DialogHeader>
+        <form noValidate className="grid gap-4" onSubmit={(e) => { e.preventDefault(); submit(); }}>
 
         <div className="space-y-4">
           <div className="grid gap-1.5">
@@ -94,11 +95,12 @@ export function NovaEntradaDialog({ hub, open, onOpenChange }: { hub: Hub; open:
         </div>
 
         <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={setStock.isPending}>Cancelar</Button>
-          <Button onClick={submit} disabled={setStock.isPending} className="bg-carbo-green hover:bg-carbo-green/90 text-white">
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={setStock.isPending}>Cancelar</Button>
+          <Button type="submit" disabled={setStock.isPending} className="bg-carbo-green hover:bg-carbo-green/90 text-white">
             {setStock.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Registrando…</> : "Registrar Entrada"}
           </Button>
         </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

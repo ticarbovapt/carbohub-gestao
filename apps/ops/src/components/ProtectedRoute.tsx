@@ -52,8 +52,8 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
               : "Esta conta não tem cadastro no sistema interno da Carbo. Fale com um gestor."}
           </p>
         </div>
-        <Button variant="outline" onClick={() => { window.location.href = `${HUB_URL}/home`; }}>
-          Voltar ao Hub
+        <Button variant="outline" asChild>
+          <a href={`${HUB_URL}/home`}>Voltar ao Hub</a>
         </Button>
       </div>
     );

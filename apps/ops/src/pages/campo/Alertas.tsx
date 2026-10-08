@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Bell, RefreshCw, AlertTriangle, Clock, CheckCircle2, Package, Loader2, ChevronRight, ShoppingCart, Truck, Factory, Receipt, Wrench } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -39,8 +39,10 @@ const KIND_CONFIG: Record<Kind, { label: string; icon: typeof Package }> = {
 
 interface Pend {
   id: string; kind: Kind; titulo: string; descricao: string; prioridade: Prioridade;
-  action: { label: string; go: () => void };
-  // ação secundária opcional (ex.: "Requisitar" no estoque)
+  // Ação principal = só navegação → vira <Link> (abre em nova aba com Ctrl/meio).
+  action: { label: string; to: string };
+  // ação secundária opcional (ex.: "Requisitar" no estoque). Fica botão: ela
+  // leva `state` (prefill), que não sobrevive a uma aba nova.
   action2?: { label: string; icon: typeof ShoppingCart; go: () => void };
 }
 
@@ -91,7 +93,7 @@ export default function Alertas() {
           titulo: `${p.name} — ${hub.label}`,
           descricao: negativo ? `Saldo NEGATIVO ${qty} ${p.stock_unit} (${p.product_code})` : `Saldo ${qty} ${p.stock_unit} • mínimo ${min} (${p.product_code})`,
           prioridade,
-          action: { label: "Ver no estoque", go: () => navigate(`/estoque/${hub.slug}`) },
+          action: { label: "Ver no estoque", to: `/estoque/${hub.slug}` },
           action2: { label: "Requisitar", icon: ShoppingCart, go: () => navigate("/compras", { state: { prefill: {
             descricao: p.name, quantidade: suggestedQty, unidade: p.stock_unit,
             motivo: qty <= 0 ? "ruptura" : "reposicao_safety", priority: qty <= 0 ? "critica" : "normal",
@@ -106,7 +108,7 @@ export default function Alertas() {
       if (TERMINAL.has(stg)) continue;
       // "parado há X" a partir da troca de etapa (coluna dedicada, não poluída).
       const idade = daysSince(o.stage_changed_at ?? o.updated_at ?? o.created_at);
-      const goPos = { label: "Abrir rastreio", go: () => navigate("/logistica/pos-venda") };
+      const goPos = { label: "Abrir rastreio", to: "/logistica/pos-venda" };
 
       if (stg === "criar_op" && o.production_done) {
         out.push({ id: `prod-${o.id}`, kind: "produzido",
@@ -135,7 +137,7 @@ export default function Alertas() {
         titulo: `${op.op_number ?? "OP"} — ${op.product_code ?? op.customer_name ?? ""}`.trim(),
         descricao: `Prazo vencido há ${atraso}d · ${op.planned_quantity} un`,
         prioridade: atraso >= 3 ? "critical" : "high",
-        action: { label: "Abrir produção", go: () => navigate("/producao/ordens") } });
+        action: { label: "Abrir produção", to: "/producao/ordens" } });
     }
 
     // 5b) OP PARADA DEMAIS na etapa (independe de prazo) — via stage_since.
@@ -149,7 +151,7 @@ export default function Alertas() {
         titulo: `${op.op_number ?? "OP"} — ${op.product_code ?? op.customer_name ?? ""}`.trim(),
         descricao: `Parada há ${parado}d na etapa atual · ${op.planned_quantity} un`,
         prioridade: parado >= 10 ? "critical" : parado >= 5 ? "high" : "medium",
-        action: { label: "Abrir produção", go: () => navigate("/producao/ordens") } });
+        action: { label: "Abrir produção", to: "/producao/ordens" } });
     }
 
     // 6) OS de campo do dia / atrasadas (stage != concluída).
@@ -161,7 +163,7 @@ export default function Alertas() {
         titulo: `${os.cliente_nome ?? "Cliente"}${os.placa ? ` — ${os.placa}` : ""}`,
         descricao: atrasada ? `OS atrasada (prevista ${os.data_prevista})` : "OS prevista para hoje",
         prioridade: atrasada ? "high" : "medium",
-        action: { label: "Abrir OS", go: () => navigate("/campo/os") } });
+        action: { label: "Abrir OS", to: "/campo/os" } });
     }
 
     // 7) Produção travada: OP pronta pra separar, OP em falta de insumo (via
@@ -176,13 +178,13 @@ export default function Alertas() {
           titulo: `${op.op_number ?? "OP"} — ${op.product_code ?? ""}`.trim(),
           descricao: `Pronta pra separar · ${op.planned_quantity} un`,
           prioridade: "medium",
-          action: { label: "Abrir produção", go: () => navigate("/producao/ordens") } });
+          action: { label: "Abrir produção", to: "/producao/ordens" } });
       } else if (v === "falta") {
         out.push({ id: `opfalta-${op.id}`, kind: "op",
           titulo: `${op.op_number ?? "OP"} — ${op.product_code ?? ""}`.trim(),
           descricao: `Travada — falta insumo em estoque · ${op.planned_quantity} un`,
           prioridade: "high",
-          action: { label: "Abrir produção", go: () => navigate("/producao/ordens") } });
+          action: { label: "Abrir produção", to: "/producao/ordens" } });
       }
     }
     for (const b of producible.bottlenecks) {
@@ -190,7 +192,7 @@ export default function Alertas() {
         titulo: `Insumo-gargalo: ${b.name}`,
         descricao: `Zerado no HUB-RN · trava ${b.affected} produção(ões)`,
         prioridade: "critical",
-        action: { label: "Abrir produção", go: () => navigate("/producao/ordens") } });
+        action: { label: "Abrir produção", to: "/producao/ordens" } });
     }
 
     return out.sort((a, b) => PRIO_ORDER[a.prioridade] - PRIO_ORDER[b.prioridade]);
@@ -282,7 +284,7 @@ export default function Alertas() {
                   {a.action2 && (
                     <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={a.action2.go}><a.action2.icon className="h-3.5 w-3.5" /> {a.action2.label}</Button>
                   )}
-                  <Button variant="ghost" size="sm" className="h-8 text-xs gap-1" onClick={a.action.go}>{a.action.label} <ChevronRight className="h-3.5 w-3.5" /></Button>
+                  <Button asChild variant="ghost" size="sm" className="h-8 text-xs gap-1"><Link to={a.action.to}>{a.action.label} <ChevronRight className="h-3.5 w-3.5" /></Link></Button>
                 </div>
               </div>
             );

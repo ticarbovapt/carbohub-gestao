@@ -328,7 +328,7 @@ export function NovaVendaDialog({ open, onOpenChange }: NovaVendaDialogProps) {
             </div>
             <div className="space-y-1.5">
               <Label>Volume Médio Mensal (veículos)</Label>
-              <Input type="number" placeholder="Ex: 500" value={volumeMensal} onChange={(e) => setVolumeMensal(e.target.value)} />
+              <Input type="number" min={0} placeholder="Ex: 500" value={volumeMensal} onChange={(e) => setVolumeMensal(e.target.value)} />
             </div>
             <div className="grid md:grid-cols-2 gap-3">
               <label className="flex items-center justify-between gap-3 rounded-xl border p-3">
