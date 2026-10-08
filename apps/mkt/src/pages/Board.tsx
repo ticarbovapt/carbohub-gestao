@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
   DndContext, PointerSensor, useSensor, useSensors, closestCorners, DragOverlay,
@@ -18,6 +18,7 @@ import {
 import { positionForIndex } from "@/lib/mktPosition";
 import { LABEL_COLORS, getAccent, tintedLabelStyle, ACCENT_SWATCHES } from "@/lib/mktTheme";
 import { CardModal } from "@/components/board/CardModal";
+import { useCustomFields, useBoardFieldValues, type CustomField } from "@/hooks/useCustomFields";
 import { BoardFieldsDialog } from "@/components/board/BoardFieldsDialog";
 import { FilterControls } from "@/components/board/FilterControls";
 import { ViewSwitcher } from "@/components/board/ViewSwitcher";
@@ -33,6 +34,44 @@ const fmtDue = (iso: string) => {
   return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
 };
 
+// Campos personalizados na FRENTE do cartão. Chega por contexto para não
+// atravessar Lista → Cartão → Face (e o DragOverlay) como prop. Existe porque o
+// Trello mostra esses campos na frente ("Canal de Publicação: Instagram") e o
+// quadro importado parecia ter perdido o dado — ele estava só no detalhe.
+const CamposCtx = createContext<{ campos: CustomField[]; valores: Map<string, Record<string, unknown>> }>({ campos: [], valores: new Map() });
+
+function textoDoCampo(f: CustomField, v: unknown): { texto: string; cor?: string } | null {
+  if (v === null || v === undefined || v === "" || (Array.isArray(v) && v.length === 0)) return null;
+  if (f.type === "select") { const o = f.options.find((x) => x.id === v); return o ? { texto: o.label, cor: o.color } : null; }
+  if (f.type === "multiselect") {
+    const ls = (v as string[]).map((id) => f.options.find((x) => x.id === id)?.label).filter(Boolean);
+    return ls.length ? { texto: ls.join(", ") } : null;
+  }
+  if (f.type === "checkbox") return v === true ? { texto: "sim" } : null;
+  if (f.type === "date") return { texto: new Date(`${v}T12:00:00`).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }) };
+  const t = String(v);
+  return { texto: t.length > 28 ? `${t.slice(0, 28)}…` : t };
+}
+
+function CamposNaFrente({ cardId }: { cardId: string }) {
+  const { campos, valores } = useContext(CamposCtx);
+  const v = valores.get(cardId);
+  if (!v || campos.length === 0) return null;
+  const itens = campos.map((f) => ({ f, x: textoDoCampo(f, v[f.id]) })).filter((i) => i.x);
+  if (itens.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-1">
+      {itens.map(({ f, x }) => (
+        <span key={f.id} title={f.name}
+          className="inline-flex items-center gap-1 max-w-full h-5 px-1.5 rounded-md border text-[11px] leading-none truncate"
+          style={x!.cor ? tintedLabelStyle(LABEL_COLORS[x!.cor] ?? x!.cor) : undefined}>
+          <span className="opacity-70 truncate">{f.name}:</span><span className="font-medium truncate">{x!.texto}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 // ── Face presentacional do cartão (reusada no kanban e no DragOverlay) ────────
 function CardFace({ card, labels }: { card: CardSummary; labels: Label[] }) {
   const cardLabels = labels.filter((l) => card.labelIds.includes(l.id));
@@ -40,7 +79,9 @@ function CardFace({ card, labels }: { card: CardSummary; labels: Label[] }) {
 
   return (
     <>
-      {card.cover && <div className="h-8 rounded-md -mx-0.5 -mt-0.5" style={{ background: card.cover }} />}
+      {/* A capa guarda a CHAVE da paleta ("sky", "lime"); pintar a chave crua
+          dava verde-néon em "lime" e faixa invisível em "sky". */}
+      {card.cover && <div className="h-8 rounded-md -mx-0.5 -mt-0.5" style={{ background: LABEL_COLORS[card.cover] ?? card.cover }} />}
       {cardLabels.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {cardLabels.map((l) => (
@@ -59,6 +100,7 @@ function CardFace({ card, labels }: { card: CardSummary; labels: Label[] }) {
         </div>
       )}
       <p className="mkt-card-title">{card.title}</p>
+      <CamposNaFrente cardId={card.mirrorOf ?? card.id} />
       <div className="mkt-meta-row flex-wrap">
         {card.due_date && (
           <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md ${overdue ? "bg-destructive/10 text-destructive" : card.is_complete ? "bg-success/10 text-success" : "bg-muted"}`}>
@@ -230,6 +272,9 @@ export default function Board() {
   useBoardLive(boardId ?? null);
   const m = useBoardMutations(boardId);
   const { data: team = [] } = useTeamMembers();
+  const { data: camposDoQuadro = [] } = useCustomFields(boardId ?? null);
+  const { data: valoresDosCampos } = useBoardFieldValues(boardId ?? null);
+  const camposCtx = useMemo(() => ({ campos: camposDoQuadro, valores: valoresDosCampos ?? new Map() }), [camposDoQuadro, valoresDosCampos]);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const [openCardId, setOpenCardId] = useState<string | null>(null);
@@ -356,6 +401,7 @@ export default function Board() {
   };
 
   return (
+    <CamposCtx.Provider value={camposCtx}>
     <div className="fixed inset-0 top-14 mkt-canvas bg-dot-grid flex flex-col">
       {/* Cabeçalho do quadro */}
       <div className="mkt-toolbar header-depth-glow gap-2">
@@ -452,5 +498,6 @@ export default function Board() {
       )}
       {fieldsOpen && <BoardFieldsDialog boardId={boardId} onClose={() => setFieldsOpen(false)} />}
     </div>
+    </CamposCtx.Provider>
   );
 }
