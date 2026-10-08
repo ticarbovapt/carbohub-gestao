@@ -3642,6 +3642,41 @@ medição feita durante indisponibilidade mede a indisponibilidade.
    cara de resposta. Já usados: 1, 2 (sha256/sha1), 3, 4, e 900 no diagnóstico.
 4. **A sonda não entra em cron nenhum**, e não deve entrar.
 
+#### ✅ O reset foi DESVENDADO em 08/10/2026 — e não era o gov.br nem a nossa nota
+O `{"diagnostico": true}` rodou com o gov de pé e o padrão foi limpo: leitura do
+ADN com cert 200 e sem cert recusada no TLS (controle válido); `sefin` raiz 403
+e `/dps` 404 (o host responde); **todo `/SefinNacional/...` reseta, com e sem
+cert, com e sem corpo**. Uma medição por fora (Actions, curl/OpenSSL, SEM cert
+e sem segredo) mostrou o mecanismo:
+
+```
+/SefinNacional/*  →  HelloRequest  →  ClientHello  →  CertificateRequest
+                     (IIS pede o certificado por RENEGOCIAÇÃO TLS 1.2)
+TLS 1.3           →  reset já no ClientHello
+```
+
+⚠️ **O Deno (rustls) NÃO renegocia, por decisão de projeto** — daí o reset em
+6–40 ms. O OpenSSL renegocia e chega ao 403 de "sem certificado". Não há flag
+no Deno que resolva: o envio TEM de sair de um runtime com OpenSSL.
+
+Por isso existe **`apps/financas/api/nfse-relay.js`** (função Node no Vercel do
+Finanças, decidido pelo dono do processo em 08/10):
+1. ⚠️ **Só TRANSPORTA.** Monta e assina continua na edge function; o relay
+   recebe `dpsXmlGZipB64` pronto e devolve a resposta CRUA.
+2. ⚠️ **Destino FIXO** (`/SefinNacional/nfse`, produção restrita; a de produção
+   COMENTADA). Sem parâmetro de host: ele apresenta o certificado A1.
+3. ⚠️ **O certificado mora em DOIS lugares** (Supabase e Vercel), e esse foi o
+   custo aceito. `NFSE_RELAY_SECRET` nos dois; ausente FECHA (500), errado 401.
+4. ⚠️ **`vercel.json` exclui `api/` do rewrite do SPA**, senão `/api/*` volta o
+   `index.html` com 200 e a chamada "funciona" sem ter ido a lugar nenhum.
+5. Testado localmente: o `https` do Node apresenta o certificado na
+   renegociação (771 bytes contra 3 sem cert — o mesmo vazio que o curl mandou
+   ao gov.br). ⚠️ Teste com servidor Node precisa de
+   `SSL_OP_NO_SESSION_RESUMPTION_ON_RENEGOTIATION`, senão a renegociação vira
+   retomada de sessão, sem `CertificateRequest`, e o teste não prova nada.
+6. ⚠️ O caminho de emissão é **`/SefinNacional/nfse`** (POST), não
+   `/sefinnacional/dps` — `/dps/{id}` é consulta.
+
 #### O plano B, se a assinatura não for viável
 Mandar o DPS **pré-preenchido para o emissor web** em vez de assinar. É mais
 perto do que foi pedido (*"apenas confirmar no portal nacional e emitir"*) e
