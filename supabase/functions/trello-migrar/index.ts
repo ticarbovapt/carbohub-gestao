@@ -95,7 +95,7 @@ async function enviarEmPartes(corpo: ReadableStream<Uint8Array>, tamanho: number
         "upload-offset": String(enviado),
         "content-type": "application/offset+octet-stream",
       },
-      body: parte,
+      body: parte as unknown as BodyInit,
     });
     if (r.status !== 204) throw new Error(`Storage recusou a parte em ${enviado} (${r.status}): ${(await r.text()).slice(0, 300)}`);
     enviado += parte.byteLength;
