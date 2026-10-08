@@ -496,6 +496,8 @@ export default function Vendas() {
         payment_terms: data.payment_terms ?? undefined,
         notes: data.notes ?? undefined,
         created_at: data.created_at, validityDays: 7,
+        // Convertido em venda, o papel diz PEDIDO (sem "válido até").
+        status: data.status,
       });
     } catch (e) {
       toast.error("Erro ao gerar PDF: " + (e instanceof Error ? e.message : "tente de novo"));
