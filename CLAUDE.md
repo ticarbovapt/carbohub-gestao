@@ -2324,6 +2324,15 @@ bucket mkt-anexos (PRIVADO, 300 MB/arquivo)   Secrets TRELLO_KEY / TRELLO_TOKEN
    `montarImportacao`). Duas cópias divergiriam e o mesmo autor sairia com
    nomes diferentes no mesmo cartão.
 
+**O cartão é no formato do Trello** (08/10/2026, pedido do dono do processo):
+conteúdo à esquerda (botões de ação numa linha, resumo membros · etiquetas ·
+datas, descrição longa recolhida em "Mostrar mais", campos em grade) e
+**"Comentários e atividade" numa coluna própria à direita**, cada lado com
+rolagem própria. Comentário: Enter quebra linha (envia no botão ou Ctrl+Enter),
+Responder/Editar/Excluir — editar e excluir só no PRÓPRIO na tela (a RLS de
+`mkt_comments` é aberta ao time). "Mostrar detalhes" mistura o `mkt_activity`
+na linha do tempo, sem o `comment.add` (repetiria o comentário).
+
 ### Regras anti-confusão (OBRIGATÓRIAS)
 1. **Todo pedido nomeia o alvo.** "no CRM" → `apps/crm`; "no controle"/"atual" → raiz (`src/`).
 2. **Na dúvida, PERGUNTE — nunca adivinhe.** Se a tela existe em mais de um app, liste os candidatos antes de mexer.

@@ -21,7 +21,7 @@ export interface ChecklistItem {
   assignee_id: string | null; due_date: string | null;
 }
 export interface Checklist { id: string; card_id: string; title: string; position: number; items: ChecklistItem[]; }
-export interface Comment { id: string; card_id: string; user_id: string; body: string; created_at: string; authorName: string | null; authorAvatar: string | null; }
+export interface Comment { id: string; card_id: string; user_id: string; body: string; created_at: string; updated_at?: string; authorName: string | null; authorAvatar: string | null; }
 export interface Attachment {
   id: string; card_id: string; kind: "drive" | "link" | "arquivo"; name: string;
   external_url: string; drive_file_id: string | null; thumbnail_url: string | null;
@@ -225,5 +225,21 @@ export function useCardMutations(cardId: string | null, boardId?: string) {
     onSuccess: inval,
   });
 
-  return { updateCard, toggleLabel, createLabel, updateLabel, deleteLabel, toggleMember, addChecklist, removeChecklist, addItem, toggleItem, updateItem, removeItem, addAttachment, removeAttachment, setFieldValue, mirrorCard, addComment };
+  const updateComment = useMutation({
+    mutationFn: async ({ id, body }: { id: string; body: string }) => {
+      const res = await db.from("mkt_comments").update({ body, updated_at: new Date().toISOString() }).eq("id", id);
+      if (res.error) throw res.error;
+    },
+    onSuccess: inval,
+  });
+
+  const removeComment = useMutation({
+    mutationFn: async ({ id }: { id: string }) => {
+      const res = await db.from("mkt_comments").delete().eq("id", id);
+      if (res.error) throw res.error;
+    },
+    onSuccess: inval,
+  });
+
+  return { updateComment, removeComment, updateCard, toggleLabel, createLabel, updateLabel, deleteLabel, toggleMember, addChecklist, removeChecklist, addItem, toggleItem, updateItem, removeItem, addAttachment, removeAttachment, setFieldValue, mirrorCard, addComment };
 }
