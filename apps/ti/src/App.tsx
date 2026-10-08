@@ -11,6 +11,7 @@ import MinhaEquipe from "./pages/MinhaEquipe";
 import Vender from "./pages/Vender";
 import Chat from "./pages/Chat";
 import ChatAdocao from "./pages/ChatAdocao";
+import AcademyAcessos from "./pages/AcademyAcessos";
 import { isCarbohubDomain, goToHubLogin } from "@/lib/sso";
 import { PaginaNaoEncontrada } from "@carbo/shell";
 
@@ -36,6 +37,7 @@ export default function App() {
         <Route path="/vender" element={<Vender />} />
         <Route path="/chat" element={<Chat />} />
         <Route path="/chat/adocao" element={<ChatAdocao />} />
+        <Route path="/academy/acessos" element={<AcademyAcessos />} />
         <Route path="/perfil" element={<Profile />} />
         <Route path="/equipe" element={<MinhaEquipe />} />
         {/* Rota inexistente: diz que não existe, em vez de cair na home calado. */}
