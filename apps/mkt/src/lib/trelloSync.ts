@@ -52,6 +52,8 @@ export interface EstadoDaqui {
     due_date: string | null; assignee_id: string | null; created_at: string; trello_id: string | null;
   }[];
   attachments: { card_id: string; external_url: string | null }[];
+  /** `trello_id` de cartões que alguém MOVEU daqui para outro quadro. */
+  movidosParaFora?: Set<string>;
 }
 
 export interface Patch { id: string; patch: Linha }
@@ -210,7 +212,10 @@ export function planejarSincronizacao(t: J, aqui: EstadoDaqui, ctx: { userId: st
 
   // ── Cartões ───────────────────────────────────────────────────────────────
   const cardsDaqui = aqui.cards.filter((c) => !c.mirror_of); // espelho segue o original
-  const tCards: J[] = t.cards.filter((c: J) => listaDaqui.has(c.idList));
+  // ⚠️ Cartão que alguém MOVEU daqui para outro quadro (o "Mover" do menu
+  // leva o `trello_id` junto) não é "sumiu daqui": sem este corte ele voltaria
+  // como cartão NOVO, e o mesmo cartão existiria em dois quadros.
+  const tCards: J[] = t.cards.filter((c: J) => listaDaqui.has(c.idList) && !aqui.movidosParaFora?.has(c.id));
   const cardLig = ligar(cardsDaqui, tCards, (c) => String(ms(c.created_at)), (c) => String(ms(criadoEm(c.id))));
   // Mesmo segundo nos dois lados: desempata pelo nome, como no "Trazer comentários".
   for (const c of tCards) {

@@ -1,5 +1,5 @@
 import { useCartaoDaUrl } from "@/lib/cartaoNaUrl";
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
   DndContext, PointerSensor, useSensor, useSensors, closestCorners, DragOverlay,
@@ -10,8 +10,9 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Plus, X, GripVertical, MoreHorizontal, Clock, CheckSquare, MessageSquare, AlignLeft, Paperclip, Settings2, Link2, ChevronLeft, ChevronRight, Filter, Bookmark, Trash2, LayoutTemplate, Archive } from "lucide-react";
+import { ArrowLeft, Plus, X, GripVertical, MoreHorizontal, Clock, CheckSquare, MessageSquare, AlignLeft, Paperclip, Settings2, Link2, ChevronLeft, ChevronRight, Filter, Bookmark, Trash2, LayoutTemplate, Archive, Pencil, Check } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import {
   useBoard, useBoardLive, useBoardMutations, POS_GAP,
   type CardSummary, type List, type Label, pessoasDoQuadro } from "@/hooks/useBoards";
@@ -23,11 +24,13 @@ import { useCustomFields, useBoardFieldValues, type CustomField } from "@/hooks/
 import { BoardFieldsDialog } from "@/components/board/BoardFieldsDialog";
 import { TrazerDoTrello } from "@/components/board/TrazerDoTrello";
 import { ItensArquivados } from "@/components/board/ItensArquivados";
+import { EdicaoRapida } from "@/components/board/EdicaoRapida";
 import { FilterControls } from "@/components/board/FilterControls";
 import { ViewSwitcher } from "@/components/board/ViewSwitcher";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { useSavedSearches, useSavedSearchMutations } from "@/hooks/useSavedSearches";
-import { emptyCriteria, criteriaActive, matchCard, type SearchCriteria } from "@/lib/mktFilter";
+import { emptyCriteria, criteriaActive, contarFiltros, matchCard, type SearchCriteria } from "@/lib/mktFilter";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { confirmar, pedirTexto } from "@carbo/shell";
@@ -104,8 +107,17 @@ function CamposNaFrente({ cardId }: { cardId: string }) {
   );
 }
 
+// Ações da FRENTE do cartão (lápis da edição rápida, círculo de concluir,
+// cartão sob o mouse para a tecla E). Por contexto, como os campos: atravessar
+// Lista → Cartão como prop seria mais três props em cada nível.
+const AcoesCtx = createContext<{
+  editar: (card: CardSummary, el: HTMLElement) => void;
+  concluir: (card: CardSummary) => void;
+  sobre: (id: string | null) => void;
+} | null>(null);
+
 // ── Face presentacional do cartão (reusada no kanban e no DragOverlay) ────────
-function CardFace({ card, labels }: { card: CardSummary; labels: Label[] }) {
+function CardFace({ card, labels, onConcluir }: { card: CardSummary; labels: Label[]; onConcluir?: () => void }) {
   const cardLabels = labels.filter((l) => card.labelIds.includes(l.id));
   const overdue = card.due_date && !card.is_complete && new Date(card.due_date) < new Date();
   const capa = lerCapa(card.cover);
@@ -155,7 +167,21 @@ function CardFace({ card, labels }: { card: CardSummary; labels: Label[] }) {
           <Link2 className="h-3.5 w-3.5" /> espelhado de {card.mirrorSourceBoard ?? "—"}{card.mirrorSourceList ? ` / ${card.mirrorSourceList}` : ""}
         </div>
       )}
-      <p className="mkt-card-title">{card.title}</p>
+      <p className="mkt-card-title flex items-start gap-1.5">
+        {/* Círculo de concluído, como no Trello: aparece ao passar o mouse e
+            fica VERDE quando concluído. É o mesmo `is_complete` da data. */}
+        {onConcluir && (
+          <button type="button" title={card.is_complete ? "Marcar como não concluído" : "Marcar como concluído"}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); onConcluir(); }}
+            className={`mt-0.5 h-4 w-4 shrink-0 rounded-full border grid place-items-center transition-all ${card.is_complete
+              ? "bg-success border-success text-white"
+              : "border-muted-foreground/60 hover:border-success hidden group-hover:grid"}`}>
+            {card.is_complete && <Check className="h-3 w-3" strokeWidth={3} />}
+          </button>
+        )}
+        <span className="min-w-0">{card.title}</span>
+      </p>
       <CamposNaFrente cardId={card.mirrorOf ?? card.id} />
       <div className="mkt-meta-row flex-wrap">
         {card.due_date && (
@@ -204,11 +230,21 @@ function BoardCard({ card, labels, onOpen }: { card: CardSummary; labels: Label[
     );
   }
 
+  const acoes = useContext(AcoesCtx);
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}
-      onClick={onOpen}
-      className="group mkt-card cursor-pointer">
-      <CardFace card={card} labels={labels} />
+      onClick={onOpen} data-card-id={card.id}
+      onMouseEnter={() => acoes?.sobre(card.id)} onMouseLeave={() => acoes?.sobre(null)}
+      className="group mkt-card cursor-pointer relative">
+      {acoes && (
+        <button type="button" title="Edição rápida (E)"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); acoes.editar(card, (e.currentTarget.parentElement as HTMLElement)); }}
+          className="absolute top-1.5 right-1.5 z-10 h-7 w-7 grid place-items-center rounded-full bg-card/90 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground hover:bg-muted transition max-sm:hidden">
+          <Pencil className="h-3.5 w-3.5" />
+        </button>
+      )}
+      <CardFace card={card} labels={labels} onConcluir={acoes ? () => acoes.concluir(card) : undefined} />
     </div>
   );
 }
@@ -398,6 +434,37 @@ export default function Board() {
 
   const [openCardId, setOpenCardId] = useState<string | null>(null);
   const [arquivadosAberto, setArquivadosAberto] = useState(false);
+  // Edição rápida: guarda o ID (o cartão é relido do quadro a cada render, para
+  // as etiquetas e membros marcados ali aparecerem na hora) e o retângulo.
+  const [rapida, setRapida] = useState<{ id: string; rect: DOMRect } | null>(null);
+  const sobreRef = useRef<string | null>(null);
+  const acoesCtx = useMemo(() => ({
+    editar: (card: CardSummary, el: HTMLElement) => setRapida({ id: card.id, rect: el.getBoundingClientRect() }),
+    concluir: async (card: CardSummary) => {
+      const r = await (supabase as any).from("mkt_cards").update({ is_complete: !card.is_complete }).eq("id", card.mirrorOf ?? card.id);
+      if (r.error) { toast.error(`Não marcou: ${r.error.message}`); return; }
+      qc.invalidateQueries({ queryKey: ["mkt", "board", boardId] });
+    },
+    sobre: (id: string | null) => { sobreRef.current = id; },
+  }), [qc, boardId]);
+  // Tecla E sobre um cartão = edição rápida, como no Trello. Nunca enquanto se
+  // digita em algum campo, nem com cartão ou diálogo aberto.
+  useEffect(() => {
+    const tecla = (e: KeyboardEvent) => {
+      if (e.key !== "e" && e.key !== "E") return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const alvo = e.target as HTMLElement | null;
+      if (alvo && (alvo.closest("input, textarea, select, [contenteditable=true], [role=dialog]"))) return;
+      const id = sobreRef.current;
+      if (!id || openCardId || rapida) return;
+      const el = document.querySelector(`[data-card-id="${id}"]`) as HTMLElement | null;
+      if (!el) return;
+      e.preventDefault();
+      setRapida({ id, rect: el.getBoundingClientRect() });
+    };
+    window.addEventListener("keydown", tecla);
+    return () => window.removeEventListener("keydown", tecla);
+  }, [openCardId, rapida]);
   const [anexoInicial, setAnexoInicial] = useState<string | null>(null);
   const [fieldsOpen, setFieldsOpen] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -408,6 +475,9 @@ export default function Board() {
   const [criteria, setCriteria] = useState<SearchCriteria>(emptyCriteria());
   const [filterOpen, setFilterOpen] = useState(false);
   const filterActive = criteriaActive(criteria);
+  const { user } = useAuth();
+  const meuId = user?.id ?? null;
+  const passa = (c: CardSummary) => !filterActive || matchCard(c, criteria, { meuId });
   const saved = useSavedSearches("board", boardId);
   const savedMut = useSavedSearchMutations();
 
@@ -535,6 +605,7 @@ export default function Board() {
 
   return (
     <CamposCtx.Provider value={camposCtx}>
+    <AcoesCtx.Provider value={acoesCtx}>
     <div className="fixed inset-0 top-14 mkt-canvas bg-dot-grid flex flex-col">
       {/* Cabeçalho do quadro */}
       <div className="mkt-toolbar header-depth-glow gap-2">
@@ -547,11 +618,14 @@ export default function Board() {
         <div className="ml-auto relative">
           <button onClick={() => setFilterOpen((v) => !v)}
             className={`flex items-center gap-1.5 text-sm rounded-md px-2.5 py-1.5 transition-colors ${filterActive ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}>
-            <Filter className="h-4 w-4" /> Filtrar{filterActive ? " •" : ""}
+            <Filter className="h-4 w-4" /> Filtrar{filterActive ? ` · ${contarFiltros(criteria)}` : ""}
           </button>
           {filterOpen && (
-            <div className="absolute right-0 z-30 mt-1 w-80 max-w-[calc(100vw-2rem)] rounded-[var(--radius)] border border-border bg-popover shadow-[var(--shadow-elevated)] p-4 space-y-3 text-foreground">
-              <FilterControls value={criteria} onChange={setCriteria} labels={labels} team={pessoasDoQuadro(data, team)} />
+            <div className="absolute right-0 z-30 mt-1 w-80 max-w-[calc(100vw-2rem)] max-h-[calc(100vh-9rem)] overflow-y-auto rounded-[var(--radius)] border border-border bg-popover shadow-[var(--shadow-elevated)] p-4 space-y-3 text-foreground">
+              <FilterControls value={criteria} onChange={setCriteria} labels={labels} team={pessoasDoQuadro(data, team)} completo meuId={meuId} />
+              {filterActive && (
+                <p className="text-xs text-muted-foreground">{data.cards.filter(passa).length} de {data.cards.length} cartões no filtro.</p>
+              )}
               <div className="flex items-center gap-2">
                 <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setCriteria(emptyCriteria())}>Limpar</Button>
                 <Button size="sm" className="h-8 text-xs disabled:bg-transparent disabled:text-muted-foreground disabled:border disabled:border-border disabled:opacity-100 disabled:shadow-none" disabled={!filterActive}
@@ -590,8 +664,9 @@ export default function Board() {
             <SortableContext items={lists.map((l) => l.id)} strategy={horizontalListSortingStrategy}>
               {lists.map((l, i) => (
                 <BoardColumn key={l.id} list={l} index={i}
-                  cards={(cardsByList.get(l.id) ?? []).filter((c) => !filterActive || matchCard(c, criteria))}
-                  labels={labels} collapsed={collapsed.has(l.id)}
+                  cards={(cardsByList.get(l.id) ?? []).filter(passa)}
+                  labels={labels}
+                  collapsed={collapsed.has(l.id) || (filterActive && !!criteria.recolherVazias && !(cardsByList.get(l.id) ?? []).some(passa))}
                   onOpenCard={(id) => setOpenCardId(id)} onAddCard={addCard}
                   onRename={(id, title) => m.renameList.mutate({ id, title })}
                   onArchive={(id) => m.archiveList.mutate({ id })}
@@ -631,6 +706,16 @@ export default function Board() {
         </DndContext>
       </div>
 
+      {rapida && (() => {
+        const c = data.cards.find((x) => x.id === rapida.id);
+        if (!c) return null;
+        return (
+          <EdicaoRapida card={c} rect={rapida.rect} boardId={boardId} labels={labels} pessoas={pessoasDoQuadro(data, team)}
+            onClose={() => setRapida(null)}
+            onAbrir={() => setOpenCardId(c.mirrorOf ?? c.id)}
+            onArquivar={() => m.archiveCard.mutate({ id: c.id }, { onSuccess: () => toast.success("Cartão arquivado.") })} />
+        );
+      })()}
       <ItensArquivados boardId={boardId} open={arquivadosAberto} onOpenChange={setArquivadosAberto}
         onAbrirCartao={(id) => { setArquivadosAberto(false); setOpenCardId(id); }} />
       {openCardId && (
@@ -638,6 +723,7 @@ export default function Board() {
       )}
       {fieldsOpen && <BoardFieldsDialog boardId={boardId} onClose={() => setFieldsOpen(false)} />}
     </div>
+    </AcoesCtx.Provider>
     </CamposCtx.Provider>
   );
 }

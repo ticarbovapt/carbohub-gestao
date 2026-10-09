@@ -2353,6 +2353,36 @@ segue a regra do "Excluir quadro": arquivos (atual, capa, web e versões) saem
 do bucket ANTES da linha, e recusa se outro quadro ESPELHA o cartão. O cartão
 arquivado aberto pelo painel mostra a faixa "arquivado" com Restaurar.
 
+**Menu do cartão, edição rápida e filtro completo** (09/10/2026, `20261066`) —
+as três ALTA que faltavam do mapeamento Trello × sistema:
+1. **Mover** (`mkt_cartao_mover`, ATÔMICA) e **Copiar** (`lib/cartaoCopiar.ts`)
+   para qualquer lista de qualquer quadro, com posição. ⚠️ Entre quadros,
+   etiqueta casa por nome + cor (criada no destino se faltar) e campo por
+   nome + tipo (sem par, o valor sai) — sem isso o cartão chegaria com
+   etiquetas que a tela do destino não pinta. ⚠️ Copiar COPIA o objeto no
+   bucket, nunca compartilha: excluir um cartão apaga os arquivos dele. ⚠️
+   Cartão movido para outro quadro leva o `trello_id`; a sincronização do
+   quadro de origem o PULA (`movidosParaFora`), senão ele voltaria duplicado.
+2. **Seguir** (`mkt_card_seguidores`): OPT-IN, avisa no sininho
+   (`mkt_seguindo`) comentário, mudança de lista e arquivamento — nunca para
+   quem fez. ⚠️ Membro NÃO segue sozinho (no Trello segue): passar a avisar
+   todo membro de todo cartão de uma vez é o sininho com 70 itens. Os gatilhos
+   nunca derrubam a gravação. `mkt_seguindo` está no `TYPE_CONFIG` dos OITO.
+   **Ingressar/Sair** e **Copiar link** (`/cartao/<id>`) não precisam de banco.
+3. **Edição rápida** (`components/board/EdicaoRapida.tsx`): lápis no hover ou
+   tecla **E** sobre o cartão. ⚠️ Em ESPELHO, conteúdo edita o ORIGINAL; Mover
+   e Arquivar agem sobre o próprio espelho. O **círculo de concluído** na frente
+   é o MESMO `is_complete` da data.
+4. **Filtro** (`lib/mktFilter.ts`): palavra-chave em título E descrição, sem
+   membros, atribuídos a mim, vários membros, concluído, sem datas, atrasado,
+   entrega em 1 dia/semana/mês, sem etiquetas, atividade, Qualquer/Todas e
+   recolher listas vazias. ⚠️ Busca SALVA antiga não tem `modo` e vale como
+   "todas" — era o que ela fazia. ⚠️ Palavra-chave e De/Até são SEMPRE E. ⚠️
+   Opções que dependem de descrição/concluído/atividade só aparecem no filtro
+   do QUADRO (`completo`): a busca entre quadros não lê esses campos.
+   ⚠️ "Atividade" lê `mkt_cards.updated_at` — cartão importado nasceu com a data
+   da IMPORTAÇÃO, e comentário não mexe nela.
+
 **O cartão é no formato do Trello** (08/10/2026, pedido do dono do processo):
 conteúdo à esquerda (botões de ação numa linha, resumo membros · etiquetas ·
 datas, descrição longa recolhida em "Mostrar mais", campos em grade) e

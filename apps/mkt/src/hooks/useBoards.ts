@@ -25,6 +25,7 @@ export interface CardSummary {
   id: string; list_id: string; board_id: string; title: string;
   description: string | null; position: number;
   start_date: string | null; due_date: string | null; is_complete: boolean; cover: string | null;
+  updated_at: string | null;
   labelIds: string[]; memberIds: string[];
   checklistDone: number; checklistTotal: number; commentCount: number; attachmentCount: number;
   checklistOverdue: boolean;
@@ -185,6 +186,7 @@ export function useBoard(boardId: string | null) {
           description: removed ? null : ((src.description as string) ?? null),
           start_date: (src.start_date as string) ?? null,
           due_date: (src.due_date as string) ?? null, is_complete: !!src.is_complete, cover: (src.cover as string) ?? null,
+          updated_at: (c.updated_at as string) ?? null,
           location_lat: (src.location_lat as number) ?? null, location_lng: (src.location_lng as number) ?? null, location_name: (src.location_name as string) ?? null,
           labelIds: labelsByCard.get(contentId) ?? [], memberIds: membersByCard.get(contentId) ?? [],
           checklistDone: doneByCard.get(contentId) ?? 0, checklistTotal: totalByCard.get(contentId) ?? 0,
