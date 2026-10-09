@@ -2383,6 +2383,26 @@ as três ALTA que faltavam do mapeamento Trello × sistema:
    ⚠️ "Atividade" lê `mkt_cards.updated_at` — cartão importado nasceu com a data
    da IMPORTAÇÃO, e comentário não mexe nela.
 
+**Ações da lista e capa no cartão aberto** (09/10/2026, `20261067`):
+1. Menu da lista (`components/board/AcoesDaLista.tsx`): copiar lista, mover
+   lista (inclusive para outro quadro), mover todos os cartões, ordenar por
+   (criação, nome, entrega), seguir lista e arquivar todos os cartões.
+   ⚠️ `mkt_lista_mover` e `mkt_lista_mover_cartoes` chamam a
+   `mkt_cartao_mover` cartão a cartão — a regra de remapear etiqueta/campo
+   entre quadros mora num lugar só. ⚠️ Mover LISTA leva os ARQUIVADOS junto
+   (senão ficariam no quadro antigo apontando para lista de outro); mover os
+   CARTÕES leva só os ativos. ⚠️ Copiar lista nasce ARQUIVADA e só aparece no
+   fim: falhou no meio, a cópia parcial fica em "Arquivados" e a mensagem diz.
+   Espelho copiado continua espelho do MESMO original.
+   ⚠️ Lista movida leva o `trello_id`; a sincronização do quadro de origem a
+   PULA (`listasMovidasParaFora`), como já fazia com cartão.
+   Seguir lista (`mkt_lista_seguidores`) avisa quando um cartão ENTRA nela —
+   criado ou movido —, opt-in, nunca quem fez.
+2. **A capa tem botão no cartão aberto** (pedido do time, 09/10/2026): faixa da
+   cor no topo do modal e o painel "Capa" (tamanho faixa/cheia, cores,
+   remover). Antes só existia na edição rápida e ninguém achava.
+   `components/board/CapaPainel.tsx` é o MESMO nos dois lugares.
+
 **O cartão é no formato do Trello** (08/10/2026, pedido do dono do processo):
 conteúdo à esquerda (botões de ação numa linha, resumo membros · etiquetas ·
 datas, descrição longa recolhida em "Mostrar mais", campos em grade) e
