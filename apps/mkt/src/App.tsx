@@ -17,6 +17,7 @@ import WorkspaceTable from "./pages/WorkspaceTable";
 import Profile from "./pages/Profile";
 import MinhaEquipe from "./pages/MinhaEquipe";
 import BugReports from "./pages/BugReports";
+import AbrirCartao from "./pages/AbrirCartao";
 import { PaginaNaoEncontrada } from "@carbo/shell";
 
 // Carbo Marketing — app novo do ecossistema. Login único pelo Hub; acesso
@@ -32,6 +33,7 @@ export default function App() {
         <Route path="/vender" element={<Vender />} />
         <Route path="/quadros" element={<Quadros />} />
         <Route path="/quadros/:boardId" element={<Board />} />
+        <Route path="/cartao/:cardId" element={<AbrirCartao />} />
         <Route path="/quadros/:boardId/calendario" element={<BoardCalendar />} />
         <Route path="/quadros/:boardId/timeline" element={<BoardTimeline />} />
         <Route path="/quadros/:boardId/tabela" element={<BoardTable />} />

@@ -16,12 +16,13 @@ import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { useCustomFields } from "@/hooks/useCustomFields";
 import { CustomFieldInput } from "@/components/board/CustomFieldInput";
 import { LABEL_COLORS, LABEL_COLOR_KEYS, tintedLabelStyle } from "@/lib/mktTheme";
-import { ListChecks, Play, Music, Image as ImageIcon, ChevronUp, ChevronDown } from "lucide-react";
+import { ListChecks, Play, Music, Image as ImageIcon, ChevronUp, ChevronDown, LayoutTemplate } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import type { Label } from "@/hooks/useBoards";
 import { diceBearUrl } from "@/components/ui/profile-avatar";
-import { confirmar } from "@carbo/shell";
+import { confirmar, pedirTexto } from "@carbo/shell";
+import { useModeloMutations } from "@/hooks/useModelos";
 import { TextoRico } from "@/lib/textoRico";
 import { EditorDescricao } from "@/components/board/EditorDescricao";
 import { Anexos } from "@/components/board/Anexos";
@@ -58,9 +59,22 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [], anex
   const { data, isLoading } = useCardDetail(cardId);
   useCartaoNoEndereco(cardId);
   const mut = useCardMutations(cardId, boardId);
+  const modelos = useModeloMutations(boardId);
   const { data: timeDept = [] } = useTeamMembers();
   const team = [...pessoas, ...timeDept.filter((t) => !pessoas.some((p) => p.id === t.id))];
   const { data: fields = [] } = useCustomFields(boardId);
+  // Quem dá para MENCIONAR: o time interno inteiro, não só o do quadro — chamar
+  // alguém de fora para olhar é justamente o uso da menção.
+  const { data: internos = [] } = useQuery({
+    queryKey: ["mkt", "pessoas-internas"],
+    staleTime: 10 * 60_000,
+    queryFn: async (): Promise<Pessoa[]> => {
+      const r = await (supabase as any).from("profiles").select("id, full_name, avatar_url").not("department", "is", null).order("full_name");
+      return ((r.data ?? []) as Pessoa[]).filter((p) => p.full_name);
+    },
+  });
+  const mencionaveis = [...team.filter((t) => t.full_name), ...internos.filter((p) => !team.some((t) => t.id === p.id))] as Pessoa[];
+  const [mencionados, setMencionados] = useState<Pessoa[]>([]);
 
   const [title, setTitle] = useState("");
   const [desc, setDesc] = useState("");
@@ -239,6 +253,17 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [], anex
                   <Paperclip className="h-3.5 w-3.5" /> Anexo
                 </Button>
                 <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShowMirror(true)}><Link2 className="h-3.5 w-3.5" /> Espelhar</Button>
+                <Button size="sm" variant="outline" className="gap-1.5" title="Guardar etiquetas, checklist, campos e descrição para criar cartões iguais"
+                  onClick={async () => {
+                    const nome = await pedirTexto({ titulo: "Salvar como modelo", rotulo: "Nome do modelo (ex.: Reels padrão)", valorInicial: data.card.title, obrigatorio: true, confirmar: "Salvar modelo" });
+                    if (!nome?.trim()) return;
+                    modelos.salvar.mutate({ nome: nome.trim(), detalhe: data }, {
+                      onSuccess: () => toast.success(`Modelo "${nome.trim()}" salvo. Use pelo ícone ao lado de "Adicionar cartão" em qualquer lista deste quadro.`),
+                      onError: (e) => toast.error(`Não salvou o modelo: ${(e as Error).message}`),
+                    });
+                  }}>
+                  <LayoutTemplate className="h-3.5 w-3.5" /> Salvar como modelo
+                </Button>
                 <Button size="sm" variant="ghost" className="gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/10"
                   onClick={async () => { if (await confirmar({ titulo: "Arquivar este cartão?", confirmar: "Arquivar" })) { mut.updateCard.mutate({ is_archived: true, archived_at: new Date().toISOString() }, { onSuccess: onClose }); toast.success("Cartão arquivado."); } }}>
                   <Archive className="h-3.5 w-3.5" /> Arquivar
@@ -454,11 +479,31 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [], anex
                 </Button>
               </div>
               <div className="px-4 pb-4 space-y-4 md:overflow-y-auto md:flex-1">
-                <NovoComentario inputRef={comentarioRef} valor={comment} onChange={setComment}
-                  onEnviar={(t) => mut.addComment.mutate({ body: t }, { onSuccess: () => setComment("") })} />
+                <NovoComentario inputRef={comentarioRef} valor={comment} onChange={setComment} pessoas={mencionaveis}
+                  onMencionar={(p) => setMencionados((m) => m.some((x) => x.id === p.id) ? m : [...m, p])}
+                  onEnviar={(t) => mut.addComment.mutate({ body: t }, { onSuccess: () => {
+                    // Só avisa quem CONTINUA no texto: apagar a menção antes de
+                    // salvar desfaz o aviso.
+                    const avisar = mencionados.filter((p) => t.includes(`@${rotuloMencao(p.full_name)}`)).map((p) => p.id);
+                    if (avisar.length) {
+                      (supabase as any).rpc("mkt_notificar_mencao", { p_card: cardId, p_usuarios: avisar, p_trecho: t.slice(0, 200) })
+                        .then((r: { error: { message: string } | null; data: number | null }) => {
+                          if (r.error) toast.error(`Comentário salvo, mas a menção não avisou: ${r.error.message}`);
+                          else if (r.data) toast.success(r.data === 1 ? "A pessoa mencionada foi avisada no sininho." : `${r.data} pessoas mencionadas foram avisadas no sininho.`);
+                        });
+                    }
+                    setComment(""); setMencionados([]);
+                  } })} />
                 {linhaDoTempo(data.comments, detalhes ? atividade : []).map((ev) => ev.tipo === "comentario" ? (
                   <ComentarioItem key={ev.c.id} c={ev.c} meu={ev.c.user_id === user?.id}
-                    onResponder={() => { setComment((v) => `@${(ev.c.authorName ?? "").split(" ")[0]} ${v}`); comentarioRef.current?.focus(); }}
+                    onResponder={() => {
+                      const autor = { id: ev.c.user_id, full_name: ev.c.authorName, avatar_url: ev.c.authorAvatar };
+                      if (autor.full_name && ev.c.user_id !== user?.id) {
+                        setMencionados((m) => m.some((x) => x.id === autor.id) ? m : [...m, autor]);
+                        setComment((v) => `@${rotuloMencao(autor.full_name)} ${v}`);
+                      }
+                      comentarioRef.current?.focus();
+                    }}
                     onSalvar={(body) => mut.updateComment.mutate({ id: ev.c.id, body })}
                     onExcluir={async () => { if (await confirmar({ titulo: "Excluir este comentário?", confirmar: "Excluir" })) mut.removeComment.mutate({ id: ev.c.id }); }} />
                 ) : (
@@ -500,6 +545,7 @@ const ROTULO_ATIVIDADE: Record<string, string> = {
   "anexo.adicionar": "anexou um arquivo",
   "anexo.substituir": "substituiu um arquivo",
   "anexo.excluir": "excluiu um arquivo",
+  "anexo.restaurar": "restaurou uma versão anterior de um arquivo",
 };
 const dataHora = (iso: string) => new Date(iso).toLocaleString("pt-BR", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 function resumoDatas(inicio: string | null, entrega: string | null) {
@@ -516,20 +562,77 @@ function linhaDoTempo(comentarios: Comment[], atividade: Atividade[]): Evento[] 
   ].sort((x, y) => y.quando.localeCompare(x.quando));
 }
 
+type Pessoa = { id: string; full_name: string | null; avatar_url: string | null };
+/** Como a pessoa aparece no texto: primeiro e segundo nome ("@Mirian Silva"). */
+const rotuloMencao = (nome: string | null) => (nome ?? "").trim().split(/\s+/).slice(0, 2).join(" ");
+const semAcento = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
 // Campo de comentário: fechado é uma linha; ao focar abre, e só envia no botão
-// (ou Ctrl+Enter) — Enter quebra linha, como no Trello.
-function NovoComentario({ valor, onChange, onEnviar, inputRef }: {
+// (ou Ctrl+Enter) — Enter quebra linha, como no Trello. Digitar "@" abre a
+// lista de pessoas; quem for escolhido recebe aviso no sininho ao salvar.
+function NovoComentario({ valor, onChange, onEnviar, inputRef, pessoas, onMencionar }: {
   valor: string; onChange: (v: string) => void; onEnviar: (t: string) => void;
   inputRef: React.RefObject<HTMLTextAreaElement>;
+  pessoas: Pessoa[]; onMencionar: (p: Pessoa) => void;
 }) {
   const [aberto, setAberto] = useState(false);
+  const [busca, setBusca] = useState<{ termo: string; inicio: number } | null>(null);
+  const [sel, setSel] = useState(0);
   const enviar = () => { const t = valor.trim(); if (t) onEnviar(t); };
+
+  const opcoes = busca
+    ? pessoas.filter((p) => semAcento(p.full_name ?? "").split(/\s+/).some((w) => w.startsWith(semAcento(busca.termo)))
+        || semAcento(p.full_name ?? "").startsWith(semAcento(busca.termo))).slice(0, 6)
+    : [];
+
+  const olhar = (el: HTMLTextAreaElement) => {
+    const ate = el.value.slice(0, el.selectionStart ?? el.value.length);
+    const m = /(^|\s)@([^\s@]{0,30})$/.exec(ate);
+    setBusca(m ? { termo: m[2], inicio: ate.length - m[2].length - 1 } : null);
+    setSel(0);
+  };
+  const escolher = (p: Pessoa) => {
+    if (!busca) return;
+    const el = inputRef.current;
+    const fim = busca.inicio + 1 + busca.termo.length;
+    const texto = `@${rotuloMencao(p.full_name)} `;
+    const novo = valor.slice(0, busca.inicio) + texto + valor.slice(fim);
+    onChange(novo); onMencionar(p); setBusca(null);
+    requestAnimationFrame(() => { if (el) { el.focus(); const pos = busca.inicio + texto.length; el.setSelectionRange(pos, pos); } });
+  };
+
   return (
     <div className="space-y-2">
-      <textarea ref={inputRef} value={valor} onChange={(e) => onChange(e.target.value)} onFocus={() => setAberto(true)}
-        onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); enviar(); } }}
-        rows={aberto ? 3 : 1} placeholder="Escrever um comentário…"
-        className="w-full text-sm rounded-[var(--input-radius)] border border-border bg-card px-3 py-2 resize-y focus:outline-none focus:ring-2 focus:ring-primary/40" />
+      <div className="relative">
+        <textarea ref={inputRef} value={valor}
+          onChange={(e) => { onChange(e.target.value); olhar(e.target); }}
+          onClick={(e) => olhar(e.currentTarget)}
+          onFocus={() => setAberto(true)}
+          onBlur={() => setTimeout(() => setBusca(null), 150)}
+          onKeyDown={(e) => {
+            if (busca && opcoes.length) {
+              if (e.key === "ArrowDown") { e.preventDefault(); setSel((x) => (x + 1) % opcoes.length); return; }
+              if (e.key === "ArrowUp") { e.preventDefault(); setSel((x) => (x - 1 + opcoes.length) % opcoes.length); return; }
+              if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); escolher(opcoes[sel]); return; }
+              if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setBusca(null); return; }
+            }
+            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); enviar(); }
+          }}
+          rows={aberto ? 3 : 1} placeholder="Escrever um comentário… (@ para mencionar)"
+          className="w-full text-sm rounded-[var(--input-radius)] border border-border bg-card px-3 py-2 resize-y focus:outline-none focus:ring-2 focus:ring-primary/40" />
+        {busca && opcoes.length > 0 && (
+          <div className="absolute z-30 left-0 right-0 top-full mt-1 rounded-[var(--radius)] border border-border bg-popover shadow-[var(--shadow-elevated)] p-1">
+            <p className="px-2 pt-1 pb-1.5 text-[11px] text-muted-foreground">Mencionar — a pessoa é avisada no sininho</p>
+            {opcoes.map((p, k) => (
+              <button key={p.id} type="button" onMouseDown={(e) => { e.preventDefault(); escolher(p); }} onMouseEnter={() => setSel(k)}
+                className={`w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm ${k === sel ? "bg-muted" : ""}`}>
+                <img src={p.avatar_url || diceBearUrl(p.id)} className="h-6 w-6 rounded-full object-cover" />
+                <span className="truncate">{p.full_name}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
       {(aberto || valor) && (
         <div className="flex items-center gap-2">
           <Button size="sm" disabled={!valor.trim()} onClick={enviar}>Salvar</Button>

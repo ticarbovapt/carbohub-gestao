@@ -24,15 +24,17 @@ import {
 // copiado continua levando à versão nova. Acaba o "subir no Drive, voltar ao
 // cartão e trocar o link em todo lugar".
 //
-// ⚠️ Substituir grava um objeto NOVO e só depois apaga o antigo: se o envio
-//    cair no meio, o anexo continua apontando para o arquivo que existe.
-// ⚠️ Excluir apaga o OBJETO antes da linha: ao contrário, sobraria arquivo no
-//    bucket que nenhuma tela mostra (e que ninguém mais acharia para apagar).
+// ⚠️ Substituir NÃO apaga a anterior: ela vira versão (v1, v2…, em
+//    `mkt_anexo_versoes`) e pode ser vista, comparada e restaurada. O arquivo
+//    novo sobe primeiro; só então a RPC troca, numa transação, o atual pelo
+//    novo — queda no meio deixa o anexo como estava.
+// ⚠️ Excluir apaga os OBJETOS (o atual e os de TODAS as versões) antes da
+//    linha: ao contrário, sobraria arquivo no bucket que nenhuma tela mostra.
 // ⚠️ A lista carrega só a CAPA. Arquivo sem capa (os do Trello) ganha uma na
 //    primeira vez que alguém o abre.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const db = supabase as unknown as { from: (t: string) => any };
+const db = supabase as unknown as { from: (t: string) => any; rpc: (f: string, a: unknown) => any };
 type Envio = { id: string; nome: string; frac: number; erro?: string };
 
 async function meuId() {
@@ -130,16 +132,12 @@ export function Anexos({ cardId, boardId, anexos, anexoInicial, onAdicionarLink,
     try {
       await enviar(f, caminho, f.type || "application/octet-stream", (frac) => setSubstituindo((s) => ({ ...s, [a.id]: frac })));
       const capa = await enviarCapa(a.id, f, tipoDoArquivo(f.type, f.name));
-      const up = await db.from("mkt_card_attachments").update({
-        name: f.name, storage_path: caminho, external_url: `storage://${BUCKET}/${caminho}`, mime_type: f.type || null,
-        tamanho: f.size, poster_path: capa, atualizado_em: new Date().toISOString(), atualizado_por: await meuId(), kind: "arquivo",
-      }).eq("id", a.id);
-      if (up.error) { await supabase.storage.from(BUCKET).remove([caminho, ...(capa ? [capa] : [])]); throw new Error(up.error.message); }
-      // Só agora o antigo some — o anexo já aponta para o novo.
-      const velhos = [a.storage_path, a.poster_path].filter(Boolean) as string[];
-      if (velhos.length) await supabase.storage.from(BUCKET).remove(velhos);
-      void registrar("anexo.substituir", { de: a.name, para: f.name });
-      toast.success(`"${a.name}" substituído por "${f.name}". O link continua o mesmo.`);
+      const r = await db.rpc("mkt_anexo_substituir", {
+        p_anexo: a.id, p_nome: f.name, p_storage_path: caminho, p_mime: f.type || null, p_tamanho: f.size, p_poster: capa,
+      });
+      if (r.error) { await supabase.storage.from(BUCKET).remove([caminho, ...(capa ? [capa] : [])]); throw new Error(r.error.message); }
+      void registrar("anexo.substituir", { de: a.name, para: f.name, versao: r.data });
+      toast.success(`"${f.name}" é agora a v${r.data}. A anterior ficou no histórico, e o link continua o mesmo.`);
       atualizar();
     } catch (e) {
       toast.error(`Não substituiu: ${(e as Error).message}`);
@@ -150,8 +148,16 @@ export function Anexos({ cardId, boardId, anexos, anexoInicial, onAdicionarLink,
 
   // ── excluir ───────────────────────────────────────────────────────────────
   const excluir = async (a: Attachment) => {
-    if (!(await confirmar({ titulo: `Excluir "${a.name}"?`, mensagem: "O arquivo é apagado do sistema e o link dele para de funcionar.", confirmar: "Excluir", perigo: true }))) return;
-    const objetos = [a.storage_path, a.poster_path].filter(Boolean) as string[];
+    const vs = await db.from("mkt_anexo_versoes").select("storage_path, poster_path, web_path").eq("anexo_id", a.id);
+    if (vs.error) { toast.error(`Não excluiu: ${vs.error.message}`); return; }
+    const anteriores = (vs.data ?? []) as { storage_path: string; poster_path: string | null; web_path: string | null }[];
+    if (!(await confirmar({
+      titulo: `Excluir "${a.name}"?`,
+      mensagem: `O arquivo é apagado do sistema e o link dele para de funcionar.${anteriores.length ? ` As ${anteriores.length} versões anteriores vão junto.` : ""}`,
+      confirmar: "Excluir", perigo: true,
+    }))) return;
+    const objetos = [a.storage_path, a.poster_path, a.web_path, ...anteriores.flatMap((v) => [v.storage_path, v.poster_path, v.web_path])]
+      .filter(Boolean) as string[];
     const rm = await supabase.storage.from(BUCKET).remove(objetos);
     if (rm.error) { toast.error(`Não excluiu: ${rm.error.message}`); return; }
     const del = await db.from("mkt_card_attachments").delete().eq("id", a.id);
@@ -249,7 +255,10 @@ export function Anexos({ cardId, boardId, anexos, anexoInicial, onAdicionarLink,
                   )}
                 </button>
                 <button type="button" onClick={() => setAberto(idx)} className="min-w-0 flex-1 text-left">
-                  <p className="text-sm font-medium text-foreground truncate">{a.name}</p>
+                  <p className="text-sm font-medium text-foreground truncate">
+                    {(a.versao ?? 1) > 1 && <span className="mr-1.5 inline-flex items-center rounded bg-primary/15 text-primary text-[11px] font-semibold px-1.5 py-px align-[1px]" title="Versão atual — as anteriores ficam no histórico">v{a.versao}</span>}
+                    {a.name}
+                  </p>
                   <p className="text-xs text-muted-foreground truncate">
                     {ROTULO_TIPO[tipo]}{a.tamanho ? ` · ${tamanhoLegivel(a.tamanho)}` : ""} · {a.atualizado_em
                       ? `substituído em ${new Date(a.atualizado_em).toLocaleDateString("pt-BR")}`
@@ -261,7 +270,7 @@ export function Anexos({ cardId, boardId, anexos, anexoInicial, onAdicionarLink,
                     <button className="h-8 w-8 shrink-0 inline-flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground" title="Ações"><MoreHorizontal className="h-4 w-4" /></button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-52">
-                    <DropdownMenuItem onClick={() => pedirTroca(a)}><RefreshCw className="h-4 w-4 mr-2" /> Substituir arquivo</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => pedirTroca(a)}><RefreshCw className="h-4 w-4 mr-2" /> Substituir (nova versão)</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => copiar(a)}><Link2 className="h-4 w-4 mr-2" /> Copiar link</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => baixar(a)}><Download className="h-4 w-4 mr-2" /> Baixar</DropdownMenuItem>
                     <DropdownMenuSeparator />
@@ -318,7 +327,8 @@ export function Anexos({ cardId, boardId, anexos, anexoInicial, onAdicionarLink,
 
       {aberto !== null && arquivos.length > 0 && (
         <Visualizador anexos={arquivos} inicial={aberto} onClose={() => setAberto(null)} linkDe={linkDe}
-          onSubstituir={pedirTroca} onAbriu={capaNaPrimeiraAbertura} />
+          onSubstituir={pedirTroca} onAbriu={capaNaPrimeiraAbertura} onMudou={atualizar}
+          registrar={(t, d) => void registrar(t, d)} />
       )}
     </div>
   );

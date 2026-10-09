@@ -2345,12 +2345,11 @@ está DESLIGADO de propósito: markdown não o guarda, e ele sumiria ao salvar.
 diferencial pedido: acabar com "subir no Drive, voltar ao cartão, trocar o link
 em todo lugar". O "Copiar link" leva a `?card=…&anexo=…` e continua valendo
 depois de substituir — o ANEXO é o mesmo, só o conteúdo muda.
-1. ⚠️ **Substituir grava objeto NOVO e só depois apaga o antigo.** Envio que cai
-   no meio deixa o anexo apontando para o arquivo que existe. Sem policy de
-   UPDATE no bucket, de propósito: objeto novo = cache do navegador nunca serve
-   a versão velha.
-2. ⚠️ **Excluir apaga o OBJETO antes da linha** — ao contrário sobraria arquivo
-   no bucket que tela nenhuma mostra.
+1. ⚠️ **Substituir grava objeto NOVO e NÃO apaga o antigo** (desde a `20261062`):
+   a anterior vira VERSÃO. Sem policy de UPDATE no bucket, de propósito: objeto
+   novo = cache do navegador nunca serve a versão velha.
+2. ⚠️ **Excluir apaga os OBJETOS (o atual e os de TODAS as versões) antes da
+   linha** — ao contrário sobraria arquivo no bucket que tela nenhuma mostra.
 3. ⚠️ **O ORIGINAL NÃO é recomprimido**: é a entrega do designer, e recomprimir
    no navegador pioraria a peça. Leve é o que a tela CARREGA: a lista mostra só
    a CAPA (`poster_path`, jpeg de 480 px gerado no navegador); o vídeo só é
@@ -2358,8 +2357,65 @@ depois de substituir — o ANEXO é o mesmo, só o conteúdo muda.
    Trello) ganha uma na PRIMEIRA abertura.
 4. Envio acima de 6 MB vai em partes (TUS, `tus-js-client`), com progresso e
    retomada; o Storage exige exatamente 6 MB por parte.
-5. ⚠️ **.MOV de iPhone (HEVC) não toca no Chrome** — o player diz isso e oferece
-   o original. Converter exigiria transcodificar no servidor; não existe hoje.
+5. ⚠️ **.MOV de iPhone (HEVC) não toca no Chrome** — resolvido pelo conversor
+   (abaixo). Enquanto a cópia não existe, o player diz que ela está a caminho.
+
+**Versões, menção, prazo, modelos, vídeo e excluir quadro** (`20261062`,
+09/10/2026, pedido do dono do processo como "o diferencial de verdade"):
+
+```
+mkt_anexo_versoes            as ANTERIORES; a atual mora no próprio anexo (versao)
+mkt_anexo_substituir/_restaurar   RPCs atômicas — o navegador sobe, o banco troca
+mkt_notificar_mencao         @menção → sininho, SÓ de quem foi mencionado
+mkt_avisar_prazos + mkt_aviso_prazo   cron 11:17 UTC; dedupe (cartão, tipo, prazo)
+mkt_card_templates           modelos por QUADRO
+mkt_quadro_para_excluir      contagem, espelhos de fora e a lista de arquivos
+mkt-video-web + mkt-transcodificar.yml + .github/scripts/mkt-transcodificar.sh
+pages/AbrirCartao.tsx        /cartao/:id — o endereço que o sininho usa
+```
+
+1. ⚠️ **A versão ATUAL mora no anexo; só as anteriores vão para a tabela.** Uma
+   tabela com todas obrigaria toda tela a escolher "a última", e a que
+   esquecesse mostraria o arquivo velho. O anexo continua sendo a identidade —
+   é o que mantém o link copiado.
+2. ⚠️ **Restaurar cria versão NOVA** (v4 = conteúdo da v2) e TIRA a linha da v2
+   do histórico: duas linhas apontando o MESMO objeto fariam excluir uma apagar
+   o arquivo da outra.
+3. **Comparar**: vídeo lado a lado, sincronizado (a atual manda, a anterior é
+   corrigida se escorregar > 0,15 s), som só da atual. Os menus do visualizador
+   são `<select>` nativo: o `DropdownMenu` abre em z-50, ABAIXO do z-70 dele.
+4. ⚠️ **Menção avisa SÓ quem foi mencionado**, nunca o time (`notify_time_interno`
+   multiplica por 30). E só quem continua no TEXTO ao salvar — apagar a menção
+   desfaz o aviso. A lista é o time interno inteiro (`profiles` com
+   departamento), não só o do quadro: chamar alguém de fora é o uso da menção.
+5. ⚠️ **Prazo: "atrasou" é só o de ONTEM** (dia de Brasília). Avisar todo
+   atrasado todo dia seria o sininho com 70 itens. Recebe quem é MEMBRO; sem
+   membro, quem criou. Fora: concluído, arquivado (cartão, lista ou quadro) e
+   ESPELHO (repetiria o original). Mudar o prazo gera aviso novo — a chave do
+   dedupe inclui `due_date`.
+6. **O sininho dos OITO apps** abre `reference_type = 'mkt_card'` em
+   `https://mkt.carbohub.com.br/cartao/<id>` (ou navega, se já está no mkt). O
+   link é pelo CARTÃO, não pelo quadro: cartão que muda de quadro continua
+   abrindo. Tipo novo de notificação do mkt: entra no `TYPE_CONFIG` dos oito.
+7. **Modelo guarda CONTEÚDO, nunca estado**: checklist volta desmarcado;
+   membros, datas e anexos não vão. Etiqueta ou campo apagado do quadro depois
+   fica de fora em vez de derrubar a criação. Criação falhou no meio ⇒ apaga o
+   cartão (cascata leva o resto).
+8. ⚠️ **O conversor roda no GitHub Actions** (cada 15 min, ffmpeg), não numa
+   edge function: 243 MB não cabem nela. O GitHub guarda só o `CRON_SECRET`; a
+   função `mkt-video-web` tem destinos FIXOS (`web/<id>/`, `capas/<id>/`). H.264
+   8 bits em .mov só troca o envelope; HEVC/10 bits/ProRes converte até 1080p.
+   O ORIGINAL nunca é tocado ("Baixar" entrega o que subiu). Três falhas e para,
+   com `web_erro`. ⚠️ `concluir` só grava se o anexo AINDA aponta o arquivo
+   convertido — substituído no meio, a cópia é descartada.
+   ⚠️ HDR do iPhone (HLG) vira 8 bits sem tonemapping: as cores podem sair
+   lavadas na cópia. O original fica certo.
+   ⚠️ O Chromium do harness não toca H.264 (codec proprietário): teste de tela
+   com vídeo usa VP9/WebM, senão "não toca" é do harness, não do código.
+9. ⚠️ **Excluir quadro RECUSA quando outro quadro espelha um cartão dele** — a FK
+   do espelho é ON DELETE CASCADE e levaria o cartão de lá, calado. Confirmação
+   é DIGITAR o nome. Arquivos saem do bucket antes da linha. Só gestor ou quem
+   criou vê o botão.
 
 ### Regras anti-confusão (OBRIGATÓRIAS)
 1. **Todo pedido nomeia o alvo.** "no CRM" → `apps/crm`; "no controle"/"atual" → raiz (`src/`).

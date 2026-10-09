@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { pedirTexto } from "@carbo/shell";
 import { ImportarTrello } from "@/components/board/ImportarTrello";
+import { ExcluirQuadro } from "@/components/board/ExcluirQuadro";
+import { useAuth } from "@/contexts/AuthContext";
 
 const HEADING_FONT = "'IBM Plex Sans', 'Inter', system-ui, sans-serif";
 
@@ -20,6 +22,8 @@ export default function Quadros() {
   const { data: boards = [], isLoading } = useBoards();
   const { createBoard } = useBoardMutations();
   const { data: team = [] } = useTeamMembers();
+  // Excluir é do GESTOR, ou de quem criou o quadro.
+  const { user, isGestor } = useAuth();
   const [creating, setCreating] = useState(false);
   const [title, setTitle] = useState("");
   const [bg, setBg] = useState("blue");
@@ -106,8 +110,9 @@ export default function Quadros() {
                 style={{ ["--mkt-accent" as string]: getAccent(b.background) }}
               >
                 <span className="mkt-accent-bar absolute inset-x-0 top-0" />
+                {(isGestor || (!!user && b.created_by === user.id)) && <ExcluirQuadro board={b} />}
                 <h3
-                  className="text-sm font-semibold text-foreground leading-snug line-clamp-3 tracking-tight"
+                  className="text-sm font-semibold text-foreground leading-snug line-clamp-3 tracking-tight pr-6"
                   style={{ fontFamily: HEADING_FONT }}
                 >
                   {b.title}
