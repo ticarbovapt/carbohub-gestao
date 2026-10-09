@@ -81,7 +81,10 @@ async function lerEstado(boardId: string): Promise<EstadoDaqui> {
       .select("id, checklist_id, text, is_done, position, due_date, assignee_id, created_at, trello_id")
       .in("checklist_id", ids.slice(i, i + 200)).order("id")));
   }
-  return { board, lists, cards, labels, fields, cardLabels, cardMembers, fieldValues, checklists, items, attachments };
+  const fora = await lerTudo<{ trello_id: string }>(() => db.from("mkt_cards").select("trello_id")
+    .neq("board_id", boardId).not("trello_id", "is", null).order("id"));
+  const movidosParaFora = new Set(fora.map((x) => x.trello_id));
+  return { board, lists, cards, labels, fields, cardLabels, cardMembers, fieldValues, checklists, items, attachments, movidosParaFora };
 }
 
 // A ordem é a das chaves estrangeiras: o que é apontado entra antes de quem aponta.

@@ -16,7 +16,9 @@ import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { useCustomFields } from "@/hooks/useCustomFields";
 import { CustomFieldInput } from "@/components/board/CustomFieldInput";
 import { LABEL_COLORS, LABEL_COLOR_KEYS, tintedLabelStyle } from "@/lib/mktTheme";
-import { ListChecks, Play, Music, Image as ImageIcon, ChevronUp, ChevronDown, LayoutTemplate, RotateCcw } from "lucide-react";
+import { ListChecks, Play, Music, Image as ImageIcon, ChevronUp, ChevronDown, LayoutTemplate, RotateCcw, ArrowRight, Copy, Eye, Share2, UserPlus, UserMinus } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { MoverCopiar } from "@/components/board/MoverCopiar";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import type { Label } from "@/hooks/useBoards";
@@ -86,6 +88,7 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [], anex
   const [showMembers, setShowMembers] = useState(false);
   const [attachUrl, setAttachUrl] = useState("");
   const [showMirror, setShowMirror] = useState(false);
+  const [moverCopiar, setMoverCopiar] = useState<"mover" | "copiar" | null>(null);
   const [addr, setAddr] = useState("");
   const [geoLoading, setGeoLoading] = useState(false);
   const [newLabelName, setNewLabelName] = useState("");
@@ -100,6 +103,30 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [], anex
   const [descAberta, setDescAberta] = useState(false);
   const [detalhes, setDetalhes] = useState(false);
   const { user } = useAuth();
+  const qcLocal = useQueryClient();
+  // Seguir: opt-in, avisa no sininho quando alguém comenta, move ou arquiva.
+  // A tabela só mostra o PRÓPRIO seguir (RLS), então a pergunta é "eu sigo?".
+  const { data: sigo = false } = useQuery({
+    queryKey: ["mkt", "sigo", cardId, user?.id],
+    enabled: !!user?.id,
+    queryFn: async () => {
+      const r = await (supabase as any).from("mkt_card_seguidores").select("card_id").eq("card_id", cardId).eq("user_id", user!.id).maybeSingle();
+      return !!r.data;
+    },
+  });
+  const alternarSeguir = async () => {
+    if (!user?.id) return;
+    const t = (supabase as any).from("mkt_card_seguidores");
+    const r = sigo ? await t.delete().eq("card_id", cardId).eq("user_id", user.id) : await t.insert({ card_id: cardId, user_id: user.id });
+    if (r.error) { toast.error(`Não deu: ${r.error.message}`); return; }
+    qcLocal.invalidateQueries({ queryKey: ["mkt", "sigo", cardId] });
+    toast.success(sigo ? "Você deixou de seguir este cartão." : "Seguindo: você recebe no sininho comentários, mudanças de lista e arquivamento.");
+  };
+  const copiarLink = async () => {
+    const url = `${window.location.origin}/cartao/${cardId}`;
+    try { await navigator.clipboard.writeText(url); toast.success("Link do cartão copiado."); }
+    catch { toast.message(url); }
+  };
   const descLonga = (data?.card.description ?? "").length > 700 || (data?.card.description ?? "").split("\n").length > 14;
 
   const { data: listaTitulo } = useQuery({
@@ -246,6 +273,9 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [], anex
                   )}
                 </div>
                 <Button size="sm" variant="outline" className="gap-1.5" onClick={() => mut.addChecklist.mutate({ title: "Checklist" })}><CheckSquare className="h-3.5 w-3.5" /> Checklist</Button>
+                {user?.id && (data.memberIds.includes(user.id)
+                  ? <Button size="sm" variant="outline" className="gap-1.5" onClick={() => mut.toggleMember.mutate({ userId: user.id, on: false })} title="Sair deste cartão"><UserMinus className="h-3.5 w-3.5" /> Sair</Button>
+                  : <Button size="sm" variant="outline" className="gap-1.5" onClick={() => mut.toggleMember.mutate({ userId: user.id, on: true })} title="Entrar como membro deste cartão"><UserPlus className="h-3.5 w-3.5" /> Ingressar</Button>)}
                 <div className="relative" ref={membersRef}>
                   <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShowMembers((v) => !v)}><User className="h-3.5 w-3.5" /> Membros</Button>
                   {showMembers && (
@@ -264,7 +294,13 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [], anex
                   onClick={() => { anexosRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>
                   <Paperclip className="h-3.5 w-3.5" /> Anexo
                 </Button>
+                <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setMoverCopiar("mover")}><ArrowRight className="h-3.5 w-3.5" /> Mover</Button>
+                <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setMoverCopiar("copiar")}><Copy className="h-3.5 w-3.5" /> Copiar</Button>
                 <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShowMirror(true)}><Link2 className="h-3.5 w-3.5" /> Espelhar</Button>
+                <Button size="sm" variant={sigo ? "secondary" : "outline"} className="gap-1.5" onClick={alternarSeguir} title="Receber no sininho o que acontecer neste cartão">
+                  <Eye className="h-3.5 w-3.5" /> {sigo ? "Seguindo" : "Seguir"}
+                </Button>
+                <Button size="sm" variant="outline" className="gap-1.5" onClick={copiarLink}><Share2 className="h-3.5 w-3.5" /> Copiar link</Button>
                 <Button size="sm" variant="outline" className="gap-1.5" title="Guardar etiquetas, checklist, campos e descrição para criar cartões iguais"
                   onClick={async () => {
                     const nome = await pedirTexto({ titulo: "Salvar como modelo", rotulo: "Nome do modelo (ex.: Reels padrão)", valorInicial: data.card.title, obrigatorio: true, confirmar: "Salvar modelo" });
@@ -530,6 +566,12 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [], anex
               </div>
             </div>
 
+            {moverCopiar && (
+              <MoverCopiar modo={moverCopiar}
+                card={{ id: cardId, title: data.card.title, board_id: data.card.board_id, list_id: data.card.list_id }}
+                onClose={() => setMoverCopiar(null)}
+                onFeito={() => { if (moverCopiar === "mover" && data.card.board_id !== boardId) onClose(); }} />
+            )}
             {showMirror && (
               <MirrorDialog
                 onConfirm={(targetListId, targetBoardId) => {

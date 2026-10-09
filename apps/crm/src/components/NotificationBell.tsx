@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AtSign, Bell, Bug, Check, CheckCheck, Clock, ListTodo, MessageCircle, Trash2, WifiOff, ShoppingCart, FileText, Package, CalendarClock } from "lucide-react";
+import { AtSign, Eye, Bell, Bug, Check, CheckCheck, Clock, ListTodo, MessageCircle, Trash2, WifiOff, ShoppingCart, FileText, Package, CalendarClock } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useNotifications, Notification } from "@/hooks/useNotifications";
@@ -21,6 +21,7 @@ const TYPE_CONFIG: Record<string, { Icon: React.ElementType; label: string; colo
   ecommerce_disconnected: { Icon: WifiOff,       label: "E-commerce caído", color: "text-destructive", bg: "bg-destructive/10" },
   ecommerce_sale:         { Icon: ShoppingCart,  label: "Nova venda",     color: "text-emerald-600", bg: "bg-emerald-500/10" },
   mkt_mencao:             { Icon: AtSign,        label: "Menção",         color: "text-violet-500",  bg: "bg-violet-500/10" },
+  mkt_seguindo:           { Icon: Eye,           label: "Seguindo",       color: "text-sky-500",     bg: "bg-sky-500/10" },
   mkt_prazo:              { Icon: CalendarClock, label: "Prazo",          color: "text-amber-600",   bg: "bg-amber-500/10" },
   finance_rc_pendente:    { Icon: FileText,      label: "Requisição",     color: "text-amber-600",   bg: "bg-amber-500/10" },
   finance_oc_nova:        { Icon: Package,       label: "Ordem de compra", color: "text-blue-500",   bg: "bg-blue-500/10" },
