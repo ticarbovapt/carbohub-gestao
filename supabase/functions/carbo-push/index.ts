@@ -25,6 +25,9 @@ const VAPID_PUBLIC = Deno.env.get("VAPID_PUBLIC_KEY") ?? "";
 const VAPID_PRIVATE = Deno.env.get("VAPID_PRIVATE_KEY") ?? "";
 const VAPID_SUBJECT = Deno.env.get("VAPID_SUBJECT") ?? "mailto:ti@carbohub.com.br";
 const HUB = "https://carbohub.com.br";
+// O Hub abre com e sem `www` (medido: o aparelho do CEO registrou
+// https://www.carbohub.com.br) — os dois são o Hub.
+const ehHub = (o: string | null) => !!o && /^https:\/\/(www\.)?carbohub\.com\.br$/.test(o);
 
 if (VAPID_PUBLIC && VAPID_PRIVATE) webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC, VAPID_PRIVATE);
 
@@ -75,7 +78,7 @@ Deno.serve(async (req) => {
 
   await Promise.all(itens.map(async (i) => {
     const subs = (porUsuario.get(i.user_id) ?? []);
-    const ordem = [...subs.filter((s) => s.origin === HUB), ...subs.filter((s) => s.origin !== HUB)];
+    const ordem = [...subs.filter((s) => ehHub(s.origin)), ...subs.filter((s) => !ehHub(s.origin))];
     const aviso = JSON.stringify({
       title: i.title || "Carbo",
       body: i.body || "",
