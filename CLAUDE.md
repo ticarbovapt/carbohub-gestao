@@ -2324,6 +2324,26 @@ bucket mkt-anexos (PRIVADO, 300 MB/arquivo)   Secrets TRELLO_KEY / TRELLO_TOKEN
    `montarImportacao`). Duas cópias divergiriam e o mesmo autor sairia com
    nomes diferentes no mesmo cartão.
 
+**"Sincronizar com o Trello"** (09/10/2026, `20261065`, botão **Trello** do
+quadro): até a virada o time segue no Trello, e o quadro daqui ACOMPANHA.
+`lib/trelloSync.ts` (PURO) compara o quadro vivo — lido pela ação `quadro` da
+`trello-migrar` — com o daqui e devolve o plano; `SincronizarTrello.tsx`
+mostra cartão a cartão o que muda e só grava no "Aplicar".
+1. ⚠️ **O Trello vence no que veio de lá; o que NASCEU AQUI fica.** "Veio do
+   Trello" = tem `trello_id`, ou foi gravado pela importação (até 30 min depois
+   de o quadro nascer). Sem essa separação, cartão criado aqui seria lido como
+   "apagado no Trello".
+2. ⚠️ **Apagado no Trello é ARQUIVADO aqui, nunca apagado** — comentário, anexo
+   e histórico ficam.
+3. ⚠️ **O import não guardou o id do Trello.** A 1ª sincronização liga pelo
+   instante de criação (só casamento ÚNICO) e grava `trello_id` em listas,
+   cartões, etiquetas, campos, checklists e itens; dali em diante o elo é o id.
+4. ⚠️ **Membro só SAI se for pessoa casada com alguém do Trello** — falha de
+   casamento por nome não pode tirar gente do cartão. Anexo nunca sai; só entra.
+5. Posição: diferença ≤ 0,5 não conta (o import somou fração de desempate).
+6. Comentários e arquivos continuam nas seções "Comentários" e "Arquivos" do
+   mesmo diálogo — rode depois de sincronizar.
+
 **O cartão é no formato do Trello** (08/10/2026, pedido do dono do processo):
 conteúdo à esquerda (botões de ação numa linha, resumo membros · etiquetas ·
 datas, descrição longa recolhida em "Mostrar mais", campos em grade) e

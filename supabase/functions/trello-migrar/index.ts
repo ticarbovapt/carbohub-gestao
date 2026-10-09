@@ -15,6 +15,8 @@ import { createClient } from "npm:@supabase/supabase-js@2.39.3";
 //
 // Ações (POST JSON):
 //   { acao: "anexo", attachment_id }        copia UM arquivo para `mkt-anexos`
+//   { acao: "quadro", quadro }             o quadro INTEIRO (listas, cartões,
+//                                           etiquetas, campos, checklists) — só lê
 //   { acao: "comentarios", quadro, antes? } até 1.000 comentários do quadro,
 //                                           do mais novo para o mais velho
 // ─────────────────────────────────────────────────────────────────────────────
@@ -202,6 +204,30 @@ async function atender(req: Request, json: (status: number, obj: unknown) => Res
       membroNome: a.memberCreator?.fullName ?? null, membroUsuario: a.memberCreator?.username ?? null,
     }));
     return json(200, { ok: true, comentarios, fim: acoes.length < 1000 });
+  }
+
+  // ── O quadro inteiro (para a sincronização) ──────────────────────────────
+  // Só LÊ. Quem compara e grava é o navegador (lib/trelloSync.ts), como no
+  // import — para dar para conferir o que muda ANTES de mudar.
+  if (body.acao === "quadro") {
+    const quadro = String(body.quadro ?? "");
+    if (!/^[A-Za-z0-9]{8,24}$/.test(quadro)) return json(400, { ok: false, erro: "Quadro do Trello inválido" });
+    const q = new URLSearchParams({
+      fields: "id,name,shortLink,url",
+      lists: "all", list_fields: "id,name,pos,color,closed",
+      cards: "all",
+      card_fields: "id,name,desc,pos,idList,closed,due,start,dueComplete,idLabels,idMembers,cover,dateClosed",
+      card_attachments: "true", card_attachment_fields: "id,name,url,isUpload,mimeType,date,bytes,fileName",
+      card_customFieldItems: "true",
+      labels: "all", label_fields: "id,name,color", labels_limit: "1000",
+      customFields: "true",
+      members: "all", member_fields: "id,fullName,username",
+      checklists: "all", checklist_fields: "id,idCard,name,pos",
+    });
+    const r = await fetch(`https://api.trello.com/1/boards/${quadro}?${q}`,
+      { headers: { authorization: autTrello, accept: "application/json" } });
+    if (!r.ok) return json(502, { ok: false, erro: `Trello respondeu ${r.status}: ${(await r.text()).slice(0, 300)}` });
+    return json(200, { ok: true, quadro: await r.json() });
   }
 
   // ── Um arquivo ────────────────────────────────────────────────────────────
