@@ -4393,6 +4393,22 @@ supabase/migrations/20261046…        carbo_interface_e_interna: É time intern
    ⚠️ `funnel === "f12"` virou `isFunilDeSdr()` — descarte em vez de perda e o
    bloco de qualificação valem para os DOIS funis de SDR.
    ⚠️ Sem linha em `crm_stage_sla` para o f14: prazo por etapa é do gerente.
+   ⚠️ **DESDE 09/10/2026 QUATRO deles DIVERGEM, por decisão do dono do
+   processo** (*"não é para mexer no crm, apenas no prevendas, crm é interno
+   100% e já está consolidado"*): `types/crm.ts`, `components/crm/LeadForm.tsx`,
+   `components/crm/DealDetail.tsx` e `pages/Pipelines.tsx` do `prevendas`
+   ganharam a QUALIFICAÇÃO DE POSTO (`perguntasDeQualificacao`). **Não copie o
+   `crm` por cima deles**, nem o contrário; correção que valha para os dois
+   entra nos dois à mão. Os outros dez continuam idênticos.
+   **A qualificação do Pré-Vendas** (f14 e o closer f15): o lead é POSTO já
+   cliente de quem indica, nunca prospecção a frio nem PDV do nosso cadastro.
+   Perguntas: Quantos postos (rede) · Quem decide no posto · Movimento do
+   posto · Como o posto reagiu à indicação · Próximo passo combinado. Origem
+   nasce "Indicação". ⚠️ As quatro últimas reusam as colunas `qual_volume`,
+   `qual_decisor`, `qual_dor`, `qual_prazo` (só o RÓTULO muda); só
+   `qual_postos` é coluna nova (`20261063`, int) — é o POTENCIAL: rede de 20
+   postos (RCM) começou com R$ 70 mil, rede de 4, bem menor. A RPC de repasse
+   (compartilhada) passou a copiá-la; no Outbound do Sales ela vem nula.
 8. **O closer do Pré-Vendas é o `f15`** — as MESMAS etapas do Inbound
    (`STAGES_INBOUND`), numa pipeline independente do Sales. O repasse do f14
    cai no f15, nunca no Inbound: a RPC `crm_sales_lead_repassar` ganhou um

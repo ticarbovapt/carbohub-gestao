@@ -3,7 +3,7 @@ import { X, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { FunnelType } from "@/types/crm";
-import { SOURCES, FUNNEL_CONFIG, SEGMENTS, isFunilDeSdr } from "@/types/crm";
+import { SOURCES, FUNNEL_CONFIG, SEGMENTS, isFunilDeSdr, funilDePosto, perguntasDeQualificacao } from "@/types/crm";
 import { FUNIS_VISIVEIS, USA_SEGMENTO } from "@/lib/funisDoApp";
 import { useCreateCRMLead } from "@/hooks/useCRMLeads";
 
@@ -49,7 +49,9 @@ export function LeadForm({ funnelType, initialStage, onClose }: LeadFormProps) {
     contact_email: "",
     city: "",
     state: "",
-    source: "prospeccao_ativa",
+    // No Pré-Vendas o posto chega INDICADO por quem já o atende; prospecção
+    // ativa é o Outbound do Sales.
+    source: funilDePosto(funnelType) ? "indicacao" : "prospeccao_ativa",
     lead_segment: "a_definir",
     notes: "",
     estimated_revenue: "",
@@ -57,6 +59,7 @@ export function LeadForm({ funnelType, initialStage, onClose }: LeadFormProps) {
     qual_dor: "",
     qual_decisor: "",
     qual_prazo: "",
+    qual_postos: "",
     // Faturamento — opcional em qualquer funil. Quem já chega com o CNPJ na
     // mão preenche agora e não digita de novo na hora do orçamento; quem não
     // tem, ignora. Nada aqui bloqueia a criação do lead.
@@ -100,6 +103,10 @@ export function LeadForm({ funnelType, initialStage, onClose }: LeadFormProps) {
       qual_dor: form.qual_dor.trim() || null,
       qual_decisor: form.qual_decisor.trim() || null,
       qual_prazo: form.qual_prazo.trim() || null,
+      // Só vai no payload quando preenchido: a coluna nasceu na `20261063`, e
+      // mandá-la vazia faria o cadastro falhar no intervalo entre o deploy da
+      // tela e a migração rodar.
+      ...(Number(onlyDigits(form.qual_postos)) > 0 ? { qual_postos: Number(onlyDigits(form.qual_postos)) } : {}),
       // Só dígitos no banco — a máscara é da tela, não do dado (mesma regra da
       // tela de venda).
       cnpj: onlyDigits(form.cnpj) || null,
@@ -174,26 +181,20 @@ export function LeadForm({ funnelType, initialStage, onClose }: LeadFormProps) {
               <SectionLabel>Qualificação (o que o closer precisa saber)</SectionLabel>
               <p className="text-[11px] text-muted-foreground -mt-2">
                 Pode ficar em branco agora e ser preenchido conforme a conversa avança.
-                Sem os quatro, o lead não deveria sair de "Qualificado".
+                O closer recebe exatamente o que estiver aqui.
               </p>
+              {/* As perguntas mudam com o funil (posto indicado × prospecção a
+                  frio); as colunas são as mesmas — ver perguntasDeQualificacao. */}
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Volume / frota">
-                  <Input placeholder="ex.: 40 caminhões" value={form.qual_volume}
-                    onChange={(e) => set("qual_volume", e.target.value)} />
-                </Field>
-                <Field label="Decisor">
-                  <Input placeholder="nome e cargo" value={form.qual_decisor}
-                    onChange={(e) => set("qual_decisor", e.target.value)} />
-                </Field>
+                {perguntasDeQualificacao(funnel).map((q) => (
+                  <div key={q.campo} className={q.larga ? "col-span-2" : ""}>
+                    <Field label={q.rotulo}>
+                      <Input placeholder={q.exemplo} value={form[q.campo]} inputMode={q.numero ? "numeric" : undefined}
+                        onChange={(e) => set(q.campo, q.numero ? onlyDigits(e.target.value).slice(0, 4) : e.target.value)} />
+                    </Field>
+                  </div>
+                ))}
               </div>
-              <Field label="Dor / problema relatado">
-                <Input placeholder="ex.: consumo alto e fumaça na revisão" value={form.qual_dor}
-                  onChange={(e) => set("qual_dor", e.target.value)} />
-              </Field>
-              <Field label="Prazo">
-                <Input placeholder="ex.: quer resolver até o fim do mês" value={form.qual_prazo}
-                  onChange={(e) => set("qual_prazo", e.target.value)} />
-              </Field>
             </>
           )}
 

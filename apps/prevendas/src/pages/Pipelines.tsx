@@ -33,7 +33,7 @@ const hojeISO = () => new Date().toISOString().slice(0, 10);
 import type { FunnelType, CRMLead } from "@/types/crm";
 import { toast } from "sonner";
 import { playMoveSuccess } from "@/lib/sfx";
-import { SEGMENTS, segmentOf, isFunilDeSdr, stageLabelAnywhere, funilDoCloser } from "@/types/crm";
+import { SEGMENTS, segmentOf, isFunilDeSdr, stageLabelAnywhere, funilDoCloser, faltaNaQualificacao } from "@/types/crm";
 import { FUNIS_VISIVEIS, FUNIL_PADRAO, USA_SEGMENTO, MOSTRA_QUENTES_E_TENTATIVAS } from "@/lib/funisDoApp";
 
 // Só as pipelines vivas viram aba. As antigas seguem em FUNNEL_CONFIG para
@@ -378,12 +378,7 @@ export default function Pipelines() {
   // Falta de qualificação não BLOQUEIA o repasse — o time ainda está se
   // formando e travar o fluxo por campo vazio seria pior que avisar. Mas o SDR
   // vê exatamente o que o closer NÃO vai receber.
-  const faltaNoRepasse = repasseLead ? ([
-    !repasseLead.qual_volume  && "volume",
-    !repasseLead.qual_dor     && "dor",
-    !repasseLead.qual_decisor && "decisor",
-    !repasseLead.qual_prazo   && "prazo",
-  ].filter(Boolean) as string[]) : [];
+  const faltaNoRepasse = repasseLead ? faltaNaQualificacao(repasseLead, repasseLead.funnel_type) : [];
 
   const handleAdvance = (lead: CRMLead) => {
     const next = getNextStage(ft, lead.stage);
