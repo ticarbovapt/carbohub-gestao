@@ -60,14 +60,14 @@ const uuid = () => crypto.randomUUID();
 // Paleta deste app (mktTheme: LABEL_COLORS / LIST_DOT). Cor do Trello que não
 // existe aqui vira a mais próxima; nunca uma string que a tela não sabe pintar.
 const COR_ETIQUETA = new Set(["green", "yellow", "orange", "red", "purple", "blue", "sky", "lime", "pink", "black"]);
-function corEtiqueta(c: string | null | undefined): string {
+export function corEtiqueta(c: string | null | undefined): string {
   const base = (c ?? "").split("_")[0];
   if (COR_ETIQUETA.has(base)) return base;
   if (base === "gray" || base === "grey") return "black";
   return "black";
 }
 const COR_LISTA = new Set(["blue", "green", "orange", "red", "purple", "pink", "sky", "gray", "lime", "dark"]);
-function corLista(c: string | null | undefined): string | null {
+export function corLista(c: string | null | undefined): string | null {
   if (!c) return null;
   const base = c.split("_")[0];
   if (COR_LISTA.has(base)) return base;

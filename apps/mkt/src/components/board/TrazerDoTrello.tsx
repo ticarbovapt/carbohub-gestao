@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, Loader2, CheckCircle2, AlertTriangle } from "lucide-react";
+import { RefreshCw, Loader2, CheckCircle2, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { casarPessoas, criadoEm, type PessoaDaqui } from "@/lib/trelloImport";
+import { SincronizarTrello, quadroDoLink } from "./SincronizarTrello";
 
 // "Trazer do Trello": completa um quadro IMPORTADO com o que o JSON não traz —
 // os arquivos enviados ao Trello (que viraram link para lá) e os comentários
@@ -48,11 +49,6 @@ async function lerTudo<T>(montar: () => any): Promise<T[]> {
   }
 }
 
-function quadroDoLink(s: string): string | null {
-  const m = /trello\.com\/b\/([A-Za-z0-9]{8})/.exec(s) ?? /^([A-Za-z0-9]{8})$/.exec(s.trim());
-  return m ? m[1] : null;
-}
-
 export function TrazerDoTrello({ boardId }: { boardId: string }) {
   const qc = useQueryClient();
   const [aberto, setAberto] = useState(false);
@@ -71,27 +67,43 @@ export function TrazerDoTrello({ boardId }: { boardId: string }) {
   if (!veioDoTrello) return null;
   return (
     <>
-      <button onClick={() => setAberto(true)} title="Trazer arquivos e comentários do Trello"
+      <button onClick={() => setAberto(true)} title="Sincronizar com o Trello · arquivos · comentários"
         className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md px-2.5 py-1.5 transition-colors">
-        <Download className="h-4 w-4" /> Trello
+        <RefreshCw className="h-4 w-4" /> Trello
       </button>
-      {aberto && <Painel boardId={boardId} onClose={() => { setAberto(false); qc.invalidateQueries({ queryKey: ["mkt", "board", boardId] }); }} />}
+      {aberto && <Painel boardId={boardId} onClose={() => setAberto(false)} atualizar={() => qc.invalidateQueries({ queryKey: ["mkt"] })} />}
     </>
   );
 }
 
-function Painel({ boardId, onClose }: { boardId: string; onClose: () => void }) {
+function Painel({ boardId, onClose, atualizar }: { boardId: string; onClose: () => void; atualizar: () => void }) {
   const [ocupado, setOcupado] = useState(false);
+  // O quadro guarda o id do Trello depois da primeira sincronização: o link
+  // não precisa ser colado de novo.
+  const { data: trelloId, isLoading } = useQuery({
+    queryKey: ["mkt-board-trello", boardId],
+    queryFn: async () => {
+      const { data } = await db.from("mkt_boards").select("trello_id").eq("id", boardId).maybeSingle();
+      return (data?.trello_id as string | null) ?? null;
+    },
+  });
+  const linkInicial = trelloId ?? "";
   return (
-    <Dialog open onOpenChange={(o) => { if (!o && !ocupado) onClose(); }}>
+    <Dialog open onOpenChange={(o) => { if (!o && !ocupado) { atualizar(); onClose(); } }}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Trazer do Trello</DialogTitle>
-          <DialogDescription>O que o arquivo exportado não traz. Pode rodar de novo quantas vezes quiser: o que já veio não duplica.</DialogDescription>
+          <DialogTitle>Trello</DialogTitle>
+          <DialogDescription>Pode rodar quantas vezes quiser: o que já veio não duplica.</DialogDescription>
         </DialogHeader>
-        <Arquivos boardId={boardId} setOcupado={setOcupado} />
-        <div className="border-t border-border" />
-        <Comentarios boardId={boardId} setOcupado={setOcupado} />
+        {isLoading ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : (
+          <>
+            <SincronizarTrello boardId={boardId} linkInicial={linkInicial} setOcupado={setOcupado} aoTerminar={atualizar} />
+            <div className="border-t border-border" />
+            <Arquivos boardId={boardId} setOcupado={setOcupado} />
+            <div className="border-t border-border" />
+            <Comentarios boardId={boardId} setOcupado={setOcupado} linkInicial={linkInicial} />
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -187,8 +199,8 @@ interface Plano {
   pessoas: { trello: string; casou: string | null }[];
 }
 
-function Comentarios({ boardId, setOcupado }: { boardId: string; setOcupado: (b: boolean) => void }) {
-  const [link, setLink] = useState("");
+function Comentarios({ boardId, setOcupado, linkInicial }: { boardId: string; setOcupado: (b: boolean) => void; linkInicial: string }) {
+  const [link, setLink] = useState(linkInicial);
   const [fase, setFase] = useState<"ocioso" | "buscando" | "pronto" | "gravando" | "feito">("ocioso");
   const [progresso, setProgresso] = useState("");
   const [plano, setPlano] = useState<Plano | null>(null);
