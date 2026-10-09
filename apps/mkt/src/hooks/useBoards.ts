@@ -26,6 +26,9 @@ export interface CardSummary {
   description: string | null; position: number;
   start_date: string | null; due_date: string | null; is_complete: boolean; cover: string | null;
   updated_at: string | null;
+  /** Minutos antes da entrega (0 = na hora); null = sem lembrete. */
+  lembrete_minutos?: number | null;
+  recorrencia?: string | null;
   labelIds: string[]; memberIds: string[];
   checklistDone: number; checklistTotal: number; commentCount: number; attachmentCount: number;
   checklistOverdue: boolean;
@@ -110,7 +113,7 @@ export function useBoard(boardId: string | null) {
       const origListTitle = new Map<string, string>();
       if (originalIds.length > 0) {
         const oRes = await db.from("mkt_cards")
-          .select("id, title, description, position, start_date, due_date, is_complete, cover, location_lat, location_lng, location_name, list_id, board_id, is_archived")
+          .select("*") // coluna nova do cartão (lembrete, recorrência) chega sem mexer aqui
           .in("id", originalIds);
         const origs = (oRes.data ?? []) as Record<string, unknown>[];
         for (const o of origs) originalById.set(o.id as string, o);
@@ -187,6 +190,7 @@ export function useBoard(boardId: string | null) {
           start_date: (src.start_date as string) ?? null,
           due_date: (src.due_date as string) ?? null, is_complete: !!src.is_complete, cover: (src.cover as string) ?? null,
           updated_at: (c.updated_at as string) ?? null,
+          lembrete_minutos: (src.lembrete_minutos as number) ?? null, recorrencia: (src.recorrencia as string) ?? null,
           location_lat: (src.location_lat as number) ?? null, location_lng: (src.location_lng as number) ?? null, location_name: (src.location_name as string) ?? null,
           labelIds: labelsByCard.get(contentId) ?? [], memberIds: membersByCard.get(contentId) ?? [],
           checklistDone: doneByCard.get(contentId) ?? 0, checklistTotal: totalByCard.get(contentId) ?? 0,

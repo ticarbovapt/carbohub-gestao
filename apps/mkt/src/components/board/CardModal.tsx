@@ -17,7 +17,8 @@ import { useCustomFields } from "@/hooks/useCustomFields";
 import { CustomFieldInput } from "@/components/board/CustomFieldInput";
 import { LABEL_COLORS, LABEL_COLOR_KEYS, tintedLabelStyle, lerCapa, tomDaCapa } from "@/lib/mktTheme";
 import { CapaPainel } from "@/components/board/CapaPainel";
-import { ListChecks, Play, Music, Image as ImageIcon, ChevronUp, ChevronDown, LayoutTemplate, RotateCcw, ArrowRight, Copy, Eye, Share2, UserPlus, UserMinus, CreditCard } from "lucide-react";
+import { DatasPainel, resumoRepetirLembrete } from "@/components/board/DatasPainel";
+import { ListChecks, Play, Music, Image as ImageIcon, ChevronUp, ChevronDown, LayoutTemplate, RotateCcw, ArrowRight, Copy, Eye, Share2, UserPlus, UserMinus, CreditCard, Repeat, Bell } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { MoverCopiar } from "@/components/board/MoverCopiar";
 import { useQuery } from "@tanstack/react-query";
@@ -286,15 +287,10 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [], anex
                 <div className="relative" ref={datasRef}>
                   <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShowDatas((v) => !v)}><Clock className="h-3.5 w-3.5" /> Datas</Button>
                   {showDatas && (
-                    <div className="absolute z-20 mt-1 w-64 max-w-[75vw] left-0 rounded-[var(--radius)] border border-border bg-popover shadow-[var(--shadow-elevated)] p-3 space-y-2">
-                      <span className="block text-xs text-muted-foreground">Início</span>
-                      <input type="date" value={data.card.start_date ? toLocalInput(data.card.start_date).slice(0, 10) : ""}
-                        onChange={(e) => mut.updateCard.mutate({ start_date: e.target.value ? new Date(e.target.value + "T12:00:00").toISOString() : null })}
-                        className="mkt-field w-full text-sm" />
-                      <span className="block text-xs text-muted-foreground">Entrega</span>
-                      <input type="datetime-local" value={toLocalInput(data.card.due_date)}
-                        onChange={(e) => mut.updateCard.mutate({ due_date: e.target.value ? new Date(e.target.value).toISOString() : null })}
-                        className="mkt-field w-full text-sm" />
+                    <div className="absolute z-20 mt-1 w-[300px] max-w-[85vw] left-0 rounded-[var(--radius)] border border-border bg-popover shadow-[var(--shadow-elevated)] p-3 max-h-[70vh] overflow-y-auto">
+                      <DatasPainel card={data.card}
+                        onSalvar={(patch) => mut.updateCard.mutate(patch, { onError: (e) => toast.error(`Não salvou as datas: ${(e as Error).message}`) })}
+                        onFechar={() => setShowDatas(false)} />
                     </div>
                   )}
                 </div>
@@ -378,6 +374,12 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [], anex
                       <button onClick={() => setShowDatas(true)} className="h-8 rounded-md bg-muted hover:bg-muted/70 px-2.5 text-sm text-foreground">
                         {resumoDatas(data.card.start_date, data.card.due_date)}
                       </button>
+                      {resumoRepetirLembrete(data.card) && (
+                        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground" title="Repetir e lembrete">
+                          {data.card.recorrencia && <Repeat className="h-3.5 w-3.5" />}{data.card.lembrete_minutos != null && <Bell className="h-3.5 w-3.5" />}
+                          {resumoRepetirLembrete(data.card)}
+                        </span>
+                      )}
                       {data.card.is_complete
                         ? <span className="text-xs font-medium rounded px-1.5 py-0.5 bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">Concluído</span>
                         : data.card.due_date && new Date(data.card.due_date) < new Date()
