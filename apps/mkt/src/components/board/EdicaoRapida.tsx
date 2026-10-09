@@ -5,7 +5,8 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useCardMutations } from "@/hooks/useCardDetail";
 import type { BoardPerson, CardSummary, Label } from "@/hooks/useBoards";
-import { LABEL_COLORS, LABEL_COLOR_KEYS, lerCapa, tintedLabelStyle } from "@/lib/mktTheme";
+import { LABEL_COLORS, tintedLabelStyle } from "@/lib/mktTheme";
+import { CapaPainel } from "@/components/board/CapaPainel";
 import { diceBearUrl } from "@/components/ui/profile-avatar";
 import { MoverCopiar } from "@/components/board/MoverCopiar";
 
@@ -34,8 +35,6 @@ export function EdicaoRapida({ card, rect, boardId, labels, pessoas, onClose, on
   const [painel, setPainel] = useState<Painel>(null);
   const [mc, setMc] = useState<"mover" | "copiar" | null>(null);
   const campo = useRef<HTMLTextAreaElement>(null);
-  const capa = lerCapa(card.cover);
-  const chaveCapa = card.cover?.replace(/^full:/, "") ?? null;
 
   useEffect(() => { campo.current?.focus(); campo.current?.select(); }, []);
   useEffect(() => {
@@ -116,26 +115,7 @@ export function EdicaoRapida({ card, rect, boardId, labels, pessoas, onClose, on
                   );
                 }))}
             {painel === "capa" && (
-              <div className="space-y-2">
-                <div className="flex gap-1">
-                  {(["faixa", "cheia"] as const).map((t) => (
-                    <button key={t} disabled={!chaveCapa}
-                      onClick={() => chaveCapa && mut.updateCard.mutate({ cover: t === "cheia" ? `full:${chaveCapa}` : chaveCapa })}
-                      className={`flex-1 rounded-md border px-2 py-1 text-xs disabled:opacity-40 ${(t === "cheia") === !!capa?.cheia && chaveCapa ? "border-primary text-foreground" : "border-border text-muted-foreground"}`}>
-                      {t === "faixa" ? "Faixa no topo" : "Cartão inteiro"}
-                    </button>
-                  ))}
-                </div>
-                <div className="grid grid-cols-5 gap-1.5">
-                  {LABEL_COLOR_KEYS.map((k) => (
-                    <button key={k} title={k}
-                      onClick={() => mut.updateCard.mutate({ cover: capa?.cheia ? `full:${k}` : k })}
-                      className={`h-7 rounded-md ${chaveCapa === k ? "ring-2 ring-primary ring-offset-1 ring-offset-popover" : ""}`}
-                      style={{ background: LABEL_COLORS[k] }} />
-                  ))}
-                </div>
-                {card.cover && <button onClick={() => mut.updateCard.mutate({ cover: null })} className="w-full text-xs rounded-md py-1 hover:bg-muted text-muted-foreground">Remover capa</button>}
-              </div>
+              <div className="p-1"><CapaPainel cover={card.cover} onChange={(cover) => mut.updateCard.mutate({ cover })} /></div>
             )}
             {painel === "datas" && (
               <div className="space-y-1.5 p-1">

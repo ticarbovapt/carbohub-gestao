@@ -54,6 +54,8 @@ export interface EstadoDaqui {
   attachments: { card_id: string; external_url: string | null }[];
   /** `trello_id` de cartões que alguém MOVEU daqui para outro quadro. */
   movidosParaFora?: Set<string>;
+  /** `trello_id` de LISTAS movidas daqui para outro quadro (Ações da lista). */
+  listasMovidasParaFora?: Set<string>;
 }
 
 export interface Patch { id: string; patch: Linha }
@@ -181,7 +183,10 @@ export function planejarSincronizacao(t: J, aqui: EstadoDaqui, ctx: { userId: st
   });
 
   // ── Listas ────────────────────────────────────────────────────────────────
-  const tLists: J[] = t.lists;
+  // ⚠️ Lista MOVIDA daqui para outro quadro leva o `trello_id`: sem este corte
+  // ela voltaria como lista nova, e os cartões dela ficariam de fora (já
+  // estão no outro quadro) — uma lista vazia com nome conhecido.
+  const tLists: J[] = t.lists.filter((l: J) => !aqui.listasMovidasParaFora?.has(l.id));
   const listLig = ligar(aqui.lists, tLists, (l) => String(ms(l.created_at)), (l) => String(ms(criadoEm(l.id))));
   const listsInsert: Linha[] = []; const listsUpdate: Patch[] = [];
   const listaDaqui = new Map<string, string>();

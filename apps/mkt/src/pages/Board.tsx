@@ -10,7 +10,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Plus, X, GripVertical, MoreHorizontal, Clock, CheckSquare, MessageSquare, AlignLeft, Paperclip, Settings2, Link2, ChevronLeft, ChevronRight, Filter, Bookmark, Trash2, LayoutTemplate, Archive, Pencil, Check } from "lucide-react";
+import { ArrowLeft, Plus, X, GripVertical, MoreHorizontal, Clock, CheckSquare, MessageSquare, AlignLeft, Paperclip, Settings2, Link2, ChevronLeft, ChevronRight, Filter, Bookmark, Trash2, LayoutTemplate, Archive, Pencil, Check, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -25,6 +25,7 @@ import { BoardFieldsDialog } from "@/components/board/BoardFieldsDialog";
 import { TrazerDoTrello } from "@/components/board/TrazerDoTrello";
 import { ItensArquivados } from "@/components/board/ItensArquivados";
 import { EdicaoRapida } from "@/components/board/EdicaoRapida";
+import { ListaDialogo, ORDENS, ordenarLista, arquivarTodosOsCartoes, useListasSeguidas, type OrdemLista } from "@/components/board/AcoesDaLista";
 import { FilterControls } from "@/components/board/FilterControls";
 import { ViewSwitcher } from "@/components/board/ViewSwitcher";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
@@ -250,9 +251,14 @@ function BoardCard({ card, labels, onOpen }: { card: CardSummary; labels: Label[
 }
 
 // ── Lista (coluna) ───────────────────────────────────────────────────────────
+type AcaoLista =
+  | { tipo: "copiar" | "mover" | "mover_cartoes" | "seguir" | "arquivar_cartoes" }
+  | { tipo: "ordenar"; ordem: OrdemLista };
+const ITEM_MENU = "w-full text-left text-sm px-2 py-1.5 rounded-md hover:bg-muted";
+
 function BoardColumn({
   list, index, cards, labels, collapsed, onOpenCard, onAddCard, onRename, onArchive, onSetColor, onToggleCollapse,
-  modelos, onUsarModelo, onExcluirModelo,
+  modelos, onUsarModelo, onExcluirModelo, seguindo, onAcao,
 }: {
   list: List; index: number; cards: CardSummary[]; labels: Label[]; collapsed: boolean;
   onOpenCard: (id: string) => void;
@@ -265,6 +271,8 @@ function BoardColumn({
   onArchive: (id: string) => void;
   onSetColor: (id: string, color: string | null) => void;
   onToggleCollapse: (id: string) => void;
+  seguindo: boolean;
+  onAcao: (acao: AcaoLista) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: list.id, data: { type: "list" },
@@ -275,6 +283,7 @@ function BoardColumn({
   const [editTitle, setEditTitle] = useState(false);
   const [title, setTitle] = useState(list.title);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [ordenarAberto, setOrdenarAberto] = useState(false);
   const [modelosAbertos, setModelosAbertos] = useState(false);
   const accent = getAccent(list.color, index);
   // No Trello a lista INTEIRA tem a cor; cinza/escuro ficam neutras (lá o
@@ -326,11 +335,11 @@ function BoardColumn({
             </button>
           )}
           <div className="relative">
-            <button onClick={() => setMenuOpen((v) => !v)} className="p-1 text-muted-foreground hover:text-foreground" title="Ações da lista">
-              <MoreHorizontal className="h-4 w-4" />
+            <button onClick={() => setMenuOpen((v) => !v)} className="p-1 text-muted-foreground hover:text-foreground" title={seguindo ? "Ações da lista · você segue esta lista" : "Ações da lista"}>
+              {seguindo ? <span className="flex items-center gap-0.5"><Eye className="h-3.5 w-3.5 text-primary" /><MoreHorizontal className="h-4 w-4" /></span> : <MoreHorizontal className="h-4 w-4" />}
             </button>
             {menuOpen && (
-              <div className="absolute right-0 z-20 mt-1 w-52 rounded-[var(--radius)] border border-border bg-popover shadow-[var(--shadow-elevated)] p-3 space-y-2">
+              <div className="absolute right-0 z-20 mt-1 w-60 rounded-[var(--radius)] border border-border bg-popover shadow-[var(--shadow-elevated)] p-3 space-y-2">
                 <p className="mkt-meta-label">Cor da lista</p>
                 <div className="flex flex-wrap gap-1.5">
                   <button onClick={() => { onSetColor(list.id, null); setMenuOpen(false); }} className={`h-6 w-6 rounded-md border border-border bg-muted ${!list.color ? "ring-2 ring-primary" : ""}`} title="Sem cor" />
@@ -339,8 +348,31 @@ function BoardColumn({
                       className={`h-6 w-6 rounded-md ${list.color === s.key ? "ring-2 ring-primary ring-offset-1 ring-offset-popover" : ""}`} style={{ background: s.color }} />
                   ))}
                 </div>
-                <button onClick={() => { setMenuOpen(false); onToggleCollapse(list.id); }} className="w-full text-left text-sm px-2 py-1.5 rounded-md hover:bg-muted">Recolher lista</button>
-                <button onClick={async () => { setMenuOpen(false); if (await confirmar({ titulo: "Arquivar esta lista?", confirmar: "Arquivar" })) onArchive(list.id); }} className="w-full text-left text-sm px-2 py-1.5 rounded-md hover:bg-muted text-destructive">Arquivar lista</button>
+                <div className="border-t border-border pt-1.5 -mx-1 space-y-0.5">
+                  {([
+                    ["adicionar", "Adicionar cartão"],
+                    ["copiar", "Copiar lista…"],
+                    ["mover", "Mover lista…"],
+                    ["mover_cartoes", "Mover todos os cartões…"],
+                  ] as const).map(([k, rot]) => (
+                    <button key={k} onClick={() => { setMenuOpen(false); if (k === "adicionar") setAdding(true); else onAcao({ tipo: k }); }} className={ITEM_MENU}>{rot}</button>
+                  ))}
+                  <button onClick={() => setOrdenarAberto((v) => !v)} className={`${ITEM_MENU} flex items-center justify-between`}>
+                    Ordenar por… <ChevronRight className={`h-3.5 w-3.5 transition-transform ${ordenarAberto ? "rotate-90" : ""}`} />
+                  </button>
+                  {ordenarAberto && ORDENS.map((o) => (
+                    <button key={o.k} onClick={() => { setMenuOpen(false); setOrdenarAberto(false); onAcao({ tipo: "ordenar", ordem: o.k }); }}
+                      className={`${ITEM_MENU} pl-5 text-xs text-muted-foreground hover:text-foreground`}>{o.rot}</button>
+                  ))}
+                  <button onClick={() => { setMenuOpen(false); onAcao({ tipo: "seguir" }); }} className={`${ITEM_MENU} flex items-center justify-between`}>
+                    {seguindo ? "Deixar de seguir" : "Seguir"} {seguindo && <Eye className="h-3.5 w-3.5 text-primary" />}
+                  </button>
+                  <button onClick={() => { setMenuOpen(false); onToggleCollapse(list.id); }} className={ITEM_MENU}>Recolher lista</button>
+                </div>
+                <div className="border-t border-border pt-1.5 -mx-1 space-y-0.5">
+                  <button onClick={() => { setMenuOpen(false); onAcao({ tipo: "arquivar_cartoes" }); }} className={ITEM_MENU}>Arquivar todos os cartões</button>
+                  <button onClick={async () => { setMenuOpen(false); if (await confirmar({ titulo: "Arquivar esta lista?", confirmar: "Arquivar" })) onArchive(list.id); }} className={`${ITEM_MENU} text-destructive`}>Arquivar lista</button>
+                </div>
               </div>
             )}
           </div>
@@ -477,6 +509,28 @@ export default function Board() {
   const filterActive = criteriaActive(criteria);
   const { user } = useAuth();
   const meuId = user?.id ?? null;
+  const { seguidas, alternar: alternarSeguir } = useListasSeguidas((data?.lists ?? []).map((l) => l.id), meuId);
+  const [dialogoLista, setDialogoLista] = useState<{ modo: "copiar" | "mover" | "mover_cartoes"; lista: { id: string; title: string } } | null>(null);
+  const acaoDaLista = async (l: { id: string; title: string }, a: AcaoLista) => {
+    try {
+      if (a.tipo === "copiar" || a.tipo === "mover" || a.tipo === "mover_cartoes") setDialogoLista({ modo: a.tipo, lista: l });
+      else if (a.tipo === "seguir") await alternarSeguir(l.id);
+      else if (a.tipo === "ordenar") {
+        const n = await ordenarLista(l.id, a.ordem);
+        toast.success(`${n} cartão(ões) reordenado(s).`);
+      } else if (a.tipo === "arquivar_cartoes") {
+        const n = (cardsByList.get(l.id) ?? []).length;
+        if (!n) { toast.info("A lista não tem cartões."); return; }
+        if (!(await confirmar({ titulo: `Arquivar os ${n} cartões de "${l.title}"?`, mensagem: "Eles vão para Arquivados e podem ser restaurados de lá.", confirmar: "Arquivar todos" }))) return;
+        const feitos = await arquivarTodosOsCartoes(l.id);
+        toast.success(`${feitos} cartão(ões) arquivado(s).`);
+      }
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      if (a.tipo === "ordenar" || a.tipo === "arquivar_cartoes") qc.invalidateQueries({ queryKey: ["mkt"] });
+    }
+  };
   const passa = (c: CardSummary) => !filterActive || matchCard(c, criteria, { meuId });
   const saved = useSavedSearches("board", boardId);
   const savedMut = useSavedSearchMutations();
@@ -672,6 +726,7 @@ export default function Board() {
                   onArchive={(id) => m.archiveList.mutate({ id })}
                   onSetColor={(id, color) => m.setListColor.mutate({ id, color })}
                   onToggleCollapse={toggleCollapse}
+                  seguindo={seguidas.has(l.id)} onAcao={(a) => acaoDaLista(l, a)}
                   modelos={modelos} onUsarModelo={usarModelo} onExcluirModelo={excluirModelo} />
               ))}
             </SortableContext>
@@ -716,6 +771,9 @@ export default function Board() {
             onArquivar={() => m.archiveCard.mutate({ id: c.id }, { onSuccess: () => toast.success("Cartão arquivado.") })} />
         );
       })()}
+      {dialogoLista && boardId && (
+        <ListaDialogo modo={dialogoLista.modo} lista={dialogoLista.lista} boardId={boardId} onClose={() => setDialogoLista(null)} />
+      )}
       <ItensArquivados boardId={boardId} open={arquivadosAberto} onOpenChange={setArquivadosAberto}
         onAbrirCartao={(id) => { setArquivadosAberto(false); setOpenCardId(id); }} />
       {openCardId && (

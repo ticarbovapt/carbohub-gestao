@@ -15,8 +15,9 @@ import { useCardDetail, useCardMutations } from "@/hooks/useCardDetail";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { useCustomFields } from "@/hooks/useCustomFields";
 import { CustomFieldInput } from "@/components/board/CustomFieldInput";
-import { LABEL_COLORS, LABEL_COLOR_KEYS, tintedLabelStyle } from "@/lib/mktTheme";
-import { ListChecks, Play, Music, Image as ImageIcon, ChevronUp, ChevronDown, LayoutTemplate, RotateCcw, ArrowRight, Copy, Eye, Share2, UserPlus, UserMinus } from "lucide-react";
+import { LABEL_COLORS, LABEL_COLOR_KEYS, tintedLabelStyle, lerCapa, tomDaCapa } from "@/lib/mktTheme";
+import { CapaPainel } from "@/components/board/CapaPainel";
+import { ListChecks, Play, Music, Image as ImageIcon, ChevronUp, ChevronDown, LayoutTemplate, RotateCcw, ArrowRight, Copy, Eye, Share2, UserPlus, UserMinus, CreditCard } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { MoverCopiar } from "@/components/board/MoverCopiar";
 import { useQuery } from "@tanstack/react-query";
@@ -97,6 +98,9 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [], anex
   const membersRef = useRef<HTMLDivElement>(null);
   const datasRef = useRef<HTMLDivElement>(null);
   const anexosRef = useRef<HTMLDivElement>(null);
+  const capaRef = useRef<HTMLDivElement>(null);
+  const capaDoCartao = lerCapa(data?.card.cover);
+  const [showCapa, setShowCapa] = useState(false);
   const anexoInputRef = useRef<HTMLInputElement>(null);
   const comentarioRef = useRef<HTMLTextAreaElement>(null);
   const [showDatas, setShowDatas] = useState(false);
@@ -159,16 +163,19 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [], anex
 
   // Fecha os popovers (Etiquetas/Membros) ao clicar fora deles.
   useEffect(() => {
-    if (!showLabels && !showMembers && !showDatas) return;
+    if (!showLabels && !showMembers && !showDatas && !showCapa) return;
     const onDown = (e: MouseEvent) => {
       const t = e.target as Node;
+      // O botão que abre a capa fica FORA do painel: sem esta exceção o clique
+      // nele fecharia no mousedown e reabriria no click.
+      if (showCapa && capaRef.current && !capaRef.current.contains(t) && !(t as Element).closest?.("[data-capa-botao]")) setShowCapa(false);
       if (showDatas && datasRef.current && !datasRef.current.contains(t)) setShowDatas(false);
       if (showLabels && labelsRef.current && !labelsRef.current.contains(t)) setShowLabels(false);
       if (showMembers && membersRef.current && !membersRef.current.contains(t)) setShowMembers(false);
     };
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
-  }, [showLabels, showMembers, showDatas]);
+  }, [showLabels, showMembers, showDatas, showCapa]);
 
   const saveTitle = () => {
     const t = title.trim();
@@ -192,7 +199,26 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [], anex
             </div>
           </div>
         ) : (
-          <div className="flex flex-col md:grid md:grid-cols-[minmax(0,1fr)_420px] md:h-[90vh]">
+          <div className="flex flex-col md:h-[90vh]">
+          {/* Capa: como no Trello, a cor do cartão no topo do cartão aberto. */}
+          {capaDoCartao && (
+            <div className="relative h-20 md:h-24 shrink-0" style={{ background: tomDaCapa(capaDoCartao.cor) }}>
+              <button data-capa-botao onClick={() => setShowCapa((v) => !v)} title="Capa"
+                className="absolute right-12 top-3 inline-flex items-center gap-1.5 rounded-md bg-background/70 hover:bg-background px-2.5 py-1.5 text-xs font-medium text-foreground backdrop-blur">
+                <CreditCard className="h-3.5 w-3.5" /> Capa
+              </button>
+            </div>
+          )}
+          {showCapa && (
+            <div ref={capaRef} className="absolute right-3 top-14 z-30 w-72 max-w-[calc(100%-1.5rem)] rounded-[var(--radius)] border border-border bg-popover shadow-[var(--shadow-elevated)] p-3">
+              <div className="flex items-center justify-between pb-2">
+                <p className="text-sm font-semibold">Capa</p>
+                <button onClick={() => setShowCapa(false)} className="p-1 text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
+              </div>
+              <CapaPainel cover={data.card.cover} onChange={(cover) => mut.updateCard.mutate({ cover })} />
+            </div>
+          )}
+          <div className="flex flex-col md:grid md:grid-cols-[minmax(0,1fr)_420px] md:flex-1 md:min-h-0">
             {/* ══════════ ESQUERDA — o cartão ══════════
                 Como no Trello: título, botões de ação numa linha, o resumo
                 (membros · etiquetas · datas) e depois o conteúdo. Rola sozinha. */}
@@ -294,6 +320,7 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [], anex
                   onClick={() => { anexosRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>
                   <Paperclip className="h-3.5 w-3.5" /> Anexo
                 </Button>
+                <Button size="sm" variant="outline" className="gap-1.5" data-capa-botao onClick={() => setShowCapa((v) => !v)}><CreditCard className="h-3.5 w-3.5" /> Capa</Button>
                 <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setMoverCopiar("mover")}><ArrowRight className="h-3.5 w-3.5" /> Mover</Button>
                 <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setMoverCopiar("copiar")}><Copy className="h-3.5 w-3.5" /> Copiar</Button>
                 <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShowMirror(true)}><Link2 className="h-3.5 w-3.5" /> Espelhar</Button>
@@ -583,6 +610,7 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [], anex
                 onClose={() => setShowMirror(false)}
               />
             )}
+          </div>
           </div>
         )}
       </DialogContent>
