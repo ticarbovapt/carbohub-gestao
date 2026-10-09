@@ -47,7 +47,7 @@ self.addEventListener("fetch", (event) => {
   }));
 });
 
-// ── Web Push (Carbo Chat) ─────────────────────────────────────────────────────
+// ── Web Push (Carbo Chat e sininho) ─────────────────────────────────────────────────────
 self.addEventListener("push", (event) => {
   let data = {};
   try { data = event.data ? event.data.json() : {}; } catch (_e) { data = {}; }
@@ -62,14 +62,24 @@ self.addEventListener("push", (event) => {
   }));
 });
 
+// O toque abre a tela certa. Duas formas de destino:
+//  • `data.path` (Carbo Chat): caminho DESTE app;
+//  • `data.url` (sininho, via `carbo-push`): endereço completo, que pode ser de
+//    OUTRO app (a venda abre no Admin, o cartão no Marketing). Endereço de outro
+//    app NÃO pode ir para `client.navigate` — ele só navega dentro da própria
+//    origem e falharia calado; vai numa janela nova.
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const path = (event.notification.data && event.notification.data.path) || "/chat";
+  const d = event.notification.data || {};
+  let alvo;
+  try { alvo = new URL(d.url || d.path || "/chat", self.location.origin); } catch (_e) { alvo = new URL("/", self.location.origin); }
   event.waitUntil((async () => {
-    const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-    for (const c of all) {
-      if ("focus" in c) { try { await c.navigate(path); } catch (_e) {} return c.focus(); }
+    if (alvo.origin === self.location.origin) {
+      const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      for (const c of all) {
+        if ("focus" in c) { try { await c.navigate(alvo.href); } catch (_e) {} return c.focus(); }
+      }
     }
-    if (self.clients.openWindow) return self.clients.openWindow(path);
+    if (self.clients.openWindow) return self.clients.openWindow(alvo.href);
   })());
 });

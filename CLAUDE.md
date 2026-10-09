@@ -4326,6 +4326,38 @@ comprou na outra loja  20261053  passo 3 do carbo_payt_carrinhos_sincronizar
    carrinhos da PayT anteriores ao marco caem em "fora da régua" junto com os
    da Nuvemshop.
 
+### O sininho no CELULAR — Web Push de toda notificação (09/10/2026)
+Pedido do dono do processo: a venda on-line aparecer no Android "como o
+WhatsApp", com o app fechado — o CEO precisa ver. Reusa o push do Carbo Chat.
+
+```
+trg_notificacao_push (20261064)   gatilho POR COMANDO em notifications → carbo-push
+supabase/functions/carbo-push     envia (VAPID), um aviso por pessoa por notificação
+carbo_push_teste()                o botão de teste: grava UMA notificação real
+carbohub-landing  AtivarNotificacoes.tsx + public/sw.js   onde se ATIVA (Hub)
+apps/*/public/sw.js               o clique abre `data.url` (absoluta) nos oito
+```
+
+1. ⚠️ **Por COMANDO, nunca por linha**: a venda chega pelo `notify_time_interno`
+   como um insert de ~30 linhas; por linha seriam 30 POSTs por venda.
+2. ⚠️ **`chat_message` fica FORA** — o chat tem o próprio `chat-push`; pelos dois
+   caminhos cada mensagem chegaria duas vezes.
+3. **Só recebe quem ATIVOU no aparelho** (linha em `chat_push_subscriptions`).
+   O sininho continua igual para todos.
+4. **UM aparelho por pessoa**, preferindo o do HUB (`origin =
+   https://carbohub.com.br`), que é o "app do celular" do ecossistema. Sem Hub,
+   o usado mais recentemente. Aparelho morto (404/410) sai e o próximo é tentado.
+5. ⚠️ **O toque abre por URL ABSOLUTA** (`destino()` no `carbo-push`): venda →
+   Admin, cartão → Marketing, bug → TI. Tipo novo sem regra cai no Hub, nunca
+   em link morto. Tipo novo que mereça tela própria: entra no `destino()`.
+6. ⚠️ **Best-effort**: falha de rede/config nunca desfaz a notificação — o
+   sininho é a verdade, o celular é o aviso. URL e segredo são os do chat
+   (`chat_push_config`, `x-chat-push-secret`): config em dois lugares diverge.
+7. ⚠️ **O teste passa pelo MESMO caminho da venda** (insert em `notifications`),
+   senão provaria o caminho errado.
+8. ⚠️ Mensagem do CHAT que cai na assinatura do Hub abre `/home` do Hub (o Hub
+   não tem `/chat`) — limitação conhecida.
+
 ### Carbo Pré-Vendas — o OITAVO app (06/10/2026)
 `prevendas.carbohub.com.br`, flag `carbo_prevendas`, cor lima `#65A30D`. É o
 app dos SDRs: qualificam o lead e repassam ao closer (que trabalha no Sales).

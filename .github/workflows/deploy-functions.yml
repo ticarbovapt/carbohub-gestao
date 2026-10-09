@@ -142,6 +142,10 @@ jobs:
           # Actions, mkt-transcodificar.yml). --no-verify-jwt porque quem chama
           # é o workflow com o X-Cron-Secret; FECHA sem ele (401/500).
           dep mkt-video-web --no-verify-jwt
+          # O sininho no celular (Web Push). --no-verify-jwt porque quem chama é
+          # o gatilho trg_notificacao_push via pg_net, com o x-chat-push-secret
+          # (o MESMO do chat-push). FECHA sem ele (500) e com ele errado (401).
+          dep carbo-push --no-verify-jwt
           dep ml-auth --no-verify-jwt
           dep ml-token-refresh --no-verify-jwt
           dep ml-estoque-full --no-verify-jwt
