@@ -7,6 +7,7 @@ import { useCardMutations } from "@/hooks/useCardDetail";
 import type { BoardPerson, CardSummary, Label } from "@/hooks/useBoards";
 import { LABEL_COLORS, tintedLabelStyle } from "@/lib/mktTheme";
 import { CapaPainel } from "@/components/board/CapaPainel";
+import { DatasPainel } from "@/components/board/DatasPainel";
 import { diceBearUrl } from "@/components/ui/profile-avatar";
 import { MoverCopiar } from "@/components/board/MoverCopiar";
 
@@ -23,7 +24,6 @@ import { MoverCopiar } from "@/components/board/MoverCopiar";
 
 type Painel = null | "etiquetas" | "membros" | "capa" | "datas";
 
-const paraData = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("sv-SE") : "");
 
 export function EdicaoRapida({ card, rect, boardId, labels, pessoas, onClose, onAbrir, onArquivar }: {
   card: CardSummary; rect: DOMRect; boardId: string; labels: Label[]; pessoas: BoardPerson[];
@@ -87,7 +87,7 @@ export function EdicaoRapida({ card, rect, boardId, labels, pessoas, onClose, on
         <Acao icone={Archive} rot="Arquivar" onClick={() => { onArquivar(); onClose(); }} />
 
         {painel && (
-          <div className="mt-2 rounded-[var(--radius)] border border-border bg-popover shadow-[var(--shadow-elevated)] p-2 max-h-72 overflow-y-auto">
+          <div className="mt-2 rounded-[var(--radius)] border border-border bg-popover shadow-[var(--shadow-elevated)] p-2 max-h-[70vh] overflow-y-auto">
             {painel === "etiquetas" && (labels.length === 0
               ? <p className="text-xs text-muted-foreground p-1">Este quadro não tem etiquetas ainda.</p>
               : labels.map((l) => {
@@ -118,14 +118,9 @@ export function EdicaoRapida({ card, rect, boardId, labels, pessoas, onClose, on
               <div className="p-1"><CapaPainel cover={card.cover} onChange={(cover) => mut.updateCard.mutate({ cover })} /></div>
             )}
             {painel === "datas" && (
-              <div className="space-y-1.5 p-1">
-                <label className="block text-xs text-muted-foreground">Início</label>
-                <input type="date" value={paraData(card.start_date)} className="mkt-field w-full text-sm"
-                  onChange={(e) => mut.updateCard.mutate({ start_date: e.target.value ? new Date(`${e.target.value}T12:00:00`).toISOString() : null })} />
-                <label className="block text-xs text-muted-foreground">Entrega</label>
-                <input type="date" value={paraData(card.due_date)} className="mkt-field w-full text-sm"
-                  onChange={(e) => mut.updateCard.mutate({ due_date: e.target.value ? new Date(`${e.target.value}T18:00:00`).toISOString() : null })} />
-                <p className="text-[11px] text-muted-foreground">Hora exata e lembrete ficam no cartão aberto.</p>
+              <div className="p-1">
+                <DatasPainel card={card} onFechar={() => setPainel(null)}
+                  onSalvar={(patch) => mut.updateCard.mutate(patch, { onError: (e) => toast.error(`Não salvou as datas: ${(e as Error).message}`) })} />
               </div>
             )}
           </div>

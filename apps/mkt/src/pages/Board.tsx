@@ -10,7 +10,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Plus, X, GripVertical, MoreHorizontal, Clock, CheckSquare, MessageSquare, AlignLeft, Paperclip, Settings2, Link2, ChevronLeft, ChevronRight, Filter, Bookmark, Trash2, LayoutTemplate, Archive, Pencil, Check, Eye } from "lucide-react";
+import { ArrowLeft, Plus, X, GripVertical, MoreHorizontal, Clock, CheckSquare, MessageSquare, AlignLeft, Paperclip, Settings2, Link2, ChevronLeft, ChevronRight, Filter, Bookmark, Trash2, LayoutTemplate, Archive, Pencil, Check, Eye, Repeat, Bell } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -188,6 +188,8 @@ function CardFace({ card, labels, onConcluir }: { card: CardSummary; labels: Lab
         {card.due_date && (
           <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md ${overdue ? "bg-destructive/10 text-destructive" : card.is_complete ? "bg-success/10 text-success" : "bg-muted"}`}>
             <Clock className="h-3.5 w-3.5" /> {card.start_date ? `${fmtDue(card.start_date)} – ` : ""}{fmtDue(card.due_date)}
+            {card.recorrencia && <Repeat className="h-3 w-3 opacity-80" aria-label="Repete" />}
+            {card.lembrete_minutos != null && <Bell className="h-3 w-3 opacity-80" aria-label="Com lembrete" />}
           </span>
         )}
         {/* Só início, sem entrega: o Trello mostra "Começou: 28 de set." e o

@@ -2403,6 +2403,26 @@ as três ALTA que faltavam do mapeamento Trello × sistema:
    remover). Antes só existia na edição rápida e ninguém achava.
    `components/board/CapaPainel.tsx` é o MESMO nos dois lugares.
 
+**Datas: calendário, LEMBRETE e REPETIR** (09/10/2026, `20261068`):
+`components/board/DatasPainel.tsx`, o MESMO no cartão aberto e na edição
+rápida, grava só no "Salvar". Colunas `mkt_cards.lembrete_minutos` e
+`mkt_cards.recorrencia` (`diaria|semanal|mensal|anual`).
+1. **Lembrete** = `mkt_avisar_lembretes()`, cron `mkt-lembretes-5min`
+   (`1-59/5`), notificação `mkt_prazo` (já está nos oito sininhos). Dedupe na
+   MESMA `mkt_aviso_prazo` (tipo `lembrete`): mudar o prazo avisa de novo.
+   ⚠️ Não avisa lembrete de prazo vencido há mais de 30 min — atrasado é do
+   aviso diário. Recebe quem é membro; sem membro, quem criou.
+2. **Repetir** = gatilho `trg_mkt_recorrencia`: CONCLUIR cria a próxima
+   ocorrência logo abaixo (data a partir da ENTREGA, pulando o que já passou;
+   etiquetas, membros, campos e checklist DESMARCADO; sem comentários, anexos
+   nem `trello_id`). ⚠️ A recorrência MUDA DE DONO para o cartão novo —
+   desmarcar e marcar de novo não duplica. ⚠️ Gatilho, não tela: o círculo,
+   o "Concluído" e a edição rápida concluem por caminhos diferentes.
+   ⚠️ Falha na cópia FALHA a conclusão — engolir seria a recorrência sumindo.
+3. ⚠️ `useCardDetail` e o original dos espelhos em `useBoard` passaram a
+   `select("*")`: lista explícita com coluna nova quebraria abrir cartão no
+   intervalo entre o deploy e a migração.
+
 **O cartão é no formato do Trello** (08/10/2026, pedido do dono do processo):
 conteúdo à esquerda (botões de ação numa linha, resumo membros · etiquetas ·
 datas, descrição longa recolhida em "Mostrar mais", campos em grade) e
