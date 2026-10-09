@@ -2344,6 +2344,15 @@ mostra cartão a cartão o que muda e só grava no "Aplicar".
 6. Comentários e arquivos continuam nas seções "Comentários" e "Arquivos" do
    mesmo diálogo — rode depois de sincronizar.
 
+**Itens arquivados** (09/10/2026, botão **Arquivados** do quadro,
+`components/board/ItensArquivados.tsx`): cartões e listas arquivados, com busca,
+Restaurar e Excluir. ⚠️ Cartão de LISTA arquivada não está arquivado — restaurar
+a lista traz os cartões dela; restaurar um cartão cuja lista está arquivada
+restaura a lista JUNTO (senão voltaria para um lugar que ninguém vê). ⚠️ Excluir
+segue a regra do "Excluir quadro": arquivos (atual, capa, web e versões) saem
+do bucket ANTES da linha, e recusa se outro quadro ESPELHA o cartão. O cartão
+arquivado aberto pelo painel mostra a faixa "arquivado" com Restaurar.
+
 **O cartão é no formato do Trello** (08/10/2026, pedido do dono do processo):
 conteúdo à esquerda (botões de ação numa linha, resumo membros · etiquetas ·
 datas, descrição longa recolhida em "Mostrar mais", campos em grade) e
