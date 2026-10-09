@@ -16,7 +16,7 @@ import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { useCustomFields } from "@/hooks/useCustomFields";
 import { CustomFieldInput } from "@/components/board/CustomFieldInput";
 import { LABEL_COLORS, LABEL_COLOR_KEYS, tintedLabelStyle } from "@/lib/mktTheme";
-import { ListChecks, Play, Music, Image as ImageIcon, ChevronUp, ChevronDown, LayoutTemplate } from "lucide-react";
+import { ListChecks, Play, Music, Image as ImageIcon, ChevronUp, ChevronDown, LayoutTemplate, RotateCcw } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import type { Label } from "@/hooks/useBoards";
@@ -180,6 +180,18 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [], anex
                 />
               </div>
 
+              {/* Aberto pelos Itens arquivados: diz que está arquivado e deixa voltar. */}
+              {data.card.is_archived && (
+                <div className="flex items-center gap-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm">
+                  <Archive className="h-4 w-4 text-warning shrink-0" />
+                  <span className="flex-1 text-foreground">Este cartão está arquivado — não aparece no quadro.</span>
+                  <Button size="sm" variant="outline" className="gap-1.5 h-7"
+                    onClick={() => mut.updateCard.mutate({ is_archived: false, archived_at: null }, { onSuccess: () => toast.success("Cartão restaurado.") })}>
+                    <RotateCcw className="h-3.5 w-3.5" /> Restaurar
+                  </Button>
+                </div>
+              )}
+
               {/* Ações — uma linha de botões, como no Trello */}
               <div className="flex flex-wrap gap-2">
                 <div className="relative" ref={labelsRef}>
@@ -264,10 +276,10 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [], anex
                   }}>
                   <LayoutTemplate className="h-3.5 w-3.5" /> Salvar como modelo
                 </Button>
-                <Button size="sm" variant="ghost" className="gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/10"
+                {!data.card.is_archived && <Button size="sm" variant="ghost" className="gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/10"
                   onClick={async () => { if (await confirmar({ titulo: "Arquivar este cartão?", confirmar: "Arquivar" })) { mut.updateCard.mutate({ is_archived: true, archived_at: new Date().toISOString() }, { onSuccess: onClose }); toast.success("Cartão arquivado."); } }}>
                   <Archive className="h-3.5 w-3.5" /> Arquivar
-                </Button>
+                </Button>}
               </div>
 
               {/* Resumo — membros, etiquetas e datas lado a lado */}

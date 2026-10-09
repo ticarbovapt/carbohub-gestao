@@ -10,7 +10,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Plus, X, GripVertical, MoreHorizontal, Clock, CheckSquare, MessageSquare, AlignLeft, Paperclip, Settings2, Link2, ChevronLeft, ChevronRight, Filter, Bookmark, Trash2, LayoutTemplate } from "lucide-react";
+import { ArrowLeft, Plus, X, GripVertical, MoreHorizontal, Clock, CheckSquare, MessageSquare, AlignLeft, Paperclip, Settings2, Link2, ChevronLeft, ChevronRight, Filter, Bookmark, Trash2, LayoutTemplate, Archive } from "lucide-react";
 import { toast } from "sonner";
 import {
   useBoard, useBoardLive, useBoardMutations, POS_GAP,
@@ -22,6 +22,7 @@ import { CardModal } from "@/components/board/CardModal";
 import { useCustomFields, useBoardFieldValues, type CustomField } from "@/hooks/useCustomFields";
 import { BoardFieldsDialog } from "@/components/board/BoardFieldsDialog";
 import { TrazerDoTrello } from "@/components/board/TrazerDoTrello";
+import { ItensArquivados } from "@/components/board/ItensArquivados";
 import { FilterControls } from "@/components/board/FilterControls";
 import { ViewSwitcher } from "@/components/board/ViewSwitcher";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
@@ -396,6 +397,7 @@ export default function Board() {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const [openCardId, setOpenCardId] = useState<string | null>(null);
+  const [arquivadosAberto, setArquivadosAberto] = useState(false);
   const [anexoInicial, setAnexoInicial] = useState<string | null>(null);
   const [fieldsOpen, setFieldsOpen] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -573,6 +575,9 @@ export default function Board() {
         </div>
 
         <TrazerDoTrello boardId={boardId} />
+        <button onClick={() => setArquivadosAberto(true)} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md px-2.5 py-1.5 transition-colors" title="Itens arquivados">
+          <Archive className="h-4 w-4" /> Arquivados
+        </button>
         <button onClick={() => setFieldsOpen(true)} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md px-2.5 py-1.5 transition-colors" title="Campos personalizados">
           <Settings2 className="h-4 w-4" /> Campos
         </button>
@@ -626,6 +631,8 @@ export default function Board() {
         </DndContext>
       </div>
 
+      <ItensArquivados boardId={boardId} open={arquivadosAberto} onOpenChange={setArquivadosAberto}
+        onAbrirCartao={(id) => { setArquivadosAberto(false); setOpenCardId(id); }} />
       {openCardId && (
         <CardModal cardId={openCardId} boardId={boardId} labels={labels} pessoas={data.people} anexoInicial={anexoInicial} onClose={() => { setOpenCardId(null); setAnexoInicial(null); }} />
       )}
