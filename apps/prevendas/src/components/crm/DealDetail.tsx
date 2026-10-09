@@ -15,7 +15,8 @@ import type { CRMLead, FunnelType } from "@/types/crm";
 import {
   FUNNEL_CONFIG, getCloseReasons, getStagesForFunnel, getNextStage, getLostStage,
   isTerminalStage, isHandoffStage, isWonStage, getDaysSinceUpdate, SEGMENTS, segmentOf,
-  stageLabelAnywhere, sourceLabel, WAITING_OPTIONS, waitingLabel, esperaVencida, isFunilDeSdr, funilDoCloser, leadParaVender, UFS } from "@/types/crm";
+  stageLabelAnywhere, sourceLabel, WAITING_OPTIONS, waitingLabel, esperaVencida, isFunilDeSdr, funilDoCloser, leadParaVender, UFS,
+  perguntasDeQualificacao, faltaNaQualificacao, type CampoQual } from "@/types/crm";
 
 import {
   useAdvanceLeadStage, useMarkLeadLost, useTransferLead, useLeadOwnerLog,
@@ -220,28 +221,35 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
   ].filter(Boolean).join(" — ") || null;
   const temFaturamento = !!(lead.cnpj || lead.legal_name || lead.address || lead.customer_ie);
 
-  // Qualificação — os quatro campos que o closer recebe no repasse.
+  // Qualificação — o que o closer recebe no repasse. As PERGUNTAS saem do
+  // funil do próprio lead (posto indicado × prospecção a frio); as colunas são
+  // as mesmas. Ver `perguntasDeQualificacao` em types/crm.ts.
+  const perguntas = perguntasDeQualificacao(lead.funnel_type);
+  const rascunhoDoLead = (): Record<CampoQual, string> => ({
+    qual_postos: lead.qual_postos ? String(lead.qual_postos) : "",
+    qual_volume: lead.qual_volume ?? "", qual_dor: lead.qual_dor ?? "",
+    qual_decisor: lead.qual_decisor ?? "", qual_prazo: lead.qual_prazo ?? "",
+  });
   const [editQual, setEditQual] = useState(false);
-  const [qVolume, setQVolume]   = useState(lead.qual_volume ?? "");
-  const [qDor, setQDor]         = useState(lead.qual_dor ?? "");
-  const [qDecisor, setQDecisor] = useState(lead.qual_decisor ?? "");
-  const [qPrazo, setQPrazo]     = useState(lead.qual_prazo ?? "");
+  const [qual, setQual] = useState<Record<CampoQual, string>>(rascunhoDoLead);
   useEffect(() => {
-    setQVolume(lead.qual_volume ?? ""); setQDor(lead.qual_dor ?? "");
-    setQDecisor(lead.qual_decisor ?? ""); setQPrazo(lead.qual_prazo ?? "");
+    setQual(rascunhoDoLead());
     setEditQual(false);
   }, [lead.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function startEditQual() {
-    setQVolume(lead.qual_volume ?? ""); setQDor(lead.qual_dor ?? "");
-    setQDecisor(lead.qual_decisor ?? ""); setQPrazo(lead.qual_prazo ?? "");
+    setQual(rascunhoDoLead());
     setEditQual(true);
   }
   async function saveQual() {
+    const postos = Number(qual.qual_postos.replace(/\D/g, "")) || null;
     await updateLead.mutateAsync({
       id: lead.id,
-      qual_volume: qVolume.trim() || null, qual_dor: qDor.trim() || null,
-      qual_decisor: qDecisor.trim() || null, qual_prazo: qPrazo.trim() || null,
+      qual_volume: qual.qual_volume.trim() || null, qual_dor: qual.qual_dor.trim() || null,
+      qual_decisor: qual.qual_decisor.trim() || null, qual_prazo: qual.qual_prazo.trim() || null,
+      // Só quando o funil pergunta: a coluna nasceu na `20261063`, e mandá-la
+      // no Outbound faria o salvar do Sales falhar até a migração rodar.
+      ...(perguntas.some((q) => q.campo === "qual_postos") ? { qual_postos: postos } : {}),
     });
     setEditQual(false);
   }
@@ -279,13 +287,8 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
   // O SDR descarta ("fora do perfil"), o closer perde ("preço"). Listas distintas.
   const closeReasons = getCloseReasons(funnelType);
   const isOutbound = isFunilDeSdr(funnelType);
-  const temQualificacao = !!(lead.qual_volume || lead.qual_dor || lead.qual_decisor || lead.qual_prazo);
-  const faltamQual = [
-    !lead.qual_volume  && "volume",
-    !lead.qual_dor     && "dor",
-    !lead.qual_decisor && "decisor",
-    !lead.qual_prazo   && "prazo",
-  ].filter(Boolean) as string[];
+  const temQualificacao = !!(lead.qual_volume || lead.qual_dor || lead.qual_decisor || lead.qual_prazo || lead.qual_postos);
+  const faltamQual = faltaNaQualificacao(lead, lead.funnel_type);
   const daysSince = getDaysSinceUpdate(lead.updated_at);
   const displayName = lead.trade_name || lead.legal_name || lead.contact_name || "Sem nome";
 
@@ -631,10 +634,10 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
               >
                 {editQual ? (
                   <>
-                    <LabeledInput label="Volume / frota" value={qVolume} onChange={setQVolume} placeholder="ex.: 40 caminhões" />
-                    <LabeledInput label="Dor / problema" value={qDor} onChange={setQDor} placeholder="o que ele contou" />
-                    <LabeledInput label="Decisor" value={qDecisor} onChange={setQDecisor} placeholder="nome e cargo de quem assina" />
-                    <LabeledInput label="Prazo" value={qPrazo} onChange={setQPrazo} placeholder="quando pretende resolver" />
+                    {perguntas.map((q) => (
+                      <LabeledInput key={q.campo} label={q.rotulo} value={qual[q.campo]} placeholder={q.exemplo}
+                        onChange={(v) => setQual((x) => ({ ...x, [q.campo]: q.numero ? v.replace(/\D/g, "").slice(0, 4) : v }))} />
+                    ))}
                     <div className="flex gap-2 pt-1">
                       <Button size="sm" onClick={saveQual} disabled={updateLead.isPending}>
                         {updateLead.isPending ? "Salvando..." : "Salvar"}
@@ -644,10 +647,9 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
                   </>
                 ) : (
                   <>
-                    <Field label="Volume / frota" value={lead.qual_volume} />
-                    <Field label="Dor / problema" value={lead.qual_dor} />
-                    <Field label="Decisor" value={lead.qual_decisor} />
-                    <Field label="Prazo" value={lead.qual_prazo} />
+                    {perguntas.map((q) => (
+                      <Field key={q.campo} label={q.rotulo} value={lead[q.campo] != null ? String(lead[q.campo]) : null} />
+                    ))}
                     {isOutbound && faltamQual.length > 0 && (
                       <p className="flex items-start gap-1.5 text-[11px] text-amber-500">
                         <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-px" />

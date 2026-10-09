@@ -90,6 +90,8 @@ export interface CRMLead {
   qual_dor: string | null;
   qual_decisor: string | null;
   qual_prazo: string | null;
+  /** Quantos postos tem a rede (Pré-Vendas). Opcional: nasceu na `20261063`. */
+  qual_postos?: number | null;
   // "Aguardando" é FLAG e não coluna: aguardar é ortogonal à etapa — dá para
   // aguardar em Proposta, Negociação e Formalização, e são coisas diferentes.
   // O prazo é obrigatório (CHECK no banco) e, quando vence, a flag deixa de
@@ -333,6 +335,53 @@ export const funilDoCloser = (ft: string | null | undefined): FunnelType =>
   ft === "f14" ? "f15" : "f11";
 export const isFunilDeSdr = (ft: string | null | undefined) =>
   !!ft && (FUNIS_DE_SDR as readonly string[]).includes(ft);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// QUALIFICAÇÃO — as perguntas mudam com o FUNIL, as colunas não.
+//
+// O Outbound do Sales (f12) é prospecção a frio: volume de frota, dor, decisor,
+// prazo. O Pré-Vendas (f14, e o closer dele, f15) atende POSTO que já é cliente
+// de quem indica — ali "dor" e "prazo" não descrevem a conversa. Pedido do dono
+// do processo em 09/10/2026, com o porquê da pergunta nova: rede de 20 postos
+// (RCM) começou com compra de R$ 70 mil; rede de 4, bem menor. Quantos postos é
+// o POTENCIAL.
+//
+// ⚠️ As quatro colunas `qual_*` são as MESMAS nos dois — só rótulo e exemplo
+// mudam. Coluna nova por funil faria o repasse (que copia as colunas) e o card
+// do closer precisarem saber de qual funil o lead veio para achar o dado.
+// ⚠️ f15 entra junto: o closer do Pré-Vendas lê o que o SDR escreveu, e com o
+// rótulo do Outbound "Como o posto reagiu" apareceria como "Dor / problema".
+// ─────────────────────────────────────────────────────────────────────────────
+export type CampoQual = "qual_postos" | "qual_volume" | "qual_dor" | "qual_decisor" | "qual_prazo";
+export interface PerguntaQual {
+  campo: CampoQual;
+  rotulo: string;
+  exemplo: string;
+  /** Como aparece em "Falta …". */
+  curto: string;
+  numero?: boolean;
+  /** Ocupa a linha inteira no formulário. */
+  larga?: boolean;
+}
+export const funilDePosto = (ft: string | null | undefined) => ft === "f14" || ft === "f15";
+export function perguntasDeQualificacao(ft: string | null | undefined): PerguntaQual[] {
+  if (funilDePosto(ft)) return [
+    { campo: "qual_postos",  rotulo: "Quantos postos (rede)",           exemplo: "ex.: 1, ou 20 (rede)",                    curto: "quantos postos", numero: true },
+    { campo: "qual_decisor", rotulo: "Quem decide no posto",            exemplo: "ex.: Carlos, dono",              curto: "quem decide" },
+    { campo: "qual_volume",  rotulo: "Movimento do posto",              exemplo: "ex.: 8 bombas, 400 carros/dia, conveniência", curto: "movimento", larga: true },
+    { campo: "qual_dor",     rotulo: "Como o posto reagiu à indicação", exemplo: "ex.: gostou, pediu amostra para testar",       curto: "reação", larga: true },
+    { campo: "qual_prazo",   rotulo: "Próximo passo combinado",         exemplo: "ex.: levar amostra na terça",                  curto: "próximo passo", larga: true },
+  ];
+  return [
+    { campo: "qual_volume",  rotulo: "Volume / frota",          exemplo: "ex.: 40 caminhões",                     curto: "volume" },
+    { campo: "qual_decisor", rotulo: "Decisor",                 exemplo: "nome e cargo",                          curto: "decisor" },
+    { campo: "qual_dor",     rotulo: "Dor / problema relatado", exemplo: "ex.: consumo alto e fumaça na revisão", curto: "dor", larga: true },
+    { campo: "qual_prazo",   rotulo: "Prazo",                   exemplo: "ex.: quer resolver até o fim do mês",   curto: "prazo", larga: true },
+  ];
+}
+/** O que falta preencher, na ordem das perguntas do funil. */
+export const faltaNaQualificacao = (l: Partial<Record<CampoQual, unknown>>, ft: string | null | undefined) =>
+  perguntasDeQualificacao(ft).filter((q) => l[q.campo] == null || l[q.campo] === "").map((q) => q.curto);
 
 // ⚠️ As pipelines que cada app MOSTRA moram em `lib/funisDoApp.ts`, que é
 // PRÓPRIO de cada app (Sales e Pré-Vendas). Este arquivo é idêntico nos dois.
