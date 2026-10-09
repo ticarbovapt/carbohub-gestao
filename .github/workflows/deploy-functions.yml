@@ -138,6 +138,10 @@ jobs:
           # gente logada, e a função ainda confere carbo_e_time_interno(). A
           # chave/token do Trello (TRELLO_KEY/TRELLO_TOKEN) só existem aqui.
           dep trello-migrar
+          # Quadros do Marketing: a PORTA do conversor de vídeo (o ffmpeg roda no
+          # Actions, mkt-transcodificar.yml). --no-verify-jwt porque quem chama
+          # é o workflow com o X-Cron-Secret; FECHA sem ele (401/500).
+          dep mkt-video-web --no-verify-jwt
           dep ml-auth --no-verify-jwt
           dep ml-token-refresh --no-verify-jwt
           dep ml-estoque-full --no-verify-jwt

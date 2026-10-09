@@ -1,9 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  AtSign, Bell, Bug, Check, CheckCheck, Clock, ListTodo,
-  MessageCircle, Trash2, WifiOff, ShoppingCart,
-} from "lucide-react";
+import { AtSign, Bell, Bug, Check, CheckCheck, Clock, ListTodo, MessageCircle, Trash2, WifiOff, ShoppingCart, CalendarClock } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useNotifications, Notification } from "@/hooks/useNotifications";
@@ -23,6 +20,8 @@ const TYPE_CONFIG: Record<string, { Icon: React.ElementType; label: string; colo
   bug_resolved:           { Icon: CheckCheck,    label: "Bug corrigido",  color: "text-emerald-600", bg: "bg-emerald-500/10" },
   ecommerce_disconnected: { Icon: WifiOff,       label: "E-commerce caído", color: "text-destructive", bg: "bg-destructive/10" },
   ecommerce_sale:         { Icon: ShoppingCart,  label: "Nova venda",     color: "text-emerald-600", bg: "bg-emerald-500/10" },
+  mkt_mencao:             { Icon: AtSign,        label: "Menção",         color: "text-violet-500",  bg: "bg-violet-500/10" },
+  mkt_prazo:              { Icon: CalendarClock, label: "Prazo",          color: "text-amber-600",   bg: "bg-amber-500/10" },
 };
 
 function NotificationItem({
@@ -87,6 +86,16 @@ export function NotificationBell() {
 
   // Clique numa notificação de chat → abre a conversa certa (?c=).
   const handleOpen = (n: Notification) => {
+    // Menção e prazo dos Quadros do Marketing → o cartão, no app do Marketing.
+    // `/cartao/:id` descobre o quadro; fora do mkt, vai pelo subdomínio (o SSO
+    // leva a sessão junto).
+    if (n.reference_type === "mkt_card" && n.reference_id) {
+      setOpen(false);
+      const caminho = `/cartao/${n.reference_id}`;
+      if (window.location.hostname.startsWith("mkt.")) navigate(caminho);
+      else window.location.href = `https://mkt.carbohub.com.br${caminho}`;
+      return;
+    }
     if (n.reference_type === "chat" && n.reference_id) {
       setOpen(false);
       navigate(`/chat?c=${n.reference_id}`);

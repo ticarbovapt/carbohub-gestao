@@ -10,7 +10,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Plus, X, GripVertical, MoreHorizontal, Clock, CheckSquare, MessageSquare, AlignLeft, Paperclip, Settings2, Link2, ChevronLeft, ChevronRight, Filter, Bookmark, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, X, GripVertical, MoreHorizontal, Clock, CheckSquare, MessageSquare, AlignLeft, Paperclip, Settings2, Link2, ChevronLeft, ChevronRight, Filter, Bookmark, Trash2, LayoutTemplate } from "lucide-react";
 import { toast } from "sonner";
 import {
   useBoard, useBoardLive, useBoardMutations, POS_GAP,
@@ -30,6 +30,7 @@ import { emptyCriteria, criteriaActive, matchCard, type SearchCriteria } from "@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { confirmar, pedirTexto } from "@carbo/shell";
+import { useModelos, useModeloMutations, type Modelo } from "@/hooks/useModelos";
 
 const fmtDue = (iso: string) => {
   const d = new Date(iso);
@@ -214,10 +215,15 @@ function BoardCard({ card, labels, onOpen }: { card: CardSummary; labels: Label[
 // ── Lista (coluna) ───────────────────────────────────────────────────────────
 function BoardColumn({
   list, index, cards, labels, collapsed, onOpenCard, onAddCard, onRename, onArchive, onSetColor, onToggleCollapse,
+  modelos, onUsarModelo, onExcluirModelo,
 }: {
   list: List; index: number; cards: CardSummary[]; labels: Label[]; collapsed: boolean;
   onOpenCard: (id: string) => void;
   onAddCard: (listId: string, title: string) => void;
+  modelos: Modelo[];
+  /** `titulo` = o que já estava digitado no campo; vazio, vale o do modelo. */
+  onUsarModelo: (listId: string, modelo: Modelo, titulo: string) => void;
+  onExcluirModelo: (modelo: Modelo) => void;
   onRename: (id: string, title: string) => void;
   onArchive: (id: string) => void;
   onSetColor: (id: string, color: string | null) => void;
@@ -232,6 +238,7 @@ function BoardColumn({
   const [editTitle, setEditTitle] = useState(false);
   const [title, setTitle] = useState(list.title);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [modelosAbertos, setModelosAbertos] = useState(false);
   const accent = getAccent(list.color, index);
   // No Trello a lista INTEIRA tem a cor; cinza/escuro ficam neutras (lá o
   // cinza é o fundo padrão de lista).
@@ -310,7 +317,31 @@ function BoardColumn({
           </SortableContext>
         </div>
 
-        <div className="px-2 pb-2">
+        <div className="px-2 pb-2 relative">
+          {modelosAbertos && (
+            <div className="absolute bottom-full left-2 right-2 z-20 mb-1 rounded-[var(--radius)] border border-border bg-popover shadow-[var(--shadow-elevated)] p-1.5">
+              <div className="flex items-center justify-between px-1.5 pb-1">
+                <p className="mkt-meta-label">Criar a partir de um modelo</p>
+                <button onClick={() => setModelosAbertos(false)} className="p-0.5 text-muted-foreground hover:text-foreground"><X className="h-3.5 w-3.5" /></button>
+              </div>
+              {modelos.length === 0 ? (
+                <p className="px-1.5 py-1.5 text-xs text-muted-foreground">Nenhum modelo neste quadro ainda. Abra um cartão pronto e use <b>Salvar como modelo</b>.</p>
+              ) : modelos.map((md) => (
+                <div key={md.id} className="group/md flex items-center gap-1">
+                  <button onClick={() => { setModelosAbertos(false); onUsarModelo(list.id, md, text); setText(""); setAdding(false); }}
+                    className="flex-1 min-w-0 text-left rounded-md px-2 py-1.5 hover:bg-muted">
+                    <span className="block text-sm truncate">{md.nome}</span>
+                    <span className="block text-[11px] text-muted-foreground truncate">
+                      {[md.checklists.length ? `${md.checklists.reduce((n, c) => n + c.items.length, 0)} itens de checklist` : "",
+                        md.label_ids.length ? `${md.label_ids.length} etiqueta${md.label_ids.length > 1 ? "s" : ""}` : "",
+                        md.campos.length ? `${md.campos.length} campo${md.campos.length > 1 ? "s" : ""}` : ""].filter(Boolean).join(" · ") || "só título e descrição"}
+                    </span>
+                  </button>
+                  <button onClick={() => onExcluirModelo(md)} title="Excluir modelo" className="p-1 opacity-0 group-hover/md:opacity-100 text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
+                </div>
+              ))}
+            </div>
+          )}
           {adding ? (
             <div className="space-y-2">
               <textarea autoFocus value={text} onChange={(e) => setText(e.target.value)}
@@ -320,12 +351,19 @@ function BoardColumn({
               <div className="flex items-center gap-2">
                 <Button size="sm" onClick={submit}>Adicionar</Button>
                 <button onClick={() => setAdding(false)} className="p-1.5 text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
+                <button onClick={() => setModelosAbertos((v) => !v)} title="Usar um modelo (o título digitado vale)" className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-muted"><LayoutTemplate className="h-3.5 w-3.5" /> Modelo</button>
               </div>
             </div>
           ) : (
-            <button onClick={() => setAdding(true)} className="w-full flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary hover:bg-muted rounded-[var(--input-radius)] px-2 py-2 transition-colors">
-              <Plus className="h-4 w-4" /> Adicionar cartão
-            </button>
+            <div className="flex items-center gap-1">
+              <button onClick={() => setAdding(true)} className="flex-1 flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary hover:bg-muted rounded-[var(--input-radius)] px-2 py-2 transition-colors">
+                <Plus className="h-4 w-4" /> Adicionar cartão
+              </button>
+              <button onClick={() => setModelosAbertos((v) => !v)} title="Criar a partir de um modelo"
+                className={`shrink-0 p-2 rounded-[var(--input-radius)] hover:bg-muted ${modelosAbertos ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}>
+                <LayoutTemplate className="h-4 w-4" />
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -340,6 +378,8 @@ export default function Board() {
   const { data, isLoading } = useBoard(boardId ?? null);
   useBoardLive(boardId ?? null);
   const m = useBoardMutations(boardId);
+  const { data: modelos = [] } = useModelos(boardId);
+  const mm = useModeloMutations(boardId);
   const { data: team = [] } = useTeamMembers();
   const { data: camposDoQuadro = [] } = useCustomFields(boardId ?? null);
   const { data: valoresDosCampos } = useBoardFieldValues(boardId ?? null);
@@ -477,6 +517,20 @@ export default function Board() {
     m.createCard.mutate({ listId, title, position: pos }, { onError: () => toast.error("Não foi possível criar o cartão.") });
   };
 
+  const usarModelo = (listId: string, modelo: Modelo, titulo: string) => {
+    const listCards = cardsByList.get(listId) ?? [];
+    const pos = (listCards[listCards.length - 1]?.position ?? 0) + POS_GAP;
+    mm.criarCartao.mutate({ modelo, listId, position: pos, titulo }, {
+      // Abre o cartão: quase sempre falta dar o título da peça e o prazo.
+      onSuccess: (id) => { setOpenCardId(id); toast.success(`Cartão criado com o modelo "${modelo.nome}".`); },
+      onError: (e) => toast.error(`Não criou o cartão: ${(e as Error).message}`),
+    });
+  };
+  const excluirModelo = async (modelo: Modelo) => {
+    if (!(await confirmar({ titulo: `Excluir o modelo "${modelo.nome}"?`, mensagem: "Os cartões já criados com ele não mudam.", confirmar: "Excluir", perigo: true }))) return;
+    mm.excluir.mutate({ id: modelo.id }, { onError: (e) => toast.error((e as Error).message) });
+  };
+
   return (
     <CamposCtx.Provider value={camposCtx}>
     <div className="fixed inset-0 top-14 mkt-canvas bg-dot-grid flex flex-col">
@@ -537,7 +591,8 @@ export default function Board() {
                   onRename={(id, title) => m.renameList.mutate({ id, title })}
                   onArchive={(id) => m.archiveList.mutate({ id })}
                   onSetColor={(id, color) => m.setListColor.mutate({ id, color })}
-                  onToggleCollapse={toggleCollapse} />
+                  onToggleCollapse={toggleCollapse}
+                  modelos={modelos} onUsarModelo={usarModelo} onExcluirModelo={excluirModelo} />
               ))}
             </SortableContext>
 

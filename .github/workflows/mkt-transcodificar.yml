@@ -1,0 +1,42 @@
+# Quadros do Marketing — converte para a web o vídeo que o navegador não toca
+# (o .MOV do iPhone é HEVC; o Chrome não reproduz HEVC). Ver o script em
+# .github/scripts/mkt-transcodificar.sh e a função supabase/functions/mkt-video-web.
+#
+# ⚠️ Roda no GitHub, não no Supabase: um vídeo de 243 MB não cabe na memória
+# nem no tempo de uma edge function, e o ffmpeg mora aqui de graça.
+# ⚠️ O GitHub guarda só o CRON_SECRET (o mesmo da sonda de status), nunca a
+# service role. Sem ele o job falha ALTO.
+
+name: Marketing — vídeo para a web
+
+on:
+  schedule:
+    # A cada 15 min, fora dos minutos cheios (o GitHub atrasa os :00).
+    - cron: "7,22,37,52 * * * *"
+  workflow_dispatch:
+    inputs:
+      limite:
+        description: "Quantos vídeos nesta rodada"
+        default: "6"
+
+# Uma rodada por vez: duas pegariam o mesmo vídeo.
+concurrency:
+  group: mkt-transcodificar
+  cancel-in-progress: false
+
+jobs:
+  converter:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+      - name: ffmpeg
+        run: command -v ffmpeg >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg)
+      - name: Converter
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SUPABASE_URL: https://wpkfirmapxevzpxjovjr.supabase.co
+          LIMITE: ${{ github.event.inputs.limite || '6' }}
+        run: bash .github/scripts/mkt-transcodificar.sh

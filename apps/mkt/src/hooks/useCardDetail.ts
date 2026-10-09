@@ -31,7 +31,20 @@ export interface Attachment {
   poster_path?: string | null;
   tamanho?: number | null;
   atualizado_em?: string | null;
+  /** Número da versão ATUAL (v1, v2…); as anteriores ficam em `mkt_anexo_versoes`. */
+  versao?: number | null;
+  /** Cópia para ASSISTIR (H.264), gerada pelo conversor quando o navegador não toca o original. */
+  web_path?: string | null;
+  web_status?: "nativo" | "pronto" | "falhou" | null;
   mime_type: string | null; created_at: string;
+}
+
+/** Uma versão ANTERIOR de um arquivo (a atual mora no próprio anexo). */
+export interface VersaoAnexo {
+  id: string; anexo_id: string; versao: number; name: string;
+  storage_path: string; poster_path: string | null; web_path: string | null;
+  mime_type: string | null; tamanho: number | null;
+  criado_em: string | null; criado_por: string | null; substituido_em: string;
 }
 export interface CardDetail {
   card: CardFull;
