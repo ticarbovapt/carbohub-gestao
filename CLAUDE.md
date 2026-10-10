@@ -2473,10 +2473,14 @@ como admin (gatilho + backfill por `created_by`). Adicionar avisa no sininho
 1. ⚠️ **Membro é QUEM PARTICIPA, não QUEM PODE VER.** O papel não trava nada,
    e o diálogo diz isso — tirar alguém não tira o acesso.
 2. ⚠️ **As tabelas do Marketing nasceram com `USING (true)`** (`20260723`):
-   qualquer logado lê os quadros, inclusive lojista e licenciado (mesma
-   `profiles`). O BLOCO 0 (b) da `20261070` MEDE isso. Fechar (trocar por
-   `carbo_e_time_interno()`) é o passo seguinte, e quadro PRIVADO só faz
-   sentido depois dele.
+   qualquer logado lia E escrevia os quadros, inclusive sessão de portal.
+   Medido em 10/10/2026: 14 tabelas abertas; as novas já nasciam fechadas.
+   A `20261071` troca as 14 por `carbo_e_time_interno()` — a MESMA regra das
+   novas. ⚠️ O BLOCO 0 (a) dela lista quem USA o Marketing e não é time
+   interno: essa pessoa perderia o quadro inteiro, calada (tela vazia). Só se
+   roda o BLOCO 1 com ele VAZIO. Tabela nova do Marketing nasce com
+   `carbo_e_time_interno()`, nunca `using (true)`. Quadro PRIVADO é outra
+   decisão, e só faz sentido depois disto.
 
 **O cartão é no formato do Trello** (08/10/2026, pedido do dono do processo):
 conteúdo à esquerda (botões de ação numa linha, resumo membros · etiquetas ·
