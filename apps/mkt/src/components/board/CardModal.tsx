@@ -324,7 +324,7 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [], anex
                   {showDatas && (
                     <div className="absolute z-20 mt-1 w-[300px] max-w-[85vw] left-0 rounded-[var(--radius)] border border-border bg-popover shadow-[var(--shadow-elevated)] p-3 max-h-[70vh] overflow-y-auto">
                       <DatasPainel card={data.card}
-                        onSalvar={(patch) => mut.updateCard.mutate(patch, { onError: (e) => toast.error(`Não salvou as datas: ${(e as Error).message}`) })}
+                        onSalvar={(patch) => mut.updateCard.mutate(patch)}
                         onFechar={() => setShowDatas(false)} />
                     </div>
                   )}

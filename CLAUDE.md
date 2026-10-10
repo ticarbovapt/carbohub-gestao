@@ -2494,6 +2494,21 @@ o quadro importado passa de 1.000 comentários e o teto calado entregaria
 arquivo "completo" pela metade. ⚠️ Imprimir abre a janela NO CLIQUE (antes do
 `await`), senão o navegador bloqueia como popup.
 
+**Botão do quadro muda a tela NO CLIQUE** (10/10/2026, `lib/mktOtimista.ts`).
+O time sentiu "um delayzinho" na capa: todo botão do cartão esperava o banco
+gravar E o quadro INTEIRO recarregar para só então mudar. Arrastar cartão já
+era otimista e por isso parecia instantâneo. Hoje capa, título, datas,
+concluído, descrição, etiqueta, membro, item de checklist, campo, excluir item/
+checklist/anexo (`useCardMutations`) e renomear/colorir/arquivar lista,
+arquivar/renomear cartão e datas na Tabela/Calendário (`useBoardMutations`)
+mudam o cache primeiro — o cartão aberto, o quadro, os ESPELHOS e as visões da
+área (`["mkt","workspace"]`). ⚠️ Errou no banco ⇒ DESFAZ e avisa (toast);
+otimista que falha calado é a tela dizendo uma coisa e o banco outra. ⚠️ O
+recarregamento continua no `onSettled`, em segundo plano. Testado com banco
+falso de 2 s: a tela mudou em ~100 ms e a recusa voltou ao estado anterior.
+⚠️ Mutação nova que só troca campo: passe o `otimista` do `run`. As que dependem
+do id que o banco gera (criar cartão/lista/item/comentário) continuam esperando.
+
 **O cartão é no formato do Trello** (08/10/2026, pedido do dono do processo):
 conteúdo à esquerda (botões de ação numa linha, resumo membros · etiquetas ·
 datas, descrição longa recolhida em "Mostrar mais", campos em grade) e

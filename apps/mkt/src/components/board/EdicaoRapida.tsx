@@ -120,7 +120,7 @@ export function EdicaoRapida({ card, rect, boardId, labels, pessoas, onClose, on
             {painel === "datas" && (
               <div className="p-1">
                 <DatasPainel card={card} onFechar={() => setPainel(null)}
-                  onSalvar={(patch) => mut.updateCard.mutate(patch, { onError: (e) => toast.error(`Não salvou as datas: ${(e as Error).message}`) })} />
+                  onSalvar={(patch) => mut.updateCard.mutate(patch)} />
               </div>
             )}
           </div>

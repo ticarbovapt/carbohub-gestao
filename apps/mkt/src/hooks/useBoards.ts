@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { POS_GAP } from "@/lib/mktPosition";
+import { fotografar, desfazer, editarQuadros, CHAVES_DE_QUADRO, type Foto } from "@/lib/mktOtimista";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Dados dos Quadros (Trello interno) — lista de quadros, e o quadro aberto com
@@ -305,6 +306,21 @@ export function useBoardMutations(boardId?: string) {
   const qc = useQueryClient();
   const invBoard = () => boardId && qc.invalidateQueries({ queryKey: ["mkt", "board", boardId] });
   const invBoards = () => qc.invalidateQueries({ queryKey: ["mkt", "boards"] });
+  // A tela muda no clique e o banco confirma depois; falhou, desfaz e avisa
+  // (`lib/mktOtimista.ts`). O quadro recarrega em segundo plano no fim.
+  const otimista = <T,>(mutationFn: (v: T) => Promise<void>, aplicar: (d: BoardData, v: T) => BoardData) =>
+    useMutation<void, Error, T, { foto: Foto }>({ // eslint-disable-line react-hooks/rules-of-hooks
+      mutationFn,
+      onMutate: async (v) => {
+        const foto = await fotografar(qc, CHAVES_DE_QUADRO);
+        editarQuadros(qc, (d) => aplicar(d, v));
+        return { foto };
+      },
+      onError: (e, _v, ctx) => desfazer(qc, ctx?.foto, e),
+      onSettled: () => { invBoard(); },
+    });
+  const naLista = (d: BoardData, id: string, patch: Partial<List>) => ({ ...d, lists: d.lists.map((l) => (l.id === id ? { ...l, ...patch } : l)) });
+  const noCartao = (d: BoardData, id: string, patch: Partial<CardSummary>) => ({ ...d, cards: d.cards.map((c) => (c.id === id ? { ...c, ...patch } : c)) });
 
   const createBoard = useMutation({
     mutationFn: async ({ title, background }: { title: string; background: string }) => {
@@ -325,13 +341,10 @@ export function useBoardMutations(boardId?: string) {
     onSuccess: invBoard,
   });
 
-  const renameList = useMutation({
-    mutationFn: async ({ id, title }: { id: string; title: string }) => {
-      const res = await db.from("mkt_lists").update({ title }).eq("id", id);
-      if (res.error) throw res.error;
-    },
-    onSuccess: invBoard,
-  });
+  const renameList = otimista(async ({ id, title }: { id: string; title: string }) => {
+    const res = await db.from("mkt_lists").update({ title }).eq("id", id);
+    if (res.error) throw res.error;
+  }, (d, { id, title }) => naLista(d, id, { title }));
 
   const moveList = useMutation({
     mutationFn: async ({ id, position }: { id: string; position: number }) => {
@@ -341,21 +354,15 @@ export function useBoardMutations(boardId?: string) {
     onSuccess: invBoard,
   });
 
-  const archiveList = useMutation({
-    mutationFn: async ({ id }: { id: string }) => {
-      const res = await db.from("mkt_lists").update({ is_archived: true, archived_at: new Date().toISOString() }).eq("id", id);
-      if (res.error) throw res.error;
-    },
-    onSuccess: invBoard,
-  });
+  const archiveList = otimista(async ({ id }: { id: string }) => {
+    const res = await db.from("mkt_lists").update({ is_archived: true, archived_at: new Date().toISOString() }).eq("id", id);
+    if (res.error) throw res.error;
+  }, (d, { id }) => ({ ...d, lists: d.lists.filter((l) => l.id !== id), cards: d.cards.filter((c) => c.list_id !== id) }));
 
-  const setListColor = useMutation({
-    mutationFn: async ({ id, color }: { id: string; color: string | null }) => {
-      const res = await db.from("mkt_lists").update({ color }).eq("id", id);
-      if (res.error) throw res.error;
-    },
-    onSuccess: invBoard,
-  });
+  const setListColor = otimista(async ({ id, color }: { id: string; color: string | null }) => {
+    const res = await db.from("mkt_lists").update({ color }).eq("id", id);
+    if (res.error) throw res.error;
+  }, (d, { id, color }) => naLista(d, id, { color }));
 
   const createCard = useMutation({
     mutationFn: async ({ listId, title, position }: { listId: string; title: string; position: number }) => {
@@ -377,34 +384,28 @@ export function useBoardMutations(boardId?: string) {
     onSuccess: invBoard,
   });
 
-  const archiveCard = useMutation({
-    mutationFn: async ({ id }: { id: string }) => {
-      const res = await db.from("mkt_cards").update({ is_archived: true, archived_at: new Date().toISOString() }).eq("id", id);
-      if (res.error) throw res.error;
-      if (boardId) await logActivity(boardId, "card.archive", {}, id);
-    },
-    onSuccess: invBoard,
-  });
+  const archiveCard = otimista(async ({ id }: { id: string }) => {
+    const res = await db.from("mkt_cards").update({ is_archived: true, archived_at: new Date().toISOString() }).eq("id", id);
+    if (res.error) throw res.error;
+    if (boardId) await logActivity(boardId, "card.archive", {}, id);
+  }, (d, { id }) => ({ ...d, cards: d.cards.filter((c) => c.id !== id) }));
 
-  const renameCard = useMutation({
-    mutationFn: async ({ id, title }: { id: string; title: string }) => {
-      const res = await db.from("mkt_cards").update({ title }).eq("id", id);
-      if (res.error) throw res.error;
-    },
-    onSuccess: invBoard,
-  });
+  const renameCard = otimista(async ({ id, title }: { id: string; title: string }) => {
+    const res = await db.from("mkt_cards").update({ title }).eq("id", id);
+    if (res.error) throw res.error;
+  }, (d, { id, title }) => noCartao(d, id, { title }));
 
   // Data do cartão (usado ao arrastar no Calendário/Timeline).
-  const setCardDates = useMutation({
-    mutationFn: async ({ id, due_date, start_date }: { id: string; due_date?: string | null; start_date?: string | null }) => {
-      const patch: Record<string, unknown> = {};
-      if (due_date !== undefined) patch.due_date = due_date;
-      if (start_date !== undefined) patch.start_date = start_date;
-      const res = await db.from("mkt_cards").update(patch).eq("id", id);
-      if (res.error) throw res.error;
-    },
-    onSuccess: invBoard,
-  });
+  const datas = (v: { due_date?: string | null; start_date?: string | null }) => {
+    const patch: { due_date?: string | null; start_date?: string | null } = {};
+    if (v.due_date !== undefined) patch.due_date = v.due_date;
+    if (v.start_date !== undefined) patch.start_date = v.start_date;
+    return patch;
+  };
+  const setCardDates = otimista(async (v: { id: string; due_date?: string | null; start_date?: string | null }) => {
+    const res = await db.from("mkt_cards").update(datas(v)).eq("id", v.id);
+    if (res.error) throw res.error;
+  }, (d, v) => noCartao(d, v.id, datas(v)));
 
   return { createBoard, createList, renameList, moveList, archiveList, setListColor, createCard, moveCard, archiveCard, renameCard, setCardDates };
 }
