@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AtSign, Eye, Bell, Bug, Check, CheckCheck, Clock, ListTodo, MessageCircle, Trash2, WifiOff, ShoppingCart, FileText, Package, CalendarClock } from "lucide-react";
+import { AtSign, Eye, Bell, Bug, Check, CheckCheck, Clock, ListTodo, MessageCircle, Trash2, WifiOff, ShoppingCart, FileText, Package, CalendarClock, UserPlus } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useNotifications, Notification } from "@/hooks/useNotifications";
@@ -23,6 +23,7 @@ const TYPE_CONFIG: Record<string, { Icon: React.ElementType; label: string; colo
   mkt_mencao:             { Icon: AtSign,        label: "Menção",         color: "text-violet-500",  bg: "bg-violet-500/10" },
   mkt_seguindo:           { Icon: Eye,           label: "Seguindo",       color: "text-sky-500",     bg: "bg-sky-500/10" },
   mkt_prazo:              { Icon: CalendarClock, label: "Prazo",          color: "text-amber-600",   bg: "bg-amber-500/10" },
+  mkt_quadro:             { Icon: UserPlus,      label: "Quadro",         color: "text-emerald-600", bg: "bg-emerald-500/10" },
   finance_rc_pendente:    { Icon: FileText,      label: "Requisição",     color: "text-amber-600",   bg: "bg-amber-500/10" },
   finance_oc_nova:        { Icon: Package,       label: "Ordem de compra", color: "text-blue-500",   bg: "bg-blue-500/10" },
 };
@@ -92,6 +93,14 @@ export function NotificationBell() {
     // Menção e prazo dos Quadros do Marketing → o cartão, no app do Marketing.
     // `/cartao/:id` descobre o quadro; fora do mkt, vai pelo subdomínio (o SSO
     // leva a sessão junto).
+    // Adicionado a um quadro → o QUADRO, no app do Marketing.
+    if (n.reference_type === "mkt_board" && n.reference_id) {
+      setOpen(false);
+      const caminho = `/quadros/${n.reference_id}`;
+      if (window.location.hostname.startsWith("mkt.")) navigate(caminho);
+      else window.location.href = `https://mkt.carbohub.com.br${caminho}`;
+      return;
+    }
     if (n.reference_type === "mkt_card" && n.reference_id) {
       setOpen(false);
       const caminho = `/cartao/${n.reference_id}`;

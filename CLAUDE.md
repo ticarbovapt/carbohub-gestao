@@ -2464,6 +2464,20 @@ caminho da seção Anexos). `lib/mktCapaImagem.ts` assina as URLs em lote.
    não `-m-3`: a regra `.mkt-card > * + *` vencia o Tailwind, e o botão de
    edição rápida, antes no DOM, dava 8 px de folga em cima da capa.
 
+**Membros do quadro e Compartilhar** (10/10/2026, `20261070`): fotos no
+cabeçalho e o diálogo "Compartilhar" (`components/board/MembrosDoQuadro.tsx`),
+tabela `mkt_board_membros` (papel `admin`|`membro`). Quem cria o quadro entra
+como admin (gatilho + backfill por `created_by`). Adicionar avisa no sininho
+(`mkt_quadro`, `reference_type = 'mkt_board'` → `/quadros/<id>`): está no
+`TYPE_CONFIG` e no clique dos OITO sininhos e no `destino()` do `carbo-push`.
+1. ⚠️ **Membro é QUEM PARTICIPA, não QUEM PODE VER.** O papel não trava nada,
+   e o diálogo diz isso — tirar alguém não tira o acesso.
+2. ⚠️ **As tabelas do Marketing nasceram com `USING (true)`** (`20260723`):
+   qualquer logado lê os quadros, inclusive lojista e licenciado (mesma
+   `profiles`). O BLOCO 0 (b) da `20261070` MEDE isso. Fechar (trocar por
+   `carbo_e_time_interno()`) é o passo seguinte, e quadro PRIVADO só faz
+   sentido depois dele.
+
 **O cartão é no formato do Trello** (08/10/2026, pedido do dono do processo):
 conteúdo à esquerda (botões de ação numa linha, resumo membros · etiquetas ·
 datas, descrição longa recolhida em "Mostrar mais", campos em grade) e

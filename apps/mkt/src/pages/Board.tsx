@@ -27,6 +27,7 @@ import { ItensArquivados } from "@/components/board/ItensArquivados";
 import { EdicaoRapida } from "@/components/board/EdicaoRapida";
 import { useMeusSinais, type MeusSinais } from "@/hooks/useMeusSinais";
 import { useImagensDeCapa } from "@/lib/mktCapaImagem";
+import { MembrosNoCabecalho, useMembrosDoQuadro } from "@/components/board/MembrosDoQuadro";
 import { ListaDialogo, ORDENS, ordenarLista, arquivarTodosOsCartoes, useListasSeguidas, type OrdemLista } from "@/components/board/AcoesDaLista";
 import { FilterControls } from "@/components/board/FilterControls";
 import { ViewSwitcher } from "@/components/board/ViewSwitcher";
@@ -552,6 +553,7 @@ export default function Board() {
   const { user } = useAuth();
   const meuId = user?.id ?? null;
   const { data: sinais } = useMeusSinais(meuId);
+  const { data: membrosQuadro = [] } = useMembrosDoQuadro(boardId);
   const { data: imagensDeCapa } = useImagensDeCapa((data?.cards ?? []).map((c) => lerCapa(c.cover)?.anexoId));
   const { seguidas, alternar: alternarSeguir } = useListasSeguidas((data?.lists ?? []).map((l) => l.id), meuId);
   const [dialogoLista, setDialogoLista] = useState<{ modo: "copiar" | "mover" | "mover_cartoes"; lista: { id: string; title: string } } | null>(null);
@@ -714,15 +716,18 @@ export default function Board() {
         <h1 className="mkt-view-title truncate">{board.title}</h1>
         <ViewSwitcher boardId={boardId} current="kanban" />
 
+        <div className="ml-auto">
+          <MembrosNoCabecalho boardId={boardId!} tituloQuadro={board.title} sugestoes={data.people} />
+        </div>
         {/* Filtro + buscas salvas do quadro */}
-        <div className="ml-auto relative">
+        <div className="relative">
           <button onClick={() => setFilterOpen((v) => !v)}
             className={`flex items-center gap-1.5 text-sm rounded-md px-2.5 py-1.5 transition-colors ${filterActive ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}>
             <Filter className="h-4 w-4" /> Filtrar{filterActive ? ` · ${contarFiltros(criteria)}` : ""}
           </button>
           {filterOpen && (
             <div className="absolute right-0 z-30 mt-1 w-80 max-w-[calc(100vw-2rem)] max-h-[calc(100vh-9rem)] overflow-y-auto rounded-[var(--radius)] border border-border bg-popover shadow-[var(--shadow-elevated)] p-4 space-y-3 text-foreground">
-              <FilterControls value={criteria} onChange={setCriteria} labels={labels} team={pessoasDoQuadro(data, team)} completo meuId={meuId} />
+              <FilterControls value={criteria} onChange={setCriteria} labels={labels} team={[...pessoasDoQuadro(data, team), ...membrosQuadro.filter((m) => !pessoasDoQuadro(data, team).some((p) => p.id === m.id))]} completo meuId={meuId} />
               {filterActive && (
                 <p className="text-xs text-muted-foreground">{data.cards.filter(passa).length} de {data.cards.length} cartões no filtro.</p>
               )}
