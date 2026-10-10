@@ -18,6 +18,7 @@ const db = supabase as unknown as {
 export interface Board {
   id: string; workspace_id: string | null; title: string; background: string;
   position: number; is_archived: boolean; created_at: string; created_by?: string | null;
+  descricao?: string | null;
 }
 export interface List { id: string; board_id: string; title: string; position: number; color: string | null; }
 export interface Label { id: string; board_id: string; name: string; color: string; }

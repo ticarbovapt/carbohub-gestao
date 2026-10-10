@@ -28,6 +28,7 @@ import { EdicaoRapida } from "@/components/board/EdicaoRapida";
 import { useMeusSinais, type MeusSinais } from "@/hooks/useMeusSinais";
 import { useImagensDeCapa } from "@/lib/mktCapaImagem";
 import { MembrosNoCabecalho, useMembrosDoQuadro } from "@/components/board/MembrosDoQuadro";
+import { MenuDoQuadro } from "@/components/board/MenuDoQuadro";
 import { ListaDialogo, ORDENS, ordenarLista, arquivarTodosOsCartoes, useListasSeguidas, type OrdemLista } from "@/components/board/AcoesDaLista";
 import { FilterControls } from "@/components/board/FilterControls";
 import { ViewSwitcher } from "@/components/board/ViewSwitcher";
@@ -586,6 +587,12 @@ export default function Board() {
   const [collapsed, setCollapsed] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem(collapseKey) || "[]")); } catch { return new Set(); }
   });
+  const [menuQuadro, setMenuQuadro] = useState(false);
+  const definirRecolhidas = (ids: string[]) => {
+    const n = new Set(ids);
+    setCollapsed(n);
+    try { localStorage.setItem(collapseKey, JSON.stringify([...n])); } catch { /* ignore */ }
+  };
   const toggleCollapse = (listId: string) => setCollapsed((prev) => {
     const n = new Set(prev);
     if (n.has(listId)) n.delete(listId); else n.add(listId);
@@ -760,7 +767,13 @@ export default function Board() {
         <button onClick={() => setFieldsOpen(true)} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md px-2.5 py-1.5 transition-colors" title="Campos personalizados">
           <Settings2 className="h-4 w-4" /> Campos
         </button>
+        <button onClick={() => setMenuQuadro(true)} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md px-2.5 py-1.5 transition-colors" title="Menu do quadro">
+          <MoreHorizontal className="h-4 w-4" /> <span className="hidden lg:inline">Menu</span>
+        </button>
       </div>
+      <MenuDoQuadro board={board} labels={labels} aberto={menuQuadro} onOpenChange={setMenuQuadro}
+        onRecolherTodas={() => definirRecolhidas(lists.map((l) => l.id))} onExpandirTodas={() => definirRecolhidas([])}
+        onCampos={() => setFieldsOpen(true)} onArquivados={() => setArquivadosAberto(true)} />
 
       {/* Colunas */}
       <div className="flex-1 overflow-x-auto overflow-y-hidden p-4 md:p-6">
