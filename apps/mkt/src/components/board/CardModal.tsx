@@ -33,6 +33,7 @@ import { Anexos } from "@/components/board/Anexos";
 import { useCartaoNoEndereco, pegarComentarioPendente } from "@/lib/cartaoNaUrl";
 import { useReacoes, ReacoesDoComentario, type Reacao } from "@/components/board/Reacoes";
 import { BarraFormatacao } from "@/components/board/BarraFormatacao";
+import { lerAvisosDoCartao } from "@/hooks/useMeusSinais";
 import { supabase } from "@/integrations/supabase/client";
 import type { Attachment, Comment } from "@/hooks/useCardDetail";
 
@@ -145,8 +146,14 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [], anex
     const r = sigo ? await t.delete().eq("card_id", cardId).eq("user_id", user.id) : await t.insert({ card_id: cardId, user_id: user.id });
     if (r.error) { toast.error(`Não deu: ${r.error.message}`); return; }
     qcLocal.invalidateQueries({ queryKey: ["mkt", "sigo", cardId] });
+    qcLocal.invalidateQueries({ queryKey: ["notifications", user.id, "cartoes-mkt"] }); // o olho na frente do cartão
     toast.success(sigo ? "Você deixou de seguir este cartão." : "Seguindo: você recebe no sininho comentários, mudanças de lista e arquivamento.");
   };
+  // Abrir o cartão LÊ os avisos dele — o selo some do quadro e do sininho.
+  useEffect(() => {
+    if (!user?.id) return;
+    lerAvisosDoCartao(user.id, cardId).then((n) => { if (n) qcLocal.invalidateQueries({ queryKey: ["notifications", user.id] }); });
+  }, [cardId, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const copiarLink = async () => {
     const url = `${window.location.origin}/cartao/${cardId}`;
     try { await navigator.clipboard.writeText(url); toast.success("Link do cartão copiado."); }

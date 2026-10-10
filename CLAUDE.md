@@ -2437,6 +2437,14 @@ rápida, grava só no "Salvar". Colunas `mkt_cards.lembrete_minutos` e
    (`pegarComentarioPendente`), e o cartão rola até ele e o destaca 4 s.
    ⚠️ Módulo, não prop: seis páginas abrem o cartão.
 
+**Sinais pessoais na frente do cartão** (10/10/2026, sem migração): sininho com
+os avisos NÃO LIDOS do cartão e olho de "você segue" (`hooks/useMeusSinais.ts`).
+Abrir o cartão marca os avisos dele como lidos (`lerAvisosDoCartao`), como no
+Trello. ⚠️ A chave da consulta começa com `["notifications", meuId]`: toda
+mutação do sininho invalida esse prefixo, então marcar lido lá apaga o selo
+aqui. Espelho mostra os sinais do ORIGINAL. O sininho já tinha "Não lidas" e
+"Marcar lidas" nos oito apps — não refaça.
+
 **O cartão é no formato do Trello** (08/10/2026, pedido do dono do processo):
 conteúdo à esquerda (botões de ação numa linha, resumo membros · etiquetas ·
 datas, descrição longa recolhida em "Mostrar mais", campos em grade) e
