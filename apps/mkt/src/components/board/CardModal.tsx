@@ -30,7 +30,9 @@ import { useModeloMutations } from "@/hooks/useModelos";
 import { TextoRico } from "@/lib/textoRico";
 import { EditorDescricao } from "@/components/board/EditorDescricao";
 import { Anexos } from "@/components/board/Anexos";
-import { useCartaoNoEndereco } from "@/lib/cartaoNaUrl";
+import { useCartaoNoEndereco, pegarComentarioPendente } from "@/lib/cartaoNaUrl";
+import { useReacoes, ReacoesDoComentario, type Reacao } from "@/components/board/Reacoes";
+import { BarraFormatacao } from "@/components/board/BarraFormatacao";
 import { supabase } from "@/integrations/supabase/client";
 import type { Attachment, Comment } from "@/hooks/useCardDetail";
 
@@ -101,6 +103,24 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [], anex
   const anexosRef = useRef<HTMLDivElement>(null);
   const capaRef = useRef<HTMLDivElement>(null);
   const capaDoCartao = lerCapa(data?.card.cover);
+  const { reacoes, alternar: alternarReacao } = useReacoes(cardId, (data?.comments ?? []).map((c) => c.id));
+  const nomeDaPessoa = (id: string) => {
+    const doTime = team.find((t) => t.id === id)?.full_name;
+    const doComentario = data?.comments.find((c) => c.user_id === id)?.authorName;
+    return doTime ?? doComentario ?? "Alguém";
+  };
+  // Link de comentário (`?comentario=`): rola até ele e o destaca por alguns
+  // segundos — no Trello o link permanente faz o mesmo.
+  const [comentarioAlvo, setComentarioAlvo] = useState<string | null>(null);
+  useEffect(() => {
+    if (!data) return;
+    const alvo = pegarComentarioPendente();
+    if (!alvo) return;
+    setComentarioAlvo(alvo);
+    requestAnimationFrame(() => document.getElementById(`comentario-${alvo}`)?.scrollIntoView({ behavior: "smooth", block: "center" }));
+    const t = window.setTimeout(() => setComentarioAlvo(null), 4000);
+    return () => window.clearTimeout(t);
+  }, [!!data]); // eslint-disable-line react-hooks/exhaustive-deps
   const [showCapa, setShowCapa] = useState(false);
   const anexoInputRef = useRef<HTMLInputElement>(null);
   const comentarioRef = useRef<HTMLTextAreaElement>(null);
@@ -573,6 +593,13 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [], anex
                   } })} />
                 {linhaDoTempo(data.comments, detalhes ? atividade : []).map((ev) => ev.tipo === "comentario" ? (
                   <ComentarioItem key={ev.c.id} c={ev.c} meu={ev.c.user_id === user?.id}
+                    reacoes={reacoes.filter((r) => r.comment_id === ev.c.id)} meuId={user?.id ?? null}
+                    nomeDe={nomeDaPessoa} onReagir={(e) => user?.id && alternarReacao(ev.c.id, e, user.id)}
+                    destacado={comentarioAlvo === ev.c.id}
+                    onCopiarLink={async () => {
+                      const url = `${window.location.origin}/cartao/${cardId}?comentario=${ev.c.id}`;
+                      try { await navigator.clipboard.writeText(url); toast.success("Link do comentário copiado."); } catch { toast.message(url); }
+                    }}
                     onResponder={() => {
                       const autor = { id: ev.c.user_id, full_name: ev.c.authorName, avatar_url: ev.c.authorAvatar };
                       if (autor.full_name && ev.c.user_id !== user?.id) {
@@ -718,23 +745,28 @@ function NovoComentario({ valor, onChange, onEnviar, inputRef, pessoas, onMencio
         )}
       </div>
       {(aberto || valor) && (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Button size="sm" disabled={!valor.trim()} onClick={enviar}>Salvar</Button>
           <button onClick={() => { onChange(""); setAberto(false); }} className="text-xs text-muted-foreground hover:text-foreground">Cancelar</button>
+          <div className="ml-auto"><BarraFormatacao inputRef={inputRef} valor={valor} onChange={onChange} /></div>
         </div>
       )}
     </div>
   );
 }
 
-function ComentarioItem({ c, meu, onResponder, onSalvar, onExcluir }: {
+function ComentarioItem({ c, meu, onResponder, onSalvar, onExcluir, reacoes, meuId, nomeDe, onReagir, onCopiarLink, destacado }: {
   c: Comment; meu: boolean; onResponder: () => void; onSalvar: (body: string) => void; onExcluir: () => void;
+  reacoes: Reacao[]; meuId: string | null; nomeDe: (id: string) => string; onReagir: (emoji: string) => void;
+  onCopiarLink: () => void; destacado: boolean;
 }) {
   const [editando, setEditando] = useState(false);
   const [texto, setTexto] = useState(c.body);
+  const editRef = useRef<HTMLTextAreaElement>(null);
   const editado = !!c.updated_at && new Date(c.updated_at).getTime() - new Date(c.created_at).getTime() > 60_000;
   return (
-    <div className="flex gap-2.5">
+    // `id` é o alvo do link do comentário (`?comentario=`); o anel some sozinho.
+    <div id={`comentario-${c.id}`} className={`flex gap-2.5 rounded-[var(--radius)] transition-shadow duration-700 ${destacado ? "ring-2 ring-primary ring-offset-4 ring-offset-background" : ""}`}>
       <img src={c.authorAvatar || diceBearUrl(c.user_id)} className="h-8 w-8 rounded-full object-cover shrink-0 ring-1 ring-border" />
       <div className="min-w-0 flex-1">
         <p className="text-xs">
@@ -743,19 +775,22 @@ function ComentarioItem({ c, meu, onResponder, onSalvar, onExcluir }: {
         </p>
         {editando ? (
           <div className="mt-1 space-y-2">
-            <textarea autoFocus value={texto} onChange={(e) => setTexto(e.target.value)} rows={4}
+            <textarea ref={editRef} autoFocus value={texto} onChange={(e) => setTexto(e.target.value)} rows={4}
               className="w-full text-sm rounded-[var(--input-radius)] border border-border bg-card px-3 py-2 resize-y focus:outline-none focus:ring-2 focus:ring-primary/40" />
             <div className="flex items-center gap-2">
               <Button size="sm" disabled={!texto.trim()} onClick={() => { onSalvar(texto.trim()); setEditando(false); }}>Salvar</Button>
               <button onClick={() => { setTexto(c.body); setEditando(false); }} className="text-xs text-muted-foreground hover:text-foreground">Cancelar</button>
+              <div className="ml-auto"><BarraFormatacao inputRef={editRef} valor={texto} onChange={setTexto} /></div>
             </div>
           </div>
         ) : (
           <TextoRico texto={c.body} className="text-sm text-foreground bg-card border border-border shadow-[var(--shadow-card)] rounded-[var(--radius)] px-3 py-2 mt-1 break-words" />
         )}
         {!editando && (
-          <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+          <div className="mt-1 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+            <ReacoesDoComentario reacoes={reacoes} meuId={meuId} nomeDe={nomeDe} onAlternar={onReagir} />
             <button onClick={onResponder} className="hover:text-foreground hover:underline">Responder</button>
+            <span>•</span><button onClick={onCopiarLink} className="hover:text-foreground hover:underline" title="Link direto para este comentário">Link</button>
             {meu && <><span>•</span><button onClick={() => setEditando(true)} className="hover:text-foreground hover:underline">Editar</button>
               <span>•</span><button onClick={onExcluir} className="hover:text-destructive hover:underline">Excluir</button></>}
           </div>
