@@ -1,5 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import type { QueryKey } from "@tanstack/react-query";
+import { fotografar, desfazer, editarCartaoNosQuadros, CHAVES_DE_QUADRO, type Foto } from "@/lib/mktOtimista";
 import { isDriveUrl, parseDriveFileId, driveThumbUrl, guessNameFromUrl } from "@/lib/mktDrive";
 
 // Detalhe do cartão (modal): campos, etiquetas, membros, checklists+itens,
@@ -120,11 +122,32 @@ export function useCardMutations(cardId: string | null, boardId?: string) {
     if (cardId) qc.invalidateQueries({ queryKey: ["mkt", "card", cardId] });
     if (boardId) qc.invalidateQueries({ queryKey: ["mkt", "board", boardId] });
   };
-  const run = <T>(fn: (v: T) => Promise<void>) => useMutation({ mutationFn: fn, onSuccess: inval });
+  // Com `otimista`, a tela muda NO CLIQUE e o banco confirma depois
+  // (`lib/mktOtimista.ts`); falhou, desfaz e avisa. Sem ele, espera o banco.
+  const chaves: QueryKey[] = [["mkt", "card", cardId], ...CHAVES_DE_QUADRO];
+  const run = <T>(fn: (v: T) => Promise<void>, otimista?: (v: T) => void) => useMutation<void, Error, T, { foto: Foto } | undefined>({
+    mutationFn: fn,
+    onMutate: async (v) => {
+      if (!otimista) return undefined;
+      const foto = await fotografar(qc, chaves);
+      otimista(v);
+      return { foto };
+    },
+    onError: (e, _v, ctx) => { if (ctx) desfazer(qc, ctx.foto, e); },
+    onSettled: inval,
+  });
+  // O cartão aberto (cache do detalhe) e o cartão no quadro (cache do quadro).
+  const noCartao = (f: (d: CardDetail) => CardDetail) =>
+    qc.setQueryData<CardDetail | null>(["mkt", "card", cardId], (d) => (d ? f(d) : d));
+  const noQuadro = (f: Parameters<typeof editarCartaoNosQuadros>[2]) => { if (cardId) editarCartaoNosQuadros(qc, cardId, f); };
 
   const updateCard = run(async (patch: Record<string, unknown>) => {
     const res = await db.from("mkt_cards").update(patch).eq("id", cardId);
     if (res.error) throw res.error;
+  }, (patch) => {
+    noCartao((d) => ({ ...d, card: { ...d.card, ...patch } as CardFull }));
+    // Arquivar/restaurar tira ou põe o cartão no quadro: isso o recarregamento faz.
+    if (!("is_archived" in patch)) noQuadro((c) => ({ ...c, ...patch }));
   });
 
   const toggleLabel = run(async ({ labelId, on }: { labelId: string; on: boolean }) => {
@@ -135,6 +158,10 @@ export function useCardMutations(cardId: string | null, boardId?: string) {
       const res = await db.from("mkt_card_labels").delete().eq("card_id", cardId).eq("label_id", labelId);
       if (res.error) throw res.error;
     }
+  }, ({ labelId, on }) => {
+    const troca = (ids: string[]) => (on ? [...new Set([...ids, labelId])] : ids.filter((x) => x !== labelId));
+    noCartao((d) => ({ ...d, labelIds: troca(d.labelIds) }));
+    noQuadro((c) => ({ ...c, labelIds: troca(c.labelIds) }));
   });
 
   const createLabel = run(async ({ name, color }: { name: string; color: string }) => {
@@ -160,6 +187,10 @@ export function useCardMutations(cardId: string | null, boardId?: string) {
       const res = await db.from("mkt_card_members").delete().eq("card_id", cardId).eq("user_id", userId);
       if (res.error) throw res.error;
     }
+  }, ({ userId, on }) => {
+    const troca = (ids: string[]) => (on ? [...new Set([...ids, userId])] : ids.filter((x) => x !== userId));
+    noCartao((d) => ({ ...d, memberIds: troca(d.memberIds) }));
+    noQuadro((c) => ({ ...c, memberIds: troca(c.memberIds) }));
   });
 
   const addChecklist = run(async ({ title }: { title: string }) => {
@@ -169,6 +200,8 @@ export function useCardMutations(cardId: string | null, boardId?: string) {
   const removeChecklist = run(async ({ id }: { id: string }) => {
     const res = await db.from("mkt_checklists").delete().eq("id", id);
     if (res.error) throw res.error;
+  }, ({ id }) => {
+    noCartao((d) => ({ ...d, checklists: d.checklists.filter((cl) => cl.id !== id) }));
   });
   const addItem = run(async ({ checklistId, text, position }: { checklistId: string; text: string; position: number }) => {
     const res = await db.from("mkt_checklist_items").insert({ checklist_id: checklistId, text, position });
@@ -177,15 +210,28 @@ export function useCardMutations(cardId: string | null, boardId?: string) {
   const toggleItem = run(async ({ id, done }: { id: string; done: boolean }) => {
     const res = await db.from("mkt_checklist_items").update({ is_done: done }).eq("id", id);
     if (res.error) throw res.error;
+  }, ({ id, done }) => {
+    const antes: { v: boolean | null } = { v: null };
+    noCartao((d) => ({ ...d, checklists: d.checklists.map((cl) => ({ ...cl, items: cl.items.map((it) => {
+      if (it.id !== id) return it;
+      antes.v = it.is_done;
+      return { ...it, is_done: done };
+    }) })) }));
+    // O "3/5" da frente do cartão anda junto.
+    if (antes.v !== null && antes.v !== done) noQuadro((c) => ({ ...c, checklistDone: Math.max(0, c.checklistDone + (done ? 1 : -1)) }));
   });
   // Checklist avançado: responsável e data por item.
   const updateItem = run(async ({ id, patch }: { id: string; patch: { assignee_id?: string | null; due_date?: string | null; text?: string } }) => {
     const res = await db.from("mkt_checklist_items").update(patch).eq("id", id);
     if (res.error) throw res.error;
+  }, ({ id, patch }) => {
+    noCartao((d) => ({ ...d, checklists: d.checklists.map((cl) => ({ ...cl, items: cl.items.map((it) => (it.id === id ? { ...it, ...patch } : it)) })) }));
   });
   const removeItem = run(async ({ id }: { id: string }) => {
     const res = await db.from("mkt_checklist_items").delete().eq("id", id);
     if (res.error) throw res.error;
+  }, ({ id }) => {
+    noCartao((d) => ({ ...d, checklists: d.checklists.map((cl) => ({ ...cl, items: cl.items.filter((it) => it.id !== id) })) }));
   });
 
   const addAttachment = run(async ({ url, name }: { url: string; name?: string }) => {
@@ -207,6 +253,8 @@ export function useCardMutations(cardId: string | null, boardId?: string) {
   const removeAttachment = run(async ({ id }: { id: string }) => {
     const res = await db.from("mkt_card_attachments").delete().eq("id", id);
     if (res.error) throw res.error;
+  }, ({ id }) => {
+    noCartao((d) => ({ ...d, attachments: d.attachments.filter((a) => a.id !== id) }));
   });
 
   // Valor de Campo Personalizado: value null/"" limpa (remove a linha); senão upsert.
@@ -219,6 +267,8 @@ export function useCardMutations(cardId: string | null, boardId?: string) {
       const res = await db.from("mkt_card_field_values").upsert({ card_id: cardId, field_id: fieldId, value, updated_at: new Date().toISOString() }, { onConflict: "card_id,field_id" });
       if (res.error) throw res.error;
     }
+  }, ({ fieldId, value }) => {
+    noCartao((d) => ({ ...d, fieldValues: { ...d.fieldValues, [fieldId]: value } }));
   });
 
   // Espelhar: cria um cartão-espelho (mirror_of = original) no quadro/lista destino.
