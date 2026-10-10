@@ -2482,6 +2482,18 @@ como admin (gatilho + backfill por `created_by`). Adicionar avisa no sininho
    `carbo_e_time_interno()`, nunca `using (true)`. Quadro PRIVADO é outra
    decisão, e só faz sentido depois disto.
 
+**Menu do quadro** (10/10/2026, `20261072` = `mkt_boards.descricao`): botão
+"Menu" no cabeçalho (`components/board/MenuDoQuadro.tsx`), painel lateral com
+Sobre (descrição em markdown + quem criou), Atividade (`mkt_activity` + os
+comentários, que são a maior parte do que acontece), Etiquetas (criar,
+renomear, cor, excluir — a confirmação diz de quantos cartões ela sai), Cor do
+quadro (o ACENTO, não fundo: `BOARD_BG` está aposentado), Campos, Arquivados,
+recolher/expandir todas, Exportar CSV (`;` + BOM, abre no Excel) e JSON, e
+Imprimir. ⚠️ Exportar e imprimir leem do BANCO paginando de 1.000 em 1.000 —
+o quadro importado passa de 1.000 comentários e o teto calado entregaria
+arquivo "completo" pela metade. ⚠️ Imprimir abre a janela NO CLIQUE (antes do
+`await`), senão o navegador bloqueia como popup.
+
 **O cartão é no formato do Trello** (08/10/2026, pedido do dono do processo):
 conteúdo à esquerda (botões de ação numa linha, resumo membros · etiquetas ·
 datas, descrição longa recolhida em "Mostrar mais", campos em grade) e
