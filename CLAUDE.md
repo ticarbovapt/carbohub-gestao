@@ -2676,7 +2676,22 @@ banco e pelas edge functions, que não sabem qual app a pessoa tem.
 5. Toda permissão tirada está em `carbo_backup_grants` — desfazer uma linha é
    um GRANT.
 
-⚠️ **PENDENTE — rodada 2, o que vaza DENTRO do time** (muda o que as telas
+**Rodada 2a — conta de FORA da empresa** (`20261076` + `20261078`, aplicadas):
+o login é UM para o ecossistema, então lojista, frentista, staff do md e
+licenciado são `authenticated` como qualquer funcionário — e liam/alteravam
+contas a pagar, carteira de licenciado, MRP, rastreio com telefone. 258 regras
+`true` / `auth.uid() IS NOT NULL` / `auth.role()='authenticated'` /
+`is_employee` viraram `carbo_e_time_interno()` (troca só o PEDAÇO: regra
+composta nunca alarga). Ficaram de fora, de propósito: as 4 tabelas que o
+Portal de Vendas lê (`carbo_bug_reports`, `carbo_departments`,
+`carbo_functions`, `notifications`), a tarja, e o INSERT de formulário público
+(`nps_responses`, `vip_registrations`, `flamme_leads`, `b2b_leads`). Backup
+inteiro em `carbo_backup_policies`. ⚠️ **Regra nova: nunca `using (true)` nem
+`auth.uid() IS NOT NULL` — é o portal lendo. Use `carbo_e_time_interno()`.**
+⚠️ `apps/mkt/src/hooks` tem hooks de finanças (`usePayables`,
+`useReceivables`…) SEM rota — código morto copiado, não tela vazando.
+
+⚠️ **PENDENTE — rodada 2b, o que vaza DENTRO do time** (muda o que as telas
 mostram, medir antes): qualquer interno lê e grava contas a pagar/receber,
 compras, comissões, metas, estoque, produção, viagens e licenciados (regras
 `true`/`is_employee`/`auth.role()` — várias tabelas têm DUAS regras abertas,
