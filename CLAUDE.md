@@ -2645,6 +2645,49 @@ nunca chegou lá. Admin de perfil é `has_role(uid,'admin')`, e só.
 pelo banco — 24 leem sem ter o app. Fechar isso é decisão (quadro privado ou
 "só quem tem carbo_mkt").
 
+### ⚠️ AUDITORIA DE SEGURANÇA DOS 8 APPS (10/10/2026) — o que vazava e onde
+Medido no banco vivo (`20261074`, só leitura). **Telas por slug: nenhuma vaza**
+— nenhum app esconde do menu uma rota aberta. O vazamento era o DADO, pelo
+banco e pelas edge functions, que não sabem qual app a pessoa tem.
+
+**Rodada 1 — o que a INTERNET alcançava** (`20261075` + `create-team-member`):
+1. ⚠️ `carboze_orders` tinha "Service role full access" = `ALL · {public} ·
+   true`: o nome diz servidor, o papel diz TODOS — `anon` (só a chave pública
+   do JavaScript) lia, alterava e apagava os 1.798 pedidos. Hoje ela é
+   `to service_role`, e o time interno ganhou a MESMA abertura por
+   `carboze_orders_time_interno` (nada mudou na tela de ninguém).
+   **Regra com nome de "service" e `roles = {public}` é regra para todo mundo.**
+2. ~100 funções SECURITY DEFINER executáveis por `anon`. Saiu o EXECUTE de
+   `anon`/`public` de todas, MENOS `get_user_email_by_username` (o LOGIN a usa
+   antes da sessão — a única, medido nos 5 repos) e as que alguma REGRA de
+   tabela/view chama. ⚠️ O GRANT explícito a `authenticated`/`service_role`
+   vem ANTES do revoke: função antiga chega ao app logado só pelo PUBLIC.
+   ⚠️ Função NOVA nasce executável por `anon` (default privileges do Supabase
+   nunca foram revogados): SECURITY DEFINER nova = `revoke … from anon, public`
+   explícito, sempre.
+3. `notifications`/`notification_log` aceitavam gravação de `anon`; a matriz de
+   telas do controle era reescrevível sem login; o token do Bling 1 era lido
+   por qualquer perfil — hoje o time lê só as colunas de ESTADO (`grant select`
+   por coluna, sem `token`), e o token fica só para a edge function.
+4. `create-team-member`: o head de QUALQUER departamento, ou qualquer staff do
+   TI, resetava a senha de qualquer conta (inclusive do CEO) para `Carbo@2026`
+   e reescrevia interfaces — por cima da trava de `profiles` (service role).
+   Hoje exige a flag `carbo_admin` ou `carbo_ti`.
+5. Toda permissão tirada está em `carbo_backup_grants` — desfazer uma linha é
+   um GRANT.
+
+⚠️ **PENDENTE — rodada 2, o que vaza DENTRO do time** (muda o que as telas
+mostram, medir antes): qualquer interno lê e grava contas a pagar/receber,
+compras, comissões, metas, estoque, produção, viagens e licenciados (regras
+`true`/`is_employee`/`auth.role()` — várias tabelas têm DUAS regras abertas,
+e fechar exige tirar as duas). Funções de dados (`fin_*`, `crm_comissao_*`,
+`carbo_all_profiles`, `carbo_clientes_busca`) seguem chamáveis por qualquer
+logado. Porta dos apps: Ops/Finanças/Marketing deixam entrar head/CEO/TI sem a
+flag e abrem SEM checar fora de `*.carbohub.com.br`; o Sales aceita flag de
+portal — o BLOCO E da `20261074` lista quem perderia o app ao fechar.
+`bling-auth`/`bling2-auth` aceitam qualquer logado; `evolution-instancia` não
+confere quem chama. Senha de reset ainda é fixa (`Carbo@2026`).
+
 ### Regras anti-confusão (OBRIGATÓRIAS)
 1. **Todo pedido nomeia o alvo.** "no CRM" → `apps/crm`; "no controle"/"atual" → raiz (`src/`).
 2. **Na dúvida, PERGUNTE — nunca adivinhe.** Se a tela existe em mais de um app, liste os candidatos antes de mexer.
