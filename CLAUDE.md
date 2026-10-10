@@ -2614,6 +2614,34 @@ pages/AbrirCartao.tsx        /cartao/:id — o endereço que o sininho usa
    é DIGITAR o nome. Arquivos saem do bucket antes da linha. Só gestor ou quem
    criou vê o botão.
 
+### ⚠️ `profiles`: NINGUÉM SE PROMOVE SOZINHO (10/10/2026, `20261073`)
+Achado auditando o Marketing, e vale para o ECOSSISTEMA inteiro: toda porta
+"time interno" (`carbo_e_time_interno()`, RLS do Marketing, bucket, esteira,
+WhatsApp, NFS-e) confia em `profiles.allowed_interfaces` — e a policy de
+UPDATE deixava cada um editar a PRÓPRIA linha sem limite de coluna. Um lojista
+ou licenciado (a MESMA `profiles`) podia se dar `carbo_mkt` pelo PostgREST, ou
+`department = 'command'` (o `seesEverything` dos apps).
+
+`trg_profiles_acesso_protegido` recusa mudar `allowed_interfaces`,
+`department`, `secondary_department`, `funcao`, `secondary_funcao`, `escopo`,
+`manager_user_id` e `status` para quem não é admin
+(`carbo_pode_editar_acesso()`: sem usuário, service role, `has_role admin` ou
+`carbo_user_roles` master_admin/ceo/gestor_adm — as MESMAS pessoas que a RLS já
+deixava editar perfil alheio). Foto, telefone e senha seguem livres.
+1. ⚠️ **A policy NÃO foi tocada**: os oito `Profile.tsx` e o
+   `PasswordChangeModal` dependem do self-update.
+2. ⚠️ **Compara pelo JSON da linha** (`to_jsonb(new) -> col`), nunca por
+   `new.col`: coluna ausente em produção faria TODO update de perfil falhar.
+3. ⚠️ **Recusa FALA** (exception 42501), nunca reverte calado.
+4. ⚠️ Coluna nova de ACESSO em `profiles` entra na lista `v_cols` do gatilho.
+
+⚠️ **PENDENTE, medido no BLOCO 0 (f):** `bling-sync` (emite NF) aceita
+QUALQUER logado, e `send-email` aceita quem tem linha em `profiles` — o que
+inclui licenciado (`is_employee` = "tem linha"). A regra certa é
+`ehTimeInterno` (`_shared/interfacesInternas.ts`), mas só depois de a lista do
+0 (f) — funcionário sem interface interna — estar VAZIA: o push em `main`
+deploya, e apertar antes tira a emissão de nota de quem trabalha.
+
 ### Regras anti-confusão (OBRIGATÓRIAS)
 1. **Todo pedido nomeia o alvo.** "no CRM" → `apps/crm`; "no controle"/"atual" → raiz (`src/`).
 2. **Na dúvida, PERGUNTE — nunca adivinhe.** Se a tela existe em mais de um app, liste os candidatos antes de mexer.
