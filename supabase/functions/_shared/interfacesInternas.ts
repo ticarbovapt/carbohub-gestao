@@ -44,6 +44,7 @@ export const INTERFACES_INTERNAS = [
   "carbo_mkt",
   "carbo_ti",
   "carbo_atendimento",
+  "carbo_prevendas",
 ] as const;
 
 /**

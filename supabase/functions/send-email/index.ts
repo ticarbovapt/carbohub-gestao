@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.39.3";
+import { ehTimeInterno } from "../_shared/interfacesInternas.ts";
 import { Resend } from "https://esm.sh/resend@4.0.0";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -10,7 +11,7 @@ import { Resend } from "https://esm.sh/resend@4.0.0";
 //   template "senha_alterada"   → confirmação de troca de senha
 //   template "alerta_seguranca" → aviso genérico de segurança (login novo, etc.)
 //
-// Acesso: só FUNCIONÁRIO autenticado dispara (valida is_employee). Anexos vêm
+// Acesso: só o TIME INTERNO autenticado dispara (ehTimeInterno). Anexos vêm
 // em base64 (o PDF é gerado no front com jsPDF e mandado pra cá).
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -192,8 +193,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const { data: userData, error: userErr } = await admin.auth.getUser(token);
     if (userErr || !userData?.user) return json({ error: "Sessão inválida" }, 401);
 
-    const { data: isEmp } = await admin.rpc("is_employee", { uid: userData.user.id });
-    if (!isEmp) return json({ error: "Apenas funcionários podem enviar e-mails" }, 403);
+    // ⚠️ `is_employee` era "tem linha em profiles" — o licenciado tem. Funcionário
+    // é o TIME INTERNO (medido em 10/10/2026: nenhum fica de fora).
+    const { data: perfil } = await admin.from("profiles").select("allowed_interfaces").eq("id", userData.user.id).maybeSingle();
+    if (!(await ehTimeInterno(admin as any, perfil?.allowed_interfaces))) return json({ error: "Apenas funcionários podem enviar e-mails" }, 403);
 
     const { template, to, data, attachments, replyTo } = await req.json() as {
       template: string; to: string | string[]; data?: Record<string, unknown>;

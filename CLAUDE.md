@@ -2625,9 +2625,8 @@ ou licenciado (a MESMA `profiles`) podia se dar `carbo_mkt` pelo PostgREST, ou
 `trg_profiles_acesso_protegido` recusa mudar `allowed_interfaces`,
 `department`, `secondary_department`, `funcao`, `secondary_funcao`, `escopo`,
 `manager_user_id` e `status` para quem não é admin
-(`carbo_pode_editar_acesso()`: sem usuário, service role, `has_role admin` ou
-`carbo_user_roles` master_admin/ceo/gestor_adm — as MESMAS pessoas que a RLS já
-deixava editar perfil alheio). Foto, telefone e senha seguem livres.
+(`carbo_pode_editar_acesso()`: sem usuário, service role ou `has_role admin` —
+as MESMAS pessoas que a RLS já deixava editar perfil alheio). Foto, telefone e senha seguem livres.
 1. ⚠️ **A policy NÃO foi tocada**: os oito `Profile.tsx` e o
    `PasswordChangeModal` dependem do self-update.
 2. ⚠️ **Compara pelo JSON da linha** (`to_jsonb(new) -> col`), nunca por
@@ -2635,12 +2634,16 @@ deixava editar perfil alheio). Foto, telefone e senha seguem livres.
 3. ⚠️ **Recusa FALA** (exception 42501), nunca reverte calado.
 4. ⚠️ Coluna nova de ACESSO em `profiles` entra na lista `v_cols` do gatilho.
 
-⚠️ **PENDENTE, medido no BLOCO 0 (f):** `bling-sync` (emite NF) aceita
-QUALQUER logado, e `send-email` aceita quem tem linha em `profiles` — o que
-inclui licenciado (`is_employee` = "tem linha"). A regra certa é
-`ehTimeInterno` (`_shared/interfacesInternas.ts`), mas só depois de a lista do
-0 (f) — funcionário sem interface interna — estar VAZIA: o push em `main`
-deploya, e apertar antes tira a emissão de nota de quem trabalha.
+✅ **`bling-sync` e `send-email` só aceitam o TIME INTERNO** (10/10/2026). A
+primeira aceitava QUALQUER logado e EMITE nota; a segunda usava `is_employee`,
+que é "tem linha em profiles" — o licenciado tem. As duas usam `ehTimeInterno`
+(`_shared/interfacesInternas.ts`). Apertado só depois de o BLOCO 0 (f) voltar
+VAZIO: nenhum funcionário sem interface interna perdeu a emissão.
+⚠️ `carbo_user_roles` NÃO existe em produção (0 (e)) — a `20260408` que a cita
+nunca chegou lá. Admin de perfil é `has_role(uid,'admin')`, e só.
+⚠️ Medido no 0 (d): 13 pessoas ENTRAM no app do Marketing, 33 leem os quadros
+pelo banco — 24 leem sem ter o app. Fechar isso é decisão (quadro privado ou
+"só quem tem carbo_mkt").
 
 ### Regras anti-confusão (OBRIGATÓRIAS)
 1. **Todo pedido nomeia o alvo.** "no CRM" → `apps/crm`; "no controle"/"atual" → raiz (`src/`).
