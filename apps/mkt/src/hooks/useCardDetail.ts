@@ -1,7 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { QueryKey } from "@tanstack/react-query";
-import { fotografar, desfazer, editarCartaoNosQuadros, CHAVES_DE_QUADRO, type Foto } from "@/lib/mktOtimista";
+import { fotografar, desfazer, editarCartaoNosQuadros, editarQuadros, CHAVES_DE_QUADRO, idNovo, type Foto } from "@/lib/mktOtimista";
+import { useAuth } from "@/contexts/AuthContext";
 import { isDriveUrl, parseDriveFileId, driveThumbUrl, guessNameFromUrl } from "@/lib/mktDrive";
 
 // Detalhe do cartão (modal): campos, etiquetas, membros, checklists+itens,
@@ -59,6 +60,10 @@ export interface CardDetail {
   attachments: Attachment[];
   fieldValues: Record<string, unknown>; // field_id → value (jsonb)
 }
+
+// Posição do checklist novo: a MESMA no cache e no insert (molde do `idNovo`).
+const posicaoNova = new WeakMap<object, number>();
+const pos = (v: object) => { if (!posicaoNova.has(v)) posicaoNova.set(v, Date.now()); return posicaoNova.get(v)!; };
 
 async function uid() {
   const { data } = await db.auth.getUser();
@@ -118,6 +123,7 @@ export function useCardDetail(cardId: string | null) {
 
 export function useCardMutations(cardId: string | null, boardId?: string) {
   const qc = useQueryClient();
+  const { user, profile } = useAuth();
   const inval = () => {
     if (cardId) qc.invalidateQueries({ queryKey: ["mkt", "card", cardId] });
     if (boardId) qc.invalidateQueries({ queryKey: ["mkt", "board", boardId] });
@@ -164,9 +170,14 @@ export function useCardMutations(cardId: string | null, boardId?: string) {
     noQuadro((c) => ({ ...c, labelIds: troca(c.labelIds) }));
   });
 
-  const createLabel = run(async ({ name, color }: { name: string; color: string }) => {
-    const res = await db.from("mkt_labels").insert({ board_id: boardId, name, color });
+  // Criar: o id nasce no NAVEGADOR e vai junto no insert (`idNovo`), então o
+  // item aparece na hora já com o id definitivo — clicar nele logo depois funciona.
+  const createLabel = run(async (v: { name: string; color: string }) => {
+    const res = await db.from("mkt_labels").insert({ id: idNovo(v), board_id: boardId, name: v.name, color: v.color });
     if (res.error) throw res.error;
+  }, (v) => {
+    if (!boardId) return;
+    editarQuadros(qc, (d) => (d.board?.id === boardId ? { ...d, labels: [...d.labels, { id: idNovo(v), board_id: boardId, name: v.name, color: v.color }] } : d));
   });
 
   const updateLabel = run(async ({ id, name }: { id: string; name: string }) => {
@@ -193,9 +204,11 @@ export function useCardMutations(cardId: string | null, boardId?: string) {
     noQuadro((c) => ({ ...c, memberIds: troca(c.memberIds) }));
   });
 
-  const addChecklist = run(async ({ title }: { title: string }) => {
-    const res = await db.from("mkt_checklists").insert({ card_id: cardId, title, position: Date.now() });
+  const addChecklist = run(async (v: { title: string }) => {
+    const res = await db.from("mkt_checklists").insert({ id: idNovo(v), card_id: cardId, title: v.title, position: pos(v) });
     if (res.error) throw res.error;
+  }, (v) => {
+    noCartao((d) => ({ ...d, checklists: [...d.checklists, { id: idNovo(v), card_id: cardId!, title: v.title, position: pos(v), items: [] }] }));
   });
   const removeChecklist = run(async ({ id }: { id: string }) => {
     const res = await db.from("mkt_checklists").delete().eq("id", id);
@@ -203,9 +216,14 @@ export function useCardMutations(cardId: string | null, boardId?: string) {
   }, ({ id }) => {
     noCartao((d) => ({ ...d, checklists: d.checklists.filter((cl) => cl.id !== id) }));
   });
-  const addItem = run(async ({ checklistId, text, position }: { checklistId: string; text: string; position: number }) => {
-    const res = await db.from("mkt_checklist_items").insert({ checklist_id: checklistId, text, position });
+  const addItem = run(async (v: { checklistId: string; text: string; position: number }) => {
+    const res = await db.from("mkt_checklist_items").insert({ id: idNovo(v), checklist_id: v.checklistId, text: v.text, position: v.position });
     if (res.error) throw res.error;
+  }, (v) => {
+    noCartao((d) => ({ ...d, checklists: d.checklists.map((cl) => (cl.id === v.checklistId
+      ? { ...cl, items: [...cl.items, { id: idNovo(v), checklist_id: v.checklistId, text: v.text, is_done: false, position: v.position } as ChecklistItem] }
+      : cl)) }));
+    noQuadro((c) => ({ ...c, checklistTotal: c.checklistTotal + 1 }));
   });
   const toggleItem = run(async ({ id, done }: { id: string; done: boolean }) => {
     const res = await db.from("mkt_checklist_items").update({ is_done: done }).eq("id", id);
@@ -285,29 +303,32 @@ export function useCardMutations(cardId: string | null, boardId?: string) {
     },
   });
 
-  const addComment = useMutation({
-    mutationFn: async ({ body }: { body: string }) => {
-      const res = await db.from("mkt_comments").insert({ card_id: cardId, user_id: await uid(), body });
-      if (res.error) throw res.error;
-      if (boardId) await db.from("mkt_activity").insert({ board_id: boardId, card_id: cardId, user_id: await uid(), type: "comment.add", data: {} });
-    },
-    onSuccess: inval,
+  const addComment = run(async (v: { body: string }) => {
+    const res = await db.from("mkt_comments").insert({ id: idNovo(v), card_id: cardId, user_id: await uid(), body: v.body });
+    if (res.error) throw res.error;
+    if (boardId) await db.from("mkt_activity").insert({ board_id: boardId, card_id: cardId, user_id: await uid(), type: "comment.add", data: {} });
+  }, (v) => {
+    const agora = new Date().toISOString();
+    noCartao((d) => ({ ...d, comments: [{
+      id: idNovo(v), card_id: cardId!, user_id: user?.id ?? "", body: v.body, created_at: agora, updated_at: agora,
+      authorName: profile?.full_name ?? null, authorAvatar: null,
+    }, ...d.comments] }));
+    noQuadro((c) => ({ ...c, commentCount: c.commentCount + 1 }));
   });
 
-  const updateComment = useMutation({
-    mutationFn: async ({ id, body }: { id: string; body: string }) => {
-      const res = await db.from("mkt_comments").update({ body, updated_at: new Date().toISOString() }).eq("id", id);
-      if (res.error) throw res.error;
-    },
-    onSuccess: inval,
+  const updateComment = run(async ({ id, body }: { id: string; body: string }) => {
+    const res = await db.from("mkt_comments").update({ body, updated_at: new Date().toISOString() }).eq("id", id);
+    if (res.error) throw res.error;
+  }, ({ id, body }) => {
+    noCartao((d) => ({ ...d, comments: d.comments.map((c) => (c.id === id ? { ...c, body, updated_at: new Date().toISOString() } : c)) }));
   });
 
-  const removeComment = useMutation({
-    mutationFn: async ({ id }: { id: string }) => {
-      const res = await db.from("mkt_comments").delete().eq("id", id);
-      if (res.error) throw res.error;
-    },
-    onSuccess: inval,
+  const removeComment = run(async ({ id }: { id: string }) => {
+    const res = await db.from("mkt_comments").delete().eq("id", id);
+    if (res.error) throw res.error;
+  }, ({ id }) => {
+    noCartao((d) => ({ ...d, comments: d.comments.filter((c) => c.id !== id) }));
+    noQuadro((c) => ({ ...c, commentCount: Math.max(0, c.commentCount - 1) }));
   });
 
   return { updateComment, removeComment, updateCard, toggleLabel, createLabel, updateLabel, deleteLabel, toggleMember, addChecklist, removeChecklist, addItem, toggleItem, updateItem, removeItem, addAttachment, removeAttachment, setFieldValue, mirrorCard, addComment };

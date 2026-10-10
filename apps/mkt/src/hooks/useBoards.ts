@@ -2,7 +2,8 @@ import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { POS_GAP } from "@/lib/mktPosition";
-import { fotografar, desfazer, editarQuadros, CHAVES_DE_QUADRO, type Foto } from "@/lib/mktOtimista";
+import { lerTudo, lerPorIds } from "@/lib/mktLerTudo";
+import { fotografar, desfazer, editarQuadros, CHAVES_DE_QUADRO, idNovo, type Foto } from "@/lib/mktOtimista";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Dados dos Quadros (Trello interno) — lista de quadros, e o quadro aberto com
@@ -90,14 +91,14 @@ export function useBoard(boardId: string | null) {
       if (boardRes.error) throw boardRes.error;
       if (!boardRes.data) return null;
 
-      const [listsRes, cardsRes, labelsRes] = await Promise.all([
-        db.from("mkt_lists").select("*").eq("board_id", boardId).eq("is_archived", false).order("position"),
-        db.from("mkt_cards").select("*").eq("board_id", boardId).eq("is_archived", false).order("position"),
-        db.from("mkt_labels").select("*").eq("board_id", boardId).order("created_at"),
+      // Sem teto (`lib/mktLerTudo.ts`): quadro importado do Trello passa de mil
+      // linhas em comentários, e o PostgREST cortaria calado.
+      const [listas, cartoes, etiquetas] = await Promise.all([
+        lerTudo<List>(() => db.from("mkt_lists").select("*").eq("board_id", boardId).eq("is_archived", false).order("position").order("id")),
+        lerTudo<Record<string, unknown>>(() => db.from("mkt_cards").select("*").eq("board_id", boardId).eq("is_archived", false).order("position").order("id")),
+        lerTudo<Label>(() => db.from("mkt_labels").select("*").eq("board_id", boardId).order("created_at").order("id")),
       ]);
-      if (listsRes.error) throw listsRes.error;
-      if (cardsRes.error) throw cardsRes.error;
-      if (labelsRes.error) throw labelsRes.error;
+      const listsRes = { data: listas }, cardsRes = { data: cartoes }, labelsRes = { data: etiquetas };
 
       // ⚠️ Cartão de LISTA arquivada some junto com a lista. O kanban escondia
       // por acaso (monta colunas pelas listas); Tabela, Calendário, Timeline,
@@ -114,10 +115,8 @@ export function useBoard(boardId: string | null) {
       const origBoardTitle = new Map<string, string>();
       const origListTitle = new Map<string, string>();
       if (originalIds.length > 0) {
-        const oRes = await db.from("mkt_cards")
-          .select("*") // coluna nova do cartão (lembrete, recorrência) chega sem mexer aqui
-          .in("id", originalIds);
-        const origs = (oRes.data ?? []) as Record<string, unknown>[];
+        // select("*"): coluna nova do cartão (lembrete, recorrência) chega sem mexer aqui
+        const origs = await lerPorIds<Record<string, unknown>>(originalIds, (l) => db.from("mkt_cards").select("*").in("id", l).order("id"));
         for (const o of origs) originalById.set(o.id as string, o);
         const obIds = [...new Set(origs.map((o) => o.board_id as string))];
         const olIds = [...new Set(origs.map((o) => o.list_id as string))];
@@ -137,25 +136,19 @@ export function useBoard(boardId: string | null) {
       let comments: { card_id: string }[] = [];
       let attachments: { card_id: string }[] = [];
       if (allIds.length > 0) {
-        const [clRes, cmRes, ckRes, coRes, atRes] = await Promise.all([
-          db.from("mkt_card_labels").select("card_id, label_id").in("card_id", allIds),
-          db.from("mkt_card_members").select("card_id, user_id").in("card_id", allIds),
-          db.from("mkt_checklists").select("id, card_id").in("card_id", allIds),
-          db.from("mkt_comments").select("card_id").in("card_id", allIds),
-          db.from("mkt_card_attachments").select("card_id").in("card_id", allIds),
+        [cardLabels, cardMembers, checklists, comments, attachments] = await Promise.all([
+          lerPorIds<{ card_id: string; label_id: string }>(allIds, (l) => db.from("mkt_card_labels").select("card_id, label_id").in("card_id", l).order("card_id").order("label_id")),
+          lerPorIds<{ card_id: string; user_id: string }>(allIds, (l) => db.from("mkt_card_members").select("card_id, user_id").in("card_id", l).order("card_id").order("user_id")),
+          lerPorIds<{ id: string; card_id: string }>(allIds, (l) => db.from("mkt_checklists").select("id, card_id").in("card_id", l).order("id")),
+          lerPorIds<{ card_id: string }>(allIds, (l) => db.from("mkt_comments").select("card_id").in("card_id", l).order("id")),
+          lerPorIds<{ card_id: string }>(allIds, (l) => db.from("mkt_card_attachments").select("card_id").in("card_id", l).order("id")),
         ]);
-        cardLabels = clRes.data ?? [];
-        cardMembers = cmRes.data ?? [];
-        checklists = ckRes.data ?? [];
-        comments = coRes.data ?? [];
-        attachments = atRes.data ?? [];
       }
       // Progresso e ATRASO de checklist (item com data vencida e não concluído).
       const checklistIds = checklists.map((c) => c.id);
       let items: { checklist_id: string; is_done: boolean; due_date: string | null }[] = [];
       if (checklistIds.length > 0) {
-        const itRes = await db.from("mkt_checklist_items").select("checklist_id, is_done, due_date").in("checklist_id", checklistIds);
-        items = itRes.data ?? [];
+        items = await lerPorIds(checklistIds, (l) => db.from("mkt_checklist_items").select("checklist_id, is_done, due_date").in("checklist_id", l).order("id"));
       }
       const checklistToCard = new Map(checklists.map((c) => [c.id, c.card_id]));
       const doneByCard = new Map<string, number>();
@@ -228,13 +221,12 @@ export function useAllCards(enabled: boolean) {
     queryKey: ["mkt", "all-cards"],
     enabled,
     queryFn: async (): Promise<AllCard[]> => {
-      const cardsRes = await db.from("mkt_cards").select("id, title, due_date, board_id, list_id, mirror_of").eq("is_archived", false);
-      if (cardsRes.error) throw cardsRes.error;
+      const cardsRes = { data: await lerTudo<Record<string, unknown>>(() => db.from("mkt_cards").select("id, title, due_date, board_id, list_id, mirror_of").eq("is_archived", false).order("id")) };
       // Quadro e lista ARQUIVADOS levam os cartões junto (senão a busca acharia
       // a cópia arquivada de um quadro reimportado, e o histórico do Trello).
       const [bRes, lRes] = await Promise.all([
-        db.from("mkt_boards").select("id, title").eq("is_archived", false),
-        db.from("mkt_lists").select("id, title").eq("is_archived", false),
+        lerTudo<{ id: string; title: string }>(() => db.from("mkt_boards").select("id, title").eq("is_archived", false).order("id")).then((data) => ({ data })),
+        lerTudo<{ id: string; title: string }>(() => db.from("mkt_lists").select("id, title").eq("is_archived", false).order("id")).then((data) => ({ data })),
       ]);
       const boardsAtivos = new Set((bRes.data ?? []).map((b: { id: string }) => b.id));
       const listasAtivas = new Set((lRes.data ?? []).map((l: { id: string }) => l.id));
@@ -243,8 +235,8 @@ export function useAllCards(enabled: boolean) {
       const ids = cards.map((c) => c.id as string);
       if (ids.length === 0) return [];
       const [clRes, cmRes] = await Promise.all([
-        db.from("mkt_card_labels").select("card_id, label_id").in("card_id", ids),
-        db.from("mkt_card_members").select("card_id, user_id").in("card_id", ids),
+        lerPorIds(ids, (l) => db.from("mkt_card_labels").select("card_id, label_id").in("card_id", l).order("card_id").order("label_id")).then((data) => ({ data })),
+        lerPorIds(ids, (l) => db.from("mkt_card_members").select("card_id, user_id").in("card_id", l).order("card_id").order("user_id")).then((data) => ({ data })),
       ]);
       const labelsByCard = new Map<string, string[]>();
       for (const cl of (clRes.data ?? []) as { card_id: string; label_id: string }[]) (labelsByCard.get(cl.card_id) ?? labelsByCard.set(cl.card_id, []).get(cl.card_id)!).push(cl.label_id);
@@ -301,6 +293,18 @@ async function logActivity(board_id: string, type: string, data: Record<string, 
   await db.from("mkt_activity").insert({ board_id, card_id: card_id ?? null, user_id: await uid(), type, data });
 }
 
+// O cartão recém-criado, como o quadro o desenha antes de o banco responder.
+function cartaoNovo(id: string, listId: string, boardId: string, title: string, position: number): CardSummary {
+  return {
+    id, list_id: listId, board_id: boardId, title, description: null, position,
+    start_date: null, due_date: null, is_complete: false, cover: null, updated_at: new Date().toISOString(),
+    lembrete_minutos: null, recorrencia: null,
+    labelIds: [], memberIds: [], checklistDone: 0, checklistTotal: 0, commentCount: 0, attachmentCount: 0,
+    checklistOverdue: false, location_lat: null, location_lng: null, location_name: null,
+    mirrorOf: null, mirrorSourceBoard: null, mirrorSourceList: null,
+  };
+}
+
 // ── Mutações estruturais ─────────────────────────────────────────────────────
 export function useBoardMutations(boardId?: string) {
   const qc = useQueryClient();
@@ -308,8 +312,8 @@ export function useBoardMutations(boardId?: string) {
   const invBoards = () => qc.invalidateQueries({ queryKey: ["mkt", "boards"] });
   // A tela muda no clique e o banco confirma depois; falhou, desfaz e avisa
   // (`lib/mktOtimista.ts`). O quadro recarrega em segundo plano no fim.
-  const otimista = <T,>(mutationFn: (v: T) => Promise<void>, aplicar: (d: BoardData, v: T) => BoardData) =>
-    useMutation<void, Error, T, { foto: Foto }>({ // eslint-disable-line react-hooks/rules-of-hooks
+  const otimista = <T, R = void>(mutationFn: (v: T) => Promise<R>, aplicar: (d: BoardData, v: T) => BoardData) =>
+    useMutation<R, Error, T, { foto: Foto }>({ // eslint-disable-line react-hooks/rules-of-hooks
       mutationFn,
       onMutate: async (v) => {
         const foto = await fotografar(qc, CHAVES_DE_QUADRO);
@@ -332,14 +336,15 @@ export function useBoardMutations(boardId?: string) {
     onSuccess: invBoards,
   });
 
-  const createList = useMutation({
-    mutationFn: async ({ title, position }: { title: string; position: number }) => {
-      const res = await db.from("mkt_lists").insert({ board_id: boardId, title, position }).select("id").single();
-      if (res.error) throw res.error;
-      return res.data.id as string;
-    },
-    onSuccess: invBoard,
-  });
+  // Criar: o id nasce no navegador (`idNovo`) — a lista/o cartão aparece na
+  // hora já com o id definitivo.
+  const createList = otimista(async (v: { title: string; position: number }) => {
+    const res = await db.from("mkt_lists").insert({ id: idNovo(v), board_id: boardId, title: v.title, position: v.position }).select("id").single();
+    if (res.error) throw res.error;
+    return res.data.id as string;
+  }, (d, v) => (d.board?.id === boardId
+    ? { ...d, lists: [...d.lists, { id: idNovo(v), board_id: boardId!, title: v.title, position: v.position, color: null }] }
+    : d));
 
   const renameList = otimista(async ({ id, title }: { id: string; title: string }) => {
     const res = await db.from("mkt_lists").update({ title }).eq("id", id);
@@ -364,16 +369,13 @@ export function useBoardMutations(boardId?: string) {
     if (res.error) throw res.error;
   }, (d, { id, color }) => naLista(d, id, { color }));
 
-  const createCard = useMutation({
-    mutationFn: async ({ listId, title, position }: { listId: string; title: string; position: number }) => {
-      if (!boardId) throw new Error("sem quadro");
-      const res = await db.from("mkt_cards").insert({ list_id: listId, board_id: boardId, title, position, created_by: await uid() }).select("id").single();
-      if (res.error) throw res.error;
-      await logActivity(boardId, "card.create", { title }, res.data.id);
-      return res.data.id as string;
-    },
-    onSuccess: invBoard,
-  });
+  const createCard = otimista(async (v: { listId: string; title: string; position: number }) => {
+    if (!boardId) throw new Error("sem quadro");
+    const res = await db.from("mkt_cards").insert({ id: idNovo(v), list_id: v.listId, board_id: boardId, title: v.title, position: v.position, created_by: await uid() }).select("id").single();
+    if (res.error) throw res.error;
+    await logActivity(boardId, "card.create", { title: v.title }, res.data.id);
+    return res.data.id as string;
+  }, (d, v) => (d.board?.id === boardId ? { ...d, cards: [...d.cards, cartaoNovo(idNovo(v), v.listId, boardId!, v.title, v.position)] } : d));
 
   // Move cartão (mesma lista ou entre listas) — atualiza list_id + position.
   const moveCard = useMutation({

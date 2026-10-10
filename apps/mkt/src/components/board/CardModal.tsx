@@ -146,8 +146,11 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [], anex
   const alternarSeguir = async () => {
     if (!user?.id) return;
     const t = (supabase as any).from("mkt_card_seguidores");
+    // O botão vira NO CLIQUE; o banco recusou ⇒ volta e avisa.
+    const chaveSigo = ["mkt", "sigo", cardId, user.id];
+    qcLocal.setQueryData(chaveSigo, !sigo);
     const r = sigo ? await t.delete().eq("card_id", cardId).eq("user_id", user.id) : await t.insert({ card_id: cardId, user_id: user.id });
-    if (r.error) { toast.error(`Não deu: ${r.error.message}`); return; }
+    if (r.error) { qcLocal.setQueryData(chaveSigo, sigo); toast.error(`Não deu: ${r.error.message}`); return; }
     qcLocal.invalidateQueries({ queryKey: ["mkt", "sigo", cardId] });
     qcLocal.invalidateQueries({ queryKey: ["notifications", user.id, "cartoes-mkt"] }); // o olho na frente do cartão
     toast.success(sigo ? "Você deixou de seguir este cartão." : "Seguindo: você recebe no sininho comentários, mudanças de lista e arquivamento.");
@@ -306,9 +309,9 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [], anex
                         <p className="mkt-meta-label">Criar etiqueta</p>
                         <div className="flex items-center gap-1.5">
                           <input value={newLabelName} onChange={(e) => setNewLabelName(e.target.value)}
-                            onKeyDown={(e) => { if (e.key === "Enter" && newLabelName.trim()) mut.createLabel.mutate({ name: newLabelName.trim(), color: newLabelColor }, { onSuccess: () => setNewLabelName("") }); }}
+                            onKeyDown={(e) => { if (e.key === "Enter" && newLabelName.trim()) { mut.createLabel.mutate({ name: newLabelName.trim(), color: newLabelColor }); setNewLabelName(""); }; }}
                             placeholder="Nome…" className="flex-1 min-w-0 h-7 text-xs rounded-md border border-border bg-card px-1.5 focus:outline-none focus:ring-1 focus:ring-primary" />
-                          <Button size="sm" className="h-7 px-2.5 text-xs shrink-0" disabled={!newLabelName.trim()} onClick={() => mut.createLabel.mutate({ name: newLabelName.trim(), color: newLabelColor }, { onSuccess: () => setNewLabelName("") })}>Criar</Button>
+                          <Button size="sm" className="h-7 px-2.5 text-xs shrink-0" disabled={!newLabelName.trim()} onClick={() => { mut.createLabel.mutate({ name: newLabelName.trim(), color: newLabelColor }); setNewLabelName(""); }}>Criar</Button>
                         </div>
                         <div className="flex flex-wrap gap-1">
                           {LABEL_COLOR_KEYS.map((k) => (
@@ -593,10 +596,15 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [], anex
               <div className="px-4 pb-4 space-y-4 md:overflow-y-auto md:flex-1">
                 <NovoComentario inputRef={comentarioRef} valor={comment} onChange={setComment} pessoas={mencionaveis}
                   onMencionar={(p) => setMencionados((m) => m.some((x) => x.id === p.id) ? m : [...m, p])}
-                  onEnviar={(t) => mut.addComment.mutate({ body: t }, { onSuccess: () => {
+                  onEnviar={(t) => {
+                    // O comentário aparece na hora (otimista) e a caixa já limpa;
+                    // se o banco recusar, o texto VOLTA para a caixa — nunca se perde.
+                    const ments = mencionados;
+                    setComment(""); setMencionados([]);
+                    mut.addComment.mutate({ body: t }, { onError: () => { setComment(t); setMencionados(ments); }, onSuccess: () => {
                     // Só avisa quem CONTINUA no texto: apagar a menção antes de
                     // salvar desfaz o aviso.
-                    const avisar = mencionados.filter((p) => t.includes(`@${rotuloMencao(p.full_name)}`)).map((p) => p.id);
+                    const avisar = ments.filter((p) => t.includes(`@${rotuloMencao(p.full_name)}`)).map((p) => p.id);
                     if (avisar.length) {
                       (supabase as any).rpc("mkt_notificar_mencao", { p_card: cardId, p_usuarios: avisar, p_trecho: t.slice(0, 200) })
                         .then((r: { error: { message: string } | null; data: number | null }) => {
@@ -604,8 +612,7 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [], anex
                           else if (r.data) toast.success(r.data === 1 ? "A pessoa mencionada foi avisada no sininho." : `${r.data} pessoas mencionadas foram avisadas no sininho.`);
                         });
                     }
-                    setComment(""); setMencionados([]);
-                  } })} />
+                  } }); }} />
                 {linhaDoTempo(data.comments, detalhes ? atividade : []).map((ev) => ev.tipo === "comentario" ? (
                   <ComentarioItem key={ev.c.id} c={ev.c} meu={ev.c.user_id === user?.id}
                     reacoes={reacoes.filter((r) => r.comment_id === ev.c.id)} meuId={user?.id ?? null}

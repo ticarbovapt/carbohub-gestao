@@ -35,12 +35,17 @@ export function useReacoes(cardId: string, commentIds: string[]) {
       return out;
     },
   });
+  // A reação muda NO CLIQUE; o banco recusou ⇒ volta ao que era e avisa.
   const alternar = async (commentId: string, emoji: string, meuId: string) => {
-    const ja = (q.data ?? []).some((r) => r.comment_id === commentId && r.user_id === meuId && r.emoji === emoji);
+    const antes = q.data ?? [];
+    const ja = antes.some((r) => r.comment_id === commentId && r.user_id === meuId && r.emoji === emoji);
+    qc.setQueryData<Reacao[]>(chave, ja
+      ? antes.filter((r) => !(r.comment_id === commentId && r.user_id === meuId && r.emoji === emoji))
+      : [...antes, { comment_id: commentId, user_id: meuId, emoji }]);
     const r = ja
       ? await db.from("mkt_comment_reacoes").delete().eq("comment_id", commentId).eq("user_id", meuId).eq("emoji", emoji)
       : await db.from("mkt_comment_reacoes").insert({ comment_id: commentId, user_id: meuId, emoji });
-    if (r.error) toast.error(`Não reagiu: ${r.error.message}`);
+    if (r.error) { qc.setQueryData<Reacao[]>(chave, antes); toast.error(`Não reagiu: ${r.error.message}`); }
     qc.invalidateQueries({ queryKey: ["mkt", "reacoes", cardId] });
   };
   return { reacoes: q.data ?? [], alternar };
