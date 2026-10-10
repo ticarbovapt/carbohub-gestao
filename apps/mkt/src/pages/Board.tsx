@@ -25,6 +25,7 @@ import { BoardFieldsDialog } from "@/components/board/BoardFieldsDialog";
 import { TrazerDoTrello } from "@/components/board/TrazerDoTrello";
 import { ItensArquivados } from "@/components/board/ItensArquivados";
 import { EdicaoRapida } from "@/components/board/EdicaoRapida";
+import { useMeusSinais, type MeusSinais } from "@/hooks/useMeusSinais";
 import { ListaDialogo, ORDENS, ordenarLista, arquivarTodosOsCartoes, useListasSeguidas, type OrdemLista } from "@/components/board/AcoesDaLista";
 import { FilterControls } from "@/components/board/FilterControls";
 import { ViewSwitcher } from "@/components/board/ViewSwitcher";
@@ -56,6 +57,8 @@ const CamposCtx = createContext<{
 // texto de TODAS (e fecha de novo). A escolha é de quem olha, então fica no
 // navegador — e tem de sobreviver a localStorage bloqueado.
 const CHAVE_ETIQUETAS = "mkt-etiquetas-abertas";
+const SEM_SINAIS: MeusSinais = { avisos: new Map(), seguidos: new Set() };
+const SinaisCtx = createContext<MeusSinais>({ avisos: new Map(), seguidos: new Set() });
 function lerEtiquetasAbertas(): boolean {
   try { return localStorage.getItem(CHAVE_ETIQUETAS) === "1"; } catch { return false; }
 }
@@ -123,6 +126,10 @@ function CardFace({ card, labels, onConcluir }: { card: CardSummary; labels: Lab
   const overdue = card.due_date && !card.is_complete && new Date(card.due_date) < new Date();
   const capa = lerCapa(card.cover);
   const { etiquetasAbertas, alternarEtiquetas } = useContext(CamposCtx);
+  const sinais = useContext(SinaisCtx);
+  const idConteudo = card.mirrorOf ?? card.id;
+  const avisos = sinais.avisos.get(idConteudo) ?? 0;
+  const sigo = sinais.seguidos.has(idConteudo);
 
   // Capa CHEIA: o cartão é a cor, com o título por cima e nada mais — é como
   // o Trello mostra a LEGENDA, e ali a cor É a informação.
@@ -212,6 +219,13 @@ function CardFace({ card, labels, onConcluir }: { card: CardSummary; labels: Lab
           <span className="inline-flex items-center gap-1"><CheckSquare className="h-3.5 w-3.5" />{card.checklistDone}/{card.checklistTotal}</span>
         )}
         {card.commentCount > 0 && <span className="inline-flex items-center gap-1"><MessageSquare className="h-3.5 w-3.5" />{card.commentCount}</span>}
+        {sigo && <span title="Você segue este cartão"><Eye className="h-3.5 w-3.5" /></span>}
+        {avisos > 0 && (
+          <span title={avisos === 1 ? "1 aviso não lido" : `${avisos} avisos não lidos`}
+            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-primary/15 text-primary font-medium">
+            <Bell className="h-3.5 w-3.5" />{avisos}
+          </span>
+        )}
         <FotosDosMembros ids={card.memberIds} />
       </div>
     </>
@@ -511,6 +525,7 @@ export default function Board() {
   const filterActive = criteriaActive(criteria);
   const { user } = useAuth();
   const meuId = user?.id ?? null;
+  const { data: sinais } = useMeusSinais(meuId);
   const { seguidas, alternar: alternarSeguir } = useListasSeguidas((data?.lists ?? []).map((l) => l.id), meuId);
   const [dialogoLista, setDialogoLista] = useState<{ modo: "copiar" | "mover" | "mover_cartoes"; lista: { id: string; title: string } } | null>(null);
   const acaoDaLista = async (l: { id: string; title: string }, a: AcaoLista) => {
@@ -661,6 +676,7 @@ export default function Board() {
 
   return (
     <CamposCtx.Provider value={camposCtx}>
+    <SinaisCtx.Provider value={sinais ?? SEM_SINAIS}>
     <AcoesCtx.Provider value={acoesCtx}>
     <div className="fixed inset-0 top-14 mkt-canvas bg-dot-grid flex flex-col">
       {/* Cabeçalho do quadro */}
@@ -784,6 +800,7 @@ export default function Board() {
       {fieldsOpen && <BoardFieldsDialog boardId={boardId} onClose={() => setFieldsOpen(false)} />}
     </div>
     </AcoesCtx.Provider>
+    </SinaisCtx.Provider>
     </CamposCtx.Provider>
   );
 }
