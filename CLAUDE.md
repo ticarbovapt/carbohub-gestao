@@ -2691,7 +2691,18 @@ inteiro em `carbo_backup_policies`. ⚠️ **Regra nova: nunca `using (true)` ne
 ⚠️ `apps/mkt/src/hooks` tem hooks de finanças (`usePayables`,
 `useReceivables`…) SEM rota — código morto copiado, não tela vazando.
 
-⚠️ **PENDENTE — rodada 2b, o que vaza DENTRO do time** (muda o que as telas
+**Rodada 2b — Finanças só para quem tem o app** (`20261079` + `20261080`,
+aplicadas, decisão do dono do processo): `carbo_tem_app(flags[])` (flag OU
+`has_role admin`) substituiu `carbo_e_time_interno()` em receivables,
+payment_methods, commission_*, purchase_payables (+ Ops e raiz, que a usam),
+comissao_faixas/vendedor_comissao (+ raiz). E `carbo_is_gestor` — que é
+"gestor de QUALQUER área", não olha departamento — passou a exigir o Finanças
+nas regras de commission_* e employee_finance (salário). ⚠️ NÃO mexer na
+própria `carbo_is_gestor`: ela governa o `isGestor` das telas de vários apps.
+⚠️ Medido: `carbo_functions` classifica `ops/estagiario` como nível gestor
+(Leticia Rosado) — cadastro a revisar.
+
+⚠️ **PENDENTE — rodada 2b, o resto do que vaza DENTRO do time** (muda o que as telas
 mostram, medir antes): qualquer interno lê e grava contas a pagar/receber,
 compras, comissões, metas, estoque, produção, viagens e licenciados (regras
 `true`/`is_employee`/`auth.role()` — várias tabelas têm DUAS regras abertas,
