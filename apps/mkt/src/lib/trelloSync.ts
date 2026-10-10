@@ -277,7 +277,11 @@ export function planejarSincronizacao(t: J, aqui: EstadoDaqui, ctx: { userId: st
     if (!mesmaData(a.start_date, desejo.start_date)) { p.start_date = desejo.start_date; o_que.push("início"); }
     if (!mesmaData(a.due_date, desejo.due_date)) { p.due_date = desejo.due_date; o_que.push("entrega"); }
     if (a.is_complete !== desejo.is_complete) { p.is_complete = desejo.is_complete; o_que.push(desejo.is_complete ? "concluído" : "reaberto"); }
-    if ((a.cover ?? null) !== desejo.cover) { p.cover = desejo.cover; o_que.push("capa"); }
+    // ⚠️ Capa de IMAGEM posta aqui (`anexo:`) o Trello não sabe representar —
+    // ele só manda capa de COR. Sem esta guarda, toda sincronização apagaria a
+    // imagem escolhida pelo time. Cor nova vinda do Trello continua valendo.
+    const imagemDaqui = !!a.cover && /(^|:)anexo:/.test(a.cover);
+    if ((a.cover ?? null) !== desejo.cover && !(imagemDaqui && !desejo.cover)) { p.cover = desejo.cover; o_que.push("capa"); }
     if (a.is_archived !== desejo.is_archived) {
       p.is_archived = desejo.is_archived; p.archived_at = desejo.is_archived ? (c.dateClosed ?? agora) : null;
       o_que.push(desejo.is_archived ? "arquivado no Trello" : "desarquivado");

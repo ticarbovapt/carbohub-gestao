@@ -115,7 +115,7 @@ export function EdicaoRapida({ card, rect, boardId, labels, pessoas, onClose, on
                   );
                 }))}
             {painel === "capa" && (
-              <div className="p-1"><CapaPainel cover={card.cover} onChange={(cover) => mut.updateCard.mutate({ cover })} /></div>
+              <div className="p-1"><CapaPainel cardId={conteudo} cover={card.cover} onChange={(cover) => mut.updateCard.mutate({ cover })} /></div>
             )}
             {painel === "datas" && (
               <div className="p-1">

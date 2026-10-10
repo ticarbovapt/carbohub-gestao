@@ -1,3 +1,4 @@
+import { anexoDaCapa } from "@/lib/mktTheme";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { CardDetail } from "@/hooks/useCardDetail";
@@ -45,7 +46,9 @@ export function modeloDoCartao(d: CardDetail) {
   return {
     titulo: d.card.title,
     descricao: d.card.description,
-    cover: d.card.cover,
+    // Capa de IMAGEM aponta um anexo DESTE cartão, e modelo não leva anexos:
+    // o cartão criado do modelo apontaria para a foto de outro cartão.
+    cover: anexoDaCapa(d.card.cover) ? null : d.card.cover,
     label_ids: d.labelIds,
     checklists: d.checklists.map((c) => ({ title: c.title, items: c.items.map((i) => i.text) })),
     campos: Object.entries(d.fieldValues)
