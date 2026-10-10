@@ -23,7 +23,7 @@
 -- alheio — nada de novo é aberto nem fechado para elas):
 --   · servidor (service role: create-team-member, bulk-create-org-users…)
 --   · sem usuário (SQL Editor, cron, gatilho de cadastro do Auth)
---   · has_role(uid,'admin')  ou  carbo_user_roles master_admin/ceo/gestor_adm
+--   · has_role(uid,'admin') — a mesma regra da policy viva de UPDATE
 -- ⚠️ Recusa FALA (exception), nunca reverte calado: a tela de Equipe mostra o
 -- erro em vez de dizer "salvo" com o dado antigo no banco.
 -- =====================================================================
@@ -138,10 +138,12 @@ returns boolean
 language sql stable security definer set search_path = public as $$
   select auth.uid() is null                                     -- SQL Editor, cron, cadastro do Auth
       or coalesce(auth.role(), '') = 'service_role'             -- edge functions com a chave de serviço
-      or public.has_role(auth.uid(), 'admin'::app_role)
-      or exists (select 1 from public.carbo_user_roles r
-                  where r.user_id = auth.uid() and r.role::text in ('master_admin','ceo','gestor_adm'));
+      or public.has_role(auth.uid(), 'admin'::app_role);
 $$;
+-- ⚠️ `carbo_user_roles` NÃO existe em produção (BLOCO 0 (e), 10/10/2026) — a
+-- `20260408` que a cita nunca chegou lá. A regra é a MESMA da policy viva de
+-- UPDATE: `has_role(uid, 'admin')`. Quem a policy já deixava editar perfil
+-- alheio continua podendo; ninguém novo ganha.
 revoke all on function public.carbo_pode_editar_acesso() from public, anon;
 grant execute on function public.carbo_pode_editar_acesso() to authenticated;
 

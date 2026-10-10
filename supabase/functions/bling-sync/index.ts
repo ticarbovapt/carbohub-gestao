@@ -2,6 +2,7 @@
 import { telefoneParaBling } from "../_shared/telefoneBling.ts";
 import { totalDaVenda, repartirParcelas, somaParcelas, descontoSemBonificacao } from "../_shared/blingParcelas.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.39.3";
+import { ehTimeInterno } from "../_shared/interfacesInternas.ts";
 
 const ALLOWED_ORIGINS = [
   "https://controle.carbohub.com.br",  // app principal de gestão
@@ -2711,6 +2712,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
         return new Response(
           JSON.stringify({ success: false, error: "Unauthorized" }),
           { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+      // ⚠️ Logado NÃO basta: esta função EMITE nota fiscal, e lojista e
+      // licenciado logam pelo mesmo Auth e têm a MESMA `profiles`. Só o time
+      // interno passa (medido em 10/10/2026: nenhum funcionário fora da regra).
+      const { data: perfil } = await supabaseAdmin.from("profiles").select("allowed_interfaces").eq("id", u.id).maybeSingle();
+      if (!(await ehTimeInterno(supabaseAdmin as any, perfil?.allowed_interfaces))) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Apenas o time interno usa a integração com o Bling" }),
+          { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
         );
       }
       user = u;
