@@ -145,39 +145,31 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
     // ─────────────────────────────────────────────────────────────────────────
 
-    // ── Autorização (MODELO NOVO) ────────────────────────────────────────────
-    // Quem "manda" é derivado do PERFIL (não mais do is_admin/app_role):
-    //   department = command | ti_suporte  OU  funcao = head (qualquer dep).
-    // O is_admin legado fica só como OR de compatibilidade com o Controle
-    // (congelado), que usa esta mesma função.
-    const MANDA_FUNCOES = ["head", "ceo", "command"];
-    const MANDA_DEPARTAMENTOS = ["command", "ti_suporte"];
+    // ── Autorização: a FLAG do app, e só ela ─────────────────────────────────
+    // Gestão de usuário (criar, editar interfaces, bloquear, apagar, resetar
+    // senha) é tela do Admin (e a cópia do TI). Quem não entra nesses apps não
+    // gere usuário — a regra universal do ecossistema.
+    // ⚠️ Antes valia "department command|ti_suporte OU funcao head|ceo": o head
+    // de QUALQUER departamento, ou qualquer staff do TI, resetava a senha de
+    // qualquer conta (inclusive do CEO) e reescrevia as interfaces de qualquer
+    // um — inclusive as próprias, por cima da trava de `profiles` (aqui é
+    // service role). Auditoria de 10/10/2026.
+    const FLAGS_DE_GESTAO = ["carbo_admin", "carbo_ti"];
 
     const { data: callerProfile } = await supabaseAdmin
       .from("profiles")
-      .select("department, funcao, secondary_department, secondary_funcao")
+      .select("allowed_interfaces, status")
       .eq("id", callingUser.id)
       .maybeSingle();
 
-    const p = callerProfile as {
-      department?: string; funcao?: string;
-      secondary_department?: string; secondary_funcao?: string;
-    } | null;
+    const flags = ((callerProfile?.allowed_interfaces as string[] | null) ?? []).map((f) => String(f).toLowerCase());
+    const podeGerir = !!callerProfile
+      && !["deleted", "rejected"].includes(String(callerProfile.status ?? ""))
+      && flags.some((f) => FLAGS_DE_GESTAO.includes(f));
 
-    const isCommand = !!p && (
-      MANDA_DEPARTAMENTOS.includes(p.department ?? "") ||
-      MANDA_DEPARTAMENTOS.includes(p.secondary_department ?? "") ||
-      MANDA_FUNCOES.includes(p.funcao ?? "") ||
-      MANDA_FUNCOES.includes(p.secondary_funcao ?? "")
-    );
-
-    const { data: legacyAdmin } = await supabaseAdmin.rpc("is_admin", {
-      _user_id: callingUser.id,
-    });
-
-    if (!isCommand && !legacyAdmin) {
+    if (!podeGerir) {
       return new Response(
-        JSON.stringify({ success: false, error: "Unauthorized: apenas gestão (Command, Head ou TI) pode criar usuários" }),
+        JSON.stringify({ success: false, error: "Sem permissão: gestão de usuários é do app Admin (ou TI)." }),
         { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
