@@ -98,17 +98,28 @@ function Compartilhar({ boardId, tituloQuadro, membros, sugestoes, onClose }: {
   const sugeridos = sugestoes.filter((p) => !ids.has(p.id) && p.full_name).slice(0, 8);
 
   const atualizar = () => qc.invalidateQueries({ queryKey: ["mkt", "membros-quadro", boardId] });
+  // A lista muda NO CLIQUE; o banco recusou ⇒ volta ao que era e avisa.
+  const chave = ["mkt", "membros-quadro", boardId];
+  const mudar = (f: (ms: Membro[]) => Membro[]) => {
+    const antes = qc.getQueryData<Membro[]>(chave) ?? [];
+    qc.setQueryData<Membro[]>(chave, f(antes));
+    return () => qc.setQueryData<Membro[]>(chave, antes);
+  };
   const adicionar = async (p: Pessoa) => {
     setOcupado(true);
+    const eu = p.id === user?.id;
+    const voltar = mudar((ms) => [...ms, { ...p, full_name: eu ? (internos.find((i) => i.id === p.id)?.full_name ?? p.full_name) : p.full_name, papel: "membro" }]);
+    setBusca("");
     const r = await db.from("mkt_board_membros").insert({ board_id: boardId, user_id: p.id, papel: "membro", adicionado_por: user?.id ?? null });
     setOcupado(false);
-    if (r.error) { toast.error(`Não adicionou: ${r.error.message}`); return; }
-    toast.success(p.id === user?.id ? "Você entrou no quadro." : `${p.full_name} foi adicionado e avisado no sininho.`);
-    setBusca(""); atualizar();
+    if (r.error) { voltar(); toast.error(`Não adicionou: ${r.error.message}`); return; }
+    toast.success(eu ? "Você entrou no quadro." : `${p.full_name} foi adicionado e avisado no sininho.`);
+    atualizar();
   };
   const trocarPapel = async (m: Membro, papel: "admin" | "membro") => {
+    const voltar = mudar((ms) => ms.map((x) => (x.id === m.id ? { ...x, papel } : x)));
     const r = await db.from("mkt_board_membros").update({ papel }).eq("board_id", boardId).eq("user_id", m.id);
-    if (r.error) toast.error(`Não mudou: ${r.error.message}`); else atualizar();
+    if (r.error) { voltar(); toast.error(`Não mudou: ${r.error.message}`); } else atualizar();
   };
   const remover = async (m: Membro) => {
     const eu = m.id === user?.id;
@@ -117,8 +128,9 @@ function Compartilhar({ boardId, tituloQuadro, membros, sugestoes, onClose }: {
       mensagem: "Ela deixa de aparecer como membro. Continua podendo abrir o quadro, como todo o time interno.",
       confirmar: eu ? "Sair" : "Tirar",
     }))) return;
+    const voltar = mudar((ms) => ms.filter((x) => x.id !== m.id));
     const r = await db.from("mkt_board_membros").delete().eq("board_id", boardId).eq("user_id", m.id);
-    if (r.error) toast.error(`Não tirou: ${r.error.message}`); else atualizar();
+    if (r.error) { voltar(); toast.error(`Não tirou: ${r.error.message}`); } else atualizar();
   };
   const copiarLink = async () => {
     const url = `${window.location.origin}/quadros/${boardId}`;

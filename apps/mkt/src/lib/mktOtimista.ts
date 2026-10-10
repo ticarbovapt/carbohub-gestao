@@ -42,3 +42,13 @@ export function desfazer(qc: QueryClient, foto: Foto | undefined, erro: unknown)
   for (const [k, v] of foto ?? []) qc.setQueryData(k, v);
   toast.error(`Não salvou: ${(erro as Error)?.message ?? "erro desconhecido"}. A tela voltou ao que estava.`);
 }
+
+// O id de um item CRIADO nasce no navegador e é o MESMO no cache otimista e no
+// insert: as duas pontas chamam `idNovo(variaveis)` e recebem o mesmo uuid.
+// Id provisório trocado depois faria o clique no item recém-criado abrir nada.
+const ids = new WeakMap<object, string>();
+export function idNovo(v: object): string {
+  let id = ids.get(v);
+  if (!id) { id = crypto.randomUUID(); ids.set(v, id); }
+  return id;
+}

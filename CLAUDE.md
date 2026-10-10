@@ -2506,8 +2506,20 @@ mudam o cache primeiro — o cartão aberto, o quadro, os ESPELHOS e as visões 
 otimista que falha calado é a tela dizendo uma coisa e o banco outra. ⚠️ O
 recarregamento continua no `onSettled`, em segundo plano. Testado com banco
 falso de 2 s: a tela mudou em ~100 ms e a recusa voltou ao estado anterior.
-⚠️ Mutação nova que só troca campo: passe o `otimista` do `run`. As que dependem
-do id que o banco gera (criar cartão/lista/item/comentário) continuam esperando.
+⚠️ Mutação nova que só troca campo: passe o `otimista` do `run`.
+**Criar também é instantâneo** (cartão, lista, checklist, item, comentário,
+etiqueta): o id nasce no NAVEGADOR (`idNovo(variaveis)`, `crypto.randomUUID`) e
+vai junto no insert — o item aparece já com o id DEFINITIVO, e clicar nele logo
+depois abre. ⚠️ Comentário recusado VOLTA para a caixa: texto digitado não some.
+Seguir, Compartilhar (membros do quadro) e reações também mudam no clique.
+
+**Leitura SEM TETO** (`lib/mktLerTudo.ts`): `useBoard`, `useWorkspace` e
+`useAllCards` liam comentários, anexos, etiquetas, membros e itens com `.in()` sem
+`.range()` — o PostgREST corta em 1.000 calado, e o quadro importado do Trello
+passa disso só em comentários. Hoje `lerTudo` (páginas de 1.000, ordem ESTÁVEL
+obrigatória) e `lerPorIds` (`.in()` em lotes de 150, que senão estoura a URL).
+⚠️ Erro SOBE: contagem que falha não vira zero. Leitura nova de lista no
+Marketing passa por eles.
 
 **O cartão é no formato do Trello** (08/10/2026, pedido do dono do processo):
 conteúdo à esquerda (botões de ação numa linha, resumo membros · etiquetas ·

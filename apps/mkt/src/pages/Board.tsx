@@ -687,7 +687,9 @@ export default function Board() {
     const t = newList.trim();
     if (!t) return;
     const pos = (lists[lists.length - 1]?.position ?? 0) + POS_GAP;
-    m.createList.mutate({ title: t, position: pos }, { onSuccess: () => { setNewList(""); setAddingList(false); } });
+    // A lista aparece na hora (otimista); se o banco recusar, ela some e o aviso diz.
+    m.createList.mutate({ title: t, position: pos });
+    setNewList(""); setAddingList(false);
   };
 
   const addCard = (listId: string, title: string) => {

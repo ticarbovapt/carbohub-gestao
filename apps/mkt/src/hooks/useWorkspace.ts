@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { lerTudo, lerPorIds } from "@/lib/mktLerTudo";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Board, List, Label, CardSummary } from "@/hooks/useBoards";
@@ -56,14 +57,13 @@ export function useWorkspaceData(workspaceId: string | null) {
         return { workspace: (wsRes.data as Workspace) ?? null, boards, lists: [], labels: [], cards: [] };
       }
 
-      const [listsRes, cardsRes, labelsRes] = await Promise.all([
-        db.from("mkt_lists").select("*").in("board_id", boardIds).eq("is_archived", false).order("position"),
-        db.from("mkt_cards").select("*").in("board_id", boardIds).eq("is_archived", false).order("position"),
-        db.from("mkt_labels").select("*").in("board_id", boardIds).order("created_at"),
+      // Sem teto (`lib/mktLerTudo.ts`): a área soma todos os quadros e passa de mil linhas.
+      const [listas, cartoes, etiquetas] = await Promise.all([
+        lerPorIds<List>(boardIds, (l) => db.from("mkt_lists").select("*").in("board_id", l).eq("is_archived", false).order("position").order("id")),
+        lerPorIds<Record<string, unknown>>(boardIds, (l) => db.from("mkt_cards").select("*").in("board_id", l).eq("is_archived", false).order("position").order("id")),
+        lerPorIds<Label>(boardIds, (l) => db.from("mkt_labels").select("*").in("board_id", l).order("created_at").order("id")),
       ]);
-      if (listsRes.error) throw listsRes.error;
-      if (cardsRes.error) throw cardsRes.error;
-      if (labelsRes.error) throw labelsRes.error;
+      const listsRes = { data: listas }, cardsRes = { data: cartoes }, labelsRes = { data: etiquetas };
 
       const lists = (listsRes.data ?? []) as List[];
       const labels = (labelsRes.data ?? []) as Label[];
@@ -82,24 +82,18 @@ export function useWorkspaceData(workspaceId: string | null) {
       let comments: { card_id: string }[] = [];
       let attachments: { card_id: string }[] = [];
       if (cardIds.length > 0) {
-        const [clRes, cmRes, ckRes, coRes, atRes] = await Promise.all([
-          db.from("mkt_card_labels").select("card_id, label_id").in("card_id", cardIds),
-          db.from("mkt_card_members").select("card_id, user_id").in("card_id", cardIds),
-          db.from("mkt_checklists").select("id, card_id").in("card_id", cardIds),
-          db.from("mkt_comments").select("card_id").in("card_id", cardIds),
-          db.from("mkt_card_attachments").select("card_id").in("card_id", cardIds),
+        [cardLabels, cardMembers, checklists, comments, attachments] = await Promise.all([
+          lerPorIds<{ card_id: string; label_id: string }>(cardIds, (l) => db.from("mkt_card_labels").select("card_id, label_id").in("card_id", l).order("card_id").order("label_id")),
+          lerPorIds<{ card_id: string; user_id: string }>(cardIds, (l) => db.from("mkt_card_members").select("card_id, user_id").in("card_id", l).order("card_id").order("user_id")),
+          lerPorIds<{ id: string; card_id: string }>(cardIds, (l) => db.from("mkt_checklists").select("id, card_id").in("card_id", l).order("id")),
+          lerPorIds<{ card_id: string }>(cardIds, (l) => db.from("mkt_comments").select("card_id").in("card_id", l).order("id")),
+          lerPorIds<{ card_id: string }>(cardIds, (l) => db.from("mkt_card_attachments").select("card_id").in("card_id", l).order("id")),
         ]);
-        cardLabels = clRes.data ?? [];
-        cardMembers = cmRes.data ?? [];
-        checklists = ckRes.data ?? [];
-        comments = coRes.data ?? [];
-        attachments = atRes.data ?? [];
       }
       const checklistIds = checklists.map((c) => c.id);
       let items: { checklist_id: string; is_done: boolean; due_date: string | null }[] = [];
       if (checklistIds.length > 0) {
-        const itRes = await db.from("mkt_checklist_items").select("checklist_id, is_done, due_date").in("checklist_id", checklistIds);
-        items = itRes.data ?? [];
+        items = await lerPorIds(checklistIds, (l) => db.from("mkt_checklist_items").select("checklist_id, is_done, due_date").in("checklist_id", l).order("id"));
       }
       const checklistToCard = new Map(checklists.map((c) => [c.id, c.card_id]));
       const doneByCard = new Map<string, number>();
@@ -129,6 +123,8 @@ export function useWorkspaceData(workspaceId: string | null) {
         description: (c.description as string) ?? null,
         start_date: (c.start_date as string) ?? null,
         due_date: (c.due_date as string) ?? null, is_complete: !!c.is_complete, cover: (c.cover as string) ?? null,
+        updated_at: (c.updated_at as string) ?? null,
+        lembrete_minutos: (c.lembrete_minutos as number) ?? null, recorrencia: (c.recorrencia as string) ?? null,
         location_lat: (c.location_lat as number) ?? null, location_lng: (c.location_lng as number) ?? null, location_name: (c.location_name as string) ?? null,
         labelIds: labelsByCard.get(c.id as string) ?? [], memberIds: membersByCard.get(c.id as string) ?? [],
         checklistDone: doneByCard.get(c.id as string) ?? 0, checklistTotal: totalByCard.get(c.id as string) ?? 0,
