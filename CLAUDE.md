@@ -2423,6 +2423,20 @@ rápida, grava só no "Salvar". Colunas `mkt_cards.lembrete_minutos` e
    `select("*")`: lista explícita com coluna nova quebraria abrir cartão no
    intervalo entre o deploy e a migração.
 
+**Comentários: reações, formatação e link do comentário** (10/10/2026, `20261069`):
+1. **Reações** (`components/board/Reacoes.tsx`, `mkt_comment_reacoes`): uma linha
+   por (comentário, pessoa, emoji) — jsonb no comentário perderia reação em
+   corrida. Cada um mexe só na sua; ler é do time interno. ⚠️ Reação NÃO avisa
+   no sininho (no Trello também não). Uma consulta por CARTÃO, em lotes de 150.
+2. **Barra de formatação** (`BarraFormatacao.tsx`) no novo comentário e na
+   edição: escreve MARKDOWN no texto (o que o `TextoRico` lê). ⚠️ Itálico é
+   `*x*`, não `_x_`. Os botões usam `onMouseDown` + `preventDefault` para não
+   tirar o foco e perder a seleção.
+3. **Link do comentário**: `/cartao/<id>?comentario=<cid>`. O `AbrirCartao`
+   repassa o parâmetro; o `useCartaoDaUrl` o guarda num valor de MÓDULO
+   (`pegarComentarioPendente`), e o cartão rola até ele e o destaca 4 s.
+   ⚠️ Módulo, não prop: seis páginas abrem o cartão.
+
 **O cartão é no formato do Trello** (08/10/2026, pedido do dono do processo):
 conteúdo à esquerda (botões de ação numa linha, resumo membros · etiquetas ·
 datas, descrição longa recolhida em "Mostrar mais", campos em grade) e

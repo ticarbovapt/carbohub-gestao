@@ -14,15 +14,24 @@ import { useSearchParams } from "react-router-dom";
 // diálogo deixaria de saber que aquela entrada é dele.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// O comentário pedido por `?comentario=` (link de comentário) espera aqui até o
+// cartão carregar e rolar até ele — módulo, e não prop, porque o cartão é
+// aberto por seis páginas diferentes e só uma delas passaria a prop adiante.
+let comentarioPendente: string | null = null;
+export function pegarComentarioPendente(): string | null {
+  const c = comentarioPendente; comentarioPendente = null; return c;
+}
+
 /** Na PÁGINA: ao montar, abre o cartão do endereço e tira o parâmetro da entrada da página. */
 export function useCartaoDaUrl(abrir: (cardId: string, anexoId: string | null) => void) {
   const [params, setParams] = useSearchParams();
   useEffect(() => {
     const card = params.get("card");
     if (!card) return;
+    comentarioPendente = params.get("comentario");
     abrir(card, params.get("anexo"));
     const p = new URLSearchParams(window.location.search);
-    p.delete("card"); p.delete("anexo");
+    p.delete("card"); p.delete("anexo"); p.delete("comentario");
     setParams(p, { replace: true });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 }

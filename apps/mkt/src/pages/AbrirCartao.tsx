@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Navigate, useParams } from "react-router-dom";
+import { Navigate, useParams, useSearchParams } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -9,13 +9,16 @@ import { supabase } from "@/integrations/supabase/client";
 // link montado com o quadro pararia de funcionar se o cartão mudasse de quadro.
 export default function AbrirCartao() {
   const { cardId } = useParams();
+  // `?comentario=` (link de um comentário) atravessa até o quadro.
+  const [params] = useSearchParams();
+  const comentario = params.get("comentario");
   const [destino, setDestino] = useState<string | null>(null);
   const [erro, setErro] = useState(false);
   useEffect(() => {
     if (!cardId) return;
     (supabase as any).from("mkt_cards").select("board_id").eq("id", cardId).maybeSingle()
       .then((r: { data: { board_id: string } | null }) => {
-        if (r.data?.board_id) setDestino(`/quadros/${r.data.board_id}?card=${cardId}`);
+        if (r.data?.board_id) setDestino(`/quadros/${r.data.board_id}?card=${cardId}${comentario ? `&comentario=${encodeURIComponent(comentario)}` : ""}`);
         else setErro(true);
       });
   }, [cardId]);
