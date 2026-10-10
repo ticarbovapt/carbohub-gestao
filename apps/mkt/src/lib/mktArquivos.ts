@@ -133,3 +133,37 @@ export async function gerarCapa(fonte: Blob | string, tipo: TipoArquivo): Promis
   }
   return null;
 }
+
+// ── NOVO ANEXO a partir de um arquivo ───────────────────────────────────────
+// Um caminho só para "subir arquivo vira anexo do cartão": a seção Anexos e o
+// "Carregar uma imagem de capa" passam por aqui. Duas cópias divergiriam no
+// que gravam (capa, mime, tamanho), e o anexo de um não abriria igual ao do outro.
+// ⚠️ Linha só DEPOIS do arquivo no bucket; falhou a linha, o arquivo sai.
+// ⚠️ A capa (jpeg leve) é melhor esforço: sem ela o anexo existe igual.
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export async function criarAnexoDeArquivo(cardId: string, f: File, onProgresso?: (frac: number) => void): Promise<{ id: string; poster: string | null }> {
+  const db = supabase as unknown as { from: (t: string) => any };
+  const eu = (await supabase.auth.getUser()).data.user?.id ?? null;
+  const caminho = caminhoDoArquivo(cardId, f.name);
+  await enviar(f, caminho, f.type || "application/octet-stream", onProgresso);
+  const ins = await db.from("mkt_card_attachments").insert({
+    card_id: cardId, kind: "arquivo", name: f.name, external_url: `storage://${BUCKET}/${caminho}`,
+    storage_path: caminho, mime_type: f.type || null, tamanho: f.size, created_by: eu,
+  }).select("id").single();
+  if (ins.error) { await supabase.storage.from(BUCKET).remove([caminho]); throw new Error(ins.error.message); }
+  const id = ins.data.id as string;
+  let poster: string | null = null;
+  const tipo = tipoDoArquivo(f.type, f.name);
+  if (tipo === "imagem" || tipo === "video") {
+    const capa = await gerarCapa(f, tipo);
+    if (capa) {
+      const cam = caminhoDaCapa(id);
+      try {
+        await enviar(capa, cam, "image/jpeg");
+        await db.from("mkt_card_attachments").update({ poster_path: cam }).eq("id", id);
+        poster = cam;
+      } catch (e) { console.warn("[mkt] capa não enviada:", e); }
+    }
+  }
+  return { id, poster };
+}

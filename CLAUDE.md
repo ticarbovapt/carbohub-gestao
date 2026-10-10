@@ -2445,6 +2445,25 @@ mutação do sininho invalida esse prefixo, então marcar lido lá apaga o selo
 aqui. Espelho mostra os sinais do ORIGINAL. O sininho já tinha "Não lidas" e
 "Marcar lidas" nos oito apps — não refaça.
 
+**Capa com IMAGEM** (10/10/2026, sem migração): `cover = 'anexo:<id>'` (imagem no
+topo) ou `'full:anexo:<id>'` (imagem ocupando o cartão, título sobre degradê).
+O painel "Capa" (`CapaPainel`) lista as imagens dos anexos e tem "Carregar uma
+imagem de capa", que cria um ANEXO de verdade (`criarAnexoDeArquivo`, o mesmo
+caminho da seção Anexos). `lib/mktCapaImagem.ts` assina as URLs em lote.
+1. ⚠️ **A capa aponta o ANEXO, nunca uma URL**: o bucket é privado (URL vale
+   1 h) e substituir o anexo troca a capa junto.
+2. ⚠️ **Usa a capa LEVE do anexo** (`poster_path`, 480 px), e o original só
+   quando ela falta e o anexo é imagem — 30 fotos de vários MB num quadro não.
+3. ⚠️ **Quatro lugares que sabem disso**: excluir o anexo tira a capa
+   (`Anexos.tsx`); copiar cartão REMAPEIA para o anexo copiado (ou tira, se o
+   anexo não foi); modelo NÃO leva capa de imagem; a sincronização com o
+   Trello NÃO apaga capa de imagem (o Trello só manda cor).
+   ⚠️ A recorrência (`trg_mkt_recorrencia`) copia a capa como está: a
+   ocorrência nova mostra a imagem do anexo da anterior até alguém trocar.
+4. ⚠️ **A capa vai até a borda por margem INLINE** (`SANGRIA` em `Board.tsx`),
+   não `-m-3`: a regra `.mkt-card > * + *` vencia o Tailwind, e o botão de
+   edição rápida, antes no DOM, dava 8 px de folga em cima da capa.
+
 **O cartão é no formato do Trello** (08/10/2026, pedido do dono do processo):
 conteúdo à esquerda (botões de ação numa linha, resumo membros · etiquetas ·
 datas, descrição longa recolhida em "Mostrar mais", campos em grade) e

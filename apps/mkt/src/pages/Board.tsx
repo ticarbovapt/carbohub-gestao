@@ -26,6 +26,7 @@ import { TrazerDoTrello } from "@/components/board/TrazerDoTrello";
 import { ItensArquivados } from "@/components/board/ItensArquivados";
 import { EdicaoRapida } from "@/components/board/EdicaoRapida";
 import { useMeusSinais, type MeusSinais } from "@/hooks/useMeusSinais";
+import { useImagensDeCapa } from "@/lib/mktCapaImagem";
 import { ListaDialogo, ORDENS, ordenarLista, arquivarTodosOsCartoes, useListasSeguidas, type OrdemLista } from "@/components/board/AcoesDaLista";
 import { FilterControls } from "@/components/board/FilterControls";
 import { ViewSwitcher } from "@/components/board/ViewSwitcher";
@@ -58,6 +59,13 @@ const CamposCtx = createContext<{
 // navegador — e tem de sobreviver a localStorage bloqueado.
 const CHAVE_ETIQUETAS = "mkt-etiquetas-abertas";
 const SEM_SINAIS: MeusSinais = { avisos: new Map(), seguidos: new Set() };
+const SEM_CAPAS = new Map<string, string>();
+// A capa vai até a borda do cartão. Margem INLINE, não `-m-3`: a regra
+// `.mkt-card > * + *` (espaço entre filhos) vencia a do Tailwind, e o botão de
+// edição rápida, por vir antes no DOM, fazia a capa ganhar 8 px de folga em cima.
+const SANGRIA = "-0.75rem";
+const SANGRIA_TOPO = "-0.75rem -0.75rem 0.25rem";
+const CapasCtx = createContext<Map<string, string>>(new Map());
 const SinaisCtx = createContext<MeusSinais>({ avisos: new Map(), seguidos: new Set() });
 function lerEtiquetasAbertas(): boolean {
   try { return localStorage.getItem(CHAVE_ETIQUETAS) === "1"; } catch { return false; }
@@ -127,6 +135,8 @@ function CardFace({ card, labels, onConcluir }: { card: CardSummary; labels: Lab
   const capa = lerCapa(card.cover);
   const { etiquetasAbertas, alternarEtiquetas } = useContext(CamposCtx);
   const sinais = useContext(SinaisCtx);
+  const capas = useContext(CapasCtx); // sempre chamado: hook não entra em condição
+  const imagem = capa?.anexoId ? capas.get(capa.anexoId) : undefined;
   const idConteudo = card.mirrorOf ?? card.id;
   const avisos = sinais.avisos.get(idConteudo) ?? 0;
   const sigo = sinais.seguidos.has(idConteudo);
@@ -134,8 +144,18 @@ function CardFace({ card, labels, onConcluir }: { card: CardSummary; labels: Lab
   // Capa CHEIA: o cartão é a cor, com o título por cima e nada mais — é como
   // o Trello mostra a LEGENDA, e ali a cor É a informação.
   if (capa?.cheia) {
+    // Imagem CHEIA: a foto é o cartão e o título vem por cima, sobre um
+    // degradê — sem ele, título claro em foto clara some.
+    if (capa.anexoId && imagem) {
+      return (
+        <div className="rounded-[inherit] min-h-[9rem] flex items-end overflow-hidden"
+          style={{ margin: SANGRIA, background: `url("${imagem}") center / cover no-repeat` }}>
+          <p className="w-full p-3 pt-8 font-semibold text-white bg-gradient-to-t from-black/75 to-transparent">{card.title}</p>
+        </div>
+      );
+    }
     return (
-      <div className="-m-3 rounded-[inherit] p-3 min-h-[3.5rem] flex items-end" style={{ background: tomDaCapa(capa.cor) }}>
+      <div className="rounded-[inherit] p-3 min-h-[3.5rem] flex items-end" style={{ margin: SANGRIA, background: tomDaCapa(capa.cor) }}>
         <p className="mkt-card-title font-semibold">{card.title}</p>
       </div>
     );
@@ -147,9 +167,15 @@ function CardFace({ card, labels, onConcluir }: { card: CardSummary; labels: Lab
           dava verde-néon em "lime" e faixa invisível em "sky". */}
       {/* Capa de ponta a ponta no topo, como no Trello — e no tom ESCURO da
           cor: o amarelo cheio da paleta gritava mais que o próprio título. */}
-      {capa && !capa.cheia && (
-        <div className="h-8 -mx-3 -mt-3 mb-1"
-          style={{ background: tomDaCapa(capa.cor), borderRadius: "inherit", borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }} />
+      {capa && !capa.cheia && capa.anexoId && imagem && (
+        // Imagem no topo: até 10rem, cortada no centro — a capa é chamada, a
+        // peça inteira está a um clique.
+        <img src={imagem} alt="" loading="lazy" className="block w-[calc(100%+1.5rem)] max-w-none max-h-40 object-cover"
+          style={{ margin: SANGRIA_TOPO, borderRadius: "inherit", borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }} />
+      )}
+      {capa && !capa.cheia && !(capa.anexoId && imagem) && (
+        <div className="h-8"
+          style={{ margin: SANGRIA_TOPO, background: tomDaCapa(capa.cor), borderRadius: "inherit", borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }} />
       )}
       {cardLabels.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
@@ -526,6 +552,7 @@ export default function Board() {
   const { user } = useAuth();
   const meuId = user?.id ?? null;
   const { data: sinais } = useMeusSinais(meuId);
+  const { data: imagensDeCapa } = useImagensDeCapa((data?.cards ?? []).map((c) => lerCapa(c.cover)?.anexoId));
   const { seguidas, alternar: alternarSeguir } = useListasSeguidas((data?.lists ?? []).map((l) => l.id), meuId);
   const [dialogoLista, setDialogoLista] = useState<{ modo: "copiar" | "mover" | "mover_cartoes"; lista: { id: string; title: string } } | null>(null);
   const acaoDaLista = async (l: { id: string; title: string }, a: AcaoLista) => {
@@ -677,6 +704,7 @@ export default function Board() {
   return (
     <CamposCtx.Provider value={camposCtx}>
     <SinaisCtx.Provider value={sinais ?? SEM_SINAIS}>
+    <CapasCtx.Provider value={imagensDeCapa ?? SEM_CAPAS}>
     <AcoesCtx.Provider value={acoesCtx}>
     <div className="fixed inset-0 top-14 mkt-canvas bg-dot-grid flex flex-col">
       {/* Cabeçalho do quadro */}
@@ -800,6 +828,7 @@ export default function Board() {
       {fieldsOpen && <BoardFieldsDialog boardId={boardId} onClose={() => setFieldsOpen(false)} />}
     </div>
     </AcoesCtx.Provider>
+    </CapasCtx.Provider>
     </SinaisCtx.Provider>
     </CamposCtx.Provider>
   );

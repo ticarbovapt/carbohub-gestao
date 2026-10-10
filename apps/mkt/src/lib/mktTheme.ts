@@ -31,17 +31,27 @@ export const LABEL_COLOR_KEYS = Object.keys(LABEL_COLORS);
 // Capa do cartão: "yellow" = faixa no topo; "full:yellow" = cartão INTEIRO
 // colorido com o título por cima (a capa "cheia" do Trello, usada na lista
 // LEGENDAS). Fica no mesmo texto da coluna `cover` para não exigir migração.
-export function lerCapa(cover: string | null | undefined): { cor: string; cheia: boolean } | null {
+// Capa de IMAGEM: "anexo:<id>" (imagem no topo) e "full:anexo:<id>" (imagem
+// ocupando o cartão). Aponta o ANEXO, nunca o arquivo: substituir o anexo
+// troca a capa junto, e o link do anexo continua o mesmo.
+// ⚠️ `cor` vazia na capa de imagem: quem pinta usa a imagem; sem ela (anexo
+// apagado, URL ainda não assinada), cai no fundo neutro, nunca em cor inventada.
+export function lerCapa(cover: string | null | undefined): { cor: string; cheia: boolean; anexoId: string | null } | null {
   if (!cover) return null;
   const cheia = cover.startsWith("full:");
   const chave = cheia ? cover.slice(5) : cover;
-  return { cor: LABEL_COLORS[chave] ?? chave, cheia };
+  if (chave.startsWith("anexo:")) return { cor: "", cheia, anexoId: chave.slice(6) || null };
+  return { cor: LABEL_COLORS[chave] ?? chave, cheia, anexoId: null };
 }
+export const capaDeAnexo = (anexoId: string, cheia: boolean) => `${cheia ? "full:" : ""}anexo:${anexoId}`;
+/** O anexo usado como capa, para remapear (copiar cartão) ou limpar (excluir anexo). */
+export const anexoDaCapa = (cover: string | null | undefined) => lerCapa(cover)?.anexoId ?? null;
 
 // A paleta é a cor CHEIA (boa para etiqueta-barrinha). Em superfície grande
 // — capa, lista inteira — ela grita; o Trello usa o tom escuro no tema escuro
 // e o claro no claro. Misturar com o fundo do cartão dá os dois de uma vez.
 export function tomDaCapa(cor: string): string {
+  if (!cor) return "hsl(var(--muted))";
   return `color-mix(in srgb, ${cor} 58%, hsl(var(--card)))`;
 }
 export function fundoDaLista(cor: string): string {

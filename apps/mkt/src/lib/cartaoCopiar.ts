@@ -16,6 +16,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { BUCKET, caminhoDoArquivo, caminhoDaCapa } from "@/lib/mktArquivos";
+import { anexoDaCapa, capaDeAnexo, lerCapa } from "@/lib/mktTheme";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const db = supabase as unknown as { from: (t: string) => any; auth: { getUser: () => Promise<{ data: { user: { id: string } | null } }> } };
@@ -39,7 +40,9 @@ export async function copiarCartao(cardId: string, listId: string, posicao: numb
     ok(await db.from("mkt_cards").insert({
       id: novoId, board_id: lista.board_id, list_id: listId, position: posicao,
       title: o.titulo.trim() || card.title, description: card.description,
-      start_date: card.start_date, due_date: card.due_date, is_complete: false, cover: card.cover,
+      // Capa de IMAGEM só vai se o anexo for junto (remapeada abaixo para o
+      // anexo COPIADO); senão apontaria para a foto de outro cartão.
+      start_date: card.start_date, due_date: card.due_date, is_complete: false, cover: anexoDaCapa(card.cover) ? null : card.cover,
       location_lat: card.location_lat, location_lng: card.location_lng, location_name: card.location_name,
       created_by: eu,
     }));
@@ -110,6 +113,9 @@ export async function copiarCartao(cardId: string, listId: string, posicao: numb
           if ("web_path" in a && a.web_path) novo.web_path = await copia(a.web_path, `web/${novoAnexo}/${crypto.randomUUID()}.mp4`);
         }
         ok(await db.from("mkt_card_attachments").insert(novo));
+        if (anexoDaCapa(card.cover) === a.id) {
+          ok(await db.from("mkt_cards").update({ cover: capaDeAnexo(novoAnexo, !!lerCapa(card.cover)?.cheia) }).eq("id", novoId));
+        }
       }
     }
 

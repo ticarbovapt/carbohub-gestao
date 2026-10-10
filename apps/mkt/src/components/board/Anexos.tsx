@@ -14,8 +14,9 @@ import { confirmar } from "@carbo/shell";
 import { supabase } from "@/integrations/supabase/client";
 import type { Attachment } from "@/hooks/useCardDetail";
 import { Visualizador } from "@/components/board/Visualizador";
+import { capaDeAnexo } from "@/lib/mktTheme";
 import {
-  BUCKET, tipoDoArquivo, ROTULO_TIPO, tamanhoLegivel, caminhoDoArquivo, caminhoDaCapa, enviar, gerarCapa, urlAssinada,
+  BUCKET, tipoDoArquivo, ROTULO_TIPO, tamanhoLegivel, caminhoDoArquivo, caminhoDaCapa, enviar, gerarCapa, urlAssinada, criarAnexoDeArquivo,
 } from "@/lib/mktArquivos";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -104,20 +105,12 @@ export function Anexos({ cardId, boardId, anexos, anexoInicial, onAdicionarLink,
     for (const f of Array.from(lista)) {
       const eid = crypto.randomUUID();
       setEnvios((x) => [...x, { id: eid, nome: f.name, frac: 0 }]);
-      const caminho = caminhoDoArquivo(cardId, f.name);
-      const tipoMime = f.type || "application/octet-stream";
       try {
-        await enviar(f, caminho, tipoMime, (frac) => setEnvios((x) => x.map((e) => e.id === eid ? { ...e, frac } : e)));
-        const ins = await db.from("mkt_card_attachments").insert({
-          card_id: cardId, kind: "arquivo", name: f.name, external_url: `storage://${BUCKET}/${caminho}`,
-          storage_path: caminho, mime_type: f.type || null, tamanho: f.size, created_by: await meuId(),
-        }).select("id").single();
-        if (ins.error) { await supabase.storage.from(BUCKET).remove([caminho]); throw new Error(ins.error.message); }
+        // O mesmo caminho do "Carregar uma imagem de capa" (`criarAnexoDeArquivo`).
+        await criarAnexoDeArquivo(cardId, f, (frac) => setEnvios((x) => x.map((e) => e.id === eid ? { ...e, frac } : e)));
         setEnvios((x) => x.filter((e) => e.id !== eid));
         atualizar();
         void registrar("anexo.adicionar", { nome: f.name });
-        const capa = await enviarCapa(ins.data.id, f, tipoDoArquivo(f.type, f.name));
-        if (capa) { await db.from("mkt_card_attachments").update({ poster_path: capa }).eq("id", ins.data.id); atualizar(); }
       } catch (e) {
         setEnvios((x) => x.map((en) => en.id === eid ? { ...en, erro: (e as Error).message } : en));
       }
@@ -162,6 +155,9 @@ export function Anexos({ cardId, boardId, anexos, anexoInicial, onAdicionarLink,
     if (rm.error) { toast.error(`Não excluiu: ${rm.error.message}`); return; }
     const del = await db.from("mkt_card_attachments").delete().eq("id", a.id);
     if (del.error) { toast.error(`Não excluiu: ${del.error.message}`); return; }
+    // Era a capa do cartão? A capa sai junto — senão o cartão ficaria com
+    // uma capa apontando para um anexo que não existe mais.
+    await db.from("mkt_cards").update({ cover: null }).eq("id", cardId).in("cover", [capaDeAnexo(a.id, false), capaDeAnexo(a.id, true)]);
     void registrar("anexo.excluir", { nome: a.name });
     atualizar();
   };

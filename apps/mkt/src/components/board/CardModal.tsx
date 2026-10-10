@@ -17,6 +17,7 @@ import { useCustomFields } from "@/hooks/useCustomFields";
 import { CustomFieldInput } from "@/components/board/CustomFieldInput";
 import { LABEL_COLORS, LABEL_COLOR_KEYS, tintedLabelStyle, lerCapa, tomDaCapa } from "@/lib/mktTheme";
 import { CapaPainel } from "@/components/board/CapaPainel";
+import { useImagensDeCapa } from "@/lib/mktCapaImagem";
 import { DatasPainel, resumoRepetirLembrete } from "@/components/board/DatasPainel";
 import { ListChecks, Play, Music, Image as ImageIcon, ChevronUp, ChevronDown, LayoutTemplate, RotateCcw, ArrowRight, Copy, Eye, Share2, UserPlus, UserMinus, CreditCard, Repeat, Bell } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -104,6 +105,8 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [], anex
   const anexosRef = useRef<HTMLDivElement>(null);
   const capaRef = useRef<HTMLDivElement>(null);
   const capaDoCartao = lerCapa(data?.card.cover);
+  const { data: imagensCapa } = useImagensDeCapa([capaDoCartao?.anexoId]);
+  const imagemDaCapa = capaDoCartao?.anexoId ? imagensCapa?.get(capaDoCartao.anexoId) : undefined;
   const { reacoes, alternar: alternarReacao } = useReacoes(cardId, (data?.comments ?? []).map((c) => c.id));
   const nomeDaPessoa = (id: string) => {
     const doTime = team.find((t) => t.id === id)?.full_name;
@@ -230,7 +233,12 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [], anex
           <div className="flex flex-col md:h-[90vh]">
           {/* Capa: como no Trello, a cor do cartão no topo do cartão aberto. */}
           {capaDoCartao && (
-            <div className="relative h-20 md:h-24 shrink-0" style={{ background: tomDaCapa(capaDoCartao.cor) }}>
+            <div className="relative h-20 md:h-24 shrink-0"
+              style={capaDoCartao.anexoId && imagemDaCapa
+                // Imagem: inteira (contain) sobre fundo escuro, como no Trello — cortar
+                // a peça do designer no topo do cartão esconderia justamente ela.
+                ? { background: `#111 url("${imagemDaCapa}") center / contain no-repeat`, height: "10rem" }
+                : { background: tomDaCapa(capaDoCartao.cor) }}>
               <button data-capa-botao onClick={() => setShowCapa((v) => !v)} title="Capa"
                 className="absolute right-12 top-3 inline-flex items-center gap-1.5 rounded-md bg-background/70 hover:bg-background px-2.5 py-1.5 text-xs font-medium text-foreground backdrop-blur">
                 <CreditCard className="h-3.5 w-3.5" /> Capa
@@ -243,7 +251,7 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [], anex
                 <p className="text-sm font-semibold">Capa</p>
                 <button onClick={() => setShowCapa(false)} className="p-1 text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
               </div>
-              <CapaPainel cover={data.card.cover} onChange={(cover) => mut.updateCard.mutate({ cover })} />
+              <CapaPainel cardId={cardId} cover={data.card.cover} onChange={(cover) => mut.updateCard.mutate({ cover })} />
             </div>
           )}
           <div className="flex flex-col md:grid md:grid-cols-[minmax(0,1fr)_420px] md:flex-1 md:min-h-0">
