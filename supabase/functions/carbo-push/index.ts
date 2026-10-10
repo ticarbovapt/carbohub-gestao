@@ -40,6 +40,7 @@ interface Sub { id: string; endpoint: string; p256dh: string; auth: string; orig
 // Para onde o toque leva. Tipo novo sem regra cai no Hub — nunca num link morto.
 function destino(i: Item): string {
   if (i.reference_type === "mkt_card" && i.reference_id) return `https://mkt.carbohub.com.br/cartao/${i.reference_id}`;
+  if (i.reference_type === "mkt_board" && i.reference_id) return `https://mkt.carbohub.com.br/quadros/${i.reference_id}`;
   const t = i.type ?? "";
   if (t === "ecommerce_sale" || t === "ecommerce_disconnected") return "https://admin.carbohub.com.br/ecommerce/vendas-online";
   if (t.startsWith("bug_")) return "https://ti.carbohub.com.br/bugs";
