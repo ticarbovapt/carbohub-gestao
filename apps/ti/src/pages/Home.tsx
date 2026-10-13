@@ -54,7 +54,7 @@ function Bloco({ title, icon: Icon, hint, children, action }: {
   title: string; icon: typeof Clock; hint?: string; children: React.ReactNode; action?: React.ReactNode;
 }) {
   return (
-    <CarboCard>
+    <CarboCard className="p-0 sm:p-6">
       <CarboCardContent className="p-4">
         <div className="flex items-center justify-between gap-2 mb-2">
           <div className="min-w-0">
@@ -176,7 +176,7 @@ export default function Home() {
         />
 
         {/* KPIs — o essencial de "o que falta" */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <CarboKPI title="Na fila (não resolvidas)" value={kpis.fila} icon={Clock} iconColor="warning" onClick={irParaDemandas} />
           <CarboKPI title="Em andamento" value={kpis.andamento} icon={Loader2} iconColor="blue" onClick={irParaDemandas} />
           <CarboKPI title="Sem responsável" value={kpis.semDono} icon={UserX} iconColor={kpis.semDono > 0 ? "destructive" : "muted"} onClick={irParaDemandas} />
@@ -184,9 +184,9 @@ export default function Home() {
         </div>
 
         {/* Fluxo da semana — a fila está crescendo ou diminuindo? */}
-        <CarboCard>
+        <CarboCard className="p-0 sm:p-6">
           <CarboCardContent className="p-4 flex flex-wrap items-center gap-x-8 gap-y-3 text-sm">
-            <span className="flex items-center gap-2">
+            <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <Inbox className="h-4 w-4 text-muted-foreground" />
               Últimos 7 dias: <strong className="text-foreground">{semana.entraram}</strong> entraram ·{" "}
               <strong className="text-foreground">{semana.sairam}</strong> saíram

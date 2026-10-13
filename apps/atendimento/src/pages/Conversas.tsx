@@ -1329,8 +1329,13 @@ function GerenciadorDeRespostas({ lista, aoUsar }: {
   );
 }
 
-function Conversa({ c, onVerPedido }: {
+function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false }: {
   c: Conversa;
+  /** Só no celular (abaixo do `lg`): lista e conversa não cabem lado a lado,
+   *  então a conversa ocupa a tela e este botão volta para a lista. */
+  aoVoltar?: () => void;
+  /** No celular a conversa só aparece quando há uma ABERTA na URL (`?de=`). */
+  ocultarNoCelular?: boolean;
   /** Abre o card do pedido. ⚠️ Vem de FORA: esta tela e o painel do contato
    *  mostram o MESMO pedido, e dois estados locais abririam duas janelas. */
   onVerPedido: (blingId: number) => void;
@@ -1536,8 +1541,8 @@ function Conversa({ c, onVerPedido }: {
   };
 
   return (
-    <CarboCard className="flex h-full min-h-0 flex-col">
-      <CarboCardContent className="flex min-h-0 flex-1 flex-col gap-3 p-4">
+    <CarboCard className={`h-full min-h-0 min-w-0 flex-col p-0 sm:p-6 ${ocultarNoCelular ? "hidden lg:flex" : "flex"}`}>
+      <CarboCardContent className="flex min-h-0 flex-1 flex-col gap-2 p-3 sm:gap-3 sm:p-4">
         {/* ── Cabeçalho da conversa ─────────────────────────────────────────
             ⚠️ O que é do CONTATO mora no painel da direita (avatar, nome, nome
             do WhatsApp, telefone, card do pedido). Aqui ele aparece com
@@ -1554,7 +1559,18 @@ function Conversa({ c, onVerPedido }: {
           {/* No `xl` sobra aqui só o aviso de vínculo provável — e vazio é o
               estado CERTO: significa "não há dúvida sobre de que pedido é esta
               conversa". */}
-          <div className="flex min-w-0 items-start gap-2.5">
+          <div className="flex min-w-0 flex-1 items-start gap-2.5 sm:flex-none">
+
+            {/* Voltar para a lista — só no celular, onde a conversa ocupa a
+                tela inteira e a lista não está ao lado. */}
+            {aoVoltar && (
+              <button type="button" onClick={aoVoltar} aria-label="Voltar para a lista"
+                      className="-ml-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-md
+                                 text-muted-foreground transition-colors hover:bg-muted/60
+                                 hover:text-foreground lg:hidden">
+                <ArrowLeft className="h-5 w-5" />
+              </button>
+            )}
 
             {/* Identidade do contato: só abaixo do `xl`. O painel mostra o mesmo
                 avatar em 64 px, o mesmo nome e o telefone copiável. */}
@@ -1642,7 +1658,8 @@ function Conversa({ c, onVerPedido }: {
           {/* ── Lado direito: as AÇÕES da conversa e o relógio ──────────────
               Procurar, arquivos e resolver na MESMA linha: eram duas, e o
               cabeçalho ficou uma linha mais baixo sem perder nada. */}
-          <div className="flex shrink-0 flex-col items-end gap-1.5">
+          <div className="flex w-full shrink-0 flex-row-reverse flex-wrap items-center justify-between gap-1.5
+                          sm:w-auto sm:flex-col sm:items-end">
             <div className="flex items-center gap-1">
               {/* Procurar e ver os arquivos ficam JUNTOS: as duas são a mesma
                   pergunta ("onde está aquilo?") por caminhos diferentes. */}
@@ -1945,7 +1962,7 @@ function Conversa({ c, onVerPedido }: {
             <Textarea
               value={recado} onChange={(e) => setRecado(e.target.value)}
               placeholder="Recado para o time…" rows={3} maxLength={2000}
-              className="resize-y border-0 bg-transparent px-1 py-0.5 text-xs shadow-none
+              className="resize-y border-0 bg-transparent px-1 py-0.5 text-base shadow-none sm:text-xs
                          focus-visible:ring-0 focus-visible:ring-offset-0"
               onKeyDown={(e) => {
                 if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); anotarAgora(); }
@@ -1982,7 +1999,7 @@ function Conversa({ c, onVerPedido }: {
             <Textarea
               value={texto} onChange={(e) => setTexto(e.target.value)}
               placeholder="Responder…" rows={3} maxLength={4096}
-              className="resize-y border-0 bg-transparent px-1 py-0.5 text-xs shadow-none
+              className="resize-y border-0 bg-transparent px-1 py-0.5 text-base shadow-none sm:text-xs
                          focus-visible:ring-0 focus-visible:ring-offset-0"
               onKeyDown={(e) => {
                 /* ⚠️ A barra vem ANTES do envio. Com o painel aberto o campo tem
@@ -2009,7 +2026,7 @@ function Conversa({ c, onVerPedido }: {
                 if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); enviar(); }
               }}
             />
-            <div className="mt-1.5 flex items-center justify-between gap-2 border-t pt-1.5">
+            <div className="mt-1.5 flex items-center justify-end gap-2 border-t pt-1.5 sm:justify-between">
               {/* ⚠️ Ficaram os DOIS atalhos que ninguém descobre sozinho: a barra
                   `/` e o colar de print. O `⌘/Ctrl + ↵` saiu daqui e virou o
                   `title` do botão Enviar — ele é convenção de qualquer caixa de
@@ -2020,7 +2037,7 @@ function Conversa({ c, onVerPedido }: {
                   avisado é recurso que metade do time nunca usa — e aqui o custo
                   disso é a frase ser redigitada diferente a cada vez, que é o
                   problema inteiro. O `/` vem na frente por ser o de maior uso. */}
-              <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-muted-foreground/70">
+              <div className="hidden min-w-0 items-center gap-1.5 text-[10px] text-muted-foreground/70 sm:flex">
                 <kbd className="rounded border bg-background px-1 py-px font-mono text-[10px]">/</kbd>
                 <span className="shrink-0">resposta pronta</span>
                 <span className="mx-0.5 shrink-0 text-muted-foreground/40">·</span>
@@ -2029,7 +2046,7 @@ function Conversa({ c, onVerPedido }: {
                 <kbd className="shrink-0 rounded border bg-background px-1 py-px font-sans text-[10px]">V</kbd>
                 <span className="truncate">cola print</span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center justify-end gap-1.5 sm:flex-nowrap sm:gap-2">
                 {perto && (
                   <span className={`text-[10px] tabular-nums ${
                     texto.length >= 4096 ? "text-red-500" : "text-amber-500"}`}>
@@ -2110,7 +2127,7 @@ function Conversa({ c, onVerPedido }: {
                           embora achando que está resolvido. */
                        min={paraInput(new Date(Date.now() + 60_000))}
                        max={c.janela_ate ? paraInput(new Date(new Date(c.janela_ate).getTime() - 60_000)) : undefined}
-                       className="h-8 w-[13rem] text-xs" />
+                       className="h-8 w-full text-xs sm:w-[13rem]" />
                 <Button size="sm" className="h-8 gap-1.5"
                         disabled={!quando || agendar.isPending}
                         onClick={() => {
@@ -3300,6 +3317,13 @@ export default function Conversas() {
      voltaria a misturar as caixas. */
   const numeroId = numeroDaUrl
     ?? (numeros?.[0]?.phone_number_id ?? null);
+  /* Só o celular usa: lá a conversa ocupa a tela, e voltar é tirar o `?de=`.
+     No `lg` a lista está sempre ao lado e o botão nem aparece. */
+  const fecharConversa = () => {
+    const p = new URLSearchParams(params);
+    p.delete("de");
+    setParams(p, { replace: true });
+  };
   const trocarNumero = (id: string) => {
     const p = new URLSearchParams(params);
     p.set("numero", id);
@@ -3318,6 +3342,10 @@ export default function Conversas() {
     () => lista.find((c) => c.wa_id === aberta) ?? lista[0] ?? null,
     [lista, aberta],
   );
+  /* No celular a tela mostra a CONVERSA só quando há uma aberta na URL que
+     existe nesta caixa; senão mostra a LISTA. Não muda o `atual` (o desktop
+     continua abrindo a primeira). */
+  const naConversa = !!aberta && atual?.wa_id === aberta;
 
   /* ⚠️ Busca e filtro são LOCAIS e só escondem linhas. A ordenação vem pronta
      do hook (quem espera resposta primeiro) e não é tocada aqui: reordenar na
@@ -3438,8 +3466,12 @@ export default function Conversas() {
   return (
     /* ⚠️ `h-full` + coluna flex, para o quadro das três colunas poder pedir "o
        que sobrou" em vez de uma conta. Ver o comentário do grid, abaixo. */
-    <div className="flex h-full min-h-0 flex-col gap-4 p-4 md:p-6">
+    <div className="flex h-full min-h-0 flex-col gap-3 p-3 sm:gap-4 sm:p-4 md:p-6">
       <CarboPageHeader
+        /* No celular, com uma conversa aberta, o cabeçalho sai: a conversa
+           ocupa a tela e o seletor de número não vale ali (trocar de número
+           fecha a conversa). Volta ao clicar em "voltar para a lista". */
+        className={naConversa ? "hidden lg:flex" : undefined}
         icon={MessagesSquare}
         title="Conversas"
         /* ⚠️ Uma linha, e ela guarda a cláusula que MANDA: estas mensagens não
@@ -3472,7 +3504,7 @@ export default function Conversas() {
                             onClick={() => trocarNumero(n.phone_number_id)}
                             title={`${n.rotulo} · ${n.numero_exibicao ?? ""}`}
                             aria-pressed={ativo}
-                            className={`flex items-center gap-1.5 rounded-md px-2.5 py-1
+                            className={`flex min-h-8 items-center gap-1.5 rounded-md px-2.5 py-1 sm:min-h-0
                                         text-[11px] font-medium transition-colors ${
                               ativo ? "bg-background text-foreground shadow-sm"
                                     : "text-muted-foreground hover:text-foreground"}`}>
@@ -3598,8 +3630,12 @@ export default function Conversas() {
            ⚠️ E `100vh` estava errado no celular por um segundo motivo: no
            Safari e no Chrome de telefone ele INCLUI a barra de endereço, então
            o pé da lista ficava atrás dela, inalcançável. */
-        <div className="grid min-h-0 gap-3 lg:flex-1 lg:grid-cols-[20rem_1fr] xl:grid-cols-[20rem_1fr_19rem]">
-          <CarboCard className="min-h-0 overflow-hidden">
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[20rem_1fr] xl:grid-cols-[20rem_1fr_19rem]">
+          {/* ⚠️ No CELULAR (abaixo do `lg`) é uma coisa OU a outra, como em
+              qualquer app de mensagens: a lista, ou a conversa aberta em
+              `?de=`. Lado a lado não cabe, e empilhado a conversa ficava abaixo
+              de uma lista que já ocupava a tela. Do `lg` para cima nada muda. */}
+          <CarboCard className={`min-h-0 min-w-0 overflow-hidden p-0 sm:p-6 ${naConversa ? "hidden lg:block" : ""}`}>
             <CarboCardContent className="flex h-full min-h-0 flex-col gap-0 p-0">
               {/* Busca e filtro ficam FORA da área que rola: com 40 conversas,
                   um campo que sobe junto com a lista é um campo que ninguém
@@ -3610,7 +3646,7 @@ export default function Conversas() {
                                      -translate-y-1/2 text-muted-foreground" />
                   <Input value={busca} onChange={(e) => setBusca(e.target.value)}
                          placeholder="Buscar por nome ou número…"
-                         className="h-9 border-border bg-muted/40 pl-8 pr-8 text-xs
+                         className="h-10 border-border bg-muted/40 pl-8 pr-8 text-base sm:h-9 sm:text-xs
                                     placeholder:text-muted-foreground/70" />
                   {busca && (
                     <button type="button" onClick={() => setBusca("")} aria-label="Limpar busca"
@@ -3780,7 +3816,7 @@ export default function Conversas() {
                 )}
               </div>
 
-              <div className="max-h-[20rem] min-h-0 flex-1 overflow-y-auto p-0 lg:max-h-none">
+              <div className="min-h-0 flex-1 overflow-y-auto p-0">
                 {/* ⚠️ "Nada casou com a busca" é diferente de "não há conversa".
                     O segundo vive fora daqui; este só precisa mostrar a saída —
                     senão a lista some e parece que os dados sumiram. */}
@@ -3852,7 +3888,8 @@ export default function Conversas() {
             </CarboCardContent>
           </CarboCard>
 
-          {atual && <Conversa key={atual.wa_id} c={atual} onVerPedido={setVerPedido} />}
+          {atual && <Conversa key={atual.wa_id} c={atual} onVerPedido={setVerPedido}
+                              aoVoltar={fecharConversa} ocultarNoCelular={!naConversa} />}
           {atual && <PainelContato key={`p-${atual.wa_id}`} c={atual} meuId={meuId}
                                    onVerPedido={setVerPedido} />}
         </div>

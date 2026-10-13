@@ -178,7 +178,9 @@ export default function Demandas() {
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar demanda…" className="pl-9 h-9" />
         </div>
 
-        <div className="flex gap-2 flex-wrap lg:ml-auto">
+        {/* No celular os filtros são UMA linha que rola de lado: quebrando, eles
+            ocupavam três linhas e empurravam o quadro para baixo. */}
+        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 [&>*]:shrink-0 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 lg:ml-auto">
           <Button variant={soMinhas ? "default" : "outline"} size="sm" className="h-9 gap-1.5"
             disabled={!valorMinhas}
             onClick={() => setFPessoa(soMinhas ? PESSOA_TODAS : valorMinhas)}>
@@ -277,7 +279,7 @@ export default function Demandas() {
       )}
 
       {/* Quadro */}
-      <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden p-4">
+      <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden p-4 snap-x snap-mandatory scroll-pl-4 sm:snap-none">
         {isLoading ? (
           <div className="flex gap-4">
             {Array.from({ length: 6 }).map((_, i) => (

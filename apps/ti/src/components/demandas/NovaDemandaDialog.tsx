@@ -61,7 +61,7 @@ export function NovaDemandaDialog({ open, onClose }: { open: boolean; onClose: (
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) { reset(); onClose(); } }}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-lg max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Nova demanda</DialogTitle>
           <DialogDescription>Para registrar o que chegou por fora do botão de reporte.</DialogDescription>
@@ -84,7 +84,7 @@ export function NovaDemandaDialog({ open, onClose }: { open: boolean; onClose: (
 
           {/* Sistema some nos tipos não-software: escolher "sales" pra buscar um
               cabo é ruído que ninguém consegue interpretar depois. */}
-          <div className={cfgKind.software ? "grid grid-cols-2 gap-3" : ""}>
+          <div className={cfgKind.software ? "grid grid-cols-1 gap-3 sm:grid-cols-2" : ""}>
             <div className="space-y-1.5">
               <Label>Tipo</Label>
               <Select value={kind} onValueChange={(v) => setKind(v as BugKind)}>
@@ -128,7 +128,7 @@ export function NovaDemandaDialog({ open, onClose }: { open: boolean; onClose: (
               bug, e é isso que decide quem o TI atende primeiro. */}
           <div className="rounded-lg border p-3 space-y-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Impacto</p>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label className="text-xs">Impede de trabalhar?</Label>
                 <Select value={bloqueio} onValueChange={setBloqueio}>

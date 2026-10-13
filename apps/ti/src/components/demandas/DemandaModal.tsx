@@ -158,9 +158,11 @@ export function DemandaModal({ demanda, onClose }: { demanda: BugReport; onClose
         </div>
 
         {/* 4. Duas colunas */}
-        <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
+        {/* No celular a área rola INTEIRA (uma rolagem só); dividida em duas
+            caixas de meia altura cada uma, nenhuma cabia. Do lg para cima, igual. */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
           {/* Esquerda — dados + execução */}
-          <div className="w-full space-y-4 overflow-y-auto border-b p-5 lg:w-2/5 lg:border-b-0 lg:border-r">
+          <div className="w-full space-y-4 border-b p-5 lg:w-2/5 lg:overflow-y-auto lg:border-b-0 lg:border-r">
             {!souEu && !terminal && (
               <Button className="w-full gap-1.5" onClick={() => assumir.mutate(demanda.id)} disabled={assumir.isPending}>
                 <Hand className="h-4 w-4" /> Assumir esta demanda
@@ -239,7 +241,7 @@ export function DemandaModal({ demanda, onClose }: { demanda: BugReport; onClose
           </div>
 
           {/* Direita — atividades */}
-          <div className="flex w-full flex-1 flex-col overflow-hidden lg:w-3/5">
+          <div className="flex w-full flex-1 flex-col lg:w-3/5 lg:overflow-hidden">
             <div className="border-b p-5 pb-4">
               <div className="mb-3 flex gap-4 border-b text-sm">
                 {ACT_TYPES.map((t) => (
@@ -268,7 +270,7 @@ export function DemandaModal({ demanda, onClose }: { demanda: BugReport; onClose
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-5">
+            <div className="flex-1 p-5 lg:overflow-y-auto">
               <Timeline
                 activities={activities}
                 onTogglePin={(a) => togglePin.mutate({ id: a.id, pinned: !a.pinned, demanda_id: demanda.id })}
@@ -286,9 +288,9 @@ export function DemandaModal({ demanda, onClose }: { demanda: BugReport; onClose
         {/* Rodapé — Avançar / Recusar */}
         {!terminal ? (
           <DialogFooter className="border-t p-3 sm:justify-start">
-            <div className="flex w-full gap-2 sm:w-auto">
+            <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:flex-nowrap">
               {proxima && (
-                <Button className="flex-1 sm:flex-none" onClick={() => irParaEtapa(proxima)} disabled={update.isPending}>
+                <Button className="basis-full sm:basis-auto sm:flex-none" onClick={() => irParaEtapa(proxima)} disabled={update.isPending}>
                   Avançar para {proxima.label} <ChevronRight className="ml-1 h-4 w-4" />
                 </Button>
               )}
