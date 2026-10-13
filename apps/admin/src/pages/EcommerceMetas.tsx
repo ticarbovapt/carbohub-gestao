@@ -107,8 +107,8 @@ function PlatformCard({
 }) {
   const colors = COLOR_MAP[stats.progressColor];
   return (
-    <CarboCard className={`border ${stats.progressColor === "red" ? "border-red-500/30" : stats.progressColor === "yellow" ? "border-amber-500/30" : ""}`}>
-      <CarboCardContent className="p-4 space-y-3">
+    <CarboCard className={`p-3 sm:p-6 border ${stats.progressColor === "red" ? "border-red-500/30" : stats.progressColor === "yellow" ? "border-amber-500/30" : ""}`}>
+      <CarboCardContent className="p-1 sm:p-4 space-y-3">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -450,7 +450,7 @@ function ChartsSection({ month, totalTarget, platformStats }: {
   ];
 
   return (
-    <CarboCard>
+    <CarboCard className="p-4 sm:p-6">
       <CarboCardHeader className="pb-2">
         <CarboCardTitle className="text-base">
           Faturamento — {format(month, "MMMM/yy", { locale: ptBR })}
@@ -583,14 +583,14 @@ export default function EcommerceMetas() {
   const prevTotal   = prevActuals?.total ?? 0;
 
   return (
-    <div className="p-4 md:p-6">
+    <div className="p-3 sm:p-4 md:p-6">
       <div className="space-y-6 max-w-7xl mx-auto">
 
         {/* Page header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">🎯 Meta Ecommerce</h1>
-            <div className="flex items-center gap-3 mt-0.5">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5">
               <p className="text-sm text-muted-foreground">
                 Faturamento real vs metas mensais por plataforma
               </p>
@@ -603,15 +603,15 @@ export default function EcommerceMetas() {
           </div>
 
           {/* Month selector */}
-          <div className="flex items-center gap-2 bg-muted/40 rounded-lg px-3 py-1.5">
-            <Button variant="ghost" size="icon" className="h-7 w-7"
+          <div className="flex items-center justify-between sm:justify-start gap-2 bg-muted/40 rounded-lg px-3 py-1.5">
+            <Button variant="ghost" size="icon" className="h-9 w-9 sm:h-7 sm:w-7"
               onClick={() => setMonth((m) => startOfMonth(subMonths(m, 1)))}>
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <span className="text-sm font-semibold w-36 text-center capitalize">
               {format(month, "MMMM 'de' yyyy", { locale: ptBR })}
             </span>
-            <Button variant="ghost" size="icon" className="h-7 w-7"
+            <Button variant="ghost" size="icon" className="h-9 w-9 sm:h-7 sm:w-7"
               onClick={() => setMonth((m) => startOfMonth(addMonths(m, 1)))}
               disabled={isCurrentMonth}>
               <ChevronRight className="h-4 w-4" />
@@ -620,20 +620,20 @@ export default function EcommerceMetas() {
         </div>
 
         {/* ── TOTAL HERO CARD ─────────────────────────────────────────────── */}
-        <CarboCard className={`border-2 ${
+        <CarboCard className={`p-4 sm:p-6 border-2 ${
           totalStats.progressColor === "green" ? "border-green-500/40" :
           totalStats.progressColor === "yellow" ? "border-amber-500/40" :
           totalStats.progressColor === "red" ? "border-red-500/40" : "border-border"
         }`}>
-          <CarboCardContent className="p-6">
+          <CarboCardContent className="p-0 sm:p-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               {/* Left: numbers */}
               <div className="space-y-1">
                 <p className="text-sm text-muted-foreground font-medium uppercase tracking-wider">
                   Faturamento Total do Mês
                 </p>
-                <div className="flex items-end gap-3">
-                  <p className={`text-4xl font-bold tabular-nums ${totalColors.text}`}>
+                <div className="flex flex-wrap items-end gap-x-3">
+                  <p className={`text-3xl sm:text-4xl font-bold tabular-nums ${totalColors.text}`}>
                     {fmtBRL(totalStats.actual)}
                   </p>
                   {totalStats.target > 0 && (
@@ -660,7 +660,7 @@ export default function EcommerceMetas() {
               </div>
 
               {/* Right: metrics */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 min-w-[320px]">
+              <div className="grid w-full md:w-auto grid-cols-2 md:grid-cols-4 gap-2 md:min-w-[320px]">
                 <div className={`rounded-xl p-3 ${totalColors.bg} text-center`}>
                   <p className="text-[10px] text-muted-foreground">Projeção FDM</p>
                   <p className={`text-base font-bold tabular-nums ${totalColors.text}`}>
@@ -760,7 +760,7 @@ export default function EcommerceMetas() {
 
         {/* ── RANKING ─────────────────────────────────────────────────────── */}
         {!isLoading && platformStats.some((s) => s.target > 0) && (
-          <CarboCard>
+          <CarboCard className="p-4 sm:p-6">
             <CarboCardHeader>
               <CarboCardTitle className="text-base">📈 Ranking de Performance por Plataforma</CarboCardTitle>
             </CarboCardHeader>
@@ -770,9 +770,9 @@ export default function EcommerceMetas() {
                   const colors = COLOR_MAP[stats.progressColor];
                   const prev = prevActuals?.platformRevenue[stats.platform as string] ?? 0;
                   return (
-                    <div key={String(stats.platform)} className="flex items-center gap-3">
-                      <span className="text-base w-6 text-center">{stats.emoji}</span>
-                      <div className="w-24 min-w-0">
+                    <div key={String(stats.platform)} className="flex items-center gap-2 sm:gap-3">
+                      <span className="text-base w-6 shrink-0 text-center">{stats.emoji}</span>
+                      <div className="w-20 sm:w-24 shrink-0 min-w-0">
                         <p className="text-sm font-medium truncate">{stats.label}</p>
                         <DeltaBadge current={stats.actual} prev={prev} title={rotuloComparacao} />
                       </div>
@@ -794,7 +794,7 @@ export default function EcommerceMetas() {
                             style={{ left: `${stats.expectedPct}%` }} />
                         )}
                       </div>
-                      <div className="w-24 text-right text-sm tabular-nums font-semibold">
+                      <div className="w-20 sm:w-24 shrink-0 text-right text-xs sm:text-sm tabular-nums font-semibold">
                         {fmtBRL(stats.actual)}
                       </div>
                     </div>

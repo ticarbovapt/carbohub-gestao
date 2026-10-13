@@ -220,7 +220,7 @@ export default function ProdutosPrecos() {
       ) : (
         <CarboCard>
           <CarboCardContent className="p-0 overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[720px] text-sm">
               <thead>
                 <tr className="border-b text-left text-xs text-muted-foreground">
                   <th className="px-4 py-2 font-medium">Produto</th>
