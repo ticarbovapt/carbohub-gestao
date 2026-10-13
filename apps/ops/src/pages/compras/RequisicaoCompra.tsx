@@ -350,27 +350,27 @@ export default function RequisicaoCompra() {
               </div>
               <div className="space-y-2">
                 {items.map((item, idx) => (
-                  <div key={idx} className="grid grid-cols-12 gap-2 items-end">
-                    <div className="col-span-5">
+                  <div key={idx} className="grid grid-cols-12 gap-2 items-end pb-2 border-b border-dashed border-border last:border-0 sm:pb-0 sm:border-0">
+                    <div className="col-span-12 sm:col-span-5">
                       {idx === 0 && <Label className="text-xs">Descrição</Label>}
                       <Input value={item.descricao} onChange={(e) => updateItem(idx, "descricao", e.target.value)} placeholder="O que comprar" />
                     </div>
-                    <div className="col-span-2">
+                    <div className="col-span-3 sm:col-span-2">
                       {idx === 0 && <Label className="text-xs">Qtd</Label>}
                       <Input type="number" min={1} value={item.quantidade} onChange={(e) => updateItem(idx, "quantidade", Number(e.target.value))} />
                     </div>
-                    <div className="col-span-2">
+                    <div className="col-span-3 sm:col-span-2">
                       {idx === 0 && <Label className="text-xs">Un.</Label>}
                       <Select value={item.unidade} onValueChange={(v) => updateItem(idx, "unidade", v)}>
                         <SelectTrigger className="h-9 px-2 text-xs"><SelectValue /></SelectTrigger>
                         <SelectContent>{UNITS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
-                    <div className="col-span-2">
-                      {idx === 0 && <Label className="text-xs">Valor Unit.</Label>}
+                    <div className="col-span-4 sm:col-span-2">
+                      {idx === 0 && <Label className="text-xs whitespace-nowrap">Valor Unit.</Label>}
                       <Input type="number" min={0} step={0.01} value={item.valor_unitario} onChange={(e) => updateItem(idx, "valor_unitario", Number(e.target.value))} />
                     </div>
-                    <div className="col-span-1 flex justify-center">
+                    <div className="col-span-2 sm:col-span-1 flex justify-center">
                       {items.length > 1 && (
                         <Button variant="ghost" size="icon" onClick={() => removeItem(idx)} className="h-8 w-8 text-destructive"><Trash2 className="h-3.5 w-3.5" /></Button>
                       )}
@@ -410,7 +410,7 @@ export default function RequisicaoCompra() {
               />
             </div>
 
-            <div className="flex justify-end gap-3 pt-4 border-t border-border">
+            <div className="flex flex-wrap justify-end gap-2 sm:gap-3 pt-4 border-t border-border">
               <Button variant="outline" onClick={reset} disabled={create.isPending}>Limpar</Button>
               <Button variant="secondary" onClick={() => submit(true)} disabled={create.isPending}>
                 {create.isPending ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Salvando…</> : "Salvar rascunho"}
@@ -432,7 +432,7 @@ export default function RequisicaoCompra() {
               <p className="py-8 text-center text-sm text-muted-foreground">Você ainda não abriu requisições.</p>
             ) : (
               <>
-                <CarboTable>
+                <CarboTable className="min-w-[640px]">
                   <CarboTableHeader>
                     <CarboTableRow>
                       <CarboTableHead>Nº RC</CarboTableHead>
@@ -449,7 +449,7 @@ export default function RequisicaoCompra() {
                       const esc = (r as any).escopo === "setor" ? "Do setor" : "Individual";
                       return (
                         <CarboTableRow key={r.id}>
-                          <CarboTableCell className="font-medium">{r.rc_number === "TEMP" ? "—" : r.rc_number}</CarboTableCell>
+                          <CarboTableCell className="font-medium whitespace-nowrap">{r.rc_number === "TEMP" ? "—" : r.rc_number}</CarboTableCell>
                           {temDeOutro && (
                             <CarboTableCell>
                               {r.requested_by && r.requested_by !== profile?.id ? (

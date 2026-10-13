@@ -238,8 +238,8 @@ export default function Alertas() {
 
         <div className="grid grid-cols-3 gap-3">
           {KPIS.map((k) => (
-            <div key={k.label} className="rounded-xl border bg-card p-4 flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center shrink-0"><k.icon className={cn("h-5 w-5", k.color)} /></div>
+            <div key={k.label} className="rounded-xl border bg-card p-3 sm:p-4 flex items-center gap-3 min-w-0">
+              <div className="h-10 w-10 rounded-lg bg-muted hidden sm:flex items-center justify-center shrink-0"><k.icon className={cn("h-5 w-5", k.color)} /></div>
               <div className="min-w-0"><p className="text-xs text-muted-foreground truncate">{k.label}</p><p className={cn("text-xl font-bold", k.color)}>{k.value}</p></div>
             </div>
           ))}
@@ -270,17 +270,17 @@ export default function Alertas() {
             const cfg = PRIORIDADE_CONFIG[a.prioridade];
             const KindIcon = KIND_CONFIG[a.kind].icon;
             return (
-              <div key={a.id} className={cn("flex items-start gap-3 rounded-xl border bg-card p-3", a.prioridade === "critical" && "border-red-300 dark:border-red-800")}>
+              <div key={a.id} className={cn("flex flex-wrap sm:flex-nowrap items-start gap-x-3 gap-y-2 rounded-xl border bg-card p-3", a.prioridade === "critical" && "border-red-300 dark:border-red-800")}>
                 <div className="h-9 w-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: cfg.color + "20", color: cfg.color }}><KindIcon className="h-4 w-4" /></div>
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 basis-[calc(100%-3rem)] sm:basis-auto">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-semibold text-sm text-foreground truncate">{a.titulo}</p>
+                    <p className="font-semibold text-sm text-foreground truncate min-w-0 max-w-full">{a.titulo}</p>
                     <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: cfg.color + "20", color: cfg.color }}><span className="h-1.5 w-1.5 rounded-full" style={{ background: cfg.color }} />{cfg.label}</span>
                     <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{KIND_CONFIG[a.kind].label}</span>
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5">{a.descricao}</p>
                 </div>
-                <div className="flex items-center gap-1 shrink-0">
+                <div className="flex items-center justify-end gap-1 shrink-0 w-full sm:w-auto">
                   {a.action2 && (
                     <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={a.action2.go}><a.action2.icon className="h-3.5 w-3.5" /> {a.action2.label}</Button>
                   )}

@@ -265,8 +265,8 @@ function Caixa({
   return (
     <CarboCard>
       <CarboCardContent className="p-3">
-        <div className="flex items-center gap-3">
-          <button onClick={onToggle} className="flex items-center gap-2 flex-1 min-w-0 text-left">
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-2">
+          <button onClick={onToggle} className="flex items-center gap-2 flex-1 basis-full sm:basis-0 min-w-0 min-h-[40px] text-left">
             {aberto ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-sm truncate">{c.vendedor_nome ?? "Sem nome"}</p>
@@ -278,11 +278,11 @@ function Caixa({
             </div>
           </button>
 
-          {!c.is_active && <Badge variant="outline" className="text-[10px]">desativada</Badge>}
+          {!c.is_active && <Badge variant="outline" className="text-[10px] shrink-0">desativada</Badge>}
           {vazia && (
             // Caixa vazia não é erro, mas é informação: vendedor sem estoque
             // não consegue vender a pronta entrega, e vai bater no bloqueio.
-            <Badge variant="outline" className="text-[10px] gap-1 border-amber-400 text-amber-700">
+            <Badge variant="outline" className="text-[10px] gap-1 border-amber-400 text-amber-700 shrink-0 whitespace-nowrap">
               <TriangleAlert className="h-3 w-3" /> não vende a pronta entrega
             </Badge>
           )}
@@ -382,7 +382,7 @@ function DialogEnviar({ caixa, onClose }: { caixa: CaixaVendedor | null; onClose
 
   return (
     <Dialog open={!!caixa} onOpenChange={(v) => { if (!v) fechar(); }}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Enviar para {caixa?.vendedor_nome ?? ""}</DialogTitle>
         </DialogHeader>
@@ -491,7 +491,7 @@ function DialogAjuste({
 
   return (
     <Dialog open={!!alvo} onOpenChange={(v) => { if (!v) fechar(); }}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Corrigir saldo</DialogTitle>
         </DialogHeader>
@@ -602,7 +602,7 @@ function DialogDevolver({
 
   return (
     <Dialog open={!!caixa} onOpenChange={(v) => { if (!v) fechar(); }}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Devolver da caixa de {caixa?.vendedor_nome ?? ""}</DialogTitle>
         </DialogHeader>

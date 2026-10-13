@@ -23,12 +23,12 @@ export interface Shipment {
 
 export function ShipmentsKanban({ shipments, onView }: { shipments: Shipment[]; onView?: (s: Shipment) => void }) {
   return (
-    <div className="flex gap-3 overflow-x-auto pb-3">
+    <div className="flex gap-3 overflow-x-auto pb-3 snap-x snap-mandatory sm:snap-none">
       {KANBAN_COLUMNS.map((status) => {
         const cfg = SHIPMENT_STATUS_CONFIG[status];
         const items = shipments.filter((s) => s.status === status);
         return (
-          <div key={status} className="w-64 shrink-0 rounded-2xl border border-border bg-board-surface/40 flex flex-col">
+          <div key={status} className="w-[85vw] sm:w-64 shrink-0 snap-start rounded-2xl border border-border bg-board-surface/40 flex flex-col">
             <div className="rounded-t-2xl px-3 py-2.5 border-b border-border flex items-center justify-between" style={{ background: cfg.color + "12" }}>
               <span className="text-sm font-semibold flex items-center gap-1.5">{cfg.icon} {cfg.label}</span>
               <span className="text-xs font-bold rounded-full px-2 py-0.5" style={{ background: cfg.color + "20", color: cfg.color }}>{items.length}</span>

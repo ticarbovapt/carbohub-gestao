@@ -642,7 +642,7 @@ export default function PosVenda() {
           </div>
         ) : (
           <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragId(null)}>
-          <div className="flex flex-col md:flex-row gap-3 overflow-y-auto md:overflow-y-hidden md:overflow-x-auto flex-1 min-h-0">
+          <div className="flex flex-row gap-3 overflow-x-auto overflow-y-hidden flex-1 min-h-0 snap-x snap-mandatory scroll-px-4 md:snap-none md:scroll-px-0 -mx-4 px-4 md:mx-0 md:px-0">
             {POSVENDA_STAGES.map((stage) => {
               const items = byStage[stage.key] ?? [];
               return (
@@ -650,7 +650,7 @@ export default function PosVenda() {
                 {(isOver, setDropRef) => (
                 <div
                   ref={setDropRef}
-                  className={`w-full md:flex-1 md:min-w-[280px] md:h-full rounded-2xl border flex flex-col transition-colors ${
+                  className={`w-[85vw] shrink-0 snap-start sm:w-[340px] md:w-auto md:shrink md:flex-1 md:min-w-[280px] h-full min-h-0 rounded-2xl border flex flex-col transition-colors ${
                     isOver ? "border-carbo-green bg-carbo-green/5" : "border-border bg-board-surface/40"
                   }`}
                 >
@@ -668,7 +668,7 @@ export default function PosVenda() {
                       <span className="text-xs text-muted-foreground tabular-nums">{items.length}</span>
                     </span>
                   </div>
-                  <div className="p-2 space-y-2 md:overflow-y-auto md:flex-1 md:min-h-0">
+                  <div className="p-2 space-y-2 overflow-y-auto overscroll-contain flex-1 min-h-0">
                     {items.length === 0 ? (
                       <p className="text-xs text-muted-foreground/60 text-center py-6">Vazio</p>
                     ) : (
@@ -841,7 +841,7 @@ export default function PosVenda() {
 
       {/* Portão de estoque — vale para Em Separação e Criar Ordem de Produção */}
       <Dialog open={!!pending} onOpenChange={(o) => !o && setPending(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {stockLoading ? "Conferindo estoque…" : hasStock ? "Produto em estoque" : "Sem estoque"}
@@ -946,7 +946,7 @@ export default function PosVenda() {
 
       {/* Emitir etiqueta de transporte (PDF 10×15) */}
       <Dialog open={!!etiquetaOrder} onOpenChange={(o) => !o && setEtiquetaOrder(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Tag className="h-4 w-4 text-carbo-blue" /> Emitir etiqueta</DialogTitle>
           </DialogHeader>
@@ -1021,7 +1021,7 @@ export default function PosVenda() {
 
               {/* Volumes / peso / transportadora — SÓ LEITURA. Para alterar, use
                   "Editar" no detalhe do pedido (evita mexer por engano na emissão). */}
-              <div className="grid grid-cols-3 gap-x-4 gap-y-1 text-xs rounded-lg border border-border p-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1 text-xs rounded-lg border border-border p-3">
                 <div>
                   <p className="flex items-center gap-1.5 text-muted-foreground mb-0.5"><Boxes className="h-3.5 w-3.5" /> Volumes</p>
                   <p className="font-semibold text-sm">{etqTotalVolumes}</p>
@@ -1058,7 +1058,7 @@ export default function PosVenda() {
 
       {/* 1º momento — Em Separação → Separado: volumes e peso, medidos na bancada */}
       <Dialog open={!!sepOrder} onOpenChange={(o) => !o && setSepOrder(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Boxes className="h-4 w-4 text-carbo-blue" /> Volumes e peso</DialogTitle>
           </DialogHeader>
@@ -1102,7 +1102,7 @@ export default function PosVenda() {
 
       {/* 2º momento — Separado → Gerar NF: transportadora e cotação do frete */}
       <Dialog open={!!gnfOrder} onOpenChange={(o) => !o && setGnfOrder(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Truck className="h-4 w-4 text-carbo-blue" /> Frete</DialogTitle>
           </DialogHeader>
@@ -1158,7 +1158,7 @@ export default function PosVenda() {
 
       {/* Detalhes do pedido */}
       <Dialog open={!!detail} onOpenChange={(o) => !o && setDetail(null)}>
-        <DialogContent className="max-w-lg max-h-[88vh] overflow-y-auto">
+        <DialogContent className="max-w-lg max-h-[90dvh] overflow-y-auto">
           {detail && (
             <>
               <DialogHeader>
@@ -1241,7 +1241,7 @@ export default function PosVenda() {
                     )}
                   </div>
                   {!editShip ? (
-                    <div className="grid grid-cols-3 gap-x-4 gap-y-1 text-xs">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1 text-xs">
                       <div>
                         <p className="flex items-center gap-1.5 text-muted-foreground mb-0.5"><Boxes className="h-3.5 w-3.5" /> Volumes</p>
                         <p className="font-medium">{detail.shipment_volumes ?? "—"}</p>
@@ -1262,7 +1262,7 @@ export default function PosVenda() {
                       </div>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                       <div className="space-y-1">
                         <Label className="text-[11px] flex items-center gap-1"><Boxes className="h-3 w-3" /> Volumes</Label>
                         <Input type="number" min={1} inputMode="numeric" value={edVolumes} onChange={(e) => setEdVolumes(e.target.value)} placeholder="1" className="h-8" />
@@ -1275,7 +1275,7 @@ export default function PosVenda() {
                         <Label className="text-[11px] flex items-center gap-1"><Truck className="h-3 w-3" /> Transportadora</Label>
                         <Input type="text" value={edCarrier} onChange={(e) => setEdCarrier(e.target.value)} placeholder="Nome" className="h-8" />
                       </div>
-                      <div className="space-y-1 col-span-3">
+                      <div className="space-y-1 col-span-2 sm:col-span-3">
                         <Label className="text-[11px] flex items-center gap-1">
                           <Truck className="h-3 w-3" /> Cotação do frete (R$)
                           <span className="text-muted-foreground font-normal">— opcional</span>

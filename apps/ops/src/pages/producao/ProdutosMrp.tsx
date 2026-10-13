@@ -140,7 +140,7 @@ export default function ProdutosMrp() {
             ) : (
               <CarboCard padding="none">
                 <div className="overflow-x-auto">
-                  <CarboTable>
+                  <CarboTable className="min-w-[760px]">
                     <CarboTableHeader>
                       <CarboTableRow>
                         <CarboTableHead>Produto</CarboTableHead><CarboTableHead>Código</CarboTableHead><CarboTableHead>Categoria</CarboTableHead>

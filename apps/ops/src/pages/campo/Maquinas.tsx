@@ -74,7 +74,7 @@ export default function Maquinas() {
         </div>
 
         <div className="overflow-x-auto">
-          <CarboTable>
+          <CarboTable className="min-w-[760px]">
             <CarboTableHeader><CarboTableRow>
               <CarboTableHead>Código</CarboTableHead><CarboTableHead>Modelo</CarboTableHead><CarboTableHead>Licenciado</CarboTableHead>
               <CarboTableHead>Status</CarboTableHead><CarboTableHead>Última Manut.</CarboTableHead><CarboTableHead>Próxima Manut.</CarboTableHead>

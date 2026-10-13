@@ -555,13 +555,13 @@ export default function Suprimentos() {
                   : "Entradas, saídas e ajustes deste hub aparecem aqui."} />
             ) : (
             <div className="rounded-lg border bg-card overflow-x-auto">
-              <Table>
+              <Table className="min-w-[1000px]">
                 <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Produto</TableHead><TableHead>Tipo</TableHead><TableHead className="text-right">Qtd</TableHead><TableHead>Por</TableHead><TableHead>Origem</TableHead><TableHead>Card</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {movsPeriodo.map((m) => (
                     <TableRow key={m.id}>
-                      <TableCell className="text-sm text-muted-foreground">{fmtDate(m.data)}</TableCell>
-                      <TableCell className="font-medium">{m.produto}<span className="ml-2 text-xs text-muted-foreground font-mono">{m.product_code}</span></TableCell>
+                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">{fmtDate(m.data)}</TableCell>
+                      <TableCell className="font-medium min-w-[180px]">{m.produto}<span className="ml-2 text-xs text-muted-foreground font-mono">{m.product_code}</span></TableCell>
                       <TableCell>
                         <CarboBadge variant={m.tipo === "entrada" ? "success" : "warning"} dot>
                           <span className="inline-flex items-center gap-1">{m.tipo === "entrada" ? <ArrowDownToLine className="h-3 w-3" /> : <ArrowUpFromLine className="h-3 w-3" />}{m.tipo === "entrada" ? "Entrada" : "Saída"}</span>
@@ -578,7 +578,7 @@ export default function Suprimentos() {
                           ? <span className="text-carbo-blue" title={m.executor}>Automático</span>
                           : "—")}
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
+                      <TableCell className="text-sm text-muted-foreground min-w-[260px]">
                         <span className="capitalize">{ORIGEM_LABEL[m.origem] ?? m.origem}</span>
                         {m.observacoes ? <span className="ml-1 text-xs">· {m.observacoes}</span> : ""}
                       </TableCell>

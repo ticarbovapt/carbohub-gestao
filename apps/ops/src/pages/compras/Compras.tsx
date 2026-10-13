@@ -58,7 +58,7 @@ function SimpleTable({ headers, rows, showValor = true }: { headers: string[]; r
   if (rows.length === 0) return <CarboEmptyState title="Nenhum registro" />;
   return (
     <div className="overflow-x-auto">
-      <CarboTable>
+      <CarboTable className="min-w-[720px]">
         <CarboTableHeader>
           <CarboTableRow>
             {headers.map((h, i) => <CarboTableHead key={h} className={i === 2 ? "hidden md:table-cell" : undefined}>{h}</CarboTableHead>)}
@@ -180,7 +180,7 @@ export default function Compras() {
               <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</div>
             ) : filteredRcs.length === 0 ? <CarboEmptyState title="Nenhuma requisição" description={rcs.length === 0 ? 'Crie a primeira em "Nova Requisição".' : "Ajuste o filtro de status."} /> : (
             <div className="overflow-x-auto">
-              <CarboTable>
+              <CarboTable className="min-w-[720px]">
                 <CarboTableHeader>
                   <CarboTableRow>
                     <CarboTableHead>Nº RC</CarboTableHead><CarboTableHead>Centro de Custo</CarboTableHead><CarboTableHead>Tipo</CarboTableHead>
@@ -240,7 +240,7 @@ export default function Compras() {
             </div>
             {payables.length === 0 ? <CarboEmptyState title="Nenhuma conta a pagar" description='Lance a primeira em "Lançar Conta".' /> : (
               <div className="overflow-x-auto">
-                <CarboTable>
+                <CarboTable className="min-w-[720px]">
                   <CarboTableHeader><CarboTableRow>
                     <CarboTableHead>Fornecedor</CarboTableHead><CarboTableHead>OC</CarboTableHead>
                     <CarboTableHead>Vencimento</CarboTableHead><CarboTableHead className="text-right">Valor</CarboTableHead>

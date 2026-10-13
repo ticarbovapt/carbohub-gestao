@@ -88,7 +88,7 @@ export default function DashboardProducao() {
             <p className="text-sm text-board-muted">Últimos checklists atualizados</p>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full min-w-[560px]">
               <thead>
                 <tr className="border-b border-border bg-secondary/30">
                   {["Checklist", "Departamento", "Progresso", "Status"].map((h, i) => (

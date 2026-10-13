@@ -150,18 +150,18 @@ export function StockView({ hub, editable }: { hub: Hub; editable: boolean }) {
               </span>
             </button>
             {!collapsed[g.category] && (
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 mt-3">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 mt-3">
                 {g.items.map((p) => {
           const qty = p.hubs[hub.id] ?? 0;
           const min = minForHub(p, hub.id);
           const status = minStockStatus(qty, min);
           return (
-            <CarboCard key={p.id} variant="default" padding="none">
+            <CarboCard key={p.id} variant="default" padding="none" className="min-w-0">
               <CarboCardContent>
                 <div className="flex items-start justify-between gap-2 px-5 pt-5 pb-2">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                      <h3 className="font-semibold text-sm text-foreground leading-tight truncate">{p.name}</h3>
+                      <h3 className="font-semibold text-sm text-foreground leading-tight truncate min-w-0 max-w-full">{p.name}</h3>
                       <CarboBadge variant={status.variant} size="sm">{status.label}</CarboBadge>
                       {/* ⚠️ Só aparece no caso contraditório: o produto está
                           marcado como fora deste hub E mesmo assim tem saldo.
