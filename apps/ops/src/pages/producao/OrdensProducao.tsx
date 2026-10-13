@@ -457,11 +457,11 @@ export default function OrdensProducao() {
           <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</div>
         ) : viewMode === "kanban" ? (
           <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragId(null)}>
-          <div className="flex gap-3 overflow-x-auto overflow-y-hidden h-[60vh] md:h-[70vh] pb-3">
+          <div className="flex gap-3 overflow-x-auto overflow-y-hidden h-[60vh] md:h-[70vh] pb-3 snap-x snap-mandatory md:snap-none">
             {/* Recorrência: demanda já vendida, ainda não devida. Coluna de LEITURA —
                 não recebe arrasto porque estas parcelas não são OP ainda. A OP
                 nasce quando o mês chega e a parcela vira pedido. */}
-            <div className="w-[260px] shrink-0 flex flex-col rounded-xl border border-dashed bg-muted/20">
+            <div className="w-[85vw] sm:w-[260px] shrink-0 snap-start flex flex-col rounded-xl border border-dashed bg-muted/20">
               <div className="px-3 py-2.5 border-b border-dashed flex items-center gap-2">
                 <span>🔁</span>
                 <span className="text-xs font-semibold" style={{ color: "#8b5cf6" }}>Pedidos de Recorrência</span>
@@ -529,7 +529,7 @@ export default function OrdensProducao() {
                 <div
                   ref={setDropRef}
                   className={cn(
-                    "flex-1 min-w-[300px] h-full rounded-2xl border bg-board-surface/40 flex flex-col transition-all",
+                    "flex-1 min-w-[85vw] sm:min-w-[300px] snap-start h-full rounded-2xl border bg-board-surface/40 flex flex-col transition-all",
                     isOver ? "border-primary" : "border-border",
                     isSkipped ? "opacity-40" : "",
                   )}
@@ -665,7 +665,7 @@ export default function OrdensProducao() {
           </div>
         ) : (
           <div className="rounded-lg border bg-card overflow-auto flex-1 min-h-0">
-            <Table>
+            <Table className="min-w-[780px]">
               <TableHeader>
                 <TableRow>
                   <TableHead>OP</TableHead><TableHead>SKU</TableHead><TableHead>Qtd</TableHead>
@@ -744,7 +744,7 @@ export default function OrdensProducao() {
       )}
       {/* Perdas de insumo — ranking (Perdas Totais → clique) */}
       <Dialog open={lossOpen} onOpenChange={setLossOpen}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-lg max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><XCircle className="h-5 w-5 text-red-500" /> Perdas</DialogTitle>
             <DialogDescription>

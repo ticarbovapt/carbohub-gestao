@@ -94,7 +94,7 @@ export default function OrdensServico() {
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="relative flex-1 max-w-sm">
+          <div className="relative flex-1 min-w-0 max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input placeholder="Buscar por OS, cliente, placa..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
           </div>
@@ -114,11 +114,11 @@ export default function OrdensServico() {
             <p className="text-sm text-muted-foreground">Nenhuma ordem de serviço ainda. As OS criadas no Carbo Sales aparecem aqui.</p>
           </div>
         ) : viewMode === "kanban" ? (
-          <div className="flex gap-3 overflow-x-auto pb-3">
+          <div className="flex gap-3 overflow-x-auto pb-3 snap-x snap-mandatory sm:snap-none">
             {OS_STAGES.map((col) => {
               const items = filtered.filter((o) => o.stage === col.id);
               return (
-                <div key={col.id} className="w-60 shrink-0 rounded-2xl border border-border bg-muted/20 flex flex-col">
+                <div key={col.id} className="w-[85vw] sm:w-60 shrink-0 snap-start rounded-2xl border border-border bg-muted/20 flex flex-col">
                   <div className="rounded-t-2xl px-3 py-2.5 border-b border-border flex items-center justify-between" style={{ background: col.color + "12" }}>
                     <span className="text-sm font-semibold flex items-center gap-1.5">{col.emoji} {col.label}</span>
                     <span className="text-xs font-bold rounded-full px-2 py-0.5" style={{ background: col.color + "20", color: col.color }}>{items.length}</span>
@@ -143,7 +143,7 @@ export default function OrdensServico() {
           </div>
         ) : (
           <div className="rounded-xl border bg-card overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[640px] text-sm">
               <thead className="bg-muted/50"><tr>
                 {["OS #", "Cliente", "Tipo", "Veículo", "Agendamento", "Etapa"].map((h) => <th key={h} className="px-4 py-3 text-left font-medium">{h}</th>)}
               </tr></thead>

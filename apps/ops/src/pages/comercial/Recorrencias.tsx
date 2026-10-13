@@ -250,11 +250,15 @@ export default function Recorrencias() {
                 {entregas.length === 0 && (
                   <tr>
                     <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
+                      {/* No celular a tabela rola (min-w 760px): sem o recorte na
+                          largura da tela, a mensagem ficava centrada fora da vista. */}
+                      <div className="max-w-[calc(100vw-4rem)] sm:max-w-none">
                       <CalendarDays className="h-7 w-7 mx-auto mb-2.5 opacity-40" />
                       <p className="text-sm">Nenhuma entrega em {MES_LONGO(ref)}.</p>
                       <p className="text-xs mt-1">
                         Os meses com bolinha na trilha acima têm entrega.
                       </p>
+                      </div>
                     </td>
                   </tr>
                 )}

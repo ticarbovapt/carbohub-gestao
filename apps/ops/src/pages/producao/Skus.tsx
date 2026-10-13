@@ -82,7 +82,7 @@ export default function Skus() {
           <CarboEmptyState title="Nenhum SKU encontrado" description={skus.length === 0 ? "Nenhum SKU cadastrado." : "Tente ajustar os filtros de busca."} icon={Package} />
         ) : (
           <div className="overflow-x-auto">
-            <CarboTable>
+            <CarboTable className="min-w-[680px]">
               <CarboTableHeader>
                 <CarboTableRow>
                   <CarboTableHead>Código</CarboTableHead><CarboTableHead>Nome</CarboTableHead><CarboTableHead>Categoria</CarboTableHead>

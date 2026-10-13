@@ -96,7 +96,7 @@ export default function Lotes() {
           <CarboEmptyState title="Nenhum lote encontrado" description={lots.length === 0 ? "Crie o primeiro em “Novo Lote”." : "Tente ajustar os filtros de busca."} icon={FlaskConical} />
         ) : (
           <div className="rounded-lg border bg-card overflow-x-auto">
-            <Table>
+            <Table className="min-w-[760px]">
               <TableHeader>
                 <TableRow>
                   <TableHead>Código</TableHead><TableHead>Produto</TableHead><TableHead>Volume</TableHead><TableHead>Status</TableHead>

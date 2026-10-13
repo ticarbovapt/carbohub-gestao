@@ -47,7 +47,7 @@ export default function FornecedoresMrp() {
           <CarboEmptyState icon={Building2} title="Nenhum fornecedor" description={suppliers.length === 0 ? "Cadastre o primeiro fornecedor." : "Ajuste a busca."} />
         ) : (
           <div className="overflow-x-auto">
-            <CarboTable>
+            <CarboTable className="min-w-[720px]">
               <CarboTableHeader>
                 <CarboTableRow>
                   <CarboTableHead>CNPJ</CarboTableHead><CarboTableHead>Razão Social</CarboTableHead><CarboTableHead>Nome Fantasia</CarboTableHead>
