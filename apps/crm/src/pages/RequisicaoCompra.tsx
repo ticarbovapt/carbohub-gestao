@@ -121,22 +121,22 @@ export default function RequisicaoCompra() {
               <div className="space-y-2">
                 {items.map((item, idx) => (
                   <div key={idx} className="grid grid-cols-12 gap-2 items-end">
-                    <div className="col-span-6">
+                    <div className="col-span-12 sm:col-span-6">
                       {idx === 0 && <Label className="text-xs">Descrição</Label>}
                       <Input value={item.descricao} onChange={(e) => updateItem(idx, "descricao", e.target.value)} placeholder="O que comprar" />
                     </div>
-                    <div className="col-span-2">
+                    <div className="col-span-4 sm:col-span-2">
                       {idx === 0 && <Label className="text-xs">Qtd</Label>}
                       <Input type="number" min={1} value={item.quantidade} onChange={(e) => updateItem(idx, "quantidade", Number(e.target.value))} />
                     </div>
-                    <div className="col-span-2">
+                    <div className="col-span-4 sm:col-span-2">
                       {idx === 0 && <Label className="text-xs">Un.</Label>}
                       <Select value={item.unidade} onValueChange={(v) => updateItem(idx, "unidade", v)}>
                         <SelectTrigger className="h-9 px-2 text-xs"><SelectValue /></SelectTrigger>
                         <SelectContent>{UNITS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
-                    <div className="col-span-2">
+                    <div className="col-span-4 sm:col-span-2">
                       {idx === 0 && <Label className="text-xs">Valor Unit.</Label>}
                       <Input type="number" min={0} step={0.01} value={item.valor_unitario} onChange={(e) => updateItem(idx, "valor_unitario", Number(e.target.value))} />
                     </div>
@@ -169,7 +169,7 @@ export default function RequisicaoCompra() {
               <Textarea value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Pra que você precisa, se ajudar o financeiro a decidir." rows={2} />
             </div>
 
-            <div className="flex justify-end gap-3 pt-4 border-t border-border">
+            <div className="flex flex-wrap justify-end gap-3 pt-4 border-t border-border">
               <Button variant="outline" onClick={reset} disabled={create.isPending}>Limpar</Button>
               <Button variant="secondary" onClick={() => submit(true)} disabled={create.isPending}>
                 {create.isPending ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Salvando…</> : "Salvar rascunho"}

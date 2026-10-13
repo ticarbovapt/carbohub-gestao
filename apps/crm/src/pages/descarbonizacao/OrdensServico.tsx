@@ -117,9 +117,9 @@ export default function OrdensServico() {
             criação vira um toast que some e o serviço nunca é executado. */}
         {semOS.length > 0 && (
           <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 overflow-hidden">
-            <div className="flex items-start gap-3 p-4">
+            <div className="flex flex-wrap sm:flex-nowrap items-start gap-3 p-4">
               <AlertTriangle className="h-5 w-5 shrink-0 text-amber-500 mt-0.5" />
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-[200px] sm:min-w-0">
                 <p className="text-sm font-semibold text-amber-600">
                   {semOS.length} venda(s) de descarbonização sem OS
                 </p>
@@ -163,12 +163,12 @@ export default function OrdensServico() {
           </div>
         )}
 
-        <div className="flex items-center gap-3">
-          <div className="relative flex-1 max-w-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="relative w-full sm:flex-1 max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input placeholder="Buscar por OS, cliente, placa..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
           </div>
-          <div className="flex rounded-lg border overflow-hidden">
+          <div className="flex self-start sm:self-auto rounded-lg border overflow-hidden">
             <button onClick={() => setViewMode("kanban")} className={`px-3 py-2 text-xs flex items-center gap-1.5 transition-colors ${viewMode === "kanban" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}><LayoutGrid className="h-3.5 w-3.5" /> Kanban</button>
             <button onClick={() => setViewMode("list")} className={`px-3 py-2 text-xs flex items-center gap-1.5 border-l transition-colors ${viewMode === "list" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}><List className="h-3.5 w-3.5" /> Lista</button>
           </div>
@@ -239,7 +239,7 @@ export default function OrdensServico() {
           </div>
         ) : (
           <div className="rounded-xl border bg-card overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[720px] text-sm">
               <thead className="bg-muted/50"><tr>
                 {["OS #", "Pedido", "Cliente", "Tipo", "Veículos", "Agendamento", "Etapa"].map((h) => <th key={h} className="px-4 py-3 text-left font-medium">{h}</th>)}
               </tr></thead>

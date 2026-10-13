@@ -53,7 +53,7 @@ function StrategyDialog({
 
   return (
     <Dialog open={!!opportunity} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Zap className="h-5 w-5 text-emerald-500" />
