@@ -16,7 +16,9 @@ import { ViewSwitcher } from "@/components/board/ViewSwitcher";
 type Edge = "start" | "move" | "end";
 interface DragState { id: string; edge: Edge; }
 const DAY_WIDTH: Record<string, number> = { dia: 36, semana: 14, mes: 5 };
-const LEFT_W = 190;
+// Coluna dos títulos: no celular 190 px comiam metade da tela e sobrava pouco
+// para as barras. Lido uma vez ao carregar (é só largura, não muda dado).
+const LEFT_W = typeof window !== "undefined" && window.matchMedia?.("(max-width: 639px)").matches ? 130 : 190;
 
 // Datas efetivas (s ≤ e) de um cartão; null se não tem data alguma.
 function cardRange(c: CardSummary): { s: string; e: string } | null {

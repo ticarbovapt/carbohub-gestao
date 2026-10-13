@@ -342,7 +342,7 @@ function BoardColumn({
   // Recolhida: barra fina vertical neutra com dot de acento + título + contagem.
   if (collapsed) {
     return (
-      <div ref={setNodeRef} style={style} className="w-10 shrink-0">
+      <div ref={setNodeRef} style={style} className="w-10 shrink-0 snap-start">
         <button onClick={() => onToggleCollapse(list.id)} title="Expandir lista"
           className="mkt-column-collapsed w-10 h-full min-h-[120px] flex flex-col items-center gap-2 py-2.5">
           <span className="mkt-dot" style={{ ["--mkt-accent" as any]: accent }} />
@@ -355,7 +355,7 @@ function BoardColumn({
   }
 
   return (
-    <div ref={setNodeRef} style={style} className="w-72 shrink-0 flex flex-col max-h-full">
+    <div ref={setNodeRef} style={style} className="w-[85vw] sm:w-72 shrink-0 flex flex-col max-h-full snap-start">
       {/* min-h-0, não max-h-full: o pai só tem max-height, então 100% dele não
           resolve e a coluna crescia com os cartões em vez de rolar. */}
       <div className="mkt-column flex flex-col min-h-0" style={fundo ? { background: fundo, borderColor: "transparent" } : undefined}>
@@ -621,7 +621,7 @@ export default function Board() {
         <div className="flex-1 overflow-hidden p-4 md:p-6">
           <div className="flex gap-4 h-full items-start">
             {[0, 1, 2].map((i) => (
-              <div key={i} className="w-80 shrink-0 space-y-2">
+              <div key={i} className="w-[85vw] sm:w-80 shrink-0 space-y-2">
                 <div className="mkt-skeleton h-10" />
                 <div className="mkt-skeleton h-20" />
                 <div className="mkt-skeleton h-24" />
@@ -719,23 +719,30 @@ export default function Board() {
     <AcoesCtx.Provider value={acoesCtx}>
     <div className="fixed inset-0 top-14 mkt-canvas bg-dot-grid flex flex-col">
       {/* Cabeçalho do quadro */}
-      <div className="mkt-toolbar header-depth-glow gap-2">
+      <div className="mkt-toolbar header-depth-glow gap-2 max-md:flex-wrap max-md:py-2 max-md:gap-y-1.5">
         <Link to="/quadros" aria-label="Voltar aos quadros" className="inline-flex p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" /></Link>
         <span className="mkt-dot" style={{ ["--mkt-accent" as any]: boardAccent }} />
-        <h1 className="mkt-view-title truncate">{board.title}</h1>
-        <ViewSwitcher boardId={boardId} current="kanban" />
+        <h1 className="mkt-view-title truncate min-w-0 max-md:flex-1">{board.title}</h1>
+        {/* No celular o seletor de vistas desce para uma linha própria (e rola de lado). */}
+        <div className="md:shrink-0 max-md:min-w-0 max-md:order-last max-md:w-full">
+          <ViewSwitcher boardId={boardId} current="kanban" />
+        </div>
 
-        <div className="ml-auto">
+        {/* No desktop este embrulho não existe (`contents`): os botões seguem
+            soltos na barra. No celular eles viram a segunda linha, e o filtro
+            abre ocupando a largura dela em vez de sair pela borda. */}
+        <div className="md:contents max-md:order-2 max-md:w-full max-md:relative max-md:flex max-md:flex-wrap max-md:items-center max-md:gap-1">
+        <div className="md:ml-auto">
           <MembrosNoCabecalho boardId={boardId!} tituloQuadro={board.title} sugestoes={data.people} />
         </div>
         {/* Filtro + buscas salvas do quadro */}
-        <div className="relative">
-          <button onClick={() => setFilterOpen((v) => !v)}
+        <div className="md:relative">
+          <button onClick={() => setFilterOpen((v) => !v)} title="Filtrar"
             className={`flex items-center gap-1.5 text-sm rounded-md px-2.5 py-1.5 transition-colors ${filterActive ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}>
-            <Filter className="h-4 w-4" /> Filtrar{filterActive ? ` · ${contarFiltros(criteria)}` : ""}
+            <Filter className="h-4 w-4" /> <span className="max-sm:hidden">Filtrar</span>{filterActive ? <span><span className="max-sm:hidden"> ·</span> {contarFiltros(criteria)}</span> : null}
           </button>
           {filterOpen && (
-            <div className="absolute right-0 z-30 mt-1 w-80 max-w-[calc(100vw-2rem)] max-h-[calc(100vh-9rem)] overflow-y-auto rounded-[var(--radius)] border border-border bg-popover shadow-[var(--shadow-elevated)] p-4 space-y-3 text-foreground">
+            <div className="absolute right-0 z-30 mt-1 w-80 max-md:left-0 max-md:top-full max-md:w-auto max-w-[calc(100vw-2rem)] max-md:max-w-none max-h-[calc(100vh-9rem)] overflow-y-auto rounded-[var(--radius)] border border-border bg-popover shadow-[var(--shadow-elevated)] p-4 space-y-3 text-foreground">
               <FilterControls value={criteria} onChange={setCriteria} labels={labels} team={[...pessoasDoQuadro(data, team), ...membrosQuadro.filter((m) => !pessoasDoQuadro(data, team).some((p) => p.id === m.id))]} completo meuId={meuId} />
               {filterActive && (
                 <p className="text-xs text-muted-foreground">{data.cards.filter(passa).length} de {data.cards.length} cartões no filtro.</p>
@@ -764,12 +771,13 @@ export default function Board() {
 
         <TrazerDoTrello boardId={boardId} />
         <button onClick={() => setArquivadosAberto(true)} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md px-2.5 py-1.5 transition-colors" title="Itens arquivados">
-          <Archive className="h-4 w-4" /> Arquivados
+          <Archive className="h-4 w-4" /> <span className="max-sm:hidden">Arquivados</span>
         </button>
         <button onClick={() => setFieldsOpen(true)} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md px-2.5 py-1.5 transition-colors" title="Campos personalizados">
-          <Settings2 className="h-4 w-4" /> Campos
+          <Settings2 className="h-4 w-4" /> <span className="max-sm:hidden">Campos</span>
         </button>
-        <button onClick={() => setMenuQuadro(true)} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md px-2.5 py-1.5 transition-colors" title="Menu do quadro">
+        </div>
+        <button onClick={() => setMenuQuadro(true)} className="max-md:order-1 flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md px-2.5 py-1.5 transition-colors" title="Menu do quadro">
           <MoreHorizontal className="h-4 w-4" /> <span className="hidden lg:inline">Menu</span>
         </button>
       </div>
@@ -778,7 +786,7 @@ export default function Board() {
         onCampos={() => setFieldsOpen(true)} onArquivados={() => setArquivadosAberto(true)} />
 
       {/* Colunas */}
-      <div className="flex-1 overflow-x-auto overflow-y-hidden p-4 md:p-6">
+      <div className="flex-1 overflow-x-auto overflow-y-hidden p-4 md:p-6 max-sm:snap-x max-sm:snap-mandatory max-sm:scroll-px-4">
         <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragEnd={onDragEnd}>
           <div className="flex gap-4 h-full items-start">
             <SortableContext items={lists.map((l) => l.id)} strategy={horizontalListSortingStrategy}>
@@ -798,7 +806,7 @@ export default function Board() {
             </SortableContext>
 
             {/* Adicionar lista */}
-            <div className="w-80 shrink-0">
+            <div className="w-[85vw] sm:w-80 shrink-0 snap-start">
               {addingList ? (
                 <form className="mkt-column p-2 space-y-2" onSubmit={(e) => { e.preventDefault(); addList(); }}>
                   <Input autoFocus value={newList} onChange={(e) => setNewList(e.target.value)}

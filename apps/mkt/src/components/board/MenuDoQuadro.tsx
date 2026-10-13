@@ -185,7 +185,7 @@ ${listas.map((l) => {
 
   return (
     <Sheet open={aberto} onOpenChange={(v) => { if (!v) fechar(); else onOpenChange(true); }}>
-      <SheetContent side="right" className="w-[360px] sm:max-w-[360px] p-0 flex flex-col">
+      <SheetContent side="right" className="w-full sm:w-[360px] sm:max-w-[360px] p-0 flex flex-col">
         <SheetHeader className="px-4 py-3 border-b border-border">
           <div className="flex items-center gap-2">
             {pagina !== "menu" && <button type="button" onClick={() => setPagina("menu")} className="p-1 -ml-1 rounded-md hover:bg-muted text-muted-foreground"><ArrowLeft className="h-4 w-4" /></button>}

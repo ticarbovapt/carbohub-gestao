@@ -12,15 +12,19 @@ const VIEWS: { key: string; label: string; path: (id: string) => string }[] = [
 
 export function ViewSwitcher({ boardId, current }: { boardId: string; current: string }) {
   return (
-    <div className="mkt-segmented">
-      {VIEWS.map((v) => (
-        <Link key={v.key} to={v.path(boardId)}
-          data-active={current === v.key}
-          aria-current={current === v.key ? "page" : undefined}
-          className={`mkt-segmented-item ${current === v.key ? "is-active" : ""}`}>
-          {v.label}
-        </Link>
-      ))}
+    // No celular as seis vistas não cabem: o seletor rola de lado em vez de
+    // empurrar a página (ou ficar cortado na borda).
+    <div className="max-w-full overflow-x-auto md:shrink-0 max-md:min-w-0">
+      <div className="mkt-segmented w-max">
+        {VIEWS.map((v) => (
+          <Link key={v.key} to={v.path(boardId)}
+            data-active={current === v.key}
+            aria-current={current === v.key ? "page" : undefined}
+            className={`mkt-segmented-item whitespace-nowrap ${current === v.key ? "is-active" : ""}`}>
+            {v.label}
+          </Link>
+        ))}
+      </div>
     </div>
   );
 }

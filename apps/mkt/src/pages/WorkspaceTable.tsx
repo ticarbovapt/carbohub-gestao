@@ -102,17 +102,17 @@ export default function WorkspaceTable() {
           <Link to="/todos/calendario" className="mkt-segmented-item px-2.5 py-1 text-xs font-semibold rounded text-muted-foreground hover:text-foreground inline-flex items-center gap-1"><CalendarClock className="h-3.5 w-3.5" /> Calendário</Link>
           <button className="mkt-segmented-item is-active px-2.5 py-1 text-xs font-semibold rounded bg-card shadow-[var(--shadow-card)] text-foreground inline-flex items-center gap-1"><Table2 className="h-3.5 w-3.5" /> Tabela</button>
         </div>
-        <div className="ml-auto flex items-center gap-2 flex-wrap">
-          <Input value={text} onChange={(e) => setText(e.target.value)} placeholder="Buscar título…" className="h-8 text-sm w-40" />
-          <select value={boardId} onChange={(e) => setBoardId(e.target.value)} className="h-8 text-sm rounded-md border border-border bg-card px-2">
+        <div className="ml-auto flex items-center gap-2 flex-wrap max-sm:w-full max-sm:grid max-sm:grid-cols-2">
+          <Input value={text} onChange={(e) => setText(e.target.value)} placeholder="Buscar título…" className="h-8 text-sm w-40 max-sm:w-full max-sm:col-span-2 max-sm:h-9" />
+          <select value={boardId} onChange={(e) => setBoardId(e.target.value)} className="h-8 text-sm rounded-md border border-border bg-card px-2 max-sm:w-full max-sm:min-w-0 max-sm:col-span-2 max-sm:h-9">
             <option value="">Quadro: todos</option>
             {data.boards.map((b) => <option key={b.id} value={b.id}>{b.title}</option>)}
           </select>
-          <select value={labelId} onChange={(e) => setLabelId(e.target.value)} className="h-8 text-sm rounded-md border border-border bg-card px-2">
+          <select value={labelId} onChange={(e) => setLabelId(e.target.value)} className="h-8 text-sm rounded-md border border-border bg-card px-2 max-sm:w-full max-sm:min-w-0 max-sm:h-9">
             <option value="">Etiqueta: todas</option>
             {data.labels.map((l) => <option key={l.id} value={l.id}>{l.name || "(sem nome)"}</option>)}
           </select>
-          <select value={memberId} onChange={(e) => setMemberId(e.target.value)} className="h-8 text-sm rounded-md border border-border bg-card px-2">
+          <select value={memberId} onChange={(e) => setMemberId(e.target.value)} className="h-8 text-sm rounded-md border border-border bg-card px-2 max-sm:w-full max-sm:min-w-0 max-sm:h-9">
             <option value="">Membro: todos</option>
             {team.map((t) => <option key={t.id} value={t.id}>{t.full_name ?? "Usuário"}</option>)}
           </select>

@@ -218,9 +218,9 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [], anex
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-6xl sm:max-w-6xl w-[calc(100%-1.5rem)] max-h-[90vh] overflow-y-auto md:overflow-hidden p-0 gap-0">
+      <DialogContent className="max-w-6xl sm:max-w-6xl w-[calc(100%-1.5rem)] max-h-[90dvh] overflow-y-auto overflow-x-hidden md:overflow-hidden p-0 gap-0">
         {isLoading || !data ? (
-          <div className="p-5 grid md:grid-cols-[1fr_260px] gap-5">
+          <div className="p-5 grid min-w-0 md:grid-cols-[1fr_260px] gap-5">
             <div className="space-y-4">
               <div className="mkt-skeleton h-8 w-2/3" />
               <div className="mkt-skeleton h-24 w-full" />
@@ -233,7 +233,7 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [], anex
             </div>
           </div>
         ) : (
-          <div className="flex flex-col md:h-[90vh]">
+          <div className="flex flex-col min-w-0 md:h-[90vh]">
           {/* Capa: como no Trello, a cor do cartão no topo do cartão aberto. */}
           {capaDoCartao && (
             <div className="relative h-20 md:h-24 shrink-0"
@@ -289,7 +289,7 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [], anex
                 <div className="relative" ref={labelsRef}>
                   <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShowLabels((v) => !v)}><Tag className="h-3.5 w-3.5" /> Etiquetas</Button>
                   {showLabels && (
-                    <div className="absolute z-20 mt-1 w-72 left-0 rounded-[var(--radius)] border border-border bg-popover shadow-[var(--shadow-elevated)] p-2.5 space-y-2">
+                    <div className="absolute z-20 mt-1 w-72 left-0 max-sm:fixed max-sm:left-3 max-sm:right-3 max-sm:w-auto max-sm:max-w-none rounded-[var(--radius)] border border-border bg-popover shadow-[var(--shadow-elevated)] p-2.5 space-y-2">
                       <p className="mkt-meta-label">Etiquetas do quadro</p>
                       <div className="space-y-1 max-h-52 overflow-y-auto">
                         {labels.length === 0 && <p className="text-xs text-muted-foreground px-1 py-1">Nenhuma etiqueta ainda — crie abaixo.</p>}
@@ -325,7 +325,7 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [], anex
                 <div className="relative" ref={datasRef}>
                   <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShowDatas((v) => !v)}><Clock className="h-3.5 w-3.5" /> Datas</Button>
                   {showDatas && (
-                    <div className="absolute z-20 mt-1 w-[300px] max-w-[85vw] left-0 rounded-[var(--radius)] border border-border bg-popover shadow-[var(--shadow-elevated)] p-3 max-h-[70vh] overflow-y-auto">
+                    <div className="absolute z-20 mt-1 w-[300px] max-w-[85vw] left-0 max-sm:fixed max-sm:left-3 max-sm:right-3 max-sm:w-auto max-sm:max-w-none rounded-[var(--radius)] border border-border bg-popover shadow-[var(--shadow-elevated)] p-3 max-h-[70vh] overflow-y-auto">
                       <DatasPainel card={data.card}
                         onSalvar={(patch) => mut.updateCard.mutate(patch)}
                         onFechar={() => setShowDatas(false)} />
@@ -339,7 +339,7 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [], anex
                 <div className="relative" ref={membersRef}>
                   <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShowMembers((v) => !v)}><User className="h-3.5 w-3.5" /> Membros</Button>
                   {showMembers && (
-                    <div className="absolute z-10 mt-1 w-64 left-0 max-h-64 overflow-y-auto rounded-[var(--radius)] border border-border bg-popover shadow-[var(--shadow-elevated)] p-2 space-y-0.5">
+                    <div className="absolute z-10 mt-1 w-64 left-0 max-sm:fixed max-sm:left-3 max-sm:right-3 max-sm:w-auto max-sm:max-w-none max-h-64 overflow-y-auto rounded-[var(--radius)] border border-border bg-popover shadow-[var(--shadow-elevated)] p-2 space-y-0.5">
                       {team.map((t) => (
                         <label key={t.id} className="flex items-center gap-2 px-1 py-1 rounded-md hover:bg-muted cursor-pointer">
                           <input type="checkbox" checked={data.memberIds.includes(t.id)} onChange={(e) => mut.toggleMember.mutate({ userId: t.id, on: e.target.checked })} className="h-4 w-4 rounded border-border accent-[hsl(var(--primary))]" />

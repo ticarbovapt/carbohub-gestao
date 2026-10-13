@@ -111,13 +111,13 @@ export default function BoardTable() {
           {board.title}
         </h1>
         <ViewSwitcher boardId={boardId} current="tabela" />
-        <div className="ml-auto flex items-center gap-2 flex-wrap">
-          <Input value={text} onChange={(e) => setText(e.target.value)} placeholder="Buscar título…" className="h-8 text-sm w-44" />
-          <select value={labelId} onChange={(e) => setLabelId(e.target.value)} className="h-8 text-sm rounded-md border border-border bg-card px-2">
+        <div className="ml-auto flex items-center gap-2 flex-wrap max-sm:w-full max-sm:grid max-sm:grid-cols-2">
+          <Input value={text} onChange={(e) => setText(e.target.value)} placeholder="Buscar título…" className="h-8 text-sm w-44 max-sm:w-full max-sm:col-span-2 max-sm:h-9" />
+          <select value={labelId} onChange={(e) => setLabelId(e.target.value)} className="h-8 text-sm rounded-md border border-border bg-card px-2 max-sm:w-full max-sm:min-w-0 max-sm:h-9">
             <option value="">Etiqueta: todas</option>
             {data.labels.map((l) => <option key={l.id} value={l.id}>{l.name || "(sem nome)"}</option>)}
           </select>
-          <select value={memberId} onChange={(e) => setMemberId(e.target.value)} className="h-8 text-sm rounded-md border border-border bg-card px-2">
+          <select value={memberId} onChange={(e) => setMemberId(e.target.value)} className="h-8 text-sm rounded-md border border-border bg-card px-2 max-sm:w-full max-sm:min-w-0 max-sm:h-9">
             <option value="">Membro: todos</option>
             {team.map((t) => <option key={t.id} value={t.id}>{t.full_name ?? "Usuário"}</option>)}
           </select>
