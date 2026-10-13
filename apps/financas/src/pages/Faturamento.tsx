@@ -192,7 +192,7 @@ export default function Faturamento() {
       );
     }
     return (
-      <CarboTable>
+      <CarboTable className="min-w-[760px]">
         <CarboTableHeader>
           <CarboTableRow>
             <CarboTableHead>Pedido</CarboTableHead>
@@ -473,7 +473,7 @@ export default function Faturamento() {
         </div>
 
         {/* KPIs */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
           <CarboKPI title="Vendas do sistema" value={sistema.length} icon={Building2} iconColor="green" />
           <CarboKPI title="Valor (sistema)" value={fmtCurrency(soma(sistema))} icon={DollarSign} iconColor="green" />
           <CarboKPI title="Do Bling" value={bling.length} icon={Store} iconColor="warning" />
@@ -488,7 +488,7 @@ export default function Faturamento() {
               <span className="min-w-28 text-center font-medium">{MONTHS[month.getMonth()]} / {month.getFullYear()}</span>
               <CarboButton variant="outline" size="icon" onClick={() => changeMonth(1)} aria-label="Próximo mês"><ChevronRight className="h-4 w-4" /></CarboButton>
             </div>
-            <div className="flex-1 min-w-48">
+            <div className="flex-1 md:min-w-48">
               <CarboSearchInput placeholder="Buscar por cliente ou nº do pedido (busca global)…" value={search} onChange={(e) => { setSearch(e.target.value); resetPages(); }} />
             </div>
             <label className="flex items-center gap-2 text-sm text-muted-foreground whitespace-nowrap">
@@ -499,7 +499,7 @@ export default function Faturamento() {
 
         {/* Abas: sistema vs Bling vs vínculo de NFs vs todas as NFs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList>
+          <TabsList className="max-w-full justify-start overflow-x-auto">
             <TabsTrigger value="sistema" className="gap-2"><Building2 className="h-4 w-4" /> Vendas do sistema ({sistema.length})</TabsTrigger>
             <TabsTrigger value="bling" className="gap-2"><Store className="h-4 w-4" /> Do Bling ({bling.length})</TabsTrigger>
             <TabsTrigger value="online" className="gap-2"><Globe className="h-4 w-4" /> NF Online ({online.length})</TabsTrigger>

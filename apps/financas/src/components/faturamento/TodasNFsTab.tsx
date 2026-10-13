@@ -49,7 +49,7 @@ export function TodasNFsTab() {
         ) : nfes.length === 0 ? (
           <CarboEmptyState icon={FileText} title="Nenhuma NF" description={search ? "Nenhuma NF encontrada." : "Nenhuma NF importada do Bling ainda."} />
         ) : (
-          <CarboTable>
+          <CarboTable className="min-w-[760px]">
             <CarboTableHeader>
               <CarboTableRow>
                 <CarboTableHead>NF</CarboTableHead>

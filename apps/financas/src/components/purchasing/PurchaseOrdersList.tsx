@@ -127,7 +127,7 @@ export function PurchaseOrdersList() {
 
       {/* OC Details Dialog */}
       <Dialog open={!!selectedOC} onOpenChange={() => setSelectedOC(null)}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Ordem de Compra {selectedOC?.oc_number}</DialogTitle>
             <DialogDescription>Detalhes da ordem de compra</DialogDescription>

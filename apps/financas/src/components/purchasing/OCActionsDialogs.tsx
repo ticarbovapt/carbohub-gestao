@@ -43,7 +43,7 @@ export function RegistrarCompraDialog({ oc, onClose }: { oc: PurchaseOrder | nul
 
   return (
     <Dialog open={!!oc} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Registrar compra — {oc.oc_number}</DialogTitle>
           <DialogDescription>Fornecedor {oc.supplier_name} · {brl(Number(oc.total_value))}</DialogDescription>
@@ -142,7 +142,7 @@ export function ReceberDialog({ oc, onClose }: { oc: PurchaseOrder | null; onClo
 
   return (
     <Dialog open={!!oc} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-xl max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Receber — {oc.oc_number}</DialogTitle>
           <DialogDescription>Confira o que chegou de {oc.supplier_name}. Divergência de quantidade/qualidade é registrada.</DialogDescription>
@@ -251,7 +251,7 @@ export function LancarNFDialog({ oc, onClose }: { oc: PurchaseOrder | null; onCl
 
   return (
     <Dialog open={!!oc} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Lançar NF — {oc.oc_number}</DialogTitle>
           <DialogDescription>Fornecedor {oc.supplier_name} · OC {brl(Number(oc.total_value))}</DialogDescription>

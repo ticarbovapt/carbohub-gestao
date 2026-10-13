@@ -275,7 +275,7 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
 
       {/* Details Dialog */}
       <Dialog open={!!selectedRC} onOpenChange={() => setSelectedRC(null)}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Requisição {selectedRC?.rc_number}</DialogTitle>
             <DialogDescription>Detalhes da requisição de compra</DialogDescription>

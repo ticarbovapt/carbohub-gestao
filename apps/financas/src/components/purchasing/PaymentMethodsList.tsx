@@ -58,7 +58,7 @@ export function PaymentMethodsList() {
   return (
     <CarboCard variant="elevated" padding="default">
       <CarboCardHeader>
-        <div className="flex items-center justify-between w-full">
+        <div className="flex flex-wrap items-center justify-between gap-2 w-full">
           <CarboCardTitle className="flex items-center gap-2">
             <CreditCard className="h-5 w-5 text-primary" />
             Cartões e Formas de Pagamento
@@ -132,7 +132,7 @@ export function PaymentMethodsList() {
 
       {/* Create/Edit */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{editPM ? "Editar forma de pagamento" : "Nova forma de pagamento"}</DialogTitle>
           </DialogHeader>

@@ -143,7 +143,7 @@ export default function Purchasing() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="w-full justify-start flex-wrap h-auto gap-1 bg-muted/50 p-1">
+          <TabsList className="w-full justify-start flex-nowrap overflow-x-auto md:flex-wrap h-auto gap-1 bg-muted/50 p-1">
             <TabsTrigger value="requisicoes" className="gap-1.5">
               <FileText className="h-3.5 w-3.5" />
               Requisições
