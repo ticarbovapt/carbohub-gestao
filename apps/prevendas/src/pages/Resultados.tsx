@@ -83,7 +83,7 @@ function Secao({ titulo, direita, children, className = "" }: {
 }) {
   return (
     <section className={`min-w-0 rounded-xl border bg-card ${className}`}>
-      <header className="flex items-center justify-between gap-3 border-b px-5 py-3.5">
+      <header className="flex items-center justify-between gap-3 border-b px-4 py-3.5 sm:px-5">
         <h2 className="text-sm font-semibold">{titulo}</h2>
         {direita}
       </header>
@@ -92,7 +92,7 @@ function Secao({ titulo, direita, children, className = "" }: {
   );
 }
 
-const th = "px-5 py-2.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground";
+const th = "px-3 py-2.5 sm:px-5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground";
 
 export default function Resultados() {
   const navigate = useNavigate();
@@ -182,17 +182,17 @@ export default function Resultados() {
   ];
 
   const filtros = (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
       {isGestor && (
         <Select value={sdrSel} onValueChange={setSdrSel}>
-          <SelectTrigger className="h-9 w-[200px]"><SelectValue placeholder="Todos os SDRs" /></SelectTrigger>
+          <SelectTrigger className="h-9 w-full sm:w-[200px]"><SelectValue placeholder="Todos os SDRs" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="todos">Todos os SDRs</SelectItem>
             {sdrs.map((s) => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}
           </SelectContent>
         </Select>
       )}
-      <div className="flex items-center rounded-lg border">
+      <div className="flex w-full items-center justify-between rounded-lg border sm:w-auto">
         <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setMes((m) => subMonths(m, 1))} aria-label="Mês anterior">
           <ChevronLeft className="h-4 w-4" />
         </Button>
@@ -231,7 +231,7 @@ export default function Resultados() {
         <>
           <div className="grid gap-4 lg:grid-cols-5">
             <Secao titulo="Situação dos repassados" className="lg:col-span-2">
-              <div className="space-y-5 px-5 py-4">
+              <div className="space-y-5 px-4 py-4 sm:px-5">
                 <div className="flex h-2.5 overflow-hidden rounded-full bg-muted">
                   {situacoes.filter((s) => s.qtd > 0).map((s) => (
                     <div key={s.id} style={{ width: `${(s.qtd / r.total) * 100}%`, background: COR[s.id] }} />
@@ -253,7 +253,7 @@ export default function Resultados() {
                     <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Em negociação, por etapa</p>
                     {porEtapa.map((s) => (
                       <div key={s.id} className="flex items-center gap-3 text-sm">
-                        <span className="w-32 shrink-0 truncate text-muted-foreground">{s.label}</span>
+                        <span className="w-28 shrink-0 truncate text-muted-foreground sm:w-32">{s.label}</span>
                         <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
                           <div className="h-full rounded-full" style={{ width: `${(s.qtd / maxEtapa) * 100}%`, background: s.color }} />
                         </div>
@@ -284,8 +284,8 @@ export default function Resultados() {
                 { rotulo: "Descartados", valor: String(prospeccao.descartados) },
                 { rotulo: "Taxa de repasse", valor: fmtPct(pct(prospeccao.repassados, prospeccao.criados)) },
               ].map((x) => (
-                <div key={x.rotulo} className="px-5 py-4">
-                  <p className="text-2xl font-bold tabular-nums">{x.valor}</p>
+                <div key={x.rotulo} className="min-w-0 px-3 py-4 sm:px-5">
+                  <p className="text-xl font-bold tabular-nums sm:text-2xl">{x.valor}</p>
                   <p className="text-xs text-muted-foreground">{x.rotulo}</p>
                 </div>
               ))}
@@ -313,7 +313,7 @@ export default function Resultados() {
                       <tr key={x.lead_id}
                         onClick={() => navigate(`/crm/pipelines?funil=f15&lead=${x.lead_id}`)}
                         className="cursor-pointer border-b last:border-0 hover:bg-muted/40">
-                        <td className="max-w-[260px] truncate px-5 py-3 font-medium">
+                        <td className="max-w-[180px] truncate sm:max-w-[260px] px-3 py-3 sm:px-5 font-medium">
                           {/* Link de verdade no nome: Ctrl/meio-clique abre o card em
                               outra aba. O stopPropagation evita que a linha navegue
                               junto na aba atual. */}
@@ -322,24 +322,24 @@ export default function Resultados() {
                             {x.cliente}
                           </Link>
                         </td>
-                        <td className="whitespace-nowrap px-5 py-3 text-muted-foreground">
+                        <td className="whitespace-nowrap px-3 py-3 sm:px-5 text-muted-foreground">
                           {format(new Date(x.repassado_em), "dd/MM")}
                           <span className="ml-1.5 text-xs">· {fmtIdade(dias(x.repassado_em))}</span>
                         </td>
-                        {visaoGeral && <td className="whitespace-nowrap px-5 py-3 text-muted-foreground">{x.sdr_nome ?? "—"}</td>}
-                        <td className="whitespace-nowrap px-5 py-3">
+                        {visaoGeral && <td className="whitespace-nowrap px-3 py-3 sm:px-5 text-muted-foreground">{x.sdr_nome ?? "—"}</td>}
+                        <td className="whitespace-nowrap px-3 py-3 sm:px-5">
                           {x.closer_id
                             ? <span className="text-muted-foreground">{x.closer_nome ?? "—"}</span>
                             : <span className="text-amber-500">Na fila</span>}
                         </td>
-                        <td className="px-5 py-3">
+                        <td className="px-3 py-3 sm:px-5">
                           <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium"
                             style={{ background: cor + "1f", color: cor }}>
                             <span className="h-1.5 w-1.5 rounded-full" style={{ background: cor }} />
                             {stageLabelAnywhere(x.etapa, "f15")}
                           </span>
                         </td>
-                        <td className="whitespace-nowrap px-5 py-3 text-right tabular-nums">
+                        <td className="whitespace-nowrap px-3 py-3 sm:px-5 text-right tabular-nums">
                           {x.valor_vendido > 0 ? brl(x.valor_vendido) : <span className="text-muted-foreground">—</span>}
                         </td>
                       </tr>
@@ -378,11 +378,11 @@ function TabelaResumo({ linhas, rotulo, rotuloTotal, rodape }: {
             <tr><td colSpan={5} className="px-5 py-6 text-center text-muted-foreground">Ninguém pegou os repasses ainda.</td></tr>
           ) : linhas.map((l) => (
             <tr key={l.nome} className="border-b last:border-0">
-              <td className="whitespace-nowrap px-5 py-3 font-medium">{l.nome}</td>
-              <td className="px-5 py-3 text-right tabular-nums">{l.total}</td>
-              <td className="px-5 py-3 text-right tabular-nums">{l.fechados}</td>
-              <td className="px-5 py-3 text-right tabular-nums">{fmtPct(pct(l.fechados, l.total))}</td>
-              <td className="px-5 py-3 text-right tabular-nums">{brl(l.receita)}</td>
+              <td className="whitespace-nowrap px-3 py-3 sm:px-5 font-medium">{l.nome}</td>
+              <td className="px-3 py-3 sm:px-5 text-right tabular-nums">{l.total}</td>
+              <td className="px-3 py-3 sm:px-5 text-right tabular-nums">{l.fechados}</td>
+              <td className="px-3 py-3 sm:px-5 text-right tabular-nums">{fmtPct(pct(l.fechados, l.total))}</td>
+              <td className="px-3 py-3 sm:px-5 text-right tabular-nums">{brl(l.receita)}</td>
             </tr>
           ))}
         </tbody>

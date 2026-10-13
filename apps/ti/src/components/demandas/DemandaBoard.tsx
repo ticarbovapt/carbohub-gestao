@@ -142,7 +142,7 @@ export function DemandaBoard({
           if (isCollapsed) {
             return (
               <DroppableColumn key={stage.id} id={stage.id}
-                className="ti-column-collapsed w-12 shrink-0 flex flex-col items-center py-3 gap-3 cursor-pointer"
+                className="ti-column-collapsed w-12 snap-start shrink-0 flex flex-col items-center py-3 gap-3 cursor-pointer"
               >
                 <button onClick={() => toggle(stage.id)} title={`Expandir ${stage.label}`}
                   className="text-muted-foreground hover:text-foreground">
@@ -163,7 +163,7 @@ export function DemandaBoard({
 
           return (
             <DroppableColumn key={stage.id} id={stage.id}
-              className="ti-column w-80 shrink-0 flex flex-col h-full min-h-0"
+              className="ti-column w-[85vw] max-w-80 sm:w-80 snap-start shrink-0 flex flex-col h-full min-h-0"
             >
               <div className="ti-accent-bar" style={{ ["--ti-accent" as string]: stage.color }} />
               <div className="ti-column-header" title={stage.hint}>

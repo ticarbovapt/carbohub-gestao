@@ -88,7 +88,7 @@ function Bloco({
   action?: React.ReactNode; children: React.ReactNode; className?: string;
 }) {
   return (
-    <CarboCard>
+    <CarboCard className="p-0 sm:p-6">
       <CarboCardContent className={className}>
         <div className="flex items-center justify-between gap-2 mb-3">
           <div className="min-w-0">
@@ -233,7 +233,7 @@ export default function StatusAvisos() {
           <div className="space-y-4">
             <div>
               <Label className="mb-2 block">O que está acontecendo</Label>
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
                 {SEVERIDADES.map((o) => {
                   const on = severidade === o.valor;
                   return (

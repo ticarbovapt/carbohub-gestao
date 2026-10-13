@@ -120,7 +120,7 @@ export function RankingTI() {
   const poucaGente = rankeados.length < 3;
 
   return (
-    <CarboCard>
+    <CarboCard className="p-0 sm:p-6">
       <CarboCardContent className="p-4 space-y-4">
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>
@@ -188,7 +188,7 @@ export function RankingTI() {
             )}
 
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[560px] text-sm">
                 <thead>
                   <tr className="text-[11px] uppercase tracking-wide text-muted-foreground border-b">
                     <th className="text-left font-medium py-2">Pessoa</th>
