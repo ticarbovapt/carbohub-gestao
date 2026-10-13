@@ -18,7 +18,7 @@ const CarboPageHeader = React.forwardRef<HTMLDivElement, CarboPageHeaderProps>(
         ref={ref}
         className={cn("flex flex-col md:flex-row md:items-center justify-between gap-4", className)}
       >
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-center gap-3">
           {Icon && (
             <div
               className={cn(
@@ -38,8 +38,8 @@ const CarboPageHeader = React.forwardRef<HTMLDivElement, CarboPageHeaderProps>(
               />
             </div>
           )}
-          <div>
-            <h1 className="text-2xl font-bold text-foreground font-plex">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold text-foreground font-plex break-words">
               {title}
             </h1>
             {description && (
@@ -49,7 +49,7 @@ const CarboPageHeader = React.forwardRef<HTMLDivElement, CarboPageHeaderProps>(
         </div>
 
         {actions && (
-          <div className="flex items-center gap-3">{actions}</div>
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">{actions}</div>
         )}
       </div>
     );
