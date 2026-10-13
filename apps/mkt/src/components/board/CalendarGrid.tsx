@@ -20,7 +20,7 @@ function CalCard({ card, color, onOpen }: { card: CardSummary; color: string; on
   };
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners} onClick={onOpen}
-      className="rounded-[var(--radius)] bg-card border border-border border-l-2 hover:shadow-[var(--shadow-elevated)] hover:-translate-y-px transition cursor-pointer px-2 py-1.5 text-xs font-medium leading-relaxed text-foreground truncate">
+      className="rounded-[var(--radius)] bg-card border border-border border-l-2 hover:shadow-[var(--shadow-elevated)] hover:-translate-y-px transition cursor-pointer px-1 sm:px-2 py-1.5 text-xs font-medium leading-relaxed text-foreground truncate">
       {card.title}
     </div>
   );
@@ -32,7 +32,7 @@ function DayCell({ dayId, isToday, isOther, dayNum, tall, children }: {
   const { setNodeRef, isOver } = useDroppable({ id: dayId });
   return (
     <div ref={setNodeRef}
-      className={`border border-border rounded-[var(--radius)] p-2 flex flex-col gap-2 overflow-hidden transition ${tall ? "min-h-[220px]" : "min-h-[104px]"} ${isOther ? "bg-muted/40" : "bg-card"} ${isOver ? "ring-2 ring-primary shadow-[var(--shadow-elevated)]" : "shadow-[var(--shadow-card)]"}`}>
+      className={`border border-border rounded-[var(--radius)] p-1 sm:p-2 flex flex-col gap-1 sm:gap-2 overflow-hidden transition ${tall ? "min-h-[220px]" : "min-h-[104px]"} ${isOther ? "bg-muted/40" : "bg-card"} ${isOver ? "ring-2 ring-primary shadow-[var(--shadow-elevated)]" : "shadow-[var(--shadow-card)]"}`}>
       <span className={`text-xs font-semibold self-end h-6 w-6 flex items-center justify-center rounded-full ${isToday ? "bg-primary text-primary-foreground" : isOther ? "text-muted-foreground" : "text-foreground"}`}>{dayNum}</span>
       <div className="flex flex-col gap-1.5 overflow-y-auto">{children}</div>
     </div>
@@ -89,11 +89,11 @@ export function CalendarGrid({ cards, refDate, mode, color, onOpenCard, onSetDay
 
   return (
     <DndContext sensors={sensors} onDragStart={(e) => setActiveId(String(e.active.id))} onDragEnd={onDragEnd}>
-      <div className="flex-1 overflow-auto p-4 md:p-6">
-        <div className="grid grid-cols-7 gap-2 mb-2">
-          {WEEKDAY_LABELS.map((w) => <div key={w} className="text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">{w}</div>)}
+      <div className="flex-1 overflow-auto p-2 sm:p-4 md:p-6">
+        <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-2">
+          {WEEKDAY_LABELS.map((w) => <div key={w} className="text-center text-[10px] sm:text-xs font-semibold uppercase tracking-wide text-muted-foreground">{w}</div>)}
         </div>
-        <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(7, minmax(0, 1fr))" }}>
+        <div className="grid gap-1 sm:gap-2" style={{ gridTemplateColumns: "repeat(7, minmax(0, 1fr))" }}>
           {weeks.flat().map((day) => {
             const key = ymd(day);
             const dayCards = byDay.get(key) ?? [];

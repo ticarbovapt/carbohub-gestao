@@ -113,7 +113,7 @@ export function ImportarTrello({ pessoas, titulosExistentes }: { pessoas: Pessoa
       </Button>
 
       <Dialog open={aberto} onOpenChange={(o) => { if (!gravando) setAberto(o); }}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Importar quadro do Trello</DialogTitle>
             <DialogDescription>Confira o que vai entrar. Ele vira um quadro novo; nada existente é alterado.</DialogDescription>

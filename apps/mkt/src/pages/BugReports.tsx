@@ -163,7 +163,7 @@ export default function BugReports() {
 
       {/* Detalhe (todos leem) + ações de gestão */}
       <Dialog open={!!detail} onOpenChange={(o) => !o && setDetail(null)}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-lg max-h-[90dvh] overflow-y-auto">
           {detail && (
             <>
               <DialogHeader>

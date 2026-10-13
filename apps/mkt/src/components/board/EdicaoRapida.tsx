@@ -52,7 +52,13 @@ export function EdicaoRapida({ card, rect, boardId, labels, pessoas, onClose, on
   // Ações à direita do cartão; sem espaço, à esquerda (cartão da última lista).
   const larguraMenu = 220;
   const aDireita = rect.right + 8 + larguraMenu < window.innerWidth;
+  // Tela estreita: sem lugar nem à direita nem à esquerda, as ações descem para
+  // baixo do cartão em vez de sair pela borda (posição só, nada mais muda).
+  const aEsquerda = !aDireita && rect.left - 8 - larguraMenu >= 8;
+  const embaixo = !aDireita && !aEsquerda;
   const topo = Math.min(rect.top, window.innerHeight - 420);
+  const larguraCartao = Math.min(rect.width, window.innerWidth - 16);
+  const esquerdaCartao = Math.max(8, Math.min(rect.left, window.innerWidth - larguraCartao - 8));
 
   const Acao = ({ icone: I, rot, onClick, ativo }: { icone: typeof Tag; rot: string; onClick: () => void; ativo?: boolean }) => (
     <button onClick={onClick}
@@ -63,7 +69,7 @@ export function EdicaoRapida({ card, rect, boardId, labels, pessoas, onClose, on
 
   return createPortal(
     <div className="fixed inset-0 z-50 bg-black/60" onMouseDown={(e) => { if (e.target === e.currentTarget) salvar(); }}>
-      <div className="absolute" style={{ top: Math.max(8, topo), left: rect.left, width: rect.width }}>
+      <div className="absolute" style={{ top: Math.max(8, topo), left: esquerdaCartao, width: larguraCartao }}>
         <div className="mkt-card !cursor-default space-y-2">
           <textarea ref={campo} value={titulo} onChange={(e) => setTitulo(e.target.value)} rows={3}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); salvar(); } }}
@@ -72,7 +78,9 @@ export function EdicaoRapida({ card, rect, boardId, labels, pessoas, onClose, on
         <Button size="sm" className="mt-2" onClick={salvar}>Salvar</Button>
       </div>
 
-      <div className="absolute space-y-1" style={{ top: Math.max(8, topo), width: larguraMenu, ...(aDireita ? { left: rect.right + 8 } : { left: rect.left - 8 - larguraMenu }) }}>
+      <div className="absolute space-y-1" style={embaixo
+        ? { top: Math.max(8, topo) + 144, left: esquerdaCartao, width: Math.min(larguraMenu, window.innerWidth - 16), maxHeight: `calc(100dvh - ${Math.max(8, topo) + 152}px)`, overflowY: "auto" }
+        : { top: Math.max(8, topo), width: larguraMenu, ...(aDireita ? { left: rect.right + 8 } : { left: rect.left - 8 - larguraMenu }) }}>
         <Acao icone={CreditCard} rot="Abrir cartão" onClick={() => { onClose(); onAbrir(); }} />
         <Acao icone={Tag} rot="Editar etiquetas" ativo={painel === "etiquetas"} onClick={() => setPainel(painel === "etiquetas" ? null : "etiquetas")} />
         <Acao icone={User} rot="Alterar membros" ativo={painel === "membros"} onClick={() => setPainel(painel === "membros" ? null : "membros")} />
