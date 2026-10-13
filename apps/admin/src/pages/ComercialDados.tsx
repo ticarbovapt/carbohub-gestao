@@ -108,10 +108,10 @@ function RestrictedNotice() {
 
 function Tile({ icon: Icon, label, value, tone }: { icon: React.ElementType; label: string; value: string; tone: string }) {
   return (
-    <CarboCard>
-      <CarboCardContent className="p-3">
-        <div className="flex items-center gap-2 text-[11px] text-muted-foreground mb-0.5"><Icon className={`h-3.5 w-3.5 ${tone}`} /> {label}</div>
-        <p className="text-lg font-bold tabular-nums">{value}</p>
+    <CarboCard className="min-w-0 p-3 sm:p-6">
+      <CarboCardContent className="p-0 sm:p-3">
+        <div className="flex items-center gap-2 text-[11px] text-muted-foreground mb-0.5"><Icon className={`h-3.5 w-3.5 shrink-0 ${tone}`} /> {label}</div>
+        <p className="text-base sm:text-lg font-bold tabular-nums break-words">{value}</p>
       </CarboCardContent>
     </CarboCard>
   );
@@ -579,14 +579,14 @@ export default function ComercialDados() {
   };
 
   return (
-    <main className="p-4 lg:p-6 board-fade-in">
+    <main className="p-3 sm:p-4 lg:p-6 board-fade-in">
       <div className="space-y-4 max-w-[1600px] mx-auto">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <CarboPageHeader icon={Database} title="Dados Comerciais — Fonte"
             description={lista === "servicos"
               ? "As NFS-e emitidas no portal nacional que alimentam a descarbonização nos gráficos. Não há vendedor na nota, então o filtro de vendedor não se aplica aqui."
               : "As linhas cruas de carboze_orders que alimentam os gráficos. Mesma base, mesmos filtros."} />
-          <div className="flex flex-col items-end gap-2">
+          <div className="flex w-full sm:w-auto flex-col items-end gap-2">
             <ComercialTabs />
             <ComercialFilterBar filters={filters} onChange={setFilters} />
           </div>
@@ -613,7 +613,7 @@ export default function ComercialDados() {
 
         {/* Modo de visão */}
         <div className="flex flex-wrap items-center gap-3">
-          <div className="inline-flex gap-1 rounded-lg border p-1">
+          <div className="inline-flex max-w-full gap-1 overflow-x-auto rounded-lg border p-1">
             {([
               ["pedidos",         "Pedidos internos",  ListOrdered],
               ["pedidos-online",  "Pedidos online",    Globe],
@@ -622,7 +622,7 @@ export default function ComercialDados() {
               ["clientes-online", "Clientes online",   Globe],
             ] as const).map(([k, l, Ico]) => (
               <button key={k} onClick={() => setView(k)}
-                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${view === k ? "bg-carbo-green/10 text-carbo-green" : "text-muted-foreground hover:bg-muted"}`}>
+                className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-2 sm:py-1.5 text-xs font-medium transition-colors ${view === k ? "bg-carbo-green/10 text-carbo-green" : "text-muted-foreground hover:bg-muted"}`}>
                 <Ico className="h-3.5 w-3.5" /> {l}
               </button>
             ))}
@@ -736,7 +736,7 @@ export default function ComercialDados() {
         )}
 
         {/* Tabela */}
-        <CarboCard>
+        <CarboCard className="p-2 sm:p-6">
           <CarboCardContent className="p-0 overflow-x-auto">
             {(lista === "servicos" ? loadingServicos : isLoading) ? (
               <p className="text-sm text-muted-foreground py-10 text-center">Carregando…</p>
@@ -744,7 +744,7 @@ export default function ComercialDados() {
               servicoRows.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-10 text-center">Nenhuma nota de serviço para os filtros atuais.</p>
               ) : (
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[860px] text-sm">
                 <thead className="sticky top-0 bg-board-surface">
                   <tr className="border-b text-left text-xs text-muted-foreground">
                     <SortTh col="nota"     label="Nota"     sort={servSort} onSort={toggleServSort} />
@@ -795,7 +795,7 @@ export default function ComercialDados() {
               rows.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-10 text-center">Nenhuma linha para os filtros atuais.</p>
               ) : (
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[860px] text-sm">
                 <thead className="sticky top-0 bg-board-surface">
                   <tr className="border-b text-left text-xs text-muted-foreground">
                     <th className="pl-3 pr-1 py-2 w-8">
@@ -886,7 +886,7 @@ export default function ComercialDados() {
               rowsSorted.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-10 text-center">Nenhum cliente para os filtros atuais.</p>
               ) : (
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[860px] text-sm">
                 <thead className="sticky top-0 bg-board-surface">
                   <tr className="border-b text-left text-xs text-muted-foreground">
                     <SortTh col="cnpj" label={agrupado ? "CNPJ(s)" : "CNPJ / CPF"} sort={sort} onSort={toggleSort} />
@@ -937,7 +937,7 @@ export default function ComercialDados() {
       {/* Detalhe — pedidos, CNPJs do grupo, datas (para follow-up). */}
       {/* Editar Canal + Origem do pedido (gestor) */}
       <Dialog open={!!editRow} onOpenChange={(o) => !o && setEditRow(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Editar pedido {editRow?.order_number || ""}</DialogTitle>
           </DialogHeader>
@@ -980,7 +980,7 @@ export default function ComercialDados() {
       </Dialog>
 
       <Dialog open={!!detail} onOpenChange={(o) => !o && setDetail(null)}>
-        <DialogContent className="max-w-2xl max-h-[88vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[90dvh] overflow-y-auto">
           {detail && (() => {
             const r = detail;
             const ordersSorted = [...r.orders].sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""));
@@ -1022,8 +1022,8 @@ export default function ComercialDados() {
                 )}
 
                 {/* Pedidos (com CNPJ por linha — dá pra ver os documentos diferentes). */}
-                <div className="rounded-lg border overflow-hidden">
-                  <table className="w-full text-sm">
+                <div className="rounded-lg border overflow-hidden overflow-x-auto">
+                  <table className="w-full min-w-[520px] text-sm">
                     <thead>
                       <tr className="border-b text-left text-xs text-muted-foreground bg-muted/30">
                         <th className="px-3 py-2 font-medium">Pedido</th>
@@ -1054,7 +1054,7 @@ export default function ComercialDados() {
 
       {/* Escolher vendedor — só quando o último pedido não tem vendedor. */}
       <Dialog open={!!vendDialog} onOpenChange={(o) => !o && setVendDialog(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Escolher vendedor do follow-up</DialogTitle>
           </DialogHeader>

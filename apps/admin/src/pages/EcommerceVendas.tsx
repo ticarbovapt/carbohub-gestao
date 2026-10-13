@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePickerInput } from "@/components/ui/date-picker-input";
@@ -389,7 +389,7 @@ function CommissionCard({ platform, commissionTotal, netRevenue }: {
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Receipt className="h-4 w-4 text-slate-400" />
@@ -401,18 +401,18 @@ function CommissionCard({ platform, commissionTotal, netRevenue }: {
           </DialogHeader>
 
           {/* Resumo financeiro */}
-          <div className="grid grid-cols-3 gap-3 py-2">
-            <div className="rounded-lg bg-muted/40 p-3 text-center">
+          <div className="grid grid-cols-3 gap-2 sm:gap-3 py-2">
+            <div className="rounded-lg bg-muted/40 p-2 sm:p-3 text-center">
               <p className="text-xs text-muted-foreground mb-1">Receita Líquida</p>
               <p className="text-sm font-bold">{fmtBRL(netRevenue)}</p>
             </div>
-            <div className="rounded-lg bg-red-500/10 p-3 text-center">
+            <div className="rounded-lg bg-red-500/10 p-2 sm:p-3 text-center">
               <p className="text-xs text-muted-foreground mb-1">Comissão</p>
               <p className="text-sm font-bold text-red-500">
                 {semTaxa ? "—" : `− ${fmtBRL(commissionTotal)}`}
               </p>
             </div>
-            <div className="rounded-lg bg-green-500/10 p-3 text-center">
+            <div className="rounded-lg bg-green-500/10 p-2 sm:p-3 text-center">
               <p className="text-xs text-muted-foreground mb-1">Após Comissão</p>
               <p className="text-sm font-bold text-green-600">
                 {semTaxa ? "—" : fmtBRL(revenueAfterFee)}
@@ -454,8 +454,8 @@ function CommissionCard({ platform, commissionTotal, netRevenue }: {
               <p className="text-sm font-semibold flex items-center gap-1.5">
                 <History className="h-3.5 w-3.5" /> Histórico de taxas
               </p>
-              <div className="rounded-xl border overflow-hidden">
-                <table className="w-full text-sm">
+              <div className="rounded-xl border overflow-hidden overflow-x-auto">
+                <table className="w-full min-w-[420px] text-sm">
                   <thead>
                     <tr className="bg-muted/30 border-b text-xs text-muted-foreground">
                       <th className="text-left px-4 py-2 font-medium">Válida a partir de</th>
@@ -561,7 +561,7 @@ function ReconciliacaoPanel({
       </CardHeader>
       <CardContent className="p-0 pb-4">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[520px] text-sm">
             <thead>
               <tr className="border-y border-border/50 bg-muted/30 text-muted-foreground text-xs">
                 <th className="text-left px-5 py-2 font-medium">Métrica</th>
@@ -785,7 +785,7 @@ function PlatformView({ platform, period, custom }: { platform: EcommercePlatfor
         </CardHeader>
         <CardContent className="p-0 pb-2">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[640px] text-sm">
               <thead>
                 <tr className="border-y border-border/50 text-muted-foreground text-xs bg-muted/30">
                   <th className="text-left px-5 py-2 font-medium">Produto</th>
@@ -1048,7 +1048,7 @@ function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?:
         </CardHeader>
         <CardContent className="p-0 pb-2">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[640px] text-sm">
               <thead>
                 <tr className="border-y border-border/50 bg-muted/30 text-muted-foreground text-xs">
                   {/* ⚠️ A LARGURA É DISTRIBUÍDA DE PROPÓSITO.
@@ -1540,17 +1540,17 @@ function HistoricoMensalView() {
               return (
                 <Card key={p} className="rounded-2xl border-0 shadow-sm">
                   <CardContent className="px-5 py-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <span className={cn("text-sm font-bold flex items-center gap-1.5", cfg.textClass)}>
+                    <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 mb-3">
+                      <span className={cn("text-sm font-bold flex items-center gap-1.5 whitespace-nowrap", cfg.textClass)}>
                         <span>{cfg.emoji}</span>{cfg.label}
                       </span>
                       <div className="flex items-center gap-2">
                         {mom !== null && (
-                          <span className={cn("text-xs font-semibold", mom >= 0 ? "text-green-500" : "text-red-500")}>
+                          <span className={cn("text-xs font-semibold whitespace-nowrap", mom >= 0 ? "text-green-500" : "text-red-500")}>
                             {mom >= 0 ? "▲" : "▼"}{Math.abs(mom).toFixed(1)}% último mês
                           </span>
                         )}
-                        <Badge variant="outline" className="text-xs">{pctReceita.toFixed(0)}% do faturamento</Badge>
+                        <Badge variant="outline" className="text-xs whitespace-nowrap">{pctReceita.toFixed(0)}% do faturamento</Badge>
                       </div>
                     </div>
                     <div className="grid grid-cols-3 gap-3 mb-3">
@@ -1697,7 +1697,7 @@ function HistoricoMensalView() {
             </CardHeader>
             <CardContent className="p-0 pb-3">
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full min-w-[720px] text-sm">
                   <thead>
                     <tr className="border-y border-border/50 bg-muted/30 text-muted-foreground text-xs">
                       <th className="text-left px-5 py-2.5 font-medium">Mês</th>
@@ -1887,6 +1887,17 @@ export default function EcommerceVendas() {
   );
   const [active, setActive] = useState<ActiveView>(() => lerAba(params));
 
+  // No celular a faixa de plataformas rola de lado: a aba escolhida (vinda da
+  // URL, por exemplo) tem de aparecer na faixa, senão parece que nenhuma está
+  // ativa. Mexe SÓ no scroll horizontal da faixa — nunca no da página.
+  const faixaRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const faixa = faixaRef.current;
+    const botao = faixa?.querySelector<HTMLElement>('[data-ativo="true"]');
+    if (!faixa || !botao || faixa.scrollWidth <= faixa.clientWidth) return;
+    faixa.scrollLeft = Math.max(0, botao.offsetLeft - faixa.offsetLeft - 12);
+  }, [active]);
+
   // ⚠️ `replace: true`: trocar de período não empilha entrada no histórico.
   // Sem isso, o "voltar" do navegador percorreria cada clique de filtro antes
   // de sair da tela — o mesmo incômodo que a Esteira já evita.
@@ -1915,7 +1926,7 @@ export default function EcommerceVendas() {
   };
 
   return (
-    <div className="p-4 md:p-6">
+    <div className="p-3 sm:p-4 md:p-6">
       <div className="space-y-5">
         {/* Page header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -2001,8 +2012,11 @@ export default function EcommerceVendas() {
           )}
         </div>
 
-        {/* Platform selector buttons */}
-        <div className="flex flex-wrap gap-2">
+        {/* Platform selector buttons.
+            No celular é UMA faixa que rola de lado (sete botões em pilha
+            empurravam os números para a segunda tela); a partir de `sm`
+            volta a quebrar linha como antes. */}
+        <div ref={faixaRef} className="-mx-3 flex gap-2 overflow-x-auto px-3 pt-0.5 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
           {PLATFORMS.map(p => {
             const on = active === p.id;
             if (p.disabled) {
@@ -2010,7 +2024,7 @@ export default function EcommerceVendas() {
                 <span
                   key={p.id}
                   title="Em breve — integração ainda não disponível"
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border-2 border-border/50 text-muted-foreground/40 cursor-not-allowed select-none"
+                  className="flex shrink-0 items-center gap-2 whitespace-nowrap px-3 sm:px-4 py-2.5 rounded-xl text-sm font-semibold border-2 border-border/50 text-muted-foreground/40 cursor-not-allowed select-none"
                 >
                   <span className="text-base grayscale opacity-50">{p.emoji}</span>
                   {p.label}
@@ -2021,9 +2035,10 @@ export default function EcommerceVendas() {
             return (
               <button
                 key={p.id}
+                data-ativo={on}
                 onClick={() => handleSetActive(p.id)}
                 className={cn(
-                  "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all",
+                  "flex shrink-0 items-center gap-2 whitespace-nowrap px-3 sm:px-4 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all",
                   on
                     ? cn(p.bgClass, p.borderClass, p.textClass, "shadow-sm scale-[1.02]")
                     : "border-border text-muted-foreground hover:bg-muted/40 hover:border-muted-foreground/40"
@@ -2035,9 +2050,10 @@ export default function EcommerceVendas() {
             );
           })}
           <button
+            data-ativo={active === "comparativo"}
             onClick={() => handleSetActive("comparativo")}
             className={cn(
-              "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all",
+              "flex shrink-0 items-center gap-2 whitespace-nowrap px-3 sm:px-4 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all",
               active === "comparativo"
                 ? "bg-violet-500/10 border-violet-500/50 text-violet-600 dark:text-violet-300 shadow-sm scale-[1.02]"
                 : "border-border text-muted-foreground hover:bg-muted/40 hover:border-muted-foreground/40"
@@ -2047,9 +2063,10 @@ export default function EcommerceVendas() {
             Comparativo
           </button>
           <button
+            data-ativo={active === "historico"}
             onClick={() => handleSetActive("historico")}
             className={cn(
-              "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all",
+              "flex shrink-0 items-center gap-2 whitespace-nowrap px-3 sm:px-4 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all",
               active === "historico"
                 ? "bg-indigo-500/10 border-indigo-500/50 text-indigo-600 dark:text-indigo-300 shadow-sm scale-[1.02]"
                 : "border-border text-muted-foreground hover:bg-muted/40 hover:border-muted-foreground/40"

@@ -12,6 +12,7 @@ import { useServicosNfse } from "@/hooks/useServicosNfse";
 import { useUnidadesVendidas } from "@/hooks/useUnidadesVendidas";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { useAuth } from "@/contexts/AuthContext";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useDashComercial } from "@/hooks/useDashComercial";
 import { useComercialCanais, type CanalKey } from "@/hooks/useComercialCanais";
 import { useCanalMetas } from "@/hooks/useCanalMetas";
@@ -58,16 +59,17 @@ function KpiCard({ title, value, sub, Icon, accent, iconBg }: {
   title: string; value: string; sub?: string; Icon: React.ElementType; accent: string; iconBg: string;
 }) {
   const len = value.length;
-  const valSize = len <= 6 ? "text-3xl" : len <= 10 ? "text-2xl" : len <= 16 ? "text-xl" : "text-base";
+  // No celular os cards vão DOIS por linha: o número desce um degrau até `sm`.
+  const valSize = len <= 6 ? "text-2xl sm:text-3xl" : len <= 10 ? "text-xl sm:text-2xl" : len <= 16 ? "text-lg sm:text-xl" : "text-sm sm:text-base";
   return (
-    <div className={`relative overflow-hidden rounded-xl bg-board-surface p-4 border-l-4 ${accent} kpi-glow transition-all hover:-translate-y-0.5`}>
+    <div className={`relative overflow-hidden rounded-xl bg-board-surface p-3 sm:p-4 border-l-4 ${accent} kpi-glow transition-all hover:-translate-y-0.5`}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <p className="text-xs font-medium text-board-muted truncate">{title}</p>
           <p className={`mt-1.5 font-bold text-board-text leading-tight break-words ${valSize}`}>{value}</p>
-          {sub && <p className="mt-1 text-xs text-board-muted leading-snug line-clamp-2" title={sub}>{sub}</p>}
+          {sub && <p className="mt-1 text-xs text-board-muted leading-snug line-clamp-3 sm:line-clamp-2" title={sub}>{sub}</p>}
         </div>
-        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${iconBg}`}><Icon className="h-4.5 w-4.5" /></div>
+        <div className={`flex h-7 w-7 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-lg ${iconBg}`}><Icon className="h-4 w-4 sm:h-4.5 sm:w-4.5" /></div>
       </div>
     </div>
   );
@@ -86,8 +88,8 @@ function PctBadge({ pct }: { pct: number | null }) {
 function GrowthSub({ label, pct, value, refLine }: { label: string; pct: number | null; value: string; refLine: string }) {
   const tone = pct == null ? "text-board-text" : pct >= 0 ? "text-green-500" : "text-red-400";
   return (
-    <div className="p-4 space-y-2">
-      <div className="flex items-center justify-between gap-2">
+    <div className="p-3 sm:p-4 space-y-2 min-w-0">
+      <div className="flex flex-wrap items-center justify-between gap-1">
         <p className="text-[10px] font-semibold text-board-muted uppercase tracking-wider">{label}</p>
         <PctBadge pct={pct} />
       </div>
@@ -166,8 +168,12 @@ function SerieMensal({
   titulo: string; acumulado: string; cor: string;
   dados: Array<Record<string, unknown>>; campo: string; moeda?: boolean;
 }) {
+  // No celular (390px) os 12 meses com `interval={0}` se atropelavam no eixo:
+  // o rótulo vai inclinado e menor, e o valor sobre a barra encolhe — continua
+  // mostrando TODOS os meses (ver o comentário do XAxis), só cabe.
+  const mobile = useIsMobile();
   return (
-    <div className="rounded-lg border border-border bg-board-surface/40 p-4">
+    <div className="rounded-lg border border-border bg-board-surface/40 p-3 sm:p-4">
       <div className="flex items-center justify-between mb-3">
         <div>
           <p className="text-[10px] font-bold text-board-muted uppercase tracking-widest">{titulo}</p>
@@ -180,21 +186,22 @@ function SerieMensal({
           grade é de DUAS colunas (ver abaixo) e a altura sobe junto: o espaço
           vertical é o que dá ar aos rótulos em cima das barras. */}
       <ResponsiveContainer width="100%" height={260}>
-        <ComposedChart data={dados} margin={{ top: 26, right: 10, bottom: 0, left: 0 }}>
+        <ComposedChart data={dados} margin={{ top: 26, right: mobile ? 4 : 10, bottom: 0, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
           {/* `interval={0}` obriga a mostrar TODOS os meses: deixar o Recharts
               decidir faz ele pular rótulo quando aperta, e mês faltando num
               eixo se lê como mês sem venda. */}
-          <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} dy={4} interval={0} />
-          <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false}
-                 width={moeda ? 48 : 32} tickFormatter={moeda ? kAxis : undefined} />
+          <XAxis dataKey="mes" tick={{ fontSize: mobile ? 9 : 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false}
+                 dy={4} interval={0} angle={mobile ? -45 : 0} textAnchor={mobile ? "end" : "middle"} height={mobile ? 40 : 30} />
+          <YAxis allowDecimals={false} tick={{ fontSize: mobile ? 10 : 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false}
+                 width={moeda ? (mobile ? 40 : 48) : 28} tickFormatter={moeda ? kAxis : undefined} />
           <Tooltip cursor={{ fill: "rgba(148,163,184,0.08)" }}
                    content={moeda ? <DarkTip fmt={brl} /> : <DarkTip unit=" vendas" />} />
           <Bar dataKey={campo} name={titulo} fill={`${cor}30`} stroke={cor} strokeWidth={1.4}
                radius={[4, 4, 0, 0]} maxBarSize={56} isAnimationActive={false}>
             <LabelList dataKey={campo} position="top"
                        formatter={(v: any) => (moeda ? (v >= 1000 ? `R$${(v / 1000).toFixed(0)}k` : `R$${Math.round(v)}`) : v)}
-                       style={{ fontSize: 11, fill: cor, fontWeight: 700 }} />
+                       style={{ fontSize: mobile ? 8 : 11, fill: cor, fontWeight: 700 }} />
           </Bar>
           {/* ⚠️ `tooltipType="none"`: a linha e a barra são o MESMO dataKey, e
               sem isto o tooltip mostrava o valor DUAS vezes, uma embaixo da
@@ -426,7 +433,7 @@ export default function DashboardComercial() {
   const hasData = (monthly.reduce((s, m) => s + m.pedidos, 0)) > 0;
 
   return (
-    <main className="p-4 lg:p-6 board-fade-in">
+    <main className="p-3 sm:p-4 lg:p-6 board-fade-in">
       <div className="space-y-3 max-w-[1600px] mx-auto">
         {/* Falha de consulta tem de aparecer. Sem isto, um erro no banco vira
             um dashboard zerado — indistinguível de "não vendemos nada". */}
@@ -445,7 +452,7 @@ export default function DashboardComercial() {
         {/* 1. Header + filtros */}
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <CarboPageHeader icon={TrendingUp} title="Dashboard — Comercial" description="Licenciados, pedidos e performance de vendas" />
-          <div className="flex flex-col items-end gap-2 shrink-0">
+          <div className="flex w-full sm:w-auto min-w-0 flex-col items-end gap-2">
             <ComercialTabs />
             <ComercialFilterBar filters={filters} onChange={setFilters} />
           </div>
@@ -456,7 +463,7 @@ export default function DashboardComercial() {
             (`carbo_vendas_metrica`), a terceira da NFS-e do portal nacional.
             Elas não se sobrepõem — é por isso que somar é legítimo aqui, e a
             medição que provou isso está no `useServicosNfse`. */}
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-2 sm:gap-3 grid-cols-2 lg:grid-cols-4">
           <KpiCard title="CarboZé on-line" value={fmtK(data?.totalOnline ?? 0)}
                    sub={`${data?.qtdOnline ?? 0} pedidos · marketplaces e loja própria`}
                    Icon={Globe} accent="border-l-blue-500" iconBg="bg-blue-500/10 text-blue-500" />
@@ -486,7 +493,7 @@ export default function DashboardComercial() {
         )}
 
         {/* 2b. KPIs */}
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-2 sm:gap-3 grid-cols-2 lg:grid-cols-4">
           {/* ⚠️ A unidade NÃO é a mesma nas duas bases: no Bling conta-se
               PEDIDO, na NFS-e conta-se NOTA de serviço. Somar só é honesto com
               a composição escrita embaixo — um "1551" sozinho esconderia que
@@ -556,7 +563,7 @@ export default function DashboardComercial() {
 
         {/* 4. Evolução Mensal */}
         <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">
-          <div className="flex items-center justify-between border-b border-border px-6 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-border px-4 sm:px-6 py-3">
             <div>
               <h2 className="text-base font-bold text-board-text flex items-center gap-2"><BarChart3 className="h-4 w-4 text-primary" /> Evolução Mensal de Vendas</h2>
               <p className="text-xs text-board-muted mt-0.5">Via Bling · <span className="font-semibold text-board-text">{k?.totalVendas ?? 0} pedidos</span> · <span className="font-semibold text-green-500">{brl(k?.totalBRL ?? 0)} acumulado</span></p>
@@ -606,7 +613,7 @@ export default function DashboardComercial() {
             inteira; painel de um gráfico só é que pode dividir. */}
         <div className="space-y-3">
           <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">
-            <div className="flex items-center justify-between border-b border-border px-6 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-border px-4 sm:px-6 py-3">
               <div>
                 <h2 className="text-base font-bold text-board-text flex items-center gap-2"><TrendingUp className="h-4 w-4 text-orange-400" /> Crescimento Anual</h2>
                 <p className="text-xs text-board-muted mt-0.5">Real (produto + serviço) vs <span className="font-semibold text-orange-400">meta configurada</span> · {year}</p>
@@ -633,7 +640,7 @@ export default function DashboardComercial() {
           </div>
 
           <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">
-            <div className="flex items-center justify-between border-b border-border px-6 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-border px-4 sm:px-6 py-3">
               <div>
                 <h2 className="text-base font-bold text-board-text flex items-center gap-2"><TrendingUp className="h-4 w-4 text-violet-500" /> Evolução do Ticket Médio</h2>
                 <p className="text-xs text-board-muted mt-0.5">Valor médio por pedido mês a mês · <span className="font-semibold text-violet-500">{fmtK(k?.ticketMedio ?? 0)} média geral</span></p>
@@ -666,7 +673,7 @@ export default function DashboardComercial() {
         {/* 7. Vendas por canal + Clientes por canal */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
           <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">
-            <div className="border-b border-border px-6 py-3">
+            <div className="border-b border-border px-4 sm:px-6 py-3">
               <h2 className="text-base font-bold text-board-text flex items-center gap-2"><BarChart3 className="h-4 w-4 text-blue-400" /> Vendas por Canal</h2>
               <p className="text-xs text-board-muted mt-0.5">Consumo · Revenda · On-line · CarboVAPT (NFS-e) · classifique cada pedido em <Link to="/comercial/dados/pedidos" className="font-semibold text-primary hover:underline">Pedidos</Link></p>
             </div>
@@ -710,7 +717,7 @@ export default function DashboardComercial() {
           </div>
 
           <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">
-            <div className="flex items-center justify-between border-b border-border px-6 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-border px-4 sm:px-6 py-3">
               <div>
                 <h2 className="text-base font-bold text-board-text flex items-center gap-2"><Repeat2 className="h-4 w-4 text-blue-400" /> Crescimento de Clientes por Canal</h2>
                 {/* Dito na tela: a linha PDV sai do CADASTRO de pontos, as
@@ -730,10 +737,10 @@ export default function DashboardComercial() {
                   </div>
                 )}
               </div>
-              <div className="flex flex-col items-end gap-1.5">
+              <div className="flex flex-col items-start sm:items-end gap-1.5">
                 <div className="inline-flex rounded-lg border border-border overflow-hidden text-[11px]">
                   {([["acum", "Acumulado"], ["ativos", "Ativos/mês"], ["novos", "Novos/mês"]] as const).map(([k2, l]) => (
-                    <button key={k2} onClick={() => setModoClientes(k2)} className={`px-2.5 py-1 font-medium transition-colors ${modoClientes === k2 ? "bg-primary text-primary-foreground" : "text-board-muted hover:bg-muted/50"}`}>{l}</button>
+                    <button key={k2} onClick={() => setModoClientes(k2)} className={`px-2.5 py-1.5 sm:py-1 font-medium transition-colors ${modoClientes === k2 ? "bg-primary text-primary-foreground" : "text-board-muted hover:bg-muted/50"}`}>{l}</button>
                   ))}
                 </div>
                 <div className="hidden sm:flex items-center gap-3 text-[10px] text-board-muted">
@@ -771,7 +778,7 @@ export default function DashboardComercial() {
 
         {/* 8. Metas por canal */}
         <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">
-          <div className="flex items-center justify-between border-b border-border px-6 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-border px-4 sm:px-6 py-3">
             <div>
               <h2 className="text-base font-bold text-board-text flex items-center gap-2"><BarChart3 className="h-4 w-4 text-blue-400" /> Metas por Canal · {year}</h2>
               <p className="text-xs text-board-muted mt-0.5">Real (barras) vs meta (linha) de cada canal · a meta geral está na curva acima</p>
@@ -870,7 +877,7 @@ export default function DashboardComercial() {
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 items-start">
           {/* ── On-line ───────────────────────────────────────────────────── */}
           <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">
-            <div className="border-b border-border px-6 py-3">
+            <div className="border-b border-border px-4 sm:px-6 py-3">
               <h2 className="text-base font-bold text-board-text flex items-center gap-2"><Globe className="h-4 w-4 text-blue-400" /> Unidades · On-line</h2>
               <p className="text-xs text-board-muted mt-0.5">
                 <span className="font-semibold text-blue-500">{fmtNum(unidades?.onUnidades ?? 0)} unidades</span> ao cliente · {fmtNum(unidades?.onPacks ?? 0)} packs · {fmtK(unidades?.onReceita ?? 0)}
@@ -891,7 +898,7 @@ export default function DashboardComercial() {
 
           {/* ── Comercial Expansão (chave `eq*`, ex-"equipe / balcão") ────── */}
           <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">
-            <div className="border-b border-border px-6 py-3">
+            <div className="border-b border-border px-4 sm:px-6 py-3">
               <h2 className="text-base font-bold text-board-text flex items-center gap-2"><ShoppingCart className="h-4 w-4 text-green-500" /> Unidades · Comercial Expansão</h2>
               {/* ⚠️ O número grande da equipe é o ITEM DO CATÁLOGO, e o rótulo
                   diz isso. Chamá-lo de "unidade" faria o kit de sachês valer 1

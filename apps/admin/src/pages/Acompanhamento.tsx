@@ -231,7 +231,7 @@ export default function Acompanhamento() {
                   <Vazio texto="Nenhum lead em aberto." />
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
+                    <table className="w-full min-w-[640px] text-xs">
                       <thead className="text-muted-foreground">
                         <tr className="border-b">
                           <th className="text-left font-medium py-1.5">Pessoa</th>
@@ -275,7 +275,7 @@ export default function Acompanhamento() {
                   <Vazio texto="Nenhum lead em aberto." />
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
+                    <table className="w-full min-w-[600px] text-xs">
                       <thead className="text-muted-foreground">
                         <tr className="border-b">
                           <th className="text-left font-medium py-1.5">Etapa</th>
@@ -332,7 +332,7 @@ export default function Acompanhamento() {
                   )}
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
+                  <table className="w-full min-w-[600px] text-xs">
                     <thead className="text-muted-foreground">
                       <tr className="border-b">
                         <th className="text-left font-medium py-1.5">SDR</th>

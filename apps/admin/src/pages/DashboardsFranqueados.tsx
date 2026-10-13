@@ -377,7 +377,7 @@ export default function DashboardsFranqueados() {
               ) : lojas.length === 0 ? (
                 <p className="px-5 py-8 text-center text-sm text-muted-foreground">Nenhuma loja ativa.</p>
               ) : (
-                <table className="w-full text-sm">
+                <table className="w-full min-w-[520px] text-sm">
                   <thead className="bg-secondary/30">
                     <tr>
                       <th scope="col" className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Loja</th>

@@ -356,11 +356,11 @@ export default function DashboardsMetas() {
           {/* Team total */}
           <CarboCard className={`border ${totalColor === "green" ? "border-green-500/30" : totalColor === "yellow" ? "border-amber-500/30" : totalColor === "red" ? "border-red-500/30" : ""}`}>
             <CarboCardContent className="p-4">
-              <div className="flex items-center justify-between gap-4 mb-3">
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 mb-3">
                 <div>
                   <p className="text-xs text-muted-foreground uppercase tracking-wider">{canSeeValues ? "Total do Time" : "Meta do mês"}</p>
                   {canSeeValues ? (
-                    <div className="flex items-end gap-2 mt-0.5">
+                    <div className="flex flex-wrap items-end gap-x-2 mt-0.5">
                       <p className={`text-2xl font-bold tabular-nums ${totalColors.text}`}>{fmtBRL(totalActual)}</p>
                       <p className="text-muted-foreground mb-0.5">/ {fmtBRL(totalTarget)}</p>
                     </div>

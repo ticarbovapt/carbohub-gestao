@@ -80,7 +80,7 @@ function Fila() {
       ) : (
         <CarboCard>
           <CarboCardContent className="p-0 overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[900px] text-sm">
               <thead>
                 <tr className="border-b text-left text-xs text-muted-foreground">
                   <th className="px-4 py-2 font-medium">Pedido</th>
@@ -308,7 +308,7 @@ function FilaFabricacao() {
       ) : (
         <CarboCard>
           <CarboCardContent className="p-0 overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[900px] text-sm">
               <thead>
                 <tr className="border-b text-left text-xs text-muted-foreground">
                   <th className="px-4 py-2 font-medium">Pedido</th>

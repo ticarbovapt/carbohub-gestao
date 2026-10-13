@@ -140,7 +140,7 @@ function InternalSection({ rows }: { rows: LoginRow[] }) {
 
       <div className="rounded-xl border border-border overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[680px] text-sm">
             <thead><tr className="border-b border-border bg-secondary/30">
               <th className={th}>Nome</th><th className={th}>Departamento</th><th className={th}>Função</th>
               <th className={th}>Último sistema</th><th className={th}>Último acesso</th><th className={th}>Status</th>
@@ -207,7 +207,7 @@ function LicenseesSection({ rows }: { rows: LoginRow[] }) {
       </div>
       <div className="rounded-xl border border-border overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[600px] text-sm">
             <thead><tr className="border-b border-border bg-secondary/30">
               <th className={th}>Licenciado</th><th className={th}>Região</th><th className={th}>Último acesso</th>
               <th className={th}>Pedidos (30d)</th><th className={th}>Status</th>
@@ -261,7 +261,7 @@ function LojasSection({ rows }: { rows: LoginRow[] }) {
       </div>
       <div className="rounded-xl border border-border overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[600px] text-sm">
             <thead><tr className="border-b border-border bg-secondary/30">
               <th className={th}>Loja</th><th className={th}>Rede</th><th className={th}>Último acesso</th>
               <th className={th}>Última reposição</th><th className={th}>Status</th>
