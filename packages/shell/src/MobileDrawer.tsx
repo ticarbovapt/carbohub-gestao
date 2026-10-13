@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { NavLink } from "react-router-dom";
-import { Lock } from "lucide-react";
+import { Lock, X } from "lucide-react";
 import { cn } from "./cn";
 import { AcademyNavLink } from "./AcademyNavLink";
 import type { ShellBrand, ShellNavItem, ShellNavSection } from "./types";
@@ -32,7 +32,7 @@ function DrawerItem({
       <div
         title={item.lockedHint}
         className={cn(
-          "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium",
+          "flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium",
           "cursor-not-allowed text-muted-foreground/50",
         )}
       >
@@ -51,7 +51,7 @@ function DrawerItem({
         onClick={onNavigate}
         className={({ isActive }) =>
           cn(
-            "group relative flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+            "group relative flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
             isActive
               ? "bg-primary/10 text-primary"
               : "text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -177,12 +177,12 @@ export function MobileDrawer({
         )}
       >
         {/* Brand header (no collapse toggle on mobile) */}
-        <div className="flex h-14 shrink-0 items-center gap-2.5 border-b border-border px-4">
+        <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border pl-4 pr-2">
           {brand.href ? (
             <a
               href={brand.href}
               onClick={() => onOpenChange(false)}
-              className="flex items-center gap-2.5 overflow-hidden text-left"
+              className="flex min-w-0 flex-1 items-center gap-2.5 overflow-hidden text-left"
             >
               <img
                 src={brand.logoSrc}
@@ -200,7 +200,7 @@ export function MobileDrawer({
                 brand.onLogoClick?.();
                 onOpenChange(false);
               }}
-              className="flex items-center gap-2.5 overflow-hidden text-left"
+              className="flex min-w-0 flex-1 items-center gap-2.5 overflow-hidden text-left"
             >
               <img
                 src={brand.logoSrc}
@@ -212,10 +212,18 @@ export function MobileDrawer({
               </span>
             </button>
           )}
+          <button
+            type="button"
+            onClick={() => onOpenChange(false)}
+            aria-label="Fechar menu"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 space-y-1 overflow-y-auto p-3">
+        <nav className="flex-1 space-y-1 overflow-y-auto overscroll-contain p-3">
           {sections.map((section, i) => (
             <DrawerSection
               key={section.label ?? `section-${i}`}
@@ -227,7 +235,7 @@ export function MobileDrawer({
         </nav>
 
         {footer && (
-          <div className="shrink-0 border-t border-border p-3">{footer}</div>
+          <div className="shrink-0 border-t border-border p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">{footer}</div>
         )}
       </aside>
     </div>

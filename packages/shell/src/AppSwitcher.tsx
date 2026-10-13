@@ -151,7 +151,7 @@ export function AppSwitcher(props: AppSwitcherProps) {
         <div
           role="menu"
           aria-label="Trocar de sistema"
-          className="absolute left-0 z-50 mt-1 w-[300px] rounded-xl border border-border bg-popover p-1.5 shadow-xl"
+          className="absolute left-0 z-50 mt-1 max-h-[calc(100dvh-5rem)] w-[300px] max-w-[calc(100vw-1.5rem)] overflow-y-auto overscroll-contain rounded-xl border border-border bg-popover p-1.5 shadow-xl"
           style={{
             opacity: mounted ? 1 : 0,
             transform: mounted ? "translateY(0)" : "translateY(-4px)",

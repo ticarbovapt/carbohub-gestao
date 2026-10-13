@@ -78,7 +78,7 @@ const CarboKPI = React.forwardRef<HTMLDivElement, CarboKPIProps>(
             {Icon && (
               <div
                 className={cn(
-                  "h-10 w-10 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-200",
+                  "h-10 w-10 rounded-xl hidden sm:flex items-center justify-center shrink-0 transition-transform duration-200",
                   onClick && "group-hover:scale-110",
                   iconColorMap[iconColor]
                 )}
@@ -94,7 +94,7 @@ const CarboKPI = React.forwardRef<HTMLDivElement, CarboKPIProps>(
                 </>
               ) : (
                 <>
-                  <p className="text-2xl font-bold text-foreground kpi-number truncate animate-count-up">
+                  <p className="text-base sm:text-2xl font-bold text-foreground kpi-number break-words animate-count-up">
                     {canAnimate ? (
                       <AnimatedKPIValue value={numericValue} />
                     ) : (

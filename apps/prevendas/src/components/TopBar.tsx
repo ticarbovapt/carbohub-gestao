@@ -79,8 +79,8 @@ export function TopBar({ appName, appKey, onMenu }: { appName: string; appKey: s
 
   return (
     <header className="border-b bg-card sticky top-0 z-30">
-      <div className="px-4 h-14 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-1.5">
+      <div className="px-2 sm:px-4 h-14 flex items-center justify-between gap-2 sm:gap-3">
+        <div className="flex min-w-0 items-center gap-1 sm:gap-1.5">
           {onMenu && (
             <Button variant="ghost" size="icon" className="h-9 w-9" onClick={onMenu} title="Abrir/fechar menu">
               <Menu className="h-4 w-4" />
@@ -89,7 +89,7 @@ export function TopBar({ appName, appKey, onMenu }: { appName: string; appKey: s
           <AppSwitcher appName={appName} appKey={appKey} logoSrc={logoCarbo} supabase={supabase} userId={user?.id} />
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
           <QuickAddMenu />
           <NotificationBell />
           <BugButton />
@@ -100,7 +100,7 @@ export function TopBar({ appName, appKey, onMenu }: { appName: string; appKey: s
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-2.5 rounded-full pl-1 pr-2.5 py-1 hover:bg-muted transition-colors">
+              <button className="flex items-center gap-2.5 rounded-full p-1 sm:pr-2.5 hover:bg-muted transition-colors">
                 <img src={avatar} alt="" className="h-8 w-8 rounded-full object-cover ring-1 ring-border" />
                 <span className="hidden sm:flex flex-col items-start leading-tight min-w-0">
                   <span className="text-sm font-medium max-w-[180px] truncate">{name}</span>
