@@ -82,11 +82,11 @@ export default function PosVenda() {
               : "Nenhum pedido manual em acompanhamento."}
           </p>
         ) : (
-          <div className="flex gap-3 overflow-x-auto flex-1 min-h-0">
+          <div className="flex gap-3 overflow-x-auto flex-1 min-h-0 snap-x snap-mandatory sm:snap-none">
             {POSVENDA_STAGES.map((stage) => {
               const items = byStage[stage.key] ?? [];
               return (
-                <div key={stage.key} className="flex-1 min-w-[230px] h-full rounded-2xl border border-border bg-board-surface/40 flex flex-col">
+                <div key={stage.key} className="flex-1 min-w-[85vw] sm:min-w-[230px] snap-start h-full rounded-2xl border border-border bg-board-surface/40 flex flex-col">
                   <div className="px-3 py-2.5 border-b border-border flex items-center justify-between shrink-0">
                     <span className="flex items-center gap-2 text-sm font-semibold">
                       <span className="h-2.5 w-2.5 rounded-full" style={{ background: stage.color }} />
@@ -105,7 +105,7 @@ export default function PosVenda() {
                           className="rounded-xl border border-border bg-card p-3 space-y-1.5 cursor-pointer hover:border-carbo-green/40 transition"
                         >
                           <div className="flex items-start justify-between gap-2">
-                            <span className="font-medium text-sm truncate">{o.customer_name}</span>
+                            <span className="font-medium text-sm truncate min-w-0">{o.customer_name}</span>
                             <span className="text-xs font-semibold tabular-nums shrink-0">{brl(Number(o.total))}</span>
                           </div>
                           <p className="text-[11px] text-muted-foreground font-mono">{o.order_number || "—"}</p>
@@ -128,7 +128,7 @@ export default function PosVenda() {
       </div>
 
       <Dialog open={!!detail} onOpenChange={(o) => !o && setDetail(null)}>
-        <DialogContent className="max-w-lg max-h-[88vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg max-h-[88dvh] overflow-y-auto">
           {detail && (
             <>
               <DialogHeader>
@@ -169,8 +169,8 @@ export default function PosVenda() {
                   <div className="rounded-lg border border-border divide-y">
                     {(Array.isArray(detail.items) ? detail.items : []).map((it, i) => (
                       <div key={i} className="flex items-center justify-between px-3 py-2 text-xs">
-                        <span className="truncate">{it.name ?? "Item"} <span className="text-muted-foreground">× {it.quantity ?? 1}</span></span>
-                        <span className="tabular-nums">{brl(Number(it.total ?? (it.quantity ?? 0) * (it.unit_price ?? 0)))}</span>
+                        <span className="truncate min-w-0">{it.name ?? "Item"} <span className="text-muted-foreground">× {it.quantity ?? 1}</span></span>
+                        <span className="tabular-nums shrink-0">{brl(Number(it.total ?? (it.quantity ?? 0) * (it.unit_price ?? 0)))}</span>
                       </div>
                     ))}
                     {(!Array.isArray(detail.items) || detail.items.length === 0) && (

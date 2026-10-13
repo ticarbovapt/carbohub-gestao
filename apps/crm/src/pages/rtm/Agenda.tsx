@@ -258,7 +258,7 @@ export default function RtmAgenda() {
         {visao === "lista" && (
           <div className="flex items-center gap-2 flex-wrap">
             <Input type="date" value={dia} onChange={(e) => setDia(e.target.value || diaLocal())}
-              className="w-[150px] h-9" />
+              className="w-[170px] md:w-[150px] h-9" />
             {dia !== hoje && (
               <Button size="sm" variant="ghost" className="h-9" onClick={() => setDia(hoje)}>Hoje</Button>
             )}
@@ -975,7 +975,7 @@ function DialogAgendar({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader><DialogTitle>Agendar visita</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <div>

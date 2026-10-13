@@ -287,7 +287,7 @@ export default function Metas() {
   }));
 
   return (
-    <div className="p-4 md:p-6 space-y-5 max-w-4xl mx-auto">
+    <div className="w-full p-4 md:p-6 space-y-5 max-w-4xl mx-auto">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
@@ -357,7 +357,7 @@ export default function Metas() {
           {/* Team total */}
           <CarboCard className={`border ${totalColor === "green" ? "border-green-500/30" : totalColor === "yellow" ? "border-amber-500/30" : totalColor === "red" ? "border-red-500/30" : ""}`}>
             <CarboCardContent className="p-4">
-              <div className="flex items-center justify-between gap-4 mb-3">
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 mb-3">
                 <div>
                   <p className="text-xs text-muted-foreground uppercase tracking-wider">{isGestor ? "Total do Time" : "Sua meta do mês"}</p>
                   {canSeeValues ? (
