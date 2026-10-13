@@ -80,7 +80,7 @@ export function KanbanBoard({ leads, funnelType, onAdvance, onMarkLost, onLeadCl
       onDragCancel={() => setActiveId(null)}
       autoScroll={{ threshold: { x: 0.2, y: 0.2 }, acceleration: 18 }}
     >
-      <div className="flex gap-3 overflow-x-auto overflow-y-hidden pb-4">
+      <div className="flex gap-3 overflow-x-auto overflow-y-hidden pb-4 snap-x snap-proximity sm:snap-none">
         {stages.map((stage) => (
           <KanbanColumn
             key={stage.id}
@@ -120,7 +120,7 @@ function KanbanColumn({
   const totalValor = leads.reduce((s, l) => s + (Number(l.estimated_revenue) || 0), 0);
   const fmtK = (v: number) => v >= 1000 ? `R$ ${(v / 1000).toFixed(v % 1000 === 0 ? 0 : 1)}k` : `R$ ${v}`;
   return (
-    <div className="flex-shrink-0 w-72 bg-[hsl(var(--kanban-col))] rounded-xl border border-border flex flex-col h-[calc(100vh-260px)]">
+    <div className="flex-shrink-0 w-[86vw] max-w-[22rem] snap-start sm:w-72 sm:max-w-none bg-[hsl(var(--kanban-col))] rounded-xl border border-border flex flex-col h-[calc(100vh-260px)]">
       {/* Column header */}
       <div
         className="sticky top-0 p-3 border-b border-border bg-background/80 backdrop-blur-sm rounded-t-xl"

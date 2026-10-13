@@ -4729,6 +4729,9 @@ supabase/migrations/20261046…        carbo_interface_e_interna: É time intern
    ganharam a QUALIFICAÇÃO DE POSTO (`perguntasDeQualificacao`). **Não copie o
    `crm` por cima deles**, nem o contrário; correção que valha para os dois
    entra nos dois à mão. Os outros dez continuam idênticos.
+   ⚠️ **Desde 13/10/2026 são CINCO**: `components/crm/KanbanBoard.tsx` do
+   `prevendas` ganhou colunas `86vw` + snap no celular (passada mobile), e o
+   do `crm` ficou como estava pela mesma regra. Os outros nove, idênticos.
    **A qualificação do Pré-Vendas** (f14 e o closer f15): o lead é POSTO já
    cliente de quem indica, nunca prospecção a frio nem PDV do nosso cadastro.
    Perguntas: Quantos postos (rede) · Quem decide no posto · Movimento do

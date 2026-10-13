@@ -474,7 +474,7 @@ export default function Pipelines() {
             <CarboKPI title="Funis" value={FUNNELS.length} icon={KanbanSquare} iconColor="green" />
           </div>
         ) : (
-          <div className={`grid grid-cols-2 gap-3 ${MOSTRA_QUENTES_E_TENTATIVAS ? "md:grid-cols-5" : "md:grid-cols-3"}`}>
+          <div className={`grid grid-cols-2 gap-3 [&>*:last-child:nth-child(odd)]:col-span-2 md:[&>*:last-child:nth-child(odd)]:col-span-1 ${MOSTRA_QUENTES_E_TENTATIVAS ? "md:grid-cols-5" : "md:grid-cols-3"}`}>
             <CarboKPI title="Total Leads" value={stats?.total || 0} icon={Users} iconColor="blue" loading={!stats} />
             {MOSTRA_QUENTES_E_TENTATIVAS && <CarboKPI title="Quentes" value={stats?.hot || 0} icon={Flame} iconColor="warning" loading={!stats} />}
             <CarboKPI title="Sem Atividade >3d" value={stats?.stale || 0} icon={AlertTriangle} iconColor="warning" loading={!stats} />
@@ -512,7 +512,7 @@ export default function Pipelines() {
             const on = situacao === c.id;
             return (
               <button key={c.id} onClick={() => setSituacao(c.id)}
-                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 sm:px-2 sm:py-0.5 text-[11px] font-medium transition-colors ${
                   on ? "text-foreground" : "border-input text-muted-foreground hover:bg-muted"}`}
                 style={on ? { borderColor: c.cor, background: c.cor + "1a", color: c.cor } : undefined}>
                 {c.label} <span className="opacity-70">{c.n}</span>
@@ -529,7 +529,7 @@ export default function Pipelines() {
             const on = segFilter.includes(sg.id);
             return (
               <button key={sg.id} onClick={() => toggleSeg(sg.id)} title={sg.label}
-                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 sm:px-2 sm:py-0.5 text-[11px] font-medium transition-colors ${
                   on ? "text-foreground" : "border-input text-muted-foreground hover:bg-muted"}`}
                 style={on ? { borderColor: sg.color, background: sg.color + "1a", color: sg.color } : undefined}>
                 <span>{sg.icon}</span> {sg.shortName}
@@ -546,12 +546,12 @@ export default function Pipelines() {
 
         {/* Filtros */}
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex-1 max-w-sm">
+          <div className="basis-full flex-1 sm:basis-0 sm:max-w-sm">
             <CarboSearchInput placeholder="Buscar por nome, CNPJ, cidade..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
           </div>
           {!isAll && (
             <Select value={stageFilter} onValueChange={setStageFilter}>
-              <SelectTrigger className="w-44 h-9 text-xs"><SelectValue placeholder="Estágio" /></SelectTrigger>
+              <SelectTrigger className="flex-1 min-w-[9rem] sm:flex-none sm:w-44 h-9 text-xs"><SelectValue placeholder="Estágio" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos Estágios</SelectItem>
                 {stages.map((s) => <SelectItem key={s.id} value={s.id}>{s.icon} {s.label}</SelectItem>)}
@@ -560,7 +560,7 @@ export default function Pipelines() {
           )}
           {isGestor && (
             <Select value={vendedorFilter} onValueChange={setVendedorFilter}>
-              <SelectTrigger className="w-48 h-9 text-xs"><span className="flex items-center gap-1.5"><Users className="h-3.5 w-3.5" /><SelectValue placeholder="Vendedor" /></span></SelectTrigger>
+              <SelectTrigger className="flex-1 min-w-[10rem] sm:flex-none sm:w-48 h-9 text-xs [&>span]:!flex"><span className="flex min-w-0 items-center gap-1.5 whitespace-nowrap"><Users className="h-3.5 w-3.5 shrink-0" /><SelectValue placeholder="Vendedor" /></span></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os vendedores</SelectItem>
                 {vendedoresDir.map((v) => (
