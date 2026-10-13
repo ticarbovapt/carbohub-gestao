@@ -778,7 +778,7 @@ export default function Vendas() {
         ) : (
           <CarboCard padding="none">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[960px] text-sm">
                 <thead>
                   <tr className="border-b bg-muted/30">
                     {isHead && (
@@ -840,7 +840,7 @@ export default function Vendas() {
                                 aria-label={`Selecionar ${venda.order_number}`} />
                             </td>
                           )}
-                          <td className="p-3">{(() => { const b = statusBadge(venda); return <CarboBadge variant={b.variant} size="sm">{b.label}</CarboBadge>; })()}</td>
+                          <td className="p-3 whitespace-nowrap">{(() => { const b = statusBadge(venda); return <CarboBadge variant={b.variant} size="sm">{b.label}</CarboBadge>; })()}</td>
                           {/* Número + as duas marcas do pedido: unidade de
                               negócio e recorrência. Ficam aqui, coladas no
                               número, porque é a coluna que o olho procura
@@ -964,7 +964,10 @@ export default function Vendas() {
                             {/* ⚠️ +1 no ramo `isHead`: entrou a coluna "Criado por".
                                 colSpan errado não dá erro — desalinha a faixa de
                                 detalhe e some com a borda da última coluna. */}
-                            <td colSpan={isHead ? 10 : 9} className="px-6 py-4 space-y-4">
+                            <td colSpan={isHead ? 10 : 9} className="p-0">
+                              {/* No celular a tabela rola de lado (min-w); o detalhe fica PRESO à
+                                  parte visível (sticky + largura da tela), senão seria lido arrastando. */}
+                              <div className="sticky left-0 w-[calc(100vw-2rem)] px-4 py-4 space-y-4 md:w-auto md:px-6">
                               {/* Cliente */}
                               <div>
                                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Cliente</p>
@@ -1144,7 +1147,7 @@ export default function Vendas() {
                                   Cancelar vem primeiro e com peso visual maior justamente
                                   porque é o que quase sempre se quer. */}
                               {(isHead || venda.vendedor_id === user?.id) && !estaCancelada(venda) && (
-                                <div className="flex justify-end gap-1 pt-2 border-t border-border/60">
+                                <div className="flex flex-wrap justify-end gap-1 pt-2 border-t border-border/60">
                                   {/* Editar usa a MESMA porta do orçamento (/vender?edit=…) —
                                       a tela de venda já sabe carregar o pedido e salvar. Some
                                       quando há NF: aí o pedido tem de espelhar a nota, e o
@@ -1189,6 +1192,7 @@ export default function Vendas() {
                                   </Button>
                                 </div>
                               )}
+                              </div>
                             </td>
                           </tr>
                         )}

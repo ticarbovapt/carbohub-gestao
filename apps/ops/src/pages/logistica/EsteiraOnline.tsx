@@ -926,7 +926,7 @@ export function Detalhe({ row, rastreio, avisos, templates, onClose }: {
     <Dialog open onOpenChange={onClose}>
       {/* Largura amarrada à janela: `max-w` sozinho não impede um filho de
           esticar o contêiner, e foi assim que o diálogo saiu da tela. */}
-      <DialogContent className="w-[min(48rem,calc(100vw-2rem))] max-w-none max-h-[88vh] overflow-y-auto overflow-x-hidden p-0">
+      <DialogContent className="w-[min(48rem,calc(100vw-2rem))] max-w-none grid-cols-[minmax(0,1fr)] max-h-[88vh] overflow-y-auto overflow-x-hidden p-0">
         {/* Cabeçalho fixo: quem é, em que etapa está e quanto vale. É o que a
             pessoa confere antes de falar com o cliente. */}
         <DialogHeader className="sticky top-0 z-10 border-b bg-background/95 px-5 py-4 backdrop-blur">

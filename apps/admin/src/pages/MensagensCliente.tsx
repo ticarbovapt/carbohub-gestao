@@ -225,12 +225,12 @@ function Editor({ t }: { t: TemplateMsg }) {
             )}
 
             {t.etapa === "entregue" && (
-              <div className="mt-3 flex items-center gap-2">
+              <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 sm:flex-nowrap">
                 <span className="text-[11px] text-muted-foreground">esperar</span>
                 <Input type="number" min={0} className="h-8 w-20"
                        value={rascunho.atraso_min}
                        onChange={(e) => setRascunho((r) => ({ ...r, atraso_min: Number(e.target.value) || 0 }))} />
-                <span className="text-[11px] text-muted-foreground">
+                <span className="basis-full text-[11px] text-muted-foreground sm:basis-auto">
                   minutos após a entrega — perguntar “chegou tudo certo?” no
                   mesmo minuto da baixa é antes de a pessoa abrir a caixa
                 </span>

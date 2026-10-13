@@ -370,14 +370,14 @@ export default function Pdvs() {
               value={busca} onChange={(e) => setBusca(e.target.value)} />
           </div>
           <Select value={fUf} onValueChange={setFUf}>
-            <SelectTrigger className="w-[130px]"><SelectValue placeholder="UF" /></SelectTrigger>
+            <SelectTrigger className="min-w-[130px] flex-1 sm:w-[130px] sm:flex-none"><SelectValue placeholder="UF" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todas as UFs</SelectItem>
               {ufs.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={fDono} onValueChange={setFDono}>
-            <SelectTrigger className="w-[170px]"><SelectValue placeholder="Vendedor dono" /></SelectTrigger>
+            <SelectTrigger className="min-w-[150px] flex-1 sm:w-[170px] sm:flex-none"><SelectValue placeholder="Vendedor dono" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos os donos</SelectItem>
               {donos.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}

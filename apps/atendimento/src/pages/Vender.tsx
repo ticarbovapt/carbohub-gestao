@@ -1428,7 +1428,7 @@ export default function Vender() {
           telas mostram para pedido de serviço. Muda o RÓTULO, não o destino. */}
       <CarboCard>
         <CarboCardContent className="p-4 space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="font-semibold flex items-center gap-2"><MapPin className="h-4 w-4 text-carbo-green" /> {ehCarboze ? "Endereço de Entrega" : "Endereço de Faturamento"}</h3>
             <Button variant="outline" size="sm" onClick={localizarNoMapa} disabled={geoLoading}>
               {geoLoading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <MapPin className="h-4 w-4 mr-1" />}
@@ -1546,7 +1546,7 @@ export default function Vender() {
       {ehCarboze && (
       <CarboCard>
         <CarboCardContent className="p-4 space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="font-semibold flex items-center gap-2"><ShoppingCart className="h-4 w-4 text-carbo-green" /> Itens do Pedido</h3>
             <Button variant="outline" size="sm" onClick={() => setRows((p) => [...p, emptyRow()])}>
               <Plus className="h-4 w-4 mr-1" /> Adicionar Item
@@ -1707,7 +1707,7 @@ export default function Vender() {
                     </div>
                     {rows.length > 1 && (
                       <button onClick={() => setRows((p) => p.filter((x) => x.id !== r.id))}
-                        className="p-1.5 rounded hover:bg-destructive/10 text-destructive"><Trash2 className="h-4 w-4" /></button>
+                        className="p-2.5 sm:p-1.5 rounded hover:bg-destructive/10 text-destructive"><Trash2 className="h-4 w-4" /></button>
                     )}
                   </div>
                 </div>
@@ -1723,7 +1723,7 @@ export default function Vender() {
                   ) : (
                   <>
                   {/* Desconto POR ITEM: toggle % | R$ + valor */}
-                  <div className="flex items-center gap-2">
+                  <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap">
                     <span className="text-sm flex items-center gap-1"><Tag className="h-3.5 w-3.5 text-carbo-green" /> Desconto</span>
                     <div className="grid grid-cols-2 gap-1 w-[92px] shrink-0">
                       {([["percent", "%", Percent], ["value", "R$", Tag]] as const).map(([v, label, Ico]) => (
@@ -1734,7 +1734,7 @@ export default function Vender() {
                         </button>
                       ))}
                     </div>
-                    <Input type="number" min={0} step="0.01" className="w-28"
+                    <Input type="number" min={0} step="0.01" className="min-w-[7rem] flex-1 sm:w-28 sm:min-w-0 sm:flex-none"
                       value={r.discValue || ""} onChange={(e) => updateRow(r.id, { discValue: Number(e.target.value) })}
                       placeholder={r.discType === "percent" ? "ex.: 5" : "ex.: 100,00"} />
                   </div>
@@ -1780,7 +1780,7 @@ export default function Vender() {
       {!ehCarboze && (
       <CarboCard>
         <CarboCardContent className="p-4 space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="font-semibold flex items-center gap-2"><Sparkles className="h-4 w-4 text-carbo-green" /> Itens de Serviço</h3>
             <Button variant="outline" size="sm" onClick={() => setServiceRows((p) => [...p, emptyServiceRow()])}>
               <Plus className="h-4 w-4 mr-1" /> Adicionar Serviço
@@ -1851,7 +1851,7 @@ export default function Vender() {
                       )}
                     </div>
                     <button onClick={() => setServiceRows((p) => p.filter((x) => x.id !== s.id))}
-                      className="p-1.5 rounded hover:bg-destructive/10 text-destructive"><Trash2 className="h-4 w-4" /></button>
+                      className="p-2.5 sm:p-1.5 rounded hover:bg-destructive/10 text-destructive"><Trash2 className="h-4 w-4" /></button>
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
@@ -1866,7 +1866,7 @@ export default function Vender() {
                     </div>
                   )}
                   {/* Desconto POR ITEM: toggle % | R$ + valor */}
-                  <div className="flex items-center gap-2">
+                  <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap">
                     <span className="text-sm flex items-center gap-1"><Tag className="h-3.5 w-3.5 text-carbo-green" /> Desconto</span>
                     <div className="grid grid-cols-2 gap-1 w-[92px] shrink-0">
                       {([["percent", "%", Percent], ["value", "R$", Tag]] as const).map(([v, label, Ico]) => (
@@ -1877,7 +1877,7 @@ export default function Vender() {
                         </button>
                       ))}
                     </div>
-                    <Input type="number" min={0} step="0.01" className="w-28"
+                    <Input type="number" min={0} step="0.01" className="min-w-[7rem] flex-1 sm:w-28 sm:min-w-0 sm:flex-none"
                       value={s.discValue || ""} onChange={(e) => updateServiceRow(s.id, { discValue: Number(e.target.value) })}
                       placeholder={s.discType === "percent" ? "ex.: 5" : "ex.: 100,00"} />
                   </div>
@@ -2303,15 +2303,15 @@ export default function Vender() {
           <p className="text-xs text-muted-foreground">Total</p>
           <p className="text-xl font-bold">{brl(orderTotal)}</p>
         </div>
-        <div className="flex items-center gap-2 w-full sm:w-auto">
+        <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:items-center sm:w-auto">
           <Button variant="ghost" className="hidden sm:inline-flex" onClick={sairDaTela}>Cancelar</Button>
-          <Button variant="outline" className="flex-1 sm:flex-none" onClick={handleQuote} disabled={generating || !podeSalvar || editandoVenda}>
+          <Button variant="outline" className="min-w-0 sm:flex-none" onClick={handleQuote} disabled={generating || !podeSalvar || editandoVenda}>
             <FileText className="h-4 w-4 mr-1" /> {generating ? "Gerando..." : (editId ? (<><span className="hidden sm:inline">Salvar e&nbsp;</span>Gerar PDF</>) : (<><span className="hidden sm:inline">Gerar&nbsp;</span>Orçamento</>))}
           </Button>
-          <Button variant="outline" className="flex-1 sm:flex-none" onClick={handleEmailQuote} disabled={emailing || !podeSalvar} title="Salvar, gerar o PDF e enviar ao e-mail do cliente">
+          <Button variant="outline" className="min-w-0 sm:flex-none" onClick={handleEmailQuote} disabled={emailing || !podeSalvar} title="Salvar, gerar o PDF e enviar ao e-mail do cliente">
             <Mail className="h-4 w-4 mr-1" /> {emailing ? "Enviando..." : (<><span className="hidden sm:inline">Enviar por&nbsp;</span>E-mail</>)}
           </Button>
-          <CarboButton onClick={handleSell} className="flex-1 sm:flex-none sm:min-w-[150px]" disabled={!podeSalvar || editFaturado}>
+          <CarboButton onClick={handleSell} className="col-span-2 order-first sm:order-none sm:flex-none sm:min-w-[150px]" disabled={!podeSalvar || editFaturado}>
             <ShoppingCart className="h-4 w-4 mr-1" /> {editFaturado ? "Nota já emitida" : editandoVenda ? "Salvar alterações" : editId ? "Salvar e Vender" : "Gerar Venda"}
           </CarboButton>
         </div>
