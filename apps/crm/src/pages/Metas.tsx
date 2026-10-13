@@ -198,20 +198,13 @@ export default function Metas() {
 
   const { isGestor } = useAuth();
 
-  // ⚠️ VALOR EM R$ NÃO APARECE NESTA TELA — para NINGUÉM, nem gestor.
+  // VALOR EM R$ só para GESTOR (pedido do dono do processo, 13/10/2026):
+  // colaborador vê só o %, para não saber a meta do colega.
   //
-  // Esta é a tela que o time de vendas abre o dia inteiro, e ela fica exposta
-  // em reunião, em tela compartilhada e no celular de quem está em campo. O
-  // que ela precisa responder é "estamos na meta?", e isso é percentual.
-  //
-  // O número em R$ continua existindo e explícito no Carbo Admin, em
-  // Dashboards → Metas (Placar). A regra é de TELA, não de dado: a mesma
-  // fonte (`useMetasVendedores`) alimenta as duas, e o Admin mostra o valor.
-  //
-  // Era `isGestor`. Virou `false` fixo, e não foi apagado junto com os `&&`
-  // que dependem dele de propósito: um dia isto pode voltar a ser uma regra
-  // por perfil, e o caminho do valor continua montado e testado.
-  const canSeeValues: boolean = false;
+  // ⚠️ A trava de verdade é o SERVIDOR: a `crm_metas_board` devolve os valores
+  // zerados para quem não é gestor (`useMetas.ts`). Esta flag só decide o que
+  // a tela desenha — sem ela o colaborador veria "R$ 0 / R$ 0", não a meta.
+  const canSeeValues: boolean = isGestor;
 
   // ⚠️ `isGestor` continua decidindo o ESCOPO — time inteiro × meta própria —
   // e os rótulos. Eram a MESMA flag, e por isso desligar o valor trocaria
