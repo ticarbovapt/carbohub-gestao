@@ -142,7 +142,7 @@ export function SubscriptionsList() {
 
       {/* Toolbar: Ativas/Paradas + setor + novo */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="inline-flex rounded-lg border border-border p-0.5">
             {(["ativa", "pausada", "cancelada"] as SubscriptionStatus[]).map((st) => (
               <button
@@ -231,7 +231,7 @@ export function SubscriptionsList() {
 
       {/* Create/Edit */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg max-h-[90dvh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editSub ? "Editar assinatura" : "Nova assinatura"}</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
@@ -244,7 +244,7 @@ export function SubscriptionsList() {
                 <Input value={form.departamento} onChange={(e) => setForm({ ...form, departamento: e.target.value })} placeholder="TI, Ops, Marketing…" />
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <Label>Valor</Label>
                 <Input type="number" min={0} step="0.01" value={form.valor} onChange={(e) => setForm({ ...form, valor: e.target.value })} placeholder="0,00" />

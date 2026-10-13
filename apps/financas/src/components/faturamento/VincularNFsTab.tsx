@@ -52,7 +52,7 @@ function LinkDialog({ nfe, onClose }: { nfe: OrphanNFe | null; onClose: () => vo
 
   return (
     <Dialog open={!!nfe} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Vincular NF {nfe?.numero || ""} a um pedido</DialogTitle>
           <DialogDescription>
@@ -139,7 +139,7 @@ export function VincularNFsTab() {
           ) : orphans.length === 0 ? (
             <CarboEmptyState icon={FileText} title="Nenhuma NF pendente" description={search ? "Nenhuma NF encontrada." : "Todas as NFs importadas já estão vinculadas a um pedido."} />
           ) : (
-            <CarboTable>
+            <CarboTable className="min-w-[640px]">
               <CarboTableHeader>
                 <CarboTableRow>
                   <CarboTableHead>NF</CarboTableHead>

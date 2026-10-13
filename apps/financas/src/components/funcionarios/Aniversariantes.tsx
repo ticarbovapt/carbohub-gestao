@@ -99,7 +99,7 @@ export function Aniversariantes({ rows }: { rows: EmployeeRow[] }) {
   return (
     <div className="space-y-6">
       {/* ── KPIs ─────────────────────────────────────────────────────────── */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <CarboKPI title="Funcionários" value={bd.total} icon={Users} iconColor="blue" />
         <CarboKPI title={`Aniversariantes de ${MESES[curMonth]}`} value={bd.thisMonth.length} icon={Cake} iconColor="green" />
         {/* Cobertura de cadastro com barra de progresso */}
@@ -188,7 +188,7 @@ export function Aniversariantes({ rows }: { rows: EmployeeRow[] }) {
           {bd.upcoming.length === 0 ? (
             <p className="text-sm text-muted-foreground py-2">Nenhum aniversário nos próximos 30 dias.</p>
           ) : (
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {bd.upcoming.map((e) => <PersonRow key={e.row.key} entry={e} deptLabel={deptLabel} />)}
             </div>
           )}
@@ -216,7 +216,7 @@ export function Aniversariantes({ rows }: { rows: EmployeeRow[] }) {
             {bd.thisMonth.length === 0 ? (
               <p className="text-sm text-muted-foreground py-1">Ninguém faz aniversário este mês.</p>
             ) : (
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {bd.thisMonth.map((e) => <PersonRow key={e.row.key} entry={e} deptLabel={deptLabel} />)}
               </div>
             )}
@@ -224,7 +224,7 @@ export function Aniversariantes({ rows }: { rows: EmployeeRow[] }) {
         </CarboCard>
 
         {/* Demais meses — grid compacto */}
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {otherMonths.map((i) => {
             const lista = bd.byMonth[i];
             const vazio = lista.length === 0;

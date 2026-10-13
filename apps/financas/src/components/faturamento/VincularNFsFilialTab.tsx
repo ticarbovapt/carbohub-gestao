@@ -154,7 +154,7 @@ function DialogoFilial({ nfe, onClose }: { nfe: NfeFilialSemPedido | null; onClo
 
   return (
     <Dialog open={!!nfe} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>
             Vincular NF {nfe?.numero || ""} da FILIAL a um pedido
@@ -396,7 +396,7 @@ export function VincularNFsFilialTab() {
                 : "Toda nota válida da filial já está vinculada a um pedido."}
             />
           ) : (
-            <CarboTable>
+            <CarboTable className="min-w-[860px]">
               <CarboTableHeader>
                 <CarboTableRow>
                   <CarboTableHead><Ordenavel col="nf" rotulo="NF" atual={ordem.col} dir={ordem.dir} aoClicar={trocarOrdem} /></CarboTableHead>

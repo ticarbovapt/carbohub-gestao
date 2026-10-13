@@ -85,9 +85,9 @@ export default function Recebiveis() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground">Títulos a receber de clientes — do sistema e do Bling — com baixa e aging.</p>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
           <Button variant="outline" onClick={() => setShowGerar(true)} className="gap-2"><FileDown className="h-4 w-4" /> Gerar de pedidos faturados</Button>
           <Button onClick={() => setShowNew(true)} className="gap-2 carbo-gradient text-white"><Plus className="h-4 w-4" /> Novo recebível</Button>
         </div>
@@ -302,7 +302,7 @@ function GerarDeVendasDialog({ open, onClose }: { open: boolean; onClose: () => 
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-2xl max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Gerar títulos a receber de pedidos faturados</DialogTitle>
         </DialogHeader>

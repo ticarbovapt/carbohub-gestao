@@ -392,7 +392,7 @@ export default function NfseNacional() {
       {/* ⚠️ QUATRO cartões, e Receita e Despesa NUNCA se fundem num só. Na aba
           "Todas" o quarto é o SALDO — explícito, com sinal —, em vez de um
           "valor líquido" que somaria as duas pontas. */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <CarboKPI title="Notas no filtro" value={resumo.total}
                   icon={FileSpreadsheet} iconColor="blue" animated />
         <CarboKPI title="Receita (emitidas válidas)" value={fmtBRL(resumo.receita)}
@@ -425,24 +425,24 @@ export default function NfseNacional() {
       )}
 
       <div className="flex flex-wrap items-center gap-3">
-        <Tabs value={papel} onValueChange={(v) => troca("papel", v)}>
-          <TabsList>
+        <Tabs value={papel} onValueChange={(v) => troca("papel", v)} className="min-w-0 max-w-full">
+          <TabsList className="max-w-full justify-start overflow-x-auto">
             <TabsTrigger value="emitida">Emitidas · receita</TabsTrigger>
             <TabsTrigger value="recebida">Recebidas · despesa</TabsTrigger>
             <TabsTrigger value="todas">Todas</TabsTrigger>
           </TabsList>
         </Tabs>
 
-        <Tabs value={situacao} onValueChange={(v) => troca("sit", v)}>
-          <TabsList>
+        <Tabs value={situacao} onValueChange={(v) => troca("sit", v)} className="min-w-0 max-w-full">
+          <TabsList className="max-w-full justify-start overflow-x-auto">
             <TabsTrigger value="todas">Todas</TabsTrigger>
             <TabsTrigger value="validas">Só válidas</TabsTrigger>
             <TabsTrigger value="canceladas">Canceladas</TabsTrigger>
           </TabsList>
         </Tabs>
 
-        <Tabs value={ano} onValueChange={(v) => troca("ano", v)}>
-          <TabsList>
+        <Tabs value={ano} onValueChange={(v) => troca("ano", v)} className="min-w-0 max-w-full">
+          <TabsList className="max-w-full justify-start overflow-x-auto">
             <TabsTrigger value="todos">Todos os anos</TabsTrigger>
             {anos.map((a) => <TabsTrigger key={a} value={a}>{a}</TabsTrigger>)}
           </TabsList>
@@ -531,7 +531,7 @@ export default function NfseNacional() {
             //                              só aparece quando DIVERGE
             //   Direção             → deixou de ser coluna: a seta vai colada
             //                          ao valor, que é onde o olho procura
-            <CarboTable>
+            <CarboTable className="min-w-[960px]">
               <CarboTableHeader>
                 <CarboTableRow>
                   {/* A coluna "Nota" carrega número E data, então ela oferece

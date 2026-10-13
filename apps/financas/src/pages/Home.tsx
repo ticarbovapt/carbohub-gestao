@@ -73,7 +73,7 @@ export default function Home() {
           <Kpi to="/compras/requisicoes" icon={ClipboardList} label="RCs a aprovar" value={String(rcPend.length)} tone={rcPend.length > 0 ? "text-warning" : ""} />
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {ATALHOS.map((a) => (
             <Link key={a.to} to={a.to}>
               <CarboCard className="hover:shadow-md transition-shadow cursor-pointer">

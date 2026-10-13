@@ -129,7 +129,7 @@ export function EditOrderDialog({ open, onOpenChange, order }: EditOrderDialogPr
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-2xl max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Editar Pedido</DialogTitle>
           <DialogDescription>
@@ -251,7 +251,7 @@ export function EditOrderDialog({ open, onOpenChange, order }: EditOrderDialogPr
                   </FormItem>
                 )}
               />
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <FormField
                   control={form.control}
                   name="delivery_city"

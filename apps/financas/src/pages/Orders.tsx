@@ -212,7 +212,7 @@ export default function Orders() {
           description="Gestão de pedidos, faturamento e entregas"
           icon={ShoppingBag}
           actions={
-            <>
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <CarboButton variant="outline" size="sm" onClick={handleRefreshAll} disabled={isRefetching}>
                 <RefreshCw className={`h-4 w-4 mr-1 ${isRefetching ? "animate-spin" : ""}`} />
                 {isRefetching ? "Atualizando..." : "Atualizar"}
@@ -250,7 +250,7 @@ export default function Orders() {
                   </Link>
                 </CarboButton>
               )}
-            </>
+            </div>
           }
         />
 
@@ -313,11 +313,12 @@ export default function Orders() {
                 iconColor="green"
                 loading={statsLoading}
                 delay={250}
+                className="col-span-2 md:col-span-1"
               />
             </div>
 
         {/* Pipeline Visual */}
-        <div className="grid grid-cols-6 gap-2">
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
           {(["pending", "confirmed", "invoiced", "shipped", "delivered", "cancelled"] as OrderStatus[]).map((status) => {
             const count = orders.filter((o) => o.status === status).length;
             const Icon = STATUS_ICONS[status];
@@ -353,7 +354,7 @@ export default function Orders() {
             </div>
 
             <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as OrderStatus | "all")}>
-              <SelectTrigger className="w-40 h-11 rounded-xl">
+              <SelectTrigger className="w-full md:w-40 h-11 rounded-xl">
                 <Filter className="h-4 w-4 mr-2" />
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
@@ -368,7 +369,7 @@ export default function Orders() {
             </Select>
 
             <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as "all" | "spot" | "recorrente")}>
-              <SelectTrigger className="w-40 h-11 rounded-xl">
+              <SelectTrigger className="w-full md:w-40 h-11 rounded-xl">
                 {typeFilter === "recorrente" ? <Repeat className="h-4 w-4 mr-2" /> : <Zap className="h-4 w-4 mr-2" />}
                 <SelectValue placeholder="Tipo" />
               </SelectTrigger>

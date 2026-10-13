@@ -118,7 +118,7 @@ function RegrasDialog({ open, onClose, vendedores, defaultRate, defaultRateDesc,
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-xl max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Regras de comissão (%)</DialogTitle>
           <DialogDescription>
@@ -128,14 +128,14 @@ function RegrasDialog({ open, onClose, vendedores, defaultRate, defaultRateDesc,
 
         <div className="space-y-3">
           {/* Cabeçalho das colunas */}
-          <div className="grid grid-cols-[1fr_110px_110px_auto] gap-3 items-end border-b border-border pb-3">
+          <div className="grid grid-cols-[minmax(0,1fr)_64px_64px_auto] sm:grid-cols-[1fr_110px_110px_auto] gap-2 sm:gap-3 items-end border-b border-border pb-3">
             <Label className="text-xs text-muted-foreground">Padrão (sem regra própria)</Label>
             <span className="text-[11px] font-medium text-muted-foreground text-center">Produto (NF)</span>
             <span className="text-[11px] font-medium text-muted-foreground text-center">Descarb.</span>
             <span />
           </div>
 
-          <div className="grid grid-cols-[1fr_110px_110px_auto] gap-3 items-center border-b border-border pb-3">
+          <div className="grid grid-cols-[minmax(0,1fr)_64px_64px_auto] sm:grid-cols-[1fr_110px_110px_auto] gap-2 sm:gap-3 items-center border-b border-border pb-3">
             <Label>% padrão</Label>
             <DecimalInput value={padrao} onValueChange={setPadrao} min={0} max={100} />
             <DecimalInput value={padraoDesc} onValueChange={setPadraoDesc} min={0} max={100} />
@@ -149,7 +149,7 @@ function RegrasDialog({ open, onClose, vendedores, defaultRate, defaultRateDesc,
           {vendedores.length === 0 ? (
             <p className="text-sm text-muted-foreground">Sem vendedores no período.</p>
           ) : vendedores.map((v) => (
-            <div key={v.id} className="grid grid-cols-[1fr_110px_110px_auto] gap-3 items-center">
+            <div key={v.id} className="grid grid-cols-[minmax(0,1fr)_64px_64px_auto] sm:grid-cols-[1fr_110px_110px_auto] gap-2 sm:gap-3 items-center">
               <Label className="truncate">{v.name}</Label>
               <DecimalInput value={porVend[v.id] ?? 0} min={0} max={100}
                 onValueChange={(val) => setPorVend((p) => ({ ...p, [v.id]: val }))} />
@@ -265,15 +265,15 @@ function CalcularTab() {
     <div className="space-y-4">
       <CarboCard>
         <CarboCardContent className="pt-6 flex flex-col md:flex-row md:items-end gap-4">
-          <div className="space-y-1.5">
+          <div className="flex flex-col gap-1.5">
             <Label>De</Label>
             <DatePickerInput value={from} onChange={setFrom} />
           </div>
-          <div className="space-y-1.5">
+          <div className="flex flex-col gap-1.5">
             <Label>Até</Label>
             <DatePickerInput value={to} onChange={setTo} />
           </div>
-          <div className="space-y-1.5 min-w-56">
+          <div className="space-y-1.5 md:min-w-56">
             <Label>Vendedor</Label>
             <Select value={vendFilter} onValueChange={setVendFilter}>
               <SelectTrigger><SelectValue /></SelectTrigger>
@@ -283,7 +283,7 @@ function CalcularTab() {
               </SelectContent>
             </Select>
           </div>
-          <div className="md:ml-auto flex items-center gap-3">
+          <div className="md:ml-auto flex flex-wrap items-center justify-between gap-3">
             <span className="text-sm text-muted-foreground">
               Base total: <strong className="text-foreground">{brl(totalBase)}</strong>
               {totalDescarb > 0 && <span className="text-muted-foreground"> · descarb. {brl(totalDescarb)}</span>}
@@ -308,7 +308,7 @@ function CalcularTab() {
           ) : rows.length === 0 ? (
             <CarboEmptyState icon={DollarSign} title="Sem vendas no período" description="Nenhum vendedor com venda faturada (com NF) ou descarbonização neste período." />
           ) : (
-            <CarboTable>
+            <CarboTable className="min-w-[760px]">
               <CarboTableHeader>
                 <CarboTableRow>
                   <CarboTableHead>Vendedor</CarboTableHead>
@@ -437,7 +437,7 @@ function PayDialog({ st, onClose }: { st: CommissionStatement | null; onClose: (
 
   return (
     <Dialog open={!!st} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Registrar pagamento — {st.vendedor_name || "Vendedor"}</DialogTitle>
           <DialogDescription>
@@ -556,7 +556,7 @@ function PagamentosTab() {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
         <CarboKPI title={filtrado ? "Comissões (filtrado)" : "Comissões geradas"} value={visiveis.length} icon={Receipt} iconColor="blue" />
         <CarboKPI title={filtrado ? "Devido (filtrado)" : "Total devido"} value={brl(totalDevido)} icon={DollarSign} iconColor="warning" />
         <CarboKPI title={filtrado ? "Pago (filtrado)" : "Total pago"} value={brl(totalPago)} icon={CheckCircle2} iconColor="green" />
@@ -610,7 +610,7 @@ function PagamentosTab() {
             <CarboEmptyState icon={Wallet} title="Nada com esse filtro"
               description="Existem comissões geradas, mas nenhuma casa com o vendedor/status selecionado." />
           ) : (
-            <CarboTable>
+            <CarboTable className="min-w-[900px]">
               <CarboTableHeader>
                 <CarboTableRow>
                   <CarboTableHead>Vendedor</CarboTableHead>
@@ -687,12 +687,12 @@ function BotaoNfs({ titulo, nfs, carregando, qtd }: {
   return (
     <>
       <button type="button" onClick={() => setAberto(true)} disabled={carregando && !nfs}
-        className="mt-1 inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-0.5 text-[11px] font-medium text-muted-foreground hover:text-foreground hover:border-foreground/30 disabled:opacity-60">
+        className="mt-1 inline-flex min-h-8 sm:min-h-0 items-center gap-1 rounded-md border border-border bg-background px-2.5 sm:px-2 py-1 sm:py-0.5 text-xs sm:text-[11px] font-medium text-muted-foreground hover:text-foreground hover:border-foreground/30 disabled:opacity-60">
         <FileText className="h-3 w-3" />
         {carregando && !nfs ? "carregando NFs…" : `${n} NF(s)`}
       </button>
       <Dialog open={aberto} onOpenChange={setAberto}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Notas fiscais — {titulo}</DialogTitle>
             <DialogDescription>As NFs que formam a base da comissão. Baixe o DANFE (PDF) ou o XML de cada uma.</DialogDescription>
@@ -733,7 +733,7 @@ function LinhaNf({ nf }: { nf: NfDaBase }) {
   };
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <p className="font-medium">NF {nf.numero ?? "— (ainda não sincronizada)"}</p>
         <p className="truncate text-[11px] text-muted-foreground">
           {nf.order_number ?? "—"} · {nf.customer_name ?? "—"}
@@ -766,7 +766,7 @@ function MemoriaDialog({ st, onClose }: { st: CommissionStatement | null; onClos
   const soma = items.reduce((s, i) => s + Number(i.total), 0);
   return (
     <Dialog open={!!st} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-lg max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Memória de cálculo — {st.vendedor_name || "Vendedor"}</DialogTitle>
           <DialogDescription>
@@ -882,7 +882,7 @@ export default function Comissionamento() {
           }, { replace: true })
         }
       >
-        <TabsList>
+        <TabsList className="max-w-full justify-start overflow-x-auto">
           <TabsTrigger value="calcular" className="gap-2"><Percent className="h-4 w-4" /> Calcular</TabsTrigger>
           <TabsTrigger value="pagamentos" className="gap-2"><Wallet className="h-4 w-4" /> Pagamentos</TabsTrigger>
         </TabsList>

@@ -339,7 +339,7 @@ export function StockOverview() {
               </button>
 
               {!collapsed[g.category] && (
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 mt-3">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 mt-3">
                   {g.items.map(p => {
             const safetyQty = p.safety_stock_qty || p.min_order_qty || 1;
 
@@ -375,7 +375,7 @@ export function StockOverview() {
                   <div className="flex items-start justify-between gap-2 px-5 pt-5 pb-2">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                        <h3 className="font-semibold text-sm text-foreground leading-tight truncate">
+                        <h3 className="min-w-0 max-w-full font-semibold text-sm text-foreground leading-tight truncate">
                           {p.name}
                         </h3>
                         <CarboBadge variant={coverageStatus.variant} size="sm">

@@ -137,7 +137,7 @@ export function StockMovementsList() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="grid gap-2">
                 <Label>Tipo</Label>
                 <Select value={tipo} onValueChange={v => setTipo(v as any)}>

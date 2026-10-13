@@ -456,7 +456,7 @@ export function OrdersAnalytics({ orders, isLoading }: OrdersAnalyticsProps) {
               </div>
               <p className="text-lg font-bold">{vendedorRanking[0].name}</p>
               <p className="text-xs text-muted-foreground mb-3">Maior faturamento líquido (pedidos faturados)</p>
-              <div className="grid grid-cols-4 gap-2 text-center">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
                 <div>
                   <p className="text-xs text-muted-foreground uppercase">Un. Fat.</p>
                   <p className="font-bold text-sm">{vendedorRanking[0].units}</p>
