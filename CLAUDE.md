@@ -4779,3 +4779,18 @@ supabase/migrations/20261046…        carbo_interface_e_interna: É time intern
     ⚠️ Quem não é gestor vê só o que ELE repassou, mesmo que a função também
     devolva o que ele pegou como closer — a visão do closer é outra tela,
     combinada para depois.
+12. **Gestor vê TUDO, colaborador só o PRÓPRIO** (dono do processo, 14/10/2026,
+    `20261081`). Gestor = `carbo_prevendas_gestor()` = `carbo_is_gestor` (a
+    MESMA flag de função do Admin que o `isGestor` da tela usa) **e** o app
+    (`carbo_tem_app(['carbo_prevendas'])`, admin passa). Antes o banco
+    perguntava `crm_is_gestor()` (head/command/ti), e um gerente marcado gestor
+    via tela de gestor com os dados de colaborador.
+    ⚠️ É SOMADA (OR) a `crm_is_gestor()` em `carbo_prevendas_vendas`,
+    `carbo_prevendas_repasses`, `crm_list_vendedores` e nas regras de SELECT/
+    UPDATE de `crm_sales_leads` — e nos cards **só para f14/f15**: o Sales não
+    muda. Textos trocados a partir do banco; o antes está em
+    `carbo_backup_funcoes` e `carbo_backup_policies`.
+    ⚠️ Os cartões do topo do Pipeline saem da MESMA lista do quadro (já no
+    escopo), não do `useCRMStats`, que lia o funil inteiro.
+13. **Sem Carbo Chat** (dono do processo, 14/10/2026): sem menu, sem card na
+    home, sem `ChatProvider`; `/chat` volta para a home.

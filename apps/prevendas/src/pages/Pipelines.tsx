@@ -13,7 +13,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { Plus, Users, TrendingUp, AlertTriangle, Flame, LayoutGrid, List, KanbanSquare } from "lucide-react";
-import { useCRMLeads, useAllCRMLeads, useCRMStats, useAdvanceLeadStage, useMarkLeadLost, useCRMLeadsRealtime } from "@/hooks/useCRMLeads";
+import { useCRMLeads, useAllCRMLeads, useAdvanceLeadStage, useMarkLeadLost, useCRMLeadsRealtime } from "@/hooks/useCRMLeads";
 import { useRepassarLead } from "@/hooks/useRepasse";
 import { useLeadPorId } from "@/hooks/useLeadPorId";
 import { useVendedoresDir } from "@/hooks/useVendas";
@@ -269,7 +269,22 @@ export default function Pipelines() {
 
   const { data: funnelLeads = [], isLoading: l1 } = useCRMLeads(ft);
   const { data: allLeads = [], isLoading: l2 } = useAllCRMLeads();
-  const { data: stats } = useCRMStats(ft);
+  // ⚠️ Os cartões de cima saem da MESMA lista do quadro (`funnelLeads`, já no
+  // escopo de quem olha: gestor vê tudo, colaborador só os dele). O
+  // `useCRMStats` lia o funil inteiro, e o colaborador via o total e o R$ do
+  // time no topo de um quadro que só mostrava os cards dele.
+  const stats = useMemo(() => {
+    if (l1) return undefined;
+    const agora = Date.now(), tresDias = 3 * 24 * 60 * 60 * 1000;
+    const n = funnelLeads.length;
+    return {
+      total: n,
+      hot: funnelLeads.filter((l) => l.temperature === "quente").length,
+      stale: funnelLeads.filter((l) => agora - new Date(l.updated_at).getTime() > tresDias).length,
+      totalRevenue: funnelLeads.reduce((s, l) => s + Number(l.estimated_revenue || 0), 0),
+      avgAttempts: n > 0 ? Math.round(funnelLeads.reduce((s, l) => s + (l.contact_attempts || 0), 0) / n * 10) / 10 : 0,
+    };
+  }, [funnelLeads, l1]);
   useCRMLeadsRealtime(); // board ao vivo (ver os vendedores movimentando os cards)
   const advanceLead = useAdvanceLeadStage();
   const markLost = useMarkLeadLost();
