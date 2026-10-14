@@ -4801,3 +4801,10 @@ supabase/migrations/20261046…        carbo_interface_e_interna: É time intern
     continua aberta: lá o closer pode ser colaborador.
 13. **Sem Carbo Chat** (dono do processo, 14/10/2026): sem menu, sem card na
     home, sem `ChatProvider`; `/chat` volta para a home.
+14. **`/atendimento` é a CASCA da tela de Conversas, sempre vazia** (dono do
+    processo, 14/10/2026): o time atende pelo WhatsApp Web, e a tela mostra
+    onde isso vai morar ("Nenhum número de WhatsApp ativo para o Pré-Vendas").
+    ⚠️ Ela NÃO lê banco: `carbo_wa_numeros`/`carbo_wa_conversas` são as caixas
+    da EMPRESA, e ligá-la a elas mostraria ao SDR as conversas dos clientes do
+    e-commerce. Número próprio do Pré-Vendas entra com `funcao` própria e a
+    leitura filtra por ele.

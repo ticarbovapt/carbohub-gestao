@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Target, ShoppingCart, Bug, UserCircle, ArrowRight, type LucideIcon, KanbanSquare, ShoppingBag, BarChart3 } from "lucide-react";
+import { Target, ShoppingCart, Bug, UserCircle, ArrowRight, type LucideIcon, KanbanSquare, ShoppingBag, BarChart3, MessagesSquare } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { useAuth } from "@/contexts/AuthContext";
@@ -25,6 +25,7 @@ const ATALHOS: Atalho[] = [
   { to: "/crm/pipelines", label: "Pipeline", hint: "Os leads em cada etapa, do contato ao closer", icon: KanbanSquare },
   { to: "/vendas", label: "Vendas", hint: "O que o closer fechou a partir do SDR", icon: ShoppingBag },
   { to: "/resultados", label: "Resultados", hint: "Repassados, fechados e conversão", icon: BarChart3 },
+  { to: "/atendimento", label: "Atendimento", hint: "As conversas com os postos no WhatsApp", icon: MessagesSquare },
   { to: "/vender", label: "Vender", hint: "Registrar uma venda ou orçamento", icon: ShoppingCart },
   { to: "/bugs", label: "Bugs e sugestões", hint: "O que você reportou ao TI", icon: Bug },
   { to: "/perfil", label: "Meu perfil", hint: "Foto, dados e departamento", icon: UserCircle },
