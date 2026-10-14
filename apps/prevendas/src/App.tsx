@@ -6,7 +6,6 @@ import Home from "./pages/Home";
 import BugReports from "./pages/BugReports";
 import Profile from "./pages/Profile";
 import Vender from "./pages/Vender";
-import Chat from "./pages/Chat";
 import Pipelines from "./pages/Pipelines";
 import Vendas from "./pages/Vendas";
 import Resultados from "./pages/Resultados";
@@ -31,7 +30,8 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/bugs" element={<BugReports />} />
         <Route path="/vender" element={<Vender />} />
-        <Route path="/chat" element={<Chat />} />
+        {/* Sem Carbo Chat neste app: aviso de chat do sininho cai aqui e volta à home. */}
+        <Route path="/chat" element={<Navigate to="/" replace />} />
         {/* O MESMO caminho do Sales (`/crm/pipelines`), de propósito: o link de
             card (`?lead=<id>`) é montado igual nos dois apps, e caminho
             diferente cairia no catch-all — a home no lugar do card, sem erro. */}
