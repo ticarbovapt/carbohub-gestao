@@ -9,6 +9,7 @@ import Vender from "./pages/Vender";
 import Pipelines from "./pages/Pipelines";
 import Vendas from "./pages/Vendas";
 import Resultados from "./pages/Resultados";
+import Atendimento from "./pages/Atendimento";
 import { isCarbohubDomain, goToHubLogin } from "@/lib/sso";
 import { PaginaNaoEncontrada } from "@carbo/shell";
 
@@ -38,6 +39,7 @@ export default function App() {
         <Route path="/crm/pipelines" element={<Pipelines />} />
         <Route path="/vendas" element={<Vendas />} />
         <Route path="/resultados" element={<Resultados />} />
+        <Route path="/atendimento" element={<Atendimento />} />
         <Route path="/perfil" element={<Profile />} />
         {/* Rota inexistente: diz que não existe, em vez de cair na home calado. */}
         <Route path="*" element={<PaginaNaoEncontrada />} />
