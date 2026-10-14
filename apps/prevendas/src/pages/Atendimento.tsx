@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
-  MessagesSquare, AlertTriangle, Search, MessageCircle, BellOff, BellRing, ArrowLeft,
+  MessagesSquare, AlertTriangle, Search, BellOff, BellRing, ArrowLeft,
   SlidersHorizontal, ChevronDown, SearchX, Clock, CheckCheck, UserCheck, Undo2, Check,
   Tag as TagIcon, EyeOff, Send, User, X, StickyNote, Plus, Paperclip, Mic, Square,
   CalendarClock, MessageSquarePlus, Copy, Trash2, FileText,
@@ -214,6 +214,25 @@ function QuemRecebe({ recebo, alternar, aoFechar }: {
   );
 }
 
+/** O aviso de que não há número — no meio da coluna da conversa (no celular,
+ *  na lista, onde a conversa não aparece). */
+function SemNumero() {
+  return (
+    <div className="mx-auto flex max-w-sm flex-col items-center gap-3 text-center">
+      <span className="flex h-12 w-12 items-center justify-center rounded-full border
+                       border-amber-500/30 bg-amber-500/10">
+        <AlertTriangle className="h-5 w-5 text-amber-500" />
+      </span>
+      <p className="text-sm font-medium text-amber-500">
+        Nenhum número de WhatsApp ativo para o <span className="whitespace-nowrap">Pré-Vendas</span>.
+      </p>
+      <p className="text-[11px] leading-relaxed text-muted-foreground">
+        Quando houver, as conversas com os postos aparecem aqui.
+      </p>
+    </div>
+  );
+}
+
 export default function Atendimento() {
   const [verQuemRecebe, setVerQuemRecebe] = useState(false);
   const [buscandoNaConversa, setBuscandoNaConversa] = useState(false);
@@ -309,16 +328,8 @@ export default function Atendimento() {
                     alternar={() => setRecebo((v) => !v)} />
       )}
 
-      <CarboCard>
-        <CarboCardContent className="p-4">
-          <p className="flex items-start gap-1.5 text-xs text-amber-500">
-            <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />
-            Nenhum número de WhatsApp ativo para o Pré-Vendas.
-          </p>
-        </CarboCardContent>
-      </CarboCard>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[20rem_1fr] xl:grid-cols-[20rem_1fr_19rem]">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[20rem_1fr] 2xl:grid-cols-[20rem_1fr_19rem]">
         {/* ── Lista ─────────────────────────────────────────────────────── */}
         <CarboCard className="min-h-0 min-w-0 overflow-hidden p-0">
           <CarboCardContent className="flex h-full min-h-0 flex-col gap-0 p-0">
@@ -426,7 +437,7 @@ export default function Atendimento() {
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto px-3 py-8 text-center">
-              <SearchX className="mx-auto h-5 w-5 text-muted-foreground/60" />
+              <SearchX className={`mx-auto h-5 w-5 text-muted-foreground/60 ${recortado ? "" : "hidden lg:block"}`} />
               {recortado ? (
                 <>
                   <p className="mt-2 text-xs text-muted-foreground">Nenhuma conversa com esse filtro.</p>
@@ -441,10 +452,14 @@ export default function Atendimento() {
                 </>
               ) : (
                 <>
-                  <p className="mt-2 text-xs text-muted-foreground">Nenhuma conversa ainda.</p>
-                  <p className="mx-auto mt-1 max-w-[15rem] text-[10px] text-muted-foreground/80">
-                    Ela aparece quando houver um número ativo e um posto escrever para ele.
-                  </p>
+                  <div className="hidden lg:block">
+                    <p className="mt-2 text-xs text-muted-foreground">Nenhuma conversa ainda.</p>
+                    <p className="mx-auto mt-1 max-w-[15rem] text-[10px] text-muted-foreground/80">
+                      Ela aparece quando houver um número ativo e um posto escrever para ele.
+                    </p>
+                  </div>
+                  {/* Abaixo do `lg` a coluna da conversa some: o aviso vem para cá. */}
+                  <div className="mt-2 lg:hidden"><SemNumero /></div>
                 </>
               )}
             </div>
@@ -461,7 +476,7 @@ export default function Atendimento() {
               </span>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold text-muted-foreground">Nenhuma conversa aberta</p>
-                <p className="text-[11px] text-muted-foreground/70">Janela de 24 h fechada</p>
+                <p className="truncate text-[11px] text-muted-foreground/70">Janela de 24 h fechada</p>
               </div>
               <div className="flex shrink-0 items-center gap-1">
                 <Button size="sm" variant={buscandoNaConversa ? "secondary" : "ghost"} className="h-8 w-8 p-0"
@@ -474,9 +489,9 @@ export default function Atendimento() {
                         onClick={() => setVerArquivos((v) => !v)}>
                   <Paperclip className="h-3.5 w-3.5" />
                 </Button>
-                <Button size="sm" variant="outline" className="h-8 gap-1.5 text-emerald-500"
+                <Button size="sm" variant="outline" className="h-8 gap-1.5 text-emerald-500" title="Resolver"
                         onClick={() => { setStatus("resolvido"); toast.success("Conversa marcada como resolvida"); }}>
-                  <CheckCheck className="h-3.5 w-3.5" /> Resolver
+                  <CheckCheck className="h-3.5 w-3.5" /> <span className="hidden xl:inline">Resolver</span>
                 </Button>
               </div>
             </div>
@@ -510,9 +525,11 @@ export default function Atendimento() {
               </div>
             )}
 
-            <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
-              <MessageCircle className="h-8 w-8 text-muted-foreground/40" />
-              <p className="text-sm text-muted-foreground">Selecione uma conversa</p>
+            {/* O aviso de "sem número" mora AQUI, no meio da conversa, e não numa
+                tarja no topo: é a resposta para "por que não há nada", e no lugar
+                onde a conversa apareceria ele se explica sozinho. */}
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+              <SemNumero />
             </div>
 
             {agendadas.length > 0 && (
@@ -613,7 +630,7 @@ export default function Atendimento() {
                               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); enviar(); }
                             }} />
                   <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-1.5">
-                    <div className="hidden min-w-0 items-center gap-1.5 text-[10px] text-muted-foreground/70 sm:flex">
+                    <div className="hidden min-w-0 items-center gap-1.5 text-[10px] text-muted-foreground/70 2xl:flex">
                       <kbd className="rounded border bg-background px-1 py-px font-mono text-[10px]">/</kbd>
                       <span className="shrink-0">resposta pronta</span>
                       <span className="mx-0.5 shrink-0 text-muted-foreground/40">·</span>
@@ -622,7 +639,7 @@ export default function Atendimento() {
                       <kbd className="shrink-0 rounded border bg-background px-1 py-px font-sans text-[10px]">V</kbd>
                       <span className="truncate">cola print</span>
                     </div>
-                    <div className="flex flex-wrap items-center justify-end gap-1.5 sm:flex-nowrap sm:gap-2">
+                    <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5 sm:gap-2">
                       <input ref={arquivoRef} type="file" className="hidden"
                              accept="image/jpeg,image/png,application/pdf,text/plain"
                              onChange={(e) => {
@@ -681,7 +698,7 @@ export default function Atendimento() {
         </CarboCard>
 
         {/* ── Painel do contato ─────────────────────────────────────────── */}
-        <CarboCard className="hidden min-h-0 xl:flex xl:flex-col">
+        <CarboCard className="hidden min-h-0 2xl:flex 2xl:flex-col">
           <CarboCardContent className="min-h-0 flex-1 space-y-3 overflow-y-auto p-0">
             <div className="space-y-2 border-b border-border px-4 pb-3 pt-4">
               <div className="flex items-center gap-3">
