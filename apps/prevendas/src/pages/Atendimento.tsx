@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
   MessagesSquare, AlertTriangle, Search, MessageCircle, BellOff, BellRing, ArrowLeft,
   SlidersHorizontal, ChevronDown, SearchX, Clock, CheckCheck, UserCheck, Undo2, Check,
-  Tag as TagIcon, EyeOff, Send, User, X, StickyNote, Plus,
+  Tag as TagIcon, EyeOff, Send, User, X, StickyNote, Plus, Paperclip, Mic, Square,
+  CalendarClock, MessageSquarePlus, Copy, Trash2, FileText,
 } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
@@ -50,7 +51,182 @@ const SEM_NUMERO = "Nenhum número de WhatsApp ativo para o Pré-Vendas — nada
 const CLASSE_FILTRO = `w-full rounded-md border border-border/60 bg-muted/40 px-2 py-1.5
                        text-[11px] outline-none focus:border-carbo-green/40`;
 
+type Resposta = { atalho: string; corpo: string };
+type Agendada = { id: number; texto: string; quando: string };
+
+/** "2026-10-14T15:30" no fuso local — o formato do `datetime-local`. */
+function paraInput(d: Date) {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function hora(v: string) {
+  return new Date(v).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+
+/** As respostas rápidas — o mesmo painel da tela de Conversas, só que local. */
+function RespostasRapidas({ lista, aoCriar, aoApagar, aoUsar }: {
+  lista: Resposta[];
+  aoCriar: (r: Resposta) => void;
+  aoApagar: (atalho: string) => void;
+  aoUsar: (r: Resposta) => void;
+}) {
+  const [aberto, setAberto] = useState(false);
+  const [criando, setCriando] = useState(false);
+  const [atalho, setAtalho] = useState("");
+  const [corpo, setCorpo] = useState("");
+  const caixa = useRef<HTMLDivElement>(null);
+  const limpo = atalho.trim().toLowerCase().replace(/^\//, "");
+  const valido = /^[a-z0-9_-]{1,24}$/.test(limpo);
+
+  useEffect(() => {
+    if (!aberto) return;
+    const fora = (e: MouseEvent) => {
+      if (!caixa.current?.contains(e.target as Node)) setAberto(false);
+    };
+    document.addEventListener("mousedown", fora);
+    return () => document.removeEventListener("mousedown", fora);
+  }, [aberto]);
+
+  return (
+    <div ref={caixa} className="relative">
+      <Button size="sm" variant="outline" className="h-8 w-8 p-0"
+              title="Respostas rápidas — ou digite / no campo de resposta"
+              aria-label="Respostas rápidas" aria-expanded={aberto}
+              onClick={() => setAberto((v) => !v)}>
+        <MessageSquarePlus className="h-3.5 w-3.5" />
+      </Button>
+      {aberto && (
+        <div className="absolute bottom-10 right-0 z-30 w-80 rounded-xl border bg-background p-3 shadow-xl">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-xs font-semibold">Respostas rápidas</p>
+            <Button size="sm" variant="outline" className="h-6 gap-1 px-2 text-[10px]"
+                    onClick={() => setCriando((v) => !v)}>
+              {criando ? <X className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
+              {criando ? "Cancelar" : "Nova"}
+            </Button>
+          </div>
+          {criando && (
+            <div className="mb-3 space-y-2 rounded-lg border bg-muted/40 p-2">
+              <label className="block">
+                <span className="mb-1 block text-[10px] uppercase tracking-wide text-muted-foreground">Atalho</span>
+                <div className="flex items-center gap-1">
+                  <span className="font-mono text-sm text-muted-foreground">/</span>
+                  <Input value={atalho} onChange={(e) => setAtalho(e.target.value)}
+                         placeholder="apresentacao" maxLength={24}
+                         className="h-7 min-w-0 flex-1 font-mono text-xs" />
+                </div>
+                {!!atalho.trim() && (
+                  <span className={`mt-1 block text-[10px] ${valido ? "text-muted-foreground" : "text-amber-500"}`}>
+                    {valido
+                      ? <>vai ser chamada por <span className="font-mono">/{limpo}</span></>
+                      : "só letras, números, hífen e _ — até 24, sem espaço"}
+                  </span>
+                )}
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[10px] uppercase tracking-wide text-muted-foreground">Texto</span>
+                <Textarea value={corpo} onChange={(e) => setCorpo(e.target.value)} rows={3} maxLength={4096}
+                          placeholder="Oi! Aqui é da Carbo, falo em nome do seu fornecedor…"
+                          className="resize-none text-xs" />
+              </label>
+              <Button size="sm" className="h-7 w-full gap-1.5 text-xs" disabled={!valido || !corpo.trim()}
+                      onClick={() => {
+                        aoCriar({ atalho: limpo, corpo: corpo.trim() });
+                        toast.success(`Resposta salva. Chame por /${limpo}`);
+                        setAtalho(""); setCorpo(""); setCriando(false);
+                      }}>
+                Salvar
+              </Button>
+            </div>
+          )}
+          {lista.length === 0 ? (
+            <p className="py-4 text-center text-[11px] text-muted-foreground">
+              Nenhuma resposta ainda. As frases que o time repete todo dia moram
+              aqui — e saem com <span className="font-mono">/atalho</span> no campo
+              de resposta.
+            </p>
+          ) : (
+            <div className="max-h-64 space-y-1 overflow-y-auto">
+              {lista.map((r) => (
+                <div key={r.atalho} className="group flex items-start gap-2 rounded-lg px-2 py-1.5 hover:bg-muted/60">
+                  <button type="button" className="min-w-0 flex-1 text-left"
+                          onClick={() => { aoUsar(r); setAberto(false); }}>
+                    <span className="block font-mono text-[11px] font-semibold">/{r.atalho}</span>
+                    <span className="line-clamp-2 block text-[11px] text-muted-foreground">{r.corpo}</span>
+                  </button>
+                  <button type="button" title="Apagar" aria-label="Apagar resposta"
+                          onClick={() => aoApagar(r.atalho)}
+                          className="shrink-0 rounded-sm p-1 text-muted-foreground opacity-0
+                                     transition-opacity hover:text-red-500 group-hover:opacity-100">
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** "Quem recebe o aviso" — na tela de Conversas é a lista do time interno;
+ *  aqui, sem banco, é só você. */
+function QuemRecebe({ recebo, alternar, aoFechar }: {
+  recebo: boolean; alternar: () => void; aoFechar: () => void;
+}) {
+  return (
+    <CarboCard>
+      <CarboCardContent className="p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="flex items-center gap-2 text-sm font-semibold">
+              <BellRing className="h-4 w-4" /> Quem recebe o aviso
+            </h3>
+            <p className="mt-0.5 max-w-xl text-[11px] text-muted-foreground">
+              Toast e sininho quando um posto responde, em qualquer app.
+              {recebo ? " 1 pessoa marcada." : " Ninguém está marcado — hoje o aviso não sai para pessoa nenhuma."}
+            </p>
+          </div>
+          <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={aoFechar}>
+            <X className="h-3.5 w-3.5" /> Fechar
+          </Button>
+        </div>
+        <div className="mt-3 grid gap-1 sm:grid-cols-2 lg:grid-cols-3">
+          <button type="button" onClick={alternar}
+                  className={`flex items-center gap-2 rounded-md border p-2 text-left transition-colors ${
+                    recebo ? "border-carbo-green/50 bg-carbo-green/5"
+                           : "border-transparent hover:border-border hover:bg-muted/40"}`}>
+            <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border ${
+              recebo ? "border-carbo-green/50 bg-carbo-green/20 text-emerald-500" : "border-border"}`}>
+              {recebo && <Check className="h-3 w-3" />}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-xs font-medium">Você</span>
+              <span className="block truncate text-[10px] text-muted-foreground">
+                {recebo ? "recebe o aviso" : "não recebe"}
+              </span>
+            </span>
+          </button>
+        </div>
+      </CarboCardContent>
+    </CarboCard>
+  );
+}
+
 export default function Atendimento() {
+  const [verQuemRecebe, setVerQuemRecebe] = useState(false);
+  const [buscandoNaConversa, setBuscandoNaConversa] = useState(false);
+  const [verArquivos, setVerArquivos] = useState(false);
+  const [respostas, setRespostas] = useState<Resposta[]>([]);
+  const [arquivo, setArquivo] = useState<File | null>(null);
+  const arquivoRef = useRef<HTMLInputElement>(null);
+  const [gravando, setGravando] = useState(false);
+  const [verAgendar, setVerAgendar] = useState(false);
+  const [quando, setQuando] = useState("");
+  const [agendadas, setAgendadas] = useState<Agendada[]>([]);
+  const [confirmarParar, setConfirmarParar] = useState(false);
+  const [semOfertas, setSemOfertas] = useState(false);
   const [aba, setAba] = useState<Aba>("todas");
   const [busca, setBusca] = useState("");
   const [painelFiltros, setPainelFiltros] = useState(false);
@@ -73,7 +249,29 @@ export default function Atendimento() {
   const recortado = !!busca.trim() || aba !== "todas" || filtrosAtivos > 0;
 
   const limparTudo = () => { setBusca(""); setAba("todas"); setFiltros(FILTROS_VAZIOS); };
-  const enviar = () => { if (!texto.trim()) return; toast.error(SEM_NUMERO); };
+  const enviar = () => {
+    if (!texto.trim() && !arquivo) return;
+    toast.error(SEM_NUMERO);
+  };
+  const usarResposta = (r: Resposta) => setTexto((t) => (t.trim() ? `${t}\n${r.corpo}` : r.corpo));
+  const abrirAgendar = () => {
+    setQuando(paraInput(new Date(Date.now() + 3_600_000)));
+    setVerAgendar((v) => !v);
+  };
+  const confirmarAgendar = () => {
+    if (!quando) return;
+    if (new Date(quando).getTime() <= Date.now()) {
+      toast.error("Escolha um horário no futuro.");
+      return;
+    }
+    setAgendadas((a) => [...a, { id: Date.now(), texto: texto.trim(), quando }]);
+    setTexto("");
+    setVerAgendar(false);
+    toast.success(`Agendada para ${hora(quando)}`);
+  };
+  const sugestoes = texto.startsWith("/") && !texto.includes(" ")
+    ? respostas.filter((r) => r.atalho.startsWith(texto.slice(1).toLowerCase()))
+    : [];
   const anotar = () => {
     if (!recado.trim()) return;
     toast.error("Nenhuma conversa aberta para anotar.");
@@ -94,10 +292,7 @@ export default function Atendimento() {
           <div className="flex flex-wrap items-center gap-3">
             <Button size="sm" variant="outline"
                     className={`h-8 gap-1.5 ${recebo ? "" : "text-amber-500"}`}
-                    onClick={() => {
-                      setRecebo((v) => !v);
-                      toast.success(recebo ? "Você deixou de receber aviso" : "Você passa a receber aviso de mensagem nova");
-                    }}>
+                    onClick={() => setVerQuemRecebe((v) => !v)}>
               {recebo
                 ? <><BellRing className="h-3.5 w-3.5" /> 1 recebe aviso</>
                 : <><BellOff className="h-3.5 w-3.5" /> Ninguém recebe aviso</>}
@@ -108,6 +303,11 @@ export default function Atendimento() {
           </div>
         }
       />
+
+      {verQuemRecebe && (
+        <QuemRecebe recebo={recebo} aoFechar={() => setVerQuemRecebe(false)}
+                    alternar={() => setRecebo((v) => !v)} />
+      )}
 
       <CarboCard>
         <CarboCardContent className="p-4">
@@ -259,16 +459,84 @@ export default function Atendimento() {
                                border border-border bg-muted/40 text-muted-foreground">
                 <User className="h-4 w-4" />
               </span>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold text-muted-foreground">Nenhuma conversa aberta</p>
                 <p className="text-[11px] text-muted-foreground/70">Janela de 24 h fechada</p>
               </div>
+              <div className="flex shrink-0 items-center gap-1">
+                <Button size="sm" variant={buscandoNaConversa ? "secondary" : "ghost"} className="h-8 w-8 p-0"
+                        title="Procurar nesta conversa"
+                        onClick={() => setBuscandoNaConversa((v) => !v)}>
+                  <Search className="h-3.5 w-3.5" />
+                </Button>
+                <Button size="sm" variant={verArquivos ? "secondary" : "ghost"} className="h-8 w-8 p-0"
+                        title="Arquivos da conversa"
+                        onClick={() => setVerArquivos((v) => !v)}>
+                  <Paperclip className="h-3.5 w-3.5" />
+                </Button>
+                <Button size="sm" variant="outline" className="h-8 gap-1.5 text-emerald-500"
+                        onClick={() => { setStatus("resolvido"); toast.success("Conversa marcada como resolvida"); }}>
+                  <CheckCheck className="h-3.5 w-3.5" /> Resolver
+                </Button>
+              </div>
             </div>
+
+            {buscandoNaConversa && (
+              <div className="flex items-center gap-2 border-b border-border px-4 py-2">
+                <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <Input autoFocus placeholder="Procurar nesta conversa…"
+                       className="h-8 flex-1 border-0 bg-transparent px-0 text-xs shadow-none
+                                  focus-visible:ring-0 focus-visible:ring-offset-0" />
+                <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">0 de 0</span>
+                <button type="button" onClick={() => setBuscandoNaConversa(false)} aria-label="Fechar a busca"
+                        className="shrink-0 rounded-sm p-1 text-muted-foreground hover:text-foreground">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
+
+            {verArquivos && (
+              <div className="border-b border-border px-4 py-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold">Arquivos da conversa</p>
+                  <button type="button" onClick={() => setVerArquivos(false)} aria-label="Fechar a galeria"
+                          className="rounded-sm p-1 text-muted-foreground hover:text-foreground">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  Nenhuma foto, áudio ou documento nesta conversa.
+                </p>
+              </div>
+            )}
 
             <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
               <MessageCircle className="h-8 w-8 text-muted-foreground/40" />
               <p className="text-sm text-muted-foreground">Selecione uma conversa</p>
             </div>
+
+            {agendadas.length > 0 && (
+              <div className="space-y-1 border-t border-border px-4 py-2">
+                <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.08em]
+                              text-muted-foreground/70">
+                  <CalendarClock className="h-3 w-3" /> Agendadas
+                </p>
+                {agendadas.map((a) => (
+                  <div key={a.id} className="flex items-center gap-2 rounded-md border border-dashed
+                                             border-border bg-muted/30 px-2 py-1.5">
+                    <span className="shrink-0 text-[10px] font-medium tabular-nums text-carbo-green">
+                      {hora(a.quando)}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-[11px]">{a.texto}</span>
+                    <button type="button" title="Cancelar agendamento"
+                            onClick={() => { setAgendadas((x) => x.filter((y) => y.id !== a.id)); toast.success("Agendamento cancelado"); }}
+                            className="shrink-0 rounded-sm p-1 text-muted-foreground hover:text-red-500">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div className="border-t border-border p-3">
               <div className="mb-1.5 flex items-center gap-1">
@@ -309,7 +577,34 @@ export default function Atendimento() {
                   </div>
                 </div>
               ) : (
-                <div className="rounded-lg border bg-muted/40 p-2">
+                <div className="relative rounded-lg border bg-muted/40 p-2">
+                  {sugestoes.length > 0 && (
+                    <div className="absolute bottom-full left-2 z-20 mb-1 w-72 rounded-lg border bg-background p-1 shadow-xl">
+                      {sugestoes.map((r) => (
+                        <button key={r.atalho} type="button"
+                                onClick={() => setTexto(r.corpo)}
+                                className="block w-full rounded-md px-2 py-1.5 text-left hover:bg-muted/60">
+                          <span className="block font-mono text-[11px] font-semibold">/{r.atalho}</span>
+                          <span className="block truncate text-[11px] text-muted-foreground">{r.corpo}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {arquivo && (
+                    <div className="mb-1.5 flex items-center gap-2 rounded-md border bg-background/60 px-2 py-1.5">
+                      <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 flex-1 truncate text-[11px]">{arquivo.name}</span>
+                      <button type="button" onClick={() => setArquivo(null)} aria-label="Tirar o arquivo"
+                              className="shrink-0 rounded-sm p-1 text-muted-foreground hover:text-foreground">
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  )}
+                  {gravando && (
+                    <p className="mb-1.5 flex items-center gap-1.5 text-[11px] text-red-500">
+                      <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" /> Gravando áudio…
+                    </p>
+                  )}
                   <Textarea value={texto} onChange={(e) => setTexto(e.target.value)}
                             placeholder="Responder…" rows={3} maxLength={4096}
                             className="resize-y border-0 bg-transparent px-1 py-0.5 text-base shadow-none sm:text-xs
@@ -317,12 +612,68 @@ export default function Atendimento() {
                             onKeyDown={(e) => {
                               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); enviar(); }
                             }} />
-                  <div className="mt-1.5 flex items-center justify-between gap-2 border-t border-border/60 pt-1.5">
-                    <p className="text-[10px] text-muted-foreground">Ctrl+Enter envia</p>
-                    <Button size="sm" className="h-8 gap-1.5" disabled={!texto.trim()} onClick={enviar}>
-                      <Send className="h-3.5 w-3.5" /> Enviar
-                    </Button>
+                  <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-1.5">
+                    <div className="hidden min-w-0 items-center gap-1.5 text-[10px] text-muted-foreground/70 sm:flex">
+                      <kbd className="rounded border bg-background px-1 py-px font-mono text-[10px]">/</kbd>
+                      <span className="shrink-0">resposta pronta</span>
+                      <span className="mx-0.5 shrink-0 text-muted-foreground/40">·</span>
+                      <kbd className="shrink-0 rounded border bg-background px-1 py-px font-sans text-[10px]">⌘/Ctrl</kbd>
+                      <span className="shrink-0" aria-hidden="true">+</span>
+                      <kbd className="shrink-0 rounded border bg-background px-1 py-px font-sans text-[10px]">V</kbd>
+                      <span className="truncate">cola print</span>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-end gap-1.5 sm:flex-nowrap sm:gap-2">
+                      <input ref={arquivoRef} type="file" className="hidden"
+                             accept="image/jpeg,image/png,application/pdf,text/plain"
+                             onChange={(e) => {
+                               const f = e.target.files?.[0];
+                               e.target.value = "";
+                               if (f) setArquivo(f);
+                             }} />
+                      <RespostasRapidas lista={respostas} aoUsar={usarResposta}
+                                        aoCriar={(r) => setRespostas((x) => [...x.filter((y) => y.atalho !== r.atalho), r])}
+                                        aoApagar={(a) => setRespostas((x) => x.filter((y) => y.atalho !== a))} />
+                      <Button size="sm" variant="outline" className="h-8 w-8 p-0"
+                              title="Enviar foto ou documento" disabled={gravando}
+                              onClick={() => arquivoRef.current?.click()}>
+                        <Paperclip className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button size="sm" variant="outline"
+                              className={`h-8 gap-1.5 ${gravando ? "border-red-500/50 text-red-500" : "w-8 p-0"}`}
+                              title={gravando ? "Parar" : "Gravar áudio"}
+                              onClick={() => {
+                                if (gravando) { setGravando(false); toast.error(SEM_NUMERO); }
+                                else setGravando(true);
+                              }}>
+                        {gravando
+                          ? <><Square className="h-3.5 w-3.5 fill-current" /> Parar</>
+                          : <Mic className="h-3.5 w-3.5" />}
+                      </Button>
+                      <Button size="sm" variant="outline" className="h-8 gap-1.5"
+                              disabled={!texto.trim()} onClick={abrirAgendar}>
+                        <CalendarClock className="h-3.5 w-3.5" /> Agendar
+                      </Button>
+                      <Button size="sm" className="h-8 gap-1.5" title="Enviar — ⌘/Ctrl + Enter"
+                              disabled={!texto.trim() && !arquivo} onClick={enviar}>
+                        <Send className="h-3.5 w-3.5" /> Enviar
+                      </Button>
+                    </div>
                   </div>
+                  {verAgendar && (
+                    <div className="mt-2 flex flex-wrap items-center gap-2 border-t pt-2">
+                      <span className="text-[11px] text-muted-foreground">enviar em</span>
+                      <Input type="datetime-local" value={quando}
+                             onChange={(e) => setQuando(e.target.value)}
+                             min={paraInput(new Date(Date.now() + 60_000))}
+                             className="h-8 w-full text-xs sm:w-[13rem]" />
+                      <Button size="sm" className="h-8 gap-1.5" disabled={!quando} onClick={confirmarAgendar}>
+                        <CalendarClock className="h-3.5 w-3.5" /> Confirmar
+                      </Button>
+                      <span className="text-[10px] text-muted-foreground">
+                        no máximo até o fim da janela de 24 h
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -348,9 +699,15 @@ export default function Atendimento() {
                   </p>
                 </div>
               </div>
-              <div className="rounded-md border border-border bg-muted/40 px-2 py-1 font-mono
-                              text-[15px] tracking-tight text-muted-foreground/50">
-                —
+              <div className="flex items-center gap-1 rounded-md border border-border bg-muted/40 px-2 py-1">
+                <span className="min-w-0 flex-1 font-mono text-[15px] tracking-tight text-muted-foreground/50">
+                  —
+                </span>
+                <button type="button" title="Copiar número" aria-label="Copiar número"
+                        onClick={() => toast.error("Nenhuma conversa aberta — não há número para copiar.")}
+                        className="shrink-0 rounded-sm p-1 text-muted-foreground transition-colors hover:text-carbo-green">
+                  <Copy className="h-3.5 w-3.5" />
+                </button>
               </div>
             </div>
 
@@ -424,6 +781,46 @@ export default function Atendimento() {
                     </select>
                   </div>
                 )}
+
+                <div className="border-t border-border pt-2.5">
+                  {semOfertas ? (
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="inline-flex min-w-0 items-center gap-1.5 rounded-md border border-purple-500/30
+                                       bg-purple-500/10 px-2 py-1 text-[10px] font-medium text-purple-400">
+                        <BellOff className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">Não recebe ofertas desde {new Date().toLocaleDateString("pt-BR")}</span>
+                      </span>
+                      <button type="button" onClick={() => { setSemOfertas(false); toast.success("Volta a receber ofertas."); }}
+                              className="shrink-0 text-[11px] text-muted-foreground underline-offset-2
+                                         hover:text-foreground hover:underline">
+                        Voltar a enviar
+                      </button>
+                    </div>
+                  ) : confirmarParar ? (
+                    <div className="space-y-2">
+                      <p className="text-[11px] leading-snug text-muted-foreground">
+                        Este posto deixa de receber mensagens comerciais, em todos os números.
+                      </p>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <Button size="sm" variant="outline" className="h-8 text-[11px]"
+                                onClick={() => setConfirmarParar(false)}>
+                          Cancelar
+                        </Button>
+                        <Button size="sm" className="h-8 bg-purple-600 text-[11px] text-white hover:bg-purple-700"
+                                onClick={() => { setSemOfertas(true); setConfirmarParar(false); toast.success("Não recebe mais ofertas."); }}>
+                          Parar ofertas
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button type="button" onClick={() => setConfirmarParar(true)}
+                            className="flex w-full items-center gap-1.5 text-left text-[11px] text-muted-foreground
+                                       hover:text-foreground">
+                      <BellOff className="h-3.5 w-3.5 shrink-0" />
+                      Parar de enviar ofertas a este posto
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="space-y-2">
