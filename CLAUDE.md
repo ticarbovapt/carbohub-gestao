@@ -4792,5 +4792,12 @@ supabase/migrations/20261046…        carbo_interface_e_interna: É time intern
     `carbo_backup_funcoes` e `carbo_backup_policies`.
     ⚠️ Os cartões do topo do Pipeline saem da MESMA lista do quadro (já no
     escopo), não do `useCRMStats`, que lia o funil inteiro.
+    ⚠️ **SDR vê no f15 SÓ o que ELE repassou** (`20261082`): o card do closer
+    nasce com `created_by` = o SDR, e a FILA aberta do repasse
+    (`origin_lead_id` sem `assigned_to`) deixou de valer para o f15 — antes
+    o banco entregava a qualquer SDR os repasses dos colegas ainda sem
+    closer. Quem pega card do f15 é o closer, que é GESTOR (desenho do dono:
+    quem opera pipeline é colaborador, closer é gestor). No Sales a fila
+    continua aberta: lá o closer pode ser colaborador.
 13. **Sem Carbo Chat** (dono do processo, 14/10/2026): sem menu, sem card na
     home, sem `ChatProvider`; `/chat` volta para a home.
