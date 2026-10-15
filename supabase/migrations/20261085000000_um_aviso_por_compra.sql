@@ -270,3 +270,45 @@ select e.platform,
    and n.created_at > now() - interval '24 hours'
  group by 1, 2
 having count(distinct n.reference_id) > 1;
+
+-- ╔═══════════════════════════════════════════════════════════════════╗
+-- ║ BLOCO 3 — aviso antigo com "$59.90" passa a "R$ 59,90" (aplicado)  ║
+-- ╚═══════════════════════════════════════════════════════════════════╝
+-- Avisos criados ANTES desta migração saíam no locale do servidor. Reescreve
+-- só o texto, com o total da compra; não toca pedido.
+do $fmt$
+declare r record; v_corpo text; v_n int := 0;
+begin
+  for r in
+    select a.chave, a.ref_id
+      from public.carbo_venda_avisada a
+     where exists (select 1 from public.notifications n
+                    where n.reference_id = a.ref_id and n.type = 'ecommerce_sale'
+                      and n.body ~ '\$[0-9]' and n.body not like '%R$%')
+  loop
+    select case e0.platform
+             when 'mercadolivre' then 'ML LogHouse' when 'mercadolivre_full' then 'ML Full'
+             when 'amazon' then 'Amazon' when 'nuvemshop' then 'Nuvemshop'
+             when 'shopee' then 'Shopee' when 'payt' then 'PayT' else initcap(e0.platform) end
+           || ' · ' || public.carbo_brl(sum(e.total))
+           || ' · ' || sum(e.quantity) || ' un.'
+           || coalesce(' · ' || string_agg(distinct nullif(e.product_name, ''), ' + '), '')
+           || case when e0.platform = 'payt' and count(distinct split_part(e.order_id, '-', 1)) > 1
+                   then ' · com upsell' else '' end
+      into v_corpo
+      from public.ecommerce_orders e0
+      join public.ecommerce_orders e
+        on e.platform = e0.platform
+       and public.carbo_venda_chave(e.platform, e.order_id, e.platform_order_number) = r.chave
+       and public.ecommerce_status_e_venda(e.status)
+     where e0.id::text = r.ref_id
+     group by e0.platform;
+
+    if v_corpo is not null then
+      update public.notifications set body = v_corpo
+       where type = 'ecommerce_sale' and reference_id = r.ref_id;
+      v_n := v_n + 1;
+    end if;
+  end loop;
+  raise notice 'avisos reformatados: %', v_n;
+end $fmt$;
