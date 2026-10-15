@@ -276,6 +276,12 @@ async function validatePayt(_req: Request, body: string): Promise<boolean> {
   return chaves.some((k) => comparaConstante(recebida, k));
 }
 
+// O hash de cada corpo da PayT, para o handler marcar no log cru se a gravação
+// em `ecommerce_orders` deu certo. WeakMap, não variável solta: o Deno atende
+// requisições em paralelo no mesmo isolate, e uma variável de módulo trocaria
+// o hash de uma pela da outra.
+const hashDoCorpoPayt = new WeakMap<object, string>();
+
 async function normalizePayt(body: unknown, _platform: Platform): Promise<NormalizedOrder[]> {
   const { linhas, motivo } = linhasDaPayt(body);
 
@@ -291,6 +297,7 @@ async function normalizePayt(body: unknown, _platform: Platform): Promise<Normal
   try {
     const bytes = new TextEncoder().encode(JSON.stringify(body));
     const hash = encodeHex(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)));
+    if (body && typeof body === "object") hashDoCorpoPayt.set(body as object, hash);
     const { error } = await supabase.from("payt_eventos").upsert({
       body_hash: hash,
       corpo: body,
@@ -438,6 +445,81 @@ function normalizeShopeeStatus(s: string): string {
   return statusDaShopee(s);
 }
 
+// ─── PayT: a rede para a venda que ficou só no log cru ───────────────────────
+//
+// A PayT é push-only: postback cuja gravação falha (timeout, banco ocupado) e
+// que ela não reenvia é venda que NUNCA entra — medido em 15/10/2026 com a
+// EYEZ2VV. Mas o corpo inteiro está em `payt_eventos`, gravado antes. Esta rota
+// relê os eventos recentes, passa cada um pelo MESMO `linhasDaPayt` do webhook
+// (uma regra só; uma cópia em SQL divergiria) e grava SÓ as linhas que faltam.
+//
+// ⚠️ Só INSERE o que falta, nunca atualiza: um evento velho (`waiting_payment`)
+// regravado por cima de uma linha `paid` rebaixaria a venda. E de cada
+// transação usa o evento MAIS RECENTE — é o estado atual dela.
+//
+// ⚠️ Chamada pelo cron com `X-Cron-Secret`. Ausência do segredo FECHA (500),
+// segredo errado recusa (401) — a regra da casa.
+async function reprocessarPayt(req: Request): Promise<Response> {
+  const json = (o: unknown, status = 200) =>
+    new Response(JSON.stringify(o), { status, headers: { "Content-Type": "application/json" } });
+  const segredo = Deno.env.get("CRON_SECRET") ?? "";
+  if (!segredo) return json({ error: "CRON_SECRET não está configurado neste projeto." }, 500);
+  if (req.headers.get("X-Cron-Secret") !== segredo) return json({ error: "Segredo inválido ou ausente." }, 401);
+
+  const desde = new Date(Date.now() - 7 * 86_400_000).toISOString();
+  const { data: eventos, error } = await supabase
+    .from("payt_eventos")
+    .select("body_hash, transaction_id, corpo, recebido_em")
+    .eq("eh_teste", false)
+    .not("transaction_id", "is", null)
+    .gte("recebido_em", desde)
+    .order("recebido_em", { ascending: false })
+    .limit(1000);
+  if (error) return json({ error: `ler payt_eventos: ${error.message}` }, 500);
+
+  // O mais recente de cada transação (a lista já vem do mais novo para o velho).
+  const ultimo = new Map<string, { body_hash: string; corpo: unknown }>();
+  for (const e of eventos ?? []) {
+    if (!ultimo.has(e.transaction_id)) ultimo.set(e.transaction_id, e);
+  }
+
+  const candidatas: { hash: string; linha: Record<string, unknown> }[] = [];
+  for (const e of ultimo.values()) {
+    for (const l of linhasDaPayt(e.corpo).linhas) {
+      candidatas.push({ hash: e.body_hash, linha: l as unknown as Record<string, unknown> });
+    }
+  }
+
+  const existentes = new Set<string>();
+  const ids = candidatas.map((c) => String(c.linha.order_id));
+  for (let i = 0; i < ids.length; i += 150) {
+    const { data, error: eL } = await supabase.from("ecommerce_orders")
+      .select("order_id").eq("platform", "payt").in("order_id", ids.slice(i, i + 150));
+    if (eL) return json({ error: `ler ecommerce_orders: ${eL.message}` }, 500);
+    for (const r of data ?? []) existentes.add(r.order_id);
+  }
+
+  const faltando = candidatas.filter((c) => !existentes.has(String(c.linha.order_id)));
+  const gravados: string[] = [];
+  const erros: string[] = [];
+  for (const c of faltando) {
+    const { error: eI } = await supabase.from("ecommerce_orders")
+      .upsert(c.linha, { onConflict: "platform,order_id", ignoreDuplicates: true });
+    if (eI) {
+      erros.push(`${c.linha.order_id}: ${eI.message}`);
+      await supabase.from("payt_eventos").update({ erro: `reprocessar: ${eI.message}` }).eq("body_hash", c.hash);
+    } else {
+      gravados.push(String(c.linha.order_id));
+      console.warn(`[payt] PAYT_LINHA_RECUPERADA ${c.linha.order_id} — estava só no log cru.`);
+      await supabase.from("payt_eventos")
+        .update({ erro: null, gravado_em: new Date().toISOString() }).eq("body_hash", c.hash);
+    }
+  }
+
+  return json({ ok: erros.length === 0, transacoes: ultimo.size, faltavam: faltando.length, gravados, erros },
+              erros.length ? 500 : 200);
+}
+
 // ─── Main handler ─────────────────────────────────────────────────────────────
 
 Deno.serve(async (req: Request) => {
@@ -452,6 +534,8 @@ Deno.serve(async (req: Request) => {
   const url      = new URL(req.url);
   const segments = url.pathname.split("/").filter(Boolean);
   const platform = segments[segments.length - 1] as Platform;
+
+  if (platform === ("payt-reprocessar" as Platform)) return reprocessarPayt(req);
 
   if (!["mercadolivre", "amazon", "tiktok", "shopee", "nuvemshop", "payt"].includes(platform)) {
     return new Response("Unknown platform", { status: 400 });
@@ -550,6 +634,23 @@ Deno.serve(async (req: Request) => {
   const { error } = await supabase
     .from("ecommerce_orders")
     .upsert(orders, { onConflict: "platform,order_id" });
+
+  // ⚠️ O log cru da PayT diz o que ACONTECEU, não só o que o parser montou.
+  // Ele era gravado antes desta linha com "1 linha(s)" — e em 15/10/2026 a
+  // venda EYEZ2VV (R$ 59,90, a principal de um upsell) ficou assim: log dizendo
+  // "1 linha(s)", pedido nenhum, e a PayT não reenviou. Venda PAGA sumida sem
+  // erro em lugar nenhum. Agora o resultado da gravação vai para a mesma linha.
+  if (platform === "payt") {
+    const hash = parsed && typeof parsed === "object" ? hashDoCorpoPayt.get(parsed as object) : undefined;
+    if (hash) {
+      const { error: eLog } = await supabase.from("payt_eventos")
+        .update(error
+          ? { erro: `gravar pedido: ${error.message}` }
+          : { erro: null, gravado_em: new Date().toISOString() })
+        .eq("body_hash", hash);
+      if (eLog) console.error("[payt] falhou marcar o resultado no log cru:", eLog.message);
+    }
+  }
 
   if (error) {
     console.error(`[${platform}] DB error:`, error.message);
