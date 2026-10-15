@@ -689,15 +689,25 @@ Quem decide o que é venda nova é o **banco**, e só ele:
 5. **Falha de áudio não pode ser silenciosa.** `play()` recusado e 404 no MP3
    davam o mesmo sintoma (nada) porque o `catch` era vazio. Hoje os dois
    aparecem no console, e há `__somVenda.estado()` / `__somVenda.testar()`.
-6. ⚠️ **UM aviso por COMPRA, não por linha** (`20261085`, 15/10/2026). O
-   gatilho avisava por linha de `ecommerce_orders`, e o upsell da PayT
-   (transação separada, mesmo carrinho) tocava "Nova venda" de novo — o
-   sininho mostrava duas vendas onde a Esteira mostrava um card. Hoje a chave é
-   a da Esteira (`carbo_venda_chave`: carrinho na PayT, raiz do pedido nos
-   demais); a 1ª linha paga anuncia JÁ com o total da compra, e as seguintes
-   ATUALIZAM o texto do aviso (ledger `carbo_venda_avisada`) — sem 2º som,
-   toast ou push. O valor sai em `carbo_brl()` ("R$ 119,60"; o `to_char` com
-   `L` saía "$119.60" no locale do Supabase).
+6. ⚠️ **Upsell TOCA, e diz que é upsell** (`20261085` → `20261086`, 15/10/2026).
+   O gatilho avisava por linha e o upsell da PayT (transação separada, mesmo
+   carrinho) tocava "Nova venda" de novo — parecia outra venda. A `20261085`
+   o calou (só atualizava o texto); o dono do processo corrigiu no mesmo dia:
+   *"o upsell é venda… tem que tocar a venda e depois tocar o upsell sim, só
+   que tem que ficar obvio que é upsell"*. Hoje: UM aviso por TRANSAÇÃO na PayT
+   (por pedido nos demais, ledger `carbo_venda_avisada`); o upsell sai como
+   **"⬆️ Upsell · PAYT"** com `+R$ 119,60 · compra agora R$ 179,50`, ainda
+   `type = 'ecommerce_sale'` (som, toast, sininho e push valem igual). O selo
+   "Upsell" dos OITO `NotificationBell` lê o TÍTULO.
+   ⚠️ Quem é upsell vem do CORPO da PayT (`raw->>'type'` = `upsell`/
+   `manual_upsell`, ou `transaction.upsell_from`), nunca da ordem de chegada —
+   a principal do EYEZ2VV entrou DEPOIS do upsell. A ordem só decide quando o
+   corpo cala. Nome do produto vai curto (`carbo_nome_curto`, corte no 1º
+   " - "); o valor em `carbo_brl()` ("$119.60" era o `to_char` com `L`).
+   ⚠️ O sininho cortava o texto: o `ScrollArea` do Radix alarga o conteúdo até o
+   texto mais longo e o `line-clamp` nunca quebra. Os oito usam
+   `[&>[data-radix-scroll-area-viewport]>div]:!block` — ScrollArea com texto
+   que quebra precisa disso.
    ⚠️ O Comparativo (`useDashEcommerce`) conta compra pela MESMA chave
    (`chavePedido()`), e o status do pedido é o da linha mais avançada — upsell
    cancelado numa compra paga não vira "1 cancelado".

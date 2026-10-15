@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AtSign, Eye, Bell, Bug, Check, CheckCheck, Clock, ListTodo, MessageCircle, Trash2, WifiOff, ShoppingCart, CalendarClock, UserPlus } from "lucide-react";
+import { AtSign, Eye, Bell, Bug, Check, CheckCheck, Clock, ListTodo, MessageCircle, Trash2, WifiOff, ShoppingCart, TrendingUp, CalendarClock, UserPlus } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useNotifications, Notification } from "@/hooks/useNotifications";
@@ -26,10 +26,15 @@ const TYPE_CONFIG: Record<string, { Icon: React.ElementType; label: string; colo
   mkt_quadro:             { Icon: UserPlus,      label: "Quadro",         color: "text-emerald-600", bg: "bg-emerald-500/10" },
 };
 
+const UPSELL_CONFIG = { Icon: TrendingUp, label: "Upsell", color: "text-violet-500", bg: "bg-violet-500/10" };
+
 function NotificationItem({
   notification, onRead, onDelete, onOpen,
 }: { notification: Notification; onRead: (id: string) => void; onDelete: (id: string) => void; onOpen: (n: Notification) => void }) {
-  const cfg = TYPE_CONFIG[notification.type] || TYPE_CONFIG.message;
+  // Upsell é `ecommerce_sale` (toca como venda), mas o selo diz o que ele é: o
+  // gatilho marca no TÍTULO (20261086). Sem isso ele parecia uma segunda venda.
+  const ehUpsell = notification.type === "ecommerce_sale" && (notification.title ?? "").includes("Upsell");
+  const cfg = ehUpsell ? UPSELL_CONFIG : (TYPE_CONFIG[notification.type] || TYPE_CONFIG.message);
   const isUnread = !notification.is_read;
 
   return (
@@ -163,7 +168,7 @@ export function NotificationBell() {
             </TabsList>
 
             <TabsContent value="unread" className="flex-1 m-0">
-              <ScrollArea className="h-[380px]">
+              <ScrollArea className="h-[380px] [&>[data-radix-scroll-area-viewport]>div]:!block">
                 {unreadNotifications.length === 0 ? (
                   <EmptyState message="Nenhuma notificação nova" />
                 ) : (
@@ -175,7 +180,7 @@ export function NotificationBell() {
             </TabsContent>
 
             <TabsContent value="all" className="flex-1 m-0">
-              <ScrollArea className="h-[380px]">
+              <ScrollArea className="h-[380px] [&>[data-radix-scroll-area-viewport]>div]:!block">
                 {notifications.length === 0 ? (
                   <EmptyState message="Nenhuma notificação ainda" />
                 ) : (
