@@ -689,6 +689,18 @@ Quem decide o que é venda nova é o **banco**, e só ele:
 5. **Falha de áudio não pode ser silenciosa.** `play()` recusado e 404 no MP3
    davam o mesmo sintoma (nada) porque o `catch` era vazio. Hoje os dois
    aparecem no console, e há `__somVenda.estado()` / `__somVenda.testar()`.
+6. ⚠️ **UM aviso por COMPRA, não por linha** (`20261085`, 15/10/2026). O
+   gatilho avisava por linha de `ecommerce_orders`, e o upsell da PayT
+   (transação separada, mesmo carrinho) tocava "Nova venda" de novo — o
+   sininho mostrava duas vendas onde a Esteira mostrava um card. Hoje a chave é
+   a da Esteira (`carbo_venda_chave`: carrinho na PayT, raiz do pedido nos
+   demais); a 1ª linha paga anuncia JÁ com o total da compra, e as seguintes
+   ATUALIZAM o texto do aviso (ledger `carbo_venda_avisada`) — sem 2º som,
+   toast ou push. O valor sai em `carbo_brl()` ("R$ 119,60"; o `to_char` com
+   `L` saía "$119.60" no locale do Supabase).
+   ⚠️ O Comparativo (`useDashEcommerce`) conta compra pela MESMA chave
+   (`chavePedido()`), e o status do pedido é o da linha mais avançada — upsell
+   cancelado numa compra paga não vira "1 cancelado".
 
 ### Unidades: são DUAS perguntas, e trocá-las erra nos dois sentidos
 O kit não tem "um" número de unidades. Tem dois, e eles divergem:

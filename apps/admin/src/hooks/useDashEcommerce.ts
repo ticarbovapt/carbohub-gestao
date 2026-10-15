@@ -256,6 +256,8 @@ interface DBOrder {
   total: number;
   status: string;
   ordered_at: string;
+  /** O carrinho, na PayT. Ver `chavePedido()`. */
+  platform_order_number?: string | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -308,11 +310,42 @@ export function pedidoRaiz(platform: string, orderId: string | null | undefined)
   return corte > 0 ? id.slice(0, corte) : id;
 };
 
+/**
+ * O que é UMA compra. Na PayT é o CARRINHO, não a transação: venda, upsell e
+ * order bump são transações separadas (postbacks separados, mesmo `cart_id`),
+ * e viram UM pedido no Bling, UMA nota e UM picking. Contadas pela transação, o
+ * Comparativo dizia "7 vendas" onde houve 4 compras (15/10/2026) — enquanto a
+ * Esteira, que agrupa pelo carrinho desde a 20260970, mostrava 4 cards.
+ * Os outros canais seguem pela raiz do `order_id`.
+ * ⚠️ Linha sem carrinho (histórico) cai na transação, que ainda é melhor que nada.
+ */
+export function chavePedido(r: Pick<DBOrder, "platform" | "order_id" | "platform_order_number">): string {
+  if (r.platform === "payt" && r.platform_order_number) return `carrinho:${r.platform_order_number}`;
+  return pedidoRaiz(r.platform, r.order_id);
+}
+
 /** Quantos PEDIDOS distintos existem nestas linhas. */
 function contarPedidos(rows: DBOrder[]): number {
   const vistos = new Set<string>();
-  for (const r of rows) vistos.add(pedidoRaiz(r.platform, r.order_id));
+  for (const r of rows) vistos.add(chavePedido(r));
   return vistos.size;
+}
+
+/**
+ * O status de cada PEDIDO = o da linha mais avançada (a mesma escada da
+ * `ecommerce_aguardando_bling`). Sem isso, um carrinho com a venda paga e o
+ * upsell cancelado contava UMA vez em "pago" e UMA em "cancelado" — e a % de
+ * cancelamento subia por uma compra que deu certo.
+ */
+const ESCADA: Record<string, number> = { delivered: 5, shipped: 4, paid: 3, pending: 2, cancelled: 1 };
+function statusPorPedido(rows: DBOrder[]): Map<string, string> {
+  const m = new Map<string, string>();
+  for (const r of rows) {
+    const k = chavePedido(r);
+    const atual = m.get(k);
+    if (atual === undefined || (ESCADA[r.status] ?? 0) > (ESCADA[atual] ?? 0)) m.set(k, r.status);
+  }
+  return m;
 }
 
 // Dia em que a venda aconteceu PARA QUEM VENDE — fuso do navegador, não UTC.
@@ -349,7 +382,8 @@ function buildMetrics(
   const totalUnitsSold   = rows.reduce((s, r) => s + displayUnits(r), 0);
   const totalQuantityRaw = rows.reduce((s, r) => s + r.quantity, 0);
 
-  const porStatus  = (st: string) => contarPedidos(rows.filter(r => r.status === st));
+  const statusDoPedido = statusPorPedido(rows);
+  const porStatus  = (st: string) => [...statusDoPedido.values()].filter(v => v === st).length;
   const cancelled  = porStatus("cancelled");
   const pending    = porStatus("pending");
   const paid       = porStatus("paid");
@@ -422,7 +456,7 @@ function buildMetrics(
   for (const r of rows) {
     const day = diaLocal(r.ordered_at);
     const prev = dayMap.get(day) ?? { pedidos: new Set<string>(), units: 0, revenue: 0 };
-    prev.pedidos.add(pedidoRaiz(r.platform, r.order_id));
+    prev.pedidos.add(chavePedido(r));
     dayMap.set(day, {
       pedidos: prev.pedidos,
       units:   prev.units   + displayUnits(r),
@@ -820,7 +854,7 @@ async function fetchOrders(
   const [{ data, error }, connected, { data: rateData }] = await Promise.all([
     supabase
       .from("ecommerce_orders" as never)
-      .select("id,platform,order_id,product_sku,product_name,quantity,units_real,unit_price,total,status,ordered_at")
+      .select("id,platform,order_id,product_sku,product_name,quantity,units_real,unit_price,total,status,ordered_at,platform_order_number")
       .eq("platform", platform)
       .gte("ordered_at", from)
       .lte("ordered_at", to),
@@ -1021,7 +1055,7 @@ export function useEcommerceComparativo(
       // ⚠️ `product_name` entrou junto: sem ele a linha SEM SKU (Shopee) não tem
       // como se identificar na soma por produto, e viraria "Produto
       // desconhecido" para todas — juntando produtos diferentes numa linha só.
-      .select("platform,order_id,product_sku,product_name,quantity,units_real,total,status,ordered_at")
+      .select("platform,order_id,product_sku,product_name,quantity,units_real,total,status,ordered_at,platform_order_number")
       .in("platform", platforms)
       .gte("ordered_at", from)
       .lte("ordered_at", to)
