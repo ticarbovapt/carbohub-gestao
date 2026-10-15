@@ -83,3 +83,16 @@ export function origemDoPedido(p: PedidoAcesso): string {
   if (p.e_licenciado) return "Licenciado";
   return "Sem cadastro conhecido";
 }
+
+/**
+ * Quantos pedidos esperam decisão — o selo do item no menu.
+ *
+ * Lê a MESMA consulta da tela (mesma chave), então o número do menu e o
+ * da aba "Pendentes" não têm como discordar, e abrir a tela não refaz a
+ * busca. Erro (SQL ainda não aplicado, sem a flag) vira selo nenhum:
+ * o selo é aviso, não a fila — quem quer o erro abre a tela e o lê lá.
+ */
+export function usePendentesAcademy(): number {
+  const { data } = useAcademyAcessos();
+  return (data ?? []).filter((p) => p.status === "pendente").length;
+}

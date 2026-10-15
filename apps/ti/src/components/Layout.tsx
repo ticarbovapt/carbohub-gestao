@@ -9,6 +9,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useAccessPing } from "@/hooks/useAccessPing";
 import { useLiveNotifications } from "@/hooks/useLiveNotifications";
 import { ChatProvider, ChatBadge } from "@carbo/chat";
+import { AcademyBadge } from "./AcademyBadge";
 import { Sidebar, type ShellNavSection, StatusTarja, usePaginaAtual } from "@carbo/shell";
 import logoCarbo from "@/assets/logo-carbo.png";
 import { HUB_URL } from "@/lib/sso";
@@ -50,7 +51,7 @@ export function Layout() {
         { to: "/bugs", label: "Bugs e sugestões", icon: Bug },
         { to: "/status", label: "Avisos de status", icon: Megaphone },
         { to: "/chat/adocao", label: "Adoção do Carbo Chat", icon: Gauge },
-        { to: "/academy/acessos", label: "Carbo Academy — acessos", icon: GraduationCap },
+        { to: "/academy/acessos", label: "Carbo Academy — acessos", icon: GraduationCap, badge: <AcademyBadge /> },
     ] },
     { label: "Ferramentas", items: [
         { to: "/vender", label: "Vender", icon: ShoppingCart },
