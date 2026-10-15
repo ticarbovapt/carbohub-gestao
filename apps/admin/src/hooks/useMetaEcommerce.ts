@@ -232,9 +232,11 @@ export function useMetaDailyActuals(month: Date, platform: MetaPlatform = null) 
       const dayMap: Record<string, number> = {};
 
       // ecommerce_orders, com filtro opcional de plataforma (null = os 3 canais).
-      let query = (supabase as any)
+      // ⚠️ `lerTudo` (ver `useMetaActuals`): sem paginação o PostgREST corta
+      // em 1.000 linhas calado.
+      const consulta = () => (supabase as any)
         .from("ecommerce_orders")
-        .select("total, ordered_at, platform")
+        .select("id, total, ordered_at, platform")
         .gte("ordered_at", start)
         .lte("ordered_at", end)
         .in("status", VENDA_STATUSES);
@@ -244,12 +246,14 @@ export function useMetaDailyActuals(month: Date, platform: MetaPlatform = null) 
       // gravado por engano, ou um canal que ainda não foi promovido a real)
       // entraria no gráfico Total e não no card do topo, e os dois números do
       // mesmo mês discordariam.
-      query = platform !== null
-        ? query.eq("platform", platform)
-        : query.in("platform", ALL_PLATFORMS.filter(Boolean) as string[]);
-
-      const { data: orders, error } = await query;
-      if (error) throw error;
+      const orders = await lerTudo<{ total: number | null; ordered_at: string }>((de, ateLinha) => {
+        const q = consulta();
+        return (platform !== null
+          ? q.eq("platform", platform)
+          : q.in("platform", ALL_PLATFORMS.filter(Boolean) as string[]))
+          .order("ordered_at").order("id")
+          .range(de, ateLinha);
+      });
       for (const o of orders || []) {
         const day = diaLocal(o.ordered_at);
         if (day) dayMap[day] = (dayMap[day] || 0) + Number(o.total || 0);
@@ -411,14 +415,18 @@ export function useMetaMonthlyHistory(platform: MetaPlatform = null) {
       // aparece na receita e não na meta. Hoje isso não muda número nenhum
       // (todo canal gravado está na lista); passa a mudar no dia em que alguém
       // gravar um canal que não é venda online.
-      let query = (supabase as any)
-        .from("ecommerce_orders")
-        .select("total, ordered_at")
-        .in("status", VENDA_STATUSES)
-        .not("ordered_at", "is", null);
-      if (platform !== null) query = query.eq("platform", platform);
-      const { data, error } = await query;
-      if (error) throw error;
+      // ⚠️ `lerTudo`: esta consulta lê o HISTÓRICO INTEIRO, sem filtro de
+      // data — passou de 1.000 linhas há muito, e o PostgREST corta CALADO.
+      // Os meses que caíam fora sumiam do gráfico sem erro nenhum.
+      const data = await lerTudo<{ total: number | null; ordered_at: string }>((de, ateLinha) => {
+        let q = (supabase as any)
+          .from("ecommerce_orders")
+          .select("id, total, ordered_at")
+          .in("status", VENDA_STATUSES)
+          .not("ordered_at", "is", null);
+        if (platform !== null) q = q.eq("platform", platform);
+        return q.order("ordered_at").order("id").range(de, ateLinha);
+      });
       for (const o of data || []) {
         const m = mesLocal(o.ordered_at);
         if (m) dayMap[m] = (dayMap[m] || 0) + Number(o.total || 0);

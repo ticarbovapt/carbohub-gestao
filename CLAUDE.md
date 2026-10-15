@@ -1245,6 +1245,13 @@ A correção é `lib/lerTudo.ts` (páginas via `.range()`), replicado em `admin`
    grande se encolhe no `where`. O teto de sanidade (200 mil linhas) existe para
    filtro esquecido falhar alto em vez de travar a aba.
 
+⚠️ **E-commerce caiu no MESMO teto** (15/10/2026): o Comparativo e a aba de
+cada canal (`useDashEcommerce`) e duas consultas das Metas (`useMetaEcommerce`,
+uma delas sem filtro de data nenhum) liam `ecommerce_orders` sem paginar. A
+tabela tem uma linha por ITEM: "junho até hoje" passava de 1.000, sem ordem
+definida, e a PayT (canal mais novo) aparecia com 2 vendas em 4 meses. Hoje as
+quatro usam `lerTudo` com `ordered_at` + `id`.
+
 ⚠️ Continuam sem teto e são da mesma família — medir antes de mexer:
 `useFaturamento` (financas), `useCeoCockpit`, `useDashEstrategico`. Não caíram
 ainda porque filtram por status ou por data, mas o teto não sabe disso.
