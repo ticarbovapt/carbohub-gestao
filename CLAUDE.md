@@ -1078,6 +1078,17 @@ de quase tudo, a tentativa ligou `Leandro Teodolino` a `Mauro Nishimoto` e um
 carrinho PayT a um pedido do ML. Mesma lição do CPF que servia a vários
 destinatários na conciliação do Melhor Envio.
 
+⚠️ **UPSELL é transação SEPARADA, postback separado, MESMO `cart_id`** (medido
+em 15/10/2026: `EYEZ2VV` R$ 59,90 + upsell `ZY2OB8M` R$ 119,60, carrinho
+`78BZDWW`). A junção pelo carrinho já cobre isso. O que falhou foi outra coisa:
+a linha da principal NÃO entrou em `ecommerce_orders` (recusa passageira, sem
+reenvio da PayT), e o log cru dizia "1 linha(s)" — escrito ANTES de gravar.
+Hoje o webhook marca `payt_eventos.gravado_em`/`erro` DEPOIS da gravação, e o
+cron `payt-reprocessar-10min` (`ecommerce-webhook/payt-reprocessar`, `20261084`)
+relê 7 dias pelo MESMO `linhasDaPayt` e insere só a linha que falta — nunca
+atualiza. ⚠️ Evento com `resultado` "N linha(s)" e `gravado_em` nulo é venda
+que não entrou: é a lista de trabalho.
+
 Três pendências conhecidas, todas medidas:
 1. ⚠️ **`loja_id = 0`** no Bling (venda direta) — a ponte só marca
    `segmento = 'online'` com loja ≠ 0, então **venda PayT não conta como
