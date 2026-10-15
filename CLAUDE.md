@@ -2687,7 +2687,15 @@ Portal de Vendas lê (`carbo_bug_reports`, `carbo_departments`,
 `carbo_functions`, `notifications`), a tarja, e o INSERT de formulário público
 (`nps_responses`, `vip_registrations`, `flamme_leads`, `b2b_leads`). Backup
 inteiro em `carbo_backup_policies`. ⚠️ **Regra nova: nunca `using (true)` nem
-`auth.uid() IS NOT NULL` — é o portal lendo. Use `carbo_e_time_interno()`.**
+`auth.uid() IS NOT NULL` — é o portal lendo. Use `(select carbo_e_time_interno())`.**
+⚠️ **E EMBRULHADA EM SELECT** (`20261083`, 15/10/2026). Solta, a função —
+SECURITY DEFINER, que o Postgres não embute — roda UMA VEZ POR LINHA LIDA, cada
+vez uma busca em `profiles`. A Esteira (view `security_invoker` que cruza seis
+tabelas em laço) passou a estourar o timeout cinco dias depois da `20261078`,
+e só a TELA: as edge functions usam service role e não passam pela RLS.
+Medido local: 6,9 s → 0,3 s. Vale para `carbo_tem_app(...)` e qualquer função
+que só dependa de quem está logado. Quando uma tela que lê view começar a dar
+`statement timeout` sem mudança nela, olhe a RLS das tabelas por baixo.
 ⚠️ `apps/mkt/src/hooks` tem hooks de finanças (`usePayables`,
 `useReceivables`…) SEM rota — código morto copiado, não tela vazando.
 
