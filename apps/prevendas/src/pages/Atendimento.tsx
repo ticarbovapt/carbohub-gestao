@@ -226,9 +226,6 @@ function SemNumero() {
       <p className="text-sm font-medium text-amber-500">
         Nenhum número de WhatsApp ativo para o <span className="whitespace-nowrap">Pré-Vendas</span>.
       </p>
-      <p className="text-[11px] leading-relaxed text-muted-foreground">
-        Quando houver, as conversas com os postos aparecem aqui.
-      </p>
     </div>
   );
 }
