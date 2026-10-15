@@ -20,6 +20,11 @@
 -- segundo toast, sem segundo push — o sininho mostra uma compra com o valor
 -- que a Esteira mostra.
 --
+-- ⚠️ `notifications.reference_id` é TEXTO, não uuid: todo join com
+-- `ecommerce_orders.id` leva `::text`. Comparar uuid = text é erro 42883 — e
+-- DENTRO do gatilho esse erro seria engolido pelo `exception when others`, e o
+-- upsell simplesmente não atualizaria o aviso, calado.
+--
 -- `carbo_venda_avisada` é o LEDGER (chave da compra → a linha cujo id está no
 -- `reference_id` do aviso). O PK é a trava: duas transações do mesmo carrinho
 -- não conseguem as duas "ser a primeira".
@@ -39,7 +44,7 @@ select e.platform,
        count(distinct n.reference_id) as avisos,
        sum(distinct e.total)          as valor_aprox
   from public.notifications n
-  join public.ecommerce_orders e on e.id = n.reference_id
+  join public.ecommerce_orders e on e.id::text = n.reference_id
  where n.type = 'ecommerce_sale' and n.reference_type = 'ecommerce_order'
    and n.created_at > now() - interval '24 hours'
  group by 1, 2
@@ -60,7 +65,7 @@ end $guarda$;
 
 create table if not exists public.carbo_venda_avisada (
   chave       text primary key,          -- 'payt:carrinho:78BZDWW', 'nuvemshop:1234'…
-  ref_id      uuid not null,             -- o reference_id dos avisos desta compra
+  ref_id      text not null,             -- o reference_id dos avisos (TEXTO em notifications)
   avisado_em  timestamptz not null default now()
 );
 alter table public.carbo_venda_avisada enable row level security;   -- sem policy: só o gatilho (dono)
@@ -90,7 +95,7 @@ declare
   plat_label text; plat_abbr text;
   v_chave text; v_raiz text; v_carrinho text;
   v_total numeric; v_qtd bigint; v_transacoes bigint; v_produtos text;
-  v_corpo text; v_ref uuid;
+  v_corpo text; v_ref text;
 begin
   if NEW.platform not in ('mercadolivre', 'mercadolivre_full', 'amazon',
                           'nuvemshop', 'shopee', 'payt') then
@@ -149,7 +154,7 @@ begin
     || case when NEW.platform = 'payt' and coalesce(v_transacoes, 1) > 1 then ' · com upsell' else '' end;
 
   insert into public.carbo_venda_avisada (chave, ref_id)
-  values (v_chave, NEW.id)
+  values (v_chave, NEW.id::text)
   on conflict (chave) do nothing
   returning ref_id into v_ref;
 
@@ -190,7 +195,7 @@ select distinct on (public.carbo_venda_chave(e.platform, e.order_id, e.platform_
        public.carbo_venda_chave(e.platform, e.order_id, e.platform_order_number),
        n.reference_id, n.created_at
   from public.notifications n
-  join public.ecommerce_orders e on e.id = n.reference_id
+  join public.ecommerce_orders e on e.id::text = n.reference_id
  where n.type = 'ecommerce_sale' and n.reference_type = 'ecommerce_order'
    and n.created_at > now() - interval '24 hours'
  order by public.carbo_venda_chave(e.platform, e.order_id, e.platform_order_number), n.created_at
@@ -212,7 +217,7 @@ begin
   loop
     if (select count(distinct n.reference_id)
           from public.notifications n
-          join public.ecommerce_orders e on e.id = n.reference_id
+          join public.ecommerce_orders e on e.id::text = n.reference_id
          where n.type = 'ecommerce_sale' and n.reference_type = 'ecommerce_order'
            and n.created_at > now() - interval '24 hours'
            and public.carbo_venda_chave(e.platform, e.order_id, e.platform_order_number) = r.chave) < 2 then
@@ -234,7 +239,7 @@ begin
         on e.platform = e0.platform
        and public.carbo_venda_chave(e.platform, e.order_id, e.platform_order_number) = r.chave
        and public.ecommerce_status_e_venda(e.status)
-     where e0.id = r.ref_id
+     where e0.id::text = r.ref_id
      group by e0.platform;
 
     update public.notifications set body = v_corpo
@@ -242,7 +247,7 @@ begin
 
     delete from public.notifications n
      using public.ecommerce_orders e
-     where e.id = n.reference_id
+     where e.id::text = n.reference_id
        and n.type = 'ecommerce_sale' and n.reference_type = 'ecommerce_order'
        and n.created_at > now() - interval '24 hours'
        and n.reference_id <> r.ref_id
@@ -260,7 +265,7 @@ select e.platform,
        coalesce(nullif(e.platform_order_number, ''), split_part(e.order_id, '-', 1)) as compra,
        count(distinct n.reference_id) as avisos
   from public.notifications n
-  join public.ecommerce_orders e on e.id = n.reference_id
+  join public.ecommerce_orders e on e.id::text = n.reference_id
  where n.type = 'ecommerce_sale' and n.reference_type = 'ecommerce_order'
    and n.created_at > now() - interval '24 hours'
  group by 1, 2
