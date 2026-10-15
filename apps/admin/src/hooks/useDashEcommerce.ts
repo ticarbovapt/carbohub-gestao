@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { subDays, startOfMonth, endOfMonth, format, startOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
+import { lerTudo } from "@/lib/lerTudo";
 import { toast } from "@/components/ui/sonner";
 import {
   COLUNAS_MAPA_SKU,
@@ -851,13 +852,25 @@ async function fetchOrders(
   const from = new Date(`${r.from}T00:00:00`).toISOString();
   const to   = new Date(`${r.to}T23:59:59.999`).toISOString();
 
-  const [{ data, error }, connected, { data: rateData }] = await Promise.all([
+  // ⚠️ `lerTudo`: sem paginação o PostgREST devolve no máximo 1.000 linhas e
+  // NÃO avisa. A tabela tem uma linha por ITEM, e um período de meses passa
+  // disso — o canal aparecia com uma fração das vendas, sem erro nenhum. Ordem
+  // estável (`ordered_at` + `id`) é obrigatória para paginar.
+  const lerLinhas = lerTudo<DBOrder>((de, ate) =>
     supabase
       .from("ecommerce_orders" as never)
       .select("id,platform,order_id,product_sku,product_name,quantity,units_real,unit_price,total,status,ordered_at,platform_order_number")
       .eq("platform", platform)
       .gte("ordered_at", from)
-      .lte("ordered_at", to),
+      .lte("ordered_at", to)
+      .order("ordered_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(de, ate) as never)
+    .then(linhas => ({ data: linhas, error: null as { message: string } | null }),
+          (e: Error) => ({ data: null, error: { message: e.message } }));
+
+  const [{ data, error }, connected, { data: rateData }] = await Promise.all([
+    lerLinhas,
     statusDaConexao(platform),
     supabase
       .from("platform_commission_rates" as never)
@@ -1050,18 +1063,27 @@ export function useEcommerceComparativo(
     // resolver o multiplicador, e a tabela caía em `units_real` — que só a
     // Nuvemshop preenche multiplicado. Era daí que vinha "27 vendas / 30
     // unidades" do Mercado Livre com kits de 5 e de 10 no meio.
-    supabase
-      .from("ecommerce_orders" as never)
-      // ⚠️ `product_name` entrou junto: sem ele a linha SEM SKU (Shopee) não tem
-      // como se identificar na soma por produto, e viraria "Produto
-      // desconhecido" para todas — juntando produtos diferentes numa linha só.
-      .select("platform,order_id,product_sku,product_name,quantity,units_real,total,status,ordered_at,platform_order_number")
-      .in("platform", platforms)
-      .gte("ordered_at", from)
-      .lte("ordered_at", to)
-      .then(async ({ data: rows }) => {
+    // ⚠️ `lerTudo`: o PostgREST corta em 1.000 linhas CALADO, e a tabela tem
+    // uma linha por ITEM. "Junho até hoje" passa disso, e o que caía fora era
+    // o mais recente — a PayT (canal mais novo) aparecia com 2 vendas em 4
+    // meses. Ordem estável (`ordered_at` + `id`) é obrigatória para paginar.
+    lerTudo<DBOrder>((de, ate) =>
+      supabase
+        .from("ecommerce_orders" as never)
+        // ⚠️ `product_name` entrou junto: sem ele a linha SEM SKU (Shopee) não tem
+        // como se identificar na soma por produto, e viraria "Produto
+        // desconhecido" para todas — juntando produtos diferentes numa linha só.
+        .select("id,platform,order_id,product_sku,product_name,quantity,units_real,total,status,ordered_at,platform_order_number")
+        .in("platform", platforms)
+        .gte("ordered_at", from)
+        .lte("ordered_at", to)
+        .order("ordered_at", { ascending: true })
+        .order("id", { ascending: true })
+        .range(de, ate) as never)
+      .catch((e: Error) => { console.error("[useComparativo]", e.message); return [] as DBOrder[]; })
+      .then(async (rows) => {
         if (cancelled) return;
-        const allRows = (rows ?? []) as DBOrder[];
+        const allRows = rows;
         const [mapa, mapaProdutos] = await Promise.all([
           carregarMapaUnidades(allRows),
           carregarProdutosDoSku(allRows),
