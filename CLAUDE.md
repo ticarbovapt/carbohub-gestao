@@ -4897,6 +4897,23 @@ supabase/migrations/20261046…        carbo_interface_e_interna: É time intern
     closer. Quem pega card do f15 é o closer, que é GESTOR (desenho do dono:
     quem opera pipeline é colaborador, closer é gestor). No Sales a fila
     continua aberta: lá o closer pode ser colaborador.
+    ⚠️ **Ver não bastava: AGIR também** (`20261093`, 16/10/2026). As ações do
+    card perguntavam só `crm_is_gestor()`, então o gestor-por-flag via o card
+    e levava "sem permissão" em timeline, fixar, histórico de responsáveis,
+    transferir, arquivar/desarquivar, repassar, comentar e abrir por link.
+    Hoje todas somam `carbo_prevendas_gestor_do_lead(p_lead)` (gestor do
+    Pré-Vendas E card f14/f15). `crm_sales_lead_pegar` recusa o f15 a quem não
+    é gestor (o SDR pegava o próprio repasse), e o `crm_lead_detalhe` perdeu a
+    fila aberta no f15 (a `20261082` só a tirou das policies).
+    ⚠️ **NULL num `if not (...)` LIBERA.** `crm_lead_detalhe` e
+    `crm_lead_comentar` guardavam com `... or assigned_to = auth.uid()`: card
+    sem responsável dá NULL, `not NULL` não dispara o `raise`, e qualquer
+    interno abria/comentava o card por link — no Sales também. Hoje é
+    `if not coalesce((...), false)`. Guarda nova em plpgsql: coalesce, sempre.
+    ⚠️ Arrastar o card para Oportunidade Qualificada/Descartado abre diálogo:
+    o `onDragMove` devolve `false` e o quadro DESFAZ o movimento otimista
+    (cancelar deixava o card na coluna errada na tela); recusa do banco
+    desfaz pela promise. Só no `prevendas` — o `KanbanBoard` do `crm` é outro.
 13. **Sem Carbo Chat** (dono do processo, 14/10/2026): sem menu, sem card na
     home, sem `ChatProvider`; `/chat` volta para a home.
 14. **`/atendimento` é a CASCA da tela de Conversas, sempre vazia** (dono do

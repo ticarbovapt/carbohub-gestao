@@ -223,7 +223,7 @@ export const SECOES: Secao[] = [
         print: { chave: "closer-colaborador", legenda: "Quadro Closer, visão do SDR: só o que ele repassou." },
         itens: [
           { n: 1, titulo: "Aba Closer", texto: "Acompanhe aqui o que aconteceu com os seus repasses." },
-          { n: 2, titulo: "Seu repasse", texto: "O card mostra em que etapa o closer está. Quando ele chega em Ganho, a venda aparece em Vendas e nos seus Resultados." },
+          { n: 2, titulo: "Seu repasse", texto: "O card mostra em que etapa o closer está. Quando ele chega em Ganho, a venda aparece em Vendas e nos seus Resultados. Enquanto ninguém assume, o card aberto diz “Repassado ao closer” — quem pega o card é o closer, não o SDR." },
         ],
       },
       {
@@ -240,7 +240,7 @@ export const SECOES: Secao[] = [
         papel: "gestor",
         print: { chave: "closer-fila", legenda: "Card na fila, aberto pelo closer.", papel: "gestor" },
         itens: [
-          { n: 1, titulo: "Pegar este card", texto: "Assume o card: ele passa a ser seu e sai da fila." },
+          { n: 1, titulo: "Pegar este card", texto: "Assume o card: ele passa a ser seu e sai da fila. No quadro Closer só o gestor pega — o SDR acompanha o card dele, mas não o assume." },
           { n: 2, titulo: "Qualificação do SDR", texto: "As respostas que o SDR levantou chegam junto, com o histórico da conversa." },
         ],
       },
@@ -395,7 +395,7 @@ export const SECOES: Secao[] = [
           { n: 1, titulo: "Mês", texto: "Navega entre os meses. A data que vale é a do faturamento." },
           { n: 2, titulo: "Período", texto: "Escolha um intervalo livre de datas. “Limpar” volta ao mês." },
           { n: 3, titulo: "Números do mês", texto: "Total vendido, faturado, aguardando faturamento, vindo de meses anteriores, em orçamento e canceladas. Clique num número para filtrar a tabela por ele; clique de novo para tirar o filtro." },
-          { n: 4, titulo: "Buscar", texto: "Procura pelo número do pedido, nome do cliente ou CNPJ/CPF, em todo o histórico (ignora o mês)." },
+          { n: 4, titulo: "Buscar", texto: "Procura pelo nome do cliente, cidade, CNPJ/CPF, IE, telefone, CEP, e-mail ou número do pedido, em todo o histórico (ignora o mês). Número com 3 dígitos ou mais casa em qualquer parte do documento, telefone, CEP ou IE." },
           { n: 5, titulo: "Status", texto: "Orçamento, Cancelado ou a etapa do pedido (Nova Venda, Em Separação, Em Transporte, Entregue…)." },
           { n: 6, titulo: "SDR e Closer", texto: "Quem originou o lead e quem fechou a venda." },
           { n: 7, titulo: "Editar / Converter", texto: "Em orçamentos: editar, converter em venda ou baixar o PDF." },

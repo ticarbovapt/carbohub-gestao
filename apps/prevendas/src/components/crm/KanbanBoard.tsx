@@ -13,7 +13,10 @@ interface KanbanBoardProps {
   onAdvance?: (lead: CRMLead) => void;
   onMarkLost?: (lead: CRMLead) => void;
   onLeadClick?: (lead: CRMLead) => void;
-  onDragMove?: (lead: CRMLead, toStage: string) => void;
+  // `false` = não moveu agora (abriu diálogo de repasse/descarte): o card
+  // volta à coluna dele e só anda se o diálogo for confirmado. Promise que
+  // falha = o banco recusou: o card volta também.
+  onDragMove?: (lead: CRMLead, toStage: string) => boolean | void | Promise<unknown>;
   onAddLead?: (stageId: string) => void;
   ownersById?: Record<string, LeadOwner>;
 }
@@ -68,7 +71,18 @@ export function KanbanBoard({ leads, funnelType, onAdvance, onMarkLost, onLeadCl
     const toStage = over.id as string;
     if (!lead || lead.stage === toStage) return;
     setOptimisticMoves((prev) => ({ ...prev, [lead.id]: toStage }));
-    onDragMove?.(lead, toStage);
+    // ⚠️ Sem desfazer, cancelar o diálogo (ou uma recusa do banco) deixava o
+    // card na coluna nova PARA SEMPRE na tela — o efeito acima só limpa quando
+    // o banco chega à mesma etapa, e nesse caso ele nunca chega.
+    const desfaz = () => setOptimisticMoves((prev) => {
+      if (prev[lead.id] !== toStage) return prev;
+      const next = { ...prev };
+      delete next[lead.id];
+      return next;
+    });
+    const r = onDragMove?.(lead, toStage);
+    if (r === false) desfaz();
+    else if (r && typeof (r as Promise<unknown>).then === "function") (r as Promise<unknown>).catch(desfaz);
   }
 
   return (
