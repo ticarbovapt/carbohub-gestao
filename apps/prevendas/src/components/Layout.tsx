@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { Outlet } from "react-router-dom";
-import { LayoutDashboard, KanbanSquare, ShoppingBag, BarChart3, MessagesSquare } from "lucide-react";
+import { LayoutDashboard, KanbanSquare, ShoppingBag, BarChart3, MessagesSquare, BookOpen } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAccessPing } from "@/hooks/useAccessPing";
@@ -45,6 +45,11 @@ export function Layout() {
         { to: "/vendas", label: "Vendas", icon: ShoppingBag },
         { to: "/resultados", label: "Resultados", icon: BarChart3 },
         { to: "/atendimento", label: "Atendimento", icon: MessagesSquare },
+    ] },
+    // Manual do app, tela a tela. Seção própria e no FIM: é consulta, não
+    // operação — e o que ela mostra depende do nível (gestor vê os dois).
+    { label: "Ajuda", items: [
+        { to: "/documentacao", label: "Documentação", icon: BookOpen },
     ] },
   ];
 
