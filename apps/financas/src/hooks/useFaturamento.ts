@@ -169,11 +169,11 @@ export function useFaturamento({ month, search = "", showAll = false }: Faturame
         const { data, error } = await (supabase as any).rpc("carbo_faturamento_busca", {
           p_termo: term, p_status: STATUS_COM_NF_POSSIVEL, p_limit: 500,
         });
-        // ⚠️ Função ainda não criada (migração não rodou) cai na busca antiga
-        // em vez de deixar a tela vazia — ausência tem de MOSTRAR.
-        const semFuncao = error && (error.code === "PGRST202" || /carbo_faturamento_busca/.test(error.message ?? ""));
-        if (error && !semFuncao) throw error;
-        if (!error) {
+        // ⚠️ A RPC falhou (ainda não criada, ou quebrada) ⇒ cai na busca
+        // antiga em vez de deixar a busca morta — e o erro vai para o console,
+        // nunca some calado. Aconteceu no 1º dia: `status` é enum em produção.
+        if (error) console.error("[faturamento] busca nova falhou, usando a antiga:", error);
+        else {
           return ((data ?? []) as any[])
             .filter((row) => showAll || row.bling_nf_id == null || row.bling_nf_bonificacao_id == null
               || row.bling2_nf_id == null || row.bling2_nf_bonificacao_id == null)
