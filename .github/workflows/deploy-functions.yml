@@ -159,6 +159,10 @@ jobs:
           # e recusa `producao: true`). Nao entra em cron nenhum.
           # --no-verify-jwt porque quem chama e curl com o X-Cron-Secret.
           dep nfse-dps-teste --no-verify-jwt
+          # NFS-e: a EMISSÃO do CarboVAPT (Finanças → Faturamento). Chamada pelo
+          # NAVEGADOR, por gente logada — por isso SEM --no-verify-jwt; a função
+          # ainda confere o app do Finanças por dentro.
+          dep nfse-emitir
           dep nuvemshop-auth --no-verify-jwt
           dep nuvemshop-lgpd --no-verify-jwt
           # Shopee. ⚠️ Estava no repo e no config.toml desde que foi escrita, e
