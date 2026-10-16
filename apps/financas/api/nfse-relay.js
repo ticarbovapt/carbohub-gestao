@@ -18,9 +18,9 @@
 //      destino livre faria dela um proxy que assina, no CNPJ da Carbo, contra
 //      qualquer servidor;
 //   2. FECHA sem segredo (500) e com segredo errado (401) — nunca abre;
-//   3. SÓ PRODUÇÃO RESTRITA (homologação). A URL de produção fica comentada:
-//      descomentar é gesto deliberado, não parâmetro passado por engano. DPS
-//      aceito em produção é nota fiscal com número;
+//   3. UM destino só. Desde 16/10/2026 é a PRODUÇÃO (a restrita fica
+//      comentada): trocar é gesto deliberado num commit, nunca parâmetro. DPS
+//      aceito aqui é nota fiscal com número;
 //   4. nunca devolve nem registra certificado, chave ou segredo.
 //
 // Env no projeto do Vercel do Finanças (Production):
@@ -29,11 +29,14 @@
 
 import https from "node:https";
 
+// ⚠️ PRODUÇÃO desde 16/10/2026, junto com `AMBIENTE = 1` na `nfse-emitir`.
+// DPS com tpAmb=2 (a sonda `nfse-dps-teste`) que chegue aqui é RECUSADO pelo
+// SEFIN — o modo certo de falhar.
 const DESTINO = {
-  hostname: "sefin.producaorestrita.nfse.gov.br",
+  hostname: "sefin.nfse.gov.br",
   path: "/SefinNacional/nfse",
 };
-// const DESTINO_PRODUCAO = { hostname: "sefin.nfse.gov.br", path: "/SefinNacional/nfse" };
+// const DESTINO_RESTRITA = { hostname: "sefin.producaorestrita.nfse.gov.br", path: "/SefinNacional/nfse" };
 
 function lerCorpo(req) {
   if (req.body && typeof req.body === "object") return Promise.resolve(req.body);
