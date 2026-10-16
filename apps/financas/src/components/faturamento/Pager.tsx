@@ -12,15 +12,17 @@ export function useUrlPage(key: string): [number, (p: number) => void] {
   const [params, setParams] = useSearchParams();
   const raw = parseInt(params.get(key) || "1", 10);
   const page = Number.isFinite(raw) && raw > 0 ? raw : 1;
-  const setPage = (p: number) =>
-    setParams(
-      (prev) => {
-        if (p <= 1) prev.delete(key);
-        else prev.set(key, String(p));
-        return prev;
-      },
-      { replace: true },
-    );
+  // ⚠️ Parte de `window.location.search`, NUNCA do `prev` do setParams: no RR
+  // 6.30 o `prev` é o da URL do último render. A busca grava `?busca=` e chama
+  // `resetPages()` no MESMO evento — com o `prev`, a volta à página 1 regravava
+  // a URL antiga por cima e APAGAVA a busca: a letra sumia do campo e a lista
+  // continuava no mês. Mesma regra do `useParamUrl` do `packages/shell`.
+  const setPage = (p: number) => {
+    const atual = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+    if (p <= 1) atual.delete(key);
+    else atual.set(key, String(p));
+    setParams(atual, { replace: true });
+  };
   return [page, setPage];
 }
 

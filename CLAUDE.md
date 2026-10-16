@@ -1354,6 +1354,11 @@ brand.href           o logo da barra lateral é LINK (nova guia)             (Si
    `setSearchParams`: no RR 6.30 o `prev` é o do último render e dois filtros
    trocados no mesmo clique apagavam um ao outro. Duas trocas no mesmo clique
    viram UMA entrada no histórico. Busca digitada usa `{ replace: true }`.
+   ⚠️ **Vale para QUALQUER setter de URL, não só o `useParamUrl`** (16/10/2026):
+   o `useUrlPage` do Finanças (`components/faturamento/Pager.tsx`) usava o
+   `prev`, e o `resetPages()` chamado junto com a busca regravava a URL antiga
+   — a busca do `/faturamento` apagava a própria letra e a lista ficava no mês.
+   Setter de URL novo parte de `window.location.search`, sempre.
 3. ⚠️ **O título vem do MENU** (`sections` do Layout, prefixo mais longo). Tela
    nova que entra no menu ganha título sozinha; fora do menu, o nome do app.
 4. ⚠️ **`FecharComVoltar` empurra uma entrada no histórico ao abrir** e a tira

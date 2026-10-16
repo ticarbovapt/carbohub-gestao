@@ -137,8 +137,12 @@ export default function Faturamento() {
   const VALID_TABS = ["sistema", "bling", "online", "vincular", "vincular_filial", "todas"];
   const rawTab = searchParams.get("tab") || "sistema";
   const activeTab = VALID_TABS.includes(rawTab) ? rawTab : "sistema";
-  const setActiveTab = (v: string) =>
-    setSearchParams((prev) => { prev.set("tab", v); return prev; });
+  // ⚠️ Da URL ATUAL, não do `prev` (o do último render no RR 6.30) — ver `useUrlPage`.
+  const setActiveTab = (v: string) => {
+    const atual = new URLSearchParams(window.location.search);
+    atual.set("tab", v);
+    setSearchParams(atual);
+  };
   // Padrão: mostra TODOS os pedidos do mês (com e sem NF) — é uma tela de
   // rastreabilidade/faturamento. Desligar "Mostrar já faturados" filtra para
   // ver só os pendentes (sem NF vinculada).
@@ -485,12 +489,21 @@ export default function Faturamento() {
           <CarboCardContent className="pt-6 flex flex-col md:flex-row md:items-center gap-4">
             <div className="flex items-center gap-2">
               <CarboButton variant="outline" size="icon" onClick={() => changeMonth(-1)} aria-label="Mês anterior"><ChevronLeft className="h-4 w-4" /></CarboButton>
-              <span className="min-w-28 text-center font-medium">{MONTHS[month.getMonth()]} / {month.getFullYear()}</span>
+              {/* Com busca, o mês NÃO vale (a busca vasculha todo o histórico) —
+                  e a tela diz isso, senão o "Out / 2026" fixo dá a entender
+                  que o resultado é só daquele mês. */}
+              <span className={`min-w-28 text-center font-medium ${search.trim() ? "text-muted-foreground line-through" : ""}`}
+                title={search.trim() ? "A busca ignora o mês e procura em todo o histórico" : undefined}>
+                {MONTHS[month.getMonth()]} / {month.getFullYear()}
+              </span>
               <CarboButton variant="outline" size="icon" onClick={() => changeMonth(1)} aria-label="Próximo mês"><ChevronRight className="h-4 w-4" /></CarboButton>
             </div>
             <div className="flex-1 md:min-w-48">
               <CarboSearchInput placeholder="Buscar por cliente ou nº do pedido (busca global)…" value={search} onChange={(e) => { setSearch(e.target.value); resetPages(); }} />
             </div>
+            {search.trim() && (
+              <span className="text-xs text-muted-foreground whitespace-nowrap">Buscando em todos os meses</span>
+            )}
             <label className="flex items-center gap-2 text-sm text-muted-foreground whitespace-nowrap">
               <Switch checked={showAll} onCheckedChange={setShowAll} /> Mostrar já faturados
             </label>
