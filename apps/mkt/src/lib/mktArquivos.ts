@@ -50,11 +50,40 @@ export const caminhoDaCapa = (anexoId: string) => `capas/${anexoId}/${crypto.ran
 
 const PARTE = 6 * 1024 * 1024; // o Storage exige EXATAMENTE 6 MB por parte no TUS
 
+/**
+ * ⚠️ ESPELHO do `file_size_limit` do bucket `mkt-anexos` (`20261060`: 300 MB).
+ * Mudou lá, mude aqui. Serve para RECUSAR antes de subir: sem isto o arquivo
+ * grande sobe inteiro, parte a parte, e só no fim o Storage responde 413 com
+ * "Maximum size exceeded" em inglês — minutos de envio para nada.
+ */
+export const LIMITE_BYTES = 300 * 1024 * 1024;
+
+/**
+ * O 413 do Storage diz só "Maximum size exceeded" — e há DOIS limites que o
+ * disparam: o do bucket (300 MB) e o GLOBAL do projeto (Supabase → Storage →
+ * Settings), que vale para todos os buckets e, se for menor, manda.
+ */
+function erroDeTamanho(tamanho: number): Error {
+  return new Error(
+    tamanho > LIMITE_BYTES
+      ? `Arquivo de ${tamanhoLegivel(tamanho)}: passa do limite de ${tamanhoLegivel(LIMITE_BYTES)} por arquivo. ` +
+        "Comprima o vídeo ou anexe pelo link (Drive, Figma…)."
+      : `O Storage recusou um arquivo de ${tamanhoLegivel(tamanho)} por tamanho, abaixo do limite do quadro ` +
+        `(${tamanhoLegivel(LIMITE_BYTES)}). O limite GLOBAL do projeto está menor — avise o TI ` +
+        "(Supabase → Storage → Settings → Upload file size limit).",
+  );
+}
+
 /** Envia ao bucket. Até 6 MB vai de uma vez; acima, em partes (TUS), com progresso e retomada. */
 export async function enviar(arquivo: Blob, caminho: string, contentType: string, onProgresso?: (frac: number) => void): Promise<void> {
+  if (arquivo.size > LIMITE_BYTES) throw erroDeTamanho(arquivo.size);
   if (arquivo.size <= PARTE) {
     const { error } = await supabase.storage.from(BUCKET).upload(caminho, arquivo, { contentType, upsert: false, cacheControl: "31536000" });
-    if (error) throw new Error(error.message);
+    if (error) {
+      const st = String((error as { statusCode?: string | number }).statusCode ?? "");
+      if (st === "413" || /maximum size exceeded/i.test(error.message)) throw erroDeTamanho(arquivo.size);
+      throw new Error(error.message);
+    }
     onProgresso?.(1);
     return;
   }
@@ -70,7 +99,10 @@ export async function enviar(arquivo: Blob, caminho: string, contentType: string
       removeFingerprintOnSuccess: true,
       chunkSize: PARTE,
       metadata: { bucketName: BUCKET, objectName: caminho, contentType, cacheControl: "31536000" },
-      onError: (e) => falha(new Error(e.message)),
+      onError: (e) => {
+        const st = (e as { originalResponse?: { getStatus?: () => number } | null }).originalResponse?.getStatus?.();
+        falha(st === 413 || /maximum size exceeded/i.test(e.message) ? erroDeTamanho(arquivo.size) : new Error(e.message));
+      },
       onProgress: (env, total) => onProgresso?.(total ? env / total : 0),
       onSuccess: () => ok(),
     });

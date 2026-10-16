@@ -16,7 +16,7 @@ import type { Attachment } from "@/hooks/useCardDetail";
 import { Visualizador } from "@/components/board/Visualizador";
 import { capaDeAnexo } from "@/lib/mktTheme";
 import {
-  BUCKET, tipoDoArquivo, ROTULO_TIPO, tamanhoLegivel, caminhoDoArquivo, caminhoDaCapa, enviar, gerarCapa, urlAssinada, criarAnexoDeArquivo,
+  BUCKET, LIMITE_BYTES, tipoDoArquivo, ROTULO_TIPO, tamanhoLegivel, caminhoDoArquivo, caminhoDaCapa, enviar, gerarCapa, urlAssinada, criarAnexoDeArquivo,
 } from "@/lib/mktArquivos";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -207,7 +207,8 @@ export function Anexos({ cardId, boardId, anexos, anexoInicial, onAdicionarLink,
         <p className="text-sm font-semibold text-foreground flex items-center gap-2" style={{ fontFamily: "'IBM Plex Sans', 'Inter', system-ui, sans-serif" }}>
           <Paperclip className="h-4 w-4 text-muted-foreground" /> Anexos
         </p>
-        <Button size="sm" variant="secondary" className="h-8 gap-1.5" onClick={() => inputNovo.current?.click()}>
+        <Button size="sm" variant="secondary" className="h-8 gap-1.5" onClick={() => inputNovo.current?.click()}
+          title={`Até ${tamanhoLegivel(LIMITE_BYTES)} por arquivo`}>
           <Upload className="h-3.5 w-3.5" /> Enviar arquivo
         </Button>
         <input ref={inputNovo} type="file" multiple hidden onChange={(e) => { if (e.target.files?.length) void enviarNovos(e.target.files); e.target.value = ""; }} />
