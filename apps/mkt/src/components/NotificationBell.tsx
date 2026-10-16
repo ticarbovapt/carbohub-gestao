@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { abrirFilaDoAcademy } from "@carbo/shell";
+import { abrirFilaDoAcademy, abrirCursoDoAcademy } from "@carbo/shell";
 
 const TYPE_CONFIG: Record<string, { Icon: React.ElementType; label: string; color: string; bg: string }> = {
   mention:                { Icon: AtSign,        label: "Menção",         color: "text-primary",     bg: "bg-primary/10" },
@@ -28,6 +28,7 @@ const TYPE_CONFIG: Record<string, { Icon: React.ElementType; label: string; colo
   mkt_prazo:              { Icon: CalendarClock, label: "Prazo",          color: "text-amber-600",   bg: "bg-amber-500/10" },
   mkt_quadro:             { Icon: UserPlus,      label: "Quadro",         color: "text-emerald-600", bg: "bg-emerald-500/10" },
   academy_acesso:         { Icon: GraduationCap, label: "Carbo Academy",  color: "text-fuchsia-500", bg: "bg-fuchsia-500/10" },
+  academy_liberado:       { Icon: GraduationCap, label: "Curso liberado", color: "text-emerald-600", bg: "bg-emerald-500/10" },
 };
 
 const UPSELL_CONFIG = { Icon: TrendingUp, label: "Upsell", color: "text-violet-500", bg: "bg-violet-500/10" };
@@ -105,6 +106,12 @@ export function NotificationBell() {
     if (n.reference_type === "academy_acesso") {
       setOpen(false);
       abrirFilaDoAcademy(navigate);
+      return;
+    }
+    // Acesso liberado (o aviso de quem pediu) → o curso, no Academy.
+    if (n.reference_type === "academy_curso" && n.reference_id) {
+      setOpen(false);
+      abrirCursoDoAcademy(n.reference_id);
       return;
     }
     if (n.reference_type === "mkt_board" && n.reference_id) {

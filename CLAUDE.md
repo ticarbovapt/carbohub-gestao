@@ -4819,7 +4819,11 @@ supabase/functions/carbo-push   destino() → a mesma fila
 2. ⚠️ **Estilo dos botões é INLINE** (`actionButtonStyle`): no padrão do sonner
    Negar e Liberar saíam brancos e iguais, lado a lado.
 3. Negar pelo toast vai sem motivo; com motivo, pela fila.
-4. ⚠️ **O Marketing não tinha `useLiveNotifications`** — era o único dos oito: o
+4. **O outro lado** (`20261103120000` no produtos): liberado ⇒ `type =
+   'academy_liberado'`, `reference_type = 'academy_curso'` para QUEM PEDIU.
+   Sininho "Curso liberado", toast com "Abrir curso" (`toastDeCursoLiberado`)
+   e push — os três levam a `academy.carbohub.com.br/academy/curso/<id>`.
+5. ⚠️ **O Marketing não tinha `useLiveNotifications`** — era o único dos oito: o
    sininho só mudava a cada 15 s e nenhum aviso virava toast lá. Hoje tem
    (cópia idêntica à dos outros seis).
 

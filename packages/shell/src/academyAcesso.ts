@@ -90,3 +90,27 @@ export function toastDoPedidoAcademy(
     },
   };
 }
+
+// ─── O outro lado: o acesso foi LIBERADO (carbohub-produtos `20261103120000`)
+// `type = 'academy_liberado'`, `reference_type = 'academy_curso'`,
+// `reference_id = <curso_id>`. O aviso vai para QUEM PEDIU.
+
+export const ACADEMY_URL = "https://academy.carbohub.com.br";
+
+/** O clique: abre o curso no Academy (outro app — o SSO leva a sessão). */
+export function abrirCursoDoAcademy(cursoId: string) {
+  window.location.href = `${ACADEMY_URL}/academy/curso/${cursoId}`;
+}
+
+/** O toast do curso liberado: "Abrir curso" leva ao Academy. */
+export function toastDeCursoLiberado(n: { title?: unknown; body?: unknown; reference_id?: unknown }) {
+  const curso = String(n.reference_id ?? "");
+  return {
+    titulo: String(n.title ?? "🎓 Acesso liberado"),
+    opcoes: {
+      description: (n.body as string | null) ?? undefined,
+      duration: 15_000,
+      action: curso ? { label: "Abrir curso", onClick: () => abrirCursoDoAcademy(curso) } : undefined,
+    },
+  };
+}

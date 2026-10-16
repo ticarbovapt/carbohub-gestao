@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import { toastDoPedidoAcademy } from "@carbo/shell";
+import { toastDoPedidoAcademy, toastDeCursoLiberado } from "@carbo/shell";
 
 // Sons via Web Audio (sem asset). O navegador só libera áudio depois de um
 // gesto do usuário, então destravamos o contexto no 1º clique/tecla da página.
@@ -103,6 +103,11 @@ export function useLiveNotifications() {
               },
             });
             toast(t.titulo, t.opcoes);
+          }
+          // 🎓 O acesso que a PESSOA pediu foi liberado: toast com "Abrir curso".
+          if (n?.type === "academy_liberado") {
+            const t = toastDeCursoLiberado(n);
+            toast.success(t.titulo, t.opcoes);
           }
           // ⚠️ Resposta do cliente no WhatsApp oficial: toast SEM som.
           //
