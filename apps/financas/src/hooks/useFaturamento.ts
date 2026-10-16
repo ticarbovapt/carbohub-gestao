@@ -15,6 +15,18 @@ export interface FaturamentoItem extends OrderItem {
   discount_amount?: number; // R$ abatido na linha
   /** Linha de bonificação (produto entregue de graça). */
   is_bonificacao?: boolean;
+  /** 'service' = descarbonização (CarboVAPT). */
+  kind?: string | null;
+}
+
+/**
+ * Pedido só de serviço (CarboVAPT): a nota dele é NFS-e pelo Portal Nacional,
+ * não NF-e pelo Bling. Mesma regra do `so_servico` do `useVendas` e da RPC
+ * `carbo_nfse_emissao_reservar` — todo item `kind = 'service'`.
+ */
+export function soServico(items: FaturamentoItem[] | null | undefined): boolean {
+  const l = items ?? [];
+  return l.length > 0 && l.every((i) => i?.kind === "service");
 }
 
 /**

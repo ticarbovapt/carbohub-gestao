@@ -4250,6 +4250,69 @@ perto do que foi pedido (*"apenas confirmar no portal nacional e emitir"*) e
 sensível do projeto de um caminho novo. Só não foi o caminho de partida porque
 ninguém mediu se o emissor web aceita entrada pré-preenchida.
 
+### NFS-e do CarboVAPT: a EMISSÃO pela tela (16/10/2026) — ainda em TESTE
+Finanças → Faturamento: pedido só de serviço (`soServico`, todo item
+`kind = 'service'`) troca "Criar no Bling" por **"Emitir NFS-e"**, que abre a
+confirmação com tudo pré-preenchido. Molde do DANFSe que o Finanças mandou
+(nota 189, série 70000, emitida no emissor web).
+
+```
+supabase/migrations/20261096000000_nfse_emissao_carbovapt.sql
+  carbo_nfse_emissoes            uma linha por TENTATIVA (sem policy de escrita)
+  carbo_nfse_serie_contador      nDPS por (ambiente, série)
+  carbo_nfse_emissao_preparar    a tela lê (Finanças: carbo_tem_app)
+  carbo_nfse_emissao_reservar    SÓ service_role — reserva o número
+  carbo_nfse_emissao_concluir    SÓ service_role — grava o desfecho
+supabase/functions/_shared/nfseDps.ts    montar/assinar/gzip (PURO)
+supabase/functions/nfse-emitir           chamada pelo navegador (com JWT)
+apps/financas/src/components/faturamento/NfseEmitirDialog.tsx
+apps/financas/src/hooks/useNfseEmissao.ts
+```
+
+1. ⚠️ **AINDA SAI NA PRODUÇÃO RESTRITA.** `AMBIENTE = 2` na função, o destino
+   do `nfse-relay` é a restrita, e `NFSE_AMBIENTE_TELA` espelha isso na tela
+   (só para o aviso). Ir para produção = mudar os TRÊS, num commit que diga
+   isso, e a primeira nota real ser de uma venda real com o Finanças olhando.
+   Nota de teste NÃO conta como NF do pedido (`nfseValida` exige ambiente 1).
+2. ⚠️ **Série 2, contador NOSSO.** Medido: 00001 tem 170 notas (até 2169),
+   70000 é o emissor web (194, até 410), 80000 tem 1. A API só aceita
+   00001–49999. A 70000 "que falaram" é a do portal, e é por isso que não serve.
+3. ⚠️ **Nome, documento e VALOR vêm do PEDIDO, lidos no servidor.** A tela
+   edita endereço, fone, e-mail, descrição, competência e o indicador.
+4. ⚠️ **`cIndOp` nasce VAZIO** — varia por serviço (050101–050104), e padrão
+   por omissão é código errado que ninguém decidiu.
+5. **O rodapé (`xInfComp`)**: `PEDIDO: V…. Vendedor: Nome.` + o pedido de
+   compra do cliente quando houver. ⚠️ O PO foi para o rodapé, e NÃO para o
+   `xPed`: a posição desse elemento no XSD não está medida, e é o texto que as
+   notas antigas já usavam ("Pedido 4500787362"). Mudar depois de um teste
+   na restrita, nunca antes.
+6. **Descrição** = `SERVIÇO DE DESCARBONIZAÇÃO. CARBOVAPT. VEICULO: MODELO,
+   ANO, PLACA.` a partir de `licenciados.os_vehicles` (pelo `descarb_os_id`).
+   Vaga sem placa (o Carbox preenche NA EXECUÇÃO) fica de fora; sem nenhuma,
+   sai `N VEÍCULOS.` e a tela avisa. Editável.
+7. **Código IBGE** do tomador: ViaCEP (`ibge`) e, de reserva, a lista do IBGE
+   por nome + UF com casamento ÚNICO. Não achou ⇒ campo vazio, nunca chute.
+8. ⚠️ **`indeterminado` é estado, não erro.** Timeout, queda do relay, 5xx do
+   SEFIN, 500 em HTML do Vercel: a nota PODE ter saído. O botão de emitir
+   TRAVA e só se oferece "Reenviar com o MESMO número" — se a primeira emitiu,
+   o SEFIN responde E0014 e a função diz isso em vez de criar a segunda.
+   `enviando` parado há 5 min vira `indeterminado` (função caiu no meio).
+   ⚠️ Só é `falha` (nada saiu) quando o RELAY diz, em JSON dele, que recusou
+   antes de falar com o SEFIN.
+9. ⚠️ **E0014 na RESTRITA avança o número** (até 8×): o ambiente é
+   compartilhado e outros já usaram números com o nosso CNPJ. Em PRODUÇÃO
+   nunca — lá E0014 significa que o número já virou nota.
+10. ⚠️ **Uma nota viva por pedido em produção mora no BANCO** (índice único
+    parcial), não no botão: duas abas passam pelo botão.
+11. Testado: o XML do tomador CNPJ sai BYTE A BYTE igual ao da sonda que o
+    SEFIN aceitou; assinatura conferida com `openssl dgst -verify`; os nove
+    desfechos do relay simulados. ⚠️ O que NÃO foi testado é o SEFIN recebendo
+    tomador CPF, fone e e-mail — é o primeiro teste na restrita.
+12. ⚠️ **PENDENTE:** `carbo_vendas_metrica` ainda não conta venda CarboVAPT
+    com NFS-e (elas seguem `aguardando_nf`). Republicar aquela view é a
+    operação que já derrubou tela duas vezes — fica para depois da produção.
+    A sonda `nfse-dps-teste` cumpriu o papel e pode sair do `dep`.
+
 ### TRÊS números no mesmo WABA — e a janela de 24 h é por PAR
 Pedido do dono do processo em 02/10/2026: *"vou precisar colocar mais um número
 aqui no Carbo atendimento que também é api oficial… vai haver um botão para

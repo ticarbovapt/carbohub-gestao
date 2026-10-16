@@ -21,8 +21,11 @@ import {
   useFaturamento,
   temBonificacao,
   faltaAlgumaNF,
+  soServico,
   type FaturamentoOrder,
 } from "@/hooks/useFaturamento";
+import { useNfseDosPedidos, nfseValida } from "@/hooks/useNfseEmissao";
+import { NfseEmitirDialog } from "@/components/faturamento/NfseEmitirDialog";
 import { BlingConfirmDialog } from "@/components/faturamento/BlingConfirmDialog";
 import { BaixarNFButton } from "@/components/faturamento/BaixarNFButton";
 import { VincularNFsTab } from "@/components/faturamento/VincularNFsTab";
@@ -161,6 +164,8 @@ export default function Faturamento() {
   // Pedido em confirmação: abre o diálogo que mostra o que vai pro Bling (inclui
   // o pré-cadastro do cliente, se for novo) para o financeiro conferir e confirmar.
   const [toBling, setToBling] = useState<FaturamentoOrder | null>(null);
+  // CarboVAPT: a nota é NFS-e pelo Portal Nacional (diálogo próprio).
+  const [toNfse, setToNfse] = useState<string | null>(null);
 
   // Remove os pedidos do Bling que são duplicata de uma venda do sistema (V… na
   // observação) — some da lista, some dos KPIs, some da contagem das abas.
@@ -170,6 +175,9 @@ export default function Faturamento() {
   // bling2-… e cairia na aba do Bling, que é justamente o que polui.
   const bling = useMemo(() => list.filter((o) => isBling(o) && !isOnline(o)), [list]);
   const online = useMemo(() => list.filter(isOnline), [list]);
+  const { data: nfsePorPedido } = useNfseDosPedidos(
+    useMemo(() => list.filter((o) => soServico(o.items)).map((o) => o.id), [list]),
+  );
   const soma = (rows: FaturamentoOrder[]) => rows.reduce((s, o) => s + Number(o.total || 0), 0);
 
   // Paginação (20/pág) das abas sistema e Bling — página na URL (persiste no F5).
@@ -217,7 +225,13 @@ export default function Faturamento() {
         </CarboTableHeader>
         <CarboTableBody>
           {rows.map((o) => {
-            const hasNF = !faltaAlgumaNF(o);
+            // ⚠️ CarboVAPT não tem NF do Bling e nunca vai ter: sem este desvio
+            // a linha oferecia "Criar no Bling" para um serviço.
+            const servico = soServico(o.items);
+            const nfse = servico ? nfseValida(nfsePorPedido?.[o.id]) : null;
+            const nfseTeste = servico ? (nfsePorPedido?.[o.id] ?? []).find((e) => e.ambiente === 2 && e.status === "autorizada") : null;
+            const nfsePendente = servico ? (nfsePorPedido?.[o.id] ?? []).find((e) => e.status === "indeterminado") : null;
+            const hasNF = servico ? !!nfse : !faltaAlgumaNF(o);
             const colSpan = showAction ? 7 : 6;
             // Financeiro defensivo: pedidos antigos podem não ter subtotal/discount.
             const itemsBruto = o.items.reduce((s, it) => s + num(it.quantity) * num(it.unit_price), 0);
@@ -242,7 +256,20 @@ export default function Faturamento() {
                   <CarboTableCell>{o.vendedor_name || <span className="text-muted-foreground">—</span>}</CarboTableCell>
                   <CarboTableCell className="text-right font-medium">{fmtCurrency(Number(o.total))}</CarboTableCell>
                   <CarboTableCell onClick={(e) => e.stopPropagation()}>
-                    {hasNF ? (
+                    {servico ? (
+                      nfse ? (
+                        <CarboBadge variant="success" className="gap-1" title={nfse.chave_acesso ?? undefined}>
+                          <FileText className="h-3 w-3" /> NFS-e {nfse.n_nfse ?? ""}
+                        </CarboBadge>
+                      ) : nfsePendente ? (
+                        <CarboBadge variant="warning" title={nfsePendente.erro ?? undefined}>NFS-e sem resposta</CarboBadge>
+                      ) : (
+                        <div className="flex items-center gap-1.5">
+                          <CarboBadge variant="warning">Sem NFS-e</CarboBadge>
+                          {nfseTeste && <CarboBadge size="sm" variant="outline" title="Emitida no ambiente de teste — não vale como nota">teste ok</CarboBadge>}
+                        </div>
+                      )
+                    ) : hasNF ? (
                       <div className="flex items-center gap-2">
                         {/* A cor vem da SITUAÇÃO da nota, não do fato de existir
                             uma. Antes era `variant="success"` fixo: nota
@@ -263,7 +290,14 @@ export default function Faturamento() {
                   </CarboTableCell>
                   {showAction && (
                     <CarboTableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                      {hasNF ? (
+                      {servico && !hasNF ? (
+                        <div className="flex justify-end">
+                          <CarboButton size="sm" onClick={() => setToNfse(o.id)}
+                            title="CarboVAPT: a nota de serviço sai pelo Portal Nacional (NFS-e), não pelo Bling.">
+                            <FileText className="h-3.5 w-3.5 mr-1" /> Emitir NFS-e
+                          </CarboButton>
+                        </div>
+                      ) : hasNF ? (
                         <span className="text-muted-foreground text-sm">Faturado</span>
                       ) : nfUnlocked(o) ? (
                         <div className="flex justify-end">
@@ -595,6 +629,7 @@ export default function Faturamento() {
       </div>
 
       <BlingConfirmDialog order={toBling} onOpenChange={(open) => { if (!open) setToBling(null); }} />
+      <NfseEmitirDialog orderId={toNfse} onOpenChange={(open) => { if (!open) setToNfse(null); }} />
       <NaturezaBonificacaoDialog open={naturezaOpen} onOpenChange={setNaturezaOpen} />
     </div>
   );
