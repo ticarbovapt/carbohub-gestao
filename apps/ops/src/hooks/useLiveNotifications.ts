@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { toastDoPedidoAcademy } from "@carbo/shell";
 
 // Sons via Web Audio (sem asset). O navegador só libera áudio depois de um
 // gesto do usuário, então destravamos o contexto no 1º clique/tecla da página.
@@ -86,6 +87,23 @@ export function useLiveNotifications() {
           // useEcommerceNotifications. Bug e demais notificações são só
           // sininho (bell), sem barulho.
           if (n?.type === "finance_rc_pendente" || n?.type === "finance_oc_nova") { playDing(); toast(n?.title ?? "Financeiro", { description: n?.body ?? undefined }); }
+          // 🎓 Pedido de acesso a curso do Carbo Academy (só o TI recebe):
+          // ding + toast com Liberar / Negar. A regra e os botões moram no
+          // `packages/shell` (academyAcesso.ts) — um arquivo para os oito apps.
+          if (n?.type === "academy_acesso") {
+            playDing();
+            qc.invalidateQueries({ queryKey: ["academy-acessos"] });
+            const t = toastDoPedidoAcademy(n, {
+              supabase: supabase as never,
+              ok: (m) => toast.success(m),
+              erro: (m) => toast.error(m),
+              depois: () => {
+                qc.invalidateQueries({ queryKey: ["notifications", user.id] });
+                qc.invalidateQueries({ queryKey: ["academy-acessos"] });
+              },
+            });
+            toast(t.titulo, t.opcoes);
+          }
           // ⚠️ Resposta do cliente no WhatsApp oficial: toast SEM som.
           //
           // Sem som porque este projeto já pagou por barulho demais — a moedinha
