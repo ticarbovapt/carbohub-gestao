@@ -1112,9 +1112,16 @@ atualiza. ⚠️ Evento com `resultado` "N linha(s)" e `gravado_em` nulo é vend
 que não entrou: é a lista de trabalho.
 
 Três pendências conhecidas, todas medidas:
-1. ⚠️ **`loja_id = 0`** no Bling (venda direta) — a ponte só marca
-   `segmento = 'online'` com loja ≠ 0, então **venda PayT não conta como
-   on-line**. Ou cria-se uma loja "PayT" no Bling, ou a ponte ganha exceção.
+1. ✅ **`loja_id = 0`** no Bling (venda direta) — a ponte só marcava
+   `segmento = 'online'` com loja ≠ 0, e a PayT somava em "Comercial
+   Expansão" (medido: 25 pedidos, R$ 4.173 de 01/06 a 16/10). A `20261090`
+   ensinou a ponte: `numero_loja like 'PAYT\_%'` ⇒ on-line, e reclassificou o
+   histórico (só `segmento` nulo e sem vendedor).
+   ⚠️ A auditoria `20261089` (A, B, C, D) é a consulta que separa "fonte
+   diferente" de "número errado" entre Dashboard Comercial e Vendas Online —
+   rode-a antes de concluir que uma das telas mente. Diferenças ESPERADAS: o
+   Dashboard soma a NF (com frete) e só pedido faturado; a Vendas Online soma
+   produto (sem frete) e toda venda paga, inclusive o ML Full sem NF.
 2. ✅ **`ordered_at` está CERTO — a suspeita foi descartada com dado cru.**
    Três transações com o mesmo segundo pareciam fallback; o log mostrou
    `started_at = 09:13:10` gravado como `12:13:10+00`, exatamente Brasília. Elas
