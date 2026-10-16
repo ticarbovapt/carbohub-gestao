@@ -1499,12 +1499,20 @@ anda mesmo assim**: quem o move é o CTE `plataforma` — o status do
 Balcão (loja 0) e venda da equipe (`206071309`, `206071288`) estão `false` e
 ficam fora; loja NOVA sem classificação também — o lado seguro.
 
-⚠️ **PENDENTE, e é decisão do dono do processo, não de código:** os pedidos do
-Full estão sem NF (**21 pedidos, R$ 3.215,22**, `conta_metrica = false`, motivo
-`aguardando_nf`). Isso faz `/ecommerce/vendas-online` e `/comercial/dashboard`
-**discordarem sobre as mesmas vendas** — nenhuma tela está com defeito, o dado
-fiscal é que não existe. Ou o pedido avança para Atendido no Bling, ou a
-`carbo_vendas_metrica` aprende a contar o canal sem exigir NF.
+✅ **O Full conta no faturamento pelo status da PLATAFORMA** (`20261091`,
+16/10/2026). O ML emite a NF do Full dentro do ML; no Bling 1 o pedido fica em
+"Em andamento" e caía em `aguardando_nf` (medido: 223 pedidos, R$ 29.398 fora
+do Dashboard Comercial de 01/06 a 16/10). Decisão do dono do processo: contar
+sem a nota, desde que cancelado na plataforma cancele no sistema.
+`bling_lojas.plataforma_fatura` (CADASTRO) marca a loja; a
+`carbo_status_pela_plataforma()` (cron `carbo-status-pela-plataforma-10min`)
+dá ao pedido o status do `ecommerce_orders` — cancelado lá ⇒ `cancelled`
+aqui; entregue/enviado/pago ⇒ delivered/shipped/invoiced, que a
+`carbo_vendas_metrica` JÁ conta sem NF. A view não foi tocada.
+⚠️ Só AVANÇA e nunca reabre cancelado. ⚠️ NUNCA volta a `confirmed`: essa
+transição dispara `generate_op_from_rv` (OP) e `update_pdv_stock_on_order_confirm`
+— por isso o `bling-sync` deixou de regravar status/etapa dessas lojas
+(`faturaNaPlataforma`). Loja nova que fature fora do Bling: preencher a coluna.
 
 ⚠️ A coluna **"Pago"** NÃO esvazia com isso: ela vem de
 `ecommerce_aguardando_bling`, outra view. Os pedidos passam a aparecer nos DOIS

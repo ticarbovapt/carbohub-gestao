@@ -2073,6 +2073,24 @@ async function bridgeOrdersToCarbohub(
     if (lojaId === undefined || lojaId === null) return null;
     return lojasOnline.has(String(lojaId)) ? "online" : null;
   };
+  // ── Loja que FATURA NA PLATAFORMA (ML Full, 20261091) ─────────────────────
+  // O ML emite a nota do Full dentro do ML; no Bling 1 o pedido fica em "Em
+  // andamento" para sempre. Quem diz o status desses pedidos é a PLATAFORMA,
+  // pela `carbo_status_pela_plataforma()` (cron 10 min) — e esta ponte NÃO
+  // regrava status nem etapa deles. ⚠️ Sem isso as duas brigariam a cada
+  // rodada, e cada volta a 'confirmed' dispara os gatilhos de OP e de estoque
+  // de PDV (`generate_op_from_rv`, `update_pdv_stock_on_order_confirm`).
+  // Consulta SEPARADA: coluna ausente (deploy antes da migração) não pode
+  // derrubar a leitura das lojas acima.
+  const { data: lojasPlataforma } = await supabaseAdmin
+    .from("bling_lojas").select("bling_id").not("plataforma_fatura", "is", null);
+  const lojasQueFaturamNaPlataforma = new Set(
+    (lojasPlataforma || []).map((l: any) => String(l.bling_id)),
+  );
+  const faturaNaPlataforma = (bo: any): boolean => {
+    const lojaId = bo?.raw_data?.loja?.id;
+    return lojaId !== undefined && lojaId !== null && lojasQueFaturamNaPlataforma.has(String(lojaId));
+  };
   // Contato completo por bling_id → enriquece o pedido (doc, IE, contato, endereço).
   const contatoMap = new Map((contacts || []).map((c: any) => [c.bling_id, c]));
   // Extrai o endereço do contato (Bling v3: raw_data.endereco.geral) → campos de entrega.
@@ -2168,12 +2186,14 @@ async function bridgeOrdersToCarbohub(
         //    nota, não manda no ciclo de vida da venda.
         // 2) Cancelamento é decisão de gente e não se desfaz sozinho — nem em
         //    pedido nascido no Bling. Reabrir é ação explícita no Rastreio.
-        const podeMexerNoStatus = nascidoNoBling && existing.status !== "cancelled";
+        // 3) Loja que fatura na plataforma (ML Full): o status é da PLATAFORMA.
+        const statusDaPlataforma = faturaNaPlataforma(bo);
+        const podeMexerNoStatus = nascidoNoBling && existing.status !== "cancelled" && !statusDaPlataforma;
         if (podeMexerNoStatus && existing.status !== status) updatePayload.status = status;
         // Etapa acompanha o status — só em pedido nascido no Bling (ver
         // `estagioDoStatus`). Recalcula toda rodada, não só quando o status
         // muda: é o que conserta o pedido que já entrou torto.
-        if (nascidoNoBling && existing.status !== "cancelled") {
+        if (nascidoNoBling && existing.status !== "cancelled" && !statusDaPlataforma) {
           const etapa = estagioDoStatus(status);
           if (existing.fulfillment_stage !== etapa) updatePayload.fulfillment_stage = etapa;
         }
