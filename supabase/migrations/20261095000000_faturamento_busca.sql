@@ -97,7 +97,9 @@ begin
         regexp_replace(coalesce(jj.j->>'po_number', ''),                  '\D', '', 'g')
       ) as dig
   ) b
-  where (p_status is null or v.status = any(p_status))
+  -- ⚠️ `::text`: `status` é o enum `order_status` em produção, e enum = text
+  -- não tem operador (42883) — o banco local de teste tinha text e não pegou.
+  where (p_status is null or v.status::text = any(p_status))
     and not exists (
       select 1 from unnest(v_tokens) as t(tok)
       where t.tok <> ''
