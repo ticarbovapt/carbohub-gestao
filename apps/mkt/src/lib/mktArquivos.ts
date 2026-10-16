@@ -51,26 +51,27 @@ export const caminhoDaCapa = (anexoId: string) => `capas/${anexoId}/${crypto.ran
 const PARTE = 6 * 1024 * 1024; // o Storage exige EXATAMENTE 6 MB por parte no TUS
 
 /**
- * ⚠️ ESPELHO do `file_size_limit` do bucket `mkt-anexos` (`20261060`: 300 MB).
- * Mudou lá, mude aqui. Serve para RECUSAR antes de subir: sem isto o arquivo
- * grande sobe inteiro, parte a parte, e só no fim o Storage responde 413 com
- * "Maximum size exceeded" em inglês — minutos de envio para nada.
+ * ⚠️ ESPELHO do limite GLOBAL do Storage (Supabase → Storage → Settings, 5 GB
+ * em 16/10/2026). O bucket `mkt-anexos` não tem limite próprio desde a
+ * `20261097` (era 300 MB e barrou um vídeo de anúncio) — decisão do dono do
+ * processo. Mudou o global, mude aqui. Serve para RECUSAR antes de subir: sem
+ * isto o arquivo grande sobe inteiro, parte a parte, e só no fim o Storage
+ * responde 413 "Maximum size exceeded" em inglês — minutos de envio para nada.
  */
-export const LIMITE_BYTES = 300 * 1024 * 1024;
+export const LIMITE_BYTES = 5 * 1024 ** 3;
 
 /**
- * O 413 do Storage diz só "Maximum size exceeded" — e há DOIS limites que o
- * disparam: o do bucket (300 MB) e o GLOBAL do projeto (Supabase → Storage →
- * Settings), que vale para todos os buckets e, se for menor, manda.
+ * O 413 do Storage diz só "Maximum size exceeded". Abaixo do espelho, alguém
+ * baixou o global (ou recolocou limite no bucket) sem mudar `LIMITE_BYTES`.
  */
 function erroDeTamanho(tamanho: number): Error {
   return new Error(
     tamanho > LIMITE_BYTES
       ? `Arquivo de ${tamanhoLegivel(tamanho)}: passa do limite de ${tamanhoLegivel(LIMITE_BYTES)} por arquivo. ` +
         "Comprima o vídeo ou anexe pelo link (Drive, Figma…)."
-      : `O Storage recusou um arquivo de ${tamanhoLegivel(tamanho)} por tamanho, abaixo do limite do quadro ` +
-        `(${tamanhoLegivel(LIMITE_BYTES)}). O limite GLOBAL do projeto está menor — avise o TI ` +
-        "(Supabase → Storage → Settings → Upload file size limit).",
+      : `O Storage recusou um arquivo de ${tamanhoLegivel(tamanho)} por tamanho, abaixo do limite esperado ` +
+        `(${tamanhoLegivel(LIMITE_BYTES)}). Algum limite foi baixado — avise o TI ` +
+        "(Supabase → Storage → Settings, e o limite do bucket mkt-anexos).",
   );
 }
 

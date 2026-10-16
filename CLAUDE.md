@@ -2362,7 +2362,7 @@ do dono do processo: *tudo no nosso banco*, o Trello deixa de ser necessário.
 supabase/functions/trello-migrar           a ÚNICA que fala com o Trello
 apps/mkt/src/components/board/TrazerDoTrello.tsx
 supabase/migrations/20261060000000_mkt_anexos_e_comentarios_do_trello.sql
-bucket mkt-anexos (PRIVADO, 300 MB/arquivo)   Secrets TRELLO_KEY / TRELLO_TOKEN
+bucket mkt-anexos (PRIVADO, sem limite próprio desde a 20261097; o global é 5 GB)   Secrets TRELLO_KEY / TRELLO_TOKEN
 ```
 
 1. ⚠️ **Chave e token só na função.** Destino FIXO (`trello.com/1/cards/…/
@@ -2372,6 +2372,12 @@ bucket mkt-anexos (PRIVADO, 300 MB/arquivo)   Secrets TRELLO_KEY / TRELLO_TOKEN
 2. **Upload em partes de 6 MB (TUS)** — o maior arquivo tem 243 MB e não cabe
    na memória da função. O limite GLOBAL do Storage (Settings) tem de ser
    ≥ 300 MB, senão os 8 maiores falham.
+   ⚠️ **Desde 16/10/2026 o bucket NÃO tem limite próprio** (`20261097`, dono do
+   processo: "pode deixar sem limite isso por card"): um vídeo de anúncio passou
+   dos 300 MB e levou 413. Manda o GLOBAL, hoje **5 GB** (teto do plano com o
+   spend cap ligado). A tela espelha em `LIMITE_BYTES` (`lib/mktArquivos.ts`)
+   para recusar ANTES de subir, e traduz o 413 — sem isso o arquivo subia
+   inteiro, em partes, e só no fim vinha "Maximum size exceeded" em inglês.
 3. ⚠️ **A linha só vira `kind='arquivo'` DEPOIS de o arquivo estar no bucket.**
    Marcar antes tiraria da lista de pendentes um anexo que não abre. Rodar de
    novo é o jeito de retomar.
