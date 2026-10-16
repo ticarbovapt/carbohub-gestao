@@ -45,6 +45,8 @@ function destino(i: Item): string {
   if (t === "ecommerce_sale" || t === "ecommerce_disconnected") return "https://admin.carbohub.com.br/ecommerce/vendas-online";
   if (t.startsWith("bug_")) return "https://ti.carbohub.com.br/bugs";
   if (t.startsWith("finance_")) return "https://finance.carbohub.com.br/compras";
+  // Pedido de acesso a curso do Academy → a fila do TI (`ACADEMY_FILA_URL` no packages/shell).
+  if (t === "academy_acesso") return "https://ti.carbohub.com.br/academy/acessos";
   return `${HUB}/home`;
 }
 

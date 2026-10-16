@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AtSign, Eye, Bell, Bug, Check, CheckCheck, Clock, ListTodo, MessageCircle, Trash2, WifiOff, ShoppingCart, TrendingUp, FileText, Package, CalendarClock, UserPlus } from "lucide-react";
+import { AtSign, Eye, Bell, Bug, Check, CheckCheck, Clock, ListTodo, MessageCircle, Trash2, WifiOff, ShoppingCart, TrendingUp, FileText, Package, CalendarClock, UserPlus, GraduationCap } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useNotifications, Notification } from "@/hooks/useNotifications";
@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { abrirFilaDoAcademy } from "@carbo/shell";
 
 const TYPE_CONFIG: Record<string, { Icon: React.ElementType; label: string; color: string; bg: string }> = {
   mention:                { Icon: AtSign,        label: "Menção",         color: "text-primary",     bg: "bg-primary/10" },
@@ -24,6 +25,7 @@ const TYPE_CONFIG: Record<string, { Icon: React.ElementType; label: string; colo
   mkt_seguindo:           { Icon: Eye,           label: "Seguindo",       color: "text-sky-500",     bg: "bg-sky-500/10" },
   mkt_prazo:              { Icon: CalendarClock, label: "Prazo",          color: "text-amber-600",   bg: "bg-amber-500/10" },
   mkt_quadro:             { Icon: UserPlus,      label: "Quadro",         color: "text-emerald-600", bg: "bg-emerald-500/10" },
+  academy_acesso:         { Icon: GraduationCap, label: "Carbo Academy",  color: "text-fuchsia-500", bg: "bg-fuchsia-500/10" },
   finance_rc_pendente:    { Icon: FileText,      label: "Requisição",     color: "text-amber-600",   bg: "bg-amber-500/10" },
   finance_oc_nova:        { Icon: Package,       label: "Ordem de compra", color: "text-blue-500",   bg: "bg-blue-500/10" },
 };
@@ -99,6 +101,12 @@ export function NotificationBell() {
     // `/cartao/:id` descobre o quadro; fora do mkt, vai pelo subdomínio (o SSO
     // leva a sessão junto).
     // Adicionado a um quadro → o QUADRO, no app do Marketing.
+    // Pedido de acesso ao Carbo Academy → a fila do TI (lá também se decide).
+    if (n.reference_type === "academy_acesso") {
+      setOpen(false);
+      abrirFilaDoAcademy(navigate);
+      return;
+    }
     if (n.reference_type === "mkt_board" && n.reference_id) {
       setOpen(false);
       const caminho = `/quadros/${n.reference_id}`;

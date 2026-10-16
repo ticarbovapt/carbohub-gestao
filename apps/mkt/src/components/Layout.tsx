@@ -11,10 +11,15 @@ import { HUB_URL } from "@/lib/sso";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEcommerceNotifications } from "@/hooks/useEcommerceNotifications";
+import { useLiveNotifications } from "@/hooks/useLiveNotifications";
 
 export function Layout() {
   // Venda online avisa em qualquer app que a pessoa esteja usando.
   useEcommerceNotifications();
+  // Sininho ao vivo (e o toast do pedido do Academy para quem é do TI). O
+  // Marketing era o ÚNICO dos oito sem este hook: o sininho só mudava na
+  // próxima leitura de 15 s e nenhum aviso virava toast aqui.
+  useLiveNotifications();
   const isMobile = useIsMobile();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState<boolean>(() => {

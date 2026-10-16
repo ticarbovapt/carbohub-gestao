@@ -4801,6 +4801,28 @@ apps/*/public/sw.js               o clique abre `data.url` (absoluta) nos oito
 8. ⚠️ Mensagem do CHAT que cai na assinatura do Hub abre `/home` do Hub (o Hub
    não tem `/chat`) — limitação conhecida.
 
+### Pedido de acesso ao Carbo Academy → sininho e toast do TI (16/10/2026)
+O banco (carbohub-produtos `20261102120000`) grava `type = 'academy_acesso'` em
+`public.notifications` para quem tem a flag `carbo_ti`, com `reference_id =
+'<user_id>:<curso_id>'`. Daqui:
+
+```
+packages/shell/src/academyAcesso.ts   toastDoPedidoAcademy (Liberar/Negar) · abrirFilaDoAcademy
+apps/*/src/hooks/useLiveNotifications.ts (+ financas useFinanceRealtime)   o toast ao vivo
+apps/*/src/components/NotificationBell.tsx   TYPE_CONFIG + clique → ti…/academy/acessos
+supabase/functions/carbo-push   destino() → a mesma fila
+```
+
+1. ⚠️ **O botão do toast decide de verdade** (`produtos.academy_decidir_acesso`,
+   que recusa sem a flag). A regra mora UMA vez no `packages/shell`; os apps só
+   chamam `toast(t.titulo, t.opcoes)` com o sonner deles.
+2. ⚠️ **Estilo dos botões é INLINE** (`actionButtonStyle`): no padrão do sonner
+   Negar e Liberar saíam brancos e iguais, lado a lado.
+3. Negar pelo toast vai sem motivo; com motivo, pela fila.
+4. ⚠️ **O Marketing não tinha `useLiveNotifications`** — era o único dos oito: o
+   sininho só mudava a cada 15 s e nenhum aviso virava toast lá. Hoje tem
+   (cópia idêntica à dos outros seis).
+
 ### Documentação do Pré-Vendas — `/documentacao`, tela a tela (16/10/2026)
 Pedido do dono do processo: o manual "igual aos dos sites", com prints
 circulados, dentro do app (item **Documentação** na barra lateral, seção
