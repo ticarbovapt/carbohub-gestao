@@ -54,7 +54,7 @@ function SeloGestor() {
 
 function ListaItens({ itens, ativo, setAtivo }: { itens: Item[]; ativo: number | null; setAtivo: (n: number | null) => void }) {
   return (
-    <ol className="space-y-2">
+    <ol className="grid gap-2 md:grid-cols-2">
       {itens.map((i, k) => (
         <li key={`${i.n ?? "t"}-${k}`}
           onMouseEnter={() => i.n && setAtivo(i.n)} onMouseLeave={() => setAtivo(null)}
@@ -89,12 +89,10 @@ function BlocoView({ bloco }: { bloco: Bloco }) {
         </h3>
       )}
       {bloco.texto && <p className="mt-1 whitespace-pre-line text-sm text-muted-foreground">{bloco.texto}</p>}
-      {bloco.print ? (
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] xl:items-start">
-          <PrintAnotado chave={bloco.print.chave} legenda={bloco.print.legenda} ativo={ativo} mostrar={numeros} />
-          {itens.length > 0 && <div className="xl:sticky xl:top-4 xl:mt-3"><ListaItens itens={itens} ativo={ativo} setAtivo={setAtivo} /></div>}
-        </div>
-      ) : itens.length > 0 && <div className="mt-3"><ListaItens itens={itens} ativo={ativo} setAtivo={setAtivo} /></div>}
+      {/* Print na largura toda e a lista embaixo: ao lado da lista o print
+          ficava pequeno demais para ler o botão que o número aponta. */}
+      {bloco.print && <PrintAnotado chave={bloco.print.chave} legenda={bloco.print.legenda} ativo={ativo} mostrar={numeros} />}
+      {itens.length > 0 && <div className="mt-3"><ListaItens itens={itens} ativo={ativo} setAtivo={setAtivo} /></div>}
     </div>
   );
 }
@@ -132,10 +130,16 @@ export default function Documentacao() {
   const refs = useRef<Record<string, HTMLElement | null>>({});
 
   // Link direto (`?secao=pipeline`) rola até a seção, inclusive no F5.
+  // ⚠️ Com atraso: o Layout leva o <main> ao topo a cada troca de página
+  // (usePaginaAtual), e rolar no mesmo instante perde para ele.
+  const rolouRef = useRef(false);
   useEffect(() => {
-    if (!secaoUrl) return;
-    const el = refs.current[secaoUrl];
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (!secaoUrl || rolouRef.current) return;
+    const t = setTimeout(() => {
+      refs.current[secaoUrl]?.scrollIntoView({ behavior: "smooth", block: "start" });
+      rolouRef.current = true;
+    }, 350);
+    return () => clearTimeout(t);
   }, [secaoUrl, secoes.length]);
 
   return (
@@ -152,9 +156,9 @@ export default function Documentacao() {
         }
       />
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
         {/* Índice */}
-        <aside className="lg:sticky lg:top-4 lg:self-start">
+        <aside className="min-w-0 lg:sticky lg:top-4 lg:self-start">
           <div className="relative">
             <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar na documentação" className="pl-8" />

@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Target, ShoppingCart, Bug, UserCircle, ArrowRight, type LucideIcon, KanbanSquare, ShoppingBag, BarChart3, MessagesSquare } from "lucide-react";
+import { Target, ShoppingCart, Bug, UserCircle, ArrowRight, type LucideIcon, KanbanSquare, ShoppingBag, BarChart3, MessagesSquare, BookOpen } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { useAuth } from "@/contexts/AuthContext";
@@ -29,6 +29,7 @@ const ATALHOS: Atalho[] = [
   { to: "/vender", label: "Vender", hint: "Registrar uma venda ou orçamento", icon: ShoppingCart },
   { to: "/bugs", label: "Bugs e sugestões", hint: "O que você reportou ao TI", icon: Bug },
   { to: "/perfil", label: "Meu perfil", hint: "Foto, dados e departamento", icon: UserCircle },
+  { to: "/documentacao", label: "Documentação", hint: "Como usar o sistema, tela a tela", icon: BookOpen },
 ];
 
 export default function Home() {

@@ -40,18 +40,21 @@ export function PrintAnotado({ chave, legenda, ativo, mostrar }: {
   const src = `/docs/${chave}.jpg`;
   return (
     <figure className="my-3">
+      {/* ⚠️ O wrapper tem a largura da IMAGEM (w-fit), não da coluna: os
+          marcadores são % da imagem, e print estreito (um card, um diálogo)
+          esticado na largura toda ficaria enorme e borrado. */}
       <button type="button" onClick={() => setZoom(true)}
-        className="group relative block w-full overflow-visible rounded-xl border bg-muted/30 text-left"
+        className="group relative mx-auto block w-fit max-w-full overflow-visible rounded-xl border bg-muted/30 text-left"
         aria-label={`Ampliar: ${legenda}`}>
-        <div className="relative">
-          <img src={src} alt={legenda} loading="lazy" className="block w-full rounded-xl" />
+        <div className="relative w-fit max-w-full align-top">
+          <img src={src} alt={legenda} loading="lazy" className="block h-auto max-h-[78vh] w-auto max-w-full rounded-xl" />
           <Marcadores chave={chave} ativo={ativo} mostrar={mostrar} />
         </div>
         <span className="absolute right-2 bottom-2 hidden items-center gap-1 rounded-md bg-black/60 px-2 py-1 text-[11px] text-white group-hover:flex">
           <Maximize2 className="h-3 w-3" /> Ampliar
         </span>
       </button>
-      <figcaption className="mt-1.5 text-xs text-muted-foreground">{legenda}</figcaption>
+      <figcaption className="mt-1.5 text-center text-xs text-muted-foreground">{legenda}</figcaption>
       <Dialog open={zoom} onOpenChange={setZoom}>
         <DialogContent className="max-w-[min(96vw,1400px)] p-3">
           <DialogTitle className="text-sm">{legenda}</DialogTitle>

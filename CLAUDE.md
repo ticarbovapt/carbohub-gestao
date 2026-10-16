@@ -4718,6 +4718,41 @@ apps/*/public/sw.js               o clique abre `data.url` (absoluta) nos oito
 8. ⚠️ Mensagem do CHAT que cai na assinatura do Hub abre `/home` do Hub (o Hub
    não tem `/chat`) — limitação conhecida.
 
+### Documentação do Pré-Vendas — `/documentacao`, tela a tela (16/10/2026)
+Pedido do dono do processo: o manual "igual aos dos sites", com prints
+circulados, dentro do app (item **Documentação** na barra lateral, seção
+"Ajuda", e atalho na Visão geral). Por enquanto só o Pré-Vendas; os outros
+apps vêm depois, com calma.
+
+```
+src/pages/Documentacao.tsx            a tela (índice, busca, ?secao=, ?busca=)
+src/components/docs/PrintAnotado.tsx  print + marcadores numerados, Ampliar
+src/docs/conteudo.ts                  o TEXTO — seção › bloco › print › itens
+src/docs/marcadores.ts                GERADO: onde cada número cai, em %
+public/docs/*.jpg                     os prints (34, ~3 MB)
+docs-prints/                          o gerador (fora do build) — ver o README
+```
+
+1. ⚠️ **Gestor vê as duas versões; colaborador só a dele** (`vale()` em
+   `docs/tipos.ts`, `papel: "gestor"` em seção, bloco, print ou item). Pedido
+   do dono do processo: o colaborador não precisa saber o que o gestor faz —
+   MAS sabe que o gestor comenta no card dele, porque isso ele vê.
+   ⚠️ É RECORTE DE TELA, não segredo: o texto vai no mesmo pacote. O dado
+   continua protegido pela RLS.
+2. ⚠️ **O marcador é MEDIDO, nunca posto à mão.** `docs-prints/captura.mjs`
+   sobe o app com o Supabase falso (dados FICTÍCIOS, nenhum cliente real),
+   localiza cada botão e grava a caixa em % da imagem. O `n` do item em
+   `conteudo.ts` é o MESMO número da entrada em `docs-prints/shots.mjs`.
+   ⚠️ Espera a FONTE carregar antes de medir — sem isso todos os marcadores
+   saem deslocados uma linha.
+3. ⚠️ **Tela mudou ⇒ print refeito na MESMA tarefa.** Manual que descreve a
+   tela de ontem é pior que manual nenhum: a pessoa procura o botão que o
+   número aponta e não acha. Tela nova ⇒ entrada em `shots.mjs` + seção em
+   `conteudo.ts` (+ fixture, senão o print sai vazio).
+4. O print usa a largura DELE (`w-fit`), não a da coluna: card e diálogo
+   esticados ficavam enormes. Os marcadores ficam na camada do mesmo tamanho
+   da imagem — é o que mantém o % certo no celular.
+
 ### Carbo Pré-Vendas — o OITAVO app (06/10/2026)
 `prevendas.carbohub.com.br`, flag `carbo_prevendas`, cor lima `#65A30D`. É o
 app dos SDRs: qualificam o lead e repassam ao closer (que trabalha no Sales).

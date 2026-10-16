@@ -1,0 +1,290 @@
+const btn = (t) => (p) => p.getByRole("button", { name: t });
+const txt = (t) => (p) => p.getByText(t, { exact: false });
+const sel = (s) => (p) => p.locator(s);
+const card = (nome) => (p) => p.locator('[aria-roledescription="draggable"]').filter({ hasText: nome });
+const dlg = (p) => p.locator('[role="dialog"]').last();
+const sec = (p, t) => dlg(p).locator("div.rounded-lg.border").filter({ has: p.locator("p", { hasText: new RegExp("^" + t + "$", "i") }) }).last();
+
+export const SHOTS = [
+  // ── Navegação e Visão geral ──
+  { chave: "inicio", papel: "colaborador", url: "/", marcas: [
+    [1, sel('aside a[title="Carbo Pré-Vendas"]')],
+    [2, sel('aside nav')],
+    [3, sel('aside a[href="/documentacao"]')],
+    [4, sel('button[aria-label="Recolher menu"]')],
+    [5, sel('button[aria-label="Trocar de sistema"]')],
+    [6, sel('button[title="Adicionar"]')],
+    [7, sel('button[title="Notificações"]')],
+    [8, sel('button[title="Reportar bug ou sugestão"]')],
+    [9, sel('button[title="Modo escuro"]')],
+    [10, (p) => p.locator("header button").filter({ hasText: "Rafael Costa" })],
+    [11, (p) => p.locator('main a[href="/crm/pipelines"]')],
+  ] },
+  // ── Pipeline ──
+  { chave: "pipeline", papel: "colaborador", url: "/crm/pipelines", espera: 1300, marcas: [
+    [1, btn("Novo Lead")],
+    [2, (p) => p.locator("main div.grid").filter({ hasText: "Total Leads" }).first()],
+    [3, (p) => p.getByRole("button", { name: /Closer/ }).locator("..")],
+    [4, (p) => p.getByText("Situação:").locator("..")],
+    [5, sel('input[placeholder="Buscar por nome, CNPJ, cidade..."]')],
+    [6, (p) => p.getByRole("combobox").filter({ hasText: "Todos Estágios" })],
+    [7, (p) => p.locator("button:has(svg.lucide-layout-grid)").locator("..")],
+    [8, (p) => p.locator('button[title="Adicionar lead aqui"]')],
+    [9, card("Posto Ponta Negra")],
+  ] },
+  { chave: "pipeline-gestor", papel: "gestor", url: "/crm/pipelines", espera: 1300, marcas: [
+    [1, (p) => p.getByRole("combobox").filter({ hasText: "Todos os vendedores" })],
+    [2, (p) => p.getByRole("button", { name: /Closer/ }).locator("..")],
+    [3, card("Posto Serra Verde")],
+  ] },
+  { chave: "card", papel: "colaborador", url: "/crm/pipelines", clip: card("Auto Posto Planalto"), pad: 22, marcas: [
+    [1, (p) => card("Auto Posto Planalto")(p).locator("span.rounded-full").first()],
+    [2, (p) => card("Auto Posto Planalto")(p).getByText("Auto Posto Planalto")],
+    [3, (p) => card("Auto Posto Planalto")(p).locator('a[title="Abrir no WhatsApp"]')],
+    [4, (p) => card("Auto Posto Planalto")(p).getByText("R$ 3,2k")],
+    [5, (p) => card("Auto Posto Planalto")(p).getByText("Indicação")],
+    [6, (p) => card("Auto Posto Planalto")(p).getByText("O cliente")],
+    [7, (p) => card("Auto Posto Planalto")(p).getByText("Rafael Costa")],
+    [8, (p) => card("Auto Posto Planalto")(p).getByRole("button", { name: /Avançar/ })],
+    [9, (p) => card("Auto Posto Planalto")(p).getByRole("button", { name: "Perdido" })],
+  ] },
+  { chave: "repasse", papel: "colaborador", url: "/crm/pipelines",
+    antes: async (p) => { await card("Posto Caminho do Sol")(p).getByRole("button", { name: /Avançar/ }).click(); },
+    marcas: [
+      [1, (p) => dlg(p).getByText(/Um card novo nasce/)],
+      [2, (p) => dlg(p).getByText(/Falta/)],
+      [3, (p) => dlg(p).locator("textarea")],
+      [4, (p) => dlg(p).getByRole("button", { name: "Passar ao closer" })],
+    ] },
+  { chave: "descarte", papel: "colaborador", url: "/crm/pipelines",
+    antes: async (p) => { await card("Posto Avenida Norte")(p).getByRole("button", { name: "Perdido" }).click(); },
+    marcas: [
+      [1, (p) => dlg(p).getByRole("combobox")],
+      [2, (p) => dlg(p).getByRole("button", { name: /Confirmar descarte/ })],
+    ] },
+  { chave: "novo-lead", papel: "colaborador", url: "/crm/pipelines", viewport: { width: 1440, height: 1250 },
+    antes: async (p) => { await p.getByRole("button", { name: "Novo Lead" }).click(); },
+    marcas: [
+      [1, (p) => p.locator("div.fixed").getByRole("combobox").first()],
+      [2, sel('input[placeholder="Nome do contato ou empresa"]')],
+      [3, sel('input[placeholder="(00) 00000-0000"]')],
+      [4, (p) => p.getByText("Qualificação (o que o closer precisa saber)")],
+      [5, (p) => p.getByRole("button", { name: /Mais detalhes/ })],
+      [6, (p) => p.getByRole("button", { name: "Criar lead" })],
+    ] },
+  { chave: "card-aberto", papel: "colaborador", url: "/crm/pipelines?funil=f14&lead=f14b", marcas: [
+    [1, (p) => dlg(p).locator('button[title="Prospecção"]').locator("..")],
+    [2, (p) => dlg(p).locator('button[title="Copiar link deste card"]')],
+    [3, (p) => dlg(p).locator('button[title="Arquivar lead"]')],
+    [4, (p) => dlg(p).getByRole("button", { name: "Marcar como aguardando" }).locator("..")],
+    [5, (p) => sec(p, "Sobre o negócio")],
+    [6, (p) => sec(p, "Qualificação").getByRole("button", { name: /Editar/ })],
+    [7, (p) => dlg(p).getByRole("button", { name: "Ligação" }).locator("..")],
+    [8, (p) => dlg(p).getByRole("button", { name: "Registrar" })],
+    [9, (p) => dlg(p).getByText("Liga amanhã cedo").first().locator("xpath=ancestor::div[contains(@class,'rounded')][1]")],
+    [10, (p) => dlg(p).getByRole("button", { name: /Avançar/ }).last()],
+    [11, (p) => dlg(p).getByRole("button", { name: "Perdido" }).last()],
+  ] },
+  { chave: "card-aberto-2", papel: "colaborador", url: "/crm/pipelines?funil=f14&lead=f14b",
+    antes: async (p) => { await sec(p, "Responsável").scrollIntoViewIfNeeded(); },
+    marcas: [
+      [1, (p) => sec(p, "Cliente / Contato")],
+      [2, (p) => sec(p, "Dados de faturamento")],
+      [3, (p) => sec(p, "Responsável")],
+    ] },
+  { chave: "card-aberto-gestor", papel: "gestor", url: "/crm/pipelines?funil=f14&lead=f14b",
+    antes: async (p) => { await sec(p, "Responsável").scrollIntoViewIfNeeded(); },
+    marcas: [
+      [1, (p) => dlg(p).getByRole("combobox").filter({ hasText: /Transferir/ })],
+      [2, (p) => dlg(p).getByRole("button", { name: "Transferir" })],
+      [3, (p) => dlg(p).locator('button[title="Arquivar lead"]')],
+    ] },
+  { chave: "closer-gestor", papel: "gestor", url: "/crm/pipelines?funil=f15", espera: 1300, viewport: { width: 1920, height: 900 }, marcas: [
+    [1, (p) => p.locator("h3", { hasText: "Qualificado" }).locator("..").locator("..")],
+    [2, (p) => card("Posto Boa Viagem")(p).getByText(/Pré-Vendas/)],
+    [3, card("Posto Alto da Serra")],
+  ] },
+  { chave: "closer-fila", papel: "gestor", url: "/crm/pipelines?funil=f15&lead=f15d", marcas: [
+    [1, (p) => dlg(p).getByRole("button", { name: "Pegar este card" }).locator("..")],
+    [2, (p) => sec(p, "Qualificação")],
+  ] },
+  { chave: "closer-colaborador", papel: "colaborador", url: "/crm/pipelines?funil=f15", espera: 1300, marcas: [
+    [1, (p) => p.getByRole("button", { name: /Closer/ })],
+    [2, card("Posto Boa Viagem")],
+  ] },
+];
+
+// ── Batch 2 ──
+const vc = (t) => (p) => p.locator("main div.rounded-xl.border").filter({ has: p.locator("h3", { hasText: t }) }).last();
+const ALTO = { width: 1440, height: 4200 };
+const row = (num) => (p) => p.locator("tbody tr").filter({ hasText: num });
+SHOTS.push(
+  // Vender
+  { chave: "vender-topo", papel: "colaborador", url: "/vender?edit=orc1", viewport: ALTO, pad: 30,
+    clip: (p) => [p.getByText(/Editando o orçamento/), vc("Informações do Cliente")(p)], marcas: [
+    [1, (p) => p.getByText(/Editando o orçamento/).locator("..")],
+    [2, (p) => vc("Tipo de Operação")(p).locator("div.grid")],
+    [3, sel('input[placeholder="CNPJ ou CPF"]')],
+    [4, btn("Buscar dados")],
+    [5, sel('input[placeholder="Nome do cliente"]')],
+    [6, (p) => vc("Informações do Cliente")(p).getByText("É Licenciado?").locator("..").locator("..")],
+    [7, (p) => vc("Informações do Cliente")(p).getByText("Inscrição Estadual").first().locator("..").locator("..")],
+  ] },
+  { chave: "vender-gestor", papel: "gestor", url: "/vender", viewport: ALTO,
+    clip: (p) => [p.getByText("Responsável pela venda").locator("xpath=ancestor::div[contains(@class,'rounded-xl')][1]"), vc("Tipo de Operação")(p)], marcas: [
+    [1, (p) => p.getByText("Responsável pela venda").locator("xpath=ancestor::div[contains(@class,'rounded-xl')][1]")],
+  ] },
+  { chave: "vender-endereco", papel: "colaborador", url: "/vender?edit=orc1", viewport: ALTO,
+    clip: (p) => vc("Endereço de Entrega")(p), marcas: [
+    [1, sel('input[placeholder="00000-000"]')],
+    [2, btn("Localizar no mapa")],
+    [3, btn("S/N")],
+    [4, (p) => p.getByText(/Mesmo endereço da entrega/).locator("..")],
+  ] },
+  { chave: "vender-itens", papel: "colaborador", url: "/vender?edit=orc1", viewport: ALTO,
+    clip: (p) => vc("Itens do Pedido")(p), marcas: [
+    [1, btn(/Adicionar Item/)],
+    [2, (p) => vc("Itens do Pedido")(p).getByRole("combobox").first()],
+    [3, (p) => vc("Itens do Pedido")(p).locator('input[type="number"]').first()],
+    [4, (p) => vc("Itens do Pedido")(p).getByText(/Preço de/).first()],
+    [5, (p) => vc("Itens do Pedido")(p).getByText("Desconto").first().locator("..")],
+    [6, (p) => vc("Itens do Pedido")(p).getByText(/Bonificação — 100%/)],
+    [7, sel('input[placeholder="Ex.: fidelização, volume…"]')],
+    [8, (p) => vc("Itens do Pedido")(p).getByText(/aprovação|Aprovação automática/).first()],
+    [9, (p) => vc("Itens do Pedido")(p).getByText("Subtotal").locator("..").locator("..")],
+  ] },
+  { chave: "vender-produto", papel: "colaborador", url: "/vender", viewport: { width: 1440, height: 1100 },
+    antes: async (p) => { await p.waitForTimeout(1500); await vc("Itens do Pedido")(p).getByRole("combobox").first().click(); await p.waitForTimeout(800); },
+    clip: (p) => [p.locator("[role=listbox]"), vc("Itens do Pedido")(p).locator("button[role=combobox]").first()], marcas: [
+    [1, (p) => p.locator('[role="listbox"]').getByText("CarboZé 100ml", { exact: true })],
+    [2, (p) => p.getByRole("option", { name: /Padrão/ }).nth(1)],
+    [3, (p) => p.getByRole("option", { name: /PDV/ }).first()],
+    [4, (p) => p.getByRole("option", { name: /Microdistribuidor/ }).first()],
+    [5, (p) => p.getByRole("option", { name: /Bonificação/ }).first()],
+  ] },
+  { chave: "vender-prazo", papel: "colaborador", url: "/vender?edit=orc1", viewport: ALTO,
+    clip: (p) => [vc("Como o produto sai")(p), vc("Recorrência")(p)], marcas: [
+    [1, (p) => vc("Como o produto sai")(p).getByText("Precisa produzir").locator("xpath=ancestor::button[1]")],
+    [2, (p) => vc("Como o produto sai")(p).getByText("Pronta entrega").locator("xpath=ancestor::button[1]")],
+    [3, (p) => vc("Prazo de Entrega")(p).getByRole("button").first()],
+    [4, (p) => vc("Prazo de Entrega")(p).getByText(/Fabricar até/).locator("xpath=ancestor::div[contains(@class,'rounded')][1]")],
+    [5, (p) => p.getByRole("switch", { name: "Ativar recorrência" })],
+  ] },
+  { chave: "vender-pagamento", papel: "colaborador", url: "/vender?edit=orc1", viewport: ALTO,
+    clip: (p) => [vc("Forma de Pagamento")(p), vc("Observações")(p)], marcas: [
+    [1, (p) => vc("Forma de Pagamento")(p).getByRole("combobox").first()],
+    [2, sel('input[placeholder="ex.: 30/60/90"]')],
+    [3, (p) => vc("Dados Estratégicos")(p)],
+    [4, (p) => vc("Observações")(p)],
+  ] },
+  { chave: "vender-rodape", papel: "colaborador", url: "/vender?edit=orc1",
+    clip: (p) => p.locator("main div.sticky.bottom-0"), pad: 6, marcas: [
+    [1, (p) => p.locator("main div.sticky.bottom-0").getByText("Total").locator("..")],
+    [2, btn("Cancelar")],
+    [3, btn(/Salvar e\s+Gerar PDF/)],
+    [4, btn(/Enviar por\s+E-mail/)],
+    [5, btn(/Salvar e Vender/)],
+  ] },
+  { chave: "vender-vapt", papel: "colaborador", url: "/vender?edit=orc2", viewport: ALTO,
+    clip: (p) => [vc("Itens de Serviço")(p), vc("Previsão de Execução")(p)], marcas: [
+    [1, (p) => vc("Itens de Serviço")(p).getByRole("combobox").first()],
+    [2, (p) => vc("Itens de Serviço")(p).getByText("Tem bonificação").first().locator("..")],
+    [3, (p) => vc("Itens de Serviço")(p).getByText(/Vai gerar/)],
+    [4, (p) => vc("Itens de Serviço")(p).getByText(/Serviços que acompanham/).locator("..")],
+    [5, (p) => vc("Previsão de Execução")(p).getByRole("button").first()],
+  ] },
+  // Vendas
+  { chave: "vendas", papel: "colaborador", url: "/vendas", viewport: { width: 1600, height: 900 }, marcas: [
+    [1, (p) => p.getByRole("button").filter({ has: p.locator("svg.lucide-chevron-left") }).first().locator("..")],
+    [2, (p) => p.getByText("Período:").locator("..")],
+    [3, (p) => p.getByText("Total vendido").locator("xpath=ancestor::div[contains(@class,'grid')][1]")],
+    [4, (p) => p.getByPlaceholder(/Cliente, cidade, CNPJ/)],
+    [5, (p) => p.locator("thead th").filter({ hasText: /^Status$/i })],
+    [6, (p) => p.locator("thead th").filter({ hasText: /^SDR$/i })],
+    [7, (p) => p.getByRole("button", { name: /Editar \/ Converter/ })],
+    [8, (p) => p.getByRole("button", { name: /Baixar NF/ })],
+    [9, row("V2026100027")],
+  ] },
+  { chave: "vendas-detalhe", papel: "colaborador", url: "/vendas", viewport: { width: 1600, height: 1500 },
+    antes: async (p) => { await row("V2026100031")(p).click(); },
+    clip: (p) => [row("V2026100031")(p), p.locator("tbody tr").nth(1)], marcas: [
+    [1, (p) => p.locator("tbody").getByText("Cliente", { exact: true }).first().locator("..")],
+    [2, (p) => p.getByText(/Endereço de Entrega/).first().locator("..")],
+    [3, (p) => p.getByText(/Nota Fiscal/).first()],
+    [4, (p) => p.locator("tbody").getByText("Produtos", { exact: true }).first().locator("..")],
+  ] },
+  { chave: "vendas-gestor", papel: "gestor", url: "/vendas", viewport: { width: 1600, height: 1000 },
+    antes: async (p) => { await p.getByRole("checkbox", { name: /Selecionar V2026100027/ }).click(); },
+    marcas: [
+    [1, (p) => p.getByRole("combobox").filter({ hasText: "Todos os closers" })],
+    [2, (p) => p.getByRole("checkbox", { name: "Selecionar todos" })],
+    [3, (p) => p.getByText(/pedido\(s\) selecionado/).locator("..")],
+  ] },
+  { chave: "vendas-gestor-detalhe", papel: "gestor", url: "/vendas", viewport: { width: 1600, height: 1500 },
+    antes: async (p) => { await row("V2026100027")(p).click(); },
+    clip: (p) => [row("V2026100027")(p), p.getByRole("button", { name: "Excluir venda" })], marcas: [
+    [1, btn("Editar venda")],
+    [2, btn("Cancelar venda")],
+    [3, btn("Excluir venda")],
+    [4, (p) => p.getByText(/Notas internas/).first()],
+  ] },
+  // Resultados
+  { chave: "resultados", papel: "colaborador", url: "/resultados", viewport: { width: 1440, height: 1180 }, espera: 1500, marcas: [
+    [1, (p) => p.getByRole("button", { name: "Mês anterior" }).locator("..")],
+    [2, (p) => p.getByText("Repassados", { exact: true }).first().locator("xpath=ancestor::div[contains(@class,'grid')][1]")],
+    [3, (p) => p.locator("section").filter({ has: p.getByRole("heading", { name: "Situação dos repassados" }) })],
+    [4, (p) => p.locator("section").filter({ has: p.getByRole("heading", { name: "Por closer" }) })],
+    [5, (p) => p.locator("section").filter({ has: p.getByRole("heading", { name: "Antes do repasse" }) })],
+    [6, (p) => p.locator("section").filter({ has: p.getByRole("heading", { name: /^Repasses/ }) })],
+  ] },
+  { chave: "resultados-gestor", papel: "gestor", url: "/resultados", viewport: { width: 1440, height: 1600 }, espera: 1500, marcas: [
+    [1, (p) => p.getByRole("combobox").filter({ hasText: "Todos os SDRs" })],
+    [2, (p) => p.locator("section").filter({ has: p.getByRole("heading", { name: "Por SDR" }) })],
+    [3, (p) => p.locator("thead th").filter({ hasText: /^SDR$/i }).last()],
+  ] },
+  // Atendimento
+  { chave: "atendimento", papel: "colaborador", url: "/atendimento", viewport: { width: 1600, height: 900 }, marcas: [
+    [1, (p) => p.getByText(/Nenhum número de WhatsApp ativo/).last()],
+    [2, (p) => p.getByPlaceholder(/Buscar por nome ou número/)],
+    [3, (p) => p.locator("button", { hasText: "Não respondidas" }).locator("..")],
+    [4, (p) => p.getByRole("button", { name: /Ninguém recebe aviso/ })],
+  ] },
+  // Bugs e sugestões
+  { chave: "bug-dialogo", papel: "colaborador", url: "/", viewport: { width: 1440, height: 1500 },
+    antes: async (p) => { await p.locator('button[title="Reportar bug ou sugestão"]').click(); await p.getByRole("button", { name: "Reportar", exact: true }).last().click(); },
+    clip: (p) => p.locator('[role="dialog"]').last(), marcas: [
+    [1, (p) => dlg(p).getByRole("button", { name: /Sugestão/ }).locator("..")],
+    [2, sel("#bug-title")],
+    [3, sel("#bug-desc")],
+    [4, (p) => dlg(p).getByText(/Isso te impede de trabalhar/).locator("..")],
+    [5, (p) => dlg(p).getByText(/Anexar print/).first()],
+    [6, (p) => dlg(p).getByRole("button", { name: "Enviar" })],
+  ] },
+  { chave: "bugs", papel: "colaborador", url: "/bugs",
+    antes: async (p) => { await p.getByRole("button", { name: /^Todos/ }).click(); },
+    marcas: [
+    [1, (p) => p.getByRole("button", { name: /^Bugs/ }).locator("..")],
+    [2, (p) => p.getByRole("button", { name: /Em andamento/ }).locator("..")],
+    [3, (p) => p.getByText("Filtro do pipeline não aplicava a etapa").locator("xpath=ancestor::*[contains(@class,'rounded')][1]")],
+  ] },
+  { chave: "bugs-gestor", papel: "gestor", url: "/bugs",
+    antes: async (p) => { await p.getByRole("button", { name: /Sugestões/ }).click(); await p.getByText("Mostrar a cidade do posto no card").click(); },
+    clip: (p) => p.locator('[role="dialog"]').last(), marcas: [
+    [1, (p) => dlg(p).locator("textarea")],
+    [2, (p) => dlg(p).getByRole("button", { name: "Recusar" })],
+    [3, (p) => dlg(p).getByRole("button", { name: /Marcar como/ })],
+  ] },
+  // Notificações e Perfil
+  { chave: "notificacoes", papel: "colaborador", url: "/",
+    antes: async (p) => { await p.locator('button[title="Notificações"]').click(); },
+    clip: (p) => [p.locator('[role="dialog"], [data-radix-popper-content-wrapper]').last(), p.locator('button[title="Notificações"]')], marcas: [
+    [1, (p) => p.getByRole("tab", { name: /Não lidas/ }).locator("..")],
+    [2, (p) => p.getByRole("button", { name: "Marcar lidas" })],
+    [3, (p) => p.getByText("Marina Alves comentou no seu card").locator("xpath=ancestor::div[contains(@class,'group')][1]")],
+  ] },
+  { chave: "perfil", papel: "colaborador", url: "/perfil", marcas: [
+    [1, btn(/Alterar foto/)],
+    [2, (p) => p.getByText("Nome completo").locator("xpath=ancestor::div[contains(@class,'rounded')][1]")],
+    [3, (p) => p.getByText(/Para alterar outras informações/)],
+  ] },
+);
