@@ -298,7 +298,12 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
   // Gestor arquiva qualquer card; o criador só o próprio. O guard de verdade
   // está na RPC crm_sales_lead_arquivar — aqui é só para não mostrar botão que
   // vai falhar.
-  const canDelete = isGestor || (!!user?.id && lead.created_by === user.id);
+  // ⚠️ Card do CLOSER (f15) é do closer: o SDR que repassou ACOMPANHA, mas não
+  // mexe — o banco recusa (policy restritiva + RPCs, 20261094). Esconder aqui é
+  // só para não oferecer clique que dá erro; quem trava é o banco. Comentar
+  // continua liberado: é conversa, não alteração do card.
+  const somenteLeitura = lead.funnel_type === "f15" && !isGestor && lead.assigned_to !== user?.id;
+  const canDelete = !somenteLeitura && (isGestor || (!!user?.id && lead.created_by === user.id));
 
   // O MESMO som e o MESMO toast de quando o card é arrastado no board
   // (Pipelines.notifyMove). Toca ANTES do await, ainda dentro do clique: depois
@@ -438,7 +443,7 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
             stages={stages}
             currentStage={stage}
             onSelect={handleStageClick}
-            disabled={advance.isPending || markLost.isPending}
+            disabled={somenteLeitura || advance.isPending || markLost.isPending}
           />
         </div>
 
@@ -458,7 +463,7 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
                 continua sendo trabalho do mesmo closer, no mesmo lugar do
                 funil. O prazo é obrigatório e, vencido, o card volta a contar
                 como esquecido — é o que impede o "aguardando" eterno. */}
-            {!terminal && (
+            {!terminal && !somenteLeitura && (
               <div className={`rounded-lg border p-3 space-y-2 ${
                 lead.waiting_on && esperaVencida(lead) ? "border-destructive/40 bg-destructive/5"
                 : lead.waiting_on ? "border-amber-500/40 bg-amber-500/5"
@@ -576,7 +581,7 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
                 Antes este botão exigia stage === "ganho", e o id do Ganho no
                 funil ativo (f13) é "convertido": ele NUNCA aparecia. Agora usa
                 isWonStage, que vale para os dois. */}
-            {(isWonStage(stage) || stage === "orcamento" || orcamento) && (
+            {!somenteLeitura && (isWonStage(stage) || stage === "orcamento" || orcamento) && (
               <div className="rounded-lg border border-border p-3 space-y-2">
                 <p className="flex items-center gap-1.5 text-xs font-medium">
                   <FileText className="h-3.5 w-3.5" /> Orçamento
@@ -617,6 +622,7 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
                 <p className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Segmento</p>
                 <select
                   className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground"
+                  disabled={somenteLeitura}
                   value={lead.lead_segment ?? "a_definir"}
                   onChange={(e) => updateLead.mutate({ id: lead.id, lead_segment: e.target.value })}
                 >
@@ -642,7 +648,7 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
             {(isOutbound || temQualificacao) && (
               <Card
                 title="Qualificação"
-                action={!editQual ? (
+                action={!editQual && !somenteLeitura ? (
                   <button onClick={startEditQual} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
                     <Pencil className="h-3 w-3" /> Editar
                   </button>
@@ -679,7 +685,7 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
 
             <Card
               title="Cliente / Contato"
-              action={!editContact ? (
+              action={!editContact && !somenteLeitura ? (
                 <button onClick={startEditContact} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
                   <Pencil className="h-3 w-3" /> Editar
                 </button>
@@ -725,7 +731,7 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
                 todo lead novo seria ruído; o botão Editar dá o caminho. */}
             <Card
               title="Dados de faturamento"
-              action={!editFat ? (
+              action={!editFat && !somenteLeitura ? (
                 <button onClick={startEditFat} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
                   <Pencil className="h-3 w-3" /> {temFaturamento ? "Editar" : "Preencher"}
                 </button>
@@ -907,7 +913,7 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
         </div>
 
         {/* Rodapé — Avançar / Perdido */}
-        {!terminal && (
+        {!terminal && !somenteLeitura && (
           <DialogFooter className="border-t p-3 sm:justify-start">
             {!showLostForm ? (
               <div className="flex w-full gap-2 sm:w-auto">

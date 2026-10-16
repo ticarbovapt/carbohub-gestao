@@ -4914,6 +4914,15 @@ supabase/migrations/20261046…        carbo_interface_e_interna: É time intern
     o `onDragMove` devolve `false` e o quadro DESFAZ o movimento otimista
     (cancelar deixava o card na coluna errada na tela); recusa do banco
     desfaz pela promise. Só no `prevendas` — o `KanbanBoard` do `crm` é outro.
+    ⚠️ **O card do closer (f15) só o closer e o gestor ALTERAM** (`20261094`).
+    O repasse grava o SDR em `created_by`, e `created_by = eu` é o que as
+    regras de escrita perguntam — pela API o SDR movia, editava, arquivava,
+    apagava e repassava de novo o card do closer. Hoje há policy RESTRITIVA
+    de UPDATE/DELETE (`crm_sales_leads_f15_so_closer_*`: responsável, gestor
+    antigo ou gestor do Pré-Vendas) e `arquivar`/`repassar` não aceitam mais
+    "criei" no f15. Restritiva soma com E: só tira, nunca abre; fora do f15 é
+    `true`. Comentar continua livre. A tela espelha com `somenteLeitura`
+    (`DealDetail`) e `podeMover` (`KanbanBoard`/`Pipelines`, só `prevendas`).
 13. **Sem Carbo Chat** (dono do processo, 14/10/2026): sem menu, sem card na
     home, sem `ChatProvider`; `/chat` volta para a home.
 14. **`/atendimento` é a CASCA da tela de Conversas, sempre vazia** (dono do

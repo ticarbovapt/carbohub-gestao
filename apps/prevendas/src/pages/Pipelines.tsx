@@ -64,12 +64,13 @@ const leadOwnerId = (l: CRMLead) =>
   (l as { assigned_to?: string | null; created_by?: string | null }).assigned_to ??
   (l as { created_by?: string | null }).created_by ?? "";
 
-function AllFunnelsBoard({ leads, ownersById, onLeadClick, onAdvance, onMarkLost }: {
+function AllFunnelsBoard({ leads, ownersById, onLeadClick, onAdvance, onMarkLost, podeMover }: {
   leads: CRMLead[];
   ownersById: Record<string, LeadOwner>;
   onLeadClick: (l: CRMLead) => void;
   onAdvance: (l: CRMLead) => void;
   onMarkLost: (l: CRMLead) => void;
+  podeMover: (l: CRMLead) => boolean;
 }) {
   const byCol = useMemo(() => {
     const map: Record<string, CRMLead[]> = {};
@@ -111,8 +112,8 @@ function AllFunnelsBoard({ leads, ownersById, onLeadClick, onAdvance, onMarkLost
                       : null}
                     originFunnel={cfg ? { icon: cfg.icon, name: cfg.shortName, color: cfg.color } : undefined}
                     onClick={onLeadClick}
-                    onAdvance={onAdvance}
-                    onMarkLost={onMarkLost}
+                    onAdvance={podeMover(lead) ? onAdvance : undefined}
+                    onMarkLost={podeMover(lead) ? onMarkLost : undefined}
                   />
                 );
               })}
@@ -413,6 +414,10 @@ export default function Pipelines() {
     notifyMove(lead.stage, next, lf);
     ofereceAcao(lead, next, lf);
   };
+  // Card do closer (f15): o SDR que repassou só ACOMPANHA. A mesma conta do
+  // `somenteLeitura` do DealDetail; quem recusa de verdade é o banco (20261094).
+  const podeMoverCard = (lead: CRMLead) =>
+    lead.funnel_type !== "f15" || isGestor || (lead as { assigned_to?: string | null }).assigned_to === user?.id;
   const handleDragMove = (lead: CRMLead, toStage: string) => {
     // Repassar não é mover: cria um card no Inbound com toda a timeline junto.
     // Por isso passa por um diálogo, e não pelo advance normal.
@@ -611,6 +616,7 @@ export default function Pipelines() {
             onLeadClick={abrirCard}
             onAdvance={handleAdvanceAny}
             onMarkLost={(lead) => { setLostReason(""); setLostDialogLead(lead); }}
+            podeMover={podeMoverCard}
           />
         ) : viewMode === "kanban" ? (
           <KanbanBoard
@@ -620,8 +626,9 @@ export default function Pipelines() {
             onMarkLost={(lead) => { setLostReason(""); setLostDialogLead(lead); }}
             onLeadClick={abrirCard}
             onDragMove={handleDragMove}
-            onAddLead={(stageId) => { setFormStage(stageId); setIsFormOpen(true); }}
+            onAddLead={ft === "f15" && !isGestor ? undefined : (stageId) => { setFormStage(stageId); setIsFormOpen(true); }}
             ownersById={ownersById}
+            podeMover={podeMoverCard}
           />
         ) : (
           <CarboCard>

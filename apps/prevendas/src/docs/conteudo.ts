@@ -223,7 +223,7 @@ export const SECOES: Secao[] = [
         print: { chave: "closer-colaborador", legenda: "Quadro Closer, visão do SDR: só o que ele repassou." },
         itens: [
           { n: 1, titulo: "Aba Closer", texto: "Acompanhe aqui o que aconteceu com os seus repasses." },
-          { n: 2, titulo: "Seu repasse", texto: "O card mostra em que etapa o closer está. Quando ele chega em Ganho, a venda aparece em Vendas e nos seus Resultados. Enquanto ninguém assume, o card aberto diz “Repassado ao closer” — quem pega o card é o closer, não o SDR." },
+          { n: 2, titulo: "Seu repasse", texto: "O card mostra em que etapa o closer está. Quando ele chega em Ganho, a venda aparece em Vendas e nos seus Resultados. Enquanto ninguém assume, o card aberto diz “Repassado ao closer” — quem pega o card é o closer, não o SDR. O card do closer é só para acompanhar: você não move nem edita, mas pode comentar nele." },
         ],
       },
       {
