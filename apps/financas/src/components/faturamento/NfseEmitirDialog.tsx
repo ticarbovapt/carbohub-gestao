@@ -28,7 +28,17 @@ import {
 // emite com o código errado sem ninguém ter decidido.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const C_IND_OP = ["050101", "050102", "050103", "050104"];
+// O texto é o da tabela do emissor web (print do Finanças, 16/10/2026). Os
+// quatro começam iguais — "Serviço prestado fisicamente sobre bem móvel
+// material" —, então a opção mostra só o que os DIFERE; o texto inteiro aparece
+// abaixo do campo depois da escolha, como no portal.
+const C_IND_OP_PREFIXO = "Serviço prestado fisicamente sobre bem móvel material";
+const C_IND_OP: Array<{ codigo: string; local: string }> = [
+  { codigo: "050101", local: "Estabelecimento do fornecedor como local da prestação" },
+  { codigo: "050102", local: "Local da prestação do serviço diverso do estabelecimento do fornecedor" },
+  { codigo: "050103", local: "Endereço do destinatário" },
+  { codigo: "050104", local: "Endereço diverso do fornecedor, adquirente ou destinatário" },
+];
 
 const digitos = (s: string | null | undefined) => (s ?? "").replace(/\D/g, "");
 const fmtDoc = (d: string | null) => {
@@ -225,11 +235,24 @@ export function NfseEmitirDialog({ orderId, onOpenChange }: { orderId: string | 
             </Secao>
 
             <Secao titulo="Serviço">
-              <Campo rotulo="Indicador da operação *" dica="O mesmo campo do emissor web (IBS/CBS). Varia conforme o serviço.">
+              <Campo rotulo="Indicador da operação *" largo
+                dica={(() => {
+                  const op = C_IND_OP.find((c) => c.codigo === f.cIndOp);
+                  return op
+                    ? `${op.codigo} - ${C_IND_OP_PREFIXO} - ${op.local}`
+                    : "O mesmo campo do emissor web (IBS/CBS). Varia conforme onde o serviço é feito.";
+                })()}>
                 <Select value={f.cIndOp} onValueChange={(v) => set("cIndOp", v)}>
-                  <SelectTrigger><SelectValue placeholder="Escolha…" /></SelectTrigger>
-                  <SelectContent>
-                    {C_IND_OP.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  <SelectTrigger className="text-left [&>span]:truncate"><SelectValue placeholder="Escolha…" /></SelectTrigger>
+                  {/* ⚠️ Largura do CAMPO, com quebra de linha: no celular o texto
+                      passava da borda da tela. Local, sem mexer no select.tsx
+                      (replicado nos oito apps). */}
+                  <SelectContent className="max-w-[var(--radix-select-trigger-width)]">
+                    {C_IND_OP.map((c) => (
+                      <SelectItem key={c.codigo} value={c.codigo} className="whitespace-normal">
+                        <span className="font-medium tabular-nums">{c.codigo}</span> · {c.local}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </Campo>
