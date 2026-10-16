@@ -416,18 +416,21 @@ export default function Pipelines() {
   const handleDragMove = (lead: CRMLead, toStage: string) => {
     // Repassar não é mover: cria um card no Inbound com toda a timeline junto.
     // Por isso passa por um diálogo, e não pelo advance normal.
-    if (isHandoffStage(toStage)) { setRepasseNota(""); setRepasseLead(lead); return; }
+    if (isHandoffStage(toStage)) { setRepasseNota(""); setRepasseLead(lead); return false; }
     // Soltar na coluna de perda abre o diálogo de motivo em vez de mover direto.
     // Antes o card ia para "Perdido" sem motivo nenhum — e o motivo é justamente
     // o dado que diz se a prospecção está errada ou se o produto é que não serve.
     if (isLostStage(toStage)) {
       setLostReason("");
       setLostDialogLead(lead);
-      return;
+      return false;
     }
-    advanceLead.mutate({ id: lead.id, newStage: toStage, funnelType: ft });
+    // A promise vai para o quadro desfazer o movimento se o banco recusar
+    // (o onError da mutation já avisa com o toast).
+    const feito = advanceLead.mutateAsync({ id: lead.id, newStage: toStage, funnelType: ft });
     notifyMove(lead.stage, toStage, ft);
     ofereceAcao(lead, toStage, ft);
+    return feito;
   };
 
   // Depois de mover para Orçamento ou Ganho, oferece o próximo passo na hora.

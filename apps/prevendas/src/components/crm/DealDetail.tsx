@@ -539,8 +539,24 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
               </div>
             )}
 
+            {/* Card do closer do Pré-Vendas (f15) sem dono: quem PEGA é o gestor
+                (o closer). O SDR que repassou vê o card dele aqui, mas não o
+                assume — o banco recusa (`crm_sales_lead_pegar`, 20261093), e
+                mostrar o botão seria oferecer um clique que dá erro. */}
+            {lead.origin_lead_id && !lead.assigned_to && lead.funnel_type === "f15" && !isGestor && (
+              <div className="rounded-lg border border-primary/40 bg-primary/5 p-3 space-y-1">
+                <p className="flex items-center gap-1.5 text-sm font-medium">
+                  <ArrowRight className="h-4 w-4 text-primary" /> Repassado ao closer
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Está na fila do closer, esperando alguém assumir. Você continua vendo o card
+                  e o que acontece com ele.
+                </p>
+              </div>
+            )}
+
             {/* Card que chegou por repasse e ainda não tem dono: fila aberta. */}
-            {lead.origin_lead_id && !lead.assigned_to && (
+            {lead.origin_lead_id && !lead.assigned_to && (lead.funnel_type !== "f15" || isGestor) && (
               <div className="rounded-lg border border-primary/40 bg-primary/5 p-3 space-y-2">
                 <p className="flex items-center gap-1.5 text-sm font-medium">
                   <ArrowRight className="h-4 w-4 text-primary" /> Veio do {FUNNEL_CONFIG[lead.origin_funnel_type as FunnelType]?.shortName ?? "SDR"}, sem dono
