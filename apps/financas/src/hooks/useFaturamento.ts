@@ -161,6 +161,29 @@ export function useFaturamento({ month, search = "", showAll = false }: Faturame
   return useQuery({
     queryKey: ["faturamento", monthKey, term, showAll],
     queryFn: async () => {
+      // Busca: a RPC procura por cliente, CNPJ/CPF (só números serve), nº do
+      // pedido, NF, pedido de compra, cidade, telefone, CEP, e-mail, IE e
+      // vendedor, em TODO o histórico (20261095). O `!showAll` é a MESMA régua
+      // grosseira do filtro do banco logo abaixo, aplicada no resultado.
+      if (term) {
+        const { data, error } = await (supabase as any).rpc("carbo_faturamento_busca", {
+          p_termo: term, p_status: STATUS_COM_NF_POSSIVEL, p_limit: 500,
+        });
+        // ⚠️ Função ainda não criada (migração não rodou) cai na busca antiga
+        // em vez de deixar a tela vazia — ausência tem de MOSTRAR.
+        const semFuncao = error && (error.code === "PGRST202" || /carbo_faturamento_busca/.test(error.message ?? ""));
+        if (error && !semFuncao) throw error;
+        if (!error) {
+          return ((data ?? []) as any[])
+            .filter((row) => showAll || row.bling_nf_id == null || row.bling_nf_bonificacao_id == null
+              || row.bling2_nf_id == null || row.bling2_nf_bonificacao_id == null)
+            .map((row) => ({
+              ...row,
+              items: Array.isArray(row.items) ? (row.items as unknown as FaturamentoItem[]) : [],
+            })) as FaturamentoOrder[];
+        }
+      }
+
       let query = supabase
         // carbo_vendas_metrica em vez de carboze_orders: ela já traz a
         // situação da NF resolvida (nf_situacao / nf_valida). Ler a tabela

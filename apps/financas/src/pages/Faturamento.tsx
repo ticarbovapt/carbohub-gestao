@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useParamUrl } from "@carbo/shell";
 import {
@@ -150,7 +150,14 @@ export default function Faturamento() {
   // Linha expandida (detalhe do pedido para conferência). Clicar na linha alterna.
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  const { data: orders, isLoading } = useFaturamento({ month, search, showAll });
+  // A consulta espera a pessoa parar de digitar: a busca vasculha o histórico
+  // inteiro, e uma consulta por letra é carga à toa (e respostas fora de ordem).
+  const [buscaConsulta, setBuscaConsulta] = useState(search);
+  useEffect(() => {
+    const t = setTimeout(() => setBuscaConsulta(search), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+  const { data: orders, isLoading } = useFaturamento({ month, search: buscaConsulta, showAll });
   // Pedido em confirmação: abre o diálogo que mostra o que vai pro Bling (inclui
   // o pré-cadastro do cliente, se for novo) para o financeiro conferir e confirmar.
   const [toBling, setToBling] = useState<FaturamentoOrder | null>(null);
@@ -499,7 +506,7 @@ export default function Faturamento() {
               <CarboButton variant="outline" size="icon" onClick={() => changeMonth(1)} aria-label="Próximo mês"><ChevronRight className="h-4 w-4" /></CarboButton>
             </div>
             <div className="flex-1 md:min-w-48">
-              <CarboSearchInput placeholder="Buscar por cliente ou nº do pedido (busca global)…" value={search} onChange={(e) => { setSearch(e.target.value); resetPages(); }} />
+              <CarboSearchInput placeholder="Buscar por cliente, CNPJ/CPF, nº do pedido ou NF, cidade, telefone, e-mail…" value={search} onChange={(e) => { setSearch(e.target.value); resetPages(); }} />
             </div>
             {search.trim() && (
               <span className="text-xs text-muted-foreground whitespace-nowrap">Buscando em todos os meses</span>
