@@ -31,4 +31,7 @@ export type {
   ShellBrand,
   SidebarProps,
 } from "./types";
-export { ACADEMY_FILA_URL, chaveDoPedido, abrirFilaDoAcademy, toastDoPedidoAcademy } from "./academyAcesso";
+export {
+  ACADEMY_FILA_URL, ACADEMY_URL, chaveDoPedido, abrirFilaDoAcademy, toastDoPedidoAcademy,
+  abrirCursoDoAcademy, toastDeCursoLiberado,
+} from "./academyAcesso";
