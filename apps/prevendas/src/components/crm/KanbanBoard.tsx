@@ -19,12 +19,15 @@ interface KanbanBoardProps {
   onDragMove?: (lead: CRMLead, toStage: string) => boolean | void | Promise<unknown>;
   onAddLead?: (stageId: string) => void;
   ownersById?: Record<string, LeadOwner>;
+  // `false` = card só de leitura para quem olha (o SDR no card do closer): não
+  // arrasta e não mostra Avançar/Perdido. Quem recusa de verdade é o banco.
+  podeMover?: (lead: CRMLead) => boolean;
 }
 
 const leadOwnerId = (l: CRMLead) => ((l as { assigned_to?: string | null; created_by?: string | null }).assigned_to
   ?? (l as { created_by?: string | null }).created_by ?? "");
 
-export function KanbanBoard({ leads, funnelType, onAdvance, onMarkLost, onLeadClick, onDragMove, onAddLead, ownersById }: KanbanBoardProps) {
+export function KanbanBoard({ leads, funnelType, onAdvance, onMarkLost, onLeadClick, onDragMove, onAddLead, ownersById, podeMover }: KanbanBoardProps) {
   const stages = useMemo(() => getStagesForFunnel(funnelType), [funnelType]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [optimisticMoves, setOptimisticMoves] = useState<Record<string, string>>({});
@@ -70,6 +73,7 @@ export function KanbanBoard({ leads, funnelType, onAdvance, onMarkLost, onLeadCl
     const lead = active.data.current?.entity as CRMLead;
     const toStage = over.id as string;
     if (!lead || lead.stage === toStage) return;
+    if (podeMover && !podeMover(lead)) return;
     setOptimisticMoves((prev) => ({ ...prev, [lead.id]: toStage }));
     // ⚠️ Sem desfazer, cancelar o diálogo (ou uma recusa do banco) deixava o
     // card na coluna nova PARA SEMPRE na tela — o efeito acima só limpa quando
@@ -106,6 +110,7 @@ export function KanbanBoard({ leads, funnelType, onAdvance, onMarkLost, onLeadCl
             onLeadClick={onLeadClick}
             onAddLead={onAddLead}
             ownersById={ownersById}
+            podeMover={podeMover}
           />
         ))}
       </div>
@@ -120,7 +125,7 @@ export function KanbanBoard({ leads, funnelType, onAdvance, onMarkLost, onLeadCl
 }
 
 function KanbanColumn({
-  stage, leads, funnelType, onAdvance, onMarkLost, onLeadClick, onAddLead, ownersById,
+  stage, leads, funnelType, onAdvance, onMarkLost, onLeadClick, onAddLead, ownersById, podeMover,
 }: {
   stage: StageConfig;
   leads: CRMLead[];
@@ -130,6 +135,7 @@ function KanbanColumn({
   onLeadClick?: (lead: CRMLead) => void;
   onAddLead?: (stageId: string) => void;
   ownersById?: Record<string, LeadOwner>;
+  podeMover?: (lead: CRMLead) => boolean;
 }) {
   const totalValor = leads.reduce((s, l) => s + (Number(l.estimated_revenue) || 0), 0);
   const fmtK = (v: number) => v >= 1000 ? `R$ ${(v / 1000).toFixed(v % 1000 === 0 ? 0 : 1)}k` : `R$ ${v}`;
@@ -166,8 +172,8 @@ function KanbanColumn({
             {leads.length === 0 ? (
               <p className="text-xs text-muted-foreground text-center py-8">Nenhum lead</p>
             ) : (
-              leads.map((lead) => (
-                <DraggableCard key={lead.id} id={lead.id} data={{ entity: lead }}>
+              leads.map((lead) => { const move = !podeMover || podeMover(lead); return (
+                <DraggableCard key={lead.id} id={lead.id} data={{ entity: lead }} disabled={!move}>
                   <LeadCard
                     lead={lead}
                     funnelType={funnelType}
@@ -180,12 +186,12 @@ function KanbanColumn({
                     repassadoPor={lead.origin_lead_id
                       ? (ownersById?.[lead.created_by ?? ""]?.name ?? null)
                       : null}
-                    onAdvance={onAdvance}
-                    onMarkLost={onMarkLost}
+                    onAdvance={move ? onAdvance : undefined}
+                    onMarkLost={move ? onMarkLost : undefined}
                     onClick={onLeadClick}
                   />
                 </DraggableCard>
-              ))
+              ); })
             )}
           </div>
         </DroppableColumn>
