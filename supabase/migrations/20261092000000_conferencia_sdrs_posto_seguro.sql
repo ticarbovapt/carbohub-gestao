@@ -45,8 +45,6 @@ select p.full_name,
        p.allowed_interfaces,
        p.allowed_interfaces::text[] = array['carbo_prevendas']         as so_prevendas,
        public.carbo_interface_e_interna(p.allowed_interfaces::text[])  as time_interno,
-       (select string_agg(r.role::text, ', ')
-          from public.user_roles r where r.user_id = p.id)             as papel,
        to_jsonb(p) ->> 'password_must_change'                          as troca_senha_no_1o_acesso,
        u.email                                                         as email_login,
        u.last_sign_in_at                                               as ultimo_login,
