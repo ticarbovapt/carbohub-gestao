@@ -104,3 +104,20 @@ select p.full_name                                   as perfil,
           cross join generate_series(1, 11) i
           group by c) cpf on e.id is not null
  order by p.full_name;
+
+-- ╔═══════════════════════════════════════════════════════════════════╗
+-- ║ D — CORREÇÃO aplicada em 16/10/2026: tipo da chave PIX do Adilson  ║
+-- ╚═══════════════════════════════════════════════════════════════════╝
+-- A conferência C mostrou as 6 fichas ligadas e batendo com a planilha da
+-- empresa; só a do Adilson veio com pix_type nulo (a chave é o CPF dele).
+-- Resultado em produção: 1 linha. ✅ Nada mais a corrigir: os 6 estão
+-- `parceiro`/colaborador (decisão do dono do processo: o Coordenador também),
+-- só com carbo_prevendas, approved e troca de senha no 1º acesso.
+update public.employee_finance
+   set pix_type   = 'cpf',
+       updated_at = now()
+ where active
+   and pix_type is null
+   and regexp_replace(pix_key, '\D', '', 'g') = regexp_replace(cpf, '\D', '', 'g')
+   and full_name = 'Adilson José de Carvalho'
+returning full_name, pix_type, pix_key;
