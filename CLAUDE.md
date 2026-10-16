@@ -4250,7 +4250,7 @@ perto do que foi pedido (*"apenas confirmar no portal nacional e emitir"*) e
 sensível do projeto de um caminho novo. Só não foi o caminho de partida porque
 ninguém mediu se o emissor web aceita entrada pré-preenchida.
 
-### NFS-e do CarboVAPT: a EMISSÃO pela tela (16/10/2026) — ainda em TESTE
+### NFS-e do CarboVAPT: a EMISSÃO pela tela (16/10/2026) — EM PRODUÇÃO
 Finanças → Faturamento: pedido só de serviço (`soServico`, todo item
 `kind = 'service'`) troca "Criar no Bling" por **"Emitir NFS-e"**, que abre a
 confirmação com tudo pré-preenchido. Molde do DANFSe que o Finanças mandou
@@ -4269,11 +4269,20 @@ apps/financas/src/components/faturamento/NfseEmitirDialog.tsx
 apps/financas/src/hooks/useNfseEmissao.ts
 ```
 
-1. ⚠️ **AINDA SAI NA PRODUÇÃO RESTRITA.** `AMBIENTE = 2` na função, o destino
-   do `nfse-relay` é a restrita, e `NFSE_AMBIENTE_TELA` espelha isso na tela
-   (só para o aviso). Ir para produção = mudar os TRÊS, num commit que diga
-   isso, e a primeira nota real ser de uma venda real com o Finanças olhando.
-   Nota de teste NÃO conta como NF do pedido (`nfseValida` exige ambiente 1).
+1. ⚠️ **EM PRODUÇÃO desde 16/10/2026** (ok do dono do processo depois do teste
+   na restrita: V2026100012, CPF, autorizada na 1ª tentativa). `AMBIENTE = 1`
+   na função, o destino do `nfse-relay` é `sefin.nfse.gov.br`, e
+   `NFSE_AMBIENTE_TELA` espelha isso na tela. Os TRÊS andam juntos; um sem o
+   outro o SEFIN recusa (tpAmb ≠ ambiente). Nota de teste NÃO conta como NF do
+   pedido (`nfseValida` exige ambiente 1).
+   ⚠️ **O NÚMERO DA NFS-e é do PORTAL**, na sequência da empresa — a MESMA do
+   emissor web (medido: série 70000 com NFS-e 80→195, 116 notas contínuas, de
+   julho a 09/10). A série 2 numera só a DPS. "Não iniciar outra sequência"
+   (pedido do dono do processo) já é como o portal funciona: não há o que
+   configurar.
+   ⚠️ A sonda `nfse-dps-teste` passou a cair na PRODUÇÃO pelo relay e manda
+   tpAmb=2: o SEFIN recusa. Não use mais; teste novo exige o relay de volta à
+   restrita.
 2. ⚠️ **Série 2, contador NOSSO.** Medido: 00001 tem 170 notas (até 2169),
    70000 é o emissor web (194, até 410), 80000 tem 1. A API só aceita
    00001–49999. A 70000 "que falaram" é a do portal, e é por isso que não serve.

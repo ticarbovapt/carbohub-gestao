@@ -156,7 +156,9 @@ export function NfseEmitirDialog({ orderId, onOpenChange }: { orderId: string | 
           </DialogTitle>
           <DialogDescription>
             Portal Nacional (gov.br). Confira os dados; nada é enviado antes de <strong>Emitir</strong>.
-            {NFSE_AMBIENTE_TELA === 2 && " Por enquanto as notas saem no ambiente de TESTE e não valem como documento fiscal."}
+            {NFSE_AMBIENTE_TELA === 2
+              ? " Por enquanto as notas saem no ambiente de TESTE e não valem como documento fiscal."
+              : <> A nota é emitida <strong>de verdade</strong> no CNPJ da Carbo, na sequência do portal, e só se desfaz com cancelamento.</>}
           </DialogDescription>
         </DialogHeader>
 

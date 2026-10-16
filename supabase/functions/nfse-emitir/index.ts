@@ -17,12 +17,13 @@
 // competência e o indicador de operação; trocar o tomador ou o valor é outra
 // venda, não uma correção na nota.
 //
-// ── ⚠️ DUAS TRAVAS INDEPENDENTES CONTRA PRODUÇÃO ──────────────────────────
-//   1. `AMBIENTE = 2` aqui (tpAmb no XML)
-//   2. o destino FIXO do relay, que é a produção restrita
-// Ir para produção é mudar as DUAS, de propósito, num commit que diga isso.
-// DPS aceito em produção é nota fiscal com número, que só se desfaz com
-// cancelamento.
+// ── ⚠️ EM PRODUÇÃO desde 16/10/2026 (decisão do dono do processo) ─────────
+//   1. `AMBIENTE = 1` aqui (tpAmb no XML)
+//   2. o destino FIXO do relay, que é a produção (`sefin.nfse.gov.br`)
+// As duas mudam JUNTAS: uma sem a outra é recusada pelo SEFIN (tpAmb diferente
+// do ambiente). DPS aceito aqui é nota fiscal com número, que só se desfaz com
+// cancelamento. O NÚMERO DA NFS-e é do portal, na sequência da empresa (a mesma
+// do emissor web); a série 2 é só o controle da DPS.
 // ═══════════════════════════════════════════════════════════════════════════
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
@@ -31,10 +32,10 @@ import {
   lerResposta, limpo, montarId, montarInfDps, type Tomador,
 } from "../_shared/nfseDps.ts";
 
-// ⚠️ 2 = PRODUÇÃO RESTRITA (homologação). Produção é 1 — e o relay também
-// precisa trocar de destino. Uma sem a outra é recusada pelo SEFIN (tpAmb
-// diferente do ambiente), o que é o modo certo de falhar.
-const AMBIENTE: 1 | 2 = 2;
+// ⚠️ 1 = PRODUÇÃO. Restrita (homologação) é 2 — e o relay também precisa
+// trocar de destino. Uma sem a outra é recusada pelo SEFIN (tpAmb diferente do
+// ambiente), o que é o modo certo de falhar.
+const AMBIENTE: 1 | 2 = 1;
 const SERIE = "2";
 
 // Prestador — os mesmos dados do gabarito aceito pelo ADN.

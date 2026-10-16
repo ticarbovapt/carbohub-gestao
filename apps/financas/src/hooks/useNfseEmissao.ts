@@ -9,9 +9,9 @@ import { supabase } from "@/integrations/supabase/client";
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** ⚠️ ESPELHO de `AMBIENTE` em `supabase/functions/nfse-emitir/index.ts`. Ao
- *  ir para produção, mude os DOIS (e o destino do `nfse-relay`). Aqui ele só
+ *  trocar de ambiente, mude os DOIS (e o destino do `nfse-relay`). Aqui ele só
  *  decide o aviso da tela; quem decide onde a nota sai é o servidor. */
-export const NFSE_AMBIENTE_TELA: 1 | 2 = 2;
+export const NFSE_AMBIENTE_TELA: 1 | 2 = 1;
 
 export type NfseStatus = "enviando" | "autorizada" | "rejeitada" | "falha" | "indeterminado";
 
