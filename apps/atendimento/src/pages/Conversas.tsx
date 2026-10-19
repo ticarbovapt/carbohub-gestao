@@ -24,7 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import {
-  useConversas, useConversasAoVivo, useResponder, janelaAberta, faltaDaJanela,
+  useConversas, useConversasAoVivo, useMensagensDaConversa, useResponder, janelaAberta, faltaDaJanela,
   useNumeros, type NumeroWa,
   // ⚠️ Puras e na `lib`, não aqui: dá para conferir o recorte sem montar tela.
   aplicarFiltrosDaCaixa, quantosFiltrosAtivos, FILTROS_VAZIOS,
@@ -3347,6 +3347,15 @@ export default function Conversas() {
      continua abrindo a primeira). */
   const naConversa = !!aberta && atual?.wa_id === aberta;
 
+  /* ⚠️ A lista traz só o RESUMO de cada conversa (`carbo_wa_caixa`); a linha do
+     tempo da conversa aberta vem inteira daqui. Enquanto carrega, mostra o que
+     a lista já tem (as últimas) em vez de tela vazia. */
+  const { data: mensagensDaAtual } = useMensagensDaConversa(numeroId, atual?.wa_id);
+  const atualCompleta = useMemo(
+    () => (atual && mensagensDaAtual?.length ? { ...atual, mensagens: mensagensDaAtual } : atual),
+    [atual, mensagensDaAtual],
+  );
+
   /* ⚠️ Busca e filtro são LOCAIS e só escondem linhas. A ordenação vem pronta
      do hook (quem espera resposta primeiro) e não é tocada aqui: reordenar na
      tela criaria uma segunda regra de prioridade competindo com a do
@@ -3431,6 +3440,15 @@ export default function Conversas() {
      viraria decoração. */
   const visiveis = useMemo(
     () => aplicarFiltrosDaCaixa(filtradas, filtros), [filtradas, filtros]);
+
+  /* ⚠️ A lista DESENHA 100 por grupo, mas busca e filtro valem sobre TODAS: com
+     500 vendas/semana a caixa de 30 dias tem milhares de conversas (quase
+     todas só com avisos automáticos), e desenhar todas a cada recarga travava
+     a tela. Quem procura alguém digita — e acha, mesmo que ele seja o 3.000º.
+     Mudou a busca, a aba ou um filtro: volta aos 100. */
+  const PASSO_LISTA = 100;
+  const [mostrarAte, setMostrarAte] = useState<Record<string, number>>({});
+  useEffect(() => { setMostrarAte({}); }, [busca, aba, filtros]);
   const filtrosAtivos = quantosFiltrosAtivos(filtros);
 
   /* As opções saem do que EXISTE nas conversas carregadas, nunca de uma lista
@@ -3876,11 +3894,22 @@ export default function Conversas() {
                           {doGrupo.length}
                         </span>
                       </p>,
-                      ...doGrupo.map((c) => (
+                      ...doGrupo.slice(0, mostrarAte[String(estado)] ?? PASSO_LISTA).map((c) => (
                         <LinhaDaConversa key={c.wa_id} c={c}
                                          selecionada={atual?.wa_id === c.wa_id}
                                          comBusca={!!busca.trim()} onAbrir={abrir} />
                       )),
+                      ...(doGrupo.length > (mostrarAte[String(estado)] ?? PASSO_LISTA) ? [
+                        <button key={`mais-${estado ?? "sem"}`} type="button"
+                                onClick={() => setMostrarAte((m) => ({
+                                  ...m, [String(estado)]: (m[String(estado)] ?? PASSO_LISTA) + PASSO_LISTA * 3,
+                                }))}
+                                className="w-full border-b border-border/60 px-3 py-2.5 text-center text-[11px]
+                                           font-medium text-muted-foreground hover:bg-muted/40 hover:text-foreground">
+                          Mostrar mais {Math.min(PASSO_LISTA * 3, doGrupo.length - (mostrarAte[String(estado)] ?? PASSO_LISTA))}
+                          {" "}de {doGrupo.length - (mostrarAte[String(estado)] ?? PASSO_LISTA)}
+                        </button>,
+                      ] : []),
                     ];
                   })
                 )}
@@ -3888,9 +3917,9 @@ export default function Conversas() {
             </CarboCardContent>
           </CarboCard>
 
-          {atual && <Conversa key={atual.wa_id} c={atual} onVerPedido={setVerPedido}
+          {atualCompleta && <Conversa key={atualCompleta.wa_id} c={atualCompleta} onVerPedido={setVerPedido}
                               aoVoltar={fecharConversa} ocultarNoCelular={!naConversa} />}
-          {atual && <PainelContato key={`p-${atual.wa_id}`} c={atual} meuId={meuId}
+          {atualCompleta && <PainelContato key={`p-${atualCompleta.wa_id}`} c={atualCompleta} meuId={meuId}
                                    onVerPedido={setVerPedido} />}
         </div>
       )}
