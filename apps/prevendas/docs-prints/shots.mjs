@@ -48,14 +48,6 @@ export const SHOTS = [
     [8, (p) => card("Auto Posto Planalto")(p).getByRole("button", { name: /Avançar/ })],
     [9, (p) => card("Auto Posto Planalto")(p).getByRole("button", { name: "Perdido" })],
   ] },
-  { chave: "repasse", papel: "colaborador", url: "/crm/pipelines",
-    antes: async (p) => { await card("Posto Caminho do Sol")(p).getByRole("button", { name: /Avançar/ }).click(); },
-    marcas: [
-      [1, (p) => dlg(p).getByText(/Um card novo nasce/)],
-      [2, (p) => dlg(p).getByText(/Falta/)],
-      [3, (p) => dlg(p).locator("textarea")],
-      [4, (p) => dlg(p).getByRole("button", { name: "Passar ao closer" })],
-    ] },
   { chave: "descarte", papel: "colaborador", url: "/crm/pipelines",
     antes: async (p) => { await card("Posto Avenida Norte")(p).getByRole("button", { name: "Perdido" }).click(); },
     marcas: [

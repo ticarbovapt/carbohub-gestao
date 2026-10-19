@@ -5032,6 +5032,24 @@ supabase/migrations/20261046…        carbo_interface_e_interna: É time intern
     "criei" no f15. Restritiva soma com E: só tira, nunca abre; fora do f15 é
     `true`. Comentar continua livre. A tela espelha com `somenteLeitura`
     (`DealDetail`) e `podeMover` (`KanbanBoard`/`Pipelines`, só `prevendas`).
+12b. **Repassar é UM gesto, sem diálogo** (dono do processo, 19/10/2026: *"preciso
+    que não seja difícil passar o lead"*). Soltar em "Oportunidade
+    Qualificada", Avançar a partir de Reunião Realizada, clicar na etapa no
+    card aberto ou CRIAR o lead pelo "+" da coluna chamam
+    `crm_sales_lead_repassar` direto. O diálogo "Passar ao closer" saiu — o
+    aviso de qualificação faltando se lia como formulário obrigatório. A
+    qualificação continua OPCIONAL; recado ao closer vira comentário.
+    ⚠️ **Criar na coluna nasce na etapa ANTERIOR e a RPC repassa**: antes o card
+    ganhava só a etapa e o closer nunca recebia. Se a RPC recusar, ele fica
+    visível em Reunião Realizada, não parado numa coluna que mente.
+    ⚠️ **Repassar DE NOVO volta o card** (`20261098`): a RPC é idempotente e
+    devolvia a cópia existente ANTES do `update stage = 'repassado'` — o SDR
+    tirava o card da coluna e ele nunca mais voltava. Hoje o ramo "já existe"
+    move o card de volta, tira a cópia do closer do arquivo se estava lá, e
+    marca "Repassado de novo" nas DUAS timelines. A cópia NÃO é recriada (tem o
+    trabalho do closer). A RPC é a mesma do Sales: lá o bug era igual.
+    Só no `prevendas` (`Pipelines`, `DealDetail`, `LeadForm`, já divergentes);
+    o Sales segue com o diálogo.
 13. **Sem Carbo Chat** (dono do processo, 14/10/2026): sem menu, sem card na
     home, sem `ChatProvider`; `/chat` volta para a home.
 14. **`/atendimento` é a CASCA da tela de Conversas, sempre vazia** (dono do

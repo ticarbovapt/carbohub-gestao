@@ -15,7 +15,7 @@ import type { CRMLead, FunnelType } from "@/types/crm";
 import {
   FUNNEL_CONFIG, getCloseReasons, getStagesForFunnel, getNextStage, getLostStage,
   isTerminalStage, isHandoffStage, isWonStage, getDaysSinceUpdate, SEGMENTS, segmentOf,
-  stageLabelAnywhere, sourceLabel, WAITING_OPTIONS, waitingLabel, esperaVencida, isFunilDeSdr, funilDoCloser, leadParaVender, UFS,
+  stageLabelAnywhere, sourceLabel, WAITING_OPTIONS, waitingLabel, esperaVencida, isFunilDeSdr, leadParaVender, UFS,
   perguntasDeQualificacao, faltaNaQualificacao, type CampoQual } from "@/types/crm";
 
 import {
@@ -117,7 +117,6 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
   useEffect(() => { setStage(lead.stage); }, [lead.id, lead.stage]);
 
   const [showLostForm, setShowLostForm] = useState(false);
-  const [showRepasse, setShowRepasse] = useState(false);
   const [editEspera, setEditEspera] = useState(false);
   const [wOn, setWOn] = useState(lead.waiting_on ?? "");
   const [wUntil, setWUntil] = useState(lead.waiting_until ?? "");
@@ -143,7 +142,6 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
     });
     setEditEspera(false);
   }
-  const [repasseNota, setRepasseNota] = useState("");
   // Vazio de propósito — vinha pré-marcado no primeiro item ("Preço").
   const [lostReason, setLostReason] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -324,16 +322,22 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
       setShowLostForm(true);
       return;
     }
-    // Repassar cria um card no Inbound — não é um avanço de etapa comum.
-    if (isHandoffStage(target.id)) { setShowRepasse(true); return; }
+    // Repassar cria o card do closer — não é um avanço de etapa comum. É UM
+    // clique, sem diálogo (19/10/2026): a qualificação é opcional.
+    if (isHandoffStage(target.id)) { await repassarJa(); return; }
     avisaMovimento(stage, target.id);
     await advance.mutateAsync({ id: lead.id, newStage: target.id, funnelType });
     setStage(target.id);
   }
 
+  async function repassarJa() {
+    await repassar.mutateAsync({ id: lead.id });
+    setStage("repassado");
+  }
+
   async function handleAdvance() {
     if (!nextStage) return;
-    if (isHandoffStage(nextStage)) { setShowRepasse(true); return; }
+    if (isHandoffStage(nextStage)) { await repassarJa(); return; }
     avisaMovimento(stage, nextStage);
     await advance.mutateAsync({ id: lead.id, newStage: nextStage, funnelType });
     setStage(nextStage);
@@ -948,44 +952,6 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
             )}
           </DialogFooter>
         )}
-
-        {/* Passar ao closer — cria o card no Inbound com a timeline junto */}
-        <Dialog open={showRepasse} onOpenChange={setShowRepasse}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Passar ao closer</DialogTitle>
-              <DialogDescription>
-                Um card novo nasce no {FUNNEL_CONFIG[funilDoCloser(funnelType)].name}, na fila, com todo o histórico e os comentários
-                deste aqui. Este card fica em "{stageLabelAnywhere("repassado", funnelType)}" — conta como SQL entregue,
-                nunca como receita.
-              </DialogDescription>
-            </DialogHeader>
-            {faltamQual.length > 0 && (
-              <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-2.5 flex items-start gap-2">
-                <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-                <p className="text-xs">
-                  Falta <strong>{faltamQual.join(", ")}</strong> na qualificação. Dá para repassar
-                  assim mesmo, mas o closer recebe o card sem isso.
-                </p>
-              </div>
-            )}
-            <textarea
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-y min-h-[64px] focus:outline-none focus:ring-2 focus:ring-ring"
-              placeholder="Recado ao closer (opcional)"
-              value={repasseNota} onChange={(e) => setRepasseNota(e.target.value)}
-            />
-            <DialogFooter className="gap-2">
-              <Button variant="outline" onClick={() => setShowRepasse(false)}>Cancelar</Button>
-              <Button disabled={repassar.isPending} onClick={async () => {
-                await repassar.mutateAsync({ id: lead.id, nota: repasseNota.trim() || undefined });
-                setShowRepasse(false);
-                setStage("repassado");
-              }}>
-                {repassar.isPending ? "Repassando…" : "Passar ao closer"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
 
         {/* Confirmação de exclusão */}
         <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>

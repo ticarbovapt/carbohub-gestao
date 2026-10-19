@@ -33,7 +33,7 @@ const hojeISO = () => new Date().toISOString().slice(0, 10);
 import type { FunnelType, CRMLead } from "@/types/crm";
 import { toast } from "sonner";
 import { playMoveSuccess } from "@/lib/sfx";
-import { SEGMENTS, segmentOf, isFunilDeSdr, stageLabelAnywhere, funilDoCloser, faltaNaQualificacao } from "@/types/crm";
+import { SEGMENTS, segmentOf, isFunilDeSdr } from "@/types/crm";
 import { FUNIS_VISIVEIS, FUNIL_PADRAO, USA_SEGMENTO, MOSTRA_QUENTES_E_TENTATIVAS } from "@/lib/funisDoApp";
 
 // Só as pipelines vivas viram aba. As antigas seguem em FUNNEL_CONFIG para
@@ -193,8 +193,6 @@ export default function Pipelines() {
   // A base de motivos de perda estava sendo fabricada por inércia de clique.
   const [lostReason, setLostReason] = useState<string>("");
   const [acao, setAcao] = useState<{ lead: CRMLead; tipo: "orcamento" | "ganho" } | null>(null);
-  const [repasseLead, setRepasseLead] = useState<CRMLead | null>(null);
-  const [repasseNota, setRepasseNota] = useState("");
   const [drawerLead, setDrawerLead] = useState<CRMLead | null>(null);
   const leadDoLink = useLeadPorId(leadParam);
 
@@ -386,20 +384,19 @@ export default function Pipelines() {
     toast.success("Card movido", { description: `${nameOf(fromId)}  →  ${nameOf(toId)}` });
   };
 
-  const confirmRepasse = () => {
-    if (!repasseLead) return;
-    repassar.mutate({ id: repasseLead.id, nota: repasseNota.trim() || undefined });
-    setRepasseLead(null);
-  };
-  // Falta de qualificação não BLOQUEIA o repasse — o time ainda está se
-  // formando e travar o fluxo por campo vazio seria pior que avisar. Mas o SDR
-  // vê exatamente o que o closer NÃO vai receber.
-  const faltaNoRepasse = repasseLead ? faltaNaQualificacao(repasseLead, repasseLead.funnel_type) : [];
+  // ⚠️ Repassar é UM gesto, sem diálogo (dono do processo, 19/10/2026: *"preciso
+  // que não seja difícil passar o lead"*). Antes soltar em "Oportunidade
+  // Qualificada" abria "Passar ao closer" com o aviso de qualificação faltando,
+  // e aquilo se lia como formulário obrigatório. A qualificação continua
+  // OPCIONAL — o closer recebe o que houver — e o recado ao closer vira
+  // comentário no card. Quem cria a cópia, leva a timeline e move o card do
+  // SDR é a RPC; a tela só chama.
+  const repassarJa = (lead: CRMLead) => repassar.mutateAsync({ id: lead.id });
 
   const handleAdvance = (lead: CRMLead) => {
     const next = getNextStage(ft, lead.stage);
     if (!next) return;
-    if (isHandoffStage(next)) { setRepasseNota(""); setRepasseLead(lead); return; }
+    if (isHandoffStage(next)) { void repassarJa(lead).catch(() => {}); return; }
     advanceLead.mutate({ id: lead.id, newStage: next, funnelType: ft });
     notifyMove(lead.stage, next, ft);
     ofereceAcao(lead, next, ft);
@@ -409,7 +406,7 @@ export default function Pipelines() {
     const lf = lead.funnel_type as FunnelType;
     const next = getNextStage(lf, lead.stage);
     if (!next) return;
-    if (isHandoffStage(next)) { setRepasseNota(""); setRepasseLead(lead); return; }
+    if (isHandoffStage(next)) { void repassarJa(lead).catch(() => {}); return; }
     advanceLead.mutate({ id: lead.id, newStage: next, funnelType: lf });
     notifyMove(lead.stage, next, lf);
     ofereceAcao(lead, next, lf);
@@ -419,9 +416,10 @@ export default function Pipelines() {
   const podeMoverCard = (lead: CRMLead) =>
     lead.funnel_type !== "f15" || isGestor || (lead as { assigned_to?: string | null }).assigned_to === user?.id;
   const handleDragMove = (lead: CRMLead, toStage: string) => {
-    // Repassar não é mover: cria um card no Inbound com toda a timeline junto.
-    // Por isso passa por um diálogo, e não pelo advance normal.
-    if (isHandoffStage(toStage)) { setRepasseNota(""); setRepasseLead(lead); return false; }
+    // Repassar não é mover: a RPC cria o card do closer com a timeline junto e
+    // move este. A promise vai para o quadro: o card fica na coluna enquanto o
+    // banco responde, e VOLTA se ele recusar (o hook avisa com o toast).
+    if (isHandoffStage(toStage)) return repassarJa(lead);
     // Soltar na coluna de perda abre o diálogo de motivo em vez de mover direto.
     // Antes o card ia para "Perdido" sem motivo nenhum — e o motivo é justamente
     // o dado que diz se a prospecção está errada ou se o produto é que não serve.
@@ -662,42 +660,6 @@ export default function Pipelines() {
 
       {isFormOpen && <LeadForm funnelType={ft} initialStage={isAll ? undefined : formStage} onClose={() => setIsFormOpen(false)} />}
       {liveDrawerLead && <DealDetail lead={liveDrawerLead} funnelType={liveDrawerLead.funnel_type as FunnelType} onClose={fecharCard} />}
-
-      <Dialog open={!!repasseLead} onOpenChange={(o) => { if (!o) setRepasseLead(null); }}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader><DialogTitle>Passar ao closer</DialogTitle></DialogHeader>
-          <div className="py-2 space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Um card novo nasce no <strong>{FUNNEL_CONFIG[funilDoCloser(repasseLead?.funnel_type ?? ft)].name}</strong>, na fila, com todo o histórico e os
-              comentários deste aqui. O seu card fica em "{stageLabelAnywhere("repassado", (repasseLead?.funnel_type ?? ft) as FunnelType)}" — ele conta como
-              SQL entregue, nunca como receita.
-            </p>
-            {faltaNoRepasse.length > 0 && (
-              <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-2.5 flex items-start gap-2">
-                <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-                <p className="text-xs">
-                  Falta <strong>{faltaNoRepasse.join(", ")}</strong> na qualificação. Dá para
-                  repassar assim mesmo, mas o closer vai receber o card sem isso.
-                </p>
-              </div>
-            )}
-            <div className="space-y-1">
-              <p className="text-xs font-medium text-muted-foreground">Recado ao closer (opcional)</p>
-              <textarea
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-y min-h-[64px] focus:outline-none focus:ring-2 focus:ring-ring"
-                placeholder="ex.: prefere ser chamado à tarde; já conhece o produto pelo primo"
-                value={repasseNota} onChange={(e) => setRepasseNota(e.target.value)}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRepasseLead(null)}>Cancelar</Button>
-            <Button onClick={confirmRepasse} disabled={repassar.isPending}>
-              {repassar.isPending ? "Repassando…" : "Passar ao closer"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={!!lostDialogLead} onOpenChange={(o) => { if (!o) setLostDialogLead(null); }}>
         <DialogContent className="sm:max-w-sm">
