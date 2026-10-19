@@ -144,21 +144,14 @@ export const SECOES: Secao[] = [
           { n: 5, titulo: "Origem", texto: "De onde o lead veio (no Pré-Vendas, quase sempre Indicação). No Closer aparece “⇄ Pré-Vendas · nome do SDR”." },
           { n: 6, titulo: "Aguardando", texto: "O card está parado esperando alguém (o cliente, o decisor, nós ou um documento) até a data mostrada. Fica vermelho quando a data passa." },
           { n: 7, titulo: "Responsável", texto: "Quem está com o card, e há quantos dias ele está na etapa. Faixa laranja na lateral = mais de 3 dias sem atividade; vermelha = mais de 7." },
-          { n: 8, titulo: "Avançar", texto: "Leva o card para a próxima etapa. Na etapa antes de Oportunidade Qualificada, abre o repasse." },
+          { n: 8, titulo: "Avançar", texto: "Leva o card para a próxima etapa. Na etapa antes de Oportunidade Qualificada, repassa ao closer na hora." },
           { n: 9, titulo: "Perdido", texto: "Descarta o lead, pedindo o motivo." },
         ],
       },
       {
         titulo: "Passar ao closer (repasse)",
         texto:
-          "Arraste o card para “Oportunidade Qualificada” (ou clique em Avançar a partir de Reunião Realizada). Antes de confirmar, o sistema mostra o que vai acontecer.",
-        print: { chave: "repasse", legenda: "Confirmação do repasse ao closer." },
-        itens: [
-          { n: 1, titulo: "O que acontece", texto: "Nasce um card novo no quadro Closer, na fila, com todo o histórico e os comentários. O seu card fica em Oportunidade Qualificada: ele conta como oportunidade entregue, não como venda." },
-          { n: 2, titulo: "Qualificação incompleta", texto: "Se faltar alguma resposta (quantos postos, quem decide, movimento, reação, próximo passo), o aviso diz qual. Dá para repassar assim mesmo, mas o closer recebe sem essa informação — preencha antes sempre que puder." },
-          { n: 3, titulo: "Recado ao closer", texto: "Opcional: o que o closer precisa saber para a primeira ligação (melhor horário, como o posto conheceu o produto…)." },
-          { n: 4, titulo: "Passar ao closer", texto: "Confirma o repasse. Para desistir, clique em Cancelar." },
-        ],
+          "Arraste o card para “Oportunidade Qualificada”, clique em Avançar a partir de Reunião Realizada, ou crie o lead direto nessa coluna pelo “+”. O repasse é na hora, sem confirmação: nasce um card novo no quadro Closer, na fila, com todo o histórico e os comentários, e o seu card fica em Oportunidade Qualificada (conta como oportunidade entregue, não como venda). A qualificação não é obrigatória — o closer recebe o que houver; preencha sempre que puder. Recado ao closer? Comente no card. Tirou o card da coluna sem querer? Arraste de volta: ele volta para o MESMO card do closer, sem duplicar.",
       },
       {
         titulo: "Descartar um lead",
@@ -185,7 +178,7 @@ export const SECOES: Secao[] = [
         texto: "Clique num card para abrir. O endereço da página muda — dá para copiar e mandar o link do card.",
         print: { chave: "card-aberto", legenda: "Card aberto: dados à esquerda, conversa à direita." },
         itens: [
-          { n: 1, titulo: "Etapas", texto: "Clique numa etapa para mover o card (inclusive para trás). Oportunidade Qualificada abre o repasse; Descartado pede o motivo." },
+          { n: 1, titulo: "Etapas", texto: "Clique numa etapa para mover o card (inclusive para trás). Oportunidade Qualificada repassa ao closer na hora; Descartado pede o motivo." },
           { n: 2, titulo: "Copiar link", texto: "Copia o endereço deste card, para mandar a alguém." },
           { n: 3, titulo: "Arquivar", texto: "Tira o card das listas sem apagar o histórico. Você arquiva os cards que você criou; a gestão pode desarquivar." },
           { n: 4, titulo: "Aguardando", texto: "Marque quando o negócio está parado esperando alguém: de quem depende, até quando e uma nota. Quando a data passa, o card avisa — renove o prazo ou volte a tocar o negócio." },

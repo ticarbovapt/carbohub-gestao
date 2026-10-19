@@ -3,9 +3,10 @@ import { X, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { FunnelType } from "@/types/crm";
-import { SOURCES, FUNNEL_CONFIG, SEGMENTS, isFunilDeSdr, funilDePosto, perguntasDeQualificacao } from "@/types/crm";
+import { SOURCES, FUNNEL_CONFIG, SEGMENTS, isFunilDeSdr, funilDePosto, perguntasDeQualificacao, isHandoffStage, getStagesForFunnel } from "@/types/crm";
 import { FUNIS_VISIVEIS, USA_SEGMENTO } from "@/lib/funisDoApp";
 import { useCreateCRMLead } from "@/hooks/useCRMLeads";
+import { useRepassarLead } from "@/hooks/useRepasse";
 
 // Só as pipelines vivas — ninguém deve conseguir criar lead numa das 9 que
 // foram consolidadas.
@@ -30,10 +31,22 @@ function fmtMoney(v: string) {
 
 export function LeadForm({ funnelType, initialStage, onClose }: LeadFormProps) {
   const create = useCreateCRMLead();
+  const repassar = useRepassarLead();
   // Funil de destino: escolhível no form. Se trocar de funil, o estágio pré-selecionado
   // (vindo do "+" de uma coluna) não vale mais → cai pro estágio inicial do funil.
   const [funnel, setFunnel] = useState<FunnelType>(funnelType);
   const stage = funnel === funnelType ? initialStage : undefined;
+  // ⚠️ Criar direto em "Oportunidade Qualificada" (o "+" daquela coluna) TEM de
+  // repassar (19/10/2026): antes o card só ganhava a ETAPA e o closer nunca
+  // recebia nada. O card nasce na etapa ANTERIOR e a RPC o repassa — é ela que
+  // cria a cópia do closer e move este. Se ela recusar, o card fica visível na
+  // etapa anterior com o erro no toast, em vez de parado numa coluna que diz
+  // "repassado" sem ter repassado.
+  const repassaAoCriar = isHandoffStage(stage);
+  const etapas = getStagesForFunnel(funnel);
+  const etapaAntes = repassaAoCriar
+    ? etapas[Math.max(0, etapas.findIndex((e) => e.id === stage) - 1)]?.id
+    : stage;
 
   // No Outbound o SDR abre este formulário dezenas de vezes por dia. Pedir 11
   // campos de um lead recém-prospectado é atrito puro: cidade, UF e receita
@@ -82,10 +95,10 @@ export function LeadForm({ funnelType, initialStage, onClose }: LeadFormProps) {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!canSave) return;
-    await create.mutateAsync({
+    const criado = await create.mutateAsync({
       funnel_type: funnel,
       lead_segment: form.lead_segment,
-      stage,
+      stage: etapaAntes,
       contact_name: form.contact_name.trim() || null,
       contact_phone: form.contact_phone || null,
       contact_email: form.contact_email || null,
@@ -118,6 +131,10 @@ export function LeadForm({ funnelType, initialStage, onClose }: LeadFormProps) {
       cep: onlyDigits(form.cep) || null,
     });
     onClose();
+    if (repassaAoCriar && criado?.id) {
+      // O toast de sucesso/erro é do próprio hook.
+      await repassar.mutateAsync({ id: criado.id }).catch(() => {});
+    }
   }
 
   return (
