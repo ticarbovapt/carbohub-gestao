@@ -1216,6 +1216,46 @@ com dia de Brasília. `data_efetiva` é DATE — não há hora para deslocar.
 CRM tem `FILTRO_VENDA_DO_TIME`). A mesma alteração mínima nas sete, nunca
 sobrescrever — como já está escrito na seção do `/vender`.
 
+### ⚠️ REGRA PERMANENTE: o sistema é feito para ESCALAR (19/10/2026)
+Dito pelo dono do processo, com 500+ vendas por semana: *"o app tem que
+compreender que ele é feito para escalar … não podemos criar gargalos"*. Toda
+leitura nova responde a UMA destas três, e nenhuma outra resposta vale:
+
+```
+precisa de TODAS as linhas     lerSemTeto / lerPorIdsSemTeto  (@carbo/shell · _shared/lerTudo.ts)
+precisa de um TOTAL            agrega no BANCO (view/RPC devolvendo o número, `jsonb` se for RPC)
+mostra MUITA coisa             pagina na TELA (.range + "mostrar mais"), nunca baixa tudo
+```
+
+1. ⚠️ **Proibido o corte calado**: `.select()` de lista sem `.range()`/helper
+   em tabela que cresce, `.limit(N)` com N ≥ 1.000 (o PostgREST corta igual) e
+   RPC `returns setof` para lista que cresce (o teto vale para RPC — devolva
+   `jsonb`). Janela pequena e DECLARADA de tela (`.limit(50)` do sininho) pode,
+   desde que nada some/conte o resultado como se fosse tudo.
+2. ⚠️ **O alarme**: os oito `client.ts` usam `fetchQueAcusaTeto` — leitura que
+   volta com 1.000 linhas sem ter pedido limite cai no console e em
+   `carbo_teto_atingido` (`20261108`), com app e tela. É a lista de trabalho;
+   linha nova ali é tela mostrando número cortado. App novo liga o alarme no
+   `client.ts`.
+3. ⚠️ **Ordem estável ao paginar** (última coluna única, `id`) e `.in()` em
+   lotes — lote de ids não é lote de linhas.
+4. ⚠️ **"Sem teto" não é "baixar tudo"**: cada página de uma VIEW cara recalcula
+   a view inteira. Função de cron que varre view pagina uma JANELA (a
+   repescagem do `rastreio-sync` olha 30 dias), nunca o histórico inteiro de
+   5 em 5 minutos.
+5. ⚠️ **Banco**: RLS com função de usuário sempre `(select …)`; FK nova com
+   índice; log nasce com faxina (`cron-log-faxina-diaria`, 7 dias); gravação
+   que não muda nada numa tabela do Realtime não é de graça. A `20261109` é a
+   varredura que mede as quatro coisas — rode de tempos em tempos.
+
+Varridos em 19/10/2026: ~650 leituras sem teto nos 8 apps e nas funções; as de
+tabela que cresce foram convertidas (detalhe nos PRs #803 em diante). Ficaram
+para decidir: o `/vendas`/Rastreio do Sales (`usePosVenda` do crm, `.limit(500)`
+sobre todas as etapas), as buscas do `useNfeLinking` (500 e filtra no
+navegador), o botão de ponte do `Bling.tsx` do Finanças (regrava status dos
+1.000 mais recentes) e as RPCs `setof` que crescem (`carbo_demanda_counts`,
+`carbo_pdv_pedidos`, `crm_comissao_detalhe`, `carbo_all_profiles`).
+
 ### ⚠️ Consulta SEM `.limit()` não devolve tudo — devolve 1.000 e não avisa
 O Dashboard Comercial (`/comercial/dashboard`) mostrava **865 pedidos de 1.170**,
 com **out/25 até jun/26 zerados**, e parecia que o histórico da empresa tinha
