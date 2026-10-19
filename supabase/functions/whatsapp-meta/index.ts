@@ -443,6 +443,27 @@ Deno.serve(async (req: Request) => {
   const outroPedidoJaOfertado = (fone: string, bling: number) =>
     [...(ofertadosRecompra.get(fone) ?? [])].some((b) => b !== bling);
 
+  // ── Linha já segurada pelo MESMO motivo não é regravada ─────────────────
+  //
+  // ⚠️ Medido em 19/10/2026: a fila tinha 34 linhas, TODAS seguradas, e cada
+  // rodada as regravava com o mesmo valor — 34 UPDATEs por minuto em
+  // `carbo_msg_envios`. Update idêntico continua sendo evento de Realtime, e
+  // cada evento fazia toda aba aberta de Conversas e da Esteira recarregar.
+  // Numa segunda de manhã isso somou com a consulta de 49 s da tela antiga e a
+  // própria fila passou a estourar o timeout: com a fila em timeout NENHUM
+  // aviso sai.
+  //
+  // Se esta leitura falhar o mapa fica vazio e a linha é regravada como antes —
+  // o pior caso é o comportamento antigo, nunca uma linha deixar de ser segurada.
+  const jaSeguradas = new Map<string, string>();
+  const idsDaFila = [...new Set((fila as LinhaFila[]).map((l) => l.bling_id))];
+  if (idsDaFila.length) {
+    const { data: pend } = await supabase
+      .from("carbo_msg_envios").select("bling_id, etapa, motivo")
+      .eq("status", "pendente").in("bling_id", idsDaFila);
+    for (const p of pend ?? []) jaSeguradas.set(`${p.bling_id}:${p.etapa}`, String(p.motivo ?? ""));
+  }
+
   // ── "Não contatar": quem pediu para parar sai de TODA mensagem COMERCIAL ──
   //
   // ⚠️ Só o comercial (recompra e carrinho). Os avisos do pedido — NF, saiu
@@ -525,11 +546,12 @@ Deno.serve(async (req: Request) => {
     // chega dez minutos depois.
     if (!montado.body) {
       segurados++;
-      if (!ensaio) {
+      const motivo = `esperando: ${montado.faltando.join(", ")}`;
+      if (!ensaio && jaSeguradas.get(`${l.bling_id}:${l.etapa}`) !== motivo) {
         await supabase.from("carbo_msg_envios").upsert({
           bling_id: l.bling_id, etapa: l.etapa, status: "pendente", canal: "meta",
           numero_id: (l as any).numero_id ?? null,
-          motivo: `esperando: ${montado.faltando.join(", ")}`,
+          motivo,
           telefone: normalizado,
         });
       }
