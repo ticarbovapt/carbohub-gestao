@@ -1151,6 +1151,24 @@ Três pendências conhecidas, todas medidas:
 com o valor dos produtos. E `product.items[]` são os COMPONENTES do kit — contá-
 los multiplica quantidade e receita pelo tamanho do kit.
 
+### Anúncios da Meta — a tela existia e NUNCA teve número (19/10/2026)
+`admin.carbohub.com.br/ecommerce/anuncios` (`EcommerceAtribuicao.tsx`) lê
+`meta_ads_diario`, escrita só pela `meta-ads-sync` (`20260972`). Medido: tabelas
+criadas, ZERO conta, ZERO rodada, ZERO cron. Faltavam quatro coisas, cada uma
+calada: a função fora da lista `dep` (nunca foi ao ar), o secret
+`META_ADS_ACCESS_TOKEN`, a conta em `meta_ads_accounts` e o cron (`20261112`
+(C), `meta-ads-sync-3x`, segredo copiado do `bling2-sync-incremental`).
+
+1. **A conta se escolhe NA TELA** (`components/ContasDaMeta.tsx`): a função
+   lista o que o token enxerga (`acao: "descobrir"`) e "Usar esta conta"
+   cadastra e já lê 30 dias. ⚠️ `usar` só aceita conta que está na lista lida
+   de novo no servidor — id digitado não entra (o token pode enxergar conta
+   que não é nossa). Escolher exige a flag `carbo_admin`; sincronizar, time
+   interno.
+2. ⚠️ Sem token, a tela diz COMO gerar: o `chamarMeta` lê o CORPO do erro (o
+   `functions.invoke` em não-2xx só diz "non-2xx status code").
+3. ⚠️ "Vendas"/"ROAS" ali são a atribuição da META, nunca faturamento.
+
 ### Seletor de período do e-commerce — "este mês" ≠ "mês fechado"
 `EcommercePeriod` tem os dois, e a diferença NÃO é detalhe:
 

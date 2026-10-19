@@ -280,20 +280,62 @@ export function useMetaAdsUltimoSync() {
  */
 export interface MetaSyncResultado { linhas?: number; contas?: number; aviso?: string }
 
+/**
+ * Chama a `meta-ads-sync` e devolve a MENSAGEM do servidor quando ele recusa.
+ *
+ * ⚠️ Em resposta não-2xx o `functions.invoke` devolve só "Edge Function returned
+ * a non-2xx status code" — e é justamente aí que a função explica o que falta
+ * ("META_ADS_ACCESS_TOKEN não configurado"). Sem ler o corpo, a tela diria
+ * "erro" sem dizer qual.
+ */
+async function chamarMeta<T>(body: Record<string, unknown>): Promise<T> {
+  const { data, error } = await supabase.functions.invoke("meta-ads-sync", { body });
+  if (error) {
+    const ctx = (error as { context?: Response }).context;
+    const corpo = ctx && typeof ctx.json === "function" ? await ctx.json().catch(() => null) : null;
+    throw new Error(corpo?.error ?? error.message);
+  }
+  if (data && data.success === false) throw new Error(data.error ?? "Falha na Meta");
+  return data as T;
+}
+
+export interface MetaContaVisivel { act_id: string; nome: string; moeda: string | null; status: number | null }
+
+/** As contas de anúncio que o TOKEN enxerga — para escolher sem procurar o `act_…`. */
+export function useMetaContasVisiveis(enabled = true) {
+  return useQuery({
+    queryKey: ["meta-ads", "visiveis"],
+    enabled,
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => (await chamarMeta<{ contas: MetaContaVisivel[] }>({ acao: "descobrir" })).contas ?? [],
+  });
+}
+
+export function useMetaContaEscolher() {
+  const qc = useQueryClient();
+  return useMutation<void, Error, { act_id: string; usar: boolean }>({
+    mutationFn: async ({ act_id, usar }) => {
+      await chamarMeta({ acao: usar ? "usar" : "desligar", act_id });
+      // Conta nova já sai lendo os últimos 30 dias, senão a tela fica vazia
+      // até o próximo horário do cron.
+      if (usar) await chamarMeta({ dias: 30, source: "manual", act_id });
+    },
+    onSuccess: (_d, { usar }) => {
+      qc.invalidateQueries({ queryKey: ["meta-ads"] });
+      toast.success(usar ? "Conta ligada — os últimos 30 dias já foram lidos." : "A conta deixou de ser lida.");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+}
+
 export function useMetaAdsSync() {
   const qc = useQueryClient();
   // ⚠️ Genéricos explícitos. Sem eles o TanStack infere `TVariables = void` a
   // partir do parâmetro com default e `mutate(30)` vira erro de tipo — a
   // janela de dias precisa ser dito na chamada, não adivinhada aqui.
   return useMutation<MetaSyncResultado, Error, number>({
-    mutationFn: async (dias: number) => {
-      const { data, error } = await supabase.functions.invoke("meta-ads-sync", {
-        body: { dias, source: "manual" },
-      });
-      if (error) throw error;
-      if (data && data.success === false) throw new Error(data.error ?? "Falha no sync");
-      return data as MetaSyncResultado;
-    },
+    mutationFn: (dias: number) => chamarMeta<MetaSyncResultado>({ dias, source: "manual" }),
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["meta-ads"] });
       if (data?.aviso) toast.warning(data.aviso);

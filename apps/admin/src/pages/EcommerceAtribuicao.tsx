@@ -18,6 +18,10 @@ import {
   type MetaPeriod, type MetaNo, type MetaDerivadas,
 } from "@/hooks/useMetaAds";
 import { cn } from "@/lib/utils";
+import { ContasDaMeta } from "@/components/ContasDaMeta";
+import {
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Anúncios da Meta — investimento, alcance e a conversão que a META atribui.
@@ -140,6 +144,7 @@ export default function EcommerceAtribuicao() {
   const [period, setPeriod] = useState<MetaPeriod>("30d");
   const [actId, setActId] = useState<string>("todas");
   const [aberto, setAberto] = useState<Set<string>>(new Set());
+  const [verContas, setVerContas] = useState(false);
 
   const contas = useMetaAdsContas();
   const { data, isLoading, error } = useMetaAds(period, undefined, actId === "todas" ? undefined : actId);
@@ -192,6 +197,12 @@ export default function EcommerceAtribuicao() {
             </SelectContent>
           </Select>
 
+          {(contas.data?.length ?? 0) > 0 && (
+            <Button variant="ghost" onClick={() => setVerContas(true)}>
+              <Plug className="mr-2 h-4 w-4" /> Contas
+            </Button>
+          )}
+
           <Button variant="outline" onClick={() => sync.mutate(30)} disabled={sync.isPending}>
             <RefreshCw className={cn("mr-2 h-4 w-4", sync.isPending && "animate-spin")} />
             {sync.isPending ? "Sincronizando…" : "Sincronizar agora"}
@@ -225,13 +236,20 @@ export default function EcommerceAtribuicao() {
         </Vazio>
 
       ) : (contas.data?.length ?? 0) === 0 ? (
-        <Vazio icone={Plug} titulo="Nenhuma conta de anúncio conectada">
-          Cadastre a conta em <code className="text-xs">meta_ads_accounts</code> com o id no
-          formato <code className="text-xs">act_123456789</code> e configure o
-          secret <code className="text-xs">META_ADS_ACCESS_TOKEN</code> com um token de
-          System User com permissão <code className="text-xs">ads_read</code>. Depois clique em
-          “Sincronizar agora”.
-        </Vazio>
+        // Sem conta ligada, a própria tela guia: falta o token → como gerar;
+        // há token → as contas que ele enxerga, com "Usar esta conta".
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Plug className="h-4 w-4 text-primary" /> Conectar a conta de anúncios
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Escolha qual conta da Meta este painel lê. Ao ligar, os últimos 30 dias já entram;
+              depois ela é relida sozinha três vezes por dia.
+            </p>
+          </CardHeader>
+          <CardContent><ContasDaMeta /></CardContent>
+        </Card>
 
       ) : !data || data.linhas === 0 ? (
         <Vazio icone={Info} titulo="Sem veiculação no período">
@@ -347,6 +365,17 @@ export default function EcommerceAtribuicao() {
           </div>
         </>
       )}
+      <Dialog open={verContas} onOpenChange={setVerContas}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Contas de anúncio</DialogTitle>
+            <DialogDescription>
+              As contas que o token da Meta enxerga. Só as ligadas entram no painel.
+            </DialogDescription>
+          </DialogHeader>
+          {verContas && <ContasDaMeta />}
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }
