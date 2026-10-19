@@ -8,13 +8,15 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 
 
+-- ⚠️ A resposta é JSON INDENTADO (`"enviados": 3`, com espaço): a 1ª versão
+--    deste regex não tinha o `\s*` e somou ZERO a manhã inteira.
 -- (M) O whatsapp-meta de 15 em 15 min, nas últimas 4 h (Brasília).
 --     ESPERADO depois do deploy: `fila_timeout` zerado e `rodou` ~15 por faixa.
 select to_char(date_trunc('hour', created at time zone 'America/Sao_Paulo')
                + floor(extract(minute from created) / 15) * interval '15 minutes',
                'DD/MM HH24:MI')                                                  as faixa,
        count(*) filter (where content::text like '%"nao_contatar"%')            as rodou,
-       coalesce(sum((substring(content::text from '"enviados":(\d+)'))::int)
+       coalesce(sum((substring(content::text from '"enviados":\s*(\d+)'))::int)
                 filter (where content::text like '%"nao_contatar"%'), 0)        as avisos_enviados,
        count(*) filter (where content::text like '%nada a avisar pela Meta%')   as fila_vazia,
        count(*) filter (where content::text ilike '%fila:%timeout%')           as fila_timeout
