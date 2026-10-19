@@ -5048,6 +5048,10 @@ supabase/migrations/20261046…        carbo_interface_e_interna: É time intern
     move o card de volta, tira a cópia do closer do arquivo se estava lá, e
     marca "Repassado de novo" nas DUAS timelines. A cópia NÃO é recriada (tem o
     trabalho do closer). A RPC é a mesma do Sales: lá o bug era igual.
+    ✅ Aplicada em 19/10/2026 (`corrigida = true`). ⚠️ A 1ª tentativa ABORTOU:
+    a âncora em texto exato achou 0 no texto vivo — produção difere do repo no
+    espaçamento. Troca por texto vivo casa por PADRÃO (`\s+`), sempre exigindo
+    UMA ocorrência; e o BLOCO 0 mostra o `trecho` para não adivinhar.
     Só no `prevendas` (`Pipelines`, `DealDetail`, `LeadForm`, já divergentes);
     o Sales segue com o diálogo.
 13. **Sem Carbo Chat** (dono do processo, 14/10/2026): sem menu, sem card na
