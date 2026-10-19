@@ -31,8 +31,11 @@
 do $$
 declare
   v_def   text := pg_get_functiondef('public.crm_sales_lead_repassar(uuid,text)'::regprocedure);
-  v_de    text := E'  if v_atual is not null then\n    return v_atual;\n  end if;';
-  v_para  text := E'  if v_atual is not null then
+  -- ⚠️ Âncora por PADRÃO, não texto exato: a primeira versão desta migração
+  -- comparava espaços e quebras de linha e achou 0 em produção (19/10/2026) —
+  -- o texto vivo não é o do repositório. Continua exigindo UMA ocorrência.
+  v_de    text := 'if\s+v_atual\s+is\s+not\s+null\s+then\s+return\s+v_atual\s*;\s*end\s+if\s*;';
+  v_para  text := E'if v_atual is not null then
     -- (20261098) Repassar DE NOVO: o card do SDR volta a "repassado", e a
     -- cópia do closer, se arquivada, volta à fila. A cópia não é recriada.
     if v_lead.stage is distinct from ''repassado'' then
@@ -51,7 +54,7 @@ declare
   end if;';
   v_n int;
 begin
-  v_n := (length(v_def) - length(replace(v_def, v_de, ''))) / length(v_de);
+  v_n := regexp_count(v_def, v_de, 1, 'i');
   if v_n <> 1 then
     raise exception 'ABORTADO: a âncora apareceu % vez(es) em crm_sales_lead_repassar (esperado 1). Nada mudou.', v_n;
   end if;
@@ -59,5 +62,5 @@ begin
   insert into public.carbo_backup_funcoes (funcao, definicao)
   values ('public.crm_sales_lead_repassar(uuid,text)', v_def);
 
-  execute replace(v_def, v_de, v_para);
+  execute regexp_replace(v_def, v_de, v_para, 'i');
 end $$;
