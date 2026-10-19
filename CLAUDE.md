@@ -2263,6 +2263,48 @@ o corpo como JSON e o `FormData` chegaria vazio do outro lado.
    `carbo_wa_contatos`. A lista de interfaces é a mesma do `notify_time_interno`
    — duas listas divergem, e divergir aqui ABRE acesso em vez de fechar.
 
+### ⚠️ Conversas e Esteira a 500 vendas/semana: o teto e o índice (19/10/2026)
+Queixa do dono do processo: *"demora para abrir"* e *"diz que foi enviada
+mensagem mas o cara não aparece aqui quando pesquisa"* (Deividi Rodrigues: NF
+LIDA em 12/10, "0 de 435" na busca). Três causas, todas já conhecidas do repo:
+
+```
+Conversas  .limit(1000) em carbo_wa_conversas (1 linha por MENSAGEM)   = 2–3 dias
+           a view cruzava a bling2_esteira inteira só para o NOME
+           vínculo aproximado sem índice em carbo_msg_envios      custo ao QUADRADO
+Esteira    .limit(1000) no quadro · lotes de 200 pedidos nos AVISOS (até 7
+           linhas por pedido ⇒ >1.000, "sem registro de envio" em aviso LIDO)
+           · recompra, carrinho, parados e rastreio sem paginar
+```
+
+`20261099`: três índices, a view sem a esteira (nome das tabelas do pedido,
+troca no texto vivo com backup) e `carbo_wa_caixa(numero, dias)`. Medido num
+Postgres local com o volume deles: **49 s → 0,3 s** a consulta da tela; a caixa
+de 30 dias (4.494 conversas) em 0,6 s.
+
+1. ⚠️ **A lista é RESUMO, a conversa aberta é INTEIRA.** `carbo_wa_caixa`
+   devolve por conversa só as mensagens que o `agruparConversas` lê; a linha do
+   tempo vem de `useMensagensDaConversa`. Conferido rodando o `agruparConversas`
+   nas duas entradas: 317 conversas, ZERO diferenças. ⚠️ Campo novo que a lista
+   passe a ler em `MensagemConversa` tem de entrar no `jsonb_build_object` da
+   função — senão chega nulo na lista, calado.
+2. ⚠️ **`jsonb`, nunca `setof`**: o teto de 1.000 do PostgREST vale para RPC.
+3. **A lista desenha 100 por grupo** ("Mostrar mais"); busca e filtros valem
+   sobre TODAS.
+4. ⚠️ **O Realtime da lista é ADIADO (8 s)**: cada aviso muda de status três
+   vezes, e cada evento recarregava a caixa inteira. A conversa aberta
+   recarrega na hora.
+5. **Front antes do SQL não quebra**: sem a função (`PGRST202`) a lista cai na
+   consulta antiga, com o teto, e avisa no console.
+6. ⚠️ **Toda leitura da Esteira pagina** (`lerTudo`, ordem estável) e `.in()`
+   vai em lotes de 100 ids **paginados** (`lerPorIds`): lote de ids não é lote
+   de linhas. `lib/lerTudo.ts` entrou no `ops` e no `atendimento` (cópia do
+   `admin`), porque o hook é idêntico nos três.
+7. ⚠️ **"esperando: rastreio" na etapa `etiqueta` NÃO é falha de envio**: desde
+   a `20260928` as mensagens com rastreio exigem o código da TRANSPORTADORA, e a
+   Jadlog só o gera na coleta. Etiqueta gerada e nunca postada segura o aviso —
+   é a logística parada, não o WhatsApp. O BLOCO 5 da `20261099` mede quanto.
+
 ### Segredo de função: FECHE quando ele não existe
 Padrão obrigatório em toda edge function chamada por máquina:
 

@@ -1,6 +1,35 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { EnvioMsg } from "@/hooks/useMensagensCliente";
+import { lerTudo } from "@/lib/lerTudo";
+
+/**
+ * ⚠️ NENHUMA leitura desta tela pode ter teto (19/10/2026). Com mais de 500
+ * vendas por semana, `.limit(1000)` no quadro cortava os pedidos mais antigos
+ * do período, e os lotes de 200 pedidos dos AVISOS passavam de 1.000 linhas
+ * (até 7 etapas por pedido): o pedido do fim do lote aparecia "sem registro de
+ * envio" com a mensagem LIDA pelo cliente. O mesmo card, aberto sozinho pelas
+ * Conversas, mostrava certo — duas telas discordando, o sinal do teto.
+ * Tudo aqui pagina (`lerTudo`, ordem estável) e lê `.in()` em lotes pequenos.
+ */
+const LOTE_IN = 100;
+
+/** `.in(coluna, valores)` em lotes, e cada lote PAGINADO — lote de ids não é
+ *  lote de linhas: um id pode ter várias. */
+async function lerPorIds<T>(
+  tabela: string, coluna: string, valores: (string | number)[], ordem: string[],
+): Promise<T[]> {
+  const out: T[] = [];
+  for (let i = 0; i < valores.length; i += LOTE_IN) {
+    const fatia = valores.slice(i, i + LOTE_IN);
+    out.push(...await lerTudo<T>((de, ate) => {
+      let q = (supabase as any).from(tabela).select("*").in(coluna, fatia);
+      for (const o of ordem) q = q.order(o);
+      return q.range(de, ate);
+    }));
+  }
+  return out;
+}
 
 /**
  * Esteira do e-commerce — espelho puro.
@@ -149,14 +178,14 @@ export function useEsteiraOnline(de: string, ate: string) {
     queryKey: ["esteira-online", de, ate],
     enabled: Boolean(de && ate),
     queryFn: async (): Promise<EsteiraRow[]> => {
-      const { data, error } = await (supabase as any)
+      const data = await lerTudo<EsteiraRow>((ini, fim) => (supabase as any)
         .from("bling2_esteira")
         .select("*")
         .gte("data_pedido", de)
         .lte("data_pedido", ate)
         .order("data_pedido", { ascending: false })
-        .limit(1000);
-      if (error) throw error;
+        .order("bling_id", { ascending: false })
+        .range(ini, fim));
       // ⚠️ A Esteira do ON-LINE só mostra pedido on-line. Venda de balcão
       // (loja 0 sem marca da PayT) entrava aqui só porque a view não filtra
       // canal — e a view não filtra de propósito: `carbo_msg_fila` lê dela, e
@@ -228,7 +257,7 @@ export function useEsteiraTravadosAntigos(de: string) {
     queryKey: ["esteira-travados-antigos", de],
     enabled: Boolean(de),
     queryFn: async (): Promise<EsteiraRow[]> => {
-      const { data, error } = await (supabase as any)
+      const data = await lerTudo<EsteiraRow>((ini, fim) => (supabase as any)
         .from("bling2_esteira")
         .select("*")
         .lt("data_pedido", de)
@@ -237,8 +266,8 @@ export function useEsteiraTravadosAntigos(de: string) {
         // janela inteira.
         .not("etapa", "in", "(entregue,cancelado)")
         .order("data_pedido", { ascending: true })
-        .limit(200);
-      if (error) throw error;
+        .order("bling_id", { ascending: true })
+        .range(ini, fim));
       // ⚠️ A Esteira do ON-LINE só mostra pedido on-line. Venda de balcão
       // (loja 0 sem marca da PayT) entrava aqui só porque a view não filtra
       // canal — e a view não filtra de propósito: `carbo_msg_fila` lê dela, e
@@ -283,12 +312,12 @@ export function useEsteiraParados() {
   return useQuery({
     queryKey: ["esteira-parados"],
     queryFn: async (): Promise<Map<number, ParadoRow>> => {
-      const { data, error } = await (supabase as any)
+      const data = await lerTudo<ParadoRow>((de, ate) => (supabase as any)
         .from("carbo_esteira_parados")
         .select("bling_id,etapa,dias_parado,limite_dias,etiqueta_morta,diagnostico")
-        .limit(500);
-      if (error) throw error;
-      return new Map((data ?? []).map((r: ParadoRow) => [Number(r.bling_id), r]));
+        .order("bling_id")
+        .range(de, ate));
+      return new Map(data.map((r: ParadoRow) => [Number(r.bling_id), r]));
     },
     // Parado é problema de DIAS. Recarregar de minuto em minuto não descobriria
     // nada mais cedo e só gastaria consulta.
@@ -367,17 +396,10 @@ export function useAvisosDoPedido(blingIds: number[]) {
     enabled: chave.length > 0,
     queryFn: async (): Promise<Map<string, EnvioMsg>> => {
       const ids = chave.split(",").map(Number).filter(Boolean);
-      const achados: EnvioMsg[] = [];
-      // Lotes de 200: o PostgREST monta o `in` na URL, e isso continua
-      // verdadeiro quando a operação crescer.
-      for (let i = 0; i < ids.length; i += 200) {
-        const { data, error } = await (supabase as any)
-          .from("carbo_msg_envios")
-          .select("*")
-          .in("bling_id", ids.slice(i, i + 200));
-        if (error) throw error;
-        achados.push(...((data ?? []) as EnvioMsg[]));
-      }
+      // ⚠️ Era lotes de 200 pedidos SEM paginar: com até 7 etapas por pedido o
+      // lote passava de 1.000 linhas e o resto sumia — "sem registro de envio"
+      // num aviso que o cliente LEU. Ver `lerPorIds`.
+      const achados = await lerPorIds<EnvioMsg>("carbo_msg_envios", "bling_id", ids, ["bling_id", "etapa"]);
       const mapa = new Map<string, EnvioMsg>();
       for (const e of achados) mapa.set(`${e.bling_id}:${e.etapa}`, e);
       return mapa;
@@ -540,12 +562,13 @@ export function useRecompraPipeline() {
   return useQuery({
     queryKey: ["recompra-pipeline"],
     queryFn: async (): Promise<RecompraRow[]> => {
-      const { data, error } = await (supabase as any)
+      // ⚠️ Sem teto: uma linha por pedido ENTREGUE, e passa de mil em semanas.
+      return await lerTudo<RecompraRow>((de, ate) => (supabase as any)
         .from("carbo_recompra_pipeline")
         .select("*")
-        .order("dias_desde_entrega", { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as RecompraRow[];
+        .order("dias_desde_entrega", { ascending: false })
+        .order("bling_id", { ascending: true })
+        .range(de, ate));
     },
     // A régua anda em DIAS. Recarregar no ritmo da esteira de entrega (10 s)
     // seria consulta à toa: nada aqui muda de coluna dentro de um minuto.
@@ -695,14 +718,20 @@ export function useCarrinhoRespostas() {
   return useQuery({
     queryKey: ["carrinho-respostas"],
     queryFn: async (): Promise<Map<number, RespostaCarrinho>> => {
-      const { data, error } = await (supabase as any)
-        .from("carbo_carrinho_respostas")
-        .select("checkout_id, wa_id, numero_id, respondeu_em");
       // ⚠️ Antes da migração 20261051 a tabela não existe: o quadro tem de
       // continuar como era, não sumir. O erro vai ao console para não passar
       // calado.
-      if (error) { console.warn("[esteira] carbo_carrinho_respostas:", error.message); return new Map(); }
-      return new Map(((data ?? []) as RespostaCarrinho[]).map((r) => [Number(r.checkout_id), r]));
+      try {
+        const data = await lerTudo<RespostaCarrinho>((de, ate) => (supabase as any)
+          .from("carbo_carrinho_respostas")
+          .select("checkout_id, wa_id, numero_id, respondeu_em")
+          .order("checkout_id")
+          .range(de, ate));
+        return new Map(data.map((r) => [Number(r.checkout_id), r]));
+      } catch (e) {
+        console.warn("[esteira] carbo_carrinho_respostas:", (e as Error).message);
+        return new Map();
+      }
     },
     refetchInterval: 60_000,
   });
@@ -712,13 +741,12 @@ export function useCarrinhoPipeline() {
   return useQuery({
     queryKey: ["carrinho-pipeline"],
     queryFn: async (): Promise<CarrinhoRow[]> => {
-      const { data, error } = await (supabase as any)
+      return await lerTudo<CarrinhoRow>((de, ate) => (supabase as any)
         .from("carbo_carrinho_pipeline")
         .select("*")
         .order("abandonado_em", { ascending: false })
-        .limit(1000);
-      if (error) throw error;
-      return (data ?? []) as CarrinhoRow[];
+        .order("checkout_id", { ascending: true })
+        .range(de, ate));
     },
     // O sync do carrinho roda de 15 em 15 min, e a janela mais curta é de 1 h.
     // Recarregar no ritmo da esteira de entrega (10 s) seria consulta à toa —
@@ -871,18 +899,8 @@ export function useRastreios(codigos: string[]) {
 
       // O PostgREST monta o `in` na URL; lotes de 200 mantêm isso verdadeiro
       // quando a operação crescer.
-      const buscar = async (coluna: string, valores: string[]) => {
-        const achados: RastreioCard[] = [];
-        for (let i = 0; i < valores.length; i += 200) {
-          const { data, error } = await (supabase as any)
-            .from("rastreio_card")
-            .select("*")
-            .in(coluna, valores.slice(i, i + 200));
-          if (error) throw error;
-          achados.push(...((data ?? []) as RastreioCard[]));
-        }
-        return achados;
-      };
+      const buscar = (coluna: string, valores: string[]) =>
+        lerPorIds<RastreioCard>("rastreio_card", coluna, valores, ["codigo"]);
 
       const porCodigo = new Map<string, RastreioCard>();
       for (const r of await buscar("codigo", lista)) porCodigo.set(r.codigo, r);

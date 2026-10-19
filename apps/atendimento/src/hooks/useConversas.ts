@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, FUNCTIONS_URL } from "@/integrations/supabase/client";
 import { chaveDoFone } from "@/hooks/useEsteiraOnline";
+import { lerTudo } from "@/lib/lerTudo";
 import {
   JANELA_MS, agruparConversas,
   type Conversa, type MensagemConversa, type Atendimento,
@@ -75,6 +76,65 @@ export function useNumeros() {
   });
 }
 
+/**
+ * As linhas da LISTA — e só as que a lista usa.
+ *
+ * ⚠️ Era `carbo_wa_conversas` com `.limit(1000)`, uma linha por MENSAGEM. Com
+ * mais de 500 vendas/semana e ~5 avisos por pedido, mil mensagens eram dois ou
+ * três dias: quem recebeu e LEU o aviso de uma semana atrás não estava na
+ * caixa, e a busca respondia "0 de 435" — ausência disfarçada de resposta.
+ *
+ * Hoje a lista vem de `carbo_wa_caixa` (migração 20261099): o banco devolve,
+ * por conversa, só as mensagens que o `agruparConversas` lê (a mais recente,
+ * a última nossa, a última do cliente, as do cliente depois da nossa, a última
+ * com pedido, a primeira com nome) — conferido contra a lista inteira: as
+ * mesmas conversas, os mesmos números, a mesma ordem. As mensagens da conversa
+ * ABERTA vêm à parte, de `useMensagensDaConversa`.
+ *
+ * ⚠️ Sem a migração (`PGRST202`, função não existe) cai na consulta antiga,
+ * com o teto — a tela continua como era em vez de quebrar. O aviso vai ao
+ * console para não passar calado.
+ */
+async function lerCaixa(numeroId: string, dias: number, desde: string) {
+  const { data, error } = await (supabase as any)
+    .rpc("carbo_wa_caixa", { p_numero_id: numeroId, p_dias: dias });
+  if (!error) {
+    return {
+      data: ((data ?? []) as Partial<MensagemConversa>[]).map((m) => ({
+        cliente: null, midia_id: null, ...m,
+      })) as MensagemConversa[],
+      error: null,
+    };
+  }
+  if (error.code !== "PGRST202" && !/carbo_wa_caixa/.test(error.message ?? "")) return { data: null, error };
+  console.warn("[conversas] carbo_wa_caixa ainda não existe — lista com teto de 1.000 (rode a 20261099).");
+  return (supabase as any).from("carbo_wa_conversas")
+    .select("*").gte("ocorrido_em", desde).eq("numero_id", numeroId)
+    .order("ocorrido_em", { ascending: false })
+    .limit(1000);
+}
+
+/**
+ * TODAS as mensagens de UMA conversa, desde sempre e sem teto (`lerTudo`).
+ * A lista só traz o resumo; a conversa aberta precisa da linha do tempo
+ * inteira. Uma pessoa tem dezenas de mensagens, não milhares — e o índice
+ * (numero_id, wa_id) responde em milissegundos.
+ */
+export function useMensagensDaConversa(numeroId: string | null | undefined, waId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["wa-conversas", "mensagens", numeroId ?? null, waId ?? null],
+    enabled: !!numeroId && !!waId,
+    queryFn: async (): Promise<MensagemConversa[]> =>
+      lerTudo<MensagemConversa>((de, ate) => (supabase as any)
+        .from("carbo_wa_conversas")
+        .select("*").eq("numero_id", numeroId).eq("wa_id", waId)
+        .order("ocorrido_em", { ascending: true })
+        .order("wamid", { ascending: true })
+        .range(de, ate)),
+    refetchInterval: 30_000,
+  });
+}
+
 export function useConversas(dias = 30, numeroId?: string | null) {
   return useQuery({
     queryKey: ["wa-conversas", dias, numeroId ?? null],
@@ -92,10 +152,7 @@ export function useConversas(dias = 30, numeroId?: string | null) {
           // ⚠️ E `numeroId` nulo NÃO significa "todos": significa que a tela
           // ainda não escolheu. Devolver tudo misturaria as caixas, que é o
           // defeito inteiro. Quem decide é o `enabled` lá embaixo.
-          (supabase as any).from("carbo_wa_conversas")
-            .select("*").gte("ocorrido_em", desde).eq("numero_id", numeroId)
-            .order("ocorrido_em", { ascending: false })
-            .limit(1000),
+          lerCaixa(numeroId as string, dias, desde),
           (supabase as any).from("carbo_wa_contatos")
             .select("wa_id,last_inbound_at").eq("numero_id", numeroId),
           (supabase as any).from("carbo_wa_atendimento").select("*").eq("numero_id", numeroId),
@@ -224,7 +281,23 @@ export function useConversasAoVivo() {
       supabase.removeChannel(canal.current);
       canal.current = null;
     }
-    const invalidar = () => qc.invalidateQueries({ queryKey: ["wa-conversas"] });
+    /* ⚠️ A LISTA recarrega no máximo a cada 8 s; a CONVERSA aberta, na hora.
+       Cada aviso da esteira muda de status três vezes (enviado → entregue →
+       lido), e com 500 pedidos/semana isso é um evento a cada poucos segundos
+       — cada um recarregava a caixa INTEIRA, e a tela vivia "carregando". A
+       conversa aberta é uma consulta de milissegundos e continua instantânea. */
+    let espera: ReturnType<typeof setTimeout> | null = null;
+    const invalidar = () => {
+      qc.invalidateQueries({ queryKey: ["wa-conversas", "mensagens"] });
+      if (espera) return;
+      espera = setTimeout(() => {
+        espera = null;
+        qc.invalidateQueries({
+          queryKey: ["wa-conversas"],
+          predicate: (q) => q.queryKey[1] !== "mensagens",
+        });
+      }, 8_000);
+    };
 
     canal.current = supabase
       .channel("wa-conversas")
@@ -263,6 +336,7 @@ export function useConversasAoVivo() {
       .subscribe();
 
     return () => {
+      if (espera) clearTimeout(espera);
       if (canal.current) supabase.removeChannel(canal.current);
       canal.current = null;
     };
@@ -760,8 +834,8 @@ export function useEnviarMidia() {
 /**
  * Procurar dentro de UMA conversa — e a busca vai ao SERVIDOR, de propósito.
  *
- * ⚠️ A `useConversas` carrega 30 dias com `.limit(1000)`. Buscar no que está em
- * memória devolveria "nada" para o comprovante de junho, e quem procura,
+ * ⚠️ A `useConversas` carrega 30 dias, e só o RESUMO de cada conversa. Buscar
+ * no que está em memória devolveria "nada" para o comprovante de junho, e quem procura,
  * procura justamente o que não está à vista: a pessoa concluiria que a
  * mensagem não existe. É a ausência disfarçada de resposta — o mesmo defeito
  * do `Math.round` inventando `×1` e do `(arquivo)` na prévia da lista.
