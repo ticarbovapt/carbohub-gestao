@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { lerSemTeto } from "@carbo/shell";
 import { toast } from "sonner";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -158,53 +159,59 @@ export function useCarbozeVendas({ month, customFrom, customTo, vendedorFilter, 
         rangeEnd = `${yr}-${String(mo).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
       }
 
-      let query = db
-        // ⚠️ carbo_vendas_metrica, NÃO carboze_orders.
-        //
-        // A view devolve todas as colunas do pedido MAIS `conta_metrica` — a
-        // regra única de "esta venda conta como faturamento". Antes esta tela
-        // tinha regra própria (NF vinculada OU invoice_number OU status
-        // entregue) que era mais frouxa que a do resto do sistema: contava
-        // pedido com nota Pendente ou Rejeitada. Resultado: o Total Faturado
-        // do Sales dava R$ 51.274 e o Dashboard do Admin, R$ 48 mil, no mesmo
-        // mês. Duas telas, dois números, nenhum errado por bug — errado por
-        // haver duas definições.
-        //
-        // A view é security_invoker: a RLS de carboze_orders continua valendo.
-        .from("carbo_vendas_metrica")
-        .select("*")
-        .neq("excluir_metricas", true)
-        // ⚠️ Filtra por `data_efetiva` (= coalesce(sale_date, created_at::date)),
-        // a MESMA data que o recorte de baixo usa — e NÃO por `created_at`.
-        //
-        // Eram duas datas diferentes: o banco mandava uma janela por data de
-        // CRIAÇÃO e a tela recortava por data EFETIVA da venda. Enquanto as
-        // duas coincidiam ninguém via; desde que `sale_date` passou a seguir o
-        // faturamento elas se separaram, e o que nasceu fora da janela nunca
-        // chegava para ser recortado — sumia dos dois meses, calado.
-        //
-        // No modo "por período" não havia nem colchão: `qStart`/`qEnd` eram as
-        // datas digitadas, então todo pedido criado antes do início e faturado
-        // dentro dele desaparecia.
-        //
-        // ⚠️ E `data_efetiva` é DATE, não timestamp: some junto o erro de fuso
-        // de comparar `"2026-09-01T00:00:00.000Z"` (UTC) com um dia de
-        // Brasília, que jogava as vendas depois das 21h para o dia seguinte.
-        .gte("data_efetiva", rangeStart)
-        .lte("data_efetiva", rangeEnd)
-        // Ordena pela mesma data que filtra; `created_at` desempata dentro do
-        // dia. É a ordem que a RPC `carbo_vendas_busca` já usava.
-        .order("data_efetiva", { ascending: false })
-        .order("created_at", { ascending: false });
+      // ⚠️ Sem teto: com 500+ vendas/semana um mês passa de 1.000 linhas, e o
+      // PostgREST corta calado. `montar` refaz a consulta a cada página.
+      const montar = () => {
+        let query = db
+          // ⚠️ carbo_vendas_metrica, NÃO carboze_orders.
+          //
+          // A view devolve todas as colunas do pedido MAIS `conta_metrica` — a
+          // regra única de "esta venda conta como faturamento". Antes esta tela
+          // tinha regra própria (NF vinculada OU invoice_number OU status
+          // entregue) que era mais frouxa que a do resto do sistema: contava
+          // pedido com nota Pendente ou Rejeitada. Resultado: o Total Faturado
+          // do Sales dava R$ 51.274 e o Dashboard do Admin, R$ 48 mil, no mesmo
+          // mês. Duas telas, dois números, nenhum errado por bug — errado por
+          // haver duas definições.
+          //
+          // A view é security_invoker: a RLS de carboze_orders continua valendo.
+          .from("carbo_vendas_metrica")
+          .select("*")
+          .neq("excluir_metricas", true)
+          // ⚠️ Filtra por `data_efetiva` (= coalesce(sale_date, created_at::date)),
+          // a MESMA data que o recorte de baixo usa — e NÃO por `created_at`.
+          //
+          // Eram duas datas diferentes: o banco mandava uma janela por data de
+          // CRIAÇÃO e a tela recortava por data EFETIVA da venda. Enquanto as
+          // duas coincidiam ninguém via; desde que `sale_date` passou a seguir o
+          // faturamento elas se separaram, e o que nasceu fora da janela nunca
+          // chegava para ser recortado — sumia dos dois meses, calado.
+          //
+          // No modo "por período" não havia nem colchão: `qStart`/`qEnd` eram as
+          // datas digitadas, então todo pedido criado antes do início e faturado
+          // dentro dele desaparecia.
+          //
+          // ⚠️ E `data_efetiva` é DATE, não timestamp: some junto o erro de fuso
+          // de comparar `"2026-09-01T00:00:00.000Z"` (UTC) com um dia de
+          // Brasília, que jogava as vendas depois das 21h para o dia seguinte.
+          .gte("data_efetiva", rangeStart)
+          .lte("data_efetiva", rangeEnd)
+          // Ordena pela mesma data que filtra; `created_at` desempata dentro do
+          // dia. É a ordem que a RPC `carbo_vendas_busca` já usava.
+          .order("data_efetiva", { ascending: false })
+          .order("created_at", { ascending: false })
+          // ⚠️ `id` desempata: sem ordem ÚNICA a paginação repete/perde linha.
+          .order("id");
 
-      if (!isGestor) {
-        query = query.eq("vendedor_id", userId);
-      } else if (vendedorFilter && vendedorFilter !== "__all__") {
-        query = query.eq("vendedor_id", vendedorFilter);
-      }
+        if (!isGestor) {
+          query = query.eq("vendedor_id", userId);
+        } else if (vendedorFilter && vendedorFilter !== "__all__") {
+          query = query.eq("vendedor_id", vendedorFilter);
+        }
+        return query;
+      };
 
-      const { data, error } = await query;
-      if (error) throw error;
+      const data = await lerSemTeto<any>(montar);
 
       // O recorte por data saiu daqui: quem filtra é o banco, pela MESMA
       // coluna. Refiltrar em memória não protegia de nada — o que faltava

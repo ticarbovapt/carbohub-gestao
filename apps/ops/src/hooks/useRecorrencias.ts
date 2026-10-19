@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase as db } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { lerSemTeto } from "@carbo/shell";
 import { POSVENDA_STAGES, type FulfillmentStage } from "@/hooks/usePosVenda";
 
 /**
@@ -56,7 +57,9 @@ export function useRecorrencias() {
   return useQuery({
     queryKey: ["ops", "recorrencias"],
     queryFn: async (): Promise<ContratoRow[]> => {
-      const { data, error } = await (db as any)
+      // ⚠️ `.limit(2000)` não furava o teto de 1.000 do PostgREST: o resto
+      // das parcelas sumia calado. Lê em páginas, com `id` de desempate.
+      const data = await lerSemTeto<any>(() => (db as any)
         .from("carboze_orders")
         .select(
           "id, order_number, customer_name, vendedor_name, status, fulfillment_stage, " +
@@ -66,11 +69,10 @@ export function useRecorrencias() {
         )
         .not("recurrence_total", "is", null)
         .order("recurrence_index", { ascending: true })
-        .limit(2000);
-      if (error) throw error;
+        .order("id"));
 
       const porContrato = new Map<string, ContratoRow>();
-      for (const r of (data ?? []) as any[]) {
+      for (const r of data) {
         // recurrence_group_id é a identidade do CONTRATO e sobrevive à exclusão
         // de qualquer parcela. Antes agrupávamos por coalesce(parent_order_id,
         // id): apagar a parcela 1 disparava o ON DELETE SET NULL da FK e o

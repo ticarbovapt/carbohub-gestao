@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { lerSemTeto } from "@carbo/shell";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Compras — Requisições (purchase_requests), o pipeline oficial:
@@ -39,12 +40,12 @@ export function useRcRequests() {
   return useQuery({
     queryKey: ["ops", "purchase-requests"],
     queryFn: async (): Promise<RcRow[]> => {
-      const res = await db
+      const rows = await lerSemTeto<Record<string, unknown>>(() => db
         .from("purchase_requests")
         .select("id, rc_number, cost_center, purchase_type, estimated_value, status, created_at, items, suggested_supplier, purchase_orders(id)")
-        .order("created_at", { ascending: false });
-      if (res.error) throw res.error;
-      return (res.data ?? []).map((r: Record<string, unknown>) => ({
+        .order("created_at", { ascending: false })
+        .order("id"));
+      return rows.map((r: Record<string, unknown>) => ({
         id: r.id as string,
         rc_number: (r.rc_number as string) ?? "—",
         cost_center: (r.cost_center as string) ?? "—",

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { lerSemTeto } from "@carbo/shell";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Ordens de Serviço / Descarbonização do Carbo Sales (tabela crm_os).
@@ -55,12 +56,11 @@ export function useOS() {
   return useQuery({
     queryKey: ["crm_os"],
     queryFn: async (): Promise<OSRow[]> => {
-      const { data, error } = await db
+      return await lerSemTeto<OSRow>(() => db
         .from("crm_os")
         .select("*")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as OSRow[];
+        .order("created_at", { ascending: false })
+        .order("id"));
     },
   });
 }

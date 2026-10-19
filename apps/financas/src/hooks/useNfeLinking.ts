@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { lerSemTeto } from "@carbo/shell";
 import { STATUS_COM_NF_POSSIVEL } from "@/lib/statusPedido";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -62,13 +63,12 @@ export function useNfeLinkSuggestions() {
       if (oErr) throw oErr;
 
       // NFs do Bling ainda não vinculadas a nenhum pedido (e não arquivadas)
-      const { data: nfData, error: nErr } = await supabase
+      const nfData = await lerSemTeto<any>(() => supabase
         .from("bling_nfe")
         .select("id, numero, contato_nome, valor_total, data_emissao, order_id, match_status")
         .is("order_id", null)
         .neq("match_status", "ignored")
-        .limit(1000);
-      if (nErr) throw nErr;
+        .order("id"));
 
       const orders = ordersData || [];
       const nfs = nfData || [];
@@ -206,13 +206,11 @@ export function useAllNFes(search = "") {
     queryKey: ["all-nfes", search.trim()],
     staleTime: 30_000,
     queryFn: async (): Promise<AllNFe[]> => {
-      const { data, error } = await supabase
+      let rows = await lerSemTeto<AllNFe>(() => supabase
         .from("bling_nfe")
         .select("id, bling_id, numero, serie, contato_nome, valor_total, data_emissao, match_status, matched_order_number, order_id, situacao")
         .order("data_emissao", { ascending: false })
-        .limit(1000);
-      if (error) throw error;
-      let rows = (data || []) as AllNFe[];
+        .order("id"));
       const q = search.trim().toLowerCase();
       if (q) rows = rows.filter((n) =>
         (n.contato_nome || "").toLowerCase().includes(q) ||

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { lerSemTeto } from "@carbo/shell";
 import { toast } from "sonner";
 
 export interface SalesTarget {
@@ -103,11 +104,14 @@ export function useSalesTargetsWithProgress(month: string) {
       const expandedStart = new Date(yearNum, monNum - 2, 1).toISOString();
       const expandedEnd   = new Date(yearNum, monNum + 1, 0, 23, 59, 59).toISOString();
 
-      const { data: ordersRaw } = await supabase
+      const ordersRaw = await lerSemTeto(() => supabase
         .from("carboze_orders")
         .select("vendedor_id, total, items, status, created_at, sale_date")
         .gte("created_at", expandedStart)
-        .lte("created_at", expandedEnd);
+        .lte("created_at", expandedEnd)
+        .order("created_at")
+        .order("id"))
+        .catch(() => null);
 
       const orders = (ordersRaw || []).filter(o => {
         if (o.status === "cancelled") return false;
@@ -372,10 +376,13 @@ export function useWeeklyTopVendedores() {
       const expandedStart = new Date(weekStart);
       expandedStart.setDate(expandedStart.getDate() - 7);
 
-      const { data: ordersRaw } = await supabase
+      const ordersRaw = await lerSemTeto(() => supabase
         .from("carboze_orders")
         .select("vendedor_id, total, status, created_at, sale_date")
-        .gte("created_at", expandedStart.toISOString());
+        .gte("created_at", expandedStart.toISOString())
+        .order("created_at")
+        .order("id"))
+        .catch(() => null);
 
       const orders = (ordersRaw || []).filter(o => {
         if (o.status === "cancelled" || !o.vendedor_id) return false;
@@ -458,11 +465,14 @@ export function useWeeklyVendedoresData(teamFilter?: "todos" | "cgc" | "expansao
       const expandedStart = new Date(weekStart); expandedStart.setDate(expandedStart.getDate() - 2);
       const expandedEnd   = new Date(weekEnd);   expandedEnd.setDate(expandedEnd.getDate() + 2);
 
-      const { data: ordersRaw } = await supabase
+      const ordersRaw = await lerSemTeto(() => supabase
         .from("carboze_orders")
         .select("vendedor_id, total, status, created_at, sale_date")
         .gte("created_at", expandedStart.toISOString())
-        .lte("created_at", expandedEnd.toISOString());
+        .lte("created_at", expandedEnd.toISOString())
+        .order("created_at")
+        .order("id"))
+        .catch(() => null);
 
       const orders = (ordersRaw || []).filter(o => {
         if (o.status === "cancelled" || !o.vendedor_id) return false;

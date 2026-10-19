@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { lerSemTeto } from "@carbo/shell";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Ordens de Serviço / Descarbonização.
@@ -153,12 +154,12 @@ export function useOS() {
   return useQuery({
     queryKey: ["os_sales"],
     queryFn: async (): Promise<OSRow[]> => {
-      const { data, error } = await lic()
+      const data = await lerSemTeto<any>(() => lic()
         .from("service_orders")
         .select(SELECT_COLS)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return ((data ?? []) as any[]).map(mapRow);
+        .order("created_at", { ascending: false })
+        .order("id"));
+      return data.map(mapRow);
     },
   });
 }

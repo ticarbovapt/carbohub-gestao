@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { lerSemTeto } from "@carbo/shell";
 import type { OrderItem } from "@/hooks/useCarbozeOrders";
 import { STATUS_COM_NF_POSSIVEL } from "@/lib/statusPedido";
 
@@ -196,47 +197,59 @@ export function useFaturamento({ month, search = "", showAll = false }: Faturame
         }
       }
 
-      let query = supabase
-        // carbo_vendas_metrica em vez de carboze_orders: ela já traz a
-        // situação da NF resolvida (nf_situacao / nf_valida). Ler a tabela
-        // crua obrigaria a repetir aqui a regra de "nota que vale", que é a
-        // mesma que o resto do sistema usa — e regra repetida diverge.
-        .from("carbo_vendas_metrica")
-        .select("*")
-        .in("status", STATUS_COM_NF_POSSIVEL)   // ⚠️ uma lista só — ver lib/statusPedido.ts
-        .order("created_at", { ascending: false });
+      const montar = () => {
+        let query = supabase
+          // carbo_vendas_metrica em vez de carboze_orders: ela já traz a
+          // situação da NF resolvida (nf_situacao / nf_valida). Ler a tabela
+          // crua obrigaria a repetir aqui a regra de "nota que vale", que é a
+          // mesma que o resto do sistema usa — e regra repetida diverge.
+          .from("carbo_vendas_metrica")
+          .select("*")
+          .in("status", STATUS_COM_NF_POSSIVEL)   // ⚠️ uma lista só — ver lib/statusPedido.ts
+          .order("created_at", { ascending: false })
+          .order("id");
 
-      if (!showAll) {
-        // ⚠️ Pedido com bonificação precisa de DUAS notas. Filtrar só por
-        // `bling_nf_id is null` tirava o pedido da fila assim que a PRIMEIRA
-        // chegasse — a de bonificação ficaria sem ser emitida e ninguém veria.
-        // Por isso o filtro do banco só derruba o caso simples; o caso com
-        // bonificação é resolvido no cliente, por `faltaAlgumaNF`.
-        // O filtro do banco é grosseiro de propósito (derruba só o caso
-        // simples e barato); quem decide de verdade é `faltaAlgumaNF` no
-        // cliente, que sabe de qual conta é o pedido.
-        query = query.or(
-          "bling_nf_id.is.null,bling_nf_bonificacao_id.is.null," +
-          "bling2_nf_id.is.null,bling2_nf_bonificacao_id.is.null",
-        );
-      }
+        if (!showAll) {
+          // ⚠️ Pedido com bonificação precisa de DUAS notas. Filtrar só por
+          // `bling_nf_id is null` tirava o pedido da fila assim que a PRIMEIRA
+          // chegasse — a de bonificação ficaria sem ser emitida e ninguém veria.
+          // Por isso o filtro do banco só derruba o caso simples; o caso com
+          // bonificação é resolvido no cliente, por `faltaAlgumaNF`.
+          // O filtro do banco é grosseiro de propósito (derruba só o caso
+          // simples e barato); quem decide de verdade é `faltaAlgumaNF` no
+          // cliente, que sabe de qual conta é o pedido.
+          query = query.or(
+            "bling_nf_id.is.null,bling_nf_bonificacao_id.is.null," +
+            "bling2_nf_id.is.null,bling2_nf_bonificacao_id.is.null",
+          );
+        }
 
+        if (term) {
+          // Busca global: ignora o mês e vasculha o banco inteiro (limitado por segurança)
+          query = query
+            .or(`customer_name.ilike.%${term}%,order_number.ilike.%${term}%`)
+            .limit(300);
+        } else {
+          // Sem busca: limita ao mês selecionado (filtro no servidor)
+          const yr = month.getFullYear();
+          const mo = month.getMonth();
+          const start = new Date(yr, mo, 1).toISOString();
+          const end = new Date(yr, mo + 1, 0, 23, 59, 59).toISOString();
+          query = query.gte("created_at", start).lte("created_at", end);
+        }
+        return query;
+      };
+
+      // ⚠️ O mês passa de 1.000 pedidos (500 vendas/semana) e o PostgREST corta
+      // calado: sem busca, lê todas as páginas. A busca já tem teto explícito.
+      let data: any[];
       if (term) {
-        // Busca global: ignora o mês e vasculha o banco inteiro (limitado por segurança)
-        query = query
-          .or(`customer_name.ilike.%${term}%,order_number.ilike.%${term}%`)
-          .limit(300);
+        const { data: d, error } = await montar();
+        if (error) throw error;
+        data = d ?? [];
       } else {
-        // Sem busca: limita ao mês selecionado (filtro no servidor)
-        const yr = month.getFullYear();
-        const mo = month.getMonth();
-        const start = new Date(yr, mo, 1).toISOString();
-        const end = new Date(yr, mo + 1, 0, 23, 59, 59).toISOString();
-        query = query.gte("created_at", start).lte("created_at", end);
+        data = await lerSemTeto<any>(montar);
       }
-
-      const { data, error } = await query;
-      if (error) throw error;
 
       return (data || []).map((row: any) => ({
         ...row,

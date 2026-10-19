@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { lerSemTeto } from "@carbo/shell";
 import type { ProdEstoque } from "@/components/estoque/stockData";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -72,7 +73,9 @@ export function useStock() {
           // POR FAIXA — o mesmo defeito do gêmeo de bonificação, multiplicado.
           .is("preco_de", null)
           .order("product_code"),
-        db.from("warehouse_stock").select("product_id, quantity, warehouse:warehouses(code)"),
+        // Paginado: produto × armazém passa de 1.000 e é SOMADO por hub.
+        lerSemTeto<any>(() => db.from("warehouse_stock").select("product_id, quantity, warehouse:warehouses(code)").order("id"))
+          .then((data) => ({ data, error: null }), (error) => ({ data: null as any[] | null, error })),
         db.from("ops_stock_min").select("product_id, min_qty, warehouse:warehouses(code)"),
         // Exceções de catálogo por hub. AUSÊNCIA de linha = o produto existe
         // no hub — por isso só o que está desligado é buscado.

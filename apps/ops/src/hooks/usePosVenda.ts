@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { lerSemTeto, lerPorIdsSemTeto } from "@carbo/shell";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Pós-venda: jornada das VENDAS MANUAIS (carboze_orders sem external_ref — as
@@ -279,10 +280,13 @@ export function usePosVendaOrders(terminalDays: number | "all" = 30) {
         .or("external_ref.is.null,and(order_number.like.V*,fulfillment_stage.not.in.(nova_venda,separacao_pendente))")
         .or("status.is.null,status.neq.quote");
 
-      // Ativos: tudo que NÃO está finalizado — sem teto (limite de segurança alto).
-      const runActive = (cols: string) => base(cols)
-        .not("fulfillment_stage", "in", "(entregue,cancelado)")
-        .order("created_at", { ascending: false }).limit(2000);
+      // Ativos: tudo que NÃO está finalizado — sem teto. (`.limit(2000)` virava
+      // 1.000 no PostgREST, calado; agora pagina, com `id` de desempate.)
+      const runActive = (cols: string): Promise<{ data: any[] | null; error: any }> =>
+        lerSemTeto<any>(() => base(cols)
+          .not("fulfillment_stage", "in", "(entregue,cancelado)")
+          .order("created_at", { ascending: false }).order("id"))
+          .then((data) => ({ data, error: null }), (error) => ({ data: null, error }));
       // Finalizados: só dentro da janela, mais recentes primeiro.
       const runTerminal = (cols: string) => {
         let q = base(cols).in("fulfillment_stage", TERMINAL_STAGES)
@@ -388,11 +392,11 @@ export function useOpsBySource(orderIds: string[], enabled: boolean) {
     queryKey: ["ops", "op-by-order", [...ids].sort()],
     enabled: enabled && ids.length > 0,
     queryFn: async (): Promise<Record<string, OpBrief>> => {
-      const res = await db
+      const opRows = await lerPorIdsSemTeto<any>(ids, (lote) => db
         .from("production_orders").select("source_order_id, op_status")
-        .in("source_order_id", ids);
+        .in("source_order_id", lote).order("id"));
       const agg: Record<string, { total: number; done: number; minRank: number; minStatus: string | null; blocked: boolean }> = {};
-      for (const r of (res.data ?? [])) {
+      for (const r of opRows) {
         const oid = r.source_order_id as string | null;
         if (!oid) continue;
         if (r.op_status === "cancelada") continue; // cancelada não conta

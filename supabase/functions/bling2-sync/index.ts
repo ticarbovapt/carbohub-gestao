@@ -16,6 +16,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 import { createClient } from "npm:@supabase/supabase-js@2.39.3";
+import { lerSemTeto } from "../_shared/lerTudo.ts";
 
 const ALLOWED_ORIGINS = [
   "https://controle.carbohub.com.br",
@@ -1367,14 +1368,19 @@ async function syncNfeRecheck(admin: Admin, token: string, logId: string): Promi
   // não morrer nos 150s deixando o log preso em `running`.
   const TETO = 60;
 
-  const { data: alvo } = await admin
+  // ⚠️ `.limit(3000)` NÃO trazia 3.000: o PostgREST corta em 1.000 calado, e
+  // os pedidos atendidos da filial já passam disso. Paginado, com ordem estável.
+  // A ordem por `data` desc mantém os pedidos RECENTES na frente do `ids` — é
+  // deles que sai a fatia de 200 da complementação mais abaixo.
+  const alvo = await lerSemTeto<{ nf_bling_id: number }>(() => admin
     .from("bling2_orders")
     .select("nf_bling_id")
     .eq("situacao_id", 9)
     .not("nf_bling_id", "is", null)
     // `notaFiscal: {id: 0}` = pedido SEM nota. Não há o que reconsultar.
     .gt("nf_bling_id", 0)
-    .limit(3000);
+    .order("data", { ascending: false })
+    .order("id"));
 
   // ⚠️ Também as notas que um PEDIDO NOSSO reivindicou.
   //
@@ -1384,11 +1390,11 @@ async function syncNfeRecheck(admin: Admin, token: string, logId: string): Promi
   // reconferência: ela CONTA no faturamento (carbo_vendas_metrica junta por
   // bling2_nf_id) e, sem passar por aqui, um cancelamento no Bling nunca
   // chegaria ao sistema. A venda seguiria contada para sempre.
-  const { data: vinculadas } = await admin
+  const vinculadas = await lerSemTeto<{ bling2_nf_id: number }>(() => admin
     .from("carboze_orders")
     .select("bling2_nf_id")
     .not("bling2_nf_id", "is", null)
-    .limit(3000);
+    .order("id"));
 
   const ids = [...new Set([
     ...semvalorSeguro(alvo).map((o: any) => Number(o.nf_bling_id)),

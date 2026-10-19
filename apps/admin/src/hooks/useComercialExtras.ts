@@ -5,6 +5,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { lerSemTeto } from "@carbo/shell";
 
 const isPedido = (s: string | null) => s !== "quote" && s !== "cancelled";
 
@@ -30,13 +31,11 @@ export function useComercialExtras(vendedorId: string | null = null) {
   return useQuery({
     queryKey: ["comercial-extras", vendedorId ?? "all"],
     queryFn: async (): Promise<ComercialExtras> => {
-      const { data, error } = await supabase
+      const rows = await lerSemTeto<OrderRow>(() => supabase
         .from("carboze_orders" as never)
         .select("total, status, created_at, customer_name, vendedor_id")
-        .order("created_at", { ascending: false });
-      if (error) throw new Error(error.message);
-
-      const rows = (data ?? []) as unknown as OrderRow[];
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false }));
       const pedidos = rows.filter(
         (v) => isPedido(v.status) && (!vendedorId || v.vendedor_id === vendedorId)
       );

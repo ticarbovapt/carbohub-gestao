@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { lerSemTeto } from "@carbo/shell";
 import { PRECO_REFERENCIA, MARGEM_ALVO_PADRAO, MARGEM_ALVO_POR_CATEGORIA } from "@/lib/precoReferencia";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -192,16 +193,21 @@ export function useSuprimentosCockpit() {
         db.from("mrp_products")
           .select("id, name, product_code, category, unit_cost, sale_price, safety_stock_qty, stock_unit, is_active")
           .eq("is_active", true),
-        db.from("warehouse_stock")
-          .select("product_id, quantity, warehouse_id, warehouse:warehouses(id, code, name, is_active)"),
+        lerSemTeto(() => db.from("warehouse_stock")
+          .select("product_id, quantity, warehouse_id, warehouse:warehouses(id, code, name, is_active)")
+          .order("id")).then((data) => ({ data, error: null })),
         db.from("ops_stock_min")
           .select("product_id, warehouse_id, min_qty, warehouse:warehouses(code)"),
-        db.from("stock_movements")
+        lerSemTeto(() => db.from("stock_movements")
           .select("product_id, warehouse_id, tipo, quantidade, created_at, warehouse:warehouses(code)")
-          .gte("created_at", since90),
-        db.from("stock_transfers")
+          .gte("created_at", since90)
+          .order("created_at")
+          .order("id")).then((data) => ({ data, error: null })),
+        lerSemTeto(() => db.from("stock_transfers")
           .select("status, created_at, product_id, quantity")
-          .gte("created_at", since180),
+          .gte("created_at", since180)
+          .order("created_at")
+          .order("id")).then((data) => ({ data, error: null })),
         db.from("mrp_bom")
           .select("product_id, insumo_id, quantity_per_unit"),
         // Histórico (tendência). Resiliente: se a tabela/migration ainda não

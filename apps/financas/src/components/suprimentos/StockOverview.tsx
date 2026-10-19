@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { lerSemTeto } from "@carbo/shell";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCreateStockMovement } from "@/hooks/useStockMovements";
 import { useProductMovements30d } from "@/hooks/useProductMovements30d";
@@ -86,10 +87,12 @@ export function StockOverview() {
   const { data: warehouseStock } = useQuery({
     queryKey: ["warehouse-stock"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // Produtos × armazéns (caixas de vendedor e de licenciado incluídas)
+      // passa de 1.000 linhas — e o PostgREST corta calado.
+      const data = await lerSemTeto<any>(() => supabase
         .from("warehouse_stock")
-        .select("*");
-      if (error) throw error;
+        .select("*")
+        .order("id"));
       return data || [];
     },
   });

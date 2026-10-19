@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { lerSemTeto, lerPorIdsSemTeto } from "@carbo/shell";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Comissionamento (Carbo Finanças). Base = vendas FATURADAS (com NF) do vendedor
@@ -83,11 +84,11 @@ export function useCommissionStatements() {
   return useQuery({
     queryKey: ["commission_statements"],
     queryFn: async (): Promise<CommissionStatement[]> => {
-      const { data, error } = await db
+      const data = await lerSemTeto<CommissionStatement>(() => db
         .from("commission_statements")
         .select("*")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
+        .order("created_at", { ascending: false })
+        .order("id"));
       return (data ?? []) as CommissionStatement[];
     },
   });
@@ -366,13 +367,11 @@ export function useNfsDosFechamentos(statementIds: string[]) {
     enabled: statementIds.length > 0,
     staleTime: 60_000,
     queryFn: async () => {
-      const itens: { statement_id: string; order_id: string }[] = [];
-      for (const f of fatias(statementIds)) {
-        const { data, error } = await db.from("commission_statement_items")
-          .select("statement_id, order_id").in("statement_id", f);
-        if (error) throw error;
-        itens.push(...((data ?? []) as any[]));
-      }
+      // ⚠️ Lote de fechamentos NÃO é lote de linhas: cada fechamento tem N
+      // itens, e o PostgREST corta em 1.000 calado.
+      const itens = await lerPorIdsSemTeto<{ statement_id: string; order_id: string }>(statementIds, (f) =>
+        db.from("commission_statement_items")
+          .select("statement_id, order_id").in("statement_id", f).order("id"));
       const porPedido = await nfsDosPedidos(itens.map((i) => i.order_id));
       const juntas = new Map<string, NfDaBase[]>();
       for (const i of itens) {

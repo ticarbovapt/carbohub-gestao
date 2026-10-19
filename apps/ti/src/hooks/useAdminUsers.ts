@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { lerSemTeto } from "@carbo/shell";
 
 export interface AdminProfile {
   id: string;
@@ -62,13 +63,13 @@ export function useProfiles() {
   return useQuery({
     queryKey: ["admin", "profiles"],
     queryFn: async (): Promise<AdminProfile[]> => {
-      const { data, error } = await supabase
+      // ⚠️ Sem `.limit(200)`: a tela de Usuários CONTA e filtra esta lista
+      // como se fosse completa, e o corte escondia os perfis mais antigos.
+      return await lerSemTeto<AdminProfile>(() => supabase
         .from("profiles")
         .select("id, full_name, avatar_url, email, username, department, funcao, secondary_department, secondary_funcao, escopo, manager_user_id, status, allowed_interfaces, is_vendedor, created_at")
         .order("created_at", { ascending: false })
-        .limit(200);
-      if (error) throw error;
-      return (data ?? []) as AdminProfile[];
+        .order("id", { ascending: false }));
     },
   });
 }

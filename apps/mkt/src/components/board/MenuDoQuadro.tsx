@@ -51,22 +51,25 @@ async function lerQuadro(boardId: string) {
     todas<any>(() => db.from("mkt_labels").select("*").eq("board_id", boardId).order("id")),
   ]);
   const ids = cards.map((c) => c.id);
-  const porLote = async <T,>(tabela: string, col: string, sel = "*") => {
+  // ⚠️ Paginar exige ordem ESTÁVEL: `card_id` sozinho empata (150 cartões têm
+  // mais de mil comentários) e a mesma linha voltaria em duas páginas. O
+  // desempate é a chave da tabela — `id`, ou o par onde não há `id`.
+  const porLote = async <T,>(tabela: string, col: string, desempate: string, sel = "*") => {
     const out: T[] = [];
     for (let i = 0; i < ids.length; i += 150) {
-      out.push(...await todas<T>(() => db.from(tabela).select(sel).in(col, ids.slice(i, i + 150)).order(col)));
+      out.push(...await todas<T>(() => db.from(tabela).select(sel).in(col, ids.slice(i, i + 150)).order(col).order(desempate)));
     }
     return out;
   };
   const [cardLabels, cardMembers, checklists, comments, attachments] = await Promise.all([
-    porLote<any>("mkt_card_labels", "card_id"), porLote<any>("mkt_card_members", "card_id"),
-    porLote<any>("mkt_checklists", "card_id"), porLote<any>("mkt_comments", "card_id"),
-    porLote<any>("mkt_card_attachments", "card_id", "id, card_id, kind, name, external_url, mime_type, created_at"),
+    porLote<any>("mkt_card_labels", "card_id", "label_id"), porLote<any>("mkt_card_members", "card_id", "user_id"),
+    porLote<any>("mkt_checklists", "card_id", "id"), porLote<any>("mkt_comments", "card_id", "id"),
+    porLote<any>("mkt_card_attachments", "card_id", "id", "id, card_id, kind, name, external_url, mime_type, created_at"),
   ]);
   const ckIds = checklists.map((c) => c.id);
   const items: any[] = [];
   for (let i = 0; i < ckIds.length; i += 150) {
-    items.push(...await todas<any>(() => db.from("mkt_checklist_items").select("*").in("checklist_id", ckIds.slice(i, i + 150)).order("checklist_id")));
+    items.push(...await todas<any>(() => db.from("mkt_checklist_items").select("*").in("checklist_id", ckIds.slice(i, i + 150)).order("checklist_id").order("id")));
   }
   const pessoasIds = [...new Set([...cardMembers.map((m) => m.user_id), ...comments.map((c) => c.user_id)])];
   const pessoas: any[] = [];

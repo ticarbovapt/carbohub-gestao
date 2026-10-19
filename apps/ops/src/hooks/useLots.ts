@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { lerSemTeto } from "@carbo/shell";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Lotes de reagente (inventory_lot) — ler / criar / editar / excluir.
@@ -36,12 +37,11 @@ export function useLots() {
   return useQuery({
     queryKey: ["ops", "inventory-lots"],
     queryFn: async (): Promise<LotRow[]> => {
-      const res = await db
+      const rows = await lerSemTeto<any>(() => db
         .from("inventory_lot")
         .select("id, lot_code, product_id, supplier_id, initial_volume_ml, available_volume_ml, status, collected_samples, expected_samples, received_at, expired_at, notes")
-        .order("created_at", { ascending: false });
-      if (res.error) throw res.error;
-      const rows = res.data ?? [];
+        .order("created_at", { ascending: false })
+        .order("id"));
 
       const productIds = [...new Set(rows.map((l: any) => l.product_id).filter(Boolean))];
       const supplierIds = [...new Set(rows.map((l: any) => l.supplier_id).filter(Boolean))];

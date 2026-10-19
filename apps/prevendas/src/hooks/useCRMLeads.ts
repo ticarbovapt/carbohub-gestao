@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { lerSemTeto } from "@carbo/shell";
 import { toast } from "sonner";
 import type { CRMLead, FunnelType } from "@/types/crm";
 import { getStagesForFunnel, getLostStage, isWonStage, isLostStage, isHandoffStage, isTerminalStage } from "@/types/crm";
@@ -155,21 +156,22 @@ export function useCRMLeads(funnelType: FunnelType, assignedFilter?: string) {
   return useQuery({
     queryKey: ["crm-leads", funnelType, ownOnly ? user?.id : "all", assignedFilter],
     queryFn: async () => {
-      let query = db
-        .from("crm_sales_leads")
-        .select("*")
-        .eq("funnel_type", funnelType)
-        .order("created_at", { ascending: false });
+      // Paginado: o funil passa de 1.000 cards e o teto cortaria o mais antigo.
+      return await lerSemTeto<CRMLead>(() => {
+        let query = db
+          .from("crm_sales_leads")
+          .select("*")
+          .eq("funnel_type", funnelType)
+          .order("created_at", { ascending: false })
+          .order("id");
 
-      if (ownOnly) {
-        query = query.or(`created_by.eq.${user!.id},assigned_to.eq.${user!.id}`);
-      } else if (assignedFilter) {
-        query = query.eq("assigned_to", assignedFilter);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-      return (data || []) as CRMLead[];
+        if (ownOnly) {
+          query = query.or(`created_by.eq.${user!.id},assigned_to.eq.${user!.id}`);
+        } else if (assignedFilter) {
+          query = query.eq("assigned_to", assignedFilter);
+        }
+        return query;
+      });
     },
   });
 }
@@ -184,14 +186,15 @@ export function useAllCRMLeads() {
     queryFn: async () => {
       // Cada app vê os SEUS funis: o Pré-Vendas não carrega o Sales, e o Sales
       // não mistura os cards dos SDRs na visão "Todos".
-      let query = recorteDoApp(db
-        .from("crm_sales_leads")
-        .select("*"))
-        .order("created_at", { ascending: false });
-      if (ownOnly) query = query.or(`created_by.eq.${user!.id},assigned_to.eq.${user!.id}`);
-      const { data, error } = await query;
-      if (error) throw error;
-      return (data || []) as CRMLead[];
+      return await lerSemTeto<CRMLead>(() => {
+        let query = recorteDoApp(db
+          .from("crm_sales_leads")
+          .select("*"))
+          .order("created_at", { ascending: false })
+          .order("id");
+        if (ownOnly) query = query.or(`created_by.eq.${user!.id},assigned_to.eq.${user!.id}`);
+        return query;
+      });
     },
   });
 }
@@ -200,12 +203,12 @@ export function useCRMStats(funnelType: FunnelType) {
   return useQuery({
     queryKey: ["crm-stats", funnelType],
     queryFn: async () => {
-      const { data, error } = await db
+      // Conta e soma: cortado pelo teto, o KPI sairia menor, calado.
+      const leads = await lerSemTeto<any>(() => db
         .from("crm_sales_leads")
         .select("stage, temperature, estimated_revenue, contact_attempts, updated_at")
-        .eq("funnel_type", funnelType);
-      if (error) throw error;
-      const leads = data || [];
+        .eq("funnel_type", funnelType)
+        .order("id"));
       const now = Date.now();
       const staleThreshold = 3 * 24 * 60 * 60 * 1000;
       return {
@@ -228,11 +231,11 @@ export function useCRMAllStats() {
   return useQuery({
     queryKey: ["crm-all-stats"],
     queryFn: async () => {
-      const { data, error } = await db
+      const data = await lerSemTeto<any>(() => db
         .from("crm_sales_leads")
-        .select("funnel_type, lead_segment, stage, temperature, estimated_revenue, updated_at");
-      if (error) throw error;
-      const leads = (data || []) as {
+        .select("funnel_type, lead_segment, stage, temperature, estimated_revenue, updated_at")
+        .order("id"));
+      const leads = data as {
         funnel_type: string; lead_segment: string | null; stage: string;
         temperature: string; estimated_revenue: number | null; updated_at: string;
       }[];

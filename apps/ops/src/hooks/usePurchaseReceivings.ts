@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { lerSemTeto } from "@carbo/shell";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Recebimento (purchase_receivings) — conferir uma OC: registra o que chegou,
@@ -38,12 +39,12 @@ export function usePurchaseReceivings() {
   return useQuery({
     queryKey: ["ops", "purchase-receivings"],
     queryFn: async (): Promise<ReceivingRow[]> => {
-      const res = await db
+      const rows = await lerSemTeto<Record<string, unknown>>(() => db
         .from("purchase_receivings")
         .select("id, received_at, status, has_divergence, items_received, purchase_orders(oc_number, supplier_name)")
-        .order("received_at", { ascending: false });
-      if (res.error) throw res.error;
-      return (res.data ?? []).map((r: Record<string, unknown>) => {
+        .order("received_at", { ascending: false })
+        .order("id"));
+      return rows.map((r: Record<string, unknown>) => {
         const oc = (r.purchase_orders as Record<string, unknown>) ?? {};
         return {
           id: r.id as string,

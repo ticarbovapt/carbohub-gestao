@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { lerSemTeto } from "@carbo/shell";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Contas a Pagar (purchase_payables) — lançar, marcar pago, listar, excluir.
@@ -33,13 +34,14 @@ export function usePayables() {
   return useQuery({
     queryKey: ["ops", "payables"],
     queryFn: async (): Promise<Payable[]> => {
-      const res = await db
+      // ⚠️ Sem teto (o PostgREST corta em 1.000, calado); `id` desempata.
+      const rows = await lerSemTeto<any>(() => db
         .from("purchase_payables")
         .select("id, supplier_name, amount, due_date, status, paid_at, notes, purchase_orders(oc_number)")
-        .order("due_date", { ascending: true });
-      if (res.error) throw res.error;
+        .order("due_date", { ascending: true })
+        .order("id"));
       const td = today();
-      return (res.data ?? []).map((r: any) => {
+      return rows.map((r: any) => {
         const status = (r.status ?? "programado") as PayableStatus;
         const due = r.due_date ? String(r.due_date).slice(0, 10) : "";
         const aberto = status !== "pago" && status !== "cancelado";

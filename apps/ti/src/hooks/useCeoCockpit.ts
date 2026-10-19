@@ -11,6 +11,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { lerSemTeto } from "@carbo/shell";
 
 // Tabelas fora dos tipos gerados do Admin → cliente "solto".
 const db = supabase as unknown as {
@@ -25,8 +26,11 @@ export type SalesPeriod = "semanas" | "meses" | "periodo";
 // DATA: orçamento em aberto e pedido cancelado entravam como receita da
 // diretoria. A view `_secure` mascara PII mas NÃO filtra nada.
 async function fetchOrders(cols: string, apply: (q: any) => any) {
-  const res = await apply(db.from("carbo_vendas_metrica").select(cols).eq("conta_metrica", true));
-  return res.error ? [] : (res.data ?? []);
+  try {
+    return await lerSemTeto(() => apply(db.from("carbo_vendas_metrica").select(cols).eq("conta_metrica", true)));
+  } catch {
+    return [];
+  }
 }
 
 /** Performance de Vendas — agrupado por semana (8 sem), mês (6m) ou período. */
@@ -41,7 +45,7 @@ export function useCeoSales(period: SalesPeriod, from: string, to: string) {
       else { start = from ? new Date(from + "T00:00:00") : (() => { const d = new Date(now); d.setDate(now.getDate() - 30); return d; })(); }
 
       const rows = await fetchOrders("total, created_at, data_efetiva", (q: any) => {
-        let query = q.gte("created_at", start.toISOString()).order("created_at", { ascending: true });
+        let query = q.gte("created_at", start.toISOString()).order("created_at", { ascending: true }).order("id");
         if (period === "periodo" && to) query = query.lte("created_at", to + "T23:59:59");
         return query;
       });
@@ -70,11 +74,10 @@ export function useOsByDepartment() {
   return useQuery({
     queryKey: ["admin-ceo-os-by-department"],
     queryFn: async () => {
-      const { data, error } = await db.from("service_orders")
-        .select("current_department").in("status", ["active", "draft"]);
-      if (error) throw error;
+      const data = await lerSemTeto(() => db.from("service_orders")
+        .select("current_department").in("status", ["active", "draft"]).order("id"));
       const counts: Record<string, number> = {};
-      for (const os of (data ?? []) as { current_department: string | null }[]) {
+      for (const os of data as { current_department: string | null }[]) {
         const dept = os.current_department || "outros";
         counts[dept] = (counts[dept] || 0) + 1;
       }
@@ -96,8 +99,9 @@ export function useCeoAlerts() {
     queryFn: async (): Promise<CockpitAlert[]> => {
       const list: CockpitAlert[] = [];
 
-      const { data: overdueOS } = await db.from("service_orders")
-        .select("id").eq("status", "active").lt("sla_deadline", new Date().toISOString());
+      const overdueOS = await lerSemTeto(() => db.from("service_orders")
+        .select("id").eq("status", "active").lt("sla_deadline", new Date().toISOString()).order("id"))
+        .catch(() => null);
       if (overdueOS && overdueOS.length > 0)
         list.push({ title: "OP com SLA vencido", description: `${overdueOS.length} OP com prazo ultrapassado`, severity: "high" });
 
@@ -109,10 +113,12 @@ export function useCeoAlerts() {
       // fetchOrders, que filtra conta_metrica. E `motivo_fora` pega pending E
       // confirmed; antes olhava só `confirmed` com invoice_number nulo, então
       // pedido pendente sem NF ficava invisível para a diretoria.
-      const { data: pending } = await db
+      const pending = await lerSemTeto(() => db
         .from("carbo_vendas_metrica")
         .select("id")
-        .eq("motivo_fora", "aguardando_nf");
+        .eq("motivo_fora", "aguardando_nf")
+        .order("id"))
+        .catch(() => null);
       if (pending && pending.length > 0)
         list.push({ title: "Faturamento pendente", description: `${pending.length} pedidos aguardando NF`, severity: "low" });
 
@@ -131,8 +137,9 @@ export function useCeoAchievements() {
       const list: CockpitAchievement[] = [];
       const startOfMonth = new Date(new Date().setDate(1)).toISOString();
 
-      const { data: completedOS } = await db.from("service_orders")
-        .select("id").eq("status", "completed").gte("updated_at", startOfMonth);
+      const completedOS = await lerSemTeto(() => db.from("service_orders")
+        .select("id").eq("status", "completed").gte("updated_at", startOfMonth).order("id"))
+        .catch(() => null);
       if (completedOS && completedOS.length > 0)
         list.push({ title: "OP concluídas no mês", description: `${completedOS.length} ordens finalizadas` });
 
@@ -174,8 +181,9 @@ export function useRuptureData() {
     queryFn: async () => {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      const { data } = await db.from("machine_consumption_history")
-        .select("machine_id, units_dispensed").gte("date", thirtyDaysAgo.toISOString().split("T")[0]);
+      const data = await lerSemTeto(() => db.from("machine_consumption_history")
+        .select("machine_id, units_dispensed").gte("date", thirtyDaysAgo.toISOString().split("T")[0]).order("id"))
+        .catch(() => null);
       return (data ?? []) as any[];
     },
   });

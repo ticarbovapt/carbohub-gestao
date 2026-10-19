@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { lerSemTeto } from "@carbo/shell";
 import { FILTRO_VENDA_DO_TIME } from "@/lib/vendaDoTime";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -146,17 +147,21 @@ export function useVendas(status?: VendaStatus | "all") {
       // O corte é por `segmento = 'online'`, não pela origem: pedido do Bling 2
       // que é venda direta (loja 0, balcão) CONTINUA aparecendo, porque é venda
       // de gente. O Bling 1 também segue como está.
-      let q = db.from("carboze_orders").select("*")
-        .or(FILTRO_VENDA_DO_TIME)
-        .order("created_at", { ascending: false });
-      if (status && status !== "all") {
-        if (status === "orcamento") q = q.eq("status", "quote");
-        else if (status === "cancelado") q = q.eq("status", "cancelled");
-        else q = q.not("status", "in", "(quote,cancelled)");
-      }
-      const { data, error } = await q;
-      if (error) throw error;
-      return (data ?? []).map(toVenda);
+      // ⚠️ Sem teto: a tabela passou de 1.000 pedidos e o PostgREST corta
+      // calado. `id` desempata — sem ordem estável a paginação repete/perde linha.
+      const data = await lerSemTeto<any>(() => {
+        let q = db.from("carboze_orders").select("*")
+          .or(FILTRO_VENDA_DO_TIME)
+          .order("created_at", { ascending: false })
+          .order("id");
+        if (status && status !== "all") {
+          if (status === "orcamento") q = q.eq("status", "quote");
+          else if (status === "cancelado") q = q.eq("status", "cancelled");
+          else q = q.not("status", "in", "(quote,cancelled)");
+        }
+        return q;
+      });
+      return data.map(toVenda);
     },
   });
 }

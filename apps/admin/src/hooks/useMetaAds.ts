@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { subDays, startOfMonth, format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
+import { lerSemTeto } from "@carbo/shell";
 import { toast } from "sonner";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -219,21 +220,26 @@ export function useMetaAds(period: MetaPeriod, custom?: MetaCustom, actId?: stri
     queryKey: ["meta-ads", "insights", from, to, actId ?? "todas"],
     staleTime: 2 * 60 * 1000,
     queryFn: async (): Promise<MetaAdsResumo> => {
-      let q = db
-        .from("meta_ads_diario")
-        .select("*")
-        .gte("dia", from)
-        .lte("dia", to);
-      if (actId) q = q.eq("act_id", actId);
+      // A consulta nasce de novo a cada página: o builder do PostgREST é
+      // mutável, e reaproveitá-lo acumularia o `.order()` de uma página na outra.
+      const consulta = () => {
+        let q = db
+          .from("meta_ads_diario")
+          .select("*")
+          .gte("dia", from)
+          .lte("dia", to);
+        if (actId) q = q.eq("act_id", actId);
+        return q;
+      };
 
-      // ⚠️ Teto explícito. O PostgREST corta em 1.000 por padrão e devolve a
-      // página SEM avisar — o dashboard mostraria um total silenciosamente
-      // menor que o real. 50k cobre ~30 dias de centenas de anúncios; se um dia
-      // estourar, o certo é agregar em SQL, não subir este número.
-      const { data, error } = await q.order("dia", { ascending: true }).limit(50000);
-      if (error) throw error;
+      // ⚠️ O PostgREST corta em 1.000 e devolve a página SEM avisar — o
+      // dashboard mostraria um total silenciosamente menor que o real. E o
+      // `.limit(50000)` que havia aqui NÃO furava o teto: virava 1.000 do mesmo
+      // jeito. Por isso páginas, com (dia, ad_id) — a chave da tabela — como
+      // ordem estável. Se um dia ficar pesado, o certo é agregar em SQL.
+      const data = await lerSemTeto<MetaAdRow>(() => consulta().order("dia", { ascending: true }).order("ad_id", { ascending: true }));
 
-      return resumir((data ?? []) as MetaAdRow[]);
+      return resumir(data);
     },
   });
 }

@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { lerSemTeto } from "@carbo/shell";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Perdas de insumo na produção (op_material_loss), agregadas por insumo.
@@ -24,13 +25,14 @@ export function useMaterialLosses() {
   return useQuery({
     queryKey: ["ops", "material-loss"],
     queryFn: async (): Promise<MaterialLoss[]> => {
-      const res = await db
+      // Soma por insumo: linha cortada pelo teto de 1.000 seria perda a menos.
+      const linhas = await lerSemTeto<any>(() => db
         .from("op_material_loss")
-        .select("insumo_id, loss_qty, actual_qty, theoretical_qty, unit, produto:mrp_products(name, product_code)");
-      if (res.error) throw res.error;
+        .select("insumo_id, loss_qty, actual_qty, theoretical_qty, unit, produto:mrp_products(name, product_code)")
+        .order("id"));
 
       const byInsumo = new Map<string, MaterialLoss>();
-      for (const r of res.data ?? []) {
+      for (const r of linhas) {
         const loss = Number(r.loss_qty) || 0;
         const cur = byInsumo.get(r.insumo_id) ?? {
           insumo_id: r.insumo_id,

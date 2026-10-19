@@ -5,6 +5,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { lerPorIdsSemTeto } from "@carbo/shell";
 import { toast } from "sonner";
 import type { ComercialOrderRow } from "@/hooks/useComercialOrders";
 
@@ -83,11 +84,11 @@ export function useCreateFollowupLead() {
       if (!ids.length) throw new Error("Cliente sem pedidos.");
 
       // Query extra: itens de TODOS os pedidos (o hook-mãe não traz `items`).
-      const { data: raw, error: qErr } = await db
+      const raw = await lerPorIdsSemTeto(ids, (lote) => db
         .from("carboze_orders")
         .select("id, order_number, created_at, total, items, cnpj, customer_name, delivery_city, delivery_state, vendedor_id")
-        .in("id", ids);
-      if (qErr) throw qErr;
+        .in("id", lote)
+        .order("id"));
 
       const pedidos: PedidoHist[] = ((raw ?? []) as any[])
         .map((o) => ({

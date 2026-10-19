@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { lerSemTeto } from "@carbo/shell";
 import { toast } from "sonner";
 import type { Shipment, ShipmentStatus } from "@/components/logistica/shipments";
 
@@ -19,9 +20,9 @@ export function useShipments() {
   return useQuery({
     queryKey: ["ops", "shipments"],
     queryFn: async (): Promise<Shipment[]> => {
-      const res = await db.from("ops_shipments").select("*").order("created_at", { ascending: false });
-      if (res.error) throw res.error;
-      return (res.data ?? []).map((s: any) => ({
+      const rows = await lerSemTeto<any>(() =>
+        db.from("ops_shipments").select("*").order("created_at", { ascending: false }).order("id"));
+      return rows.map((s: any) => ({
         id: s.id,
         order_number: s.order_number ?? "—",
         destination: s.destination ?? "—",
