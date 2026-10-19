@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { lerSemTeto } from "@carbo/shell";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -24,14 +25,13 @@ function useOSFlowData() {
   return useQuery({
     queryKey: ["admin-os-flow-map"],
     queryFn: async () => {
-      const { data, error } = await db.from("service_orders")
-        .select("id, current_department, status").in("status", ["active", "draft"]);
-      if (error) throw error;
+      const data = await lerSemTeto(() => db.from("service_orders")
+        .select("id, current_department, status").in("status", ["active", "draft"]).order("id"));
 
       const counts: Record<string, number> = {
         venda: 0, preparacao: 0, expedicao: 0, operacao: 0, administrativo: 0, financeiro: 0, pos_venda: 0,
       };
-      (data ?? []).forEach((os: { current_department: string | null }) => {
+      data.forEach((os: { current_department: string | null }) => {
         if (os.current_department && Object.prototype.hasOwnProperty.call(counts, os.current_department)) {
           counts[os.current_department]++;
         }

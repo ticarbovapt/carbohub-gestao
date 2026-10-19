@@ -12,6 +12,7 @@ export type { AppSwitcherProps } from "./AppSwitcher";
 export { StatusTarja } from "./StatusTarja";
 export type { StatusTarjaProps, StatusAviso, StatusSeveridade } from "./StatusTarja";
 export { cn } from "./cn";
+export { lerSemTeto, lerPorIdsSemTeto, fetchQueAcusaTeto, TETO_POSTGREST } from "./leitura";
 export { usePaginaAtual, PaginaNaoEncontrada, tituloDaRota } from "./pagina";
 export { useParamUrl } from "./urlState";
 export { useVoltarFecha, FecharComVoltar } from "./voltarFecha";

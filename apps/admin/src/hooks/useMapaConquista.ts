@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { lerSemTeto } from "@carbo/shell";
 
 /**
  * Mapa da conquista — onde a Carbo já chegou.
@@ -55,12 +56,12 @@ export function useCidadesConquistadas() {
   return useQuery({
     queryKey: ["mapa-conquista"],
     queryFn: async (): Promise<CidadeConquistada[]> => {
-      const { data, error } = await (supabase as any)
+      // Uma linha por (cidade, uf): o par é único e serve de ordem estável.
+      return await lerSemTeto<CidadeConquistada>(() => (supabase as any)
         .from("mapa_conquista")
         .select("*")
-        .limit(6000);
-      if (error) throw error;
-      return (data ?? []) as CidadeConquistada[];
+        .order("uf")
+        .order("cidade"));
     },
     staleTime: 5 * 60_000,
   });

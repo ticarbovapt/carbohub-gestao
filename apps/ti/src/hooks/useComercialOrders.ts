@@ -2,6 +2,7 @@
 // TODOS os gráficos do Dashboard Comercial. Mesma base, mesmos filtros.
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { lerSemTeto } from "@carbo/shell";
 
 const db = supabase as unknown as { from: (t: string) => any };
 
@@ -46,12 +47,11 @@ export function useComercialOrders(filters: ComercialFonteFilters = {}) {
   return useQuery({
     queryKey: ["comercial-fonte", vendedorId ?? "all", from ?? "", to ?? "", segmento ?? "all"],
     queryFn: async (): Promise<ComercialFonteData> => {
-      const { data, error } = await db
+      const data = await lerSemTeto<any>(() => db
         .from("carbo_vendas_metrica")
         .select("id, order_number, created_at, customer_name, cnpj, vendedor_name, vendedor_id, segmento, status, total, excluir_metricas, external_ref, origem_override, bling_nf_id, nf_numero, nf_situacao, nf_valida, conta_metrica, motivo_fora")
         .order("created_at", { ascending: false })
-        .limit(5000);
-      if (error) throw error;
+        .order("id", { ascending: false }));
 
       const fromTs = from ? new Date(from + "T00:00:00").getTime() : null;
       const toTs = to ? new Date(to + "T23:59:59").getTime() : null;

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { lerSemTeto } from "@carbo/shell";
 import type { Json } from "@/integrations/supabase/types";
 
 export type OrderStatus = "pending" | "confirmed" | "invoiced" | "shipped" | "delivered" | "cancelled";
@@ -150,17 +151,18 @@ export function useOrders(statusFilter?: OrderStatus | "all") {
       // declarada, e o PostgREST quebra ao tentar embutir licensees/sku
       // (deixava a lista vazia mesmo com pedidos). Usamos as colunas
       // denormalizadas (vendedor_name, customer_name, linha) já presentes.
-      let query = supabase
-        .from("carboze_orders_secure")
-        .select("*")
-        .order("created_at", { ascending: false });
+      const data = await lerSemTeto<CarbozeOrder>(() => {
+        let query = supabase
+          .from("carboze_orders_secure")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .order("id");
 
-      if (statusFilter && statusFilter !== "all") {
-        query = query.eq("status", statusFilter);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
+        if (statusFilter && statusFilter !== "all") {
+          query = query.eq("status", statusFilter);
+        }
+        return query;
+      });
       return data as CarbozeOrder[];
     },
   });
@@ -259,11 +261,10 @@ export function useOrderStats() {
   return useQuery({
     queryKey: ["order-stats"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const data = await lerSemTeto<any>(() => supabase
         .from("carboze_orders_secure")
-        .select("status, total, has_commission, commission_amount");
-
-      if (error) throw error;
+        .select("status, total, has_commission, commission_amount")
+        .order("id"));
 
       const stats = {
         total: data.length,

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { lerSemTeto } from "@carbo/shell";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Mapa SKU da plataforma → produto do MRP  (`sku_product_mappings`)
@@ -187,13 +188,20 @@ export function useSkusSemMapa() {
   return useQuery({
     queryKey: [...CHAVE, "sem-mapa"],
     queryFn: async (): Promise<SkuSemMapa[]> => {
-      const { data, error } = await db
-        .from("carbo_estoque_ensaio")
-        .select("platform, product_sku, product_name, qtd_vendida, veredito, ordered_at")
-        .ilike("veredito", "%SEM MAPEAMENTO%")
-        .order("ordered_at", { ascending: false })
-        .limit(5000);
-      if (error) throw traduzErro(error);
+      // ⚠️ `.limit(5000)` virava 1.000 no PostgREST, calado: a contagem de
+      // linhas/packs sairia menor. Pagina; (platform, order_id) é a chave única.
+      let data: any[];
+      try {
+        data = await lerSemTeto<any>(() => db
+          .from("carbo_estoque_ensaio")
+          .select("platform, product_sku, product_name, qtd_vendida, veredito, ordered_at")
+          .ilike("veredito", "%SEM MAPEAMENTO%")
+          .order("ordered_at", { ascending: false })
+          .order("platform")
+          .order("order_id"));
+      } catch (e) {
+        throw traduzErro(e as any);
+      }
 
       // ⚠️ Linha SEM `product_sku` NÃO é descartada. Ela era descartada por um
       // `if (!r.product_sku) continue`, e o efeito era o pior possível: a Shopee
@@ -206,7 +214,7 @@ export function useSkusSemMapa() {
       // livre e um separador qualquer pode aparecer dentro deles — e `null`
       // precisa ser uma chave distinta de qualquer string, não virar "null".
       const agg = new Map<string, SkuSemMapa>();
-      for (const r of (data ?? []) as any[]) {
+      for (const r of data) {
         const sku: string | null = r.product_sku ?? null;
         const chave = JSON.stringify([r.platform ?? null, sku]);
         const atual = agg.get(chave);

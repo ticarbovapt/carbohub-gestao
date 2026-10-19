@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { lerSemTeto } from "../_shared/lerTudo.ts";
 
 const ALLOWED_ORIGINS = [
   "https://controle.carbohub.com.br",
@@ -42,14 +43,17 @@ serve(async (req) => {
     const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
 
     // Gather historical data
-    const [osRes, ordersRes, productsRes] = await Promise.all([
+    const [osRes, orders, productsRes] = await Promise.all([
       supabase.from("service_orders").select("id, status, created_at, current_department, metadata").gte("created_at", ninetyDaysAgo.toISOString()),
-      supabase.from("carboze_orders").select("id, product_code, total, status, created_at, licensee_id").gte("created_at", ninetyDaysAgo.toISOString()),
+      // ⚠️ Paginado: 90 dias de pedidos passam do teto de 1.000 do PostgREST,
+      // que corta calado — e receita e volume abaixo são SOMA.
+      lerSemTeto<{ id: string; product_code: string; total: number | null; status: string; created_at: string; licensee_id: string | null }>(() =>
+        supabase.from("carboze_orders").select("id, product_code, total, status, created_at, licensee_id")
+          .gte("created_at", ninetyDaysAgo.toISOString()).order("created_at").order("id")),
       supabase.from("mrp_products").select("product_code, name, category").eq("is_active", true),
     ]);
 
     const os = osRes.data || [];
-    const orders = ordersRes.data || [];
     const products = productsRes.data || [];
 
     // Aggregate by week

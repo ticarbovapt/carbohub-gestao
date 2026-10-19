@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { subDays, format, startOfDay } from "date-fns";
+import { lerPorIdsSemTeto } from "@carbo/shell";
 
 export interface DailyMovement {
   date: string;
@@ -23,15 +24,14 @@ export function useProductMovements30d(productIds: string[]) {
     queryFn: async () => {
       const since = format(subDays(new Date(), 30), "yyyy-MM-dd");
 
-      const { data, error } = await supabase
+      const data = await lerPorIdsSemTeto<any>(productIds, (lote) => supabase
         .from("stock_movements")
         .select("product_id, tipo, quantidade, created_at")
-        .in("product_id", productIds)
+        .in("product_id", lote)
         .eq("tipo", "saida")
         .gte("created_at", since)
-        .order("created_at", { ascending: true });
-
-      if (error) throw error;
+        .order("created_at", { ascending: true })
+        .order("id"));
 
       const result: Record<string, Product30dStats> = {};
 

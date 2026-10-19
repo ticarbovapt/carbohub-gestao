@@ -13,6 +13,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { lerSemTeto } from "@carbo/shell";
 
 export interface EstrategicoData {
   activeOS: number;
@@ -70,13 +71,14 @@ export function useDashEstrategico(months = 12) {
       // ── Receita por mês (view secure; fallback carboze_orders) ────────────
       // ⚠️ FONTE ÚNICA. Antes somava `total` com filtro só de data — orçamento
       // e cancelado entravam como receita no painel estratégico.
-      const rev = await supabase
+      const orders = await lerSemTeto<OrderRow>(() => supabase
         .from("carbo_vendas_metrica" as never)
         .select("total, created_at")
         .eq("conta_metrica", true)
         .gte("created_at", chartFrom)
-        .order("created_at", { ascending: true });
-      const orders = (rev.error ? [] : (rev.data ?? [])) as OrderRow[];
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true }))
+        .catch(() => [] as OrderRow[]);
 
       const monthMap: Record<string, { receita: number; vendas: number }> = {};
       let monthlyRevenue = 0;

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { lerSemTeto } from "@carbo/shell";
 
 const db = supabase as unknown as { from: (t: string) => any; rpc: (fn: string, args?: any) => any };
 
@@ -34,11 +35,12 @@ export function useReceivablesOpen(source?: string) {
   return useQuery({
     queryKey: ["receivables-open", source ?? "all"],
     queryFn: async () => {
-      let q = db.from("receivables").select("id, amount, due_date, status, source")
-        .neq("status", "recebido").neq("status", "cancelado");
-      if (source && source !== "all") q = q.eq("source", source);
-      const { data, error } = await q;
-      if (error) throw error;
+      const data = await lerSemTeto<any>(() => {
+        let q = db.from("receivables").select("id, amount, due_date, status, source")
+          .neq("status", "recebido").neq("status", "cancelado").order("id");
+        if (source && source !== "all") q = q.eq("source", source);
+        return q;
+      });
       return (data || []) as any[];
     },
   });
@@ -129,8 +131,8 @@ export function useInvoicedOrdersNoReceivable() {
   return useQuery({
     queryKey: ["invoiced-no-receivable"],
     queryFn: async (): Promise<InvoicedOrder[]> => {
-      const { data: recs, error: e1 } = await db.from("receivables").select("order_id").not("order_id", "is", null);
-      if (e1) throw e1;
+      const recs = await lerSemTeto<any>(() =>
+        db.from("receivables").select("order_id").not("order_id", "is", null).order("id"));
       const linked = new Set((recs ?? []).map((r: any) => r.order_id));
       const { data: orders, error } = await db
         .from("carboze_orders_secure")

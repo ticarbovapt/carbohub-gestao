@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { lerSemTeto } from "@carbo/shell";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Ordens de Compra (purchase_orders) — ler + gerar a partir de uma requisição
@@ -36,12 +37,12 @@ export function usePurchaseOrders() {
   return useQuery({
     queryKey: ["ops", "purchase-orders"],
     queryFn: async (): Promise<OcRow[]> => {
-      const res = await db
+      const rows = await lerSemTeto<Record<string, unknown>>(() => db
         .from("purchase_orders")
         .select("id, oc_number, supplier_name, items, total_value, status")
-        .order("created_at", { ascending: false });
-      if (res.error) throw res.error;
-      return (res.data ?? []).map((r: Record<string, unknown>) => ({
+        .order("created_at", { ascending: false })
+        .order("id"));
+      return rows.map((r: Record<string, unknown>) => ({
         id: r.id as string,
         oc_number: (r.oc_number as string) ?? "—",
         supplier_name: (r.supplier_name as string) ?? "—",

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { lerSemTeto } from "@carbo/shell";
 import { toast } from "sonner";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -100,12 +101,12 @@ export function usePdvs() {
   return useQuery({
     queryKey: ["pdvs", "painel"],
     queryFn: async (): Promise<PdvRow[]> => {
-      const { data, error } = await db
+      const data = await lerSemTeto<PdvRow>(() => db
         .from("carbo_pdvs_painel")
         .select("*")
-        .order("name", { ascending: true });
-      if (error) throw error;
-      return ((data ?? []) as PdvRow[]).map((p) => ({
+        .order("name", { ascending: true })
+        .order("id", { ascending: true }));
+      return data.map((p) => ({
         ...p,
         pedidos: Number(p.pedidos) || 0,
         total_comprado: Number(p.total_comprado) || 0,

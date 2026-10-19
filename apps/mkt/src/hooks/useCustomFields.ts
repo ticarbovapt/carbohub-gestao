@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { lerSemTeto, lerPorIdsSemTeto } from "@carbo/shell";
 
 // Campos Personalizados por quadro — definições + mutações. O valor por cartão
 // fica em useCardDetail (fieldValues / setFieldValue).
@@ -39,14 +40,15 @@ export function useBoardFieldValues(boardId: string | null) {
     queryKey: ["mkt", "field-values", boardId],
     enabled: !!boardId,
     queryFn: async (): Promise<Map<string, Record<string, unknown>>> => {
-      const cardsRes = await db.from("mkt_cards").select("id").eq("board_id", boardId).eq("is_archived", false);
-      if (cardsRes.error) throw cardsRes.error;
-      const ids: string[] = (cardsRes.data ?? []).map((c: { id: string }) => c.id);
+      // Sem teto e em lotes: quadro importado passa de mil cartões, e `.in()` com
+      // centenas de uuids estoura a URL.
+      const cards = await lerSemTeto<{ id: string }>(() => db.from("mkt_cards").select("id").eq("board_id", boardId).eq("is_archived", false).order("id"));
+      const ids: string[] = cards.map((c) => c.id);
       const map = new Map<string, Record<string, unknown>>();
       if (ids.length === 0) return map;
-      const fvRes = await db.from("mkt_card_field_values").select("card_id, field_id, value").in("card_id", ids);
-      if (fvRes.error) throw fvRes.error;
-      for (const r of (fvRes.data ?? []) as { card_id: string; field_id: string; value: unknown }[]) {
+      const valores = await lerPorIdsSemTeto<{ card_id: string; field_id: string; value: unknown }>(ids, (lote) =>
+        db.from("mkt_card_field_values").select("card_id, field_id, value").in("card_id", lote).order("card_id").order("field_id"));
+      for (const r of valores) {
         const rec = map.get(r.card_id) ?? {};
         rec[r.field_id] = r.value;
         map.set(r.card_id, rec);

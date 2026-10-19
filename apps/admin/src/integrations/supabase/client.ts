@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { fetchQueAcusaTeto } from "@carbo/shell";
 import { crossSubdomainStorage, AUTH_STORAGE_KEY } from "@/lib/sso";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
@@ -27,4 +28,7 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     autoRefreshToken: true,
     detectSessionInUrl: true,
   },
+  // Toda leitura cortada no teto de 1.000 do PostgREST aparece no console e em
+  // `carbo_teto_atingido` (ver packages/shell/src/leitura.ts).
+  global: { fetch: fetchQueAcusaTeto("admin") },
 });

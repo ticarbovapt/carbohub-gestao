@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { EnvioMsg } from "@/hooks/useMensagensCliente";
 import { lerTudo } from "@/lib/lerTudo";
+import { lerSemTeto } from "@carbo/shell";
 
 /**
  * ⚠️ NENHUMA leitura desta tela pode ter teto (19/10/2026). Com mais de 500
@@ -359,12 +360,17 @@ export function useEcommerceAguardando() {
   return useQuery({
     queryKey: ["ecommerce-aguardando-bling"],
     queryFn: async (): Promise<AguardandoRow[]> => {
-      const { data, error } = await (supabase as any)
+      // ⚠️ Sem teto: a view não tem janela de data, e canal que não chega ao
+      // Bling acumula aqui. `ordered_at` + (platform, pedido_loja) dão ordem
+      // ÚNICA e a mesma de `minutos_parado` (que anda com o relógio).
+      const data = await lerSemTeto<AguardandoRow>(() => (supabase as any)
         .from("ecommerce_aguardando_bling")
         .select("*")
-        .order("minutos_parado", { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as AguardandoRow[];
+        .order("minutos_parado", { ascending: false })
+        .order("ordered_at", { ascending: true })
+        .order("platform")
+        .order("pedido_loja"));
+      return data;
     },
     // Mesmo relógio do quadro — ver RECARGA_MS. Foi a diferença entre os dois
     // que fazia o card sumir na travessia.
@@ -513,11 +519,17 @@ export function useNaoContatarLista() {
   return useQuery({
     queryKey: ["nao-contatar-lista"],
     queryFn: async (): Promise<Set<string>> => {
-      const { data, error } = await (supabase as any)
-        .from("carbo_wa_nao_contatar").select("chave").is("removido_em", null);
-      // Antes da migração 20261053 a tabela não existe: a tela segue como era.
-      if (error) { console.warn("[esteira] carbo_wa_nao_contatar:", error.message); return new Set(); }
-      return new Set(((data ?? []) as { chave: string }[]).map((r) => r.chave));
+      // ⚠️ Sem teto: a lista só cresce (a linha nunca é apagada). `chave` é a PK.
+      let data: { chave: string }[];
+      try {
+        data = await lerSemTeto<{ chave: string }>(() => (supabase as any)
+          .from("carbo_wa_nao_contatar").select("chave").is("removido_em", null).order("chave"));
+      } catch (e) {
+        // Antes da migração 20261053 a tabela não existe: a tela segue como era.
+        console.warn("[esteira] carbo_wa_nao_contatar:", (e as Error).message);
+        return new Set();
+      }
+      return new Set(data.map((r) => r.chave));
     },
     refetchInterval: 60_000,
   });

@@ -3,6 +3,7 @@ import { telefoneParaBling } from "../_shared/telefoneBling.ts";
 import { totalDaVenda, repartirParcelas, somaParcelas, descontoSemBonificacao } from "../_shared/blingParcelas.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.39.3";
 import { ehTimeInterno } from "../_shared/interfacesInternas.ts";
+import { lerSemTeto } from "../_shared/lerTudo.ts";
 
 const ALLOWED_ORIGINS = [
   "https://controle.carbohub.com.br",  // app principal de gestão
@@ -2037,11 +2038,17 @@ async function bridgeOrdersToCarbohub(
   logId: string
 ): Promise<{ synced: number; failed: number }> {
   // Load reference data
-  const [{ data: blingOrders }, { data: skus }, { data: licensees }, { data: contacts }, { data: lojas }] = await Promise.all([
-    supabaseAdmin.from("bling_orders").select("*").order("data", { ascending: false }),
+  //
+  // ⚠️ `bling_orders` e `bling_contacts` crescem sem parar e o PostgREST corta
+  // em 1.000 linhas calado: sem paginar, o contato do pedido novo ficava fora
+  // do `contatoMap` e o pedido nascia sem documento, telefone e endereço.
+  const [blingOrders, { data: skus }, { data: licensees }, contacts, { data: lojas }] = await Promise.all([
+    lerSemTeto<any>(() => supabaseAdmin.from("bling_orders").select("*")
+      .order("data", { ascending: false }).order("id")),
     supabaseAdmin.from("sku").select("id, code, name"),
     supabaseAdmin.from("licensees").select("id, name, trade_name, cnpj"),
-    supabaseAdmin.from("bling_contacts").select("bling_id, cpf_cnpj, ie, email, telefone, celular, raw_data"),
+    lerSemTeto<any>(() => supabaseAdmin.from("bling_contacts")
+      .select("bling_id, cpf_cnpj, ie, email, telefone, celular, raw_data").order("id")),
     supabaseAdmin.from("bling_lojas").select("bling_id, e_online, ignorar"),
   ]);
 
@@ -2277,11 +2284,15 @@ async function runTreatment(
   const logs: any[] = [];
 
   // Load reference data
-  const [{ data: blingOrders }, { data: existingOrders }, { data: licensees }, { data: contacts }] = await Promise.all([
-    supabaseAdmin.from("bling_orders").select("bling_id, contato_nome, total, items"),
-    supabaseAdmin.from("carboze_orders").select("external_ref"),
+  // ⚠️ Sem paginar, o PostgREST devolve 1.000 linhas e cala: `carboze_orders`
+  // já passou disso, e o conjunto de "já importado" saía incompleto.
+  const [blingOrders, existingOrders, { data: licensees }, contacts] = await Promise.all([
+    lerSemTeto<any>(() => supabaseAdmin.from("bling_orders")
+      .select("bling_id, contato_nome, total, items").order("id")),
+    lerSemTeto<any>(() => supabaseAdmin.from("carboze_orders").select("external_ref").order("id")),
     supabaseAdmin.from("licensees").select("id, name, trade_name"),
-    supabaseAdmin.from("bling_contacts").select("bling_id, is_supplier, is_client"),
+    lerSemTeto<any>(() => supabaseAdmin.from("bling_contacts")
+      .select("bling_id, is_supplier, is_client").order("id")),
   ]);
 
   const existingRefs = new Set((existingOrders || []).map((o: any) => o.external_ref));

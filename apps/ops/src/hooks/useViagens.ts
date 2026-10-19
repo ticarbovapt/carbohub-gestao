@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { lerSemTeto } from "@carbo/shell";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Viagens corporativas (ops_viagens) — tabela interna do Carbo Ops.
@@ -37,9 +38,9 @@ export function useViagens() {
   return useQuery({
     queryKey: ["ops", "viagens"],
     queryFn: async (): Promise<Viagem[]> => {
-      const res = await db.from("ops_viagens").select("*").order("created_at", { ascending: false });
-      if (res.error) throw res.error;
-      return (res.data ?? []).map((v: any) => ({
+      const rows = await lerSemTeto<any>(() =>
+        db.from("ops_viagens").select("*").order("created_at", { ascending: false }).order("id"));
+      return rows.map((v: any) => ({
         id: v.id,
         solicitante: v.solicitante ?? "—",
         destino: v.destino ?? "—",

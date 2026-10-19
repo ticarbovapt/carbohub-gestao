@@ -8,6 +8,7 @@ import {
 // sua própria tabela, e ela discordava da canônica justamente em `PROCESSED`.
 import { statusDaShopee } from "../_shared/shopeePedido.ts";
 import { linhasDaPayt } from "../_shared/paytPedido.ts";
+import { lerSemTeto } from "../_shared/lerTudo.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -467,15 +468,22 @@ async function reprocessarPayt(req: Request): Promise<Response> {
   if (req.headers.get("X-Cron-Secret") !== segredo) return json({ error: "Segredo inválido ou ausente." }, 401);
 
   const desde = new Date(Date.now() - 7 * 86_400_000).toISOString();
-  const { data: eventos, error } = await supabase
-    .from("payt_eventos")
-    .select("body_hash, transaction_id, corpo, recebido_em")
-    .eq("eh_teste", false)
-    .not("transaction_id", "is", null)
-    .gte("recebido_em", desde)
-    .order("recebido_em", { ascending: false })
-    .limit(1000);
-  if (error) return json({ error: `ler payt_eventos: ${error.message}` }, 500);
+  // ⚠️ Os 7 dias INTEIROS, paginado: o PostgREST corta em 1.000 calado, e o
+  // que caísse fora seriam justamente os eventos mais velhos da janela — a
+  // venda que esta rota existe para recuperar.
+  let eventos: { body_hash: string; transaction_id: string; corpo: unknown; recebido_em: string }[];
+  try {
+    eventos = await lerSemTeto(() => supabase
+      .from("payt_eventos")
+      .select("body_hash, transaction_id, corpo, recebido_em")
+      .eq("eh_teste", false)
+      .not("transaction_id", "is", null)
+      .gte("recebido_em", desde)
+      .order("recebido_em", { ascending: false })
+      .order("id", { ascending: false }));
+  } catch (e) {
+    return json({ error: `ler payt_eventos: ${(e as Error).message}` }, 500);
+  }
 
   // O mais recente de cada transação (a lista já vem do mais novo para o velho).
   const ultimo = new Map<string, { body_hash: string; corpo: unknown }>();

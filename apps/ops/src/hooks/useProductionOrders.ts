@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { lerSemTeto, lerPorIdsSemTeto } from "@carbo/shell";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Ordens de Produção (production_orders) — ler / criar / editar / excluir.
@@ -54,26 +55,25 @@ export function useProductionOrders() {
   return useQuery({
     queryKey: ["ops", "production-orders"],
     queryFn: async (): Promise<OpRow[]> => {
-      const res = await db
+      const rows = await lerSemTeto<any>(() => db
         .from("production_orders")
         .select("id, op_number, sku_id, product_id, planned_quantity, good_quantity, rejected_quantity, priority, op_status, demand_source, need_date, product_code, source_order_id, production_route, created_at, updated_at, stage_since, customer_name")
-        .order("created_at", { ascending: false });
-      if (res.error) throw res.error;
-      const rows = res.data ?? [];
+        .order("created_at", { ascending: false })
+        .order("id"));
 
       // Produção é ancorada em mrp_products; mantemos o fallback de sku por compat
       // com OPs antigas. Resolve os dois catálogos para exibir código/nome no card.
       const skuIds = [...new Set(rows.map((r: any) => r.sku_id).filter(Boolean))];
       const prodIds = [...new Set(rows.map((r: any) => r.product_id).filter(Boolean))];
       const orderIds = [...new Set(rows.map((r: any) => r.source_order_id).filter(Boolean))];
-      const [skuRes, prodRes, orderRes] = await Promise.all([
-        skuIds.length ? db.from("sku").select("id, code, name").in("id", skuIds) : Promise.resolve({ data: [] }),
-        prodIds.length ? db.from("mrp_products").select("id, product_code, name").in("id", prodIds) : Promise.resolve({ data: [] }),
-        orderIds.length ? db.from("carboze_orders").select("id, customer_name").in("id", orderIds) : Promise.resolve({ data: [] }),
+      const [skuRows, prodRows, orderRows] = await Promise.all([
+        lerPorIdsSemTeto<any>(skuIds, (lote) => db.from("sku").select("id, code, name").in("id", lote).order("id")),
+        lerPorIdsSemTeto<any>(prodIds, (lote) => db.from("mrp_products").select("id, product_code, name").in("id", lote).order("id")),
+        lerPorIdsSemTeto<any>(orderIds, (lote) => db.from("carboze_orders").select("id, customer_name").in("id", lote).order("id")),
       ]);
-      const skuMap = new Map((skuRes.data ?? []).map((s: any) => [s.id, { code: s.code, name: s.name }]));
-      const prodMap = new Map((prodRes.data ?? []).map((p: any) => [p.id, { code: p.product_code, name: p.name }]));
-      const custMap = new Map((orderRes.data ?? []).map((o: any) => [o.id, o.customer_name as string | null]));
+      const skuMap = new Map(skuRows.map((s: any) => [s.id, { code: s.code, name: s.name }]));
+      const prodMap = new Map(prodRows.map((p: any) => [p.id, { code: p.product_code, name: p.name }]));
+      const custMap = new Map(orderRows.map((o: any) => [o.id, o.customer_name as string | null]));
 
       return rows.map((r: any) => {
         const ref = prodMap.get(r.product_id) ?? skuMap.get(r.sku_id) as { code: string; name: string } | undefined;
@@ -373,14 +373,13 @@ export function useParcelasAgendadas() {
   return useQuery({
     queryKey: ["parcelas_agendadas"],
     queryFn: async (): Promise<ParcelaAgendada[]> => {
-      const { data, error } = await (db as any)
+      // A coluna mostra a CONTAGEM: com `.limit(200)` ela parava em 200 calada.
+      return await lerSemTeto<ParcelaAgendada>(() => (db as any)
         .from("carboze_orders")
         .select("id, order_number, customer_name, scheduled_month, total, recurrence_index, recurrence_total, items, agreed_delivery_date")
         .eq("status", "agendado")
         .order("scheduled_month", { ascending: true })
-        .limit(200);
-      if (error) throw error;
-      return (data ?? []) as ParcelaAgendada[];
+        .order("id"));
     },
   });
 }

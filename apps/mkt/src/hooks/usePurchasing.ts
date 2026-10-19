@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
+import { lerSemTeto } from "@carbo/shell";
 import type {
   PurchaseRequest,
   PurchaseOrder,
@@ -19,16 +20,17 @@ export function usePurchaseRequests(filters?: { status?: string; costCenter?: st
   return useQuery({
     queryKey: ["purchase-requests", filters],
     queryFn: async () => {
-      let query = supabase
-        .from("purchase_requests")
-        .select("*")
-        .order("created_at", { ascending: false });
+      const data = await lerSemTeto(() => {
+        let query = supabase
+          .from("purchase_requests")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .order("id");
 
-      if (filters?.status) query = query.eq("status", filters.status as any);
-      if (filters?.costCenter) query = query.eq("cost_center", filters.costCenter);
-
-      const { data, error } = await query;
-      if (error) throw error;
+        if (filters?.status) query = query.eq("status", filters.status as any);
+        if (filters?.costCenter) query = query.eq("cost_center", filters.costCenter);
+        return query;
+      });
       return (data || []) as unknown as PurchaseRequest[];
     },
   });
@@ -121,15 +123,16 @@ export function usePurchaseOrders(filters?: { status?: string }) {
   return useQuery({
     queryKey: ["purchase-orders", filters],
     queryFn: async () => {
-      let query = supabase
-        .from("purchase_orders")
-        .select("*")
-        .order("created_at", { ascending: false });
+      const data = await lerSemTeto(() => {
+        let query = supabase
+          .from("purchase_orders")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .order("id");
 
-      if (filters?.status) query = query.eq("status", filters.status as any);
-
-      const { data, error } = await query;
-      if (error) throw error;
+        if (filters?.status) query = query.eq("status", filters.status as any);
+        return query;
+      });
       return (data || []) as unknown as PurchaseOrder[];
     },
   });
@@ -256,15 +259,16 @@ export function usePurchaseReceivings(purchaseOrderId?: string) {
   return useQuery({
     queryKey: ["purchase-receivings", purchaseOrderId],
     queryFn: async () => {
-      let query = supabase
-        .from("purchase_receivings")
-        .select("*")
-        .order("created_at", { ascending: false });
+      const data = await lerSemTeto(() => {
+        let query = supabase
+          .from("purchase_receivings")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .order("id");
 
-      if (purchaseOrderId) query = query.eq("purchase_order_id", purchaseOrderId);
-
-      const { data, error } = await query;
-      if (error) throw error;
+        if (purchaseOrderId) query = query.eq("purchase_order_id", purchaseOrderId);
+        return query;
+      });
       return (data || []) as unknown as PurchaseReceiving[];
     },
   });
@@ -323,15 +327,16 @@ export function usePurchaseInvoices(purchaseOrderId?: string) {
   return useQuery({
     queryKey: ["purchase-invoices", purchaseOrderId],
     queryFn: async () => {
-      let query = supabase
-        .from("purchase_invoices")
-        .select("*")
-        .order("created_at", { ascending: false });
+      const data = await lerSemTeto(() => {
+        let query = supabase
+          .from("purchase_invoices")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .order("id");
 
-      if (purchaseOrderId) query = query.eq("purchase_order_id", purchaseOrderId);
-
-      const { data, error } = await query;
-      if (error) throw error;
+        if (purchaseOrderId) query = query.eq("purchase_order_id", purchaseOrderId);
+        return query;
+      });
       return (data || []) as unknown as PurchaseInvoice[];
     },
   });
@@ -392,15 +397,16 @@ export function usePurchasePayables(filters?: { status?: string }) {
   return useQuery({
     queryKey: ["purchase-payables", filters],
     queryFn: async () => {
-      let query = supabase
-        .from("purchase_payables")
-        .select("*")
-        .order("due_date", { ascending: true });
+      const data = await lerSemTeto(() => {
+        let query = supabase
+          .from("purchase_payables")
+          .select("*")
+          .order("due_date", { ascending: true })
+          .order("id");
 
-      if (filters?.status) query = query.eq("status", filters.status as any);
-
-      const { data, error } = await query;
-      if (error) throw error;
+        if (filters?.status) query = query.eq("status", filters.status as any);
+        return query;
+      });
       return (data || []) as unknown as PurchasePayable[];
     },
   });
@@ -412,14 +418,16 @@ export function usePurchasePayablesOpen(source?: string) {
   return useQuery({
     queryKey: ["purchase-payables-open", source ?? "all"],
     queryFn: async () => {
-      let q = supabase
-        .from("purchase_payables")
-        .select("id, amount, due_date, status, source")
-        .neq("status", "pago")
-        .neq("status", "cancelado");
-      if (source && source !== "all") q = q.eq("source", source as any);
-      const { data, error } = await q;
-      if (error) throw error;
+      const data = await lerSemTeto(() => {
+        let q = supabase
+          .from("purchase_payables")
+          .select("id, amount, due_date, status, source")
+          .neq("status", "pago")
+          .neq("status", "cancelado")
+          .order("id");
+        if (source && source !== "all") q = q.eq("source", source as any);
+        return q;
+      });
       return (data || []) as any[];
     },
   });
@@ -571,15 +579,11 @@ export function usePurchasingKPIs() {
   return useQuery({
     queryKey: ["purchasing-kpis"],
     queryFn: async () => {
-      const [reqRes, ordRes, payRes] = await Promise.all([
-        supabase.from("purchase_requests").select("id, status, estimated_value"),
-        supabase.from("purchase_orders").select("id, status, total_value"),
-        supabase.from("purchase_payables").select("id, status, amount, due_date"),
+      const [requests, orders, payables] = await Promise.all([
+        lerSemTeto<any>(() => supabase.from("purchase_requests").select("id, status, estimated_value").order("id")),
+        lerSemTeto<any>(() => supabase.from("purchase_orders").select("id, status, total_value").order("id")),
+        lerSemTeto<any>(() => supabase.from("purchase_payables").select("id, status, amount, due_date").order("id")),
       ]);
-
-      const requests = (reqRes.data || []) as any[];
-      const orders = (ordRes.data || []) as any[];
-      const payables = (payRes.data || []) as any[];
 
       const today = new Date().toISOString().split("T")[0];
 

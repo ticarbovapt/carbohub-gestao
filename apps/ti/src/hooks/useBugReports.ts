@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { lerSemTeto } from "@carbo/shell";
 import { useToast } from "@/hooks/use-toast";
 
 // Reportes (bugs + sugestões) do novo ecossistema — tabela PRÓPRIA carbo_bug_reports
@@ -92,13 +93,12 @@ export function useAllBugReports() {
   return useQuery({
     queryKey: ["bug_reports", "all"],
     queryFn: async (): Promise<BugReport[]> => {
-      const { data, error } = await db
+      return await lerSemTeto<BugReport>(() => db
         .from("carbo_bug_reports")
         .select("*")
         .is("archived_at", null)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as BugReport[];
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false }));
     },
   });
 }

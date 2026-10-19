@@ -34,6 +34,7 @@ import {
 import {
   getMelhorEnvioToken, MELHOR_ENVIO_BASE, MELHOR_ENVIO_UA,
 } from "../_shared/melhorEnvio.ts";
+import { lerSemTeto } from "../_shared/lerTudo.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -306,9 +307,13 @@ async function montarFila(alvos?: string[]): Promise<ItemFila[]> {
   const { data: esteira, error } = await consulta.limit(500);
   if (error) throw new Error(`esteira: ${error.message}`);
 
-  const { data: jaTemos } = await supabase
+  // ⚠️ TODAS as linhas, paginado: o PostgREST corta em 1.000 calado, e com o
+  // mapa cortado o envio já conhecido parecia novo — entregue voltava à fila e
+  // a repescagem gastava as vagas dela com código que já tem linha.
+  const jaTemos = await lerSemTeto<Record<string, string | null>>(() => supabase
     .from("rastreio_envios")
-    .select("codigo,fonte_id,status");
+    .select("codigo,fonte_id,status")
+    .order("codigo"));
   const conhecidos = new Map<string, { fonte_id: string | null; status: string | null }>(
     (jaTemos ?? []).map((r: Record<string, string | null>) =>
       [String(r.codigo), { fonte_id: r.fonte_id, status: r.status }]),
@@ -391,20 +396,30 @@ async function montarFila(alvos?: string[]): Promise<ItemFila[]> {
   // qual pedaço da população cabia dependia do plano do momento.
   //
   // Com ordem explícita e teto folgado, o filtro em JS enxerga todo mundo.
+  //
+  // ⚠️ E `.limit(2000)` NÃO trazia 2.000: o PostgREST corta em 1.000 calado, e
+  // o alarme abaixo (que compara com 2.000) nunca podia disparar. Agora a
+  // varredura é paginada e traz a população inteira DA JANELA.
+  //
+  // ⚠️ A janela de 30 dias é o que impede o custo de crescer para sempre: cada
+  // página recalcula a `bling2_esteira` inteira (a etapa é um CASE, o filtro
+  // não desce para as tabelas), a cada 5 minutos. Trajeto serve a quem ainda
+  // vai clicar no link de rastreio; entregue de dois meses atrás sem trajeto
+  // não justifica recalcular a esteira de 5 em 5 minutos.
   const LIMITE_VARREDURA = 2000;
-  const { data: entregues } = await supabase
+  const desde = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
+  const entregues = await lerSemTeto<any>(() => supabase
     .from("bling2_esteira")
     .select("bling_id,rastreio,nf_chave,transportadora,servico,canal,data_pedido")
     .eq("etapa", "entregue")
     .not("rastreio", "is", null)
+    .gte("data_pedido", desde)
     .order("data_pedido", { ascending: false })
-    .limit(LIMITE_VARREDURA);
-  // Se um dia a população encostar no teto, o sintoma volta — e agora ele grita
-  // em vez de sumir.
-  if ((entregues?.length ?? 0) >= LIMITE_VARREDURA) {
+    .order("bling_id"));
+  if (entregues.length >= LIMITE_VARREDURA) {
     console.error(
-      `[rastreio-sync] ⚠️ repescagem varreu ${LIMITE_VARREDURA} entregues (teto). ` +
-      `Há entregues fora da varredura — suba LIMITE_VARREDURA ou filtre no banco.`,
+      `[rastreio-sync] ⚠️ repescagem varreu ${entregues.length} entregues (≥ ${LIMITE_VARREDURA}). ` +
+      `A população cresceu — vale filtrar no banco em vez de varrer tudo.`,
     );
   }
 

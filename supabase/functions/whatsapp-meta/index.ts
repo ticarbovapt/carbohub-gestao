@@ -40,6 +40,7 @@ import {
   normalizarBR, montarPayload, ehTransitorio, detalheDoErro, chaveDoFone,
   type VarTemplate,
 } from "../_shared/metaTemplate.ts";
+import { lerPorIdsSemTeto } from "../_shared/lerTudo.ts";
 
 // deno-lint-ignore-file no-explicit-any
 
@@ -414,10 +415,20 @@ Deno.serve(async (req: Request) => {
     .map((l) => normalizarBR(l.telefone)).filter((n): n is string => !!n);
   const conhecidos = new Map<string, string>();
   if (numeros.length) {
-    const { data: antigos } = await supabase
-      .from("carbo_msg_envios").select("telefone,wa_id")
-      .in("telefone", numeros).not("wa_id", "is", null);
-    for (const a of antigos ?? []) {
+    // ⚠️ Paginado: cada número tem uma linha por etapa por pedido, e 150
+    // números passam das 1.000 linhas que o PostgREST devolve sem avisar.
+    // Leitura que falha continua deixando o mapa vazio (manda o número do
+    // cadastro, como sempre) — nunca derruba a rodada.
+    let antigos: any[] = [];
+    try {
+      antigos = await lerPorIdsSemTeto<any, string>(numeros, (lote) => supabase
+        .from("carbo_msg_envios").select("telefone,wa_id")
+        .in("telefone", lote).not("wa_id", "is", null)
+        .order("bling_id").order("etapa"));
+    } catch (e) {
+      console.error("[whatsapp-meta] wa_id conhecidos ilegível — segue com o número do cadastro:", (e as Error).message);
+    }
+    for (const a of antigos) {
       if (a.telefone && a.wa_id) conhecidos.set(String(a.telefone), String(a.wa_id));
     }
   }

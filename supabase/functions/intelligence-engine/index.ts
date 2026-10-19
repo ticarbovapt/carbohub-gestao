@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { lerSemTeto } from "../_shared/lerTudo.ts";
 
 const ALLOWED_ORIGINS = [
   "https://controle.carbohub.com.br",
@@ -42,17 +43,20 @@ serve(async (req) => {
     const now = new Date();
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-    const [osRes, licenseeRes, machineRes, ordersRes] = await Promise.all([
+    const [osRes, licenseeRes, machineRes, orders] = await Promise.all([
       supabase.from("service_orders").select("id, status, stage_sla_deadline, current_department, created_at, title").neq("status", "completed").neq("status", "cancelled"),
       supabase.from("licensees").select("id, name, status, total_revenue, performance_score, total_machines"),
       supabase.from("machines").select("id, machine_id, status, has_active_alert, units_since_last_refill, capacity, low_stock_threshold, location_state"),
-      supabase.from("carboze_orders").select("id, total, status, licensee_id, created_at").gte("created_at", thirtyDaysAgo.toISOString()),
+      // ⚠️ Paginado: 30 dias de pedidos já encostam no teto de 1.000 do
+      // PostgREST, que corta calado — e a receita abaixo é SOMA.
+      lerSemTeto<{ id: string; total: number | null; status: string; licensee_id: string | null; created_at: string }>(() =>
+        supabase.from("carboze_orders").select("id, total, status, licensee_id, created_at")
+          .gte("created_at", thirtyDaysAgo.toISOString()).order("created_at").order("id")),
     ]);
 
     const os = osRes.data || [];
     const licensees = licenseeRes.data || [];
     const machines = machineRes.data || [];
-    const orders = ordersRes.data || [];
 
     // Build context for AI
     const slaBreaches = os.filter(o => o.stage_sla_deadline && new Date(o.stage_sla_deadline) < now);

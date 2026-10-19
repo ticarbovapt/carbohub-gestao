@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { lerSemTeto } from "@carbo/shell";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Catálogo MRP (Carbo Ops) — LEITURA do banco compartilhado do ecossistema.
@@ -53,9 +54,13 @@ export function useMrpProducts() {
           // POR FAIXA — o mesmo defeito do gêmeo de bonificação, multiplicado.
           .is("preco_de", null)
           .order("product_code"),
-        db
+        // warehouse_stock = produto × armazém (hubs, caixas de vendedor,
+        // licenciados) e é SOMADO: paginado para o teto de 1.000 não cortar.
+        lerSemTeto<any>(() => db
           .from("warehouse_stock")
-          .select("product_id, quantity, warehouse:warehouses(code, name, is_active)"),
+          .select("product_id, quantity, warehouse:warehouses(code, name, is_active)")
+          .order("id"))
+          .then((data) => ({ data, error: null }), (error) => ({ data: null as any[] | null, error })),
         db.from("mrp_bom").select("product_id"),
         // mínimo por hub — só interessa o HUB-RN (Natal) p/ produção.
         db.from("ops_stock_min").select("product_id, min_qty, warehouse:warehouses(code)"),

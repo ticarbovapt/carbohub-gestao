@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { lerSemTeto } from "@carbo/shell";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Transferências entre hubs (Carbo Ops) — Envios RN→SP / RN→SP-Vendas.
@@ -59,13 +60,15 @@ export function useStockTransfers() {
       // `Map` no navegador. A junção mora no banco (migração 20260944) porque
       // ela precisa dos mesmos nomes na tela de envio e na de recebimento —
       // duas montagens da mesma junção divergem sem dar erro.
-      const { data, error } = await db
+      // Histórico inteiro de envios: paginado, senão o teto de 1.000 corta o
+      // mais antigo calado.
+      const data = await lerSemTeto<Record<string, unknown>>(() => db
         .from("carbo_transferencias")
         .select("*")
-        .order("enviado_em", { ascending: false });
-      if (error) throw error;
+        .order("enviado_em", { ascending: false })
+        .order("id"));
 
-      return (data ?? []).map((t: Record<string, unknown>) => ({
+      return data.map((t: Record<string, unknown>) => ({
         id: t.id as string,
         product_id: t.product_id as string,
         produto: (t.produto as string) ?? "—",

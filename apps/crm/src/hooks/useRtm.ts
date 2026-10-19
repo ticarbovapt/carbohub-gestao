@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { lerSemTeto } from "@carbo/shell";
 import { toast } from "sonner";
 import {
   rtmLerTodas, rtmObservar, rtmSincronizar, rtmIniciarSincronizacao, rtmLimparAntigas,
@@ -177,13 +178,15 @@ export function useRtmAgenda(de: string, ate: string, vendedorId?: string | null
   return useQuery({
     queryKey: ["rtm", "agenda", de, ate, vendedorId ?? "todos"],
     queryFn: async (): Promise<RtmAgendaRow[]> => {
-      let q = db.from("rtm_agenda").select("*")
-        .gte("data_prevista", de).lte("data_prevista", ate)
-        .order("data_prevista").order("ordem", { nullsFirst: false }).order("pdv_nome");
-      if (vendedorId) q = q.eq("vendedor_id", vendedorId);
-      const { data, error } = await q;
-      if (error) throw error;
-      return (data ?? []) as RtmAgendaRow[];
+      // Time inteiro × período passa de 1.000: paginado, `planejada_id` desempata.
+      return await lerSemTeto<RtmAgendaRow>(() => {
+        let q = db.from("rtm_agenda").select("*")
+          .gte("data_prevista", de).lte("data_prevista", ate)
+          .order("data_prevista").order("ordem", { nullsFirst: false }).order("pdv_nome")
+          .order("planejada_id");
+        if (vendedorId) q = q.eq("vendedor_id", vendedorId);
+        return q;
+      });
     },
   });
 }
@@ -214,11 +217,14 @@ export function useRtmAgendaDia(
     // A carga do mês não muda a cada segundo, e no celular cada refetch conta.
     staleTime: 60_000,
     queryFn: async (): Promise<Map<string, RtmDiaResumo>> => {
-      let q = db.from("rtm_agenda_dia").select("*")
-        .gte("data_prevista", de).lte("data_prevista", ate);
-      if (vendedorId) q = q.eq("vendedor_id", vendedorId);
-      const { data, error } = await q;
-      if (error) throw error;
+      // Uma linha por (dia, vendedor), SOMADA: paginado para o teto não cortar.
+      const data = await lerSemTeto<any>(() => {
+        let q = db.from("rtm_agenda_dia").select("*")
+          .gte("data_prevista", de).lte("data_prevista", ate)
+          .order("data_prevista").order("vendedor_id");
+        if (vendedorId) q = q.eq("vendedor_id", vendedorId);
+        return q;
+      });
 
       // Soma entre vendedores quando o gestor olha o time inteiro.
       const mapa = new Map<string, RtmDiaResumo>();
@@ -248,16 +254,17 @@ export function useRtmVisitas(de: string, ate: string, vendedorId?: string | nul
   return useQuery({
     queryKey: ["rtm", "visitas", de, ate, vendedorId ?? "todos"],
     queryFn: async (): Promise<RtmVisitaCard[]> => {
-      let q = db.from("rtm_visita_card").select("*")
-        // O filtro é por dia de Brasília, então a janela vai de 00:00 local do
-        // primeiro dia a 00:00 local do dia seguinte ao último.
-        .gte("ts_checkin", `${de}T00:00:00-03:00`)
-        .lt("ts_checkin", `${ate}T23:59:59.999-03:00`)
-        .order("ts_checkin", { ascending: false });
-      if (vendedorId) q = q.eq("vendedor_id", vendedorId);
-      const { data, error } = await q;
-      if (error) throw error;
-      return (data ?? []) as RtmVisitaCard[];
+      return await lerSemTeto<RtmVisitaCard>(() => {
+        let q = db.from("rtm_visita_card").select("*")
+          // O filtro é por dia de Brasília, então a janela vai de 00:00 local do
+          // primeiro dia a 00:00 local do dia seguinte ao último.
+          .gte("ts_checkin", `${de}T00:00:00-03:00`)
+          .lt("ts_checkin", `${ate}T23:59:59.999-03:00`)
+          .order("ts_checkin", { ascending: false })
+          .order("id");
+        if (vendedorId) q = q.eq("vendedor_id", vendedorId);
+        return q;
+      });
     },
   });
 }

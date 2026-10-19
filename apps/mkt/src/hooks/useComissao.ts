@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { lerSemTeto } from "@carbo/shell";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Comissionamento (Carbo Finanças). Base = vendas FATURADAS (com NF) do vendedor
@@ -59,11 +60,11 @@ export function useCommissionStatements() {
   return useQuery({
     queryKey: ["commission_statements"],
     queryFn: async (): Promise<CommissionStatement[]> => {
-      const { data, error } = await db
+      const data = await lerSemTeto<CommissionStatement>(() => db
         .from("commission_statements")
         .select("*")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
+        .order("created_at", { ascending: false })
+        .order("id"));
       return (data ?? []) as CommissionStatement[];
     },
   });

@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { lerSemTeto } from "@carbo/shell";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Faturamento da unidade de negócio ON-LINE, para o Dashboard Comercial.
@@ -55,12 +56,15 @@ export function useEcommerceUnidade() {
     queryKey: ["ecommerce_unidade_negocio"],
     staleTime: 5 * 60 * 1000,
     queryFn: async (): Promise<EcommerceUnidade> => {
-      const { data, error } = await db
+      // Uma linha por (plataforma, dia) e SOMADA: passa de 1.000 e o teto
+      // cortaria dias inteiros do total, calado. (platform, day) é única.
+      const data = await lerSemTeto<any>(() => db
         .from("ecommerce_raw_summary")
-        .select("sale_orders, sale_revenue");
-      if (error) throw error;
+        .select("sale_orders, sale_revenue")
+        .order("day")
+        .order("platform"));
 
-      const linhas = (data ?? []) as Array<{ sale_orders: number | null; sale_revenue: number | null }>;
+      const linhas = data as Array<{ sale_orders: number | null; sale_revenue: number | null }>;
       return {
         pedidos: linhas.reduce((s, l) => s + (Number(l.sale_orders) || 0), 0),
         faturado: linhas.reduce((s, l) => s + (Number(l.sale_revenue) || 0), 0),

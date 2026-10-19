@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import { useChatCtx } from "./context";
+import { lerSemTeto, lerPorIdsSemTeto } from "@carbo/shell";
 
 // Sufixo único por assinatura Realtime — evita colidir nomes de canal quando o
 // mesmo hook é usado em vários componentes ("cannot add callbacks after subscribe").
@@ -564,10 +565,11 @@ export function useChannelAcks(channelId: string | null, enabled = true) {
     queryKey: ["chat", "acks", channelId],
     enabled: !!channelId && enabled,
     queryFn: async (): Promise<AckRow[]> => {
-      const { data, error } = await supabase.from("chat_acks")
-        .select("message_id, user_id, acked_at").eq("channel_id", channelId);
-      if (error) throw error;
-      return (data ?? []) as AckRow[];
+      // Mensagens × pessoas do canal: passa de 1.000 e o teto cortaria
+      // confirmações, calado. (message_id, user_id) é a chave primária.
+      return await lerSemTeto<AckRow>(() => supabase.from("chat_acks")
+        .select("message_id, user_id, acked_at").eq("channel_id", channelId)
+        .order("message_id").order("user_id"));
     },
   });
 }
@@ -840,17 +842,18 @@ export function useChannelMedia(channelId: string | null, enabled = true) {
     queryKey: ["chat", "media", channelId],
     enabled: !!channelId && enabled,
     queryFn: async (): Promise<ChatAttachment[]> => {
-      const { data: msgs, error } = await supabase
-        .from("chat_messages").select("id, created_at").eq("channel_id", channelId).is("deleted_at", null);
-      if (error) throw error;
-      const rows = (msgs ?? []) as { id: string; created_at: string }[];
+      // TODAS as mensagens do canal (o grupo grande passa de 1.000): paginado,
+      // e os anexos em lotes de ids — `.in()` com milhares de ids estoura a URL.
+      const rows = await lerSemTeto<{ id: string; created_at: string }>(() => supabase
+        .from("chat_messages").select("id, created_at").eq("channel_id", channelId).is("deleted_at", null)
+        .order("id"));
       const when: Record<string, string> = {};
       for (const m of rows) when[m.id] = m.created_at;
       const ids = rows.map((m) => m.id);
       if (!ids.length) return [];
-      const { data: atts, error: aErr } = await supabase.from("chat_attachments").select("*").in("message_id", ids);
-      if (aErr) throw aErr;
-      return ((atts ?? []) as ChatAttachment[]).sort(
+      const atts = await lerPorIdsSemTeto<ChatAttachment>(ids, (lote) =>
+        supabase.from("chat_attachments").select("*").in("message_id", lote).order("id"));
+      return atts.sort(
         (a, b) => (when[b.message_id] ?? "").localeCompare(when[a.message_id] ?? ""),
       );
     },
