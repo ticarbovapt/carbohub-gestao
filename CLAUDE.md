@@ -669,9 +669,21 @@ Quem decide o que é venda nova é o **banco**, e só ele:
    dias atrás, com o sininho — corretamente — vazio. O gatilho
    `trg_ecommerce_sale_notify` tem `OLD.status` e a janela de 12h; a tela só
    reage ao que ele decidiu. Uma regra governa som, toast e sininho.
-2. **Quem recebe: todo o time interno.** O gatilho chama `notify_time_interno`
-   (não `notify_admin_users`, que era só `carbo_admin`) — decisão de deixar todo
-   mundo ver o crescimento. ⚠️ O filtro de interface interna **não é
+2. **Quem recebe: só quem foi LIGADO À MÃO** (`20261111`, 19/10/2026). Até
+   ali era o time interno inteiro (`notify_time_interno`); com 500+ vendas por
+   semana o dono do processo pediu: *"ninguém vai ser ligado a não ser
+   manualmente"*. O gatilho chama `notify_venda_online`, que lê
+   `carbo_aviso_venda_online`; a tela é **Admin → E-commerce → Quem recebe a
+   venda** (`/ecommerce/avisos-de-venda`, RPCs `carbo_aviso_venda_online_lista`
+   / `_definir`, flag do Admin).
+   ⚠️ **"Head" é a AJUDA para escolher, nunca a regra**: a tela marca
+   head/CEO/command (a lista do `GESTOR_FUNCOES`), e ser head não liga
+   ninguém. ⚠️ Lista vazia = NINGUÉM recebe; por isso o BLOCO 2 da migração
+   recusa trocar o gatilho com ninguém ligado. ⚠️ A venda INTERNA
+   (`trg_venda_manual_notify`, "🎉 Nova venda!") NÃO mudou: segue para o time
+   interno. Som, toast, sininho e celular saem da linha de `notifications` de
+   cada um, então os quatro mudam juntos sem tocar em app.
+   ⚠️ O filtro de interface interna continua no fan-out e **não é
    decoração**: o portal de lojas e o de licenciados usam a MESMA tabela
    `profiles`, e sem ele o lojista recebe o faturamento da Carbo no sininho.
 3. **Um som só, num lugar só.** Havia uma moedinha **sintetizada** (Web Audio)

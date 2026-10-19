@@ -12,6 +12,7 @@ import EcommerceMetas from "./pages/EcommerceMetas";
 import EsteiraOnline from "./pages/EsteiraOnline";
 import MensagensCliente from "./pages/MensagensCliente";
 import EcommerceAtribuicao from "./pages/EcommerceAtribuicao";
+import AvisoVendaOnline from "./pages/AvisoVendaOnline";
 import MapaConquista from "./pages/MapaConquista";
 import MetaConfig from "./pages/MetaConfig";
 import Vender from "./pages/Vender";
@@ -62,6 +63,7 @@ export default function App() {
         <Route path="/ecommerce/esteira" element={<EsteiraOnline />} />
         <Route path="/ecommerce/mensagens" element={<MensagensCliente />} />
         <Route path="/ecommerce/anuncios" element={<EcommerceAtribuicao />} />
+        <Route path="/ecommerce/avisos-de-venda" element={<AvisoVendaOnline />} />
         <Route path="/metas/configurar" element={<MetaConfig />} />
         <Route path="/vender" element={<Vender />} />
         <Route path="/ultimo-acesso" element={<UltimoAcesso />} />
