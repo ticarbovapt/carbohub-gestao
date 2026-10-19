@@ -3569,6 +3569,16 @@ Oito pedidos ficaram presos em "Gerar Nota Fiscal" com a nota já vinculada.
    lá. ⚠️ Isso só funciona porque a natureza da filial passou a ser reconhecida
    (`20261026`): sem isso a nota de bonificação caía no ramo de venda, encontrava
    a outra e era bloqueada — a recusa estava certa, a classificação é que não.
+4. ⚠️ **O vínculo ia e voltava a cada 5 min** (`20261107`, 19/10/2026). O passo
+   1 da `carbo_vincula_nf_filial` tratava "o pedido no Bling não tem nota" como
+   "a nota foi cancelada" e APAGAVA o vínculo; o passo 2 (rodapé) o refazia na
+   mesma transação. Ninguém via na tela, mas eram ~2.300 updates/dia: 266 MB
+   de `order_audit_logs` (~97% do que a auditoria grava sozinha), dois eventos
+   de Realtime por pedido a cada rodada — e vínculo MANUAL sem rodapé sumia em
+   5 min, calado. Hoje o passo 1 só desfaz nota sabidamente inválida
+   (`carbo_nf_invalida`). ⚠️ Ausência não é cancelamento. ⚠️ O sinal foi o
+   `updated_at` mudar em EXATAMENTE metade das vezes: dois updates na mesma
+   transação têm o mesmo `now()`.
 
 ### ⚠️ A COMISSÃO tem definição PRÓPRIA de "pedido faturado"
 `/comissionamento` não lê `carbo_vendas_metrica`. As duas RPCs
