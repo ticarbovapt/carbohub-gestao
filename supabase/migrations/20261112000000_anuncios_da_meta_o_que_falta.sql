@@ -50,3 +50,49 @@ select (select count(*) from public.meta_ads_accounts)                          
           from public.meta_ads_sync_log)                                                as ultima_rodada,
        (select left(erro, 200) from public.meta_ads_sync_log
          where not ok order by rodou_em desc limit 1)                                   as ultimo_erro;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (C) O CRON — relê os últimos 30 dias 3× por dia (07:19, 12:19 e 18:19 de
+--     Brasília). Medido no (A): `jobs = 0`, a 20260972 nunca agendou.
+--
+-- ⚠️ O segredo é COPIADO do `bling2-sync-incremental` (que provadamente
+-- responde 202), com `%L` — nunca digitado, nunca impresso. Molde da 20261036.
+-- ⚠️ ABORTA se não conseguir ler: agendar com segredo nulo troca um job que
+-- falha ALTO por um que falha calado.
+-- ⚠️ Minuto :19, ímpar e fora da grade cheia. Os três horários num job só.
+-- ⚠️ Sem conta escolhida a rodada só registra "nenhuma conta ativa" no log, e
+-- isso não é erro.
+--
+-- ESPERADO: "Success. No rows returned".
+-- ═══════════════════════════════════════════════════════════════════════════
+do $fix$
+declare
+  v_secret text;
+  v_cmd    text;
+  j        bigint;
+begin
+  select (regexp_match(command, 'X-Cron-Secret''\s*,\s*''([^'']+)'''))[1]
+    into v_secret
+    from cron.job
+   where jobname = 'bling2-sync-incremental'
+   limit 1;
+
+  if v_secret is null or btrim(v_secret) = '' then
+    raise exception 'Nao consegui ler o X-Cron-Secret do job bling2-sync-incremental — nada foi agendado.';
+  end if;
+
+  for j in select jobid from cron.job where jobname like 'meta-ads-sync%' loop
+    perform cron.unschedule(j);
+  end loop;
+
+  v_cmd := format(
+    'select net.http_post(url := %L, headers := jsonb_build_object(%L, %L, %L, %L), body := %L::jsonb) as request_id;',
+    'https://wpkfirmapxevzpxjovjr.supabase.co/functions/v1/meta-ads-sync',
+    'Content-Type',  'application/json',
+    'X-Cron-Secret', v_secret,
+    '{"dias":30,"source":"cron"}'
+  );
+
+  perform cron.schedule('meta-ads-sync-3x', '19 10,15,21 * * *', v_cmd);
+end $fix$;

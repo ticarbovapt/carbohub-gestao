@@ -22,6 +22,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { cors } from "../_shared/cors.ts";
+import { ehTimeInterno } from "../_shared/interfacesInternas.ts";
 
 // Fixada de propósito. A v25.0 é a atual (fev/2026); a v26 ainda não saiu.
 // ⚠️ Subir de versão é decisão consciente — a Meta aposenta métrica entre
@@ -88,6 +89,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   const admin = createClient(supabaseUrl, serviceKey);
 
+  // ⚠️ Quem chama pela TELA tem de ser do time interno: o portal de lojas e o
+  // de licenciados usam a MESMA `profiles`, e um lojista logado não tem o que
+  // fazer aqui. Escolher a conta de anúncio (`descobrir`/`usar`/`desligar`)
+  // exige ainda a flag do Admin — é a tela onde isso mora.
+  let podeEscolherConta = false;
   if (!ehCron) {
     const auth = req.headers.get("Authorization") ?? "";
     const jwt = auth.startsWith("Bearer ") ? auth.slice(7) : "";
@@ -96,6 +102,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
       console.warn("[meta-ads-sync] Chamada sem cron-secret válido e sem JWT de usuário.");
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
     }
+    const { data: perfil } = await admin.from("profiles")
+      .select("allowed_interfaces").eq("id", userData.user.id).maybeSingle();
+    const interfaces = (perfil?.allowed_interfaces ?? []) as string[];
+    if (!(await ehTimeInterno(admin, interfaces))) {
+      return new Response(JSON.stringify({ error: "Só o time interno usa os anúncios da Meta." }), { status: 403, headers });
+    }
+    podeEscolherConta = interfaces.includes("carbo_admin");
   }
 
   // ⚠️ Checado DEPOIS da autorização, para não contar a quem não passou que o
@@ -111,7 +124,68 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   try {
-    const body = await req.json().catch(() => ({})) as { dias?: number; act_id?: string; source?: string };
+    const body = await req.json().catch(() => ({})) as {
+      dias?: number; act_id?: string; source?: string;
+      acao?: "sincronizar" | "descobrir" | "usar" | "desligar";
+    };
+
+    // ── Escolher a conta, sem ninguém ter de procurar o `act_…` ─────────────
+    //
+    // ⚠️ O cadastro continua MANUAL (o comentário de `meta_ads_accounts` diz
+    // por quê: o token pode enxergar conta que não é nossa). O que muda é que a
+    // tela LISTA o que o token enxerga e a pessoa clica — em vez de achar o id
+    // no Gerenciador e mandar por SQL. `usar` só aceita conta que está NESSA
+    // lista, lida de novo aqui: id digitado não entra.
+    if (body.acao === "descobrir" || body.acao === "usar" || body.acao === "desligar") {
+      if (!podeEscolherConta) {
+        return new Response(JSON.stringify({ error: "Só quem tem o Admin escolhe a conta de anúncio." }), { status: 403, headers });
+      }
+
+      if (body.acao === "desligar") {
+        if (!body.act_id) return new Response(JSON.stringify({ error: "act_id é obrigatório." }), { status: 400, headers });
+        const { error } = await admin.from("meta_ads_accounts")
+          .update({ ativo: false, atualizado_em: new Date().toISOString() }).eq("act_id", body.act_id);
+        if (error) throw new Error(`Falha ao desligar a conta: ${error.message}`);
+        return new Response(JSON.stringify({ success: true }), { headers });
+      }
+
+      const visiveis: Array<{ act_id: string; nome: string; moeda: string | null; status: number | null }> = [];
+      let url: string | null = `${GRAPH}/me/adaccounts?${new URLSearchParams({
+        fields: "id,name,currency,account_status", limit: "100", access_token: token,
+      })}`;
+      for (let pagina = 0; url && pagina < 10; pagina++) {
+        const resp: Response = await fetch(url);
+        const json = await resp.json().catch(() => ({}));
+        if (!resp.ok || json?.error) {
+          throw new Error(`Graph respondeu: ${json?.error?.message ?? `HTTP ${resp.status}`}`);
+        }
+        for (const c of (json.data ?? []) as Record<string, unknown>[]) {
+          visiveis.push({
+            act_id: String(c.id ?? ""),
+            nome: String(c.name ?? c.id ?? ""),
+            moeda: (c.currency as string | undefined) ?? null,
+            status: typeof c.account_status === "number" ? c.account_status : null,
+          });
+        }
+        url = (json.paging?.next as string | undefined) ?? null;
+      }
+
+      if (body.acao === "descobrir") {
+        return new Response(JSON.stringify({ success: true, contas: visiveis }), { headers });
+      }
+
+      const escolhida = visiveis.find((c) => c.act_id === body.act_id);
+      if (!escolhida) {
+        return new Response(JSON.stringify({ error: "Essa conta não está entre as que o token enxerga." }), { status: 400, headers });
+      }
+      const { error } = await admin.from("meta_ads_accounts").upsert({
+        act_id: escolhida.act_id, apelido: escolhida.nome, moeda: escolhida.moeda,
+        ativo: true, atualizado_em: new Date().toISOString(),
+      }, { onConflict: "act_id" });
+      if (error) throw new Error(`Falha ao cadastrar a conta: ${error.message}`);
+      return new Response(JSON.stringify({ success: true, conta: escolhida }), { headers });
+    }
+
     const origem = body.source === "cron" ? "cron" : "manual";
     // Teto de 90 dias: acima disso a Meta pagina demais e a função estoura o
     // tempo antes de gravar qualquer coisa. Backfill maior é rodada repetida.

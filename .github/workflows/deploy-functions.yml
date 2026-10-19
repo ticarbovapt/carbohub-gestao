@@ -104,6 +104,10 @@ jobs:
           # o painel dela não deixa mandar header. Quem autentica é a assinatura
           # X-Hub-Signature-256, conferida por dentro.
           dep whatsapp-meta-webhook --no-verify-jwt
+          # Anúncios da Meta (Admin → E-commerce → Anúncios da Meta). Ficou FORA
+          # desta lista desde que nasceu (20260972) e nunca foi ao ar. Sem JWT na
+          # porta porque o cron chama com X-Cron-Secret; a função confere os dois.
+          dep meta-ads-sync --no-verify-jwt
           # Resposta em texto livre, no atendimento. SEM --no-verify-jwt de
           # proposito: quem chama e o NAVEGADOR, por gente logada, e escrever
           # pelo numero da CarboZe nao pode depender de um segredo que anda na
