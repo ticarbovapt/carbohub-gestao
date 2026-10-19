@@ -363,6 +363,21 @@ Deno.serve(async (req: Request) => {
   // não há configuração faltando: há nada a fazer. Ao contrário, isto devolveria
   // 500 a cada minuto por falta de um secret que ainda não é necessário — 1440
   // falhas por dia num lugar que ninguém abre.
+  // ── O código do pedido (CZ…) nasce ANTES de a fila ser lida ─────────────
+  //
+  // ⚠️ Medido em 19/10/2026: 116 avisos de "confirmado" nunca saíram, e nos 116
+  // o código chegou em ATÉ 5 MIN. O código vem de um cron de 2 min; o card fica
+  // em "confirmado" só até a NF, que às vezes sai antes disso. Esta rodada
+  // segurava ("esperando: pedido"), o código chegava, e na rodada seguinte o
+  // card já estava em "NF emitida" — a etapa não é mais oferecida e o cliente
+  // nunca recebia a confirmação.
+  //
+  // A função é idempotente e trava a sequência por advisory lock, então rodar
+  // aqui e no cron não duplica número. Falhar aqui não impede o envio: o pior
+  // caso é o de antes (espera o cron).
+  const { error: errCodigo } = await supabase.rpc("carbo_gerar_codigos_pedido");
+  if (errCodigo) console.error("[whatsapp-meta] código do pedido não gerado:", errCodigo.message);
+
   const { data: fila, error } = await supabase
     .from("carbo_msg_fila").select("*")
     .eq("canal_envio", "meta")

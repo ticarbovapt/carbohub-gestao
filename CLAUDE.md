@@ -2312,6 +2312,14 @@ de 30 dias (4.494 conversas) em 0,6 s.
    nenhum. ⚠️ Gravação que não muda nada numa tabela publicada no Realtime NÃO
    é de graça. ⚠️ E aba aberta antes do deploy continua com o código velho
    até o F5.
+9. ⚠️ **O `whatsapp-meta` gera o código CZ antes de ler a fila**
+   (`carbo_gerar_codigos_pedido`, idempotente, advisory lock). Medido: 116
+   "confirmado" perdidos, e nos 116 o código chegou em até 5 min — mas o card
+   já tinha ido para "NF emitida", e a fila só oferece a etapa ATUAL. Etapa que
+   dura menos que o cron de que ela depende nunca é avisada, calada.
+   ⚠️ `"enviados"` no `net._http_response` sai de QUATRO funções (meta,
+   kanban-n8n, agendadas, carbo-push); a do `whatsapp-meta` é a única com
+   `"nao_contatar"` — filtre por ela (`20261102`).
 
 ### Segredo de função: FECHE quando ele não existe
 Padrão obrigatório em toda edge function chamada por máquina:
