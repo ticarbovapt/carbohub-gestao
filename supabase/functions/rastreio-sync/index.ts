@@ -399,14 +399,21 @@ async function montarFila(alvos?: string[]): Promise<ItemFila[]> {
   //
   // ⚠️ E `.limit(2000)` NÃO trazia 2.000: o PostgREST corta em 1.000 calado, e
   // o alarme abaixo (que compara com 2.000) nunca podia disparar. Agora a
-  // varredura é paginada e traz a população inteira; o alarme fica como aviso
-  // de que ela cresceu a ponto de pedir filtro no banco.
+  // varredura é paginada e traz a população inteira DA JANELA.
+  //
+  // ⚠️ A janela de 30 dias é o que impede o custo de crescer para sempre: cada
+  // página recalcula a `bling2_esteira` inteira (a etapa é um CASE, o filtro
+  // não desce para as tabelas), a cada 5 minutos. Trajeto serve a quem ainda
+  // vai clicar no link de rastreio; entregue de dois meses atrás sem trajeto
+  // não justifica recalcular a esteira de 5 em 5 minutos.
   const LIMITE_VARREDURA = 2000;
+  const desde = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
   const entregues = await lerSemTeto<any>(() => supabase
     .from("bling2_esteira")
     .select("bling_id,rastreio,nf_chave,transportadora,servico,canal,data_pedido")
     .eq("etapa", "entregue")
     .not("rastreio", "is", null)
+    .gte("data_pedido", desde)
     .order("data_pedido", { ascending: false })
     .order("bling_id"));
   if (entregues.length >= LIMITE_VARREDURA) {
