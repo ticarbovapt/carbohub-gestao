@@ -2304,6 +2304,14 @@ de 30 dias (4.494 conversas) em 0,6 s.
    a `20260928` as mensagens com rastreio exigem o código da TRANSPORTADORA, e a
    Jadlog só o gera na coleta. Etiqueta gerada e nunca postada segura o aviso —
    é a logística parada, não o WhatsApp. O BLOCO 5 da `20261099` mede quanto.
+8. ⚠️ **O `whatsapp-meta` NÃO regrava linha já segurada pelo mesmo motivo**
+   (19/10/2026). A fila tinha 34 linhas, todas seguradas, regravadas a cada
+   minuto: update idêntico é evento de Realtime, e cada evento recarregava as
+   abas de Conversas/Esteira — com a tela antiga (49 s) aberta numa segunda de
+   manhã, a fila foi a 25,9 s (11,8 s de PLANEJAMENTO) e às 9h não saiu aviso
+   nenhum. ⚠️ Gravação que não muda nada numa tabela publicada no Realtime NÃO
+   é de graça. ⚠️ E aba aberta antes do deploy continua com o código velho
+   até o F5.
 
 ### Segredo de função: FECHE quando ele não existe
 Padrão obrigatório em toda edge function chamada por máquina:
