@@ -62,12 +62,14 @@ export const ADMIN_APP: EcoApp = {
 // o Academy atende também micro, lojista e licenciado, e a flag ali faria um
 // deles contar como "time interno" (sininho com o faturamento, RLS aberta).
 //
-// Cor #C322C3 escolhida por MEDIDA: 300°, a 29° do roxo do Atendimento e 30°
-// do rosa do Marketing — o maior vão da grade. A MESMA do azulejo do Hub
+// Cor = o verde Carbo (#3BC770), o MESMO do "Início" e do primário de todo
+// app (19/10/2026). Foi magenta (#C322C3) e o dono do processo recusou: "no
+// resto do sistema é outra cor". O Academy é do ecossistema inteiro, não de
+// um sistema, e por isso veste a cor da marca. A MESMA do azulejo do Hub
 // (`ACADEMY_APP` em carbohub-landing/src/lib/apps.ts). Mudou um, mude o outro.
 export const ACADEMY_APP: EcoApp = {
   key: "academy", name: "Carbo Academy", tag: "Cursos · Vídeos e PDFs",
-  href: "https://academy.carbohub.com.br", icon: GraduationCap, accent: "#C322C3",
+  href: "https://academy.carbohub.com.br", icon: GraduationCap, accent: "#3BC770",
 };
 
 // interface (allowed_interfaces) → app do catálogo.
