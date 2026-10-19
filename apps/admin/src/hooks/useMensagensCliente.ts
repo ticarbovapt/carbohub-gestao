@@ -231,7 +231,15 @@ export function useEnviosMsg(limite = 60) {
   });
 }
 
-/** Quantos pedidos estão esperando aviso agora. */
+/**
+ * Quantos pedidos estão esperando aviso agora.
+ *
+ * ⚠️ De 5 em 5 min, nunca de minuto em minuto, e sem reler no foco: contar a
+ * fila é MONTAR a fila inteira (a consulta mais cara do banco, 27,7% do tempo
+ * dele em 19/10/2026), cada aba aberta fazia isso a cada minuto, e com o banco
+ * ocupado a leitura do `whatsapp-meta` estourava o tempo — nenhum aviso saía
+ * naquele minuto. É um número de referência; o que sai está nos envios.
+ */
 export function useFilaMsg() {
   return useQuery({
     queryKey: ["msg-fila"],
@@ -241,7 +249,9 @@ export function useFilaMsg() {
       if (error) throw error;
       return count ?? 0;
     },
-    refetchInterval: 60_000,
+    refetchInterval: 300_000,
+    refetchOnWindowFocus: false,
+    staleTime: 240_000,
   });
 }
 

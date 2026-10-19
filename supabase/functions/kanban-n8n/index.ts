@@ -189,6 +189,22 @@ Deno.serve(async (req: Request) => {
   // template aprovado, sem wamid — e a outra encontraria a linha já gravada e
   // não faria nada. O cliente receberia a mensagem certa pelo caminho errado, e
   // o registro diria que estava tudo bem.
+  //
+  // ⚠️ Sem etapa ATIVA na Evolution, NÃO lê a fila (19/10/2026). Desde 05/10
+  // nada sai por aqui, e a fila só devolve linha de template ativo — mas montá-
+  // la custa o mesmo com ou sem filtro (`base AS MATERIALIZED`), e esta leitura
+  // inútil de minuto em minuto disputava o banco com a do `whatsapp-meta`, que
+  // é a que manda os avisos. Com a fila em timeout, nenhum aviso sai.
+  // Erro na consulta dos templates NÃO pula: cai na leitura de sempre.
+  const { count: etapasEvolution, error: errTpl } = await supabase
+    .from("carbo_msg_templates")
+    .select("etapa", { count: "exact", head: true })
+    .eq("ativo", true)
+    .eq("canal_envio", "evolution");
+  if (!errTpl && etapasEvolution === 0) {
+    return json({ ok: true, fila: 0, nota: "nada a avisar — nenhuma etapa ativa na Evolution" });
+  }
+
   const { data: fila, error } = await supabase
     .from("carbo_msg_fila")
     .select("*")

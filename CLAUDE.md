@@ -2320,6 +2320,16 @@ de 30 dias (4.494 conversas) em 0,6 s.
    ⚠️ `"enviados"` no `net._http_response` sai de QUATRO funções (meta,
    kanban-n8n, agendadas, carbo-push); a do `whatsapp-meta` é a única com
    `"nao_contatar"` — filtre por ela (`20261102`).
+10. ⚠️ **A fila é a consulta mais cara do banco** (27,7% do tempo em 19/10,
+   `pg_stat_statements`), e quem a montava eram TRÊS: o `whatsapp-meta`
+   (precisa), o `kanban-n8n` (lia de minuto em minuto sem ter etapa na
+   Evolution) e o contador "na fila" de CADA aba de Mensagens ao cliente. Hoje o
+   `kanban-n8n` só lê a fila se houver template ATIVO com `canal_envio =
+   'evolution'`, e o contador relê de 5 em 5 min, sem reler no foco. ⚠️ Leitura
+   nova da `carbo_msg_fila` (tela ou função) é custo somado ao do envio: com o
+   banco ocupado é a leitura do `whatsapp-meta` que estoura os 8 s, e naquele
+   minuto nenhum aviso sai. Timeout ATRASA (a fila é estado), mas etapa curta
+   some.
 
 ### Segredo de função: FECHE quando ele não existe
 Padrão obrigatório em toda edge function chamada por máquina:
