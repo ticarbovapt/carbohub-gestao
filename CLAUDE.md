@@ -1247,6 +1247,18 @@ mostra MUITA coisa             pagina na TELA (.range + "mostrar mais"), nunca b
    índice; log nasce com faxina (`cron-log-faxina-diaria`, 7 dias); gravação
    que não muda nada numa tabela do Realtime não é de graça. A `20261109` é a
    varredura que mede as quatro coisas — rode de tempos em tempos.
+   ✅ 1ª rodada (`20261110`): ~280 regras do `public` com `auth.uid()`/
+   `is_admin(auth.uid())` soltos embrulhadas (regex no texto vivo, backup em
+   `carbo_backup_policies`, idempotente; `licenciados`/`produtos` ficaram para
+   os repos deles), índice `notifications (user_id, created_at desc)` (77 mil
+   linhas sem índice, lidas pelo sininho), e a faxina diária passou a limpar
+   também `bling2_sync_log` e `bling_treatment_log` (30 dias).
+   ⚠️ Regras de SELECT se somam com OR: embrulhar UMA (a `20261083`) não basta
+   se a outra da mesma tabela continua solta — as duas rodam por linha.
+6. ⚠️ **Polling é custo por ABA, vezes o time.** O sininho relia
+   `notifications` a cada 15 s em toda aba dos oito apps, com o Realtime já
+   trazendo a novidade na hora. Hoje é 120 s, como rede de segurança. Tela nova
+   com Realtime: `refetchInterval` é a rede, não o caminho.
 
 Varridos em 19/10/2026: ~650 leituras sem teto nos 8 apps e nas funções; as de
 tabela que cresce foram convertidas (detalhe nos PRs #803 em diante). Ficaram
