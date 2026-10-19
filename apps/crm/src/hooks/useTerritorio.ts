@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { lerSemTeto } from "@carbo/shell";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Território do Carbo Sales — dados REAIS do CORE (somente leitura).
@@ -174,12 +175,16 @@ export function useTerritorioMapa() {
             "id, name, code, status, address_state, address_city, total_machines"
           )
           .order("name"),
-        db
+        // O cadastro de PDV cresce por planilha e o mapa CONTA os pontos:
+        // paginado para o teto de 1.000 não sumir com PDV do mapa, calado.
+        lerSemTeto<any>(() => db
           .from("pdvs")
           .select(
             "id, pdv_code, name, status, address_state, address_city, latitude, longitude, current_stock, min_stock_threshold, has_stock_alert, assigned_licensee_id"
           )
-          .order("name"),
+          .order("name")
+          .order("id"))
+          .then((data) => ({ data, error: null }), (error) => ({ data: null as any[] | null, error })),
         db
           .from("machines")
           .select(

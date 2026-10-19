@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, FUNCTIONS_URL } from "@/integrations/supabase/client";
+import { lerSemTeto, lerPorIdsSemTeto } from "@carbo/shell";
 import { chaveDoFone } from "@/hooks/useEsteiraOnline";
 import { lerTudo } from "@/lib/lerTudo";
 import {
@@ -95,6 +96,17 @@ export function useNumeros() {
  * com o teto — a tela continua como era em vez de quebrar. O aviso vai ao
  * console para não passar calado.
  */
+/** Lê sem teto; erro vira `{ data: null }` (avisado no console), que era o que
+ *  estas leituras auxiliares faziam: sem elas a caixa continua aparecendo. */
+async function semTetoOuNulo(nome: string, montar: () => any): Promise<{ data: any[] | null }> {
+  try {
+    return { data: await lerSemTeto<any>(montar) };
+  } catch (e) {
+    console.error(`[conversas] ${nome}:`, (e as Error).message);
+    return { data: null };
+  }
+}
+
 async function lerCaixa(numeroId: string, dias: number, desde: string) {
   const { data, error } = await (supabase as any)
     .rpc("carbo_wa_caixa", { p_numero_id: numeroId, p_dias: dias });
@@ -153,14 +165,19 @@ export function useConversas(dias = 30, numeroId?: string | null) {
           // ainda não escolheu. Devolver tudo misturaria as caixas, que é o
           // defeito inteiro. Quem decide é o `enabled` lá embaixo.
           lerCaixa(numeroId as string, dias, desde),
-          (supabase as any).from("carbo_wa_contatos")
-            .select("wa_id,last_inbound_at").eq("numero_id", numeroId),
-          (supabase as any).from("carbo_wa_atendimento").select("*").eq("numero_id", numeroId),
+          // ⚠️ Uma linha por CONTATO do número (milhares): sem paginar, o teto
+          // de 1.000 do PostgREST cortava a janela, o status e as etiquetas da
+          // maior parte da caixa, calado. Falha continua sem derrubar a caixa,
+          // como antes (vira `data: null`).
+          semTetoOuNulo("carbo_wa_contatos", () => (supabase as any).from("carbo_wa_contatos")
+            .select("wa_id,last_inbound_at").eq("numero_id", numeroId).order("wa_id")),
+          semTetoOuNulo("carbo_wa_atendimento", () => (supabase as any).from("carbo_wa_atendimento")
+            .select("*").eq("numero_id", numeroId).order("wa_id")),
           // A tag vem junto do vínculo: a lista da esquerda precisa das etiquetas
           // para filtrar, e uma consulta por conversa seriam 36 idas ao banco.
-          (supabase as any).from("carbo_wa_conversa_tag")
+          semTetoOuNulo("carbo_wa_conversa_tag", () => (supabase as any).from("carbo_wa_conversa_tag")
             .select("wa_id, carbo_wa_tags(id, nome, cor, ativo)")
-            .eq("numero_id", numeroId),
+            .eq("numero_id", numeroId).order("wa_id").order("tag_id")),
         ]);
       if (error) throw error;
 
@@ -203,10 +220,14 @@ export function useConversas(dias = 30, numeroId?: string | null) {
       if (checkouts.length > 0) {
         // Falhar aqui não pode derrubar a caixa: sem o nome, a conversa
         // continua aparecendo — como aparecia antes.
-        const { data: carrinhos, error: errCar } = await (supabase as any)
-          .from("nuvemshop_carrinhos").select("checkout_id, cliente")
-          .in("checkout_id", checkouts);
-        if (errCar) console.error("[conversas] nome do carrinho:", errCar.message);
+        let carrinhos: any[] | null = null;
+        try {
+          carrinhos = await lerPorIdsSemTeto<any>(checkouts, (lote) => (supabase as any)
+            .from("nuvemshop_carrinhos").select("checkout_id, cliente")
+            .in("checkout_id", lote).order("checkout_id"));
+        } catch (errCar) {
+          console.error("[conversas] nome do carrinho:", (errCar as Error).message);
+        }
         const nomes = new Map<number, string>();
         for (const c of (carrinhos ?? []) as any[]) {
           if (c.cliente?.trim()) nomes.set(Number(c.checkout_id), c.cliente.trim());

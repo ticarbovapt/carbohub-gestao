@@ -402,7 +402,7 @@ async function montarFila(alvos?: string[]): Promise<ItemFila[]> {
   // varredura é paginada e traz a população inteira; o alarme fica como aviso
   // de que ela cresceu a ponto de pedir filtro no banco.
   const LIMITE_VARREDURA = 2000;
-  const entregues = await lerSemTeto<Record<string, string | number | null>>(() => supabase
+  const entregues = await lerSemTeto<any>(() => supabase
     .from("bling2_esteira")
     .select("bling_id,rastreio,nf_chave,transportadora,servico,canal,data_pedido")
     .eq("etapa", "entregue")

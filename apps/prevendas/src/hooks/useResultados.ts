@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { lerSemTeto } from "@carbo/shell";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Resultados do Pré-Vendas — o que aconteceu com cada lead repassado.
@@ -72,14 +73,14 @@ export function useLeadsSdr(mes: Date, userId?: string) {
     enabled: !!userId,
     queryFn: async (): Promise<LeadSdr[]> => {
       // Limites em Brasília: "criado em outubro" é outubro aqui, não em UTC.
-      const { data, error } = await db
+      // É CONTADO na tela: paginado, para o teto de 1.000 não encolher o mês.
+      return await lerSemTeto<LeadSdr>(() => db
         .from("crm_sales_leads")
         .select("id, stage, created_by, assigned_to")
         .eq("funnel_type", "f14")
         .gte("created_at", `${de}T00:00:00-03:00`)
-        .lte("created_at", `${ate}T23:59:59.999-03:00`);
-      if (error) throw error;
-      return (data ?? []) as LeadSdr[];
+        .lte("created_at", `${ate}T23:59:59.999-03:00`)
+        .order("id"));
     },
   });
 }

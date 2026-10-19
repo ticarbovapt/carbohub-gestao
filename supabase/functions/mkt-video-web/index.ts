@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.39.3";
+import { lerSemTeto } from "../_shared/lerTudo.ts";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // mkt-video-web — a PORTA do conversor de vídeo dos Quadros do Marketing.
@@ -47,13 +48,21 @@ Deno.serve(async (req) => {
 
   if (b.acao === "pendentes") {
     const limite = Math.min(Math.max(Number(b.limite) || 5, 1), 20);
-    const { data, error } = await sb.from("mkt_card_attachments")
-      .select("id, name, mime_type, storage_path, poster_path, tamanho, web_tentativas")
-      .eq("kind", "arquivo").not("storage_path", "is", null).is("web_status", null)
-      .lt("web_tentativas", MAX_TENTATIVAS)
-      .order("created_at", { ascending: false }).limit(1000);
-    if (error) return json({ erro: error.message }, 500);
-    const videos = (data ?? []).filter((a) => EH_VIDEO(a.mime_type, a.name)).slice(0, limite);
+    // ⚠️ Paginado, e não `.limit(1000)`: o filtro de VÍDEO roda aqui em JS, e
+    // anexo que não é vídeo nunca ganha `web_status` — fica nesta consulta para
+    // sempre. Com o teto de 1.000 do PostgREST, imagens e PDFs recentes
+    // empurrariam os vídeos mais velhos para fora e eles nunca converteriam.
+    let data: any[];
+    try {
+      data = await lerSemTeto(() => sb.from("mkt_card_attachments")
+        .select("id, name, mime_type, storage_path, poster_path, tamanho, web_tentativas")
+        .eq("kind", "arquivo").not("storage_path", "is", null).is("web_status", null)
+        .lt("web_tentativas", MAX_TENTATIVAS)
+        .order("created_at", { ascending: false }).order("id"));
+    } catch (e) {
+      return json({ erro: (e as Error).message }, 500);
+    }
+    const videos = data.filter((a) => EH_VIDEO(a.mime_type, a.name)).slice(0, limite);
     const itens = [];
     for (const a of videos) {
       const s = await sb.storage.from(BUCKET).createSignedUrl(a.storage_path, 3 * 3600);
