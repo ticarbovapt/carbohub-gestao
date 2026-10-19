@@ -37,7 +37,11 @@ export function useNotifications() {
       return (data || []) as Notification[];
     },
     enabled: !!user,
-    refetchInterval: 15000, // poll a cada 15s
+    // ⚠️ Rede de segurança, não o caminho principal: quem traz a notificação
+    // nova na hora é o Realtime (useLiveNotifications invalida esta chave).
+    // A 15 s, cada aba aberta lia `notifications` 4×/min — o time inteiro,
+    // nos oito apps, o dia todo.
+    refetchInterval: 120_000,
   });
 
   const markAsReadMutation = useMutation({
