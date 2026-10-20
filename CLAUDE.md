@@ -1180,6 +1180,19 @@ calada: a função fora da lista `dep` (nunca foi ao ar), o secret
    definição. ⚠️ O cron relê só 30 dias; "usar a conta" lê 90, e é isso que dá
    o período anterior. ⚠️ Sem a função (front antes do SQL) as seções somem e
    o resto da tela segue.
+   ⚠️ O funil segue o caminho MEDIDO (`20261114`): checkout (7.261) passa do
+   carrinho (1.998) porque a página da PayT vai direto ao checkout. A
+   sequência é cliques → página → checkout → pagamento (`add_payment_info`) →
+   compra; "viu o produto" e "carrinho" aparecem À PARTE.
+5. **Criativo e segmentos** (`20261115`): o sync lê, numa tentativa À PARTE do
+   gasto, o criativo de cada anúncio (`meta_ads_criativos`: miniatura, status)
+   e os segmentos por dia no nível de CONTA (`meta_ads_segmentos`: idade ×
+   gênero, plataforma × posição, região); a tela lê
+   `carbo_meta_ads_segmentos` (jsonb). ⚠️ A URL da miniatura é ASSINADA e
+   vence — relida a cada rodada; imagem que não abre vira ícone. ⚠️ A Meta
+   modela compra por segmento: a soma não fecha com o total, e a tela diz.
+   ⚠️ Falha dos extras grava `origem = '<x>:extras'` com `ok = false` no log
+   (aparece no aviso da tela) e NÃO desfaz o gasto.
 
 ### Seletor de período do e-commerce — "este mês" ≠ "mês fechado"
 `EcommercePeriod` tem os dois, e a diferença NÃO é detalhe:
