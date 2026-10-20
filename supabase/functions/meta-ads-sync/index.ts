@@ -21,7 +21,25 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { cors } from "../_shared/cors.ts";
+// ⚠️ CORS PRÓPRIO, não o `_shared/cors.ts`: aquela lista é a das funções do
+// WhatsApp, fechada de propósito (elas escrevem pelo número da empresa). A tela
+// de anúncios vive no Admin e no Marketing (20/10/2026); aqui vale qualquer
+// https://*.carbohub.com.br — a porta de verdade é o JWT + time interno.
+function cors(req: Request, metodos = "GET, POST, OPTIONS") {
+  const origin = req.headers.get("origin") || "";
+  let ok = false;
+  try {
+    const u = new URL(origin);
+    ok = (u.protocol === "https:" && u.hostname.endsWith(".carbohub.com.br")) ||
+      (u.protocol === "http:" && u.hostname === "localhost");
+  } catch { ok = false; }
+  return {
+    "Access-Control-Allow-Origin": ok ? origin : "https://admin.carbohub.com.br",
+    "Access-Control-Allow-Methods": metodos,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Vary": "Origin",
+  };
+}
 import { ehTimeInterno } from "../_shared/interfacesInternas.ts";
 
 // Fixada de propósito. A v25.0 é a atual (fev/2026); a v26 ainda não saiu.
