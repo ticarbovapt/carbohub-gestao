@@ -3019,6 +3019,14 @@ confere quem chama. Senha de reset ainda é fixa (`Carbo@2026`).
 4. **Mudança em `packages/`** → avise que afeta vários apps antes de aplicar.
 5. **Cada app é autossuficiente.** `apps/crm` tem build/lockfile próprio; NÃO mexer no `package.json` da raiz (3 lockfiles frágeis — risco ao deploy do controle).
 
+### Sales: Funis, Dashboard Comercial e Território SAÍRAM (20/10/2026)
+Decisão do dono do processo. `/funis`, `/comercial`, `/territorio/mapa`,
+`/territorio/rede` e `/territorio/expansao` foram apagados do `apps/crm`, com o
+que só eles usavam (`useTerritorio`, `useEcommerceUnidade`, `RequireGestor`).
+Os endereços antigos (e o `/dashboard-comercial`) caem em `/crm/pipelines`, a
+home do Sales. O Dashboard Comercial de verdade é o do Admin
+(`admin.carbohub.com.br/comercial/dashboard`).
+
 ### Admin: Visão Geral e Estratégico SAÍRAM (20/10/2026)
 `/dashboards/comercial` e `/dashboards/estrategico` foram apagados, por decisão do
 dono do processo: o Dashboard Comercial (`/comercial/dashboard`) cobre os dois,

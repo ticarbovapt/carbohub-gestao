@@ -17,7 +17,7 @@ import {
 // que o vendedor vê tem de ser a do bolso dele.
 //
 // ⚠️ Os tipos gerados do Supabase não conhecem as tabelas rtm_*; o cast fica
-// isolado neste `db`, como no `useTerritorio`.
+// isolado neste `db`.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const db = supabase as unknown as {

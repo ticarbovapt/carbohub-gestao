@@ -1,14 +1,11 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { ProtectedRoute } from "./components/ProtectedRoute";
-import { RequireGestor } from "./components/RequireGestor";
 import { SalesShell } from "./components/SalesShell";
 import Login from "./pages/Login";
-import CRM from "./pages/CRM";
 import Pipelines from "./pages/Pipelines";
 import Vender from "./pages/Vender";
 import Chat from "./pages/Chat";
 import PedidosTravada from "./pages/PedidosTravada";
-import DashboardComercial from "./pages/DashboardComercial";
 import Vendas from "./pages/Vendas";
 import Metas from "./pages/Metas";
 import Profile from "./pages/Profile";
@@ -18,9 +15,6 @@ import RequisicaoCompra from "./pages/RequisicaoCompra";
 import PosVenda from "./pages/PosVenda";
 import DescOrdensServico from "./pages/descarbonizacao/OrdensServico";
 import DescAgendamentos from "./pages/descarbonizacao/Agendamentos";
-import MapaTerritorial from "./pages/territorio/MapaTerritorial";
-import NetworkMap from "./pages/territorio/NetworkMap";
-import TerritoryExpansion from "./pages/territorio/TerritoryExpansion";
 import Pdvs from "./pages/Pdvs";
 import MeuEstoque from "./pages/MeuEstoque";
 import RtmAgenda from "./pages/rtm/Agenda";
@@ -46,8 +40,9 @@ export default function App() {
         {/* Landing = Funil de Vendas (pipeline única ativa) */}
         <Route path="/" element={<Navigate to="/crm/pipelines" replace />} />
         <Route path="/crm/pipelines" element={<Pipelines />} />
-        {/* Dashboard de todos os funis — preservado, sem link no menu (escala depois) */}
-        <Route path="/funis" element={<CRM />} />
+        {/* /funis, /comercial e /territorio/* SAÍRAM (20/10/2026, decisão do dono
+            do processo). O endereço antigo cai na home, nunca no "não encontrada". */}
+        <Route path="/funis" element={<Navigate to="/crm/pipelines" replace />} />
         {/* compat: rotas antigas por funil → pipelines com filtro */}
         <Route path="/crm/:funnelType" element={<Navigate to="/crm/pipelines" replace />} />
         <Route path="/vender" element={<Vender />} />
@@ -62,7 +57,7 @@ export default function App() {
         <Route path="/pos-venda" element={<PosVenda />} />
         <Route path="/vendas" element={<Vendas />} />
         <Route path="/metas" element={<Metas />} />
-        <Route path="/comercial" element={<DashboardComercial />} />
+        <Route path="/comercial" element={<Navigate to="/crm/pipelines" replace />} />
         <Route path="/pdvs" element={<Pdvs />} />
         <Route path="/meu-estoque" element={<MeuEstoque />} />
 
@@ -74,12 +69,8 @@ export default function App() {
         {/* Descarbonização — acompanhamento (pra onde o "+ Nova Descarbonização" leva) */}
         <Route path="/descarbonizacao/os" element={<DescOrdensServico />} />
         <Route path="/descarbonizacao/agendamentos" element={<DescAgendamentos />} />
-        {/* Território — só gestor (rede da empresa); barra a URL direta p/ não-gestor */}
-        <Route path="/territorio/mapa" element={<RequireGestor><MapaTerritorial /></RequireGestor>} />
-        <Route path="/territorio/rede" element={<RequireGestor><NetworkMap /></RequireGestor>} />
-        <Route path="/territorio/expansao" element={<RequireGestor><TerritoryExpansion /></RequireGestor>} />
-        {/* compatibilidade com rotas antigas (e-commerce migrou para o Carbo Ops) */}
-        <Route path="/dashboard-comercial" element={<Navigate to="/comercial" replace />} />
+        <Route path="/territorio/*" element={<Navigate to="/crm/pipelines" replace />} />
+        <Route path="/dashboard-comercial" element={<Navigate to="/crm/pipelines" replace />} />
         <Route path="/perfil" element={<Profile />} />
         <Route path="/bugs" element={<BugReports />} />
         <Route path="/equipe" element={<MinhaEquipe />} />

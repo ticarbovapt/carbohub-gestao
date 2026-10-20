@@ -1,8 +1,8 @@
 import { useState, useRef } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import {
-  KanbanSquare, ClipboardList, TrendingUp, Target, BarChart3, LayoutDashboard,
-  Wind, CalendarDays, MapPinned, Map, Share2, ShoppingCart, ShoppingBag, MessagesSquare, MapPin,
+  KanbanSquare, ClipboardList, TrendingUp, Target,
+  Wind, CalendarDays, ShoppingCart, ShoppingBag, MessagesSquare, MapPin,
   CalendarCheck, PackageCheck,
 } from "lucide-react";
 import { ChatBadge, ChatProvider } from "@carbo/chat";
@@ -29,7 +29,7 @@ export function SalesShell() {
   const toggleCollapsed = () => setCollapsed((c) => { const n = !c; try { localStorage.setItem("carbo:sidebar:collapsed", n ? "1" : "0"); } catch {} return n; });
   useAccessPing("carbo_crm");
   useLiveNotifications();
-  const { user, profile, isGestor } = useAuth();
+  const { user, profile } = useAuth();
   const chatUser = useMemo(
     () => ({ id: user?.id ?? "", full_name: profile?.full_name ?? null, avatar_url: profile?.avatar_url ?? null }),
     [user?.id, profile?.full_name, profile?.avatar_url],
@@ -40,11 +40,9 @@ export function SalesShell() {
   // Navegação padronizada: topo = item principal + Carbo Chat; depois seções por domínio.
   const sections: ShellNavSection[] = [
     { items: [
-        { to: "/funis", label: "Funis de Venda", icon: LayoutDashboard, end: true },
         { to: "/chat", label: "Carbo Chat", icon: MessagesSquare, badge: <ChatBadge /> },
     ] },
     { label: "Comercial", items: [
-        { to: "/comercial", label: "Dashboard Comercial", icon: BarChart3 },
         { to: "/crm/pipelines", label: "Pipelines", icon: KanbanSquare },
         { to: "/vendas", label: "Vendas", icon: TrendingUp },
         { to: "/metas", label: "Metas de Vendedores", icon: Target },
@@ -62,11 +60,6 @@ export function SalesShell() {
         { to: "/descarbonizacao/os", label: "Ordens de Serviço", icon: ClipboardList },
         { to: "/descarbonizacao/agendamentos", label: "Agendamentos", icon: CalendarDays },
     ] },
-    ...(isGestor ? [{ label: "Território", icon: MapPinned, items: [
-        { to: "/territorio/mapa", label: "Mapa Territorial", icon: Map },
-        { to: "/territorio/rede", label: "Mapa da Rede", icon: Share2 },
-        { to: "/territorio/expansao", label: "Expansão", icon: TrendingUp },
-    ] }] : []),
   ];
 
   // Mobile: abre a gaveta. Desktop: recolhe/expande a sidebar (rail).
