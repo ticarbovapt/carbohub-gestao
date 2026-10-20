@@ -479,7 +479,7 @@ export default function Pipelines() {
             <CarboKPI title="Funis" value={FUNNELS.length} icon={KanbanSquare} iconColor="green" />
           </div>
         ) : (
-          <div className={`grid grid-cols-2 gap-3 ${MOSTRA_QUENTES_E_TENTATIVAS ? "md:grid-cols-5" : "md:grid-cols-3"}`}>
+          <div className={`grid grid-cols-2 gap-3 ${MOSTRA_QUENTES_E_TENTATIVAS ? "md:grid-cols-3 xl:grid-cols-5" : "md:grid-cols-3"}`}>
             <CarboKPI title="Total Leads" value={stats?.total || 0} icon={Users} iconColor="blue" loading={!stats} />
             {MOSTRA_QUENTES_E_TENTATIVAS && <CarboKPI title="Quentes" value={stats?.hot || 0} icon={Flame} iconColor="warning" loading={!stats} />}
             <CarboKPI title="Sem Atividade >3d" value={stats?.stale || 0} icon={AlertTriangle} iconColor="warning" loading={!stats} />

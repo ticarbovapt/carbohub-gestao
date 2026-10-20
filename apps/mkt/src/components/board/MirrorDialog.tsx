@@ -17,7 +17,7 @@ export function MirrorDialog({ onConfirm, onClose }: {
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-sm gap-4">
+      <DialogContent className="sm:max-w-sm gap-4">
         <DialogHeader>
           <DialogTitle className="mkt-view-title flex items-center gap-2 text-base">
             <span className="flex h-8 w-8 items-center justify-center rounded-[var(--input-radius)] bg-accent/10 text-accent">

@@ -30,7 +30,7 @@ export function BlingPreviewDialog({ order, open, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><FileText className="h-5 w-5 text-carbo-green" /> Pré-visualizar envio ao Bling</DialogTitle>
           <DialogDescription>Confira os dados que serão enviados via API ao Bling para emissão da NF-e.</DialogDescription>

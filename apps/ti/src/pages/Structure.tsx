@@ -24,7 +24,7 @@ export default function Structure() {
   const [selectedDept, setSelectedDept] = useState<string>("");
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-8 grid gap-6 lg:grid-cols-2">
+    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
       <DepartmentsPanel
         departments={departments}
         loading={loadingDepts}

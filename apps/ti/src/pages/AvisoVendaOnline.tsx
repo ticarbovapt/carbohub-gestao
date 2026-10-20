@@ -183,7 +183,7 @@ export default function AvisoVendaOnline() {
                   <ProfileAvatar userId={p.id} avatarUrl={p.avatar_url} fullName={p.nome} size={40} className="ring-1 ring-border" />
                   <div className="min-w-0 flex-1">
                     <p className="flex items-center gap-2 font-medium">
-                      <span className="truncate">{p.nome ?? "—"}</span>
+                      <span className="min-w-0 break-words">{p.nome ?? "—"}</span>
                       {p.e_head && (
                         <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-400">
                           <Crown className="h-3 w-3" /> Head

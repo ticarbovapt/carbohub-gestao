@@ -58,7 +58,7 @@ export function AvatarCropDialog({ imageSrc, mimeType, onConfirm, onCancel }: Av
 
   return (
     <Dialog open={!!imageSrc} onOpenChange={(open) => { if (!open) onCancel(); }}>
-      <DialogContent className="max-w-sm w-full">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>Ajustar foto</DialogTitle>
         </DialogHeader>

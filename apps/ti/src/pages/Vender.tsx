@@ -1357,7 +1357,7 @@ export default function Vender() {
       <CarboCard>
         <CarboCardContent className="p-4 space-y-3">
           <h3 className="font-semibold flex items-center gap-2"><Building2 className="h-4 w-4 text-carbo-green" /> Informações do Cliente</h3>
-          <div className="grid md:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Nome / Razão Social <span className="text-destructive">*</span></Label>
               <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Nome do cliente"
@@ -1567,7 +1567,7 @@ export default function Vender() {
                     digitado aqui.
                   </p>
                 )}
-                <div className="grid grid-cols-1 sm:grid-cols-[1fr_90px_120px_auto] gap-3 items-end">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_90px_120px_auto] gap-3 items-end">
                   <div className="space-y-1.5">
                     <Label>Produto</Label>
                     <Select value={r.productId} onValueChange={(v) => onProduct(r.id, v)}>
@@ -1812,7 +1812,7 @@ export default function Vender() {
             const line = computeLineDiscount(bruto, { type: s.discType, value: s.discValue });
             return (
               <div key={s.id} className="rounded-xl border p-3 space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-[1fr_90px_120px_auto] gap-3 items-end">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_90px_120px_auto] gap-3 items-end">
                   <div className="space-y-1.5">
                     <Label>Modalidade</Label>
                     <Select value={s.modality} onValueChange={(v) => updateServiceRow(s.id, { modality: v as ServiceRow["modality"] })}>
@@ -2157,7 +2157,7 @@ export default function Vender() {
 
           {recorrente && (
             <>
-              <div className="grid md:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>Periodicidade</Label>
                   <Select value={recPeriodo} onValueChange={(v) => setRecPeriodo(v as RecorrenciaPeriodo)}>
@@ -2213,7 +2213,7 @@ export default function Vender() {
           <h3 className="font-semibold flex items-center gap-2">
             <CreditCard className="h-4 w-4 text-carbo-green" /> Forma de Pagamento <span className="text-red-400">*</span>
           </h3>
-          <div className="grid md:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Modalidade <span className="text-destructive">*</span></Label>
               <Select value={pagModalidade} onValueChange={setPagModalidade}>
@@ -2255,7 +2255,7 @@ export default function Vender() {
 
       {/* Dados Estratégicos (opcional, recolhível) */}
       <CollapsibleCard title="Dados Estratégicos" icon={Target} open={showEstrategicos} onToggle={() => setShowEstrategicos((o) => !o)}>
-        <div className="grid md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <Label>Tipo de Ponto</Label>
             <Select value={tipoPonto} onValueChange={setTipoPonto}>
@@ -2275,7 +2275,7 @@ export default function Vender() {
           <Label>Volume Médio Mensal (veículos)</Label>
           <Input type="number" placeholder="Ex: 500" value={volumeMedio} onChange={(e) => setVolumeMedio(e.target.value)} />
         </div>
-        <div className="grid md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <label className="flex items-center justify-between gap-3 rounded-xl border p-3">
             <span className="text-sm font-medium">Atua com Diesel?</span><Switch checked={atuaDiesel} onCheckedChange={setAtuaDiesel} />
           </label>
@@ -2298,20 +2298,20 @@ export default function Vender() {
       </CollapsibleCard>
 
       {/* Rodapé: total + ações */}
-      <div className="sticky bottom-0 bg-background/95 backdrop-blur border-t -mx-4 md:-mx-6 px-4 md:px-6 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="flex items-center justify-between sm:block">
+      <div className="sticky bottom-0 bg-background/95 backdrop-blur border-t -mx-4 md:-mx-6 px-4 md:px-6 py-3 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+        <div className="flex items-center justify-between lg:block">
           <p className="text-xs text-muted-foreground">Total</p>
           <p className="text-xl font-bold">{brl(orderTotal)}</p>
         </div>
-        <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:items-center sm:w-auto">
-          <Button variant="ghost" className="hidden sm:inline-flex" onClick={sairDaTela}>Cancelar</Button>
-          <Button variant="outline" className="min-w-0 sm:flex-none" onClick={handleQuote} disabled={generating || !podeSalvar || editandoVenda}>
+        <div className="grid grid-cols-2 gap-2 w-full lg:flex lg:items-center lg:w-auto">
+          <Button variant="ghost" className="hidden lg:inline-flex" onClick={sairDaTela}>Cancelar</Button>
+          <Button variant="outline" className="min-w-0 lg:flex-none" onClick={handleQuote} disabled={generating || !podeSalvar || editandoVenda}>
             <FileText className="h-4 w-4 mr-1" /> {generating ? "Gerando..." : (editId ? (<><span className="hidden sm:inline">Salvar e&nbsp;</span>Gerar PDF</>) : (<><span className="hidden sm:inline">Gerar&nbsp;</span>Orçamento</>))}
           </Button>
-          <Button variant="outline" className="min-w-0 sm:flex-none" onClick={handleEmailQuote} disabled={emailing || !podeSalvar} title="Salvar, gerar o PDF e enviar ao e-mail do cliente">
+          <Button variant="outline" className="min-w-0 lg:flex-none" onClick={handleEmailQuote} disabled={emailing || !podeSalvar} title="Salvar, gerar o PDF e enviar ao e-mail do cliente">
             <Mail className="h-4 w-4 mr-1" /> {emailing ? "Enviando..." : (<><span className="hidden sm:inline">Enviar por&nbsp;</span>E-mail</>)}
           </Button>
-          <CarboButton onClick={handleSell} className="col-span-2 order-first sm:order-none sm:flex-none sm:min-w-[150px]" disabled={!podeSalvar || editFaturado}>
+          <CarboButton onClick={handleSell} className="col-span-2 order-first lg:order-none lg:flex-none lg:min-w-[150px]" disabled={!podeSalvar || editFaturado}>
             <ShoppingCart className="h-4 w-4 mr-1" /> {editFaturado ? "Nota já emitida" : editandoVenda ? "Salvar alterações" : editId ? "Salvar e Vender" : "Gerar Venda"}
           </CarboButton>
         </div>

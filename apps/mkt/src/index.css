@@ -843,6 +843,8 @@
     line-height: 1.625;
     font-weight: 500;
     color: hsl(var(--foreground));
+    /* Palavra/URL sem espaço não pode vazar da largura do cartão. */
+    overflow-wrap: anywhere;
   }
 
   /* Meta-row do cartão (due/checklist/badges) */

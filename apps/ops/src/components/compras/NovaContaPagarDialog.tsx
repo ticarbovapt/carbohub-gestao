@@ -52,7 +52,7 @@ export function NovaContaPagarDialog({ open, onOpenChange }: { open: boolean; on
 
   return (
     <Dialog open={open} onOpenChange={close}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Lançar Conta a Pagar</DialogTitle>
           <DialogDescription>A partir de uma OC recebida ou manual.</DialogDescription>

@@ -90,7 +90,7 @@ function Painel({ boardId, onClose, atualizar }: { boardId: string; onClose: () 
   const linkInicial = trelloId ?? "";
   return (
     <Dialog open onOpenChange={(o) => { if (!o && !ocupado) { atualizar(); onClose(); } }}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Trello</DialogTitle>
           <DialogDescription>Pode rodar quantas vezes quiser: o que já veio não duplica.</DialogDescription>

@@ -57,7 +57,7 @@ export default function FornecedoresMrp() {
               <CarboTableBody>
                 {filtered.map((s) => (
                   <CarboTableRow key={s.id}>
-                    <CarboTableCell><span className="font-mono text-sm">{formatCnpj(s.cnpj)}</span></CarboTableCell>
+                    <CarboTableCell><span className="font-mono text-sm whitespace-nowrap">{formatCnpj(s.cnpj)}</span></CarboTableCell>
                     <CarboTableCell><span className="font-medium">{s.legal_name || "—"}</span></CarboTableCell>
                     <CarboTableCell>{s.trade_name || "—"}</CarboTableCell>
                     <CarboTableCell>{s.category || "—"}</CarboTableCell>

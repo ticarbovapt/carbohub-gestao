@@ -169,7 +169,7 @@ export function ListaDialogo({ modo, lista, boardId, onClose }: {
   const tituloDialogo = modo === "copiar" ? "Copiar lista" : modo === "mover" ? "Mover lista" : "Mover todos os cartões";
   return (
     <Dialog open onOpenChange={(o) => { if (!o && !ocupado) onClose(); }}>
-      <DialogContent className="max-w-sm">
+      <DialogContent className="sm:max-w-sm grid-cols-[minmax(0,1fr)]">
         <DialogHeader>
           <DialogTitle>{tituloDialogo}</DialogTitle>
           <DialogDescription className="truncate">{lista.title}</DialogDescription>

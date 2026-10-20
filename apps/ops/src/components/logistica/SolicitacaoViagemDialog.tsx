@@ -65,7 +65,7 @@ export function SolicitacaoViagemDialog({ open, onOpenChange }: SolicitacaoViage
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Plane className="h-4 w-4" /> Nova Solicitação de Viagem

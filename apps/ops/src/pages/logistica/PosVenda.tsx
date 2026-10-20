@@ -309,11 +309,11 @@ function prazoCor(d: string): string {
 
 function VendedorTag({ name, avatar }: { name: string; avatar: string | null }) {
   return (
-    <span className="flex items-center gap-1 truncate">
+    <span className="flex items-center gap-1 min-w-0" title={name}>
       {avatar
         ? <img src={avatar} alt="" className="h-5 w-5 rounded-full object-cover shrink-0" />
         : <User className="h-3.5 w-3.5 shrink-0" />}
-      {name}
+      <span className="truncate">{name}</span>
     </span>
   );
 }
@@ -697,9 +697,9 @@ export default function PosVenda() {
                               </span>
                             </div>
                           )}
-                          <div className="flex items-start justify-between gap-2">
-                            <span className="font-semibold text-[15px] leading-snug line-clamp-2">{o.customer_name}</span>
-                            <span className="text-sm font-semibold tabular-nums shrink-0">{brl(Number(o.total))}</span>
+                          <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-0.5">
+                            <span className="font-semibold text-[15px] leading-snug line-clamp-2 min-w-[9rem] flex-1">{o.customer_name}</span>
+                            <span className="text-sm font-semibold tabular-nums shrink-0 ml-auto">{brl(Number(o.total))}</span>
                           </div>
                           {/* O QUE é o pedido. Antes o card só dizia quem e quanto —
                               a Separação tinha de abrir o detalhe para saber o item. */}
@@ -841,7 +841,7 @@ export default function PosVenda() {
 
       {/* Portão de estoque — vale para Em Separação e Criar Ordem de Produção */}
       <Dialog open={!!pending} onOpenChange={(o) => !o && setPending(null)}>
-        <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {stockLoading ? "Conferindo estoque…" : hasStock ? "Produto em estoque" : "Sem estoque"}
@@ -946,7 +946,7 @@ export default function PosVenda() {
 
       {/* Emitir etiqueta de transporte (PDF 10×15) */}
       <Dialog open={!!etiquetaOrder} onOpenChange={(o) => !o && setEtiquetaOrder(null)}>
-        <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Tag className="h-4 w-4 text-carbo-blue" /> Emitir etiqueta</DialogTitle>
           </DialogHeader>
@@ -1058,7 +1058,7 @@ export default function PosVenda() {
 
       {/* 1º momento — Em Separação → Separado: volumes e peso, medidos na bancada */}
       <Dialog open={!!sepOrder} onOpenChange={(o) => !o && setSepOrder(null)}>
-        <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Boxes className="h-4 w-4 text-carbo-blue" /> Volumes e peso</DialogTitle>
           </DialogHeader>
@@ -1102,7 +1102,7 @@ export default function PosVenda() {
 
       {/* 2º momento — Separado → Gerar NF: transportadora e cotação do frete */}
       <Dialog open={!!gnfOrder} onOpenChange={(o) => !o && setGnfOrder(null)}>
-        <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Truck className="h-4 w-4 text-carbo-blue" /> Frete</DialogTitle>
           </DialogHeader>
@@ -1158,13 +1158,13 @@ export default function PosVenda() {
 
       {/* Detalhes do pedido */}
       <Dialog open={!!detail} onOpenChange={(o) => !o && setDetail(null)}>
-        <DialogContent className="max-w-lg max-h-[90dvh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg max-h-[90dvh] overflow-y-auto grid-cols-[minmax(0,1fr)]">
           {detail && (
             <>
               <DialogHeader>
-                <DialogTitle className="flex items-center justify-between gap-3">
-                  <span>{detail.customer_name}</span>
-                  <CarboBadge variant="default">{stageLabel(detail.fulfillment_stage)}</CarboBadge>
+                <DialogTitle className="flex items-center justify-between gap-3 pr-6">
+                  <span className="min-w-0 break-words">{detail.customer_name}</span>
+                  <CarboBadge variant="default" className="shrink-0 whitespace-nowrap">{stageLabel(detail.fulfillment_stage)}</CarboBadge>
                 </DialogTitle>
               </DialogHeader>
               <div className="space-y-4 text-sm">
@@ -1186,7 +1186,7 @@ export default function PosVenda() {
                 {(detail.customer_phone || detail.customer_email) && (
                   <div className="space-y-1">
                     {detail.customer_phone && <p className="flex items-center gap-2"><Phone className="h-3.5 w-3.5 text-muted-foreground" /> {detail.customer_phone}</p>}
-                    {detail.customer_email && <p className="flex items-center gap-2"><Mail className="h-3.5 w-3.5 text-muted-foreground" /> {detail.customer_email}</p>}
+                    {detail.customer_email && <p className="flex items-center gap-2"><Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" /> <span className="min-w-0 break-all">{detail.customer_email}</span></p>}
                   </div>
                 )}
 

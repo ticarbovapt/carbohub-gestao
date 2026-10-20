@@ -46,9 +46,9 @@ function FieldRow({ field, onUpdate, onDelete }: {
       <div className="flex items-center gap-2">
         <button className="p-1 rounded-md cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" {...attributes} {...listeners}><GripVertical className="h-4 w-4" /></button>
         <Input value={name} onChange={(e) => setName(e.target.value)} onBlur={() => name !== field.name && onUpdate({ name })}
-          placeholder="Nome do campo" className="h-9 text-sm flex-1" />
+          placeholder="Nome do campo" className="h-9 text-sm flex-1 min-w-0" />
         <Select value={field.type} onValueChange={(v) => onUpdate({ type: v as FieldType })}>
-          <SelectTrigger className="h-9 w-40 text-sm"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="h-9 w-32 sm:w-40 shrink-0 text-sm"><SelectValue /></SelectTrigger>
           <SelectContent>{TYPES.map((t) => <SelectItem key={t} value={t}>{FIELD_TYPE_LABELS[t]}</SelectItem>)}</SelectContent>
         </Select>
         <button onClick={async () => { if (await confirmar({ titulo: `Excluir o campo "${field.name || "sem nome"}"?`, mensagem: "Isso apaga o valor dele em todos os cartões.", confirmar: "Excluir", perigo: true })) onDelete(); }}
@@ -58,11 +58,11 @@ function FieldRow({ field, onUpdate, onDelete }: {
       {hasOptions(field.type) && (
         <div className="pl-8 space-y-2 border-l-2 border-border ml-1">
           {field.options.map((o) => (
-            <div key={o.id} className="flex items-center gap-2">
-              <span className="inline-flex items-center h-6 px-2 rounded-md text-xs font-medium shrink-0 border" style={tintedLabelStyle(LABEL_COLORS[o.color ?? "blue"])}>
+            <div key={o.id} className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center h-6 px-2 rounded-md text-xs font-medium shrink-0 border max-w-full truncate" style={tintedLabelStyle(LABEL_COLORS[o.color ?? "blue"])}>
                 {o.label || "—"}
               </span>
-              <Input value={o.label} onChange={(e) => updateOption(o.id, { label: e.target.value })} className="h-8 text-sm flex-1" />
+              <Input value={o.label} onChange={(e) => updateOption(o.id, { label: e.target.value })} className="h-8 text-sm flex-1 min-w-[8rem]" />
               <div className="flex gap-1">
                 {LABEL_COLOR_KEYS.slice(0, 6).map((k) => (
                   <button key={k} onClick={() => updateOption(o.id, { color: k })} className={`h-5 w-5 rounded-md transition-transform hover:scale-110 ${o.color === k ? "ring-2 ring-primary ring-offset-1 ring-offset-card" : ""}`} style={{ background: LABEL_COLORS[k] }} />
@@ -106,7 +106,7 @@ export function BoardFieldsDialog({ boardId, onClose }: { boardId: string; onClo
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg w-[calc(100%-1.5rem)] max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-lg w-[calc(100%-1.5rem)] max-h-[85vh] overflow-y-auto grid-cols-[minmax(0,1fr)]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-lg font-bold tracking-tight" style={{ fontFamily: "'IBM Plex Sans', 'Inter', system-ui, sans-serif" }}>
             <SlidersHorizontal className="h-5 w-5 text-primary" />

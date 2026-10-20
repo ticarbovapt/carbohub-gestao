@@ -676,10 +676,10 @@ export default function OrdensProducao() {
               <TableBody>
                 {filtered.map((o) => (
                   <TableRow key={o.id} className="cursor-pointer hover:bg-muted/50">
-                    <TableCell><span className="font-mono text-sm text-blue-500 font-medium">{o.op_number}</span></TableCell>
+                    <TableCell><span className="font-mono text-sm text-blue-500 font-medium whitespace-nowrap">{o.op_number}</span></TableCell>
                     <TableCell>
                       <div className="space-y-0.5">
-                        <span className="font-mono text-sm text-green-500 font-medium">{o.sku_code}</span>
+                        <span className="font-mono text-sm text-green-500 font-medium whitespace-nowrap">{o.sku_code}</span>
                         <p className="text-xs text-muted-foreground">{o.sku_name}</p>
                       </div>
                     </TableCell>
@@ -744,7 +744,7 @@ export default function OrdensProducao() {
       )}
       {/* Perdas de insumo — ranking (Perdas Totais → clique) */}
       <Dialog open={lossOpen} onOpenChange={setLossOpen}>
-        <DialogContent className="max-w-lg max-h-[90dvh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><XCircle className="h-5 w-5 text-red-500" /> Perdas</DialogTitle>
             <DialogDescription>

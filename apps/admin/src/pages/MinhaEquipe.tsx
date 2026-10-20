@@ -71,10 +71,10 @@ export default function MinhaEquipe() {
                     <p className="font-medium truncate">{m.full_name ?? "—"}</p>
                     <p className="text-xs text-muted-foreground truncate">{roleLine(m) || "—"}</p>
                   </div>
-                  <div className="text-right shrink-0">
+                  <div className="text-right min-w-0 max-w-[50%]">
                     {email ? (
                       <a href={`mailto:${email}`} className="inline-flex items-center gap-1.5 text-xs text-carbo-green hover:underline">
-                        <Mail className="h-3.5 w-3.5" /> <span className="hidden sm:inline">{email}</span>
+                        <Mail className="h-3.5 w-3.5" /> <span className="hidden sm:inline break-all">{email}</span>
                       </a>
                     ) : (
                       <span className="text-[11px] text-muted-foreground">sem e-mail</span>

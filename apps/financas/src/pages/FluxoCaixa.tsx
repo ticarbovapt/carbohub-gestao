@@ -77,7 +77,7 @@ export default function FluxoCaixa() {
             <p className="text-xs text-muted-foreground mb-1">{k.label}</p>
             {k.loading ? <Skeleton className="h-7 w-28" />
               : k.error ? <p className="text-sm text-destructive">Erro ao carregar</p>
-              : <p className={`text-lg font-bold kpi-number ${k.cor}`}>{brl(k.valor)}</p>}
+              : <p className={`text-lg font-bold kpi-number break-words ${k.cor}`}>{brl(k.valor)}</p>}
           </CarboCardContent></CarboCard>
         ))}
       </div>

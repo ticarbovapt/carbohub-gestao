@@ -18,7 +18,7 @@ export function OSKanban({ items }: { items: OSView[] }) {
   const hoje = hojeLocal();
 
   return (
-    <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 md:grid md:grid-cols-3 md:gap-4 md:overflow-visible md:pb-0">
+    <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 lg:grid lg:grid-cols-3 lg:gap-4 lg:overflow-visible lg:pb-0">
       {STAGES.map((stage) => (
         <Coluna
           key={stage.id}
@@ -35,7 +35,7 @@ function Coluna({ stage, items, hoje }: { stage: StageMeta; items: OSView[]; hoj
   return (
     // Altura FIXA e rolagem dentro da coluna: com muitas OS numa etapa, o quadro
     // continua do tamanho da tela em vez de esticar a página.
-    <section className="flex h-[70dvh] w-[86vw] shrink-0 snap-start flex-col rounded-xl border bg-muted/30 md:h-[max(440px,calc(100dvh-23rem))] md:w-auto md:min-w-0">
+    <section className="flex h-[70dvh] w-[86vw] shrink-0 snap-start flex-col rounded-xl border bg-muted/30 md:h-[max(440px,calc(100dvh-23rem))] md:w-72 lg:w-auto lg:min-w-0">
       <header className="flex items-center gap-2 px-3.5 py-3">
         <span className={cn("h-2 w-2 shrink-0 rounded-full", stage.dot)} />
         <h3 className="text-sm font-semibold tracking-tight">{stage.label}</h3>

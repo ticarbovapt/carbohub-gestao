@@ -621,12 +621,12 @@ export default function Vendas() {
           quem dá as bordas; teto e borda são coisas diferentes. */}
       <div className="space-y-5 max-w-[1500px] mx-auto">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+        <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2"><ShoppingBag className="h-6 w-6 text-carbo-green" /> Vendas e Orçamentos</h1>
             <p className="text-sm text-muted-foreground mt-0.5">Acompanhamento de pedidos e orçamentos por vendedor</p>
           </div>
-          <div className="flex flex-col items-end gap-2 shrink-0">
+          <div className="flex flex-col items-start lg:items-end gap-2 shrink-0">
             {!hasCustomRange && (
               <div className="flex items-center gap-1 bg-muted/40 rounded-lg px-2 py-1.5">
                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setMonth((m) => startOfMonth(subMonths(m, 1)))}><ChevronLeft className="h-4 w-4" /></Button>
@@ -634,7 +634,7 @@ export default function Vendas() {
                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setMonth((m) => startOfMonth(addMonths(m, 1)))} disabled={isCurrentMonth}><ChevronRight className="h-4 w-4" /></Button>
               </div>
             )}
-            <div className="flex items-center gap-2 flex-wrap justify-end">
+            <div className="flex items-center gap-2 flex-wrap lg:justify-end">
               <div className="flex items-center gap-1 text-xs text-muted-foreground"><CalendarDays className="h-3.5 w-3.5" /> Período:</div>
               <Input type="date" className="h-8 w-36 text-xs" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} title="Data início" />
               <span className="text-xs text-muted-foreground">até</span>
@@ -651,27 +651,27 @@ export default function Vendas() {
             vem. Orçamento e Cancelada ficam de fora da conta de propósito:
             orçamento ainda não é venda, cancelada deixou de ser.
             Para colaborador (vê só o próprio), a query já limita ao vendedor. */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          <CarboCard onClick={() => toggleKpi("vendido")}
+        <div className="grid grid-cols-2 md:grid-cols-3 2xl:grid-cols-6 gap-3">
+          <CarboCard padding="none" onClick={() => toggleKpi("vendido")}
             className={`cursor-pointer transition ${kpiFilter === "vendido" ? "ring-2 ring-violet-400/60" : "hover:bg-muted/20"}`}>
             <CarboCardContent className="p-3 text-center">
-              <p className="text-xl font-bold text-violet-400 tabular-nums">{fmtBRL(totalVendido)}</p>
+              <p className="text-lg lg:text-xl font-bold text-violet-400 tabular-nums break-words">{fmtBRL(totalVendido)}</p>
               <p className="text-xs text-muted-foreground">Total vendido</p>
               <p className="text-[10px] text-muted-foreground/70 mt-0.5">{vendidas.length} venda(s) no mês</p>
             </CarboCardContent>
           </CarboCard>
-          <CarboCard onClick={() => toggleKpi("faturado")}
+          <CarboCard padding="none" onClick={() => toggleKpi("faturado")}
             className={`cursor-pointer transition ${kpiFilter === "faturado" ? "ring-2 ring-carbo-green/60" : "hover:bg-muted/20"}`}>
             <CarboCardContent className="p-3 text-center">
-              <p className="text-xl font-bold text-carbo-green tabular-nums">{fmtBRL(totalFaturado)}</p>
+              <p className="text-lg lg:text-xl font-bold text-carbo-green tabular-nums break-words">{fmtBRL(totalFaturado)}</p>
               <p className="text-xs text-muted-foreground">Total faturado</p>
               <p className="text-[10px] text-muted-foreground/70 mt-0.5">{faturadas.length} venda(s) faturada(s)</p>
             </CarboCardContent>
           </CarboCard>
-          <CarboCard onClick={() => toggleKpi("aguardando")}
+          <CarboCard padding="none" onClick={() => toggleKpi("aguardando")}
             className={`cursor-pointer transition ${kpiFilter === "aguardando" ? "ring-2 ring-amber-400/60" : "hover:bg-muted/20"}`}>
             <CarboCardContent className="p-3 text-center">
-              <p className="text-xl font-bold text-amber-400 tabular-nums">{fmtBRL(totalAguardando)}</p>
+              <p className="text-lg lg:text-xl font-bold text-amber-400 tabular-nums break-words">{fmtBRL(totalAguardando)}</p>
               <p className="text-xs text-muted-foreground">Aguardando faturamento</p>
               {/* É esta linha que responde "quanto transborda": o card sozinho
                   dá o valor, mas é a fração do vendido que diz se o mês fechou
@@ -682,10 +682,10 @@ export default function Vendas() {
               </p>
             </CarboCardContent>
           </CarboCard>
-          <CarboCard onClick={() => toggleKpi("entrou")}
+          <CarboCard padding="none" onClick={() => toggleKpi("entrou")}
             className={`cursor-pointer transition ${kpiFilter === "entrou" ? "ring-2 ring-cyan-400/60" : "hover:bg-muted/20"}`}>
             <CarboCardContent className="p-3 text-center">
-              <p className="text-xl font-bold text-cyan-400 tabular-nums">{fmtBRL(totalVeioAntes)}</p>
+              <p className="text-lg lg:text-xl font-bold text-cyan-400 tabular-nums break-words">{fmtBRL(totalVeioAntes)}</p>
               <p className="text-xs text-muted-foreground">Veio de meses anteriores</p>
               <p className="text-[10px] text-muted-foreground/70 mt-0.5">
                 {veioAntes.length} venda(s) transbordada(s)
@@ -693,15 +693,15 @@ export default function Vendas() {
               </p>
             </CarboCardContent>
           </CarboCard>
-          <CarboCard onClick={() => toggleKpi("orcamento")}
+          <CarboCard padding="none" onClick={() => toggleKpi("orcamento")}
             className={`cursor-pointer transition ${kpiFilter === "orcamento" ? "ring-2 ring-sky-400/60" : "hover:bg-muted/20"}`}>
             <CarboCardContent className="p-3 text-center">
-              <p className="text-xl font-bold text-sky-400 tabular-nums">{fmtBRL(totalOrcamento)}</p>
+              <p className="text-lg lg:text-xl font-bold text-sky-400 tabular-nums break-words">{fmtBRL(totalOrcamento)}</p>
               <p className="text-xs text-muted-foreground">Em orçamento</p>
               <p className="text-[10px] text-muted-foreground/70 mt-0.5">{quotes.length} orçamento(s)</p>
             </CarboCardContent>
           </CarboCard>
-          <CarboCard onClick={() => toggleKpi("cancelado")}
+          <CarboCard padding="none" onClick={() => toggleKpi("cancelado")}
             className={`cursor-pointer transition ${kpiFilter === "cancelado" ? "ring-2 ring-red-400/60" : "hover:bg-muted/20"}`}>
             <CarboCardContent className="p-3 text-center">
               <p className="text-2xl font-bold text-red-400 tabular-nums">{cancelled}</p>
@@ -890,11 +890,11 @@ export default function Vendas() {
                               )
                             )}
                           </td>
-                          <td className="p-3 font-medium max-w-[180px] truncate">{venda.customer_name}</td>
+                          <td className="p-3 font-medium max-w-[180px] truncate" title={venda.customer_name ?? undefined}>{venda.customer_name}</td>
                           <td className="p-3 text-muted-foreground whitespace-nowrap">{[venda.delivery_city, venda.delivery_state].filter(Boolean).join("/") || "—"}</td>
-                          <td className="p-3 text-muted-foreground whitespace-nowrap">{sdrNome || "—"}</td>
-                          <td className="p-3 text-muted-foreground whitespace-nowrap">{vendedorNome || "—"}</td>
-                          <td className="p-3 text-right font-bold tabular-nums">{fmtBRL(venda.total)}</td>
+                          <td className="p-3 text-muted-foreground max-w-[200px] truncate" title={sdrNome || undefined}>{sdrNome || "—"}</td>
+                          <td className="p-3 text-muted-foreground max-w-[200px] truncate" title={vendedorNome || undefined}>{vendedorNome || "—"}</td>
+                          <td className="p-3 text-right font-bold tabular-nums whitespace-nowrap">{fmtBRL(venda.total)}</td>
                           <td className="p-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center justify-end gap-1.5">
                               {isQuote ? (

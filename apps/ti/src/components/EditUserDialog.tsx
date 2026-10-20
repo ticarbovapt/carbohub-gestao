@@ -30,7 +30,7 @@ function InfoRow({ icon: Icon, label, children }: { icon: React.ElementType; lab
       <Icon className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
       <div className="min-w-0">
         <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
-        <div className="text-sm">{children}</div>
+        <div className="text-sm break-words">{children}</div>
       </div>
     </div>
   );
@@ -170,7 +170,7 @@ export function EditUserDialog({ user, approved, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={onClose}>
-      <div className="w-full max-w-lg rounded-2xl border bg-card max-h-[90vh] overflow-y-auto"
+      <div className="w-full max-w-lg rounded-2xl border bg-card max-h-[90vh] supports-[height:100dvh]:max-h-[90dvh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}>
 
         {/* ════════════ MODO VER (cartão de perfil) ════════════ */}
@@ -185,8 +185,8 @@ export function EditUserDialog({ user, approved, onClose }: Props) {
                 <ProfileAvatar userId={user.id} avatarUrl={user.avatar_url} fullName={user.full_name} size={64}
                   className={gestor ? "ring-2 ring-amber-400/70" : "ring-1 ring-border"} />
                 <div className="min-w-0">
-                  <h3 className="text-lg font-semibold truncate">{user.full_name ?? "—"}</h3>
-                  <p className="font-mono text-xs text-muted-foreground">{user.username ?? "—"}</p>
+                  <h3 className="text-lg font-semibold break-words">{user.full_name ?? "—"}</h3>
+                  <p className="font-mono text-xs text-muted-foreground break-all">{user.username ?? "—"}</p>
                   <div className="flex items-center gap-2 mt-1.5">
                     {gestor ? (
                       <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-amber-500/15 text-amber-600">
@@ -258,7 +258,7 @@ export function EditUserDialog({ user, approved, onClose }: Props) {
                     <p className="text-sm font-medium text-emerald-600">Senha redefinida!</p>
                     <p className="text-xs text-muted-foreground">No próximo acesso ele refaz o primeiro login (define uma nova senha). Passe as credenciais:</p>
                     <div className="flex flex-wrap items-center gap-2 text-sm">
-                      <code className="font-mono font-bold text-primary bg-primary/10 px-2 py-1 rounded">{user.username}</code>
+                      <code className="font-mono font-bold text-primary bg-primary/10 px-2 py-1 rounded break-all">{user.username}</code>
                       <code className="font-mono font-bold text-amber-600 bg-amber-500/10 px-2 py-1 rounded">{DEFAULT_PASSWORD}</code>
                       <button type="button"
                         onClick={() => { navigator.clipboard.writeText(`Usuário: ${user.username}\nSenha: ${DEFAULT_PASSWORD}`); toast.success("Credenciais copiadas!"); }}
@@ -309,7 +309,7 @@ export function EditUserDialog({ user, approved, onClose }: Props) {
               <button onClick={onClose} className="p-1 rounded hover:bg-muted"><X className="h-4 w-4" /></button>
             </div>
             <p className="text-xs text-muted-foreground mb-4 pl-7">
-              <span className="font-mono">{user.username}</span> — o username não muda.
+              <span className="font-mono break-all">{user.username}</span> — o username não muda.
             </p>
 
             <div className="space-y-3">
@@ -381,7 +381,7 @@ export function EditUserDialog({ user, approved, onClose }: Props) {
                         checked={interfaces.includes(s.iface)} onChange={() => toggleInterface(s.iface)} />
                       <span className="font-medium">{s.label}</span>
                       {s.comingSoon && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 font-medium">Em breve</span>}
-                      <span className="text-muted-foreground text-xs">— {s.hint}</span>
+                      <span className="min-w-0 text-muted-foreground text-xs [overflow-wrap:anywhere]">— {s.hint}</span>
                     </label>
                   ))}
                 </div>

@@ -1229,7 +1229,7 @@ function GerenciadorDeRespostas({ lista, aoUsar }: {
       {aberto && (
         /* `bottom-10`: o painel abre para CIMA. O campo de resposta fica no pé
            da tela, e para baixo ele sairia da janela. */
-        <div className="absolute bottom-10 right-0 z-30 w-80 rounded-xl border bg-background p-3 shadow-xl">
+        <div className="absolute bottom-10 left-0 z-30 w-[min(20rem,calc(100vw-2rem))] rounded-xl border bg-background p-3 shadow-xl sm:left-auto sm:right-0">
           <div className="mb-2 flex items-center justify-between">
             <p className="text-xs font-semibold">Respostas rápidas</p>
             <Button size="sm" variant="outline" className="h-6 gap-1 px-2 text-[10px]"
@@ -1541,7 +1541,7 @@ function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false }: {
   };
 
   return (
-    <CarboCard className={`h-full min-h-0 min-w-0 flex-col p-0 sm:p-6 ${ocultarNoCelular ? "hidden lg:flex" : "flex"}`}>
+    <CarboCard className={`h-full min-h-0 min-w-0 flex-col p-0 ${ocultarNoCelular ? "hidden lg:flex" : "flex"}`}>
       <CarboCardContent className="flex min-h-0 flex-1 flex-col gap-2 p-3 sm:gap-3 sm:p-4">
         {/* ── Cabeçalho da conversa ─────────────────────────────────────────
             ⚠️ O que é do CONTATO mora no painel da direita (avatar, nome, nome
@@ -1559,7 +1559,7 @@ function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false }: {
           {/* No `xl` sobra aqui só o aviso de vínculo provável — e vazio é o
               estado CERTO: significa "não há dúvida sobre de que pedido é esta
               conversa". */}
-          <div className="flex min-w-0 flex-1 items-start gap-2.5 sm:flex-none">
+          <div className="flex min-w-0 flex-1 basis-64 items-start gap-2.5 xl:flex-none xl:basis-auto">
 
             {/* Voltar para a lista — só no celular, onde a conversa ocupa a
                 tela inteira e a lista não está ao lado. */}
@@ -2026,7 +2026,7 @@ function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false }: {
                 if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); enviar(); }
               }}
             />
-            <div className="mt-1.5 flex items-center justify-end gap-2 border-t pt-1.5 sm:justify-between">
+            <div className="mt-1.5 flex flex-wrap items-center justify-end gap-x-2 gap-y-1.5 border-t pt-1.5 sm:justify-between">
               {/* ⚠️ Ficaram os DOIS atalhos que ninguém descobre sozinho: a barra
                   `/` e o colar de print. O `⌘/Ctrl + ↵` saiu daqui e virou o
                   `title` do botão Enviar — ele é convenção de qualquer caixa de
@@ -2037,7 +2037,7 @@ function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false }: {
                   avisado é recurso que metade do time nunca usa — e aqui o custo
                   disso é a frase ser redigitada diferente a cada vez, que é o
                   problema inteiro. O `/` vem na frente por ser o de maior uso. */}
-              <div className="hidden min-w-0 items-center gap-1.5 text-[10px] text-muted-foreground/70 sm:flex">
+              <div className="hidden min-w-0 items-center gap-1.5 overflow-hidden text-[10px] text-muted-foreground/70 sm:flex">
                 <kbd className="rounded border bg-background px-1 py-px font-mono text-[10px]">/</kbd>
                 <span className="shrink-0">resposta pronta</span>
                 <span className="mx-0.5 shrink-0 text-muted-foreground/40">·</span>
@@ -2046,7 +2046,7 @@ function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false }: {
                 <kbd className="shrink-0 rounded border bg-background px-1 py-px font-sans text-[10px]">V</kbd>
                 <span className="truncate">cola print</span>
               </div>
-              <div className="flex flex-wrap items-center justify-end gap-1.5 sm:flex-nowrap sm:gap-2">
+              <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5 sm:gap-2">
                 {perto && (
                   <span className={`text-[10px] tabular-nums ${
                     texto.length >= 4096 ? "text-red-500" : "text-amber-500"}`}>
@@ -2253,7 +2253,7 @@ function QuemRecebe({ aoFechar }: { aoFechar: () => void }) {
             {isLoading ? (
               <p className="mt-3 text-xs text-muted-foreground">Carregando…</p>
             ) : (
-              <div className="mt-3 grid gap-1 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="mt-3 grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-3">
                 {filtradas.map((p) => (
                   <button
                     key={p.user_id} type="button"
@@ -3600,9 +3600,11 @@ export default function Conversas() {
           <CarboCardContent className="p-4">
             <p className="flex items-start gap-1.5 text-xs text-amber-500">
               <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />
-              Nenhum número de WhatsApp disponível para o seu acesso. O cadastro
-              (<span className="font-mono">carbo_wa_numeros</span>) é lido só por
-              quem está no time interno — não é a caixa que está vazia.
+              <span className="min-w-0">
+                Nenhum número de WhatsApp disponível para o seu acesso. O cadastro
+                (<span className="font-mono">carbo_wa_numeros</span>) é lido só por
+                quem está no time interno — não é a caixa que está vazia.
+              </span>
             </p>
           </CarboCardContent>
         </CarboCard>
@@ -3653,7 +3655,7 @@ export default function Conversas() {
               qualquer app de mensagens: a lista, ou a conversa aberta em
               `?de=`. Lado a lado não cabe, e empilhado a conversa ficava abaixo
               de uma lista que já ocupava a tela. Do `lg` para cima nada muda. */}
-          <CarboCard className={`min-h-0 min-w-0 overflow-hidden p-0 sm:p-6 ${naConversa ? "hidden lg:block" : ""}`}>
+          <CarboCard className={`min-h-0 min-w-0 overflow-hidden p-0 ${naConversa ? "hidden lg:block" : ""}`}>
             <CarboCardContent className="flex h-full min-h-0 flex-col gap-0 p-0">
               {/* Busca e filtro ficam FORA da área que rola: com 40 conversas,
                   um campo que sobe junto com a lista é um campo que ninguém

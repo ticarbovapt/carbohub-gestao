@@ -167,7 +167,7 @@ function Linha({ p }: { p: PedidoAcesso }) {
           {p.avatar_url ? <img src={p.avatar_url} alt="" className="h-full w-full object-cover" /> : (p.nome || "?").charAt(0).toUpperCase()}
         </span>
         <div className="min-w-0">
-          <p className="truncate font-semibold">{p.nome}</p>
+          <p className="break-words font-semibold">{p.nome}</p>
           <p className="truncate text-xs text-muted-foreground">
             {origemDoPedido(p)}{p.email ? ` · ${p.email}` : ""}
           </p>
@@ -175,7 +175,7 @@ function Linha({ p }: { p: PedidoAcesso }) {
       </div>
 
       <div className="min-w-0 sm:w-64">
-        <p className="truncate text-sm font-medium">{p.curso_titulo}</p>
+        <p className="break-words text-sm font-medium">{p.curso_titulo}</p>
         <p className="text-xs text-muted-foreground">
           {p.status === "pendente"
             ? `Pediu em ${quando(p.pedido_em)}`

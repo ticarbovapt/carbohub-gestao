@@ -719,12 +719,14 @@ export default function Board() {
     <AcoesCtx.Provider value={acoesCtx}>
     <div className="fixed inset-0 top-14 mkt-canvas bg-dot-grid flex flex-col">
       {/* Cabeçalho do quadro */}
-      <div className="mkt-toolbar header-depth-glow gap-2 max-md:flex-wrap max-md:py-2 max-md:gap-y-1.5">
+      <div className="mkt-toolbar header-depth-glow gap-2 max-2xl:flex-wrap max-2xl:py-2 max-2xl:gap-y-1.5">
         <Link to="/quadros" aria-label="Voltar aos quadros" className="inline-flex p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" /></Link>
         <span className="mkt-dot" style={{ ["--mkt-accent" as any]: boardAccent }} />
-        <h1 className="mkt-view-title truncate min-w-0 max-md:flex-1">{board.title}</h1>
-        {/* No celular o seletor de vistas desce para uma linha própria (e rola de lado). */}
-        <div className="md:shrink-0 max-md:min-w-0 max-md:order-last max-md:w-full">
+        <h1 className="mkt-view-title truncate min-w-0 max-2xl:flex-1 md:min-w-[8rem]">{board.title}</h1>
+        {/* Abaixo de 1536px o seletor de vistas desce para uma linha própria (e
+            rola de lado): numa linha só com os botões ele empurrava o Menu para
+            fora da tela e o título sumia. */}
+        <div className="2xl:shrink-0 max-2xl:min-w-0 max-2xl:order-last max-2xl:w-full">
           <ViewSwitcher boardId={boardId} current="kanban" />
         </div>
 
@@ -771,10 +773,10 @@ export default function Board() {
 
         <TrazerDoTrello boardId={boardId} />
         <button onClick={() => setArquivadosAberto(true)} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md px-2.5 py-1.5 transition-colors" title="Itens arquivados">
-          <Archive className="h-4 w-4" /> <span className="max-sm:hidden">Arquivados</span>
+          <Archive className="h-4 w-4" /> <span className="hidden lg:inline">Arquivados</span>
         </button>
         <button onClick={() => setFieldsOpen(true)} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md px-2.5 py-1.5 transition-colors" title="Campos personalizados">
-          <Settings2 className="h-4 w-4" /> <span className="max-sm:hidden">Campos</span>
+          <Settings2 className="h-4 w-4" /> <span className="hidden lg:inline">Campos</span>
         </button>
         </div>
         <button onClick={() => setMenuQuadro(true)} className="max-md:order-1 flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md px-2.5 py-1.5 transition-colors" title="Menu do quadro">

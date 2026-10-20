@@ -92,7 +92,7 @@ export default function Purchasing() {
 
         {/* KPI Cards */}
         {kpis && (
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
             <CarboCard variant="kpi" padding="sm" className="cursor-pointer" onClick={() => setActiveTab("requisicoes")} title="Ver requisições">
               <CarboCardContent>
                 <div className="flex items-center gap-2 mb-1">
@@ -126,7 +126,7 @@ export default function Purchasing() {
                   <DollarSign className="h-4 w-4 text-carbo-green" />
                   <span className="text-xs text-muted-foreground">Comprometido</span>
                 </div>
-                <p className="text-lg font-bold kpi-number">{formatCurrency(kpis.totalComprometido)}</p>
+                <p className="text-base xl:text-lg font-bold kpi-number break-words">{formatCurrency(kpis.totalComprometido)}</p>
               </CarboCardContent>
             </CarboCard>
             <CarboCard variant="kpi" padding="sm" className="cursor-pointer" onClick={() => goPayables("all")} title="Ver contas a pagar">
@@ -135,7 +135,7 @@ export default function Purchasing() {
                   <CreditCard className="h-4 w-4 text-warning" />
                   <span className="text-xs text-muted-foreground">A Pagar</span>
                 </div>
-                <p className="text-lg font-bold kpi-number">{formatCurrency(kpis.totalAPagar)}</p>
+                <p className="text-base xl:text-lg font-bold kpi-number break-words">{formatCurrency(kpis.totalAPagar)}</p>
               </CarboCardContent>
             </CarboCard>
           </div>

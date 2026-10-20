@@ -147,8 +147,8 @@ export default function BoardTable() {
                 <td className="px-3 py-1.5">
                   <button onClick={() => setOpenCardId(c.mirrorOf ?? c.id)} className="p-1 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors" title="Abrir cartão"><Maximize2 className="h-3.5 w-3.5" /></button>
                 </td>
-                <td className="px-2 py-1.5"><EditableTitle value={c.title} onSave={(t) => m.renameCard.mutate({ id: c.id, title: t })} /></td>
-                <td className="px-3 py-1.5 whitespace-nowrap"><CarboBadge variant="secondary" size="sm">{listById.get(c.list_id)?.title ?? "—"}</CarboBadge></td>
+                <td className="px-2 py-1.5 min-w-[18rem]"><EditableTitle value={c.title} onSave={(t) => m.renameCard.mutate({ id: c.id, title: t })} /></td>
+                <td className="px-3 py-1.5 whitespace-nowrap"><CarboBadge variant="secondary" size="sm" className="max-w-[14rem]" title={listById.get(c.list_id)?.title}><span className="truncate">{listById.get(c.list_id)?.title ?? "—"}</span></CarboBadge></td>
                 <td className="px-3 py-1.5">
                   <div className="flex flex-wrap gap-1">
                     {c.labelIds.map((id) => {

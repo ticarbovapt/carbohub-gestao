@@ -44,7 +44,7 @@ export function PrestacaoContasDialog({ open, onOpenChange, viagem }: { open: bo
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><Receipt className="h-4 w-4" /> Prestação de Contas</DialogTitle>
           <DialogDescription>{viagem ? `${viagem.destino} — ${viagem.solicitante}` : ""}</DialogDescription>

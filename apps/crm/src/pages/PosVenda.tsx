@@ -128,7 +128,7 @@ export default function PosVenda() {
       </div>
 
       <Dialog open={!!detail} onOpenChange={(o) => !o && setDetail(null)}>
-        <DialogContent className="sm:max-w-lg max-h-[88dvh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg max-h-[88dvh] overflow-y-auto [&>*]:min-w-0">
           {detail && (
             <>
               <DialogHeader>
@@ -149,7 +149,7 @@ export default function PosVenda() {
                 {(detail.customer_phone || detail.customer_email) && (
                   <div className="space-y-1">
                     {detail.customer_phone && <p className="flex items-center gap-2"><Phone className="h-3.5 w-3.5 text-muted-foreground" /> {detail.customer_phone}</p>}
-                    {detail.customer_email && <p className="flex items-center gap-2"><Mail className="h-3.5 w-3.5 text-muted-foreground" /> {detail.customer_email}</p>}
+                    {detail.customer_email && <p className="flex items-center gap-2 break-all"><Mail className="h-3.5 w-3.5 text-muted-foreground" /> {detail.customer_email}</p>}
                   </div>
                 )}
 

@@ -439,8 +439,8 @@ export default function DashboardsMetas() {
                         <span className="w-6 text-center shrink-0 text-sm font-bold text-muted-foreground">{rankBadge}</span>
                         <ProfileAvatar avatarUrl={t.vendedor?.avatar_url} fullName={t.vendedor?.full_name} userId={t.vendedor_id} size={28} />
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="font-semibold text-sm truncate">{t.vendedor?.full_name || "—"}</p>
+                          <div className="flex flex-wrap items-center justify-between gap-x-2">
+                            <p className="font-semibold text-sm truncate min-w-0 flex-1 basis-24">{t.vendedor?.full_name || "—"}</p>
                             <div className="flex items-center gap-2 shrink-0">
                               {canSeeValues && <span className={`text-sm font-bold tabular-nums ${colors.text}`}>{fmtBRL(actual)}<span className="text-[10px] font-normal text-muted-foreground"> /{fmtBRL(target)}</span></span>}
                               <CarboBadge variant={colors.badge} size="sm">{fmtPct(pctVal)}</CarboBadge>

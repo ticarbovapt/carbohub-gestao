@@ -456,7 +456,7 @@ export default function Pdvs() {
                           numa célula, empurraria Mix e Comprado para fora da
                           tela — que é o oposto de mostrar mais informação. */}
                       <td className="px-3 py-2 text-xs max-w-[220px]">
-                        <p className="whitespace-nowrap">
+                        <p className="truncate" title={[p.address_city, p.address_state].filter(Boolean).join("/") || undefined}>
                           {[p.address_city, p.address_state].filter(Boolean).join("/") || "—"}
                         </p>
                         {p.address_street && (
@@ -527,7 +527,7 @@ export default function Pdvs() {
 
       {/* Criar / editar */}
       <Dialog open={!!form} onOpenChange={(o) => { if (!o) { setForm(null); setEditId(null); } }}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editId ? "Editar PDV" : "Novo PDV"}</DialogTitle>
             <DialogDescription>
@@ -535,7 +535,7 @@ export default function Pdvs() {
             </DialogDescription>
           </DialogHeader>
           {form && (
-            <div className="grid md:grid-cols-2 gap-3 py-1">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 py-1">
               <div className="space-y-1.5 md:col-span-2">
                 <Label>Nome comercial *</Label>
                 <Input value={form.name} onChange={(e) => set({ name: e.target.value })}
@@ -655,8 +655,8 @@ export default function Pdvs() {
                   <span className="text-[11px] text-muted-foreground">preço de revenda ao consumidor</span>
                 </div>
                 {mix && PRODUTOS.map((k) => (
-                  <div key={k} className="grid grid-cols-[1fr_140px_120px] gap-2 items-center">
-                    <span className="text-sm">{PDV_PRODUTO_LABEL[k]}</span>
+                  <div key={k} className="grid grid-cols-2 sm:grid-cols-[1fr_140px_120px] gap-2 items-center">
+                    <span className="text-sm col-span-2 sm:col-span-1">{PDV_PRODUTO_LABEL[k]}</span>
                     <Select value={mix[k].oferece}
                       onValueChange={(v) => setMix((m) => m && { ...m, [k]: { ...m[k], oferece: v as PdvOferece } })}>
                       <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>

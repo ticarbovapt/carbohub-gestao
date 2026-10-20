@@ -56,8 +56,8 @@ export function PrintAnotado({ chave, legenda, ativo, mostrar }: {
       </button>
       <figcaption className="mt-1.5 text-center text-xs text-muted-foreground">{legenda}</figcaption>
       <Dialog open={zoom} onOpenChange={setZoom}>
-        <DialogContent className="max-w-[min(96vw,1400px)] p-3">
-          <DialogTitle className="text-sm">{legenda}</DialogTitle>
+        <DialogContent className="max-w-[min(96vw,1400px)] sm:max-w-[min(96vw,1400px)] p-3">
+          <DialogTitle className="pr-8 text-sm">{legenda}</DialogTitle>
           <div className="relative mt-2 max-h-[80vh] overflow-auto">
             <div className="relative">
               <img src={src} alt={legenda} className="block w-full rounded-lg" />

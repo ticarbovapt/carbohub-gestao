@@ -380,9 +380,9 @@ async function sincronizarUma(v: RtmVisitaLocal) {
     p_pdv_id: v.pdv_id,
     p_tipo: v.tipo,
     p_visita_planejada_id: v.visita_planejada_id,
-    p_lat: v.geo_checkin.lat,
-    p_lng: v.geo_checkin.lng,
-    p_precisao_m: v.geo_checkin.precisao_m,
+    p_lat: v.geo_checkin?.lat ?? null,
+    p_lng: v.geo_checkin?.lng ?? null,
+    p_precisao_m: v.geo_checkin?.precisao_m ?? null,
     p_ts_dispositivo: v.ts_dispositivo_checkin,
     p_offline: true,
   });
@@ -470,9 +470,9 @@ async function sincronizarUma(v: RtmVisitaLocal) {
     p_motivo_texto: f.motivo_texto,
     p_proximo_passo: f.proximo_passo,
     p_proximo_passo_em: f.proximo_passo_em,
-    p_lat: f.geo.lat,
-    p_lng: f.geo.lng,
-    p_precisao_m: f.geo.precisao_m,
+    p_lat: f.geo?.lat ?? null,
+    p_lng: f.geo?.lng ?? null,
+    p_precisao_m: f.geo?.precisao_m ?? null,
     p_ts_dispositivo: f.ts_dispositivo,
   });
   if (erroFechar) throw erroFechar;

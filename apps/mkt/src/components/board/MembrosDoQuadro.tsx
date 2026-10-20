@@ -54,7 +54,7 @@ export function MembrosNoCabecalho({ boardId, tituloQuadro, sugestoes }: {
     <>
       <div className="flex items-center gap-2">
         {membros.length > 0 && (
-          <button type="button" onClick={() => setAberto(true)} className="hidden sm:flex -space-x-2" title="Membros do quadro">
+          <button type="button" onClick={() => setAberto(true)} className="hidden lg:flex -space-x-2" title="Membros do quadro">
             {visiveis.map((m) => <Foto key={m.id} p={m} />)}
             {membros.length > 5 && (
               <span className="h-7 w-7 rounded-full ring-2 ring-background bg-muted text-[11px] font-medium grid place-items-center text-muted-foreground">+{membros.length - 5}</span>
@@ -147,7 +147,7 @@ function Compartilhar({ boardId, tituloQuadro, membros, sugestoes, onClose }: {
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="sm:max-w-md grid-cols-[minmax(0,1fr)]">
         <DialogHeader>
           <DialogTitle>Compartilhar quadro</DialogTitle>
           <DialogDescription className="truncate">{tituloQuadro}</DialogDescription>

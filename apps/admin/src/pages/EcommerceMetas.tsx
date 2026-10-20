@@ -626,7 +626,7 @@ export default function EcommerceMetas() {
           totalStats.progressColor === "red" ? "border-red-500/40" : "border-border"
         }`}>
           <CarboCardContent className="p-0 sm:p-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
               {/* Left: numbers */}
               <div className="space-y-1">
                 <p className="text-sm text-muted-foreground font-medium uppercase tracking-wider">
@@ -660,7 +660,7 @@ export default function EcommerceMetas() {
               </div>
 
               {/* Right: metrics */}
-              <div className="grid w-full md:w-auto grid-cols-2 md:grid-cols-4 gap-2 md:min-w-[320px]">
+              <div className="grid w-full lg:w-auto grid-cols-2 sm:grid-cols-4 gap-2 lg:min-w-[320px]">
                 <div className={`rounded-xl p-3 ${totalColors.bg} text-center`}>
                   <p className="text-[10px] text-muted-foreground">Projeção FDM</p>
                   <p className={`text-base font-bold tabular-nums ${totalColors.text}`}>

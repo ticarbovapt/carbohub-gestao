@@ -93,7 +93,7 @@ export default function Skus() {
               <CarboTableBody>
                 {filtered.map((sku) => (
                   <CarboTableRow key={sku.id} interactive onClick={() => setEditSku(sku)}>
-                    <CarboTableCell><span className="font-mono text-sm font-medium text-carbo-green">{sku.code}</span></CarboTableCell>
+                    <CarboTableCell><span className="font-mono text-sm font-medium text-carbo-green whitespace-nowrap">{sku.code}</span></CarboTableCell>
                     <CarboTableCell>
                       <p className="font-medium">{sku.name}</p>
                       {sku.description && <p className="text-xs text-muted-foreground truncate max-w-48">{sku.description}</p>}

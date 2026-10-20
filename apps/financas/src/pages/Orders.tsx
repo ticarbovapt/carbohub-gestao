@@ -398,14 +398,14 @@ export default function Orders() {
                 value={dateFrom}
                 onChange={setDateFrom}
                 placeholder="De"
-                className="w-36"
+                className="w-32 sm:w-36"
               />
               <span className="text-xs text-muted-foreground">até</span>
               <DatePickerInput
                 value={dateTo}
                 onChange={setDateTo}
                 placeholder="Até"
-                className="w-36"
+                className="w-32 sm:w-36"
               />
             </div>
 

@@ -977,7 +977,7 @@ function DialogAgendar({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader><DialogTitle>Agendar visita</DialogTitle></DialogHeader>
-        <div className="space-y-3">
+        <div className="space-y-3 min-w-0">
           <div>
             <Label className="text-xs">Dia</Label>
             <Input type="date" value={data} onChange={(e) => setData(e.target.value)} className="h-9" />

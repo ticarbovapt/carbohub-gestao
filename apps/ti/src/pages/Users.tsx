@@ -346,8 +346,8 @@ export default function Users() {
                               {/* ⚠️ A marca vai no NOME, não numa coluna no fim da
                                   linha: bloqueado é o que muda o significado da
                                   linha inteira, e quem varre a lista lê o nome. */}
-                              <p className="font-medium truncate flex items-center gap-1.5">
-                                {p.full_name ?? "—"}
+                              <p className="font-medium min-w-0 flex items-center gap-1.5">
+                                <span className="break-words">{p.full_name ?? "—"}</span>
                                 {bloqueados.has(p.id) && (
                                   <span title="Acesso bloqueado — os dados continuam no sistema"
                                     className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-destructive/15 text-destructive shrink-0">
@@ -355,7 +355,7 @@ export default function Users() {
                                   </span>
                                 )}
                               </p>
-                              <p className="font-mono text-xs text-muted-foreground">{p.username ?? "—"}</p>
+                              <p className="font-mono text-xs text-muted-foreground break-all">{p.username ?? "—"}</p>
                             </div>
                           </div>
                         </td>
@@ -394,8 +394,8 @@ export default function Users() {
                       className={gestor ? "ring-2 ring-amber-400/70" : "ring-1 ring-border"} />
                     <div className="flex-1 min-w-0 space-y-1.5">
                       <div className="flex items-center justify-between gap-2">
-                        <p className="font-medium truncate flex items-center gap-1.5">
-                          {p.full_name ?? "—"}
+                        <p className="font-medium min-w-0 flex items-center gap-1.5">
+                          <span className="truncate">{p.full_name ?? "—"}</span>
                           {bloqueados.has(p.id) && (
                             <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-destructive/15 text-destructive shrink-0">
                               <Lock className="h-2.5 w-2.5" /> Bloqueado
@@ -404,7 +404,7 @@ export default function Users() {
                         </p>
                         <NivelBadge gestor={gestor} />
                       </div>
-                      <p className="font-mono text-xs text-muted-foreground">{p.username ?? "—"}</p>
+                      <p className="font-mono text-xs text-muted-foreground break-all">{p.username ?? "—"}</p>
                       <p className="text-xs text-muted-foreground">
                         {getDept(p.department)} · {funcLabel ?? "—"}
                       </p>

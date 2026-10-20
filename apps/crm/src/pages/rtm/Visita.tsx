@@ -184,7 +184,7 @@ function VisitaEmCampo({ clientUuid }: { clientUuid: string }) {
               <span className="inline-flex items-center gap-1">
                 <Clock className="h-3 w-3" /> {minutos} min em visita
               </span>
-              {v.geo_checkin.lat != null ? (
+              {v.geo_checkin?.lat != null ? (
                 <span className="inline-flex items-center gap-1">
                   <MapPin className="h-3 w-3" /> local registrado
                 </span>
@@ -270,8 +270,8 @@ function VisitaEmCampo({ clientUuid }: { clientUuid: string }) {
               nota="'Não trabalha' é diferente de 'zerado' — só o zerado conta como ruptura.">
               <div className="space-y-2">
                 {RTM_SKUS.map((sku) => (
-                  <div key={sku} className="flex items-center gap-2">
-                    <span className="text-sm flex-1 min-w-0 truncate">{RTM_SKU_LABEL[sku]}</span>
+                  <div key={sku} className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="text-sm flex-1 min-w-[9rem] truncate">{RTM_SKU_LABEL[sku]}</span>
                     <div className="flex gap-1 shrink-0">
                       {([["tem", "Tem"], ["zerado", "Zerado"], ["nao_trabalha", "Não trabalha"]] as
                         [RtmSituacaoSku, string][]).map(([valor, label]) => (
@@ -339,7 +339,7 @@ function temResposta(v: RtmVisitaLocal, item: RtmChecklistItem) {
 
 function Bloco({ titulo, nota, children }: { titulo: string; nota?: string; children: React.ReactNode }) {
   return (
-    <CarboCard>
+    <CarboCard padding="none">
       <CarboCardContent className="p-4 space-y-3">
         <div>
           <h2 className="text-sm font-semibold">{titulo}</h2>

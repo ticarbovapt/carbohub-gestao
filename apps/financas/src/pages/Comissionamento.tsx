@@ -264,7 +264,7 @@ function CalcularTab() {
   return (
     <div className="space-y-4">
       <CarboCard>
-        <CarboCardContent className="pt-6 flex flex-col md:flex-row md:items-end gap-4">
+        <CarboCardContent className="pt-6 flex flex-col lg:flex-row lg:flex-wrap lg:items-end gap-4">
           <div className="flex flex-col gap-1.5">
             <Label>De</Label>
             <DatePickerInput value={from} onChange={setFrom} />
@@ -273,7 +273,7 @@ function CalcularTab() {
             <Label>Até</Label>
             <DatePickerInput value={to} onChange={setTo} />
           </div>
-          <div className="space-y-1.5 md:min-w-56">
+          <div className="space-y-1.5 lg:min-w-56">
             <Label>Vendedor</Label>
             <Select value={vendFilter} onValueChange={setVendFilter}>
               <SelectTrigger><SelectValue /></SelectTrigger>
@@ -283,7 +283,7 @@ function CalcularTab() {
               </SelectContent>
             </Select>
           </div>
-          <div className="md:ml-auto flex flex-wrap items-center justify-between gap-3">
+          <div className="lg:ml-auto flex flex-wrap items-center justify-between gap-3">
             <span className="text-sm text-muted-foreground">
               Base total: <strong className="text-foreground">{brl(totalBase)}</strong>
               {totalDescarb > 0 && <span className="text-muted-foreground"> · descarb. {brl(totalDescarb)}</span>}
@@ -348,11 +348,11 @@ function CalcularTab() {
                       </CarboTableCell>
                       <CarboTableCell>
                         <DecimalInput value={pct} onValueChange={(v) => setPcts((p) => ({ ...p, [r.vendedor_id]: v }))}
-                          min={0} max={100} className="h-9" placeholder="0" />
+                          min={0} max={100} className="h-9 min-w-16" placeholder="0" />
                       </CarboTableCell>
                       <CarboTableCell>
                         <DecimalInput value={pctD} onValueChange={(v) => setPctsDesc((p) => ({ ...p, [r.vendedor_id]: v }))}
-                          min={0} max={100} className="h-9" placeholder="0"
+                          min={0} max={100} className="h-9 min-w-16" placeholder="0"
                           disabled={r.descarb <= 0} />
                       </CarboTableCell>
                       <CarboTableCell className="text-right">
