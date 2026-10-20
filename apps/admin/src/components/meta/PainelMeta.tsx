@@ -96,12 +96,15 @@ export function LojaReal({ painel, moeda, filtrandoConta }: { painel: MetaPainel
 export function Funil({ painel, moeda }: { painel: MetaPainel; moeda: string }) {
   const f = painel.funil;
   const gasto = painel.atual.spend;
+  // ⚠️ O caminho REAL do site, medido (20261114): a página da PayT leva direto
+  // ao checkout, sem carrinho — checkout (7,2 mil) passa do carrinho (2 mil).
+  // "Viu o produto" e "carrinho" ficam À PARTE, porque nem todo caminho os
+  // dispara; metê-los na sequência daria "363% seguiram".
   const etapas = [
     { rotulo: "Cliques no link", v: f.cliques, custo: "por clique" },
     { rotulo: "Chegaram na página", v: f.pagina, custo: "por visita" },
-    { rotulo: "Viram o produto", v: f.produto, custo: "por visualização" },
-    { rotulo: "Adicionaram ao carrinho", v: f.carrinho, custo: "por carrinho" },
     { rotulo: "Iniciaram o checkout", v: f.checkout, custo: "por checkout" },
+    ...(f.pagamento === undefined ? [] : [{ rotulo: "Preencheram o pagamento", v: f.pagamento, custo: "por pagamento" }]),
     { rotulo: "Compraram", v: f.compras, custo: "por compra" },
   ];
   const topo = Math.max(...etapas.map((e) => e.v), 1);
@@ -120,7 +123,9 @@ export function Funil({ painel, moeda }: { painel: MetaPainel; moeda: string }) 
       </CardHeader>
       <CardContent className="space-y-2.5">
         {etapas.map((e) => {
-          const taxa = anterior && e.v ? (e.v / anterior) * 100 : null;
+          const bruta = anterior && e.v ? (e.v / anterior) * 100 : null;
+          // Acima de 100% não é conversão, é evento que não segue a sequência.
+          const taxa = bruta != null && bruta <= 100 ? bruta : null;
           const semEvento = e.v === 0;
           const linha = (
             <div key={e.rotulo} className="grid grid-cols-[minmax(0,10rem)_1fr] items-center gap-3 sm:grid-cols-[12rem_1fr_7rem_8rem]">
@@ -142,6 +147,13 @@ export function Funil({ painel, moeda }: { painel: MetaPainel; moeda: string }) 
           if (!semEvento) anterior = e.v;
           return linha;
         })}
+        {(f.produto > 0 || f.carrinho > 0) && (
+          <p className="pt-1 text-xs text-muted-foreground">
+            Também registrados, fora da sequência: <span className="font-medium text-foreground">{fmtNum(f.produto)}</span> viram
+            o produto e <span className="font-medium text-foreground">{fmtNum(f.carrinho)}</span> adicionaram ao carrinho.
+            Nem todo caminho passa por eles — a página da PayT leva direto ao checkout.
+          </p>
+        )}
       </CardContent>
     </Card>
   );

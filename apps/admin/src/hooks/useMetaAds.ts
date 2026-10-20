@@ -270,6 +270,8 @@ export interface MetaPainel {
   funil: {
     impressoes: number; cliques: number; pagina: number; produto: number;
     carrinho: number; checkout: number; compras: number;
+    /** add_payment_info — `undefined` antes da 20261114. */
+    pagamento?: number;
   };
   loja: {
     faturamento: number;
