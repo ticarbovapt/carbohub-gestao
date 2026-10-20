@@ -14,7 +14,6 @@ import MinhaEquipe from "./pages/MinhaEquipe";
 import RequisicaoCompra from "./pages/RequisicaoCompra";
 import PosVenda from "./pages/PosVenda";
 import DescOrdensServico from "./pages/descarbonizacao/OrdensServico";
-import DescAgendamentos from "./pages/descarbonizacao/Agendamentos";
 import Pdvs from "./pages/Pdvs";
 import MeuEstoque from "./pages/MeuEstoque";
 import RtmAgenda from "./pages/rtm/Agenda";
@@ -68,7 +67,8 @@ export default function App() {
         <Route path="/rtm/visita" element={<RtmVisita />} />
         {/* Descarbonização — acompanhamento (pra onde o "+ Nova Descarbonização" leva) */}
         <Route path="/descarbonizacao/os" element={<DescOrdensServico />} />
-        <Route path="/descarbonizacao/agendamentos" element={<DescAgendamentos />} />
+        {/* A agenda virou uma visão da tela de OS (20/10/2026). */}
+        <Route path="/descarbonizacao/agendamentos" element={<Navigate to="/descarbonizacao/os?ver=agenda" replace />} />
         <Route path="/territorio/*" element={<Navigate to="/crm/pipelines" replace />} />
         <Route path="/dashboard-comercial" element={<Navigate to="/crm/pipelines" replace />} />
         <Route path="/perfil" element={<Profile />} />

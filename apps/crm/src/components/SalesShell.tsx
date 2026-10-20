@@ -2,7 +2,7 @@ import { useState, useRef } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import {
   KanbanSquare, ClipboardList, TrendingUp, Target,
-  Wind, CalendarDays, ShoppingCart, ShoppingBag, MessagesSquare, MapPin,
+  Wind, ShoppingCart, ShoppingBag, MessagesSquare, MapPin,
   CalendarCheck, PackageCheck,
 } from "lucide-react";
 import { ChatBadge, ChatProvider } from "@carbo/chat";
@@ -58,7 +58,6 @@ export function SalesShell() {
     ] },
     { label: "Descarbonização", icon: Wind, items: [
         { to: "/descarbonizacao/os", label: "Ordens de Serviço", icon: ClipboardList },
-        { to: "/descarbonizacao/agendamentos", label: "Agendamentos", icon: CalendarDays },
     ] },
   ];
 
