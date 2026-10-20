@@ -159,8 +159,7 @@ select (p->'atual'->>'spend')::numeric          as investimento,
 --     leitura sai sem o `objective` das campanhas e o "Investindo e sem venda"
 --     não consegue separar engajamento de venda nesses dias.
 --     ⚠️ O segredo é COPIADO do job `meta-ads-sync-3x` (`%L`, nunca impresso).
---     ESPERADO: uma linha com `request_id` (um número). A leitura leva ~1 min;
---     depois, a tela em "Últimos 30 dias" mostra a comparação.
+--     ESPERADO: "Success. No rows returned" — o pedido sai em segundo plano.
 do $ler$
 declare v_secret text;
 begin
@@ -176,5 +175,15 @@ begin
     '{"dias":90,"source":"manual"}');
 end $ler$;
 
-select count(*) as linhas_gravadas, min(dia) as dia_mais_antigo, max(dia) as dia_mais_recente
+
+
+-- (E) CONFERÊNCIA, ~1 min depois do (D). ESPERADO: `dia_mais_antigo` perto de
+--     90 dias atrás e `ultima_leitura_ok = true`. Se o dia mais antigo continuar
+--     ~30 dias atrás, a leitura ainda não terminou (espere e rode de novo) ou a
+--     conta só começou a anunciar depois disso.
+select count(*)  as linhas_gravadas,
+       min(dia)  as dia_mais_antigo,
+       max(dia)  as dia_mais_recente,
+       (select ok from public.meta_ads_sync_log order by rodou_em desc limit 1) as ultima_leitura_ok,
+       (select left(erro, 200) from public.meta_ads_sync_log order by rodou_em desc limit 1) as ultimo_erro
   from public.meta_ads_insights_daily;
