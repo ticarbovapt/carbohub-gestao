@@ -1203,6 +1203,30 @@ calada: a função fora da lista `dep` (nunca foi ao ar), o secret
    ⚠️ Segmento com investimento < 1% do maior mostra o ROAS sem cor e com
    nota: R$ 0,25 e uma compra davam 227x no topo da leitura.
 
+### E-commerce também no Marketing — CÓPIA, o Admin continua (20/10/2026)
+Pedido do dono do processo: *"tudo do ecommerce vai para o marketing como
+copia, mesma tela, mas não sai do admin"*. Vendas Online, Esteira do On-line
+(com Mensagens ao cliente), Acompanhamento de Metas e Anúncios da Meta existem
+nos DOIS, nas MESMAS rotas `/ecommerce/...` (os links moram dentro dos
+arquivos), byte a byte. **Fonte da verdade = `apps/admin`**; editou lá, copie:
+
+```
+pages/        EcommerceVendas · EcommerceMetas · EsteiraOnline · MensagensCliente · EcommerceAtribuicao
+components/   ConexaoWhatsApp · ContasDaMeta · meta/PainelMeta · meta/SegmentosMeta
+hooks/        useDashEcommerce · useMetaEcommerce · useEsteiraOnline · useMensagensCliente · useMetaAds
+lib/          lerTudo · skuUnidades
+```
+
+1. ⚠️ **NÃO copiados de propósito**: `ui/dialog.tsx` e `ui/date-picker-input.tsx`
+   — os do `mkt` já existiam (o date-picker é superconjunto; o dialog difere só
+   no estilo do X) e servem às telas sem mudança. `client.ts` é de cada app.
+2. ⚠️ **A `meta-ads-sync` ganhou CORS PRÓPRIO** (`*.carbohub.com.br`). Ela usava o
+   `_shared/cors.ts`, que é a lista FECHADA das funções do WhatsApp; abrir aquela
+   lista para o Marketing abriria junto quem escreve pelo número da empresa.
+3. As portas do banco valem igual nos dois: leitura é time interno
+   (`carbo_mkt` é interface interna); ESCOLHER a conta da Meta continua exigindo
+   a flag `carbo_admin`, como no Admin.
+
 ### Seletor de período do e-commerce — "este mês" ≠ "mês fechado"
 `EcommercePeriod` tem os dois, e a diferença NÃO é detalhe:
 
@@ -1221,9 +1245,11 @@ consulta pelo caminho que já existia. E a âncora é montada com `T12:00:00`, n
 `T00:00:00` — à meia-noite um fuso negativo joga a data para o dia anterior e o
 mês âncora vira o ANTERIOR, o mesmo erro de fuso do `ordered_at::date`.
 
-⚠️ **A tela viva é só `apps/admin`.** A raiz (`DashEcommerceVendas.tsx`) é
-congelada e nem expõe `custom`; `apps/ops/src/pages/ecommerce/VendasOnline.tsx`
-é mock NÃO roteado. Não há espelho a manter aqui.
+⚠️ **A tela viva é `apps/admin` — e a CÓPIA idêntica em `apps/mkt`** (desde
+20/10/2026, ver "E-commerce também no Marketing"). A raiz
+(`DashEcommerceVendas.tsx`) é congelada e nem expõe `custom`;
+`apps/ops/src/pages/ecommerce/VendasOnline.tsx` é mock NÃO roteado. Editou no
+admin, copie para o mkt.
 
 ⚠️ **O estado da tela mora na URL**: `?aba=&periodo=&de=&ate=`. Antes era
 `useState` puro e o F5 devolvia "Últimos 7 dias" — com a ABA voltando do
@@ -1535,8 +1561,9 @@ quando a operação online passou a rodar na conta 2: pedido ATENDIDO
   pedido de `cancelled`. Mesma lição do `bling-sync`, onde venda cancelada
   ressuscitava a cada rodada.
 
-### Esteira do On-line — admin manda, Ops e Atendimento espelham
-**Cinco** arquivos byte a byte idênticos, agora em **três** apps. Fonte da
+### Esteira do On-line — admin manda, Ops, Atendimento e Marketing espelham
+**Cinco** arquivos byte a byte idênticos, agora em **quatro** apps (o `mkt`
+entrou em 20/10/2026, nas MESMAS rotas `/ecommerce/...` do admin). Fonte da
 verdade = `apps/admin`. No Ops as páginas moram em `pages/logistica/` e a rota
 da esteira é `/logistica/esteira`; no Atendimento (28/08/2026) as páginas ficam
 em `pages/` e as rotas repetem as do admin.

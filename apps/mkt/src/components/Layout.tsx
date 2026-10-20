@@ -1,6 +1,6 @@
 import { useMemo, useState, useRef } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
-import { Home as HomeIcon, MessagesSquare, Megaphone, Trello } from "lucide-react";
+import { Home as HomeIcon, MessagesSquare, Megaphone, Trello, Globe, Truck, Target } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAccessPing } from "@/hooks/useAccessPing";
@@ -50,6 +50,14 @@ export function Layout() {
     { label: "Marketing", items: [
         { to: "/quadros", label: "Quadros", icon: Trello },
         { to: "/campanhas", label: "Campanhas", icon: Megaphone },
+    ] },
+    // Cópia do E-commerce do Carbo Admin (20/10/2026): mesmas telas, mesmos
+    // endereços. O Admin continua com as dele.
+    { label: "E-commerce", items: [
+        { to: "/ecommerce/vendas-online", label: "Vendas Online", icon: Globe },
+        { to: "/ecommerce/esteira", label: "Esteira do On-line", icon: Truck },
+        { to: "/ecommerce/metas", label: "Acompanhamento de Metas", icon: Target },
+        { to: "/ecommerce/anuncios", label: "Anúncios da Meta", icon: Megaphone },
     ] },
   ];
 

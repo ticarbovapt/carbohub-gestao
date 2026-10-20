@@ -18,6 +18,13 @@ import Profile from "./pages/Profile";
 import MinhaEquipe from "./pages/MinhaEquipe";
 import BugReports from "./pages/BugReports";
 import AbrirCartao from "./pages/AbrirCartao";
+// E-commerce: CÓPIA das telas do Carbo Admin (20/10/2026), byte a byte, nos
+// MESMOS endereços — os links moram dentro dos arquivos (/ecommerce/...).
+import EcommerceVendas from "./pages/EcommerceVendas";
+import EcommerceMetas from "./pages/EcommerceMetas";
+import EsteiraOnline from "./pages/EsteiraOnline";
+import MensagensCliente from "./pages/MensagensCliente";
+import EcommerceAtribuicao from "./pages/EcommerceAtribuicao";
 import { PaginaNaoEncontrada } from "@carbo/shell";
 
 // Carbo Marketing — app novo do ecossistema. Login único pelo Hub; acesso
@@ -44,6 +51,11 @@ export default function App() {
         <Route path="/perfil" element={<Profile />} />
         <Route path="/equipe" element={<MinhaEquipe />} />
         <Route path="/bugs" element={<BugReports />} />
+        <Route path="/ecommerce/vendas-online" element={<EcommerceVendas />} />
+        <Route path="/ecommerce/metas" element={<EcommerceMetas />} />
+        <Route path="/ecommerce/esteira" element={<EsteiraOnline />} />
+        <Route path="/ecommerce/mensagens" element={<MensagensCliente />} />
+        <Route path="/ecommerce/anuncios" element={<EcommerceAtribuicao />} />
         {/* Rota inexistente: diz que não existe, em vez de cair na home calado. */}
         <Route path="*" element={<PaginaNaoEncontrada />} />
       </Route>
