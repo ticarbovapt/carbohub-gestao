@@ -5,6 +5,7 @@ import {
   derivar, fmtMoeda, fmtNum, fmtPct, fmtRoas,
   type MetaPainel, type MetaAnuncio,
 } from "@/hooks/useMetaAds";
+import { Miniatura, StatusDoAnuncio } from "@/components/meta/SegmentosMeta";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // As seções do painel que a tabela de campanhas não mostra (20261113).
@@ -28,15 +29,18 @@ export function variacao(atual: number | null, anterior: number | null): number 
 export function ChipVariacao({ pct, bomQuandoSobe }: { pct: number | null; bomQuandoSobe?: boolean }) {
   if (pct == null) return <span className="text-[11px] text-muted-foreground">sem base no período anterior</span>;
   const sobe = pct >= 0;
-  const bom = bomQuandoSobe === undefined ? null : sobe === bomQuandoSobe;
+  // Abaixo de meio ponto é ESTÁVEL: pintar 0,2% de verde é ler sinal em ruído.
+  const estavel = Math.abs(pct) < 0.5;
+  const bom = bomQuandoSobe === undefined || estavel ? null : sobe === bomQuandoSobe;
   const Icone = sobe ? ArrowUpRight : ArrowDownRight;
   return (
     <span title="comparado ao mesmo número de dias imediatamente antes" className={cn(
       "inline-flex items-center gap-0.5 text-[11px] font-medium",
       bom === null ? "text-muted-foreground" : bom ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400",
     )}>
-      <Icone className="h-3 w-3" />
-      {Math.abs(pct).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% vs. anterior
+      {estavel ? "estável vs. anterior" : (
+        <><Icone className="h-3 w-3" />{Math.abs(pct).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% vs. anterior</>
+      )}
     </span>
   );
 }
@@ -169,9 +173,15 @@ const OBJETIVO_DE_VENDA = /SALES|CONVERSION|PURCHASE|PRODUCT_CATALOG/i;
 function LinhaAnuncio({ a, moeda, detalhe }: { a: MetaAnuncio; moeda: string; detalhe: string }) {
   return (
     <li className="flex flex-col gap-1 py-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-      <div className="min-w-0">
-        <p className="truncate text-sm font-medium" title={a.nome ?? a.ad_id}>{a.nome ?? a.ad_id}</p>
-        <p className="truncate text-[11px] text-muted-foreground" title={a.campanha ?? ""}>{a.campanha ?? "—"}</p>
+      <div className="flex min-w-0 items-start gap-2.5">
+        <Miniatura adId={a.ad_id} />
+        <div className="min-w-0">
+          <p className="flex items-center gap-1.5 text-sm font-medium">
+            <span className="truncate" title={a.nome ?? a.ad_id}>{a.nome ?? a.ad_id}</span>
+            <StatusDoAnuncio adId={a.ad_id} />
+          </p>
+          <p className="truncate text-[11px] text-muted-foreground" title={a.campanha ?? ""}>{a.campanha ?? "—"}</p>
+        </div>
       </div>
       <div className="shrink-0 sm:text-right">
         <p className="text-sm font-semibold tabular-nums">{detalhe}</p>

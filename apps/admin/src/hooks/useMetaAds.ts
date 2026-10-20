@@ -331,6 +331,75 @@ export function useMetaAdsPainel(period: MetaPeriod, actId?: string) {
   });
 }
 
+// ── Criativo e segmentos (20261115) ─────────────────────────────────────────
+
+export interface MetaCriativo {
+  ad_id: string;
+  status: string | null;
+  thumbnail_url: string | null;
+  image_url: string | null;
+  tipo: string | null;
+  titulo: string | null;
+  texto: string | null;
+}
+
+/** Tabela ausente (front antes do SQL) não é erro de tela: volta vazio. */
+const tabelaAusente = (e: unknown) => {
+  const c = (e as { code?: string })?.code;
+  return c === "42P01" || c === "PGRST205" || c === "PGRST202";
+};
+
+/** O criativo de cada anúncio, por `ad_id`. */
+export function useMetaCriativos() {
+  return useQuery({
+    queryKey: ["meta-ads", "criativos"],
+    staleTime: 10 * 60 * 1000,
+    queryFn: async (): Promise<Map<string, MetaCriativo>> => {
+      try {
+        const linhas = await lerSemTeto<MetaCriativo>(() => db
+          .from("meta_ads_criativos")
+          .select("ad_id, status, thumbnail_url, image_url, tipo, titulo, texto")
+          .order("ad_id", { ascending: true }));
+        return new Map(linhas.map((c) => [c.ad_id, c]));
+      } catch (e) {
+        if (tabelaAusente(e)) return new Map();
+        throw e;
+      }
+    },
+  });
+}
+
+export interface MetaSegmento extends Brutos { chave1: string; chave2: string }
+export type MetaSegmentos = Partial<Record<"idade_genero" | "posicionamento" | "regiao", MetaSegmento[]>>;
+
+/** Idade × gênero, posicionamento e região — agregados no banco. */
+export function useMetaSegmentos(period: MetaPeriod, actId?: string) {
+  const { from, to } = rangeDoPeriodo(period);
+  return useQuery({
+    queryKey: ["meta-ads", "segmentos", from, to, actId ?? "todas"],
+    staleTime: 2 * 60 * 1000,
+    queryFn: async (): Promise<MetaSegmentos | null> => {
+      const { data, error } = await supabase.rpc("carbo_meta_ads_segmentos" as never,
+        { p_de: from, p_ate: to, p_act: actId ?? null } as never);
+      if (error) {
+        if (tabelaAusente(error)) return null;
+        throw error;
+      }
+      const n = (v: unknown) => Number(v ?? 0) || 0;
+      const bruto = (data ?? {}) as Record<string, Array<Record<string, unknown>>>;
+      const out: MetaSegmentos = {};
+      for (const [dim, linhas] of Object.entries(bruto)) {
+        out[dim as keyof MetaSegmentos] = (linhas ?? []).map((l) => ({
+          chave1: String(l.chave1 ?? ""), chave2: String(l.chave2 ?? ""),
+          spend: n(l.spend), impressions: n(l.impressions), link_clicks: n(l.link_clicks),
+          compras: n(l.compras), valor: n(l.valor),
+        }));
+      }
+      return out;
+    },
+  });
+}
+
 export interface MetaSyncLog {
   id: number;
   rodou_em: string;

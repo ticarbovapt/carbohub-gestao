@@ -13,13 +13,14 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  useMetaAds, useMetaAdsContas, useMetaAdsSync, useMetaAdsUltimoSync, useMetaAdsPainel, derivar,
+  useMetaAds, useMetaAdsContas, useMetaAdsSync, useMetaAdsUltimoSync, useMetaAdsPainel, useMetaCriativos, useMetaSegmentos, derivar,
   PERIOD_LABEL, fmtMoeda, fmtNum, fmtPct, fmtRoas,
   type MetaPeriod, type MetaNo, type MetaDerivadas,
 } from "@/hooks/useMetaAds";
 import { cn } from "@/lib/utils";
 import { ContasDaMeta } from "@/components/ContasDaMeta";
 import { ChipVariacao, Destaques, Funil, LojaReal, variacao } from "@/components/meta/PainelMeta";
+import { CriativosProvider, Miniatura, Segmentos, StatusDoAnuncio } from "@/components/meta/SegmentosMeta";
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -99,7 +100,10 @@ function LinhaNo({
             {temFilhos
               ? <ChevronRight className={cn("h-3.5 w-3.5 shrink-0 transition-transform", estaAberto && "rotate-90")} />
               : <span className="w-3.5 shrink-0" />}
+            {/* O nível 2 é o ANÚNCIO: é ali que o criativo existe. */}
+            {nivel === 2 && <Miniatura adId={no.id} tamanho={28} />}
             <span className={cn("truncate", nivel === 0 && "font-medium")} title={no.nome}>{no.nome}</span>
+            {nivel === 2 && <StatusDoAnuncio adId={no.id} />}
           </button>
         </td>
         <td className="px-3 py-2 text-right tabular-nums">{fmtMoeda(no.spend, moeda)}</td>
@@ -155,6 +159,8 @@ export default function EcommerceAtribuicao() {
   const sync = useMetaAdsSync();
   const logs = useMetaAdsUltimoSync();
   const painel = useMetaAdsPainel(period, actId === "todas" ? undefined : actId);
+  const criativos = useMetaCriativos();
+  const segmentos = useMetaSegmentos(period, actId === "todas" ? undefined : actId);
 
   const alternar = (id: string) =>
     setAberto((s) => {
@@ -179,6 +185,7 @@ export default function EcommerceAtribuicao() {
   const serie = (data?.serie ?? []).map((d) => ({ ...d, loja: lojaPorDia.get(d.dia) ?? 0 }));
 
   return (
+    <CriativosProvider value={criativos.data ?? new Map()}>
     <main className="mx-auto max-w-7xl px-4 sm:px-6 py-8 space-y-6">
       {/* ── Cabeçalho ── */}
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -333,6 +340,7 @@ export default function EcommerceAtribuicao() {
           {/* ── Funil e destaques ── */}
           {p && <Funil painel={p} moeda={moeda} />}
           {p && <Destaques painel={p} moeda={moeda} />}
+          {segmentos.data && <Segmentos segmentos={segmentos.data} moeda={moeda} />}
 
           {/* ── Drilldown ── */}
           <Card>
@@ -409,5 +417,6 @@ export default function EcommerceAtribuicao() {
         </DialogContent>
       </Dialog>
     </main>
+    </CriativosProvider>
   );
 }
