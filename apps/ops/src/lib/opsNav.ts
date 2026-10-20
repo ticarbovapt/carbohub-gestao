@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, Factory, BarChart3, Package, Boxes, Layers, Building2,
   ShoppingCart, PackagePlus, Truck,
-  Plane, ClipboardList, Calendar, Cog, Bell, Target, ShoppingBag,
+  Plane, ClipboardList, Bell, ShoppingBag,
   Repeat,
   type LucideIcon,
   PackageCheck, MessagesSquare,
@@ -80,8 +80,6 @@ export const OPS_GROUPS: OpsNavGroup[] = [
     items: [
       { path: "/logistica/pos-venda", label: "Rastreio de venda", icon: ShoppingBag, from: "carboze_orders", ready: true },
       { path: "/logistica/recorrencias", label: "Vendas de Recorrência", icon: Repeat, from: "carboze_orders", ready: true },
-      // Espelho da tela do admin — arquivos byte a byte idênticos aos de lá.
-      { path: "/logistica/esteira", label: "Esteira do On-line", icon: PackageCheck, from: "bling2_esteira", ready: true },
       { path: "/logistica", label: "Logística", icon: Truck, from: "/logistics", ready: true, end: true },
       { path: "/logistica/viagens", label: "Viagens & PC", icon: Plane, from: "/viagens", ready: true },
     ],
@@ -90,15 +88,7 @@ export const OPS_GROUPS: OpsNavGroup[] = [
     label: "Operação de Campo",
     items: [
       { path: "/campo/os", label: "OS Descarbonização", icon: ClipboardList, from: "/os", ready: true },
-      { path: "/campo/agendamentos", label: "Agendamentos", icon: Calendar, from: "/scheduling", ready: true },
-      { path: "/campo/maquinas", label: "Máquinas", icon: Cog, from: "/machines", ready: true },
       { path: "/campo/alertas", label: "Alertas Operacionais", icon: Bell, from: "/ops/alerts", ready: true },
-    ],
-  },
-  {
-    label: "Acompanhamento (Vendas)",
-    items: [
-      { path: "/acompanhamento/metas", label: "Metas de Vendedores", icon: Target, from: "/dashboards/metas/vendedores", mirror: true, ready: true },
     ],
   },
 ];

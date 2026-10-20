@@ -27,12 +27,24 @@ import { minForHub } from "@/components/estoque/stockData";
 // um zero silencioso — zero em "abaixo do mínimo" parece estoque saudável.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const hojeISO = () => new Date().toISOString().slice(0, 10);
+// Dia de BRASÍLIA (hora local), nunca `toISOString()`: às 21h ele já devolve
+// o dia seguinte, e a OS de hoje virava "de amanhã".
+const diaLocal = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const hojeISO = () => diaLocal(new Date());
 
 const emDias = (n: number) => {
   const d = new Date();
   d.setDate(d.getDate() + n);
-  return d.toISOString().slice(0, 10);
+  return diaLocal(d);
+};
+
+/** Dia local da data agendada da OS (`scheduled_at` é timestamptz). */
+const diaDaOS = (s: string | null) => {
+  if (!s) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? "" : diaLocal(d);
 };
 
 /** OPs que ainda exigem alguém: fora de concluída/cancelada. */
@@ -49,7 +61,8 @@ const OP_ESPERANDO = new Set([
 ]);
 
 /** OS que ainda vai acontecer. Concluída sai da fila. */
-const OS_ABERTA = new Set(["nova", "qualificacao", "agendamento", "confirmada", "em_execucao", "pos_servico"]);
+// A OS mora no portal de licenciados (`useOS`), que só tem estas etapas.
+const OS_ABERTA = new Set(["nova", "em_execucao"]);
 
 export interface BlocoEstado {
   carregando: boolean;
@@ -125,14 +138,14 @@ export function useOpsResumo() {
     return {
       ...estado(os),
       abertas: abertas.length,
-      hoje: abertas.filter((o) => (o.data_prevista ?? "").slice(0, 10) === hoje).length,
+      hoje: abertas.filter((o) => diaDaOS(o.data_prevista) === hoje).length,
       semana: abertas.filter((o) => {
-        const d = (o.data_prevista ?? "").slice(0, 10);
+        const d = diaDaOS(o.data_prevista);
         return d && d >= hoje && d <= seteDias;
       }).length,
       // Prevista para trás e ainda aberta: alguém precisa remarcar ou fechar.
       atrasadas: abertas.filter((o) => {
-        const d = (o.data_prevista ?? "").slice(0, 10);
+        const d = diaDaOS(o.data_prevista);
         return d && d < hoje;
       }).length,
       semData: abertas.filter((o) => !o.data_prevista).length,

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
@@ -619,21 +619,23 @@ export default function Suprimentos() {
                           const rotulo = m.ecomNumero ?? m.refExterna;
                           const classe = `inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-mono ${m.opNumber || m.orderNumber ? "ml-1" : ""}`;
                           return m.ecomBlingId ? (
-                            <Link
+                            <a
                               /* ⚠️ O parâmetro é `card`, não `pedido`. A Esteira
                                  lê `params.get("card")` e ignora qualquer outro
                                  nome — com `?pedido=` a tela abria e o card
                                  NUNCA abria, sem erro nenhum. É a mesma falha
                                  silenciosa que o comentário logo acima descreve.
                                  O nome vem do botão "Copiar link" da própria
-                                 Esteira; ao mudar um, confira o outro. */
-                              to={`/logistica/esteira?card=${m.ecomBlingId}`}
+                                 Esteira; ao mudar um, confira o outro.
+                                 A Esteira saiu do Ops (20/10/2026): o link vai
+                                 à do Admin. */
+                              href={`https://admin.carbohub.com.br/ecommerce/esteira?card=${m.ecomBlingId}`}
                               className={`${classe} bg-carbo-blue/10 text-carbo-blue hover:bg-carbo-blue/20`}
                               title={`Abrir na Esteira do On-line · ${m.refExterna}`}
                             >
                               <Globe className="h-3 w-3 shrink-0" />{rotulo}
                               <ArrowUpRight className="h-3 w-3 shrink-0" />
-                            </Link>
+                            </a>
                           ) : (
                             <span
                               className={`${classe} bg-muted`}
