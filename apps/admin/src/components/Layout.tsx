@@ -2,7 +2,7 @@ import { useMemo, useState, useRef } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import {
   Globe, Target,
-  Store, Building2, TrendingUp, LineChart, Trophy, BarChart3, BadgePercent, Tags, MessagesSquare,
+  Store, Building2, LineChart, Trophy, BarChart3, BadgePercent, Tags, MessagesSquare,
   Boxes, MapPin, Truck, Map as MapIcon, Megaphone,
 } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
@@ -53,8 +53,6 @@ export function Layout() {
         { to: "/comercial/precos", label: "Tabela de preços", icon: Tags },
     ] },
     { label: "Dashboards", items: [
-        { to: "/dashboards/comercial", label: "Visão Geral", icon: TrendingUp },
-        { to: "/dashboards/estrategico", label: "Estratégico", icon: LineChart },
         { to: "/dashboards/mapa-conquista", label: "Mapa da Conquista", icon: MapIcon },
         { to: "/dashboards/lojas", label: "Portal de Vendas", icon: Store },
         { to: "/dashboards/franqueados", label: "Licenciados", icon: Building2 },

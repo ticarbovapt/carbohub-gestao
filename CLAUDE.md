@@ -1402,7 +1402,8 @@ definida, e a PayT (canal mais novo) aparecia com 2 vendas em 4 meses. Hoje as
 quatro usam `lerTudo` com `ordered_at` + `id`.
 
 ⚠️ Continuam sem teto e são da mesma família — medir antes de mexer:
-`useFaturamento` (financas), `useCeoCockpit`, `useDashEstrategico`. Não caíram
+`useFaturamento` (financas), `useCeoCockpit`, `useDashEstrategico` (estes dois só
+no `ti` desde 20/10/2026 — as telas do Admin que os usavam saíram). Não caíram
 ainda porque filtram por status ou por data, mas o teto não sabe disso.
 
 ⚠️ **Autoria: o rodapé `Claude-Session:` distingue SESSÕES, o nome do autor não.**
@@ -3017,6 +3018,14 @@ confere quem chama. Senha de reset ainda é fixa (`Carbo@2026`).
    isso deixa de valer e vira número mentindo.
 4. **Mudança em `packages/`** → avise que afeta vários apps antes de aplicar.
 5. **Cada app é autossuficiente.** `apps/crm` tem build/lockfile próprio; NÃO mexer no `package.json` da raiz (3 lockfiles frágeis — risco ao deploy do controle).
+
+### Admin: Visão Geral e Estratégico SAÍRAM (20/10/2026)
+`/dashboards/comercial` e `/dashboards/estrategico` foram apagados, por decisão do
+dono do processo: o Dashboard Comercial (`/comercial/dashboard`) cobre os dois,
+mais completo. Os dois endereços redirecionam para ele. Hooks e componentes que
+só eles usavam saíram junto (`useCeoCockpit`, `useDashEstrategico`,
+`useComercialExtras`, `cockpit/*`, `VendedorFilter`) — no Admin; o `ti` tem
+cópias próprias que não foram tocadas.
 
 ### Usuários, estrutura, aviso de venda e Auditoria moram no TI (20/10/2026)
 Pedido do dono do processo: *"mesma tela, mesma lógica, idêntico, nada novo,
