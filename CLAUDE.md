@@ -41,11 +41,12 @@ A raiz (`controle`) está fora — ela tem `/orders/new`, outra tela, congelada.
 idênticos nos seis.
 
 Duas armadilhas já pagas, não repita:
-1. **`useOS` significa duas coisas.** No `crm` é `licenciados.service_orders` via
-   RPC `os_create`; no `ops` é `crm_os` no schema public. Copiar um por cima do
-   outro quebra `Alertas`, `Agendamentos` e `OrdensServico` do Ops **sem erro de
-   compilação**. Por isso o Vender importa `useCreateOSFromSale` de
-   `@/hooks/useDescarbOS` (nome neutro, idêntico nos seis), nunca de `useOS`.
+1. **`useOS` SIGNIFICAVA duas coisas** — no `crm`, `licenciados.service_orders`;
+   no `ops`, `crm_os` (tabela vazia). Desde 20/10/2026 o do `ops` é CÓPIA do do
+   `crm` (a tela de OS do Sales foi para o Ops), e os dois são idênticos. O
+   Vender continua importando `useCreateOSFromSale` de `@/hooks/useDescarbOS`
+   (nome neutro, idêntico nos seis), nunca de `useOS` — nos outros apps o nome
+   pode voltar a significar outra coisa.
 2. **`isGestor` é alias.** O Vender canônico usa `isGestor`; fora do CRM o
    `AuthContext` chamava isso de `canAdmin` (e `gestor` no financas). Os três são
    `isManager(profile, fnMap)` — a mesma expressão. O alias `isGestor` existe nos
@@ -1562,9 +1563,11 @@ quando a operação online passou a rodar na conta 2: pedido ATENDIDO
   pedido de `cancelled`. Mesma lição do `bling-sync`, onde venda cancelada
   ressuscitava a cada rodada.
 
-### Esteira do On-line — admin manda, Ops, Atendimento e Marketing espelham
-**Cinco** arquivos byte a byte idênticos, agora em **quatro** apps (o `mkt`
-entrou em 20/10/2026, nas MESMAS rotas `/ecommerce/...` do admin). Fonte da
+### Esteira do On-line — admin manda, Atendimento e Marketing espelham
+**Cinco** arquivos byte a byte idênticos, em **três** apps (o `mkt` entrou em
+20/10/2026, nas MESMAS rotas `/ecommerce/...` do admin). ⚠️ **O Ops SAIU no
+mesmo dia** (decisão do dono do processo): os endereços dele levam à do Admin.
+O que segue sobre o Ops abaixo é histórico. Fonte da
 verdade = `apps/admin`. No Ops as páginas moram em `pages/logistica/` e a rota
 da esteira é `/logistica/esteira`; no Atendimento (28/08/2026) as páginas ficam
 em `pages/` e as rotas repetem as do admin.
@@ -3035,6 +3038,33 @@ conversão ÚNICA de `OSRow`, as três visões leem dela).
 ⚠️ **Coluna do quadro tem ALTURA FIXA e rola por dentro**; o painel lateral da
 agenda acompanha a altura do calendário (`lg:h-0 lg:min-h-full`). Sem isso, uma
 etapa com muitas OS estica a página inteira — foi a queixa do dono do processo.
+
+### Ops: Operação de Campo = a tela de OS do Sales (20/10/2026)
+Decisão do dono do processo. `ops.carbohub.com.br/campo/os` passou a ser a
+MESMA tela de `/descarbonizacao/os` do Sales — byte a byte: `pages/campo/
+OrdensServico.tsx` (no crm, `pages/descarbonizacao/`), `components/os/*`,
+`components/NovaDescarbonizacaoDialog.tsx` e `hooks/useOS.ts`. **Fonte da
+verdade = `apps/crm`**; editou lá, copie. A antiga lia `crm_os`, que estava vazia.
+1. ⚠️ **O banco só deixava ver a OS do portal com a flag `carbo_crm`**
+   (`licenciados.is_carbo_sales()`). A `20261118` faz a função aceitar
+   `carbo_crm` OU `carbo_ops` — sem ela a tela do Ops abre VAZIA para quem só
+   tem o Ops, calada. Vale para criar OS também (o `/vender` do Ops já criava
+   OS da venda e era recusado para quem não tinha o Sales).
+2. **Saíram do Ops**: Agendamentos (virou a visão Agenda; `/campo/agendamentos`
+   → `/campo/os?ver=agenda`), Máquinas (`/campo/maquinas` → `/campo/os`), Metas
+   de Vendedores (`/acompanhamento/metas`) e a Esteira do On-line com as
+   Mensagens ao cliente (`/logistica/esteira`, `/ecommerce/esteira` e
+   `/ecommerce/mensagens` levam à do ADMIN, com a query — o `?card=` continua
+   abrindo o pedido). O chip de Movimentações do Suprimentos aponta para o
+   Admin. ⚠️ Quem não tem a flag do Admin leva "Acesso restrito" ali.
+3. **Alertas Operacionais** (`/campo/alertas`) refeita: cartões por área que
+   filtram (Estoque, Pedidos, Produção, OS de campo), prioridade e busca na URL,
+   grupos com "Mostrar mais". Entraram as **vendas de descarbonização sem OS**
+   (crítico) e a OS lida do portal; o "Ver estoque" ia para `/estoque/<hub>`,
+   rota que não existe — hoje `/suprimentos/<hub>/estoque`.
+   ⚠️ Fonte que falha APARECE ("Não foi possível ler: …") — sem isso, "não
+   carregou" teria a cara de "tudo certo".
+   ⚠️ A data da OS é `timestamptz`: dia por hora LOCAL, nunca `toISOString()`.
 
 ### Admin: Visão Geral e Estratégico SAÍRAM (20/10/2026)
 `/dashboards/comercial` e `/dashboards/estrategico` foram apagados, por decisão do

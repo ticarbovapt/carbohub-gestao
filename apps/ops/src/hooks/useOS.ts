@@ -1,46 +1,70 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { lerSemTeto } from "@carbo/shell";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Ordens de Serviço / Descarbonização do Carbo Sales (tabela crm_os).
-// Fase inicial: apenas salva/lê a OS. Sem efeitos no resto do sistema.
-// A tabela é nova — os tipos gerados ainda não a conhecem, por isso o cliente é
-// tratado como `any` aqui (cast pontual e isolado neste hook).
+// Ordens de Serviço / Descarbonização.
+//
+// FONTE DE VERDADE = portal Licenciados: schema `licenciados`, tabela
+// `service_orders` (+ os_customers, os_vehicles). O Carbo Sales CRIA
+// (RPC os_create) e ACOMPANHA (kanban espelho read-only + Realtime). A
+// EXECUÇÃO (avançar estágio, fotos, IA) fica no Carbox/Licenciados.
+//
+// O client tipado não conhece o schema `licenciados` → cast pontual p/ any.
 // ─────────────────────────────────────────────────────────────────────────────
-const db = supabase as unknown as {
-  from: (t: string) => any;
-};
+const lic = () => (supabase as unknown as { schema: (s: string) => any }).schema("licenciados");
 
 export type OsTipo = "b2c" | "b2b" | "frota";
-export type OsStage =
-  | "nova"
-  | "qualificacao"
-  | "agendamento"
-  | "confirmada"
-  | "em_execucao"
-  | "pos_servico"
-  | "concluida";
+export type OsPersonType = "pf" | "pj";
+// Estágios efetivos do kanban (licenciados): nova → em_execucao → concluida (+cancelada).
+export type OsStage = "nova" | "em_execucao" | "concluida" | "cancelada";
 
+// Espelha 1:1 o formulário de "Nova OS" do Licenciados (mesma tela nos dois).
 export interface NovaOSInput {
-  tipo: OsTipo;
-  cliente_nome?: string;
-  cnpj?: string;
-  placa?: string;
-  modelo?: string;
-  data_prevista?: string | null;
-  prioridade?: number;
-  titulo?: string;
-  observacoes?: string;
+  service_type: OsTipo;
+  person_type: OsPersonType;
+  customer_name: string;
+  phone?: string | null;
+  federal_code?: string | null; // CNPJ (PJ)
+  company?: string | null;      // nome fantasia (PJ)
+  email?: string | null;
+  plate?: string | null;        // placa do veículo
+  model?: string | null;        // modelo do veículo
+  vehicle_year?: number | null; // ano do veículo
+  scheduled_at?: string | null; // ISO; obrigatório p/ frota
+  responsibles?: { name: string; phone?: string | null }[]; // frota: quem acompanha
+}
+
+// Cliente recorrente (autofill por telefone/CNPJ) — mesma UX do Licenciados.
+export interface OsCustomerLite {
+  name: string | null;
+  company: string | null;
+  email: string | null;
+  phone: string | null;
+  federal_code: string | null;
+}
+
+/** Busca cliente recorrente da OS (PF por telefone, PJ por CNPJ). */
+export async function findOsCustomer(
+  personType: OsPersonType, key: string,
+): Promise<OsCustomerLite | null> {
+  const { data, error } = await lic().rpc("os_find_customer", {
+    p_person_type: personType, p_key: key.trim(),
+  });
+  if (error) return null;
+  const row = Array.isArray(data) ? data[0] : data;
+  return (row as OsCustomerLite) ?? null;
 }
 
 export interface OSRow {
   id: string;
-  criado_por: string;
+  numero: string | null;
   tipo: OsTipo;
   stage: OsStage;
   cliente_nome: string | null;
   cnpj: string | null;
+  telefone: string | null;
   placa: string | null;
   modelo: string | null;
   data_prevista: string | null;
@@ -49,37 +73,232 @@ export interface OSRow {
   observacoes: string | null;
   created_at: string;
   updated_at: string;
+  // ── Vagas de veículo (fase 2/3) ──
+  /** Quantos veículos esta OS tem para executar. */
+  vagas: number;
+  /** Quantos já foram executados (descarbonização registrada no Carbox). */
+  vagasExecutadas: number;
+  /** Quantos já têm placa — sinal de que o carro foi identificado. */
+  vagasComPlaca: number;
+  /** Quebra por porte, ex.: { P: 5, M: 3, G: 1 }. Vaga sem porte cai em "—". */
+  portes: Record<string, number>;
+  // ── Elo com a venda ──
+  saleOrderId: string | null;
+  saleOrderNumber: string | null;
+  saleTotal: number | null;
 }
 
-/** Lista de OS (RLS decide o escopo: próprio criador ou tudo p/ gestor). */
+/** Mapeia a linha do schema licenciados para o formato usado pelas telas. */
+function mapRow(o: any): OSRow {
+  const cust = o.customer ?? null;
+  const vehicles = Array.isArray(o.vehicles) ? o.vehicles : [];
+  const veh = vehicles.find((v: any) => v.position === 1) ?? vehicles[0] ?? null;
+  return {
+    id: o.id,
+    numero: o.os_number ?? null,
+    tipo: o.service_type,
+    stage: o.os_stage,
+    cliente_nome: o.customer_name ?? cust?.name ?? null,
+    cnpj: cust?.federal_code ?? null,
+    telefone: cust?.phone ?? null,
+    placa: veh?.plate ?? o.vehicle_plate ?? null,
+    modelo: veh?.model ?? o.vehicle_model ?? null,
+    data_prevista: o.scheduled_at ?? null,
+    prioridade: o.priority ?? 3,
+    titulo: o.title ?? null,
+    observacoes: o.description ?? null,
+    created_at: o.created_at,
+    updated_at: o.updated_at,
+    // Vaga cancelada saiu do escopo da OS (cliente não trouxe o carro).
+    vagas: vehicles.filter((v: any) => !v.cancelled_at).length,
+    vagasExecutadas: vehicles.filter((v: any) => !v.cancelled_at && !!v.executed_at).length,
+    vagasComPlaca: vehicles.filter((v: any) => !v.cancelled_at && !!v.plate).length,
+    portes: vehicles.reduce((acc: Record<string, number>, v: any) => {
+      const k = v.porte || "—";
+      acc[k] = (acc[k] ?? 0) + 1;
+      return acc;
+    }, {}),
+    saleOrderId: o.sale_order_id ?? null,
+    saleOrderNumber: o.sale_order_number ?? null,
+    saleTotal: o.sale_total != null ? Number(o.sale_total) : null,
+  };
+}
+
+const SELECT_COLS =
+  "id, os_number, service_type, os_stage, customer_name, scheduled_at, priority, title, description, " +
+  "vehicle_plate, vehicle_model, created_at, updated_at, " +
+  "sale_order_id, sale_order_number, sale_total, " +
+  "customer:os_customers(name, phone, federal_code), " +
+  "vehicles:os_vehicles(position, plate, model, porte, executed_at, cancelled_at)";
+
+/** Lista de OS (espelho ao vivo). RLS: o Sales enxerga via is_carbo_sales(). */
 export function useOS() {
+  const qc = useQueryClient();
+
+  // Realtime: qualquer mudança na OS (criar/mover/concluir) atualiza na hora.
+  useEffect(() => {
+    const rt = supabase as unknown as {
+      channel: (n: string) => any;
+      removeChannel: (c: any) => void;
+    };
+    const ch = rt
+      .channel("os-sales-mirror")
+      .on("postgres_changes", { event: "*", schema: "licenciados", table: "service_orders" },
+        () => qc.invalidateQueries({ queryKey: ["os_sales"] }))
+      .on("postgres_changes", { event: "*", schema: "licenciados", table: "os_vehicles" },
+        () => qc.invalidateQueries({ queryKey: ["os_sales"] }))
+      .subscribe();
+    return () => { rt.removeChannel(ch); };
+  }, [qc]);
+
   return useQuery({
-    queryKey: ["crm_os"],
+    queryKey: ["os_sales"],
     queryFn: async (): Promise<OSRow[]> => {
-      return await lerSemTeto<OSRow>(() => db
-        .from("crm_os")
-        .select("*")
+      const data = await lerSemTeto<any>(() => lic()
+        .from("service_orders")
+        .select(SELECT_COLS)
         .order("created_at", { ascending: false })
         .order("id"));
+      return data.map(mapRow);
     },
   });
 }
 
-/** Cria uma OS de descarbonização (stage inicial 'nova'). */
+// ─────────────────────────────────────────────────────────────────────────────
+// OS a partir da VENDA — uma vaga de veículo por unidade vendida.
+//
+// os_create (abaixo) cria UMA OS com UM veículo: serve para a OS aberta à mão
+// no Carbox, onde o operador tem o carro na frente. A venda é outro caso — ela
+// sabe a quantidade mas não sabe os carros — e por isso usa os_create_from_sale,
+// que gera sum(qty + bonus) vagas vazias, cada uma com o seu porte.
+// ─────────────────────────────────────────────────────────────────────────────
+export interface OSFromSaleInput {
+  service_type: OsTipo;
+  person_type: OsPersonType;
+  customer_name: string;
+  phone?: string | null;
+  federal_code?: string | null;
+  company?: string | null;
+  email?: string | null;
+  scheduled_at?: string | null;
+  /** [{porte, qty, bonus}] — cada unidade vira uma vaga de veículo. */
+  items: { porte: string; qty: number; bonus: number }[];
+  responsibles?: { name: string; phone?: string | null }[];
+  sale_order_id?: string | null;
+  sale_order_number?: string | null;
+  sale_total?: number | null;
+}
+
+export function useCreateOSFromSale() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: OSFromSaleInput) => {
+      const { data: id, error } = await lic().rpc("os_create_from_sale", {
+        p_person_type:       input.person_type,
+        p_customer_name:     input.customer_name.trim(),
+        p_phone:             input.phone?.trim() || null,
+        p_federal_code:      input.federal_code?.trim() || null,
+        p_company:           input.company?.trim() || null,
+        p_email:             input.email?.trim() || null,
+        p_service_type:      input.service_type,
+        p_scheduled_at:      input.scheduled_at ?? null,
+        p_items:             input.items,
+        p_responsibles:      input.responsibles ?? [],
+        p_sale_order_id:     input.sale_order_id ?? null,
+        p_sale_order_number: input.sale_order_number ?? null,
+        p_sale_total:        input.sale_total ?? null,
+        p_priority:          3,
+      });
+      if (error) throw error;
+
+      // Número gerado (OS-AAAA-#####) + quantas vagas nasceram, para o toast.
+      let numero: string | null = null;
+      let vagas = 0;
+      try {
+        const { data: row } = await lic()
+          .from("service_orders")
+          .select("os_number, vehicles:os_vehicles(id)")
+          .eq("id", id).single();
+        numero = (row?.os_number as string) ?? null;
+        vagas = Array.isArray(row?.vehicles) ? row.vehicles.length : 0;
+      } catch { /* cosmético */ }
+
+      return { id: id as string, numero, vagas };
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["os_sales"] }); },
+  });
+}
+
+/** Cria uma OS de descarbonização na fonte de verdade (RPC os_create). */
 export function useCreateOS() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: NovaOSInput) => {
-      const { data, error } = await db
-        .from("crm_os")
-        .insert({ stage: "nova", ...input })
-        .select("id")
-        .single();
+      const { data: id, error } = await lic().rpc("os_create", {
+        p_person_type: input.person_type,
+        p_customer_name: input.customer_name.trim(),
+        p_phone: input.phone?.trim() || null,
+        p_federal_code: input.federal_code?.trim() || null,
+        p_company: input.company?.trim() || null,
+        p_email: input.email?.trim() || null,
+        p_service_type: input.service_type,
+        p_vehicle_year: input.vehicle_year ?? null,
+        p_plate: input.plate?.trim() || null,
+        p_model: input.model?.trim() || null,
+        p_responsibles: input.responsibles ?? [],
+        p_scheduled_at: input.scheduled_at ?? null,
+        p_priority: 3,
+      });
       if (error) throw error;
-      return (data as { id: string }).id;
+
+      // Busca o número gerado (OS-AAAA-#####) para o feedback.
+      let numero: string | null = null;
+      try {
+        const { data: row } = await lic()
+          .from("service_orders").select("os_number").eq("id", id).single();
+        numero = (row?.os_number as string) ?? null;
+      } catch { /* número é só cosmético no toast */ }
+
+      return { id: id as string, numero };
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["crm_os"] });
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["os_sales"] }); },
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Reconciliação: vendas de descarbonização SEM OS.
+//
+// Se a criação da OS falha, o /vender mostra um toast e segue. O toast some, a
+// venda fica registrada e o serviço nunca é executado. Esta lista é o que
+// impede isso de passar em branco.
+// ─────────────────────────────────────────────────────────────────────────────
+export interface VendaSemOS {
+  order_id: string;
+  order_number: string | null;
+  customer_name: string | null;
+  vendedor_name: string | null;
+  valor_descarb: number;
+  sale_date: string | null;
+  execution_date: string | null;
+}
+
+export function useVendasSemOS(dias = 365) {
+  return useQuery({
+    queryKey: ["descarb_vendas_sem_os", dias],
+    queryFn: async (): Promise<VendaSemOS[]> => {
+      const { data, error } = await (supabase as unknown as {
+        rpc: (fn: string, args?: Record<string, unknown>) => any;
+      }).rpc("crm_descarb_vendas_sem_os", { p_dias: dias });
+      if (error) throw error;
+      return ((data ?? []) as any[]).map((r) => ({
+        order_id: r.order_id,
+        order_number: r.order_number ?? null,
+        customer_name: r.customer_name ?? null,
+        vendedor_name: r.vendedor_name ?? null,
+        valor_descarb: Number(r.valor_descarb || 0),
+        sale_date: r.sale_date ?? null,
+        execution_date: r.execution_date ?? null,
+      }));
     },
   });
 }

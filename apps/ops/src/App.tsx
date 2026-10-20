@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Layout } from "./components/Layout";
@@ -18,28 +19,24 @@ import EstoqueVendedores from "./pages/compras/EstoqueVendedores";
 import Logistica from "./pages/logistica/Logistica";
 import PosVenda from "./pages/logistica/PosVenda";
 import Recorrencias from "./pages/comercial/Recorrencias";
-import EsteiraOnline from "./pages/logistica/EsteiraOnline";
-import MensagensCliente from "./pages/MensagensCliente";
 import ViagensLog from "./pages/logistica/Viagens";
 import OrdensServico from "./pages/campo/OrdensServico";
-import Agendamentos from "./pages/campo/Agendamentos";
-import Maquinas from "./pages/campo/Maquinas";
 import Alertas from "./pages/campo/Alertas";
-import AcompMetasVendedores from "./pages/acompanhamento/MetasVendedores";
 import { OPS_ALL_ITEMS } from "@/lib/opsNav";
 import { PaginaNaoEncontrada } from "@carbo/shell";
 
 /**
- * Apelido `/ecommerce/esteira` → `/logistica/esteira`, com a query INTACTA.
- *
- * ⚠️ `<Navigate to="/logistica/esteira" />` sozinho não serve: ele descarta a
- * query string, e é justamente o `?card=` que abre o pedido. Um redirecionamento
- * que chega na tela certa com o card fechado é o mesmo tipo de falha muda que
- * este apelido veio consertar.
+ * A Esteira do On-line (e as Mensagens ao cliente, que só se chegava por ela)
+ * SAIU do Ops em 20/10/2026, por decisão do dono do processo — ela continua no
+ * Admin, no Atendimento e no Marketing. Os endereços antigos daqui levam à do
+ * Admin, com a query INTACTA: é o `?card=` que abre o pedido, e link colado no
+ * chat ou o chip de Movimentações do Suprimentos continuam chegando ao card.
  */
-function RedirEsteira() {
+const ADMIN = "https://admin.carbohub.com.br";
+function ParaAdmin({ destino }: { destino: string }) {
   const { search } = useLocation();
-  return <Navigate to={`/logistica/esteira${search}`} replace />;
+  useEffect(() => { window.location.replace(`${ADMIN}${destino}${search}`); }, [destino, search]);
+  return null;
 }
 
 // Login é ÚNICO no Hub (carbohub.com.br). O ProtectedRoute cuida do acesso.
@@ -91,20 +88,9 @@ export default function App() {
         {/* Logística */}
         <Route path="/logistica/pos-venda" element={<PosVenda />} />
         <Route path="/logistica/recorrencias" element={<Recorrencias />} />
-        <Route path="/logistica/esteira" element={<EsteiraOnline />} />
-        {/* ⚠️ O apelido existe porque o caminho da Esteira DIVERGE entre os apps:
-            /ecommerce/esteira no admin e no atendimento, /logistica/esteira aqui.
-            O `MensagensCliente` é byte a byte idêntico nos três e, sem o
-            `?voltar=` na URL (link direto, favorito, aba restaurada), o botão
-            "voltar" dele cai no padrão do admin — que no Ops não existia e caía
-            no catch-all, levando a pessoa para a HOME sem dizer por quê.
-            Redirecionar em vez de montar a tela aqui mantém um endereço só na
-            barra e no destaque do menu. ⚠️ `search` preservado de propósito: o
-            `?card=` é o que abre o pedido, e `<Navigate>` descarta a query. */}
-        <Route path="/ecommerce/esteira" element={<RedirEsteira />} />
-        {/* Mesmo caminho do admin de propósito: o botão da Esteira é o mesmo
-            arquivo nos dois apps e precisa levar ao mesmo lugar. */}
-        <Route path="/ecommerce/mensagens" element={<MensagensCliente />} />
+        <Route path="/logistica/esteira" element={<ParaAdmin destino="/ecommerce/esteira" />} />
+        <Route path="/ecommerce/esteira" element={<ParaAdmin destino="/ecommerce/esteira" />} />
+        <Route path="/ecommerce/mensagens" element={<ParaAdmin destino="/ecommerce/mensagens" />} />
         <Route path="/logistica" element={<Logistica />} />
         {/* A aba vira segmento da URL. As rotas estáticas acima (/pos-venda,
             /viagens) ganham desta no ranking do react-router, então não há
@@ -114,12 +100,11 @@ export default function App() {
 
         {/* Operação de Campo */}
         <Route path="/campo/os" element={<OrdensServico />} />
-        <Route path="/campo/agendamentos" element={<Agendamentos />} />
-        <Route path="/campo/maquinas" element={<Maquinas />} />
+        {/* Agendamentos virou a visão Agenda da própria tela de OS, como no
+            Sales; Máquinas saiu (decisão do dono do processo, 20/10/2026). */}
+        <Route path="/campo/agendamentos" element={<Navigate to="/campo/os?ver=agenda" replace />} />
+        <Route path="/campo/maquinas" element={<Navigate to="/campo/os" replace />} />
         <Route path="/campo/alertas" element={<Alertas />} />
-
-        {/* Acompanhamento (Vendas) — espelho do Sales, visualização */}
-        <Route path="/acompanhamento/metas" element={<AcompMetasVendedores />} />
 
         {/* Demais áreas: placeholder até o port (telas com ready=false) */}
         {OPS_ALL_ITEMS.filter((i) => !i.ready).map((i) => (
