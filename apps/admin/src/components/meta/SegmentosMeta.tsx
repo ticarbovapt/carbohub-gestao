@@ -80,6 +80,7 @@ const POSICAO: Record<string, string> = {
   threads_feed: "Feed",
 };
 const GENERO: Record<string, string> = { female: "Mulheres", male: "Homens", unknown: "Não informado" };
+const IDADE: Record<string, string> = { unknown: "Não informado", Unknown: "Não informado" };
 const bonito = (s: string) => s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 
 function somar(linhas: MetaSegmento[]): Brutos {
@@ -101,11 +102,15 @@ function agruparPor(linhas: MetaSegmento[], chave: (l: MetaSegmento) => string) 
 // ── A tabela comum às três abas ──────────────────────────────────────────────
 
 function Tabela({ linhas, moeda, extra }: {
-  linhas: Array<{ rotulo: string; b: Brutos; nota?: string }>;
+  linhas: Array<{ rotulo: string; chave?: string; b: Brutos; nota?: string }>;
   moeda: string;
-  extra?: { titulo: string; valor: (l: { rotulo: string; b: Brutos }) => React.ReactNode };
+  extra?: { titulo: string; valor: (l: { rotulo: string; chave?: string; b: Brutos }) => React.ReactNode };
 }) {
   const max = Math.max(...linhas.map((l) => l.b.spend), 1);
+  // ⚠️ Segmento com investimento irrisório dá ROAS absurdo (medido: R$ 0,25
+  // investidos e uma compra atribuída = 227x). O número continua lá, mas sem
+  // a cor de "bom", e a linha diz por quê — senão ele é o primeiro que se lê.
+  const irrisorio = (spend: number) => spend < max * 0.01;
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[40rem] text-sm">
@@ -123,11 +128,13 @@ function Tabela({ linhas, moeda, extra }: {
         <tbody>
           {linhas.map((l) => {
             const d = derivar(l.b);
+            const pouco = irrisorio(l.b.spend);
+            const nota = l.nota ?? (pouco ? "investimento pequeno demais para comparar" : undefined);
             return (
               <tr key={l.rotulo} className="border-t">
                 <td className="px-3 py-2">
                   <span className="font-medium">{l.rotulo}</span>
-                  {l.nota && <span className="block text-[11px] text-muted-foreground">{l.nota}</span>}
+                  {nota && <span className="block text-[11px] text-muted-foreground">{nota}</span>}
                 </td>
                 <td className="px-3 py-2">
                   <div className="flex items-center gap-2">
@@ -142,7 +149,7 @@ function Tabela({ linhas, moeda, extra }: {
                 <td className="px-3 py-2 text-right tabular-nums">{fmtMoeda(d.cpa, moeda)}</td>
                 <td className="px-3 py-2 text-right">
                   <span className={cn("tabular-nums font-medium",
-                    d.roas != null && (d.roas >= 1 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"))}>
+                    pouco ? "text-muted-foreground" : d.roas != null && (d.roas >= 1 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"))}>
                     {fmtRoas(d.roas)}
                   </span>
                 </td>
@@ -166,7 +173,10 @@ export function Segmentos({ segmentos, moeda }: { segmentos: MetaSegmentos; moed
   const idade = useMemo(() => {
     const ls = segmentos.idade_genero ?? [];
     const pos = (r: string) => { const i = ORDEM_IDADE.indexOf(r); return i < 0 ? 99 : i; };
-    return agruparPor(ls, (l) => l.chave1).sort((a, b) => pos(a.rotulo) - pos(b.rotulo));
+    // A chave crua fica em `chave` (é por ela que o ROAS mulheres · homens
+    // filtra); o rótulo é só apresentação.
+    return agruparPor(ls, (l) => l.chave1).sort((a, b) => pos(a.rotulo) - pos(b.rotulo))
+      .map((g) => ({ ...g, chave: g.rotulo, rotulo: IDADE[g.rotulo] ?? g.rotulo }));
   }, [segmentos]);
   const genero = useMemo(() => agruparPor(segmentos.idade_genero ?? [], (l) => GENERO[l.chave2] ?? bonito(l.chave2))
     .sort((a, b) => b.b.spend - a.b.spend), [segmentos]);
@@ -228,7 +238,7 @@ export function Segmentos({ segmentos, moeda }: { segmentos: MetaSegmentos; moed
                 })}
               </div>
               <Tabela linhas={idade} moeda={moeda}
-                extra={{ titulo: "ROAS mulheres · homens", valor: (l) => roasPorGenero(l.rotulo) }} />
+                extra={{ titulo: "ROAS mulheres · homens", valor: (l) => roasPorGenero(l.chave ?? l.rotulo) }} />
             </TabsContent>
 
             <TabsContent value="posicao" className="space-y-4">

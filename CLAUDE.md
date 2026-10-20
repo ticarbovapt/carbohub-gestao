@@ -1191,8 +1191,17 @@ calada: a função fora da lista `dep` (nunca foi ao ar), o secret
    `carbo_meta_ads_segmentos` (jsonb). ⚠️ A URL da miniatura é ASSINADA e
    vence — relida a cada rodada; imagem que não abre vira ícone. ⚠️ A Meta
    modela compra por segmento: a soma não fecha com o total, e a tela diz.
-   ⚠️ Falha dos extras grava `origem = '<x>:extras'` com `ok = false` no log
-   (aparece no aviso da tela) e NÃO desfaz o gasto.
+   ⚠️ Os extras gravam SEMPRE uma linha `origem = '<x>:extras'` (ok, ou
+   `ok = false` com a lista das partes que falharam) e NÃO desfazem o gasto.
+   O aviso da tela mostra só a falha que AINDA vale: a última rodada de cada
+   tipo (gasto / extras) por conta — falha seguida de rodada boa já passou.
+   ⚠️ **"Please reduce the amount of data" é a PÁGINA pesada demais**, não
+   cota (`20261116`): 200 anúncios com criativo expandido e 90 dias × região
+   num pedido foram recusados. Hoje: 50 anúncios por página, `lerPaginas`
+   divide o `limit` sozinho até 10, segmentos em janelas de 15 dias, e
+   criativos + cada dimensão são partes INDEPENDENTES.
+   ⚠️ Segmento com investimento < 1% do maior mostra o ROAS sem cor e com
+   nota: R$ 0,25 e uma compra davam 227x no topo da leitura.
 
 ### Seletor de período do e-commerce — "este mês" ≠ "mês fechado"
 `EcommercePeriod` tem os dois, e a diferença NÃO é detalhe:
