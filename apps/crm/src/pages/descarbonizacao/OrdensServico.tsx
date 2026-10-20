@@ -30,9 +30,9 @@ function Kpi({ icon: Icon, label, value, tone }: {
 }) {
   return (
     <div className="rounded-xl border bg-card px-4 py-3.5">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-muted-foreground">{label}</span>
-        <span className={cn("flex h-7 w-7 items-center justify-center rounded-lg", tone)}>
+      <div className="flex items-center justify-between gap-2">
+        <span className="truncate text-xs font-medium text-muted-foreground">{label}</span>
+        <span className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-lg", tone)}>
           <Icon className="h-3.5 w-3.5" />
         </span>
       </div>

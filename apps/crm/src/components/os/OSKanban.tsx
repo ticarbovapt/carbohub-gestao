@@ -18,7 +18,7 @@ export function OSKanban({ items }: { items: OSView[] }) {
   const hoje = hojeLocal();
 
   return (
-    <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 md:grid md:grid-cols-3 md:items-start md:gap-4 md:overflow-visible md:pb-0">
+    <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 md:grid md:grid-cols-3 md:gap-4 md:overflow-visible md:pb-0">
       {STAGES.map((stage) => (
         <Coluna
           key={stage.id}
@@ -33,7 +33,9 @@ export function OSKanban({ items }: { items: OSView[] }) {
 
 function Coluna({ stage, items, hoje }: { stage: StageMeta; items: OSView[]; hoje: string }) {
   return (
-    <section className="flex w-[86vw] shrink-0 snap-start flex-col rounded-xl border bg-muted/30 md:w-auto md:min-w-0">
+    // Altura FIXA e rolagem dentro da coluna: com muitas OS numa etapa, o quadro
+    // continua do tamanho da tela em vez de esticar a página.
+    <section className="flex h-[70dvh] w-[86vw] shrink-0 snap-start flex-col rounded-xl border bg-muted/30 md:h-[max(440px,calc(100dvh-23rem))] md:w-auto md:min-w-0">
       <header className="flex items-center gap-2 px-3.5 py-3">
         <span className={cn("h-2 w-2 shrink-0 rounded-full", stage.dot)} />
         <h3 className="text-sm font-semibold tracking-tight">{stage.label}</h3>
@@ -42,7 +44,7 @@ function Coluna({ stage, items, hoje }: { stage: StageMeta; items: OSView[]; hoj
         </span>
       </header>
 
-      <div className="flex flex-col gap-2.5 px-2.5 pb-2.5">
+      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-2.5 pb-2.5 [scrollbar-width:thin]">
         {items.length === 0 ? (
           <div className="rounded-lg border border-dashed py-6 text-center text-xs text-muted-foreground">
             Nenhuma OS
@@ -62,13 +64,16 @@ function Cartao({ os, stage, hoje }: { os: OSView; stage: StageMeta; hoje: strin
   const temVenda = !!os.pedido || os.valor != null;
 
   return (
-    <article className="rounded-lg border bg-card p-3.5 shadow-sm transition-colors hover:border-foreground/20">
+    <article className="shrink-0 rounded-lg border bg-card p-3 shadow-sm transition-colors hover:border-foreground/20">
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold leading-snug" title={os.cliente}>
             {os.cliente}
           </p>
-          <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">{os.numero}</p>
+          <p className="mt-0.5 truncate text-[11px] text-muted-foreground" title={os.veiculo ?? undefined}>
+            <span className="font-mono">{os.numero}</span>
+            {os.veiculo && <> · {os.veiculo}</>}
+          </p>
         </div>
         <span
           className={cn(
@@ -80,13 +85,7 @@ function Cartao({ os, stage, hoje }: { os: OSView; stage: StageMeta; hoje: strin
         </span>
       </div>
 
-      {os.veiculo && (
-        <p className="mt-2 truncate text-xs text-muted-foreground" title={os.veiculo}>
-          {os.veiculo}
-        </p>
-      )}
-
-      <div className="mt-3">
+      <div className="mt-2.5">
         <div className="flex items-baseline justify-between gap-2 text-xs">
           <span className="text-muted-foreground">
             {os.vagas > 1 ? (
@@ -107,7 +106,7 @@ function Cartao({ os, stage, hoje }: { os: OSView; stage: StageMeta; hoje: strin
         )}
       </div>
 
-      <div className="mt-3 flex items-center justify-between gap-2 border-t pt-2.5 text-xs">
+      <div className="mt-2.5 flex items-center justify-between gap-2 border-t pt-2 text-xs">
         <span
           className={cn(
             "inline-flex items-center gap-1.5 tabular-nums",

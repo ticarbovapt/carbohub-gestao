@@ -89,7 +89,7 @@ export function OSAgenda({ items }: { items: OSView[] }) {
   const diaSelecionado = painel.modo === "dia" ? painel.chave : null;
 
   return (
-    <div className="grid gap-4 lg:grid-cols-4">
+    <div className="grid items-start gap-4 lg:grid-cols-4">
       <section className="min-w-0 overflow-hidden rounded-xl border bg-card lg:col-span-3">
         <header className="flex items-center justify-between gap-3 border-b px-3 py-3 sm:px-5">
           <h2 className="text-base font-semibold tracking-tight sm:text-lg">
@@ -241,14 +241,14 @@ function PainelLateral({ painel, porDia, semData, proximos, onVoltar }: {
       : (
         <>
           <p className="px-4 pb-2 text-xs text-muted-foreground tabular-nums">
-            {lista.length} {lista.length === 1 ? "OS" : "OS"} · {veiculos} {veiculos === 1 ? "veículo" : "veículos"}
+            {lista.length} OS · {veiculos} {veiculos === 1 ? "veículo" : "veículos"}
           </p>
           <ul className="space-y-2 px-3 pb-3">{lista.map((o) => <ItemOS key={o.id} os={o} />)}</ul>
         </>
       );
   } else if (painel.modo === "semData") {
     titulo = "Sem data";
-    subtitulo = `${semData.length} ${semData.length === 1 ? "OS" : "OS"}`;
+    subtitulo = `${semData.length} OS`;
     corpo = semData.length === 0
       ? <Vazio icone={CalendarX2} texto="Todas as OS têm data" />
       : <ul className="space-y-2 px-3 pb-3">{semData.map((o) => <ItemOS key={o.id} os={o} />)}</ul>;
@@ -285,7 +285,7 @@ function ItemOS({ os, chave }: { os: OSView; chave?: string }) {
     <li className={cn("rounded-lg border bg-background/60 p-3 transition-colors hover:bg-muted/40", cancelada(os) && "opacity-60")}>
       <div className="flex gap-3">
         {data && (
-          <div className="flex w-11 shrink-0 flex-col items-center justify-center rounded-md border bg-muted/40 py-1.5">
+          <div className="flex h-12 w-11 shrink-0 flex-col items-center justify-center self-start rounded-md border bg-muted/40">
             <span className="text-base font-semibold leading-none tabular-nums">{data.getDate()}</span>
             <span className="mt-1 text-[10px] font-medium uppercase leading-none tracking-wide text-muted-foreground">{mesCurto(data)}</span>
           </div>
