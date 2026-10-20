@@ -3004,7 +3004,7 @@ nada se perde"*. Saíram do **Admin** e entraram no **TI**, byte a byte:
 
 1. ⚠️ **O Admin REDIRECIONA os endereços antigos** (`IrParaTi`, com a query) —
    favorito e link mandado a alguém continuam abrindo. A home do Admin virou a
-   Visão Geral (`/dashboards/comercial`).
+   o Dashboard Comercial (`/comercial/dashboard`), e a seção Comercial veio para cima de Dashboards.
 2. ⚠️ **Os arquivos SAÍRAM do Admin** (páginas, `EditUserDialog`,
    `useAdminUsers`, `useStructure`, `lib/interfaces.ts`…): cópia morta é cópia
    que diverge. Não há mais `interfaces.ts` no Admin — a caixinha é a do TI.
