@@ -89,8 +89,8 @@ export function OSAgenda({ items }: { items: OSView[] }) {
   const diaSelecionado = painel.modo === "dia" ? painel.chave : null;
 
   return (
-    <div className="grid items-start gap-4 lg:grid-cols-4">
-      <section className="min-w-0 overflow-hidden rounded-xl border bg-card lg:col-span-3">
+    <div className="grid gap-4 lg:grid-cols-4">
+      <section className="min-w-0 self-start overflow-hidden rounded-xl border bg-card lg:col-span-3">
         <header className="flex items-center justify-between gap-3 border-b px-3 py-3 sm:px-5">
           <h2 className="text-base font-semibold tracking-tight sm:text-lg">
             {tituloMes} <span className="font-normal text-muted-foreground">{mes.getFullYear()}</span>
@@ -260,7 +260,7 @@ function PainelLateral({ painel, porDia, semData, proximos, onVoltar }: {
   }
 
   return (
-    <aside className="flex min-w-0 flex-col self-start overflow-hidden rounded-xl border bg-card lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)]">
+    <aside className="flex max-h-[60dvh] min-w-0 flex-col overflow-hidden rounded-xl border bg-card lg:h-0 lg:max-h-none lg:min-h-full">
       <header className="flex items-start justify-between gap-2 px-4 pb-3 pt-4">
         <div className="min-w-0">
           <h3 className="truncate text-sm font-semibold">{titulo}</h3>

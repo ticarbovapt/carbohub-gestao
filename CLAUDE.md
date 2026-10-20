@@ -3027,6 +3027,15 @@ Os endereços antigos (e o `/dashboard-comercial`) caem em `/crm/pipelines`, a
 home do Sales. O Dashboard Comercial de verdade é o do Admin
 (`admin.carbohub.com.br/comercial/dashboard`).
 
+### Sales: Ordens de Serviço com Quadro · Lista · Agenda (20/10/2026)
+`/descarbonizacao/os` ganhou três visões (`?ver=quadro|lista|agenda`) e a
+tela de Agendamentos virou a visão **Agenda** — `/descarbonizacao/agendamentos`
+redireciona para `?ver=agenda`. Peças em `components/os/` (`osView.ts` é a
+conversão ÚNICA de `OSRow`, as três visões leem dela).
+⚠️ **Coluna do quadro tem ALTURA FIXA e rola por dentro**; o painel lateral da
+agenda acompanha a altura do calendário (`lg:h-0 lg:min-h-full`). Sem isso, uma
+etapa com muitas OS estica a página inteira — foi a queixa do dono do processo.
+
 ### Admin: Visão Geral e Estratégico SAÍRAM (20/10/2026)
 `/dashboards/comercial` e `/dashboards/estrategico` foram apagados, por decisão do
 dono do processo: o Dashboard Comercial (`/comercial/dashboard`) cobre os dois,
