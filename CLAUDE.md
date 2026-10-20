@@ -1168,6 +1168,18 @@ calada: a função fora da lista `dep` (nunca foi ao ar), o secret
 2. ⚠️ Sem token, a tela diz COMO gerar: o `chamarMeta` lê o CORPO do erro (o
    `functions.invoke` em não-2xx só diz "non-2xx status code").
 3. ⚠️ "Vendas"/"ROAS" ali são a atribuição da META, nunca faturamento.
+4. **O painel** (`20261113`, `carbo_meta_ads_painel(de, ate, conta)`, jsonb,
+   agregado no BANCO; `components/meta/PainelMeta.tsx`): comparação com o
+   período anterior nos cards, a LOJA REAL (Nuvemshop + PayT, só venda) com
+   MER = faturamento ÷ investimento, o funil página → produto → carrinho →
+   checkout → compra (lido de `raw->'actions'`, que sempre foi guardado) e os
+   destaques por anúncio. ⚠️ Etapa do funil = o PRIMEIRO tipo que existir
+   (`carbo_meta_acao`, `omni_*` antes do pixel cru), nunca a soma — a regra do
+   `primeiraAcao`. ⚠️ "Investindo e sem venda" só lista objetivo de VENDA ou
+   desconhecido (`objective` entrou no sync agora): engajamento não vende por
+   definição. ⚠️ O cron relê só 30 dias; "usar a conta" lê 90, e é isso que dá
+   o período anterior. ⚠️ Sem a função (front antes do SQL) as seções somem e
+   o resto da tela segue.
 
 ### Seletor de período do e-commerce — "este mês" ≠ "mês fechado"
 `EcommercePeriod` tem os dois, e a diferença NÃO é detalhe:

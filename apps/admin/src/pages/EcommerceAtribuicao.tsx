@@ -13,12 +13,13 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  useMetaAds, useMetaAdsContas, useMetaAdsSync, useMetaAdsUltimoSync,
+  useMetaAds, useMetaAdsContas, useMetaAdsSync, useMetaAdsUltimoSync, useMetaAdsPainel, derivar,
   PERIOD_LABEL, fmtMoeda, fmtNum, fmtPct, fmtRoas,
   type MetaPeriod, type MetaNo, type MetaDerivadas,
 } from "@/hooks/useMetaAds";
 import { cn } from "@/lib/utils";
 import { ContasDaMeta } from "@/components/ContasDaMeta";
+import { ChipVariacao, Destaques, Funil, LojaReal, variacao } from "@/components/meta/PainelMeta";
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -49,9 +50,11 @@ const PERIODOS: MetaPeriod[] = ["today", "yesterday", "7d", "30d", "month"];
 // ── Card de indicador ────────────────────────────────────────────────────────
 
 function Indicador({
-  icone: Icone, titulo, valor, apoio, destaque,
+  icone: Icone, titulo, valor, apoio, destaque, extra,
 }: {
   icone: typeof Wallet; titulo: string; valor: string; apoio?: string; destaque?: boolean;
+  /** A linha de comparação com o período anterior. */
+  extra?: React.ReactNode;
 }) {
   return (
     <Card className={cn(destaque && "border-primary/50 bg-primary/5")}>
@@ -63,6 +66,7 @@ function Indicador({
       <CardContent>
         <div className={cn("text-2xl font-bold tabular-nums", destaque && "text-primary")}>{valor}</div>
         {apoio && <p className="mt-0.5 text-xs text-muted-foreground">{apoio}</p>}
+        {extra && <div className="mt-1">{extra}</div>}
       </CardContent>
     </Card>
   );
@@ -150,6 +154,7 @@ export default function EcommerceAtribuicao() {
   const { data, isLoading, error } = useMetaAds(period, undefined, actId === "todas" ? undefined : actId);
   const sync = useMetaAdsSync();
   const logs = useMetaAdsUltimoSync();
+  const painel = useMetaAdsPainel(period, actId === "todas" ? undefined : actId);
 
   const alternar = (id: string) =>
     setAberto((s) => {
@@ -161,6 +166,17 @@ export default function EcommerceAtribuicao() {
   const moeda = data?.moeda ?? "BRL";
   const t: MetaDerivadas | undefined = data?.total;
   const ultimoErro = logs.data?.find((l) => !l.ok);
+
+  // O período anterior, pela MESMA conta do total (`derivar`). Sem dado antes
+  // (conta ligada há pouco), a comparação diz isso em vez de mostrar −100%.
+  const p = painel.data;
+  const ant = p && p.anterior.linhas > 0 ? derivar(p.anterior) : null;
+  const delta = (atual: number | null | undefined, antes: number | null | undefined, bomQuandoSobe?: boolean) =>
+    p ? <ChipVariacao pct={ant ? variacao(atual ?? null, antes ?? null) : null} bomQuandoSobe={bomQuandoSobe} /> : null;
+
+  // O faturamento REAL da loja entra no gráfico ao lado do que a Meta atribui.
+  const lojaPorDia = new Map((p?.loja.serie ?? []).map((s) => [s.dia, s.faturamento]));
+  const serie = (data?.serie ?? []).map((d) => ({ ...d, loja: lojaPorDia.get(d.dia) ?? 0 }));
 
   return (
     <main className="mx-auto max-w-7xl px-4 sm:px-6 py-8 space-y-6">
@@ -262,18 +278,26 @@ export default function EcommerceAtribuicao() {
           {/* ── Indicadores ── */}
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             <Indicador icone={Wallet} titulo="Investimento" valor={fmtMoeda(t!.spend, moeda)}
-              apoio={`${fmtNum(t!.impressions)} impressões`} />
+              apoio={`${fmtNum(t!.impressions)} impressões`} extra={delta(t!.spend, ant?.spend)} />
             <Indicador icone={ShoppingBag} titulo="Vendas (Meta)" valor={fmtMoeda(t!.valor, moeda)}
-              apoio={`${fmtNum(t!.compras)} compras atribuídas`} />
+              apoio={`${fmtNum(t!.compras)} compras atribuídas`} extra={delta(t!.valor, ant?.valor, true)} />
             <Indicador icone={TrendingUp} titulo="ROAS (Meta)" valor={fmtRoas(t!.roas)}
-              apoio="retorno sobre o investido" destaque />
+              apoio="retorno sobre o investido" destaque extra={delta(t!.roas, ant?.roas, true)} />
             <Indicador icone={Target} titulo="CPA" valor={fmtMoeda(t!.cpa, moeda)}
-              apoio="custo por compra" />
+              apoio="custo por compra" extra={delta(t!.cpa, ant?.cpa, false)} />
             <Indicador icone={Eye} titulo="CPM" valor={fmtMoeda(t!.cpm, moeda)}
-              apoio="custo por mil impressões" />
+              apoio="custo por mil impressões" extra={delta(t!.cpm, ant?.cpm, false)} />
             <Indicador icone={MousePointerClick} titulo="CTR" valor={fmtPct(t!.ctr)}
-              apoio={`${fmtNum(t!.link_clicks)} cliques no link`} />
+              apoio={`${fmtNum(t!.link_clicks)} cliques no link`} extra={delta(t!.ctr, ant?.ctr, true)} />
           </div>
+
+          {/* ── A loja de verdade, ao lado do que a Meta atribui ── */}
+          {p && <LojaReal painel={p} moeda={moeda} filtrandoConta={actId !== "todas"} />}
+          {painel.error && (
+            <p className="text-xs text-destructive">
+              Não foi possível carregar o funil e a loja: {painel.error instanceof Error ? painel.error.message : String(painel.error)}
+            </p>
+          )}
 
           {/* ── Curva do período ── */}
           <Card>
@@ -282,7 +306,7 @@ export default function EcommerceAtribuicao() {
             </CardHeader>
             <CardContent className="h-[320px]">
               <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={data.serie} margin={{ top: 8, right: 8, bottom: 0, left: 8 }}>
+                <ComposedChart data={serie} margin={{ top: 8, right: 8, bottom: 0, left: 8 }}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" vertical={false} />
                   <XAxis dataKey="dia" tickFormatter={(d: string) => d.slice(8) + "/" + d.slice(5, 7)}
                     fontSize={11} tickLine={false} axisLine={false} />
@@ -297,10 +321,18 @@ export default function EcommerceAtribuicao() {
                   <Bar dataKey="spend" name="Investimento" fill="#f43f5e" radius={[3, 3, 0, 0]} />
                   <Line type="monotone" dataKey="valor" name="Vendas (Meta)"
                     stroke="#10b981" strokeWidth={2} dot={false} />
+                  {p && (
+                    <Line type="monotone" dataKey="loja" name="Faturamento real (loja)"
+                      stroke="#3b82f6" strokeWidth={2} strokeDasharray="5 4" dot={false} />
+                  )}
                 </ComposedChart>
               </ResponsiveContainer>
             </CardContent>
           </Card>
+
+          {/* ── Funil e destaques ── */}
+          {p && <Funil painel={p} moeda={moeda} />}
+          {p && <Destaques painel={p} moeda={moeda} />}
 
           {/* ── Drilldown ── */}
           <Card>

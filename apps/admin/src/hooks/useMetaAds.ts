@@ -75,7 +75,7 @@ export interface MetaAdRow {
 }
 
 /** Os brutos que se somam. Tudo o mais é conta. */
-interface Brutos {
+export interface Brutos {
   spend: number;
   impressions: number;
   link_clicks: number;
@@ -111,7 +111,7 @@ function somar(a: Brutos, r: MetaAdRow): Brutos {
  * quem lê entende "não dá para calcular"; um `0` no CPA seria lido como
  * "aquisição de graça", que é o oposto do que aconteceu.
  */
-function derivar(b: Brutos): MetaDerivadas {
+export function derivar(b: Brutos): MetaDerivadas {
   const div = (n: number, d: number) => (d > 0 ? n / d : null);
   return {
     ...b,
@@ -244,6 +244,91 @@ export function useMetaAds(period: MetaPeriod, custom?: MetaCustom, actId?: stri
   });
 }
 
+// ── O painel: funil, período anterior, loja real e anúncios (20261113) ──────
+
+export interface MetaAnuncio {
+  ad_id: string;
+  nome: string | null;
+  campanha: string | null;
+  conjunto: string | null;
+  /** OUTCOME_SALES, OUTCOME_ENGAGEMENT… — nulo nas linhas anteriores ao campo existir. */
+  objetivo: string | null;
+  spend: number;
+  impressions: number;
+  link_clicks: number;
+  compras: number;
+  valor: number;
+  carrinho: number;
+  dias: number;
+  ultimo_dia: string;
+}
+
+export interface MetaPainel {
+  periodo: { de: string; ate: string; ant_de: string; ant_ate: string };
+  atual: Brutos;
+  anterior: Brutos & { linhas: number };
+  funil: {
+    impressoes: number; cliques: number; pagina: number; produto: number;
+    carrinho: number; checkout: number; compras: number;
+  };
+  loja: {
+    faturamento: number;
+    pedidos: number;
+    faturamento_anterior: number;
+    serie: Array<{ dia: string; faturamento: number }>;
+  };
+  anuncios: MetaAnuncio[];
+}
+
+/**
+ * O que a tabela de campanhas não diz: comparação, funil, a loja de verdade e
+ * o destaque por anúncio. Tudo AGREGADO no banco (`carbo_meta_ads_painel`).
+ *
+ * ⚠️ `null` quando a função ainda não existe (front antes do SQL): as seções
+ * novas somem e o resto da tela segue igual — ausência não derruba a página.
+ */
+export function useMetaAdsPainel(period: MetaPeriod, actId?: string) {
+  const { from, to } = rangeDoPeriodo(period);
+  return useQuery({
+    queryKey: ["meta-ads", "painel", from, to, actId ?? "todas"],
+    staleTime: 2 * 60 * 1000,
+    queryFn: async (): Promise<MetaPainel | null> => {
+      const { data, error } = await supabase.rpc("carbo_meta_ads_painel" as never,
+        { p_de: from, p_ate: to, p_act: actId ?? null } as never);
+      if (error) {
+        if ((error as { code?: string }).code === "PGRST202") {
+          console.warn("[meta-ads] carbo_meta_ads_painel ainda não existe — rode a 20261113.");
+          return null;
+        }
+        throw error;
+      }
+      const p = data as unknown as MetaPainel;
+      const n = (v: unknown) => Number(v ?? 0) || 0;
+      // O jsonb devolve numeric como número, mas soma de bigint vem como texto
+      // em alguns drivers — normaliza num lugar só.
+      const brutos = (b: Record<string, unknown>): Brutos => ({
+        spend: n(b.spend), impressions: n(b.impressions), link_clicks: n(b.link_clicks),
+        compras: n(b.compras), valor: n(b.valor),
+      });
+      return {
+        ...p,
+        atual: brutos(p.atual as unknown as Record<string, unknown>),
+        anterior: { ...brutos(p.anterior as unknown as Record<string, unknown>), linhas: n(p.anterior?.linhas) },
+        funil: Object.fromEntries(Object.entries(p.funil).map(([k, v]) => [k, n(v)])) as MetaPainel["funil"],
+        loja: {
+          faturamento: n(p.loja.faturamento), pedidos: n(p.loja.pedidos),
+          faturamento_anterior: n(p.loja.faturamento_anterior),
+          serie: (p.loja.serie ?? []).map((s) => ({ dia: s.dia, faturamento: n(s.faturamento) })),
+        },
+        anuncios: (p.anuncios ?? []).map((a) => ({
+          ...a, spend: n(a.spend), impressions: n(a.impressions), link_clicks: n(a.link_clicks),
+          compras: n(a.compras), valor: n(a.valor), carrinho: n(a.carrinho), dias: n(a.dias),
+        })),
+      };
+    },
+  });
+}
+
 export interface MetaSyncLog {
   id: number;
   rodou_em: string;
@@ -317,13 +402,14 @@ export function useMetaContaEscolher() {
   return useMutation<void, Error, { act_id: string; usar: boolean }>({
     mutationFn: async ({ act_id, usar }) => {
       await chamarMeta({ acao: usar ? "usar" : "desligar", act_id });
-      // Conta nova já sai lendo os últimos 30 dias, senão a tela fica vazia
-      // até o próximo horário do cron.
-      if (usar) await chamarMeta({ dias: 30, source: "manual", act_id });
+      // Conta nova já sai lendo 90 dias (o teto da função): os 30 da tela e
+      // os 60 de antes, que são o "período anterior" da comparação. O cron
+      // relê só 30 — o que é mais velho fica gravado e não muda mais.
+      if (usar) await chamarMeta({ dias: 90, source: "manual", act_id });
     },
     onSuccess: (_d, { usar }) => {
       qc.invalidateQueries({ queryKey: ["meta-ads"] });
-      toast.success(usar ? "Conta ligada — os últimos 30 dias já foram lidos." : "A conta deixou de ser lida.");
+      toast.success(usar ? "Conta ligada — os últimos 90 dias já foram lidos." : "A conta deixou de ser lida.");
     },
     onError: (e) => toast.error(e.message),
   });
