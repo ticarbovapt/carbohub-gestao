@@ -49,11 +49,14 @@ begin
     raise exception 'Forma inesperada da is_carbo_sales (achei % ocorrências de ''carbo_crm'' = any). Nada foi mudado; mande o BLOCO 0 (a).', v_n;
   end if;
 
+  -- Mesma forma da tabela que a 20261081 criou (feito_em, funcao, definicao).
   create table if not exists public.carbo_backup_funcoes (
-    nome text not null, definicao text not null, guardado_em timestamptz not null default now()
+    feito_em  timestamptz not null default now(),
+    funcao    text not null,
+    definicao text not null
   );
-  insert into public.carbo_backup_funcoes (nome, definicao)
-  values ('licenciados.is_carbo_sales() · antes da 20261118', v_def);
+  insert into public.carbo_backup_funcoes (funcao, definicao)
+  values ('licenciados.is_carbo_sales', v_def);
 
   v_novo := regexp_replace(
     v_def,
