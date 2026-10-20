@@ -18,7 +18,7 @@ export function OSKanban({ items }: { items: OSView[] }) {
   const hoje = hojeLocal();
 
   return (
-    <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 md:grid md:grid-cols-3 md:gap-4 md:overflow-visible md:pb-0">
+    <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 md:grid md:grid-cols-3 md:items-start md:gap-4 md:overflow-visible md:pb-0">
       {STAGES.map((stage) => (
         <Coluna
           key={stage.id}
