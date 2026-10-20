@@ -74,18 +74,51 @@ function primeiraAcao(acoes: unknown): number {
 // aqui não pode desfazer o gasto já gravado, que é o número que importa. A
 // falha APARECE (linha `:extras` no log, com o erro), nunca some.
 
-/** Lê todas as páginas de um endpoint do Graph, com teto. */
-async function lerPaginas(url: string, teto: number): Promise<Record<string, unknown>[]> {
+/**
+ * Lê todas as páginas de um endpoint do Graph, com teto.
+ *
+ * ⚠️ "Please reduce the amount of data you're asking for" (medido em
+ * 20/10/2026, na primeira rodada dos extras) não é limite de cota: a Meta
+ * recusa a PÁGINA por ficar pesada demais — o criativo expandido pesa muito
+ * por linha. A resposta é pedir a MESMA página com metade do `limit`, até um
+ * piso; abaixo dele o erro sobe, porque aí o problema não é o tamanho.
+ */
+const PEDE_MENOS = /reduce the amount of data/i;
+async function lerPaginas(url: string, teto: number, piso = 10): Promise<Record<string, unknown>[]> {
   const linhas: Record<string, unknown>[] = [];
   let proxima: string | null = url;
   for (let pagina = 0; proxima && pagina < teto; pagina++) {
     const resp: Response = await fetch(proxima);
     const json = await resp.json().catch(() => ({}));
-    if (!resp.ok || json?.error) throw new Error(`Graph respondeu: ${json?.error?.message ?? `HTTP ${resp.status}`}`);
+    if (!resp.ok || json?.error) {
+      const msg: string = json?.error?.message ?? `HTTP ${resp.status}`;
+      const u = new URL(proxima);
+      const limite = Number(u.searchParams.get("limit") ?? 25);
+      if (PEDE_MENOS.test(msg) && limite > piso) {
+        u.searchParams.set("limit", String(Math.max(piso, Math.floor(limite / 2))));
+        proxima = u.toString();
+        pagina--; // a mesma página, menor — não conta no teto
+        continue;
+      }
+      throw new Error(`Graph respondeu: ${msg}`);
+    }
     linhas.push(...((json.data ?? []) as Record<string, unknown>[]));
     proxima = (json.paging?.next as string | undefined) ?? null;
   }
   return linhas;
+}
+
+/** Corta [inicio, ate] em janelas de `dias` (datas ISO, inclusivas). */
+function janelas(inicio: string, ate: string, dias: number): Array<[string, string]> {
+  const out: Array<[string, string]> = [];
+  const fim = new Date(`${ate}T12:00:00Z`);
+  for (let d = new Date(`${inicio}T12:00:00Z`); d <= fim; ) {
+    const ini = d.toISOString().slice(0, 10);
+    const f = new Date(d); f.setUTCDate(f.getUTCDate() + dias - 1);
+    out.push([ini, (f < fim ? f : fim).toISOString().slice(0, 10)]);
+    d = new Date(f); d.setUTCDate(d.getUTCDate() + 1);
+  }
+  return out;
 }
 
 // As três perguntas de "quem compra e onde". Nível de CONTA, por dia: por
@@ -100,56 +133,80 @@ const SEGMENTOS: Array<{ dimensao: string; breakdowns: string; chaves: [string, 
 
 async function sincronizarExtras(
   admin: ReturnType<typeof createClient>, token: string, actId: string, inicio: string, ate: string,
-): Promise<{ criativos: number; segmentos: number }> {
+): Promise<{ criativos: number; segmentos: number; erros: string[] }> {
+  // ⚠️ QUATRO partes independentes (criativos + três dimensões): uma recusada
+  // não impede as outras, e cada falha entra na lista com o NOME da parte.
+  // Medido em 20/10/2026: com um `throw` só, a recusa de uma parte deixou a
+  // tela com miniatura e idade, sem região, e o aviso não dizia qual faltou.
+  const erros: string[] = [];
+  let criativos = 0;
+  let segmentos = 0;
+
   // 1. O criativo de cada anúncio: miniatura, imagem, texto e status.
   //    `thumbnail_width/height` pede a miniatura maior (o padrão é 64 px).
   //    ⚠️ A URL da Meta é assinada e VENCE em dias — por isso é relida a cada
   //    rodada, em vez de guardada uma vez.
-  const ads = await lerPaginas(`${GRAPH}/${actId}/ads?${new URLSearchParams({
-    fields: "id,name,effective_status,creative.thumbnail_width(320).thumbnail_height(320){id,thumbnail_url,image_url,object_type,title,body}",
-    limit: "200", access_token: token,
-  })}`, 25);
-  const criativos = ads.map((a) => {
-    const c = (a.creative ?? {}) as Record<string, unknown>;
-    return {
-      ad_id: String(a.id ?? ""), act_id: actId, nome: (a.name as string) ?? null,
-      status: (a.effective_status as string) ?? null,
-      thumbnail_url: (c.thumbnail_url as string) ?? null, image_url: (c.image_url as string) ?? null,
-      tipo: (c.object_type as string) ?? null, titulo: (c.title as string) ?? null, texto: (c.body as string) ?? null,
-      atualizado_em: new Date().toISOString(),
-    };
-  }).filter((c) => c.ad_id);
-  for (let i = 0; i < criativos.length; i += 500) {
-    const { error } = await admin.from("meta_ads_criativos").upsert(criativos.slice(i, i + 500), { onConflict: "ad_id" });
-    if (error) throw new Error(`criativos: ${error.message}`);
+  //    ⚠️ `limit` 50: o criativo expandido é pesado e 200 por página foi
+  //    recusado. O `lerPaginas` ainda divide sozinho se a Meta reclamar.
+  try {
+    const ads = await lerPaginas(`${GRAPH}/${actId}/ads?${new URLSearchParams({
+      fields: "id,name,effective_status,creative.thumbnail_width(320).thumbnail_height(320){id,thumbnail_url,image_url,object_type,title,body}",
+      limit: "50", access_token: token,
+    })}`, 60);
+    const linhas = ads.map((a) => {
+      const c = (a.creative ?? {}) as Record<string, unknown>;
+      return {
+        ad_id: String(a.id ?? ""), act_id: actId, nome: (a.name as string) ?? null,
+        status: (a.effective_status as string) ?? null,
+        thumbnail_url: (c.thumbnail_url as string) ?? null, image_url: (c.image_url as string) ?? null,
+        tipo: (c.object_type as string) ?? null, titulo: (c.title as string) ?? null, texto: (c.body as string) ?? null,
+        atualizado_em: new Date().toISOString(),
+      };
+    }).filter((c) => c.ad_id);
+    for (let i = 0; i < linhas.length; i += 500) {
+      const { error } = await admin.from("meta_ads_criativos").upsert(linhas.slice(i, i + 500), { onConflict: "ad_id" });
+      if (error) throw new Error(error.message);
+    }
+    criativos = linhas.length;
+  } catch (e) {
+    erros.push(`criativos: ${e instanceof Error ? e.message : String(e)}`);
   }
 
-  // 2. Os segmentos, por dia, na MESMA janela do insight principal.
-  let segmentos = 0;
+  // 2. Os segmentos, por dia, na MESMA janela do insight principal — mas
+  //    pedidos em janelas de 15 dias: 90 dias × região (~27 estados) num
+  //    pedido só é o que a Meta recusa por tamanho.
   for (const seg of SEGMENTOS) {
-    const linhas = await lerPaginas(`${GRAPH}/${actId}/insights?${new URLSearchParams({
-      level: "account", time_increment: "1", breakdowns: seg.breakdowns,
-      time_range: JSON.stringify({ since: inicio, until: ate }),
-      fields: "spend,impressions,inline_link_clicks,actions,action_values,date_start",
-      limit: "500", access_token: token,
-    })}`, 40);
-    const gravar = linhas.map((r) => ({
-      dia: r.date_start, act_id: actId, dimensao: seg.dimensao,
-      chave1: String(r[seg.chaves[0]] ?? "desconhecido"),
-      chave2: seg.chaves[1] ? String(r[seg.chaves[1]] ?? "desconhecido") : "",
-      spend: Number(r.spend ?? 0) || 0, impressions: Number(r.impressions ?? 0) || 0,
-      link_clicks: Number(r.inline_link_clicks ?? 0) || 0,
-      compras: primeiraAcao(r.actions), valor: primeiraAcao(r.action_values),
-      raw: r, sincronizado_em: new Date().toISOString(),
-    }));
-    for (let i = 0; i < gravar.length; i += 500) {
-      const { error } = await admin.from("meta_ads_segmentos")
-        .upsert(gravar.slice(i, i + 500), { onConflict: "dia,act_id,dimensao,chave1,chave2" });
-      if (error) throw new Error(`segmentos ${seg.dimensao}: ${error.message}`);
+    try {
+      let n = 0;
+      for (const [de, ateJanela] of janelas(inicio, ate, 15)) {
+        const linhas = await lerPaginas(`${GRAPH}/${actId}/insights?${new URLSearchParams({
+          level: "account", time_increment: "1", breakdowns: seg.breakdowns,
+          time_range: JSON.stringify({ since: de, until: ateJanela }),
+          fields: "spend,impressions,inline_link_clicks,actions,action_values,date_start",
+          limit: "200", access_token: token,
+        })}`, 40);
+        const gravar = linhas.map((r) => ({
+          dia: r.date_start, act_id: actId, dimensao: seg.dimensao,
+          chave1: String(r[seg.chaves[0]] ?? "desconhecido"),
+          chave2: seg.chaves[1] ? String(r[seg.chaves[1]] ?? "desconhecido") : "",
+          spend: Number(r.spend ?? 0) || 0, impressions: Number(r.impressions ?? 0) || 0,
+          link_clicks: Number(r.inline_link_clicks ?? 0) || 0,
+          compras: primeiraAcao(r.actions), valor: primeiraAcao(r.action_values),
+          raw: r, sincronizado_em: new Date().toISOString(),
+        }));
+        for (let i = 0; i < gravar.length; i += 500) {
+          const { error } = await admin.from("meta_ads_segmentos")
+            .upsert(gravar.slice(i, i + 500), { onConflict: "dia,act_id,dimensao,chave1,chave2" });
+          if (error) throw new Error(error.message);
+        }
+        n += gravar.length;
+      }
+      segmentos += n;
+    } catch (e) {
+      erros.push(`${seg.dimensao}: ${e instanceof Error ? e.message : String(e)}`);
     }
-    segmentos += gravar.length;
   }
-  return { criativos: criativos.length, segmentos };
+  return { criativos, segmentos, erros };
 }
 
 function diaISO(d: Date): string {
@@ -385,18 +442,22 @@ Deno.serve(async (req: Request): Promise<Response> => {
         resultado.push({ act_id: conta.act_id, linhas: gravadas, ok: true });
 
         // Os extras numa tentativa À PARTE: o gasto acima já está gravado.
+        // ⚠️ A linha `:extras` é gravada SEMPRE, ok ou não: é ela que diz à
+        // tela que a falha anterior dos extras já passou.
         const t1 = Date.now();
+        let ex: { criativos: number; segmentos: number; erros: string[] };
         try {
-          const ex = await sincronizarExtras(admin, token, conta.act_id, inicio, diaISO(ate));
-          console.log(`[meta-ads-sync] ${conta.act_id}: ${ex.criativos} criativos, ${ex.segmentos} linhas de segmento.`);
+          ex = await sincronizarExtras(admin, token, conta.act_id, inicio, diaISO(ate));
         } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          console.error(`[meta-ads-sync] ${conta.act_id} extras falharam:`, msg);
-          await admin.from("meta_ads_sync_log").insert({
-            origem: `${origem}:extras`, act_id: conta.act_id, desde: inicio, ate: diaISO(ate),
-            linhas: 0, ok: false, erro: `criativo/segmentos: ${msg}`, duracao_ms: Date.now() - t1,
-          });
+          ex = { criativos: 0, segmentos: 0, erros: [e instanceof Error ? e.message : String(e)] };
         }
+        console.log(`[meta-ads-sync] ${conta.act_id}: ${ex.criativos} criativos, ${ex.segmentos} linhas de segmento.`);
+        if (ex.erros.length) console.error(`[meta-ads-sync] ${conta.act_id} extras com falha:`, ex.erros.join(" | "));
+        await admin.from("meta_ads_sync_log").insert({
+          origem: `${origem}:extras`, act_id: conta.act_id, desde: inicio, ate: diaISO(ate),
+          linhas: ex.criativos + ex.segmentos, ok: ex.erros.length === 0,
+          erro: ex.erros.length ? ex.erros.join(" | ") : null, duracao_ms: Date.now() - t1,
+        });
 
       } catch (e) {
         // ⚠️ Uma conta com problema (token sem permissão nela, conta desativada

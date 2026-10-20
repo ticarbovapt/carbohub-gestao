@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
@@ -171,7 +171,19 @@ export default function EcommerceAtribuicao() {
 
   const moeda = data?.moeda ?? "BRL";
   const t: MetaDerivadas | undefined = data?.total;
-  const ultimoErro = logs.data?.find((l) => !l.ok);
+  // ⚠️ Só a falha que AINDA vale: a última rodada de cada tipo (gasto, e os
+  // extras de criativo/segmento) e de cada conta. Uma falha seguida de rodada
+  // boa do mesmo tipo já passou — mostrá-la seria erro velho com cara de atual.
+  const ultimoErro = useMemo(() => {
+    const visto = new Set<string>();
+    for (const l of logs.data ?? []) {
+      const k = `${l.act_id ?? ""}|${l.origem.endsWith(":extras") ? "extras" : "gasto"}`;
+      if (visto.has(k)) continue;
+      visto.add(k);
+      if (!l.ok) return l;
+    }
+    return undefined;
+  }, [logs.data]);
 
   // O período anterior, pela MESMA conta do total (`derivar`). Sem dado antes
   // (conta ligada há pouco), a comparação diz isso em vez de mostrar −100%.
