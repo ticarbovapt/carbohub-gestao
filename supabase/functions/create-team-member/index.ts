@@ -17,9 +17,23 @@ const ALLOWED_ORIGINS = [
   "http://localhost:3000",
 ];
 
+// Lista fixa OU qualquer https://*.carbohub.com.br (a fronteira do SSO). A tela
+// de Usuários mudou do Admin para o TI em 20/10/2026, e o TI não estava na
+// lista: o navegador recusaria a resposta e a tela diria só "Failed to fetch".
+// ⚠️ CORS não é a porta: quem decide é o JWT + as flags carbo_admin/carbo_ti.
+function isAllowedOrigin(origin: string): boolean {
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  try {
+    const { protocol, hostname } = new URL(origin);
+    return protocol === "https:" && hostname.endsWith(".carbohub.com.br");
+  } catch {
+    return false;
+  }
+}
+
 function getCorsHeaders(req: Request) {
   const origin = req.headers.get("origin") || "";
-  const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  const allowedOrigin = isAllowedOrigin(origin) ? origin : ALLOWED_ORIGINS[0];
   return {
     "Access-Control-Allow-Origin": allowedOrigin,
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS, PUT, DELETE",

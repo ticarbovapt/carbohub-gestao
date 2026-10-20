@@ -182,7 +182,7 @@ export default function ChatAdocao() {
             <TabsContent value="pendencias" className="mt-2">
               {onboarding.isLoading ? <div className="p-4"><Skeleton className="h-40 w-full" /></div> : (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                  <table className="w-full min-w-[600px] text-sm">
                     <thead className="text-left text-xs text-muted-foreground border-y">
                       <tr>
                         <th className="px-4 py-2 font-medium">Pessoa</th>
@@ -232,7 +232,7 @@ export default function ChatAdocao() {
               </div>
               {inactive.isLoading ? <div className="p-4"><Skeleton className="h-40 w-full" /></div> : (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                  <table className="w-full min-w-[520px] text-sm">
                     <thead className="text-left text-xs text-muted-foreground border-y">
                       <tr>
                         <th className="px-4 py-2 font-medium">Pessoa</th>

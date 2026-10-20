@@ -12,6 +12,13 @@ import Vender from "./pages/Vender";
 import Chat from "./pages/Chat";
 import ChatAdocao from "./pages/ChatAdocao";
 import AcademyAcessos from "./pages/AcademyAcessos";
+// Vindas do Carbo Admin (20/10/2026) — as MESMAS telas, byte a byte.
+import Users from "./pages/Users";
+import Structure from "./pages/Structure";
+import AvisoVendaOnline from "./pages/AvisoVendaOnline";
+import Auditoria from "./pages/Auditoria";
+import Acompanhamento from "./pages/Acompanhamento";
+import UltimoAcesso from "./pages/UltimoAcesso";
 import { isCarbohubDomain, goToHubLogin } from "@/lib/sso";
 import { PaginaNaoEncontrada } from "@carbo/shell";
 
@@ -38,6 +45,12 @@ export default function App() {
         <Route path="/chat" element={<Chat />} />
         <Route path="/chat/adocao" element={<ChatAdocao />} />
         <Route path="/academy/acessos" element={<AcademyAcessos />} />
+        <Route path="/usuarios" element={<Users />} />
+        <Route path="/estrutura" element={<Structure />} />
+        <Route path="/ecommerce/avisos-de-venda" element={<AvisoVendaOnline />} />
+        <Route path="/auditoria" element={<Auditoria />} />
+        <Route path="/acompanhamento" element={<Acompanhamento />} />
+        <Route path="/ultimo-acesso" element={<UltimoAcesso />} />
         <Route path="/perfil" element={<Profile />} />
         <Route path="/equipe" element={<MinhaEquipe />} />
         {/* Rota inexistente: diz que não existe, em vez de cair na home calado. */}
