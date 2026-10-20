@@ -3,12 +3,13 @@ import { toast } from "sonner";
 import {
   Loader2, Save, X, Pencil, KeyRound, Copy, Trash2, AlertTriangle,
   ArrowLeft, Crown, Mail, Building2, Briefcase, UserCog, Target,
+  Lock, Unlock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import { SYSTEMS, brandOf } from "@/lib/interfaces";
-import { useDeptFunctions, useUpdateUser, useSetIsVendedor, useResetPassword, useDeleteUser, type AdminProfile } from "@/hooks/useAdminUsers";
+import { useDeptFunctions, useUpdateUser, useSetIsVendedor, useResetPassword, useDeleteUser, useBloquearUsuario, useUsuariosBloqueados, type AdminProfile } from "@/hooks/useAdminUsers";
 import { useDepartments } from "@/hooks/useStructure";
 
 const DEFAULT_PASSWORD = "Carbo@2026";
@@ -42,12 +43,17 @@ export function EditUserDialog({ user, approved, onClose }: Props) {
   const setIsVendedor = useSetIsVendedor();
   const resetPwd = useResetPassword();
   const deleteUser = useDeleteUser();
+  const bloquear_ = useBloquearUsuario();
+  const { data: bloqueados = new Set<string>() } = useUsuariosBloqueados();
+  const estaBloqueado = !!user && bloqueados.has(user.id);
   const { data: DEPTS = [] } = useDepartments();
 
   const [mode, setMode] = useState<"view" | "edit">("view");
   const [confirmReset, setConfirmReset] = useState(false);
   const [resetDone, setResetDone] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmBloqueio, setConfirmBloqueio] = useState(false);
+  const [motivoBloqueio, setMotivoBloqueio] = useState("");
 
   const [fullName, setFullName] = useState("");
   const [department, setDepartment] = useState("");
@@ -139,6 +145,22 @@ export function EditUserDialog({ user, approved, onClose }: Props) {
       onClose();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao apagar usuário");
+    }
+  }
+
+  async function handleBloqueio(bloquear: boolean) {
+    if (!user) return;
+    try {
+      await bloquear_.mutateAsync({ userId: user.id, bloquear, motivo: motivoBloqueio });
+      toast.success(
+        bloquear
+          ? "Acesso bloqueado. Os dados ficam no sistema e a senha não foi alterada."
+          : "Acesso liberado. A pessoa entra com a MESMA senha de antes.",
+      );
+      setConfirmBloqueio(false);
+      setMotivoBloqueio("");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao alterar o bloqueio");
     }
   }
 
@@ -383,6 +405,76 @@ export function EditUserDialog({ user, approved, onClose }: Props) {
                     ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando...</>
                     : <><Save className="h-4 w-4" /> Salvar</>}
                 </Button>
+              </div>
+
+              {/* ── Bloquear acesso — a alternativa REVERSÍVEL ao apagar ──────
+                  ⚠️ Fica ACIMA da zona de perigo de propósito: quem chega aqui
+                  querendo "tirar o acesso de quem saiu" encontra primeiro a
+                  opção que não destrói nada. Antes só existia o botão
+                  irreversível, e ele era usado por falta de outro. */}
+              <div className="mt-2 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
+                {estaBloqueado ? (
+                  <div className="space-y-2.5">
+                    <p className="flex items-start gap-2 text-sm text-amber-600">
+                      <Lock className="h-4 w-4 mt-0.5 shrink-0" />
+                      <span>
+                        <span className="font-semibold">Acesso bloqueado.</span> Os dados continuam
+                        no sistema. Ao desbloquear, a pessoa entra com a <span className="font-semibold">mesma
+                        senha</span> — ela nunca foi alterada.
+                      </span>
+                    </p>
+                    <Button variant="outline" size="sm" className="w-full"
+                      onClick={() => handleBloqueio(false)} disabled={bloquear_.isPending}>
+                      {bloquear_.isPending
+                        ? <><Loader2 className="h-4 w-4 animate-spin" /> Desbloqueando…</>
+                        : <><Unlock className="h-4 w-4" /> Desbloquear acesso</>}
+                    </Button>
+                  </div>
+                ) : !confirmBloqueio ? (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmBloqueio(true)}
+                    className="flex items-center gap-2 text-sm font-medium text-amber-600 hover:underline"
+                  >
+                    <Lock className="h-4 w-4" /> Bloquear acesso (mantém os dados)
+                  </button>
+                ) : (
+                  <div className="space-y-2.5">
+                    <p className="flex items-start gap-2 text-sm text-amber-600">
+                      <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                      <span>
+                        <span className="font-semibold">{user.full_name || user.username}</span> deixa
+                        de entrar em <span className="font-semibold">todos</span> os sistemas do
+                        CarboHub. Nada é apagado, e dá para desfazer a qualquer momento.
+                      </span>
+                    </p>
+                    {/* ⚠️ Sessão aberta não cai na hora, e isso precisa ser DITO
+                        aqui: o GoTrue confere o banimento no login e na
+                        renovação do token, que é de 1 h. Descobrir isso depois
+                        é pior que ler agora. */}
+                    <p className="text-[11px] text-muted-foreground">
+                      Quem estiver com o sistema aberto neste instante continua até 1 h.
+                      Se for urgente, use também <span className="font-medium">Redefinir senha</span>.
+                    </p>
+                    <Input
+                      placeholder="Motivo (opcional) — ex.: desligamento"
+                      value={motivoBloqueio}
+                      onChange={(e) => setMotivoBloqueio(e.target.value)}
+                    />
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" className="flex-1"
+                        onClick={() => setConfirmBloqueio(false)} disabled={bloquear_.isPending}>
+                        Cancelar
+                      </Button>
+                      <Button size="sm" className="flex-1 bg-amber-600 hover:bg-amber-700 text-white"
+                        onClick={() => handleBloqueio(true)} disabled={bloquear_.isPending}>
+                        {bloquear_.isPending
+                          ? <><Loader2 className="h-4 w-4 animate-spin" /> Bloqueando…</>
+                          : <><Lock className="h-4 w-4" /> Bloquear acesso</>}
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Zona de perigo — apagar usuário e liberar a vaga */}

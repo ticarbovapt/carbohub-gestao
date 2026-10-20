@@ -673,7 +673,7 @@ Quem decide o que é venda nova é o **banco**, e só ele:
    ali era o time interno inteiro (`notify_time_interno`); com 500+ vendas por
    semana o dono do processo pediu: *"ninguém vai ser ligado a não ser
    manualmente"*. O gatilho chama `notify_venda_online`, que lê
-   `carbo_aviso_venda_online`; a tela é **Admin → E-commerce → Quem recebe a
+   `carbo_aviso_venda_online`; a tela é **TI → Usuários e acessos → Quem recebe a
    venda** (`/ecommerce/avisos-de-venda`, RPCs `carbo_aviso_venda_online_lista`
    / `_definir`, flag do Admin).
    ⚠️ **"Head" é a AJUDA para escolher, nunca a regra**: a tela marca
@@ -2991,13 +2991,42 @@ confere quem chama. Senha de reset ainda é fixa (`Carbo@2026`).
 4. **Mudança em `packages/`** → avise que afeta vários apps antes de aplicar.
 5. **Cada app é autossuficiente.** `apps/crm` tem build/lockfile próprio; NÃO mexer no `package.json` da raiz (3 lockfiles frágeis — risco ao deploy do controle).
 
+### Usuários, estrutura, aviso de venda e Auditoria moram no TI (20/10/2026)
+Pedido do dono do processo: *"mesma tela, mesma lógica, idêntico, nada novo,
+nada se perde"*. Saíram do **Admin** e entraram no **TI**, byte a byte:
+
+```
+/usuarios                    Usuários (no Admin era a home "/")
+/estrutura                   Departamentos e funções
+/ecommerce/avisos-de-venda   Quem recebe a venda
+/auditoria · /acompanhamento · /ultimo-acesso · /chat/adocao
+```
+
+1. ⚠️ **O Admin REDIRECIONA os endereços antigos** (`IrParaTi`, com a query) —
+   favorito e link mandado a alguém continuam abrindo. A home do Admin virou a
+   Visão Geral (`/dashboards/comercial`).
+2. ⚠️ **Os arquivos SAÍRAM do Admin** (páginas, `EditUserDialog`,
+   `useAdminUsers`, `useStructure`, `lib/interfaces.ts`…): cópia morta é cópia
+   que diverge. Não há mais `interfaces.ts` no Admin — a caixinha é a do TI.
+3. ⚠️ **Duas portas do banco perguntavam pela flag do APP Admin**, e no TI
+   recusariam quem só tem `carbo_ti`: `carbo_aviso_venda_online_lista/_definir`
+   e `chat_adoption_can_view`. A `20261117` SOMOU `carbo_ti` (o Admin continua
+   passando). As outras telas perguntam pelo PERFIL (gestor/CEO/admin) e valem
+   em qualquer app.
+4. ⚠️ **`create-team-member` só aceitava o Admin no CORS** — no TI a tela de
+   Usuários diria "Failed to fetch". Hoje aceita qualquer
+   `https://*.carbohub.com.br`. A porta de verdade continua sendo o JWT + as
+   flags `carbo_admin`/`carbo_ti`.
+5. ⚠️ **Quem tinha só o Admin perdeu essas telas** — o BLOCO A da `20261117`
+   lista quem (`tem_ti = false`).
+
 ### App novo no hub — os QUATRO lugares que precisam aprender a interface
 Criar a pasta do app é a parte fácil. O que faz um app existir é a flag em
 `profiles.allowed_interfaces` (ex.: `carbo_atendimento`) ser reconhecida em
 quatro lugares — e **cada um falha calado de um jeito diferente**:
 
 ```
-apps/{admin,ti,<novo>}/src/lib/interfaces.ts   a caixinha na tela do Admin
+apps/ti/src/lib/interfaces.ts                  a caixinha na tela de Usuários (no TI desde 20/10/2026)
 packages/shell/src/apps.ts                     o seletor de apps
 carbohub-landing/src/lib/apps.ts               o azulejo do Hub (OUTRO repo)
 carbo_interface_e_interna()  (migração)        quem é "time interno"
@@ -5065,7 +5094,7 @@ as telas entram quando o dono do processo descrever a lógica.
 ```
 apps/prevendas/                      cópia do atendimento SEM Conversas/Esteira/Mensagens
 packages/shell/src/apps.ts           seletor (antes do Sales: pré-venda → venda)
-apps/{admin,ti}/src/lib/interfaces.ts a caixinha de acesso
+apps/ti/src/lib/interfaces.ts        a caixinha de acesso
 carbohub-landing/src/lib/apps.ts     o azulejo do Hub (OUTRO repo)
 supabase/migrations/20261046…        carbo_interface_e_interna: É time interno
 ```

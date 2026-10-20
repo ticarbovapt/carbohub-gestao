@@ -1,9 +1,8 @@
+import { useEffect } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Layout } from "./components/Layout";
 import Login from "./pages/Login";
-import Users from "./pages/Users";
-import Structure from "./pages/Structure";
 import Profile from "./pages/Profile";
 import BugReports from "./pages/BugReports";
 import MinhaEquipe from "./pages/MinhaEquipe";
@@ -12,11 +11,9 @@ import EcommerceMetas from "./pages/EcommerceMetas";
 import EsteiraOnline from "./pages/EsteiraOnline";
 import MensagensCliente from "./pages/MensagensCliente";
 import EcommerceAtribuicao from "./pages/EcommerceAtribuicao";
-import AvisoVendaOnline from "./pages/AvisoVendaOnline";
 import MapaConquista from "./pages/MapaConquista";
 import MetaConfig from "./pages/MetaConfig";
 import Vender from "./pages/Vender";
-import UltimoAcesso from "./pages/UltimoAcesso";
 import DashboardsLojas from "./pages/DashboardsLojas";
 import DashboardsFranqueados from "./pages/DashboardsFranqueados";
 import DashboardsComercial from "./pages/DashboardsComercial";
@@ -28,13 +25,19 @@ import Pdvs from "./pages/Pdvs";
 import DashboardsMetas from "./pages/DashboardsMetas";
 import DashboardsEstrategico from "./pages/DashboardsEstrategico";
 import Suprimentos from "./pages/Suprimentos";
-import Auditoria from "./pages/Auditoria";
-import Acompanhamento from "./pages/Acompanhamento";
 import Chat from "./pages/Chat";
-import ChatAdocao from "./pages/ChatAdocao";
 import CallTest from "./pages/CallTest";
 import { isCarbohubDomain, goToHubLogin } from "@/lib/sso";
 import { PaginaNaoEncontrada } from "@carbo/shell";
+
+// Usuários, Departamentos e funções, Quem recebe a venda e a Auditoria moram no
+// Carbo TI desde 20/10/2026 (as mesmas telas). O endereço antigo leva para lá,
+// com a query junto — favorito e link mandado a alguém continuam abrindo.
+const TI_URL = "https://ti.carbohub.com.br";
+function IrParaTi({ para }: { para: string }) {
+  useEffect(() => { window.location.replace(`${TI_URL}${para}${window.location.search}`); }, [para]);
+  return null;
+}
 
 // Login é ÚNICO no Hub: /login direto em produção é redirecionado pra lá.
 // Em dev/preview (fora do domínio) mostra o login local standalone.
@@ -51,8 +54,10 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<LoginRoute />} />
       <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-        <Route path="/" element={<Users />} />
-        <Route path="/estrutura" element={<Structure />} />
+        {/* A home era Usuários; agora é a Visão Geral, o primeiro item do menu. */}
+        <Route path="/" element={<Navigate to="/dashboards/comercial" replace />} />
+        <Route path="/usuarios" element={<IrParaTi para="/usuarios" />} />
+        <Route path="/estrutura" element={<IrParaTi para="/estrutura" />} />
         <Route path="/perfil" element={<Profile />} />
         <Route path="/bugs" element={<BugReports />} />
         <Route path="/equipe" element={<MinhaEquipe />} />
@@ -63,14 +68,14 @@ export default function App() {
         <Route path="/ecommerce/esteira" element={<EsteiraOnline />} />
         <Route path="/ecommerce/mensagens" element={<MensagensCliente />} />
         <Route path="/ecommerce/anuncios" element={<EcommerceAtribuicao />} />
-        <Route path="/ecommerce/avisos-de-venda" element={<AvisoVendaOnline />} />
+        <Route path="/ecommerce/avisos-de-venda" element={<IrParaTi para="/ecommerce/avisos-de-venda" />} />
         <Route path="/metas/configurar" element={<MetaConfig />} />
         <Route path="/vender" element={<Vender />} />
-        <Route path="/ultimo-acesso" element={<UltimoAcesso />} />
-        <Route path="/auditoria" element={<Auditoria />} />
-        <Route path="/acompanhamento" element={<Acompanhamento />} />
+        <Route path="/ultimo-acesso" element={<IrParaTi para="/ultimo-acesso" />} />
+        <Route path="/auditoria" element={<IrParaTi para="/auditoria" />} />
+        <Route path="/acompanhamento" element={<IrParaTi para="/acompanhamento" />} />
         <Route path="/chat" element={<Chat />} />
-        <Route path="/chat/adocao" element={<ChatAdocao />} />
+        <Route path="/chat/adocao" element={<IrParaTi para="/chat/adocao" />} />
         <Route path="/call-test" element={<CallTest />} />
 
         {/* Dashboards espelhados dos sistemas do ecossistema */}

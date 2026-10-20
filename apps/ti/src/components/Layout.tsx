@@ -2,7 +2,7 @@ import { useMemo, useState, useRef } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import {
   LifeBuoy, MessagesSquare, ShoppingCart, Bug, Gauge, Users as UsersIcon, LayoutDashboard, Megaphone,
-  GraduationCap,
+  GraduationCap, ListTree, BellRing, ShieldCheck, Activity,
 } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -50,8 +50,21 @@ export function Layout() {
     { label: "TI", items: [
         { to: "/bugs", label: "Bugs e sugestões", icon: Bug },
         { to: "/status", label: "Avisos de status", icon: Megaphone },
-        { to: "/chat/adocao", label: "Adoção do Carbo Chat", icon: Gauge },
         { to: "/academy/acessos", label: "Carbo Academy — acessos", icon: GraduationCap, badge: <AcademyBadge /> },
+    ] },
+    // Vindas do Carbo Admin (20/10/2026): as mesmas telas, nos mesmos endereços
+    // (menos Usuários, que lá era a home). O Admin redireciona os endereços
+    // antigos para cá.
+    { label: "Usuários e acessos", items: [
+        { to: "/usuarios", label: "Usuários", icon: UsersIcon },
+        { to: "/estrutura", label: "Departamentos e funções", icon: ListTree },
+        { to: "/ecommerce/avisos-de-venda", label: "Quem recebe a venda", icon: BellRing },
+    ] },
+    { label: "Auditoria", items: [
+        { to: "/auditoria", label: "Central de Auditoria", icon: ShieldCheck },
+        { to: "/acompanhamento", label: "Acompanhamento Comercial", icon: Gauge },
+        { to: "/ultimo-acesso", label: "Último acesso", icon: Activity },
+        { to: "/chat/adocao", label: "Adoção do Carbo Chat", icon: Gauge },
     ] },
     { label: "Ferramentas", items: [
         { to: "/vender", label: "Vender", icon: ShoppingCart },

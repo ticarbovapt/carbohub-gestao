@@ -1,9 +1,9 @@
 import { useMemo, useState, useRef } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import {
-  Users as UsersIcon, ListTree, Globe, Target, Activity,
-  Store, Building2, TrendingUp, LineChart, Trophy, BarChart3, BadgePercent, Tags, ShieldCheck, MessagesSquare,
-  Gauge, Boxes, MapPin, Truck, Map as MapIcon, Megaphone, BellRing,
+  Globe, Target,
+  Store, Building2, TrendingUp, LineChart, Trophy, BarChart3, BadgePercent, Tags, MessagesSquare,
+  Boxes, MapPin, Truck, Map as MapIcon, Megaphone,
 } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -43,7 +43,6 @@ export function Layout() {
   // Navegação padronizada: topo = item principal + Carbo Chat; depois seções por domínio.
   const sections: ShellNavSection[] = [
     { items: [
-        { to: "/", label: "Usuários", icon: UsersIcon, end: true },
         { to: "/chat", label: "Carbo Chat", icon: MessagesSquare, badge: <ChatBadge /> },
     ] },
     { label: "Dashboards", items: [
@@ -67,17 +66,9 @@ export function Layout() {
         { to: "/ecommerce/esteira", label: "Esteira do On-line", icon: Truck },
         { to: "/ecommerce/metas", label: "Acompanhamento de Metas", icon: Target },
         { to: "/ecommerce/anuncios", label: "Anúncios da Meta", icon: Megaphone },
-        { to: "/ecommerce/avisos-de-venda", label: "Quem recebe a venda", icon: BellRing },
     ] },
     { label: "Configurações", items: [
-        { to: "/estrutura", label: "Departamentos e funções", icon: ListTree },
         { to: "/metas/configurar", label: "Configurar Metas", icon: Target },
-    ] },
-    { label: "Auditoria", items: [
-        { to: "/auditoria", label: "Central de Auditoria", icon: ShieldCheck },
-        { to: "/acompanhamento", label: "Acompanhamento Comercial", icon: Gauge },
-        { to: "/ultimo-acesso", label: "Último acesso", icon: Activity },
-        { to: "/chat/adocao", label: "Adoção do Carbo Chat", icon: Gauge },
     ] },
   ];
 
