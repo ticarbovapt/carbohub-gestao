@@ -496,10 +496,10 @@ boa é a da nota fiscal (`carboze_orders.customer_name`), não a da planilha.
 "existe na planilha e ainda não vende". Marcar de ativo infla a contagem de PDVs
 ativos, que é o número que a diretoria olha.
 
-⚠️ **`pages/Pdvs.tsx` é byte a byte idêntico entre `crm` e `admin`** (a ponte de
-auth `isGestor`/`canAdmin` é o que permite isso). Editou um, copie o outro na
-MESMA tarefa — é a lista de arquivos replicados que ninguém mantém que produz
-divergência silenciosa, como no `quotePdf.ts` do `mkt`.
+⚠️ **`pages/Pdvs.tsx` mora SÓ no `crm` desde 20/10/2026** (decisão do dono do
+processo: "já tem no sales onde importa"). A cópia do `admin` saiu com o
+`usePdvs` dela, e `admin…/comercial/pdvs` leva a `sales…/pdvs` com a query.
+Antes eram duas cópias byte a byte idênticas — não recrie a segunda.
 
 ⚠️ **Importar o dado não o coloca na tela.** A `20260941` gravou endereço em 70
 PDVs e a tela continuou mostrando só cidade/UF — a coluna, a busca e a modal
