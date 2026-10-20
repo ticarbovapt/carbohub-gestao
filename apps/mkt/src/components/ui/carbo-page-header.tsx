@@ -16,7 +16,7 @@ const CarboPageHeader = React.forwardRef<HTMLDivElement, CarboPageHeaderProps>(
     return (
       <div
         ref={ref}
-        className={cn("flex flex-col md:flex-row md:items-center justify-between gap-4", className)}
+        className={cn("flex flex-col lg:flex-row lg:items-center justify-between gap-4", className)}
       >
         <div className="flex min-w-0 items-center gap-3">
           {Icon && (

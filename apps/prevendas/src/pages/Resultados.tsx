@@ -207,7 +207,8 @@ export default function Resultados() {
 
   return (
     <div className="space-y-6 p-4 md:p-6">
-      <CarboPageHeader title="Resultados" description="Do repasse ao fechamento" icon={BarChart3} actions={filtros} />
+      <CarboPageHeader title="Resultados" description="Do repasse ao fechamento" icon={BarChart3} actions={filtros}
+        className="md:flex-col md:items-stretch lg:flex-row lg:items-center" />
 
       {erro && (
         <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm">
@@ -215,11 +216,13 @@ export default function Resultados() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:grid-flow-dense xl:grid-cols-3 min-[1800px]:grid-cols-5">
         <CarboKPI title="Repassados" value={r.total} icon={Send} iconColor="blue" loading={carregando} />
         <CarboKPI title="Fechados" value={r.fechados} icon={CheckCircle2} iconColor="success" loading={carregando} />
         <CarboKPI title="Conversão" value={fmtPct(conversao)} icon={Percent} iconColor="green" loading={carregando} />
-        <CarboKPI title="Receita gerada" value={brl(r.receita)} icon={TrendingUp} iconColor="green" loading={carregando} />
+        <div className="sm:col-span-2 min-[1800px]:col-span-1">
+          <CarboKPI title="Receita gerada" value={brl(r.receita)} icon={TrendingUp} iconColor="green" loading={carregando} />
+        </div>
         <CarboKPI title="Tempo até fechar" value={fmtDuracao(r.tempoMedio)} icon={Timer} iconColor="muted" loading={carregando} />
       </div>
 
@@ -229,8 +232,8 @@ export default function Resultados() {
         </div>
       ) : !carregando && (
         <>
-          <div className="grid gap-4 lg:grid-cols-5">
-            <Secao titulo="Situação dos repassados" className="lg:col-span-2">
+          <div className="grid gap-4 2xl:grid-cols-5">
+            <Secao titulo="Situação dos repassados" className="2xl:col-span-2">
               <div className="space-y-5 px-4 py-4 sm:px-5">
                 <div className="flex h-2.5 overflow-hidden rounded-full bg-muted">
                   {situacoes.filter((s) => s.qtd > 0).map((s) => (
@@ -265,7 +268,7 @@ export default function Resultados() {
               </div>
             </Secao>
 
-            <Secao titulo="Por closer" className="lg:col-span-3">
+            <Secao titulo="Por closer" className="2xl:col-span-3">
               <TabelaResumo linhas={porCloser} rotulo="Closer" rotuloTotal="Recebidos"
                 rodape={r.fila > 0 ? `${r.fila} ${r.fila === 1 ? "lead aguarda" : "leads aguardam"} um closer pegar na fila.` : null} />
             </Secao>
@@ -378,11 +381,11 @@ function TabelaResumo({ linhas, rotulo, rotuloTotal, rodape }: {
             <tr><td colSpan={5} className="px-5 py-6 text-center text-muted-foreground">Ninguém pegou os repasses ainda.</td></tr>
           ) : linhas.map((l) => (
             <tr key={l.nome} className="border-b last:border-0">
-              <td className="whitespace-nowrap px-3 py-3 sm:px-5 font-medium">{l.nome}</td>
+              <td className="max-w-[220px] truncate px-3 py-3 sm:px-5 font-medium" title={l.nome}>{l.nome}</td>
               <td className="px-3 py-3 sm:px-5 text-right tabular-nums">{l.total}</td>
               <td className="px-3 py-3 sm:px-5 text-right tabular-nums">{l.fechados}</td>
               <td className="px-3 py-3 sm:px-5 text-right tabular-nums">{fmtPct(pct(l.fechados, l.total))}</td>
-              <td className="px-3 py-3 sm:px-5 text-right tabular-nums">{brl(l.receita)}</td>
+              <td className="whitespace-nowrap px-3 py-3 sm:px-5 text-right tabular-nums">{brl(l.receita)}</td>
             </tr>
           ))}
         </tbody>

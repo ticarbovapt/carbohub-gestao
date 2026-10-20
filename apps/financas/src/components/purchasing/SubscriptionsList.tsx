@@ -128,7 +128,7 @@ export function SubscriptionsList() {
           <CarboCard key={cur} variant="kpi" padding="sm">
             <CarboCardContent>
               <div className="flex items-center gap-2 mb-1"><CreditCard className="h-4 w-4 text-carbo-blue" /><span className="text-xs text-muted-foreground">Custo/mês ({cur})</span></div>
-              <p className="text-lg font-bold kpi-number">{money(val, cur)}</p>
+              <p className="text-base sm:text-lg font-bold kpi-number break-words">{money(val, cur)}</p>
             </CarboCardContent>
           </CarboCard>
         ))}

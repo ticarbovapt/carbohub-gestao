@@ -146,7 +146,7 @@ export function CotacoesPanel({
       {isLoading && <p className="text-xs text-muted-foreground">Carregando cotações…</p>}
 
       <Dialog open={!!adding} onOpenChange={(o) => !o && setAdding(null)}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader><DialogTitle>Cotação — {adding?.descricao || "item"}</DialogTitle></DialogHeader>
           <div className="space-y-3 py-1">
             <div className="space-y-1.5">

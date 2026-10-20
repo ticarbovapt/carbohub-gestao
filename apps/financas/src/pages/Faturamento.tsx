@@ -527,7 +527,7 @@ export default function Faturamento() {
 
         {/* Controles */}
         <CarboCard>
-          <CarboCardContent className="pt-6 flex flex-col md:flex-row md:items-center gap-4">
+          <CarboCardContent className="pt-6 flex flex-col lg:flex-row lg:flex-wrap lg:items-center gap-4">
             <div className="flex items-center gap-2">
               <CarboButton variant="outline" size="icon" onClick={() => changeMonth(-1)} aria-label="Mês anterior"><ChevronLeft className="h-4 w-4" /></CarboButton>
               {/* Com busca, o mês NÃO vale (a busca vasculha todo o histórico) —
@@ -539,7 +539,7 @@ export default function Faturamento() {
               </span>
               <CarboButton variant="outline" size="icon" onClick={() => changeMonth(1)} aria-label="Próximo mês"><ChevronRight className="h-4 w-4" /></CarboButton>
             </div>
-            <div className="flex-1 md:min-w-48">
+            <div className="flex-1 lg:min-w-48">
               <CarboSearchInput placeholder="Buscar por cliente, CNPJ/CPF, nº do pedido ou NF, cidade, telefone, e-mail…" value={search} onChange={(e) => { setSearch(e.target.value); resetPages(); }} />
             </div>
             {search.trim() && (

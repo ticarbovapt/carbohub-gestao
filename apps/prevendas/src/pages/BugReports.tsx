@@ -132,7 +132,7 @@ export default function BugReports() {
                       <span className={`text-[10px] font-medium ${b.status === "resolved" ? "text-success" : b.status === "declined" ? "text-muted-foreground" : b.status === "aguardando" ? "text-amber-500" : "text-warning"}`}>{statusText(b.status)}</span>
                     </div>
                     <p className="text-xs text-muted-foreground truncate">{b.description}</p>
-                    <div className="flex items-center gap-3 mt-1 text-[11px] text-muted-foreground">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-[11px] text-muted-foreground">
                       <span>{b.reporter_name || "—"}</span>
                       <span>·</span>
                       <span>{dtFmt(b.created_at)}</span>
@@ -167,13 +167,13 @@ export default function BugReports() {
           {detail && (
             <>
               <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  {detail.kind === "sugestao" ? <Lightbulb className="h-4 w-4 text-amber-500" /> : <Bug className="h-4 w-4 text-destructive" />}
+                <DialogTitle className="flex items-center gap-2 pr-6">
+                  {detail.kind === "sugestao" ? <Lightbulb className="h-4 w-4 shrink-0 text-amber-500" /> : <Bug className="h-4 w-4 shrink-0 text-destructive" />}
                   {detail.title}
                 </DialogTitle>
               </DialogHeader>
-              <div className="space-y-3 py-1 text-sm">
-                <p className="whitespace-pre-wrap text-muted-foreground">{detail.description}</p>
+              <div className="min-w-0 space-y-3 py-1 text-sm">
+                <p className="whitespace-pre-wrap break-words text-muted-foreground">{detail.description}</p>
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div><span className="text-muted-foreground">Reportado por</span><p className="font-medium">{detail.reporter_name || "—"}</p></div>
                   <div><span className="text-muted-foreground">App</span><p className="font-medium uppercase">{detail.app}</p></div>
@@ -194,7 +194,7 @@ export default function BugReports() {
                 ) : detail.admin_notes ? (
                   <div className="rounded bg-muted px-3 py-2">
                     <p className="text-[11px] font-medium mb-0.5">Resposta do TI</p>
-                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">{detail.admin_notes}</p>
+                    <p className="text-sm text-muted-foreground whitespace-pre-wrap break-words">{detail.admin_notes}</p>
                   </div>
                 ) : null}
               </div>

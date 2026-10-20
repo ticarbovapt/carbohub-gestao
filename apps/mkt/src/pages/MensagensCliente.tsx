@@ -146,7 +146,7 @@ function Editor({ t }: { t: TemplateMsg }) {
               <div className="mb-2 rounded-md border border-sky-500/30 bg-sky-500/5 p-2.5">
                 <p className="flex items-start gap-1.5 text-[11px] text-sky-500">
                   <Lock className="mt-px h-3 w-3 shrink-0" />
-                  <span>
+                  <span className="min-w-0 break-words">
                     Texto aprovado pela Meta — <strong>editar aqui não muda o que o
                     cliente recebe</strong>. A redação é a do template
                     <code className="mx-1 rounded bg-muted px-1 font-mono text-[10px]">

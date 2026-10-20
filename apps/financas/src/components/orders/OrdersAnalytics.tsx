@@ -295,7 +295,7 @@ export function OrdersAnalytics({ orders, isLoading }: OrdersAnalyticsProps) {
     <div className="space-y-6">
       {/* ===== HEADER: Period + Filters ===== */}
       <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-lg font-semibold flex items-center gap-2">
             <TrendingUp className="h-5 w-5 text-carbo-green" />
             Análise de Pedidos
@@ -354,7 +354,7 @@ export function OrdersAnalytics({ orders, isLoading }: OrdersAnalyticsProps) {
         <CarboCard className="bg-gradient-to-br from-carbo-green/10 to-transparent">
           <CarboCardContent className="p-4">
             <p className="text-[10px] font-semibold uppercase text-muted-foreground tracking-wider">Faturamento Bruto</p>
-            <p className="text-xl font-bold mt-1 text-carbo-green kpi-number">{fmt(metrics.fatBruto)}</p>
+            <p className="text-base sm:text-xl font-bold mt-1 text-carbo-green kpi-number break-words">{fmt(metrics.fatBruto)}</p>
             <p className="text-[10px] text-muted-foreground">{metrics.pedidosFaturados} pedidos faturados</p>
           </CarboCardContent>
         </CarboCard>
@@ -362,7 +362,7 @@ export function OrdersAnalytics({ orders, isLoading }: OrdersAnalyticsProps) {
         <CarboCard className="bg-gradient-to-br from-emerald-500/10 to-transparent">
           <CarboCardContent className="p-4">
             <p className="text-[10px] font-semibold uppercase text-muted-foreground tracking-wider">Faturamento Líquido</p>
-            <p className="text-xl font-bold mt-1 text-emerald-500 kpi-number">{fmt(metrics.fatLiquido)}</p>
+            <p className="text-base sm:text-xl font-bold mt-1 text-emerald-500 kpi-number break-words">{fmt(metrics.fatLiquido)}</p>
             <p className="text-[10px] text-muted-foreground">{metrics.pedidosFaturados} pedidos faturados</p>
           </CarboCardContent>
         </CarboCard>
@@ -370,7 +370,7 @@ export function OrdersAnalytics({ orders, isLoading }: OrdersAnalyticsProps) {
         <CarboCard className="bg-gradient-to-br from-blue-500/10 to-transparent">
           <CarboCardContent className="p-4">
             <p className="text-[10px] font-semibold uppercase text-muted-foreground tracking-wider">Pedidos Faturados</p>
-            <p className="text-xl font-bold mt-1 text-blue-500 kpi-number">{metrics.pedidosFaturados}</p>
+            <p className="text-base sm:text-xl font-bold mt-1 text-blue-500 kpi-number break-words">{metrics.pedidosFaturados}</p>
             <p className="text-[10px] text-muted-foreground">sem ocorrências</p>
           </CarboCardContent>
         </CarboCard>
@@ -378,7 +378,7 @@ export function OrdersAnalytics({ orders, isLoading }: OrdersAnalyticsProps) {
         <CarboCard>
           <CarboCardContent className="p-4">
             <p className="text-[10px] font-semibold uppercase text-muted-foreground tracking-wider">Ticket Médio</p>
-            <p className="text-xl font-bold mt-1 kpi-number">{fmt(metrics.ticketMedio)}</p>
+            <p className="text-base sm:text-xl font-bold mt-1 kpi-number break-words">{fmt(metrics.ticketMedio)}</p>
             <p className="text-[10px] text-muted-foreground">base: {metrics.pedidosFaturados} faturados</p>
           </CarboCardContent>
         </CarboCard>
@@ -386,7 +386,7 @@ export function OrdersAnalytics({ orders, isLoading }: OrdersAnalyticsProps) {
         <CarboCard>
           <CarboCardContent className="p-4">
             <p className="text-[10px] font-semibold uppercase text-muted-foreground tracking-wider">Clientes Únicos</p>
-            <p className="text-xl font-bold mt-1 kpi-number">{metrics.clientesUnicos}</p>
+            <p className="text-base sm:text-xl font-bold mt-1 kpi-number break-words">{metrics.clientesUnicos}</p>
             <p className="text-[10px] text-muted-foreground">clientes atendidos</p>
           </CarboCardContent>
         </CarboCard>

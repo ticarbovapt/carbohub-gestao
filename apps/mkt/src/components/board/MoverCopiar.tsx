@@ -87,12 +87,12 @@ export function MoverCopiar({ modo, card, onClose, onFeito }: {
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o && !ocupado) onClose(); }}>
-      <DialogContent className="max-w-sm">
+      <DialogContent className="sm:max-w-sm grid-cols-[minmax(0,1fr)]">
         <DialogHeader>
           <DialogTitle>{modo === "mover" ? "Mover cartão" : "Copiar cartão"}</DialogTitle>
           <DialogDescription className="truncate">{card.title}</DialogDescription>
         </DialogHeader>
-        <div className="space-y-3">
+        <div className="space-y-3 min-w-0">
           {modo === "copiar" && (
             <div className="space-y-1.5">
               <label className="mkt-meta-label block">Título</label>
@@ -115,7 +115,7 @@ export function MoverCopiar({ modo, card, onClose, onFeito }: {
               {quadros.map((b) => <option key={b.id} value={b.id}>{b.title}{b.id === card.board_id ? " (atual)" : ""}</option>)}
             </select>
           </div>
-          <div className="grid grid-cols-[1fr_auto] gap-2">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
             <div className="space-y-1.5 min-w-0">
               <label className="mkt-meta-label block">Lista</label>
               <select value={listId} onChange={(e) => { setListId(e.target.value); setIndice(null); }} className="mkt-field text-sm w-full">

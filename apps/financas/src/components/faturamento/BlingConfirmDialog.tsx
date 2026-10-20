@@ -296,7 +296,7 @@ export function BlingConfirmDialog({
             {data.payment_summary?.escolhido && (
               <div>
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Pagamento</p>
-                <div className="flex items-center gap-2 text-xs min-w-0">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs min-w-0">
                   {data.payment_summary.forma_bling
                     ? <CarboBadge variant="success" className="shrink-0">Bling: {data.payment_summary.forma_bling}</CarboBadge>
                     : <CarboBadge variant="warning" className="shrink-0">sem forma no Bling</CarboBadge>}

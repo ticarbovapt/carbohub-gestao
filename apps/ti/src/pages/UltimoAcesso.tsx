@@ -316,16 +316,16 @@ export default function UltimoAcesso() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-3 gap-4">
-            <div className="rounded-xl border border-border bg-card p-4 flex items-center gap-3">
+          <div className="grid grid-cols-3 gap-2 sm:gap-4">
+            <div className="rounded-xl border border-border bg-card p-3 sm:p-4 flex flex-col items-start sm:flex-row sm:items-center gap-2 sm:gap-3">
               <div className="h-10 w-10 rounded-xl bg-blue-500/10 flex items-center justify-center"><Building2 className="h-5 w-5 text-blue-500" /></div>
               <div><p className="text-2xl font-bold">{isLoading ? "—" : internal.length}</p><p className="text-xs text-muted-foreground">Internos</p></div>
             </div>
-            <div className="rounded-xl border border-border bg-card p-4 flex items-center gap-3">
+            <div className="rounded-xl border border-border bg-card p-3 sm:p-4 flex flex-col items-start sm:flex-row sm:items-center gap-2 sm:gap-3">
               <div className="h-10 w-10 rounded-xl bg-emerald-500/10 flex items-center justify-center"><Users className="h-5 w-5 text-emerald-500" /></div>
               <div><p className="text-2xl font-bold">{isLoading ? "—" : licensees.length}</p><p className="text-xs text-muted-foreground">Licenciados</p></div>
             </div>
-            <div className="rounded-xl border border-border bg-card p-4 flex items-center gap-3">
+            <div className="rounded-xl border border-border bg-card p-3 sm:p-4 flex flex-col items-start sm:flex-row sm:items-center gap-2 sm:gap-3">
               <div className="h-10 w-10 rounded-xl bg-amber-500/10 flex items-center justify-center"><Store className="h-5 w-5 text-amber-500" /></div>
               <div><p className="text-2xl font-bold">{isLoading ? "—" : lojas.length}</p><p className="text-xs text-muted-foreground">Lojas</p></div>
             </div>

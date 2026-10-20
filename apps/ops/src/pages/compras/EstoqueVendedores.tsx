@@ -382,7 +382,7 @@ function DialogEnviar({ caixa, onClose }: { caixa: CaixaVendedor | null; onClose
 
   return (
     <Dialog open={!!caixa} onOpenChange={(v) => { if (!v) fechar(); }}>
-      <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
+      <DialogContent className="sm:max-w-lg max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Enviar para {caixa?.vendedor_nome ?? ""}</DialogTitle>
         </DialogHeader>
@@ -491,7 +491,7 @@ function DialogAjuste({
 
   return (
     <Dialog open={!!alvo} onOpenChange={(v) => { if (!v) fechar(); }}>
-      <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
+      <DialogContent className="sm:max-w-lg max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Corrigir saldo</DialogTitle>
         </DialogHeader>
@@ -602,7 +602,7 @@ function DialogDevolver({
 
   return (
     <Dialog open={!!caixa} onOpenChange={(v) => { if (!v) fechar(); }}>
-      <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
+      <DialogContent className="sm:max-w-lg max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Devolver da caixa de {caixa?.vendedor_nome ?? ""}</DialogTitle>
         </DialogHeader>

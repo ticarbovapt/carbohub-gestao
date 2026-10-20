@@ -134,7 +134,7 @@ export function MoveOPDialog({ open, onOpenChange, op, fromLabel, toLabel, toSta
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {isSeparacao ? "Separar materiais" : isConclusao ? "Concluir produção" : "Mover ordem de produção"}

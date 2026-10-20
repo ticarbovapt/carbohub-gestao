@@ -453,7 +453,7 @@ function LinhaAviso({ a, children }: { a: StatusAvisoLinha; children: React.Reac
       </span>
       <div className="min-w-[11rem] flex-1">
         <div className="flex items-center gap-2 flex-wrap">
-          <p className="font-semibold text-sm truncate">{a.titulo}</p>
+          <p className="font-semibold text-sm min-w-0 break-words">{a.titulo}</p>
           <CarboBadge variant={o.badge} size="sm">{o.rotulo}</CarboBadge>
         </div>
         {a.mensagem && <p className="text-xs text-muted-foreground mt-0.5">{a.mensagem}</p>}

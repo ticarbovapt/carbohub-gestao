@@ -34,7 +34,7 @@ export function NovaRemessaDialog({ open, onOpenChange }: { open: boolean; onOpe
 
   return (
     <Dialog open={open} onOpenChange={close}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><Truck className="h-4 w-4" /> Nova Remessa</DialogTitle>
           <DialogDescription>Registre uma remessa para rastreio operacional.</DialogDescription>

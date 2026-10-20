@@ -69,7 +69,7 @@ export default function Acompanhamento() {
   if (error) {
     return (
       <div className="p-4 sm:p-6">
-        <CarboCard>
+        <CarboCard padding="none">
           <CarboCardContent className="p-6 flex items-start gap-3">
             <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
             <div>
@@ -89,7 +89,7 @@ export default function Acompanhamento() {
         description="Como a operação comercial se comportou no período"
         icon={Activity}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {PERIODOS.map((p) => (
               <Button
                 key={p.dias}
@@ -197,7 +197,7 @@ export default function Acompanhamento() {
           )}
 
           {/* Série diária */}
-          <CarboCard>
+          <CarboCard padding="none">
             <CarboCardContent className="p-4">
               <h2 className="text-sm font-bold mb-3">Movimento diário</h2>
               <ResponsiveContainer width="100%" height={260}>
@@ -222,9 +222,9 @@ export default function Acompanhamento() {
             </CarboCardContent>
           </CarboCard>
 
-          <div className="grid lg:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Por pessoa — responde QUEM, sem isso a tela informa e não permite agir */}
-            <CarboCard>
+            <CarboCard padding="none">
               <CarboCardContent className="p-4">
                 <h2 className="text-sm font-bold mb-3">Por pessoa</h2>
                 {data.por_pessoa.length === 0 ? (
@@ -268,7 +268,7 @@ export default function Acompanhamento() {
             </CarboCard>
 
             {/* Por etapa — etapa que acumula é gargalo */}
-            <CarboCard>
+            <CarboCard padding="none">
               <CarboCardContent className="p-4">
                 <h2 className="text-sm font-bold mb-3">Funil agora</h2>
                 {data.por_etapa.length === 0 ? (
@@ -321,7 +321,7 @@ export default function Acompanhamento() {
           {/* Repasse Outbound → Inbound — volume E qualidade lado a lado.
               Medir só "quantos repassou" premiaria quem empurra tudo adiante. */}
           {repasses && repasses.total.repassados > 0 && (
-            <CarboCard>
+            <CarboCard padding="none">
               <CarboCardContent className="p-4">
                 <div className="flex items-baseline justify-between mb-3">
                   <h2 className="text-sm font-bold">Repasses ao closer</h2>
@@ -369,7 +369,7 @@ export default function Acompanhamento() {
           )}
 
           {/* Motivos — descarte de SDR e perda de closer são coisas diferentes */}
-          <CarboCard>
+          <CarboCard padding="none">
             <CarboCardContent className="p-4">
               <h2 className="text-sm font-bold mb-3">Por que perdemos, no período</h2>
               {data.motivos.length === 0 ? (
@@ -393,7 +393,7 @@ export default function Acompanhamento() {
           </CarboCard>
 
           {/* Os esquecidos, clicáveis */}
-          <CarboCard>
+          <CarboCard padding="none">
             <CarboCardContent className="p-4">
               <h2 className="text-sm font-bold mb-1">Esquecidos</h2>
               <p className="text-xs text-muted-foreground mb-3">
@@ -442,7 +442,7 @@ export default function Acompanhamento() {
           abandono, por isso lista à parte dos esquecidos: a conversa com o
           vendedor é outra ("e aí, o decisor respondeu?" vs "ninguém tocou"). */}
       {data && data.lista_espera_vencida.length > 0 && (
-        <CarboCard>
+        <CarboCard padding="none">
           <CarboCardContent className="p-4">
             <h2 className="text-sm font-bold mb-1">Esperas vencidas</h2>
             <p className="text-xs text-muted-foreground mb-3">
@@ -486,7 +486,7 @@ function Kpi({ icon, label, value, color, destaque, hint }: {
   destaque?: boolean; hint?: string;
 }) {
   return (
-    <CarboCard>
+    <CarboCard padding="none">
       <CarboCardContent
         className="p-3.5"
         style={destaque && value > 0 ? { borderColor: color, background: color + "0D" } : undefined}
@@ -508,7 +508,7 @@ const brl = (v: number) =>
 
 function Valor({ label, valor, cor, hint }: { label: string; valor: number; cor: string; hint?: string }) {
   return (
-    <CarboCard>
+    <CarboCard padding="none">
       <CarboCardContent className="p-3.5">
         <p className="text-xs text-muted-foreground">{label}</p>
         <p className="text-xl font-bold tabular-nums mt-1" style={{ color: cor }}>{brl(valor)}</p>

@@ -325,11 +325,11 @@ export default function Alertas() {
               onChange={(e) => setBusca(e.target.value)} className="h-9 pl-9" />
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <div className="inline-flex rounded-lg border bg-muted/40 p-0.5">
+            <div className="flex w-full rounded-lg border bg-muted/40 p-0.5 sm:inline-flex sm:w-auto">
               {([null, ...PRIO_ORDEM] as (Prioridade | null)[]).map((pr) => (
                 <button key={pr ?? "todas"} type="button" onClick={() => setPrio(pr ?? "")}
                   className={cn(
-                    "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
+                    "flex flex-1 items-center justify-center gap-1.5 rounded-md px-1.5 py-1.5 text-xs font-medium transition-colors sm:flex-none sm:px-2.5",
                     prio === pr ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
                   )}>
                   {pr && <span className={cn("h-1.5 w-1.5 rounded-full", PRIO[pr].dot)} />}
@@ -404,8 +404,8 @@ function Linha({ p }: { p: Pend }) {
     <li className="relative flex flex-col gap-2 py-3 pl-5 pr-4 sm:flex-row sm:items-center sm:gap-4">
       <span className={cn("absolute inset-y-2 left-0 w-1 rounded-r", cfg.bar)} aria-hidden />
       <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-center gap-2">
-          <p className="truncate text-sm font-medium" title={p.titulo}>{p.titulo}</p>
+        <div className="flex min-w-0 items-start gap-2">
+          <p className="line-clamp-2 break-words text-sm font-medium" title={p.titulo}>{p.titulo}</p>
           <span className={cn("shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide", cfg.chip)}>
             {p.tipo}
           </span>

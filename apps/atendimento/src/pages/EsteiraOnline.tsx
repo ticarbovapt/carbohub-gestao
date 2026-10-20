@@ -2023,11 +2023,13 @@ export default function EsteiraOnline() {
 
           <p className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground">
             <ShoppingBag className="h-3 w-3 shrink-0" />
-            Só a loja própria: Mercado Livre e Amazon fazem a própria recuperação e não
-            entregam o contato de quem abandonou. As janelas são <strong>encadeadas</strong> —
-            a 2ª conta a partir da 1ª, não do abandono —, e{" "}
-            <strong>Recuperado</strong> é observação: o sistema vê que houve pedido do mesmo
-            e-mail depois do abandono, não que ele veio da mensagem.
+            <span className="min-w-0">
+              Só a loja própria: Mercado Livre e Amazon fazem a própria recuperação e não
+              entregam o contato de quem abandonou. As janelas são <strong>encadeadas</strong> —
+              a 2ª conta a partir da 1ª, não do abandono —, e{" "}
+              <strong>Recuperado</strong> é observação: o sistema vê que houve pedido do mesmo
+              e-mail depois do abandono, não que ele veio da mensagem.
+            </span>
           </p>
         </>
       ) : pipeline === "recompra" ? (
@@ -2114,10 +2116,12 @@ export default function EsteiraOnline() {
           )}
 
           <p className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground">
-            <Repeat2 className="h-3 w-3" />
-            A coluna é calculada: dias desde a entrega e existência de venda nova do mesmo CPF.
-            {" "}<strong>Recomprou</strong> é observação, não atribuição — o sistema vê que o cliente
-            voltou, não que voltou por causa da oferta.
+            <Repeat2 className="h-3 w-3 shrink-0" />
+            <span className="min-w-0">
+              A coluna é calculada: dias desde a entrega e existência de venda nova do mesmo CPF.
+              {" "}<strong>Recomprou</strong> é observação, não atribuição — o sistema vê que o cliente
+              voltou, não que voltou por causa da oferta.
+            </span>
           </p>
         </>
       ) : isLoading ? (

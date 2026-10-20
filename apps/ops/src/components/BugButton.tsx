@@ -256,7 +256,7 @@ export function BugButton() {
           </button>
         </PopoverTrigger>
 
-        <PopoverContent align="end" className="w-80 p-0">
+        <PopoverContent align="end" collisionPadding={8} className="w-80 max-w-[calc(100vw-1rem)] p-0 max-h-[var(--radix-popover-content-available-height)] overflow-y-auto">
           <div className="flex items-center justify-between gap-2 px-4 py-3 border-b">
             <div className="flex items-center gap-2 min-w-0">
               <Bug className="h-4 w-4 text-muted-foreground shrink-0" />

@@ -308,7 +308,7 @@ export default function Bling2Integracao() {
             ))}
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 justify-center items-center">
             <Button
               size="lg"
               disabled={!!sincronizando}

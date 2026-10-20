@@ -137,7 +137,7 @@ function Fila() {
 
       {/* Detalhe / decisão */}
       <Dialog open={!!detail} onOpenChange={(o) => !o && setDetail(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="sm:max-w-md">
           {detail && (
             <>
               <DialogHeader>
@@ -362,7 +362,7 @@ function FilaFabricacao() {
       )}
 
       <Dialog open={!!detail} onOpenChange={(o) => !o && setDetail(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="sm:max-w-md">
           {detail && (
             <>
               <DialogHeader>

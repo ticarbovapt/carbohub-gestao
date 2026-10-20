@@ -304,6 +304,7 @@ export default function Atendimento() {
       <CarboPageHeader
         icon={MessagesSquare}
         title="Atendimento"
+        className="md:flex-col md:items-stretch lg:flex-row lg:items-center"
         actions={
           <div className="flex flex-wrap items-center gap-3">
             <Button size="sm" variant="outline"

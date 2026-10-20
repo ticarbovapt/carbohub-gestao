@@ -141,14 +141,14 @@ export default function WorkspaceTable() {
                 <td className="px-2 py-1">
                   <button onClick={() => setOpenCardId(c.id)} className="p-1 text-muted-foreground hover:text-foreground" title="Abrir cartão"><Maximize2 className="h-3.5 w-3.5" /></button>
                 </td>
-                <td className="px-1 py-1"><EditableTitle value={c.title} onSave={(t) => m.renameCard.mutate({ id: c.id, title: t })} /></td>
+                <td className="px-1 py-1 min-w-[18rem]"><EditableTitle value={c.title} onSave={(t) => m.renameCard.mutate({ id: c.id, title: t })} /></td>
                 <td className="px-2 py-1 whitespace-nowrap">
                   <Link to={`/quadros/${c.board_id}`} className="inline-flex items-center gap-1.5 hover:underline">
                     <span className="h-2 w-2 rounded-full shrink-0" style={{ background: getAccent(boardById.get(c.board_id)?.background) }} />
-                    <CarboBadge variant="outline" size="sm">{c.boardTitle}</CarboBadge>
+                    <CarboBadge variant="outline" size="sm" className="max-w-[16rem]" title={c.boardTitle}><span className="truncate">{c.boardTitle}</span></CarboBadge>
                   </Link>
                 </td>
-                <td className="px-2 py-1 whitespace-nowrap"><CarboBadge variant="secondary" size="sm">{c.listTitle}</CarboBadge></td>
+                <td className="px-2 py-1 whitespace-nowrap"><CarboBadge variant="secondary" size="sm" className="max-w-[14rem]" title={c.listTitle}><span className="truncate">{c.listTitle}</span></CarboBadge></td>
                 <td className="px-2 py-1">
                   <div className="flex flex-wrap gap-1">
                     {c.labelIds.map((id) => {

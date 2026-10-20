@@ -354,7 +354,7 @@ export default function Metas() {
                 <div>
                   <p className="text-xs text-muted-foreground uppercase tracking-wider">{isGestor ? "Total do Time" : "Sua meta do mês"}</p>
                   {canSeeValues ? (
-                    <div className="flex items-end gap-2 mt-0.5">
+                    <div className="flex flex-wrap items-end gap-x-2 mt-0.5">
                       <p className={`text-2xl font-bold tabular-nums ${totalColors.text}`}>{fmtBRL(totalActual)}</p>
                       <p className="text-muted-foreground mb-0.5">/ {fmtBRL(totalTarget)}</p>
                     </div>
@@ -434,9 +434,9 @@ export default function Metas() {
                         <span className="w-6 text-center shrink-0 text-sm font-bold text-muted-foreground">{rankBadge}</span>
                         <ProfileAvatar avatarUrl={t.vendedor?.avatar_url} fullName={t.vendedor?.full_name} userId={t.vendedor_id} size={28} />
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between gap-2">
+                          <div className="flex flex-wrap items-center justify-between gap-x-2">
                             <p className="font-semibold text-sm truncate">{t.vendedor?.full_name || "—"}</p>
-                            <div className="flex items-center gap-2 shrink-0">
+                            <div className="flex flex-wrap items-center gap-x-2 min-w-0">
                               {canSeeValues && <span className={`text-sm font-bold tabular-nums ${colors.text}`}>{fmtBRL(actual)}<span className="text-[10px] font-normal text-muted-foreground"> /{fmtBRL(target)}</span></span>}
                               <CarboBadge variant={colors.badge} size="sm">{fmtPct(pctVal)}</CarboBadge>
                             </div>

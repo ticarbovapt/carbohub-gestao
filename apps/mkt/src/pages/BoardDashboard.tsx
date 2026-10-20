@@ -34,6 +34,10 @@ function Tile({ label, value, sub, accent, icon: Icon }: { label: string; value:
   );
 }
 
+// Nome longo de lista/pessoa quebrava em várias linhas no eixo e encavalava com
+// a barra vizinha; o nome inteiro continua no tooltip.
+const rotuloCurto = (s: string) => (s.length > 19 ? s.slice(0, 18).trimEnd() + "…" : s);
+
 export default function BoardDashboard() {
   const { boardId } = useParams();
   const { data, isLoading } = useBoard(boardId ?? null);
@@ -127,7 +131,7 @@ export default function BoardDashboard() {
                   <BarChart data={metrics.porLista} layout="vertical" margin={{ top: 4, right: 32, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" horizontal={false} />
                     <XAxis type="number" allowDecimals={false} domain={[0, "dataMax"]} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-                    <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={rotuloCurto} />
                     <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [v, "Cartões"]} />
                     <Bar dataKey="value" radius={[0, 4, 4, 0]}>
                       {metrics.porLista.map((d, i) => <Cell key={i} fill={d.color} />)}
@@ -168,7 +172,7 @@ export default function BoardDashboard() {
                   <BarChart data={metrics.porMembro} layout="vertical" margin={{ top: 4, right: 32, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" horizontal={false} />
                     <XAxis type="number" allowDecimals={false} domain={[0, "dataMax"]} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-                    <YAxis type="category" dataKey="name" width={130} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <YAxis type="category" dataKey="name" width={130} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={rotuloCurto} />
                     <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [v, "Cartões"]} />
                     <Bar dataKey="value" fill="hsl(var(--accent))" radius={[0, 4, 4, 0]}>
                       <LabelList dataKey="value" position="right" style={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />

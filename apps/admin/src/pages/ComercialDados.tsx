@@ -581,19 +581,19 @@ export default function ComercialDados() {
   return (
     <main className="p-3 sm:p-4 lg:p-6 board-fade-in">
       <div className="space-y-4 max-w-[1600px] mx-auto">
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+        <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4">
           <CarboPageHeader icon={Database} title="Dados Comerciais — Fonte"
             description={lista === "servicos"
               ? "As NFS-e emitidas no portal nacional que alimentam a descarbonização nos gráficos. Não há vendedor na nota, então o filtro de vendedor não se aplica aqui."
               : "As linhas cruas de carboze_orders que alimentam os gráficos. Mesma base, mesmos filtros."} />
-          <div className="flex w-full sm:w-auto flex-col items-end gap-2">
+          <div className="flex w-full xl:w-auto min-w-0 flex-col items-end gap-2">
             <ComercialTabs />
             <ComercialFilterBar filters={filters} onChange={setFilters} />
           </div>
         </div>
 
         {/* Resumo — os cards são do que ESTÁ NA TELA, em qualquer aba. */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
           {lista === "servicos" ? (
             <>
               <Tile icon={Wrench} label="Notas de serviço (válidas)" value={String(kpisServico.notas)} tone="text-cyan-500" />
@@ -937,7 +937,7 @@ export default function ComercialDados() {
       {/* Detalhe — pedidos, CNPJs do grupo, datas (para follow-up). */}
       {/* Editar Canal + Origem do pedido (gestor) */}
       <Dialog open={!!editRow} onOpenChange={(o) => !o && setEditRow(null)}>
-        <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
+        <DialogContent className="sm:max-w-md max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Editar pedido {editRow?.order_number || ""}</DialogTitle>
           </DialogHeader>
@@ -980,7 +980,7 @@ export default function ComercialDados() {
       </Dialog>
 
       <Dialog open={!!detail} onOpenChange={(o) => !o && setDetail(null)}>
-        <DialogContent className="max-w-2xl max-h-[90dvh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl max-h-[90dvh] overflow-y-auto">
           {detail && (() => {
             const r = detail;
             const ordersSorted = [...r.orders].sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""));
@@ -1054,7 +1054,7 @@ export default function ComercialDados() {
 
       {/* Escolher vendedor — só quando o último pedido não tem vendedor. */}
       <Dialog open={!!vendDialog} onOpenChange={(o) => !o && setVendDialog(null)}>
-        <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
+        <DialogContent className="sm:max-w-md max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Escolher vendedor do follow-up</DialogTitle>
           </DialogHeader>

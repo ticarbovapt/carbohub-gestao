@@ -1462,6 +1462,30 @@ navegador, não estimado) e os sete `select.tsx` estão byte a byte iguais.
    uma correção como concluída enquanto ela valia para 1/7. Ao escrever "hoje
    é X" aqui, diga **em quantos apps** — e confira, não presuma.
 
+### Varredura de responsividade dos oito apps (20/10/2026)
+Pedido do dono do processo: todas as telas e modais, do celular de 360 ao
+monitor de 1920. Medido no navegador (Supabase falso), app a app.
+1. ⚠️ **Com a barra lateral aberta, 768 de tela são ~528 de conteúdo.** Os
+   breakpoints `sm:`/`md:` olham a JANELA, não o `<main>`: foi a causa de quase
+   todo estouro (rodapé do `/vender`, KPIs, barras de filtro, cabeçalhos). Tela
+   que põe coisa lado a lado em `sm:`/`md:` estoura ali — use `lg:`.
+2. ⚠️ **`ui/dialog.tsx` (os oito) trocou `max-w-[calc(100%-2rem)]` por
+   `w-[calc(100%-2rem)]` + `grid-cols-[minmax(0,1fr)]`.** Antes, qualquer
+   `max-w-md` passado pela tela APAGAVA (tailwind-merge) a margem do celular, e
+   a coluna implícita do grid crescia até o maior `<select>`/URL/`truncate` —
+   diálogo de 384 px com conteúdo de 891. ⚠️ Passar `w-full` no `DialogContent`
+   volta a colar o diálogo na borda; não passe.
+3. Arquivos replicados mexidos nas MESMAS cópias (md5 conferido): `Vender.tsx`
+   (8), `dialog.tsx` (8), `AvatarCropDialog` (8), `carbo-page-header` (8,
+   `md:`→`lg:`), `Profile` (8), `MinhaEquipe` (6), `BugButton` (8, popover com
+   altura máxima), `BugReports` (8), `NotificationBell` (8), Esteira/Mensagens
+   (admin·atendimento·mkt), `EcommerceMetas` (admin·mkt), `OSKanban`/`OSAgenda`
+   (crm·ops). Os prints da Documentação do Pré-Vendas foram refeitos.
+4. ⚠️ **O check-in do RTM deixava a tela em BRANCO** (achado na mesma
+   varredura): a Agenda abre a visita com `geo: null` (não espera o GPS) e
+   `Visita.tsx`/`rtmFila.ts` liam `geo_checkin.lat` direto. O `tsc` não pega —
+   o `crm` tem `strictNullChecks: false`. Hoje é `?.` nos dois lugares.
+
 ### Tooltip de gráfico no tema escuro — corrigido no `index.css`, não no gráfico
 As variáveis de cor são TRIPLETOS HSL; `background: var(--background)` (em ~20
 gráficos) é cor inválida, descartada calada — o tooltip ficava transparente. E

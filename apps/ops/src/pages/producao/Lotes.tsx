@@ -109,7 +109,7 @@ export default function Lotes() {
                   const pct = volumePercent(lot.available_volume_ml, lot.initial_volume_ml);
                   return (
                     <TableRow key={lot.id}>
-                      <TableCell><span className="font-mono text-sm text-green-500 font-medium">{lot.lot_code}</span></TableCell>
+                      <TableCell><span className="font-mono text-sm text-green-500 font-medium whitespace-nowrap">{lot.lot_code}</span></TableCell>
                       <TableCell className="font-medium">{lot.product_name}</TableCell>
                       <TableCell>
                         <div className="space-y-1">

@@ -512,7 +512,7 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [], anex
                               <div key={it.id} className="group">
                                 <div className="flex items-center gap-2">
                                   <input type="checkbox" checked={it.is_done} onChange={(e) => mut.toggleItem.mutate({ id: it.id, done: e.target.checked })} className="h-4 w-4 rounded border-border accent-[hsl(var(--primary))]" />
-                                  <span className={`text-sm flex-1 ${it.is_done ? "line-through text-muted-foreground" : "text-foreground"}`}>{it.text}</span>
+                                  <span className={`text-sm flex-1 min-w-0 [overflow-wrap:anywhere] ${it.is_done ? "line-through text-muted-foreground" : "text-foreground"}`}>{it.text}</span>
                                   <button onClick={() => mut.removeItem.mutate({ id: it.id })} className="p-0.5 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"><X className="h-3.5 w-3.5" /></button>
                                 </div>
                                 {/* Data e responsável só ficam à vista quando preenchidos;

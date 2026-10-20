@@ -78,14 +78,14 @@ export function GerarOCDialog({ rc, onClose }: { rc: PurchaseRequest | null; onC
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3 py-1">
+        <div className="space-y-3 py-1 min-w-0">
           {groups.map(([supplier, ls]) => {
             const total = ls.reduce((s, l) => s + l.quantidade * l.unit_price, 0);
             const semQuote = supplier === "A definir";
             return (
               <div key={supplier} className="rounded-lg border border-border">
-                <div className="flex items-center justify-between px-3 py-2 bg-muted/40 rounded-t-lg">
-                  <span className="font-medium text-sm flex items-center gap-2">
+                <div className="flex items-center justify-between gap-2 px-3 py-2 bg-muted/40 rounded-t-lg">
+                  <span className="font-medium text-sm flex items-center gap-2 min-w-0 break-words">
                     {supplier}
                     {semQuote && <CarboBadge variant="warning" className="text-[10px]">sem cotação</CarboBadge>}
                   </span>
@@ -93,8 +93,8 @@ export function GerarOCDialog({ rc, onClose }: { rc: PurchaseRequest | null; onC
                 </div>
                 <div className="divide-y divide-border">
                   {ls.map((l) => (
-                    <div key={l.i} className="flex items-center justify-between px-3 py-1.5 text-sm">
-                      <span className="truncate">{l.descricao} <span className="text-muted-foreground">· {l.quantidade} {l.unidade}</span></span>
+                    <div key={l.i} className="flex items-center justify-between gap-2 px-3 py-1.5 text-sm">
+                      <span className="truncate min-w-0">{l.descricao} <span className="text-muted-foreground">· {l.quantidade} {l.unidade}</span></span>
                       <span className="text-muted-foreground shrink-0">{brl(l.unit_price)}/un</span>
                     </div>
                   ))}

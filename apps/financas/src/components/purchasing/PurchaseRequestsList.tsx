@@ -281,7 +281,7 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
             <DialogDescription>Detalhes da requisição de compra</DialogDescription>
           </DialogHeader>
           {selectedRC && (
-            <div className="space-y-4">
+            <div className="space-y-4 min-w-0">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div><span className="text-muted-foreground">Solicitante:</span> <strong>{requesterName(selectedRC)}</strong></div>
                 {registradoPor(selectedRC) && (

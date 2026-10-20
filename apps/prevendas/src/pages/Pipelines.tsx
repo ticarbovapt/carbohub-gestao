@@ -488,14 +488,14 @@ export default function Pipelines() {
 
         {/* KPIs */}
         {isAll ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
             <CarboKPI title="Total Leads" value={allKpis.total} icon={Users} iconColor="blue" loading={l2} />
             <CarboKPI title="Quentes" value={allKpis.hot} icon={Flame} iconColor="warning" loading={l2} />
             <CarboKPI title="Sem Atividade >3d" value={allKpis.stale} icon={AlertTriangle} iconColor="warning" loading={l2} />
             <CarboKPI title="Funis" value={FUNNELS.length} icon={KanbanSquare} iconColor="green" />
           </div>
         ) : (
-          <div className={`grid grid-cols-2 gap-3 [&>*:last-child:nth-child(odd)]:col-span-2 md:[&>*:last-child:nth-child(odd)]:col-span-1 ${MOSTRA_QUENTES_E_TENTATIVAS ? "md:grid-cols-5" : "md:grid-cols-3"}`}>
+          <div className={`grid grid-cols-2 gap-3 [&>*:last-child:nth-child(odd)]:col-span-2 xl:[&>*:last-child:nth-child(odd)]:col-span-1 ${MOSTRA_QUENTES_E_TENTATIVAS ? "xl:grid-cols-5" : "xl:grid-cols-3"}`}>
             <CarboKPI title="Total Leads" value={stats?.total || 0} icon={Users} iconColor="blue" loading={!stats} />
             {MOSTRA_QUENTES_E_TENTATIVAS && <CarboKPI title="Quentes" value={stats?.hot || 0} icon={Flame} iconColor="warning" loading={!stats} />}
             <CarboKPI title="Sem Atividade >3d" value={stats?.stale || 0} icon={AlertTriangle} iconColor="warning" loading={!stats} />
@@ -567,7 +567,7 @@ export default function Pipelines() {
 
         {/* Filtros */}
         <div className="flex flex-wrap items-center gap-3">
-          <div className="basis-full flex-1 sm:basis-0 sm:max-w-sm">
+          <div className="basis-full flex-1 xl:basis-0 xl:max-w-sm">
             <CarboSearchInput placeholder="Buscar por nome, CNPJ, cidade..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
           </div>
           {!isAll && (

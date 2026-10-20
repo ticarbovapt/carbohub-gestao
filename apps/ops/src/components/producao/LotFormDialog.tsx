@@ -71,7 +71,7 @@ export function LotFormDialog({ open, onOpenChange, mode, id, initial }: LotForm
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Editar Lote" : "Novo Lote de Reagente"}</DialogTitle>
           <DialogDescription>

@@ -303,7 +303,7 @@ export default function MetaConfigPage() {
                   .map(t => (
                   <CarboCard key={t.id}>
                     <CarboCardContent className="p-3 flex items-center gap-3 flex-wrap">
-                      <div className="flex-1 min-w-0">
+                      <div className="flex-1 min-w-0 basis-56">
                         <div className="flex items-center gap-2">
                           <p className="font-semibold text-sm truncate">{t.vendedor?.full_name || "—"}</p>
                           {t.source === "month" && (
@@ -326,7 +326,7 @@ export default function MetaConfigPage() {
                           Meta: {fmtBRL(Number(t.target_amount))} · Real: {fmtBRL(t.actual_amount || 0)} ({t.pct_amount || 0}%)
                         </p>
                       </div>
-                      <div className="flex gap-1.5 shrink-0 flex-wrap">
+                      <div className="flex gap-1.5 flex-wrap max-w-full">
                         <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => openEditDefault(t)}>
                           <Pencil className="h-3 w-3" /> Meta padrão
                         </Button>
