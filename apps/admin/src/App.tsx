@@ -20,7 +20,6 @@ import DescontoAprovacoes from "./pages/DescontoAprovacoes";
 import ProdutosPrecos from "./pages/ProdutosPrecos";
 import DashboardComercial from "./pages/DashboardComercial";
 import ComercialDados from "./pages/ComercialDados";
-import Pdvs from "./pages/Pdvs";
 import DashboardsMetas from "./pages/DashboardsMetas";
 import Suprimentos from "./pages/Suprimentos";
 import Chat from "./pages/Chat";
@@ -34,6 +33,12 @@ import { PaginaNaoEncontrada } from "@carbo/shell";
 const TI_URL = "https://ti.carbohub.com.br";
 function IrParaTi({ para }: { para: string }) {
   useEffect(() => { window.location.replace(`${TI_URL}${para}${window.location.search}`); }, [para]);
+  return null;
+}
+
+// Pontos de Venda saiu do Admin (20/10/2026): mora no Sales, onde é usado.
+function IrParaSales({ para }: { para: string }) {
+  useEffect(() => { window.location.replace(`https://sales.carbohub.com.br${para}${window.location.search}`); }, [para]);
   return null;
 }
 
@@ -86,7 +91,7 @@ export default function App() {
         <Route path="/comercial/dados" element={<ComercialDados />} />
         {/* Aba como segmento da URL — ver a nota em ComercialDados. */}
         <Route path="/comercial/dados/:aba" element={<ComercialDados />} />
-        <Route path="/comercial/pdvs" element={<Pdvs />} />
+        <Route path="/comercial/pdvs" element={<IrParaSales para="/pdvs" />} />
         <Route path="/comercial/descontos" element={<DescontoAprovacoes />} />
         <Route path="/comercial/precos" element={<ProdutosPrecos />} />
         <Route path="/dashboards/metas" element={<DashboardsMetas />} />

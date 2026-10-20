@@ -3,7 +3,7 @@ import { Outlet, useNavigate } from "react-router-dom";
 import {
   Globe, Target,
   Store, Building2, LineChart, Trophy, BarChart3, BadgePercent, Tags, MessagesSquare,
-  Boxes, MapPin, Truck, Map as MapIcon, Megaphone,
+  Boxes, Truck, Map as MapIcon, Megaphone,
 } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -48,7 +48,6 @@ export function Layout() {
     { label: "Comercial", items: [
         { to: "/comercial/dashboard", label: "Dashboard Comercial", icon: LineChart },
         { to: "/comercial/dados", label: "Dados Comerciais (fonte)", icon: Store },
-        { to: "/comercial/pdvs", label: "Pontos de Venda", icon: MapPin },
         { to: "/comercial/descontos", label: "Aprovações", icon: BadgePercent },
         { to: "/comercial/precos", label: "Tabela de preços", icon: Tags },
     ] },
