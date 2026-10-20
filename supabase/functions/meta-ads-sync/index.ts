@@ -34,6 +34,10 @@ const GRAPH = "https://graph.facebook.com/v25.0";
 // parece maior do que o do site.
 const FIELDS = [
   "account_id", "account_currency",
+  // O objetivo da campanha (OUTCOME_SALES, OUTCOME_ENGAGEMENT…): é ele que
+  // separa "gastou e não vendeu" de "campanha de engajamento, que não vende
+  // mesmo" no painel (20261113). Fica no `raw`, sem coluna própria.
+  "objective",
   "campaign_id", "campaign_name",
   "adset_id", "adset_name",
   "ad_id", "ad_name",

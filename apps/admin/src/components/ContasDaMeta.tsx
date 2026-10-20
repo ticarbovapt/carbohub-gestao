@@ -92,7 +92,7 @@ export function ContasDaMeta() {
               onClick={() => escolher.mutate({ act_id: c.act_id, usar: !ligada })}
             >
               {ocupado && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-              {ligada ? "Parar de ler" : ocupado ? "Lendo 30 dias…" : "Usar esta conta"}
+              {ligada ? "Parar de ler" : ocupado ? "Lendo 90 dias…" : "Usar esta conta"}
             </Button>
           </div>
         );
