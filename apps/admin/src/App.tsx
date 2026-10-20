@@ -16,14 +16,12 @@ import MetaConfig from "./pages/MetaConfig";
 import Vender from "./pages/Vender";
 import DashboardsLojas from "./pages/DashboardsLojas";
 import DashboardsFranqueados from "./pages/DashboardsFranqueados";
-import DashboardsComercial from "./pages/DashboardsComercial";
 import DescontoAprovacoes from "./pages/DescontoAprovacoes";
 import ProdutosPrecos from "./pages/ProdutosPrecos";
 import DashboardComercial from "./pages/DashboardComercial";
 import ComercialDados from "./pages/ComercialDados";
 import Pdvs from "./pages/Pdvs";
 import DashboardsMetas from "./pages/DashboardsMetas";
-import DashboardsEstrategico from "./pages/DashboardsEstrategico";
 import Suprimentos from "./pages/Suprimentos";
 import Chat from "./pages/Chat";
 import CallTest from "./pages/CallTest";
@@ -81,7 +79,9 @@ export default function App() {
         {/* Dashboards espelhados dos sistemas do ecossistema */}
         <Route path="/dashboards/lojas" element={<DashboardsLojas />} />
         <Route path="/dashboards/franqueados" element={<DashboardsFranqueados />} />
-        <Route path="/dashboards/comercial" element={<DashboardsComercial />} />
+        {/* Visão Geral e Estratégico saíram (20/10/2026): o Dashboard Comercial
+            cobre os dois, mais completo. Link salvo cai nele. */}
+        <Route path="/dashboards/comercial" element={<Navigate to="/comercial/dashboard" replace />} />
         <Route path="/comercial/dashboard" element={<DashboardComercial />} />
         <Route path="/comercial/dados" element={<ComercialDados />} />
         {/* Aba como segmento da URL — ver a nota em ComercialDados. */}
@@ -90,7 +90,7 @@ export default function App() {
         <Route path="/comercial/descontos" element={<DescontoAprovacoes />} />
         <Route path="/comercial/precos" element={<ProdutosPrecos />} />
         <Route path="/dashboards/metas" element={<DashboardsMetas />} />
-        <Route path="/dashboards/estrategico" element={<DashboardsEstrategico />} />
+        <Route path="/dashboards/estrategico" element={<Navigate to="/comercial/dashboard" replace />} />
         <Route path="/dashboards/mapa-conquista" element={<MapaConquista />} />
         <Route path="/dashboards/suprimentos" element={<Suprimentos />} />
         {/* Rota inexistente: diz que não existe, em vez de cair na home calado. */}
