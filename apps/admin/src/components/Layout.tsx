@@ -45,6 +45,13 @@ export function Layout() {
     { items: [
         { to: "/chat", label: "Carbo Chat", icon: MessagesSquare, badge: <ChatBadge /> },
     ] },
+    { label: "Comercial", items: [
+        { to: "/comercial/dashboard", label: "Dashboard Comercial", icon: LineChart },
+        { to: "/comercial/dados", label: "Dados Comerciais (fonte)", icon: Store },
+        { to: "/comercial/pdvs", label: "Pontos de Venda", icon: MapPin },
+        { to: "/comercial/descontos", label: "Aprovações", icon: BadgePercent },
+        { to: "/comercial/precos", label: "Tabela de preços", icon: Tags },
+    ] },
     { label: "Dashboards", items: [
         { to: "/dashboards/comercial", label: "Visão Geral", icon: TrendingUp },
         { to: "/dashboards/estrategico", label: "Estratégico", icon: LineChart },
@@ -53,13 +60,6 @@ export function Layout() {
         { to: "/dashboards/franqueados", label: "Licenciados", icon: Building2 },
         { to: "/dashboards/metas", label: "Metas (Placar)", icon: Trophy },
         { to: "/dashboards/suprimentos", label: "Suprimentos", icon: Boxes },
-    ] },
-    { label: "Comercial", items: [
-        { to: "/comercial/dashboard", label: "Dashboard Comercial", icon: LineChart },
-        { to: "/comercial/dados", label: "Dados Comerciais (fonte)", icon: Store },
-        { to: "/comercial/pdvs", label: "Pontos de Venda", icon: MapPin },
-        { to: "/comercial/descontos", label: "Aprovações", icon: BadgePercent },
-        { to: "/comercial/precos", label: "Tabela de preços", icon: Tags },
     ] },
     { label: "E-commerce", items: [
         { to: "/ecommerce/vendas-online", label: "Vendas Online", icon: Globe },

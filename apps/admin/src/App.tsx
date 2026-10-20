@@ -54,8 +54,8 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<LoginRoute />} />
       <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-        {/* A home era Usuários; agora é a Visão Geral, o primeiro item do menu. */}
-        <Route path="/" element={<Navigate to="/dashboards/comercial" replace />} />
+        {/* A home era Usuários; agora é o Dashboard Comercial, o primeiro item do menu. */}
+        <Route path="/" element={<Navigate to="/comercial/dashboard" replace />} />
         <Route path="/usuarios" element={<IrParaTi para="/usuarios" />} />
         <Route path="/estrutura" element={<IrParaTi para="/estrutura" />} />
         <Route path="/perfil" element={<Profile />} />
