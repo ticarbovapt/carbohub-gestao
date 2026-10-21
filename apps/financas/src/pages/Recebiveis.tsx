@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { HandCoins, CheckCircle2, Ban, ChevronLeft, ChevronRight, Plus, Search, AlertTriangle } from "lucide-react";
 import { useParamUrl, confirmar } from "@carbo/shell";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
@@ -13,9 +14,12 @@ import {
 } from "@/components/ui/carbo-table";
 import { usePersistedState } from "@/hooks/usePersistedState";
 import { FilialBling2, SeletorEmpresa, useEmpresaUrl } from "@/components/financeiro/FilialBling2";
+import { BaixaNoBling } from "@/components/financeiro/BaixaNoBling";
+import { toast } from "@/hooks/use-toast";
+import { useBaixaBlingConfig, vaiAoBling, enviarAoBling, avisarBaixaNoBling } from "@/lib/blingBaixa";
 import {
   useReceivablesOpen, useReceivablesPaged, useUpdateReceivableStatus, useCreateReceivable,
-  useInvoicedOrdersNoReceivable, useGenerateReceivablesFromOrders,
+  useInvoicedOrdersNoReceivable, useGenerateReceivablesFromOrders, invalidarContasAReceber,
   RECEIVABLE_STATUS_LABELS, RECEIVABLE_SOURCE_LABELS, type Receivable, type ReceivableStatus, type FiltroStatusReceber, type TituloNovo,
 } from "@/hooks/useReceivables";
 import { hojeISO, mesAtualISO, somarDias, diasAte, limitesDoMes, dataBR, estaVencido } from "@/lib/datas";
@@ -156,6 +160,9 @@ function RecebiveisMatriz({ seletor }: { seletor: ReactNode }) {
 
   const update = useUpdateReceivableStatus();
   const create = useCreateReceivable();
+  const qc = useQueryClient();
+  const { data: cfgBling } = useBaixaBlingConfig();
+  const [estornando, setEstornando] = useState<string | null>(null);
   const { data: openRows } = useReceivablesOpen(source);
   const { data: paged, isLoading, isError, error } = useReceivablesPaged({
     source, status, de: recorte.de, ate: recorte.ate, busca: buscaUrl, page, pageSize,
@@ -175,8 +182,17 @@ function RecebiveisMatriz({ seletor }: { seletor: ReactNode }) {
 
   const doReceive = async () => {
     if (!receiving || !recAt) return;
-    await update.mutateAsync({ id: receiving.id, status: "recebido", received_at: recAt, amount: Number(receiving.amount) });
-    setReceiving(null);
+    const titulo = receiving;
+    try {
+      await update.mutateAsync({ id: titulo.id, status: "recebido", received_at: recAt, amount: Number(titulo.amount) });
+      setReceiving(null);
+    } catch { return; /* o hook já avisou; o diálogo fica aberto para tentar de novo */ }
+    // ⚠️ A baixa LOCAL já está gravada; o Bling é o passo seguinte, e a recusa
+    // dele NÃO a desfaz — fica em `bling_baixa_erro`, com "Tentar de novo" na linha.
+    if (vaiAoBling(cfgBling, titulo)) {
+      avisarBaixaNoBling(await enviarAoBling("baixar", "receber", titulo.id));
+      invalidarContasAReceber(qc);
+    }
   };
   const doCreate = async () => {
     if (!form.amount || !form.due_date) return;
@@ -184,12 +200,35 @@ function RecebiveisMatriz({ seletor }: { seletor: ReactNode }) {
     setShowNew(false); setForm(formVazio());
   };
   const estornar = async (r: Receivable) => {
+    const vai = vaiAoBling(cfgBling, r);
+    // ⚠️ Recebido com `received_by` nulo = a baixa foi feita NO Bling e chegou
+    // pelo espelho. Estornar só aqui não adianta: a sincronização de 10 min o
+    // marca recebido de novo. Com a integração ligada quem recusa é a função.
+    if (r.source === "bling" && !vai && !r.received_by) {
+      toast({ title: "Este título foi pago no Bling — desfaça a baixa lá; o sistema acompanha em até 15 min.", variant: "destructive" });
+      return;
+    }
     const ok = await confirmar({
       titulo: "Estornar o recebimento?",
-      mensagem: `${r.customer_name || "Título"} · ${brl(r.amount)}, recebido em ${dataBR(r.received_at)}.\nO título volta a ficar em aberto e a data de recebimento é apagada.`,
+      mensagem: `${r.customer_name || "Título"} · ${brl(r.amount)}, recebido em ${dataBR(r.received_at)}.\nO título volta a ficar em aberto e a data de recebimento é apagada.` +
+        (vai ? "\nO estorno é feito primeiro no Bling e só depois aqui — se o Bling recusar, nada muda." : ""),
       confirmar: "Estornar", perigo: true,
     });
-    if (ok) update.mutate({ id: r.id, status: "programado" });
+    if (!ok) return;
+    if (vai) {
+      // ⚠️ O BLING PRIMEIRO. Estornar aqui e o Bling recusar deixaria o título
+      // em aberto aqui e recebido lá — e a sincronização o traria de volta.
+      setEstornando(r.id);
+      const res = await enviarAoBling("estornar", "receber", r.id);
+      setEstornando(null);
+      if (!res.ok) {
+        toast({ title: "O Bling recusou o estorno", description: res.mensagem, variant: "destructive" });
+        invalidarContasAReceber(qc);
+        return;
+      }
+      if (res.pulado) toast({ title: "Bling", description: res.mensagem });
+    }
+    update.mutate({ id: r.id, status: "programado" });
   };
   const cancelar = async (r: Receivable) => {
     const ok = await confirmar({
@@ -227,7 +266,8 @@ function RecebiveisMatriz({ seletor }: { seletor: ReactNode }) {
           título do Bling não guarda o pedido de origem, então não há como saber
           que já existe. A geração pela NF está DESLIGADA (fica no radar). */}
       <p className="text-xs text-muted-foreground">
-        Matriz: o contas a receber do Bling 1, atualizado a cada 10 minutos. A baixa feita aqui ainda não volta ao Bling.
+        Matriz: o contas a receber do Bling 1, atualizado a cada 10 minutos.{" "}
+        {cfgBling?.ativo ? "A baixa feita aqui vai para o Bling na hora." : "A baixa feita aqui ainda não volta ao Bling."}
       </p>
 
       {/* Aging — sempre sobre TODO o em aberto, independente dos filtros da lista. */}
@@ -359,7 +399,15 @@ function RecebiveisMatriz({ seletor }: { seletor: ReactNode }) {
                   </CarboTableCell>
                   <CarboTableCell>
                     {r.status === "recebido" ? (
-                        <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" onClick={() => estornar(r)}>Estornar</Button>
+                        <div className="flex flex-col items-start gap-0.5 lg:flex-row lg:flex-wrap lg:items-center lg:gap-1">
+                          <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" disabled={estornando === r.id} onClick={() => estornar(r)}>
+                            {estornando === r.id ? "Estornando…" : "Estornar"}
+                          </Button>
+                          <BaixaNoBling
+                            titulo={r} tipo="receber" cfg={cfgBling} pago baixadoAqui={!!r.received_by}
+                            onDepois={() => invalidarContasAReceber(qc)}
+                          />
+                        </div>
                       ) : r.status === "cancelado" ? <span className="text-muted-foreground text-xs">—</span>
                       : (
                         <div className="flex items-center gap-1">
@@ -409,6 +457,9 @@ function RecebiveisMatriz({ seletor }: { seletor: ReactNode }) {
                 <div className="flex justify-between gap-2"><span className="text-muted-foreground">Vencimento</span><strong>{dataBR(receiving.due_date)}</strong></div>
               </div>
               <div className="space-y-1.5"><Label>Data do recebimento</Label><Input type="date" value={recAt} max={hoje} onChange={(e) => setRecAt(e.target.value)} /></div>
+              {vaiAoBling(cfgBling, receiving) && (
+                <p className="rounded-md border border-border bg-muted/40 p-2 text-xs">A baixa feita aqui vai para o Bling na hora.</p>
+              )}
             </div>
           )}
           <DialogFooter>

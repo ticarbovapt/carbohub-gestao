@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { lerSemTeto } from "@carbo/shell";
 import { diaBrasilia, hojeISO, instanteDoDia, somarDias } from "@/lib/datas";
+import { COLUNAS_BAIXA_BLING, faltaColunaDaBaixa } from "@/lib/blingBaixa";
 
 const db = supabase as unknown as { from: (t: string) => any; rpc: (fn: string, args?: any) => any };
 
@@ -36,6 +37,13 @@ export interface Receivable {
   txid?: string | null;
   valor_recebido?: number | null;
   recebido_via?: string | null;     // manual | banco
+  bling_id?: number | string | null;
+  /** Quem deu a baixa AQUI. Nulo num título recebido = baixado no Bling (veio pelo espelho). */
+  received_by?: string | null;
+  // ── A baixa feita aqui enviada ao Bling 1 (`bling-contas-baixar`). Opcionais pelo mesmo motivo. ──
+  bling_baixa_em?: string | null;
+  bling_baixa_bordero?: number | null;
+  bling_baixa_erro?: string | null;
 }
 
 export const RECEIVABLE_SOURCE_LABELS: Record<string, string> = {
@@ -65,13 +73,21 @@ export function useReceivablesOpen(source?: string) {
   return useQuery({
     queryKey: ["receivables-open", source ?? "all"],
     queryFn: async () => {
-      const data = await lerSemTeto<any>(() => {
-        let q = db.from("receivables").select("id, amount, due_date, status, source")
+      const ler = (colunas: string) => lerSemTeto<any>(() => {
+        let q = db.from("receivables").select(colunas)
           .neq("status", "recebido").neq("status", "cancelado").order("id");
         if (source && source !== "all") q = q.eq("source", source);
         return q;
       });
-      return (data || []) as any[];
+      const antigas = "id, amount, due_date, status, source";
+      // ⚠️ As colunas da baixa no Bling podem ainda não existir (front antes do
+      // SQL): aí repete com as antigas, em vez de o resumo sumir.
+      try {
+        return ((await ler(`${antigas}, bling_id, received_by, ${COLUNAS_BAIXA_BLING}`)) || []) as any[];
+      } catch (e) {
+        if (!faltaColunaDaBaixa(e)) throw e;
+        return ((await ler(antigas)) || []) as any[];
+      }
     },
   });
 }
@@ -83,6 +99,9 @@ const limparBusca = (s: string) => s.replace(/[,()*%\\]/g, " ").trim();
 
 /**
  * Lista paginada no servidor, ordem ESTÁVEL (vencimento, id).
+ *
+ * `select("*")`: traz `bling_id`, `received_by` e as colunas `bling_baixa_*`
+ * quando existem — e, antes do SQL, simplesmente não as traz, sem erro.
  *
  * ⚠️ O recorte de data muda de coluna conforme o status: título RECEBIDO é
  * recortado por `received_at` (o dia de Brasília em que entrou o dinheiro);
@@ -151,7 +170,8 @@ async function montarPaginaReceber(params: {
   return { error, resultado: { rows: (data || []) as Receivable[], count: count || 0 } };
 }
 
-function invalidate(qc: ReturnType<typeof useQueryClient>) {
+/** Tudo o que lê `receivables` — a lista, o resumo e os painéis. */
+export function invalidarContasAReceber(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ["receivables-paged"] });
   qc.invalidateQueries({ queryKey: ["receivables-open"] });
   ["fin-rec-aging", "fin-cashflow", "fin-rec-customers", "fin-rec-ontime"].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
@@ -186,7 +206,7 @@ export function useUpdateReceivableStatus() {
       const { error: e2 } = await db.from("receivables").update(updates).eq("id", id);
       if (e2) throw e2;
     },
-    onSuccess: () => { invalidate(qc); toast({ title: "Recebível atualizado" }); },
+    onSuccess: () => { invalidarContasAReceber(qc); toast({ title: "Recebível atualizado" }); },
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
   });
 }
@@ -209,7 +229,7 @@ export function useCreateReceivable() {
       });
       if (error) throw error;
     },
-    onSuccess: () => { invalidate(qc); toast({ title: "Recebível criado" }); },
+    onSuccess: () => { invalidarContasAReceber(qc); toast({ title: "Recebível criado" }); },
     onError: (e: any) => toast({ title: "Erro ao criar recebível", description: e.message, variant: "destructive" }),
   });
 }
@@ -286,7 +306,7 @@ export function useGenerateReceivablesFromOrders() {
       }
       return rows.length;
     },
-    onSuccess: (n) => { invalidate(qc); qc.invalidateQueries({ queryKey: ["invoiced-no-receivable"] }); toast({ title: `${n} título(s) a receber gerado(s)` }); },
+    onSuccess: (n) => { invalidarContasAReceber(qc); qc.invalidateQueries({ queryKey: ["invoiced-no-receivable"] }); toast({ title: `${n} título(s) a receber gerado(s)` }); },
     onError: (e: any) => toast({ title: "Erro ao gerar títulos", description: e.message, variant: "destructive" }),
   });
 }

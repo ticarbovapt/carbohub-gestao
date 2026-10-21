@@ -185,8 +185,14 @@ export interface PurchasePayable {
   notes: string | null;
   source: string;            // 'interno' (criado no sistema) | 'bling' (espelho)
   bling_numero: string | null;
+  bling_id?: number | string | null;
   created_at: string;
   updated_at: string;
+  // ── A baixa feita aqui enviada ao Bling 1 (`bling-contas-baixar`). ──
+  // ⚠️ OPCIONAIS: o front pode subir antes do SQL, e aí elas não existem.
+  bling_baixa_em?: string | null;
+  bling_baixa_bordero?: number | null;
+  bling_baixa_erro?: string | null;
 }
 
 export interface ApprovalConfig {

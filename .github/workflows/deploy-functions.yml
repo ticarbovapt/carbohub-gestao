@@ -74,6 +74,10 @@ jobs:
           # Espelho das contas a pagar/receber do Bling 1 — SÓ LÊ e NUNCA renova o
           # token (a renovação é do bling-sync). Chamada pelo pg_cron com X-Cron-Secret.
           dep bling-contas-espelho --no-verify-jwt
+          # A baixa feita no Finanças VAI para o Bling 1 (e o estorno). Chamada pelo
+          # NAVEGADOR, por gente logada — SEM --no-verify-jwt; confere o app do
+          # Finanças por dentro e nasce DESLIGADA (fin_bling_baixa_config).
+          dep bling-contas-baixar
           # Bling 2 — segunda conta. --no-verify-jwt em todas: a auth e a sync
           # validam o JWT por dentro, e a auto-sync é chamada pelo pg_cron, que
           # manda só o X-Cron-Secret e nenhum Authorization.

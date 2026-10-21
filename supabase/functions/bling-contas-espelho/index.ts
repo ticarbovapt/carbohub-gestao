@@ -13,7 +13,7 @@
 //     derrubou o ML (`20260986`), e aqui ela derrubaria a EMISSÃO DE NF. Token
 //     perto de vencer ⇒ esta rodada PULA (e diz isso no log); quem renova é o
 //     `bling-sync`, como sempre foi. 401 do Bling ⇒ para, sem tentar renovar.
-//   • Só LÊ do Bling. Escrever lá (dar baixa) é outra etapa, com aprovação.
+//   • Só LÊ do Bling. Quem escreve lá (a baixa) é a `bling-contas-baixar`.
 //
 // A listagem do Bling é magra (id, valor, contato, situação, vencimento) e não
 // traz a DATA DE PAGAMENTO. O detalhe (`/contas/<tipo>/<id>`) traz, e é pedido
@@ -38,7 +38,12 @@ const PAUSA_MS = 350;                     // o Bling aceita ~3 req/s
 // faltou fica para a próxima rodada (é só uma fila que drena). O de RECEBER
 // para mais cedo para sobrar tempo para a LISTAGEM do de pagar, que vem depois
 // e não pode ser pulada (é ela que deixa o espelho em dia).
-const ORCAMENTO_MS: Record<"receber" | "pagar", number> = { receber: 50_000, pagar: 105_000 };
+const ORCAMENTO_MS: Record<"receber" | "pagar", number> = { receber: 40_000, pagar: 90_000 };
+// A DATA DE PAGAMENTO mora no BORDERÔ da baixa (`GET /borderos/{id}`), não no
+// título. Fase própria, depois do detalhe, com orçamento próprio: é uma fila
+// que drena (~2.600 títulos quitados na 1ª vez) e não pode atrasar a listagem.
+const ORCAMENTO_BORDERO_MS: Record<"receber" | "pagar", number> = { receber: 55_000, pagar: 115_000 };
+const BORDEROS_POR_RODADA = 40;
 
 const json = (status: number, obj: unknown) =>
   new Response(JSON.stringify(obj), { status, headers: { "Content-Type": "application/json" } });
@@ -152,7 +157,11 @@ Deno.serve(async (req) => {
           contato_documento: d.contato?.numeroDocumento ? String(d.contato.numeroDocumento).replace(/\D/g, "") : null,
           saldo: numOuNull(d.saldo),
           data_emissao: dataOuNull(d.dataEmissao),
-          data_pagamento: dataOuNull(d.dataPagamento ?? d.dataBaixa),
+          // A data vem do BORDERÔ (fase abaixo). Título quitado mantém a que já
+          // foi lida; título que voltou a aberto perde a dele.
+          ...(dataOuNull(d.dataPagamento ?? d.dataBaixa)
+            ? { data_pagamento: dataOuNull(d.dataPagamento ?? d.dataBaixa) }
+            : ["2", "3"].includes(String(d.situacao)) ? {} : { data_pagamento: null }),
           origem_id: numOuNull(d.origem?.id),
           origem_tipo: d.origem?.tipoOrigem ?? null,
           origem_numero: d.origem?.numero != null ? String(d.origem.numero) : null,
@@ -163,7 +172,26 @@ Deno.serve(async (req) => {
         if (error) throw new Error(`detalhe ${tabela} ${id}: ${error.message}`);
         detalhados++;
       }
-      resumo[tipo] = { lidos, detalhados, faltam_detalhe: Math.max(0, precisaDetalhe.length - detalhados) };
+      // ── A data de pagamento: o borderô mais recente do título quitado ─────
+      // ⚠️ Só lê. Borderô pode cobrir vários títulos; aqui ele só dá a DATA.
+      let borderos = 0;
+      const { data: semData } = await db.from(tabela).select("bling_id, detalhe")
+        .in("situacao", ["2", "3"]).is("data_pagamento", null).not("detalhe", "is", null)
+        .order("bling_id", { ascending: false }).limit(BORDEROS_POR_RODADA);
+      for (const r of semData ?? []) {
+        if (Date.now() - inicio > ORCAMENTO_BORDERO_MS[tipo]) break;
+        const ids = ((r.detalhe as any)?.borderos ?? [])
+          .map((x: any) => Number(typeof x === "object" ? x?.id : x)).filter((n: number) => n > 0);
+        if (!ids.length) continue;
+        await dormir(PAUSA_MS);
+        const bo = (await blingGet(token, `/borderos/${Math.max(...ids)}`))?.data ?? {};
+        const dia = dataOuNull(bo.data);
+        if (!dia) continue;
+        const { error } = await db.from(tabela).update({ data_pagamento: dia }).eq("bling_id", r.bling_id);
+        if (error) throw new Error(`borderô ${tabela} ${r.bling_id}: ${error.message}`);
+        borderos++;
+      }
+      resumo[tipo] = { lidos, detalhados, faltam_detalhe: Math.max(0, precisaDetalhe.length - detalhados), borderos };
     }
     await log(true, {});
     return json(200, resumo);

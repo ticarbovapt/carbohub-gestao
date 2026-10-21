@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useParamUrl, confirmar } from "@carbo/shell";
 import { usePersistedState } from "@/hooks/usePersistedState";
 import { CreditCard, CheckCircle2, Undo2, Ban, ChevronLeft, ChevronRight, Search, X, CalendarRange } from "lucide-react";
@@ -8,8 +9,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { usePurchasePayablesOpen, usePurchasePayablesPaged, useUpdatePayableStatus, type FiltroPagar } from "@/hooks/usePurchasing";
+import { usePurchasePayablesOpen, usePurchasePayablesPaged, useUpdatePayableStatus, invalidarContasAPagar, type FiltroPagar } from "@/hooks/usePurchasing";
 import { FilialBling2, SeletorEmpresa, useEmpresaUrl } from "@/components/financeiro/FilialBling2";
+import { BaixaNoBling } from "@/components/financeiro/BaixaNoBling";
+import { toast } from "@/hooks/use-toast";
+import { useBaixaBlingConfig, vaiAoBling, enviarAoBling, avisarBaixaNoBling } from "@/lib/blingBaixa";
 import { PAYABLE_STATUS_LABELS, type PayableStatus, type PurchasePayable } from "@/types/purchasing";
 import { hojeISO, mesAtualISO, limitesDoMes, dataBR, diasAte, estaVencido, emAberto } from "@/lib/datas";
 import {
@@ -166,6 +170,9 @@ function PayablesMatriz() {
   };
 
   const updateStatus = useUpdatePayableStatus();
+  const qc = useQueryClient();
+  const { data: cfgBling } = useBaixaBlingConfig();
+  const [estornando, setEstornando] = useState<string | null>(null);
   const { data: openRows } = usePurchasePayablesOpen(source);
   const { data: paged, isLoading, isError, error } = usePurchasePayablesPaged({
     source, status, from: periodo.de, to: periodo.ate, page, pageSize, busca,
@@ -194,24 +201,57 @@ function PayablesMatriz() {
   const payingPayable = rows.find((p) => p.id === payingId);
   const handlePay = async () => {
     if (!payingId) return;
+    // A linha é lida ANTES de fechar o diálogo: depois do update ela pode já ter
+    // saído da página (a fila não mostra pago).
+    const titulo = rows.find((p) => p.id === payingId);
     try {
       await updateStatus.mutateAsync({ id: payingId, status: "pago", paid_at: paidAt || hojeISO() });
       setPayingId(null);
-    } catch { /* o hook já avisou; o diálogo fica aberto para tentar de novo */ }
+    } catch { return; /* o hook já avisou; o diálogo fica aberto para tentar de novo */ }
+    // ⚠️ A baixa LOCAL já está gravada; o Bling é o passo seguinte, e a recusa
+    // dele NÃO a desfaz — fica em `bling_baixa_erro`, com "Tentar de novo" na linha.
+    if (titulo && vaiAoBling(cfgBling, titulo)) {
+      avisarBaixaNoBling(await enviarAoBling("baixar", "pagar", titulo.id));
+      invalidarContasAPagar(qc);
+    }
   };
 
   const estornar = async (p: PurchasePayable) => {
     const doBling = p.source === "bling";
+    const vai = vaiAoBling(cfgBling, p);
+    // ⚠️ Pago com `paid_by` nulo = a baixa foi feita NO Bling e chegou pelo
+    // espelho. Estornar só aqui não adianta: a sincronização de 10 min o marca
+    // pago de novo. Com a integração ligada quem recusa é a função (e diz por quê).
+    if (doBling && !vai && !p.paid_by) {
+      toast({ title: "Este título foi pago no Bling — desfaça a baixa lá; o sistema acompanha em até 15 min.", variant: "destructive" });
+      return;
+    }
     const ok = await confirmar({
       titulo: "Estornar o pagamento?",
       mensagem: `${p.supplier_name} · ${formatCurrency(p.amount)} · venc. ${dataBR(p.due_date)}\n\n` +
-        (doBling
+        (vai
+          ? "Este título vem do Bling. O estorno é feito primeiro no Bling e só depois aqui — se o Bling recusar, nada muda."
+          : doBling
           ? "Este título vem do Bling. O estorno vale só aqui: se no Bling ele estiver pago, a próxima sincronização o traz de volta como pago."
           : "A conta volta a ficar em aberto e a data de pagamento é apagada."),
       confirmar: "Estornar",
       perigo: true,
     });
-    if (ok) updateStatus.mutate({ id: p.id, status: "programado" });
+    if (!ok) return;
+    if (vai) {
+      // ⚠️ O BLING PRIMEIRO. Estornar aqui e o Bling recusar deixaria o título
+      // em aberto aqui e pago lá — e a sincronização o traria de volta pago.
+      setEstornando(p.id);
+      const r = await enviarAoBling("estornar", "pagar", p.id);
+      setEstornando(null);
+      if (!r.ok) {
+        toast({ title: "O Bling recusou o estorno", description: r.mensagem, variant: "destructive" });
+        invalidarContasAPagar(qc);
+        return;
+      }
+      if (r.pulado) toast({ title: "Bling", description: r.mensagem });
+    }
+    updateStatus.mutate({ id: p.id, status: "programado" });
   };
 
   const cancelar = async (p: PurchasePayable) => {
@@ -402,9 +442,18 @@ function PayablesMatriz() {
                   </CarboTableCell>
                   <CarboTableCell onClick={(e) => e.stopPropagation()}>
                     {p.status === "pago" ? (
-                      <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" onClick={() => estornar(p)} title="Estornar pagamento">
-                        <Undo2 className="h-3.5 w-3.5" /> Estornar
-                      </Button>
+                      <div className="flex flex-col items-start gap-0.5 lg:flex-row lg:flex-wrap lg:items-center lg:gap-1">
+                        <Button
+                          variant="ghost" size="sm" className="gap-1.5 text-muted-foreground"
+                          disabled={estornando === p.id} onClick={() => estornar(p)} title="Estornar pagamento"
+                        >
+                          <Undo2 className="h-3.5 w-3.5" /> {estornando === p.id ? "Estornando…" : "Estornar"}
+                        </Button>
+                        <BaixaNoBling
+                          titulo={p} tipo="pagar" cfg={cfgBling} pago baixadoAqui={!!p.paid_by}
+                          onDepois={() => invalidarContasAPagar(qc)}
+                        />
+                      </div>
                     ) : p.status === "cancelado" ? (
                       <span className="text-xs text-muted-foreground">—</span>
                     ) : (
@@ -472,11 +521,15 @@ function PayablesMatriz() {
                   <Label>Data do pagamento</Label>
                   <Input type="date" value={paidAt} max={hoje} onChange={(e) => setPaidAt(e.target.value)} />
                 </div>
-                {payingPayable.source === "bling" && (
+                {payingPayable.source === "bling" && (vaiAoBling(cfgBling, payingPayable) ? (
+                  <p className="rounded-md border border-border bg-muted/40 p-2 text-xs">
+                    A baixa feita aqui vai para o Bling na hora.
+                  </p>
+                ) : (
                   <p className="rounded-md border border-warning/40 bg-warning/10 p-2 text-xs">
                     A baixa vale só aqui — no Bling o título continua em aberto.
                   </p>
-                )}
+                ))}
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">Deseja marcar esta conta como paga?</p>
