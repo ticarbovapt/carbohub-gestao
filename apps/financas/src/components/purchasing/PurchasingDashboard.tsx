@@ -1,13 +1,12 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend,
   ComposedChart, Line, Area, AreaChart, LabelList,
 } from "recharts";
 import { CarboCard, CarboCardContent, CarboCardHeader, CarboCardTitle } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
-import { subMonths, differenceInCalendarDays, format } from "date-fns";
-import { ptBR } from "date-fns/locale";
-import { usePersistedState } from "@/hooks/usePersistedState";
+import { useParamUrl } from "@carbo/shell";
+import { hojeISO, diaBrasilia, diasAte, dataBR } from "@/lib/datas";
 import { usePurchaseRequests } from "@/hooks/usePurchasing";
 import { useSubscriptions } from "@/hooks/useSubscriptions";
 import { subscriptionMonthlyCost } from "@/types/purchasing";
@@ -19,7 +18,26 @@ import {
 const brl = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
 const brlC = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", notation: "compact" }).format(v || 0);
 const usd = (v: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(v || 0);
-const today = () => new Date();
+
+// ⚠️ `semana`/`mes` das RPCs são DATE (`AAAA-MM-DD`). `new Date("2026-10-19")`
+// é meia-noite UTC — 21h do DOMINGO em Brasília: a semana aparecia como
+// domingo e o mês de outubro saía rotulado "set/26". Tudo aqui é lido como texto.
+const MESES_CURTOS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+const rotuloMes = (iso: string) => `${MESES_CURTOS[Number(iso.slice(5, 7)) - 1]}/${iso.slice(2, 4)}`;
+const diaMes = (iso: string) => dataBR(iso).slice(0, 5);
+/** `AAAA-MM-DD` menos N meses, por texto (dia limitado ao fim do mês). */
+function subtrairMeses(iso: string, n: number): string {
+  const t = Number(iso.slice(0, 4)) * 12 + Number(iso.slice(5, 7)) - 1 - n;
+  const a = Math.floor(t / 12), m = (t % 12) + 1;
+  const ultimo = new Date(Date.UTC(a, m, 0)).getUTCDate();
+  const d = Math.min(Number(iso.slice(8, 10)), ultimo);
+  return `${a}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+/** Dias desde um instante (`created_at`, `submitted_at`), pelo dia de Brasília. */
+const diasDesde = (instante: string) => -(diasAte(diaBrasilia(new Date(instante))) ?? 0);
+
+const ORIGENS: [string, string][] = [["all", "Todas"], ["interno", "Sistema"], ["bling", "Bling"]];
+const PERIODOS: [string, string][] = [["6", "6 meses"], ["12", "12 meses"], ["tudo", "Tudo"]];
 
 const AGING = [
   { key: "vencido_30_mais", label: "Vencido +30d", color: "hsl(0, 72%, 45%)" },
@@ -49,13 +67,17 @@ function Kpi({ label, value, tone = "" }: { label: string; value: string; tone?:
 const empty = <p className="text-muted-foreground text-sm text-center py-12">Sem dados disponíveis</p>;
 
 export function PurchasingDashboard() {
-  const [source, setSource] = usePersistedState<string>("compras.dash.source", "all");
-  const [meses, setMeses] = usePersistedState<number>("compras.dash.meses", 12);
-  const periodo = useMemo(() => {
-    const to = today().toISOString().slice(0, 10);
-    const from = meses > 0 ? subMonths(today(), meses).toISOString().slice(0, 10) : undefined;
-    return { from, to: meses > 0 ? to : undefined };
-  }, [meses]);
+  // Filtros na URL (nunca no localStorage): período é PERGUNTA, não preferência —
+  // grudado, traria "6 meses" de volta semanas depois com cara de padrão.
+  const [origemUrl, setSource] = useParamUrl("origem", "all");
+  const [periodoUrl, setPeriodo] = useParamUrl("periodo", "12");
+  const source = ORIGENS.some(([v]) => v === origemUrl) ? origemUrl : "all";
+  const periodoSel = PERIODOS.some(([v]) => v === periodoUrl) ? periodoUrl : "12";
+  const meses = periodoSel === "tudo" ? 0 : Number(periodoSel);
+  const hoje = hojeISO();
+  const periodo = useMemo(() => (
+    meses > 0 ? { from: subtrairMeses(hoje, meses), to: hoje } : { from: undefined, to: undefined }
+  ), [meses, hoje]);
 
   const { data: aging = [] } = useFinAging(source);
   const { data: forecast = [] } = useFinForecast(source, 8);
@@ -78,7 +100,7 @@ export function PurchasingDashboard() {
   const aVencer30 = useMemo(() => aging.filter((a) => a.bucket === "vence_hoje" || a.bucket === "a_vencer_7" || a.bucket === "a_vencer_30").reduce((s, a) => s + Number(a.total), 0), [aging]);
 
   const forecastData = useMemo(() => forecast.map((f) => ({
-    semana: format(new Date(f.semana), "dd/MM", { locale: ptBR }), valor: Number(f.total),
+    semana: diaMes(f.semana), valor: Number(f.total),
   })), [forecast]);
 
   const statusData = useMemo(() => statusSum
@@ -86,7 +108,7 @@ export function PurchasingDashboard() {
     .map((s) => ({ name: STATUS_META[s.status_efetivo]?.label ?? s.status_efetivo, value: Number(s.total), color: STATUS_META[s.status_efetivo]?.color ?? "hsl(220,9%,60%)" })), [statusSum]);
 
   const monthlyData = useMemo(() => monthly.map((m) => ({
-    mes: format(new Date(m.mes), "MMM/yy", { locale: ptBR }), Pago: Number(m.pago), "Em aberto": Number(m.aberto),
+    mes: rotuloMes(m.mes), Pago: Number(m.pago), "Em aberto": Number(m.aberto),
   })), [monthly]);
 
   // Curva ABC (Pareto): barra de gasto + linha de % acumulado sobre o TOTAL do
@@ -124,31 +146,31 @@ export function PurchasingDashboard() {
   const hasUSD = subsData.some((d) => d.USD > 0);
 
   const renovacoes = useMemo(() => (subs ?? [])
-    .filter((s) => s.status === "ativa" && s.proximo_vencimento && differenceInCalendarDays(new Date(s.proximo_vencimento), today()) <= 60)
-    .sort((a, b) => new Date(a.proximo_vencimento!).getTime() - new Date(b.proximo_vencimento!).getTime())
-    .slice(0, 8), [subs]);
+    .filter((s) => s.status === "ativa" && s.proximo_vencimento && (diasAte(s.proximo_vencimento, hoje) ?? 999) <= 60)
+    .sort((a, b) => a.proximo_vencimento!.slice(0, 10).localeCompare(b.proximo_vencimento!.slice(0, 10)))
+    .slice(0, 8), [subs, hoje]);
 
   return (
     <div className="space-y-6">
       {/* Filtros globais */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="inline-flex rounded-lg border border-border p-0.5">
-          {[["all", "Todas"], ["interno", "Sistema"], ["bling", "Bling"]].map(([v, l]) => (
+        <div className="inline-flex rounded-lg border border-border p-0.5" role="group" aria-label="Origem">
+          {ORIGENS.map(([v, l]) => (
             <button key={v} onClick={() => setSource(v)} aria-pressed={source === v}
               className={`px-3 py-1.5 text-sm rounded-md transition-colors ${source === v ? "bg-carbo-green text-white" : "text-muted-foreground hover:text-foreground"}`}>{l}</button>
           ))}
         </div>
-        <div className="inline-flex rounded-lg border border-border p-0.5">
-          {[[6, "6 meses"], [12, "12 meses"], [0, "Tudo"]].map(([v, l]) => (
-            <button key={v} onClick={() => setMeses(v as number)} aria-pressed={meses === v}
-              className={`px-3 py-1.5 text-sm rounded-md transition-colors ${meses === v ? "bg-carbo-green text-white" : "text-muted-foreground hover:text-foreground"}`}>{l}</button>
+        <div className="inline-flex rounded-lg border border-border p-0.5" role="group" aria-label="Período">
+          {PERIODOS.map(([v, l]) => (
+            <button key={v} onClick={() => setPeriodo(v)} aria-pressed={periodoSel === v}
+              className={`px-3 py-1.5 text-sm rounded-md transition-colors ${periodoSel === v ? "bg-carbo-green text-white" : "text-muted-foreground hover:text-foreground"}`}>{l}</button>
           ))}
         </div>
         <span className="text-[11px] text-muted-foreground">Contas a pagar em BRL. Assinaturas em BRL/USD separadas. Origem "{source === "all" ? "todas" : source}".</span>
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Kpi label="Vencido (em aberto)" value={brl(totalVencido)} tone={totalVencido > 0 ? "text-destructive" : ""} />
         <Kpi label="A vencer (30 dias)" value={brl(aVencer30)} />
         <Kpi label="Pago no prazo" value={onTime?.pct_no_prazo != null ? `${onTime.pct_no_prazo}%` : "—"} tone={(onTime?.pct_no_prazo ?? 100) < 80 ? "text-warning" : "text-success"} />
@@ -295,7 +317,7 @@ export function PurchasingDashboard() {
             ) : (
               <div className="space-y-2 max-h-[260px] overflow-y-auto">
                 {pendentes.slice(0, 12).map((rc) => {
-                  const dias = differenceInCalendarDays(today(), new Date(rc.submitted_at ?? rc.created_at));
+                  const dias = diasDesde(rc.submitted_at ?? rc.created_at);
                   return (
                     <div key={rc.id} className="flex items-center justify-between text-sm border-b border-border pb-1.5">
                       <div className="min-w-0">
@@ -349,7 +371,7 @@ export function PurchasingDashboard() {
             ) : (
               <div className="space-y-2 max-h-[300px] overflow-y-auto">
                 {renovacoes.map((s) => {
-                  const dias = differenceInCalendarDays(new Date(s.proximo_vencimento!), today());
+                  const dias = diasAte(s.proximo_vencimento!, hoje) ?? 0;
                   const money = s.currency === "USD" ? usd : brl;
                   return (
                     <div key={s.id} className="flex items-center justify-between text-sm border-b border-border pb-1.5">
@@ -358,7 +380,7 @@ export function PurchasingDashboard() {
                         <p className="text-[11px] text-muted-foreground truncate">{s.departamento || "—"} · {money(Number(s.valor))} · {s.cobranca === "manual" ? "manual" : "automática"}</p>
                       </div>
                       <div className="text-right shrink-0">
-                        <p className="text-xs">{format(new Date(s.proximo_vencimento!), "dd/MM", { locale: ptBR })}</p>
+                        <p className="text-xs">{diaMes(s.proximo_vencimento!)}</p>
                         <CarboBadge variant={dias <= 7 && s.cobranca === "manual" ? "destructive" : "secondary"} className="text-[10px]">{dias <= 0 ? "hoje/venc." : `${dias}d`}</CarboBadge>
                       </div>
                     </div>

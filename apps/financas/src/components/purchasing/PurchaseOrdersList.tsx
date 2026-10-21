@@ -1,22 +1,22 @@
 import { useState } from "react";
-import { usePersistedState } from "@/hooks/usePersistedState";
-import { ShoppingCart } from "lucide-react";
+import { ShoppingCart, Ban, Search } from "lucide-react";
+import { useParamUrl, confirmar } from "@carbo/shell";
 import { RegistrarCompraDialog } from "./OCActionsDialogs";
 import { usePaymentMethods, labelPaymentMethod } from "@/hooks/usePaymentMethods";
-import { PAYMENT_METHOD_TYPE_LABELS } from "@/types/purchasing";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Ban } from "lucide-react";
 import { usePurchaseOrders, useUpdatePurchaseOrderStatus } from "@/hooks/usePurchasing";
 import { useAuth } from "@/contexts/AuthContext";
-import { ORDER_STATUS_LABELS, type PurchaseOrder, type PurchaseOrderStatus } from "@/types/purchasing";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { ORDER_STATUS_LABELS, PAYMENT_METHOD_TYPE_LABELS, type PurchaseOrder, type PurchaseOrderStatus } from "@/types/purchasing";
+import { dataBR } from "@/lib/datas";
 import {
   CarboTable, CarboTableHeader, CarboTableBody, CarboTableRow, CarboTableHead, CarboTableCell,
 } from "@/components/ui/carbo-table";
+
+const semAcento = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
 const statusVariantMap: Record<PurchaseOrderStatus, any> = {
   gerada: "info",
@@ -28,24 +28,39 @@ const statusVariantMap: Record<PurchaseOrderStatus, any> = {
 };
 
 export function PurchaseOrdersList() {
-  const [statusFilter, setStatusFilter] = usePersistedState<string>("compras.oc.status", "all");
-  const { data: orders, isLoading } = usePurchaseOrders(
+  const [statusFilter, setStatusFilter] = useParamUrl("status", "all");
+  const [busca, setBusca] = useParamUrl("busca", "", { replace: true });
+  const { data: allOrders, isLoading } = usePurchaseOrders(
     statusFilter !== "all" ? { status: statusFilter } : undefined
   );
+  const termo = semAcento(busca.trim());
+  const orders = (allOrders ?? []).filter((oc) =>
+    !termo || semAcento(`${oc.oc_number} ${oc.supplier_name}`).includes(termo));
   const { data: methods = [] } = usePaymentMethods();
   const pmById = new Map(methods.map((m) => [m.id, m]));
   const { gestor } = useAuth();
   const updateStatus = useUpdatePurchaseOrderStatus();
   const [selectedOC, setSelectedOC] = useState<PurchaseOrder | null>(null);
   const [comprarOC, setComprarOC] = useState<PurchaseOrder | null>(null);
-  const [cancelOC, setCancelOC] = useState<PurchaseOrder | null>(null);
 
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val);
 
+  const cancelarOC = async (oc: PurchaseOrder) => {
+    const ok = await confirmar({
+      titulo: `Cancelar a OC ${oc.oc_number}?`,
+      mensagem: "A ordem sai do fluxo (não poderá ser recebida nem faturada). Use quando a OC foi gerada por engano ou a compra não vai acontecer.",
+      confirmar: "Cancelar OC",
+      cancelar: "Voltar",
+      perigo: true,
+    });
+    if (!ok) return;
+    updateStatus.mutate({ id: oc.id, status: "cancelada" }, { onSuccess: () => setSelectedOC(null) });
+  };
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-[200px]">
             <SelectValue placeholder="Filtrar por status" />
@@ -57,6 +72,10 @@ export function PurchaseOrdersList() {
             ))}
           </SelectContent>
         </Select>
+        <div className="relative w-full lg:w-72">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Nº da OC ou fornecedor…" className="pl-8" />
+        </div>
       </div>
 
       <CarboTable>
@@ -68,7 +87,7 @@ export function PurchaseOrdersList() {
             <CarboTableHead>Pagamento</CarboTableHead>
             <CarboTableHead>Previsão Entrega</CarboTableHead>
             <CarboTableHead>Status</CarboTableHead>
-            <CarboTableHead>Ações</CarboTableHead>
+            <CarboTableHead><span className="sr-only">Ação</span></CarboTableHead>
           </CarboTableRow>
         </CarboTableHeader>
         <CarboTableBody>
@@ -76,13 +95,13 @@ export function PurchaseOrdersList() {
             <CarboTableRow>
               <CarboTableCell colSpan={7} className="text-center text-muted-foreground py-8">Carregando...</CarboTableCell>
             </CarboTableRow>
-          ) : !orders?.length ? (
+          ) : !orders.length ? (
             <CarboTableRow>
               <CarboTableCell colSpan={7} className="text-center text-muted-foreground py-8">Nenhuma OC encontrada</CarboTableCell>
             </CarboTableRow>
           ) : (
             orders.map((oc) => (
-              <CarboTableRow key={oc.id} interactive className="cursor-pointer" onClick={() => setSelectedOC(oc)}>
+              <CarboTableRow key={oc.id} interactive onClick={() => setSelectedOC(oc)}>
                 <CarboTableCell className="font-mono font-medium">{oc.oc_number}</CarboTableCell>
                 <CarboTableCell>{oc.supplier_name}</CarboTableCell>
                 <CarboTableCell className="font-mono">{formatCurrency(oc.total_value)}</CarboTableCell>
@@ -102,21 +121,17 @@ export function PurchaseOrdersList() {
                     <span className="text-muted-foreground text-sm">—</span>
                   )}
                 </CarboTableCell>
-                <CarboTableCell className="text-muted-foreground text-sm">
-                  {oc.expected_delivery ? format(new Date(oc.expected_delivery), "dd/MM/yyyy", { locale: ptBR }) : "—"}
-                </CarboTableCell>
+                <CarboTableCell className="text-muted-foreground text-sm">{dataBR(oc.expected_delivery)}</CarboTableCell>
                 <CarboTableCell>
                   <CarboBadge variant={statusVariantMap[oc.status]} dot>
                     {ORDER_STATUS_LABELS[oc.status]}
                   </CarboBadge>
                 </CarboTableCell>
                 <CarboTableCell onClick={(e) => e.stopPropagation()}>
-                  {oc.status === "gerada" ? (
-                    <Button size="sm" className="h-8 gap-1 bg-carbo-green hover:bg-carbo-green/90 text-white" onClick={() => setComprarOC(oc)} title="Registrar compra">
+                  {oc.status === "gerada" && (
+                    <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => setComprarOC(oc)}>
                       <ShoppingCart className="h-4 w-4" /> Registrar compra
                     </Button>
-                  ) : (
-                    <span className="text-muted-foreground text-sm">—</span>
                   )}
                 </CarboTableCell>
               </CarboTableRow>
@@ -126,15 +141,17 @@ export function PurchaseOrdersList() {
       </CarboTable>
 
       {/* OC Details Dialog */}
-      <Dialog open={!!selectedOC} onOpenChange={() => setSelectedOC(null)}>
-        <DialogContent className="sm:max-w-2xl">
+      <Dialog open={!!selectedOC} onOpenChange={(o) => !o && setSelectedOC(null)}>
+        <DialogContent className="sm:max-w-2xl max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Ordem de Compra {selectedOC?.oc_number}</DialogTitle>
-            <DialogDescription>Detalhes da ordem de compra</DialogDescription>
+            <DialogDescription>
+              {selectedOC ? `${ORDER_STATUS_LABELS[selectedOC.status]} · gerada em ${dataBR(selectedOC.created_at)}` : "Detalhes da ordem de compra"}
+            </DialogDescription>
           </DialogHeader>
           {selectedOC && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4 text-sm">
+              <div className="grid grid-cols-1 gap-x-4 gap-y-2 text-sm sm:grid-cols-2">
                 <div><span className="text-muted-foreground">Fornecedor:</span> <strong>{selectedOC.supplier_name}</strong></div>
                 <div><span className="text-muted-foreground">CNPJ/CPF:</span> <strong>{selectedOC.supplier_document || "—"}</strong></div>
                 <div><span className="text-muted-foreground">Condição Pgto:</span> <strong>{selectedOC.payment_condition || "—"}</strong></div>
@@ -149,11 +166,15 @@ export function PurchaseOrdersList() {
                     </strong>
                   </div>
                 )}
+                <div><span className="text-muted-foreground">Previsão de entrega:</span> <strong>{dataBR(selectedOC.expected_delivery)}</strong></div>
                 {selectedOC.purchased_at && (
-                  <div>
-                    <span className="text-muted-foreground">Pagamento:</span>{" "}
-                    <strong>{selectedOC.is_paid ? "Pago" : "Em aberto"}</strong>
-                  </div>
+                  <>
+                    <div><span className="text-muted-foreground">Comprada em:</span> <strong>{dataBR(selectedOC.purchased_at)}</strong></div>
+                    <div>
+                      <span className="text-muted-foreground">Pagamento:</span>{" "}
+                      <strong>{selectedOC.is_paid ? `Pago${selectedOC.paid_at ? ` em ${dataBR(selectedOC.paid_at)}` : ""}` : `Em aberto${selectedOC.payment_due_date ? ` · vence ${dataBR(selectedOC.payment_due_date)}` : ""}`}</strong>
+                    </div>
+                  </>
                 )}
               </div>
               {selectedOC.items?.length > 0 && (
@@ -171,7 +192,7 @@ export function PurchaseOrdersList() {
                       {selectedOC.items.map((item, idx) => (
                         <tr key={idx} className="border-t border-border">
                           <td className="p-2">{item.descricao}</td>
-                          <td className="p-2 text-right">{item.quantidade} {item.unidade}</td>
+                          <td className="p-2 text-right whitespace-nowrap">{item.quantidade} {item.unidade}</td>
                           <td className="p-2 text-right font-mono">{formatCurrency(item.valor_unitario)}</td>
                           <td className="p-2 text-right font-mono">{formatCurrency(item.quantidade * item.valor_unitario)}</td>
                         </tr>
@@ -182,28 +203,20 @@ export function PurchaseOrdersList() {
               )}
             </div>
           )}
-          {gestor && selectedOC && (selectedOC.status === "gerada" || selectedOC.status === "comprada") && (
-            <DialogFooter>
-              <Button variant="outline" className="gap-1.5 text-destructive" onClick={() => setCancelOC(selectedOC)}>
-                <Ban className="h-4 w-4" /> Cancelar OC
-              </Button>
+          {selectedOC && (selectedOC.status === "gerada" || (gestor && selectedOC.status === "comprada")) && (
+            <DialogFooter className="flex-wrap gap-2">
+              {gestor && (
+                <Button variant="ghost" className="gap-1.5 text-destructive" disabled={updateStatus.isPending} onClick={() => cancelarOC(selectedOC)}>
+                  <Ban className="h-4 w-4" /> Cancelar OC
+                </Button>
+              )}
+              {selectedOC.status === "gerada" && (
+                <Button className="gap-1.5 bg-carbo-green hover:bg-carbo-green/90 text-white" onClick={() => { setComprarOC(selectedOC); setSelectedOC(null); }}>
+                  <ShoppingCart className="h-4 w-4" /> Registrar compra
+                </Button>
+              )}
             </DialogFooter>
           )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Confirmação de cancelamento da OC */}
-      <Dialog open={!!cancelOC} onOpenChange={(o) => !o && setCancelOC(null)}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Cancelar OC {cancelOC?.oc_number}?</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground">A ordem sai do fluxo (não poderá ser recebida nem faturada). Use quando a OC foi gerada por engano ou a compra não vai acontecer.</p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCancelOC(null)}>Voltar</Button>
-            <Button variant="destructive" disabled={updateStatus.isPending}
-              onClick={() => { if (cancelOC) updateStatus.mutate({ id: cancelOC.id, status: "cancelada" }, { onSuccess: () => { setCancelOC(null); setSelectedOC(null); } }); }}>
-              Cancelar OC
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 

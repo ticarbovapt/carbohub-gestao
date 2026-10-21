@@ -10,7 +10,7 @@ import { useCreatePurchaseRequest } from "@/hooks/usePurchasing";
 import { useSuppliers } from "@/hooks/useSuppliers";
 import { useTimeInterno } from "@/hooks/useTimeInterno";
 import { useAuth } from "@/contexts/AuthContext";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import type { PurchaseRequestItem } from "@/types/purchasing";
 
 const UNITS_OF_MEASURE = ["un", "kg", "g", "L", "mL", "m", "cm", "m²", "m³", "pç", "cx", "pct", "par", "h", "km"];
@@ -67,26 +67,40 @@ export function PurchaseRequestForm({ serviceOrderId, onClose }: PurchaseRequest
   };
 
   const handleSubmit = async (asDraft: boolean) => {
-    if (!costCenter || !justification || items.some((i) => !i.descricao)) return;
+    // Campo obrigatório vazio NÃO pode ser um `return` calado: o clique não
+    // fazia nada e a pessoa não sabia por quê.
+    const faltando: string[] = [];
+    if (!costCenter) faltando.push("Centro de Custo");
+    if (!justification.trim()) faltando.push("Justificativa");
+    items.forEach((i, idx) => { if (!i.descricao.trim()) faltando.push(`Descrição do item ${idx + 1}`); });
+    if (faltando.length) {
+      toast.error("Preencha os campos obrigatórios", { description: faltando.join(" · ") });
+      return;
+    }
     // Enviar para aprovação exige valor > 0 (rascunho pode ficar sem valor ainda).
     if (!asDraft && estimatedValue <= 0) {
-      toast({ title: "Informe o valor dos itens", description: "O valor estimado precisa ser maior que zero para enviar à aprovação.", variant: "destructive" });
+      toast.error("Informe o valor dos itens", { description: "O valor estimado precisa ser maior que zero para enviar à aprovação." });
       return;
     }
 
-    await createRC.mutateAsync({
-      cost_center: costCenter,
-      purchase_type: purchaseType,
-      suggested_supplier: supplier,
-      estimated_value: estimatedValue,
-      justification,
-      operational_impact: impact,
-      items,
-      requested_by: requesterId || undefined,
-      service_order_id: serviceOrderId,
-      status: asDraft ? "rascunho" : "aguardando_aprovacao",
-    });
-    onClose();
+    try {
+      await createRC.mutateAsync({
+        cost_center: costCenter,
+        purchase_type: purchaseType,
+        suggested_supplier: supplier,
+        estimated_value: estimatedValue,
+        justification,
+        operational_impact: impact,
+        items,
+        requested_by: requesterId || undefined,
+        service_order_id: serviceOrderId,
+        status: asDraft ? "rascunho" : "aguardando_aprovacao",
+      });
+      onClose();
+    } catch {
+      // O `onError` do useCreatePurchaseRequest mostra a mensagem; aqui só se
+      // mantém o formulário aberto, com o que foi digitado.
+    }
   };
 
   const formatCurrency = (val: number) =>
@@ -106,7 +120,7 @@ export function PurchaseRequestForm({ serviceOrderId, onClose }: PurchaseRequest
             requesterId !== "" ? "border-amber-500/40 bg-amber-500/10" : "border-border bg-card"
           }`}
         >
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:gap-3">
             <div className="flex items-center gap-2">
               <span
                 className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
@@ -126,13 +140,13 @@ export function PurchaseRequestForm({ serviceOrderId, onClose }: PurchaseRequest
               </span>
             </div>
 
-            <div className="flex flex-1 items-center gap-2 sm:justify-end">
+            <div className="flex flex-1 items-center gap-2 lg:justify-end">
               <Select
                 value={requesterId || "__self__"}
                 onValueChange={(v) => setRequesterId(v === "__self__" ? "" : v)}
               >
                 <SelectTrigger
-                  className={`h-9 w-full sm:w-72 ${
+                  className={`h-9 w-full lg:w-72 ${
                     requesterId !== ""
                       ? "border-amber-500/40 bg-amber-500/5 text-amber-700 focus:ring-amber-500/30 dark:text-amber-300"
                       : ""
@@ -165,7 +179,7 @@ export function PurchaseRequestForm({ serviceOrderId, onClose }: PurchaseRequest
           )}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div>
             <Label>Centro de Custo *</Label>
             <Select value={costCenter} onValueChange={setCostCenter}>
@@ -219,56 +233,62 @@ export function PurchaseRequestForm({ serviceOrderId, onClose }: PurchaseRequest
               <Plus className="h-3.5 w-3.5" /> Adicionar Item
             </Button>
           </div>
+          {/* Abaixo de `lg:` cada item é um bloco empilhado, com rótulo em todo
+              campo; o `grid-cols-12` estourava no celular (e, com a barra
+              lateral aberta, até em 768). */}
           <div className="space-y-2">
-            {items.map((item, idx) => (
-              <div key={idx} className="grid grid-cols-12 gap-2 items-end">
-                <div className="col-span-5">
-                  {idx === 0 && <Label className="text-xs">Descrição</Label>}
-                  <Input
-                    value={item.descricao}
-                    onChange={(e) => updateItem(idx, "descricao", e.target.value)}
-                    placeholder="Descrição do item"
-                  />
+            {items.map((item, idx) => {
+              const rotulo = idx === 0 ? "text-xs" : "text-xs lg:hidden";
+              return (
+                <div key={idx} className="grid grid-cols-2 gap-2 items-end rounded-lg border border-border p-2 lg:grid-cols-12 lg:border-0 lg:p-0">
+                  <div className="col-span-2 lg:col-span-5">
+                    <Label className={rotulo}>Descrição {items.length > 1 && <span className="lg:hidden">· item {idx + 1}</span>}</Label>
+                    <Input
+                      value={item.descricao}
+                      onChange={(e) => updateItem(idx, "descricao", e.target.value)}
+                      placeholder="Descrição do item"
+                    />
+                  </div>
+                  <div className="col-span-1 lg:col-span-2">
+                    <Label className={rotulo}>Qtd</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={item.quantidade}
+                      onChange={(e) => updateItem(idx, "quantidade", Number(e.target.value))}
+                    />
+                  </div>
+                  <div className="col-span-1 lg:col-span-1">
+                    <Label className={rotulo}>Un.</Label>
+                    <Select value={item.unidade} onValueChange={(v) => updateItem(idx, "unidade", v)}>
+                      <SelectTrigger className="h-9 px-2 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {UNITS_OF_MEASURE.map((u) => (
+                          <SelectItem key={u} value={u}>{u}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="col-span-1 lg:col-span-3">
+                    <Label className={rotulo}>Valor Unit.</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step={0.01}
+                      value={item.valor_unitario}
+                      onChange={(e) => updateItem(idx, "valor_unitario", Number(e.target.value))}
+                    />
+                  </div>
+                  <div className="col-span-1 flex justify-end lg:justify-center">
+                    {items.length > 1 && (
+                      <Button variant="ghost" size="icon" onClick={() => removeItem(idx)} className="h-8 w-8 text-destructive" title="Remover item" aria-label="Remover item">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
-                <div className="col-span-2">
-                  {idx === 0 && <Label className="text-xs">Qtd</Label>}
-                  <Input
-                    type="number"
-                    min={1}
-                    value={item.quantidade}
-                    onChange={(e) => updateItem(idx, "quantidade", Number(e.target.value))}
-                  />
-                </div>
-                <div className="col-span-1">
-                  {idx === 0 && <Label className="text-xs">Un.</Label>}
-                  <Select value={item.unidade} onValueChange={(v) => updateItem(idx, "unidade", v)}>
-                    <SelectTrigger className="h-9 px-2 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {UNITS_OF_MEASURE.map((u) => (
-                        <SelectItem key={u} value={u}>{u}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="col-span-3">
-                  {idx === 0 && <Label className="text-xs">Valor Unit.</Label>}
-                  <Input
-                    type="number"
-                    min={0}
-                    step={0.01}
-                    value={item.valor_unitario}
-                    onChange={(e) => updateItem(idx, "valor_unitario", Number(e.target.value))}
-                  />
-                </div>
-                <div className="col-span-1 flex justify-center">
-                  {items.length > 1 && (
-                    <Button variant="ghost" size="icon" onClick={() => removeItem(idx)} className="h-8 w-8 text-destructive">
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           <div className="mt-3 text-right">
             <span className="text-sm text-muted-foreground">Valor Estimado: </span>
@@ -277,7 +297,7 @@ export function PurchaseRequestForm({ serviceOrderId, onClose }: PurchaseRequest
         </div>
 
         {/* Actions */}
-        <div className="flex justify-end gap-3 pt-4 border-t border-border">
+        <div className="flex flex-wrap justify-end gap-2 pt-4 border-t border-border">
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
           <Button variant="secondary" onClick={() => handleSubmit(true)} disabled={createRC.isPending}>
             Salvar Rascunho

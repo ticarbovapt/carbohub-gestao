@@ -1,14 +1,14 @@
 import { useState } from "react";
-import { usePersistedState } from "@/hooks/usePersistedState";
-import { FileText, Eye, CheckCircle2, XCircle, Send, PackagePlus } from "lucide-react";
-import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
+import { CheckCircle2, XCircle, Send, PackagePlus, Ban, Search } from "lucide-react";
+import { useParamUrl, confirmar, pedirTexto } from "@carbo/shell";
+import { toast } from "sonner";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 import { usePurchaseRequests, useApprovePurchaseRequest } from "@/hooks/usePurchasing";
+import { useEnviarParaAprovacao, useCancelarRequisicao, podeCancelarRequisicao } from "@/hooks/useRequisicaoAcoes";
 import { PurchaseRequestForm } from "./PurchaseRequestForm";
 import {
   REQUEST_STATUS_LABELS,
@@ -19,14 +19,12 @@ import {
   type PurchaseRequestStatus,
 } from "@/types/purchasing";
 import { useAuth } from "@/contexts/AuthContext";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { useTimeInterno } from "@/hooks/useTimeInterno";
 import { useOrgLabels } from "@/hooks/useTeamMembers";
 import { CotacoesPanel } from "./CotacoesPanel";
 import { useQuotes } from "@/hooks/useCotacoes";
 import { GerarOCDialog } from "./GerarOCDialog";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { dataBR } from "@/lib/datas";
 import {
   CarboTable,
   CarboTableHeader,
@@ -50,68 +48,76 @@ const statusVariantMap: Record<PurchaseRequestStatus, any> = {
   convertida: "default",
 };
 
-// Perfis do sistema (id → nome/setor) pra mostrar o SETOR do solicitante da RC.
-function useRequesterInfo() {
-  return useQuery({
-    queryKey: ["all_profiles"],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any).rpc("carbo_all_profiles");
-      if (error) throw error;
-      const byId = new Map<string, { full_name: string | null; department: string | null }>();
-      for (const p of (data ?? []) as any[]) byId.set(p.id, { full_name: p.full_name, department: p.department });
-      return byId;
-    },
-  });
-}
+// O que "precisa de ação" significa depende de quem olha:
+//   gestor  → aprovar (aguardando) e virar OC (aprovada) — de todo mundo
+//   todos   → as SUAS em rascunho/aguardando/aprovada/rejeitada
+const ACAO_DO_GESTOR: PurchaseRequestStatus[] = ["aguardando_aprovacao", "aprovada"];
+const ACAO_DO_SOLICITANTE: PurchaseRequestStatus[] = ["rascunho", "aguardando_aprovacao", "aprovada", "rejeitada"];
+
+const semAcento = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
 export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseRequestsListProps) {
-  const [statusFilter, setStatusFilter] = usePersistedState<string>("compras.rc.status", "all");
-  const [tipoFilter, setTipoFilter] = usePersistedState<string>("compras.rc.tipo", "all");
-  const [setorFilter, setSetorFilter] = usePersistedState<string>("compras.rc.setor", "all");
-  const [escopoFilter, setEscopoFilter] = usePersistedState<string>("compras.rc.escopo", "all");
+  const [statusFilter, setStatusFilter] = useParamUrl("status", "all");
+  const [tipoFilter, setTipoFilter] = useParamUrl("tipo", "all");
+  const [setorFilter, setSetorFilter] = useParamUrl("setor", "all");
+  const [escopoFilter, setEscopoFilter] = useParamUrl("escopo", "all");
+  const [ver, setVer] = useParamUrl("ver", "acao");
+  const [busca, setBusca] = useParamUrl("busca", "", { replace: true });
+
   const { data: allRequests, isLoading } = usePurchaseRequests(
     statusFilter !== "all" ? { status: statusFilter } : undefined
   );
   const approveRC = useApprovePurchaseRequest();
-  const { gestor } = useAuth();
-  const { data: requesterById } = useRequesterInfo();
+  const enviar = useEnviarParaAprovacao();
+  const cancelar = useCancelarRequisicao();
+  const { gestor, user } = useAuth();
+  const meuId = user?.id ?? null;
+
+  // Nomes e setores SÓ do time interno (carbo_time_interno_lista). O
+  // `carbo_all_profiles` devolvia a tabela inteira, lojista e licenciado inclusos.
+  const { data: pessoas = [] } = useTimeInterno();
+  const pessoaPorId = new Map(pessoas.map((p) => [p.id, p]));
   const { data: labels } = useOrgLabels();
   const deptLabel = labels?.deptLabel ?? {};
 
-  const setorOf = (rc: PurchaseRequest) => requesterById?.get(rc.requested_by)?.department ?? null;
-  const requesterName = (rc: PurchaseRequest) => requesterById?.get(rc.requested_by)?.full_name ?? "—";
-  // Quem CLICOU em criar. Só interessa mostrar quando difere do solicitante —
-  // na RC normal os dois são a mesma pessoa e repetir o nome seria ruído.
+  const setorOf = (rc: PurchaseRequest) => pessoaPorId.get(rc.requested_by)?.department ?? null;
+  const requesterName = (rc: PurchaseRequest) => pessoaPorId.get(rc.requested_by)?.full_name ?? "—";
+  // Quem CLICOU em criar. Só interessa mostrar quando difere do solicitante.
   const registradoPor = (rc: PurchaseRequest) => {
-    const autor = (rc as any).created_by as string | null | undefined;
+    const autor = rc.created_by;
     if (!autor || autor === rc.requested_by) return null;
-    return requesterById?.get(autor)?.full_name ?? "—";
+    return pessoaPorId.get(autor)?.full_name ?? "—";
   };
+  const escopoOf = (rc: PurchaseRequest) => rc.escopo ?? "individual";
+  // "Minha" = sou o solicitante ou fui eu quem lançou em nome de alguém.
+  const ehMinha = (rc: PurchaseRequest) => !!meuId && (rc.requested_by === meuId || rc.created_by === meuId);
 
-  // Setores presentes (pra montar o filtro).
   const setores = Array.from(new Set((allRequests ?? []).map(setorOf).filter(Boolean) as string[]))
     .sort((a, b) => (deptLabel[a] ?? a).localeCompare(deptLabel[b] ?? b, "pt-BR"));
 
-  // Filtro client-side por Tipo e Setor (status já vem filtrado do servidor).
-  const escopoOf = (rc: PurchaseRequest) => (rc as any).escopo ?? "individual";
+  // Status escolhido explicitamente vale SOBRE a visão.
+  const visao = statusFilter !== "all" ? "todas" : ver;
+  const precisaDeAcao = (rc: PurchaseRequest) =>
+    (gestor && ACAO_DO_GESTOR.includes(rc.status)) ||
+    (ehMinha(rc) && ACAO_DO_SOLICITANTE.includes(rc.status));
+
+  const termo = semAcento(busca.trim());
   const requests = (allRequests ?? []).filter((rc) => {
+    if (visao === "acao" && !precisaDeAcao(rc)) return false;
     if (tipoFilter !== "all" && rc.purchase_type !== tipoFilter) return false;
     if (setorFilter !== "all" && setorOf(rc) !== setorFilter) return false;
     if (escopoFilter !== "all" && escopoOf(rc) !== escopoFilter) return false;
+    if (termo) {
+      const alvo = semAcento([rc.rc_number, requesterName(rc), rc.cost_center, rc.suggested_supplier ?? ""].join(" "));
+      if (!alvo.includes(termo)) return false;
+    }
     return true;
   });
 
   const [selectedRC, setSelectedRC] = useState<PurchaseRequest | null>(null);
-  const [rejectReason, setRejectReason] = useState("");
-  const [showRejectDialog, setShowRejectDialog] = useState(false);
-  const [rejectingId, setRejectingId] = useState<string | null>(null);
-  const [approving, setApproving] = useState<PurchaseRequest | null>(null);
   const [gerarOC, setGerarOC] = useState<PurchaseRequest | null>(null);
 
-  const canApprove = gestor;
-
-  // Cotações da RC aberta — pra mostrar o total NEGOCIADO na hora de aprovar
-  // (o valor que importa pra decisão, não o estimado do solicitante).
+  // Cotações da RC aberta — o total NEGOCIADO, que é o que importa pra aprovar.
   const { data: selQuotes = [] } = useQuotes(selectedRC?.id ?? null);
   const totalCotado = selQuotes.filter((q) => q.selected).reduce((s, q) => s + q.unit_price * q.quantidade, 0);
   const itensComCotacao = new Set(selQuotes.filter((q) => q.selected).map((q) => q.item_index)).size;
@@ -120,26 +126,88 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val);
 
-  const handleApprove = async () => {
-    if (!approving) return;
-    await approveRC.mutateAsync({ id: approving.id, approved: true });
-    setApproving(null);
+  const ocupado = approveRC.isPending || enviar.isPending || cancelar.isPending;
+
+  // Aprovar confirma UMA vez: o rodapé do detalhe já mostra estimado × cotado ×
+  // itens sem cotação, que é exatamente o que a segunda confirmação repetia.
+  const aprovar = (rc: PurchaseRequest) =>
+    approveRC.mutate({ id: rc.id, approved: true }, { onSuccess: () => setSelectedRC(null) });
+
+  const rejeitar = async (rc: PurchaseRequest) => {
+    const motivo = await pedirTexto({
+      titulo: `Rejeitar a ${rc.rc_number}?`,
+      rotulo: "Motivo *",
+      placeholder: "O solicitante vai ler isto.",
+      obrigatorio: true,
+      multilinha: true,
+      confirmar: "Rejeitar",
+      perigo: true,
+    });
+    if (!motivo) return;
+    approveRC.mutate({ id: rc.id, approved: false, rejection_reason: motivo }, { onSuccess: () => setSelectedRC(null) });
   };
 
-  const handleReject = async () => {
-    if (!rejectingId) return;
-    await approveRC.mutateAsync({ id: rejectingId, approved: false, rejection_reason: rejectReason });
-    setShowRejectDialog(false);
-    setRejectReason("");
-    setRejectingId(null);
+  const enviarParaAprovacao = (rc: PurchaseRequest) => {
+    if (!(Number(rc.estimated_value) > 0)) {
+      // Mesma regra do formulário: sem valor não vai para aprovação.
+      toast.error("Falta o valor", { description: "O valor estimado precisa ser maior que zero para enviar à aprovação." });
+      return;
+    }
+    enviar.mutate(rc.id, { onSuccess: () => setSelectedRC(null) });
   };
+
+  const cancelarRC = async (rc: PurchaseRequest) => {
+    const ok = await confirmar({
+      titulo: `Cancelar a ${rc.rc_number}?`,
+      mensagem: "A requisição sai do fluxo e não pode ser reaberta. As cotações ficam guardadas nela.",
+      confirmar: "Cancelar requisição",
+      cancelar: "Voltar",
+      perigo: true,
+    });
+    if (!ok) return;
+    cancelar.mutate({ id: rc.id, de: rc.status }, { onSuccess: () => setSelectedRC(null) });
+  };
+
+  const sel = selectedRC;
+  const souDono = sel ? ehMinha(sel) : false;
+  const podeMexer = souDono || gestor;
+  // Gestor não aprova a PRÓPRIA RC. ⚠️ A regra mora só na tela (Fase 3: banco).
+  const aprovaPropria = !!sel && souDono;
+  const editavel = !!sel && (sel.status === "rascunho" || sel.status === "aguardando_aprovacao");
+
+  const vazio = visao === "acao" && !termo && tipoFilter === "all" && setorFilter === "all" && escopoFilter === "all";
 
   return (
     <div className="space-y-4">
       {showNewForm && <PurchaseRequestForm onClose={onCloseForm} />}
 
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3">
+      {/* Visão + busca */}
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="inline-flex w-fit rounded-lg border border-border p-0.5">
+          {([["acao", "Precisa de ação"], ["todas", "Todas"]] as const).map(([v, rotulo]) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => { setVer(v); if (statusFilter !== "all") setStatusFilter("all"); }}
+              className={`rounded-md px-3 py-1.5 text-sm transition-colors ${visao === v ? "bg-carbo-green text-white font-medium" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              {rotulo}
+            </button>
+          ))}
+        </div>
+        <div className="relative w-full lg:w-72">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Nº, solicitante, centro de custo, fornecedor…"
+            className="pl-8"
+          />
+        </div>
+      </div>
+
+      {/* Filtros */}
+      <div className="flex flex-wrap items-center gap-2">
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-[190px]">
             <SelectValue placeholder="Filtrar por status" />
@@ -153,7 +221,7 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
         </Select>
 
         <Select value={tipoFilter} onValueChange={setTipoFilter}>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-[170px]">
             <SelectValue placeholder="Tipo de compra" />
           </SelectTrigger>
           <SelectContent>
@@ -165,7 +233,7 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
         </Select>
 
         <Select value={setorFilter} onValueChange={setSetorFilter}>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-[170px]">
             <SelectValue placeholder="Setor solicitante" />
           </SelectTrigger>
           <SelectContent>
@@ -186,7 +254,7 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
         </Select>
       </div>
 
-      {/* Table */}
+      {/* Tabela — a linha inteira abre o detalhe */}
       <CarboTable>
         <CarboTableHeader>
           <CarboTableRow>
@@ -198,7 +266,7 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
             <CarboTableHead>Prazo</CarboTableHead>
             <CarboTableHead>Status</CarboTableHead>
             <CarboTableHead>Data</CarboTableHead>
-            <CarboTableHead>Ações</CarboTableHead>
+            <CarboTableHead><span className="sr-only">Ação</span></CarboTableHead>
           </CarboTableRow>
         </CarboTableHeader>
         <CarboTableBody>
@@ -208,15 +276,22 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
                 Carregando...
               </CarboTableCell>
             </CarboTableRow>
-          ) : !requests?.length ? (
+          ) : !requests.length ? (
             <CarboTableRow>
               <CarboTableCell colSpan={9} className="text-center text-muted-foreground py-8">
-                Nenhuma requisição encontrada
+                {vazio ? (
+                  <div className="flex flex-col items-center gap-2">
+                    <span>Nada precisa da sua ação agora.</span>
+                    <Button variant="outline" size="sm" onClick={() => setVer("todas")}>Ver todas as requisições</Button>
+                  </div>
+                ) : (
+                  "Nenhuma requisição encontrada"
+                )}
               </CarboTableCell>
             </CarboTableRow>
           ) : (
             requests.map((rc) => (
-              <CarboTableRow key={rc.id} interactive className="cursor-pointer" onClick={() => setSelectedRC(rc)}>
+              <CarboTableRow key={rc.id} interactive onClick={() => setSelectedRC(rc)}>
                 <CarboTableCell className="font-mono font-medium">{rc.rc_number}</CarboTableCell>
                 <CarboTableCell>
                   <div className="leading-tight">
@@ -227,45 +302,31 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
                 <CarboTableCell>{rc.cost_center}</CarboTableCell>
                 <CarboTableCell>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span>{(rc as any).motivo ? (MOTIVO_LABELS[(rc as any).motivo] ?? PURCHASE_TYPE_LABELS[rc.purchase_type]) : PURCHASE_TYPE_LABELS[rc.purchase_type]}</span>
+                    <span>{rc.motivo ? (MOTIVO_LABELS[rc.motivo] ?? PURCHASE_TYPE_LABELS[rc.purchase_type]) : PURCHASE_TYPE_LABELS[rc.purchase_type]}</span>
                     <CarboBadge variant={escopoOf(rc) === "setor" ? "info" : "secondary"} className="text-[10px]">
                       {escopoOf(rc) === "setor" ? "Setor" : "Individual"}
                     </CarboBadge>
-                    {((rc as any).priority === "critica" || (rc as any).priority === "alta") && (
-                      <CarboBadge variant={(rc as any).priority === "critica" ? "destructive" : "warning"} className="text-[10px]">
-                        {PRIORITY_LABELS[(rc as any).priority]}
+                    {(rc.priority === "critica" || rc.priority === "alta") && (
+                      <CarboBadge variant={rc.priority === "critica" ? "destructive" : "warning"} className="text-[10px]">
+                        {PRIORITY_LABELS[rc.priority]}
                       </CarboBadge>
                     )}
                   </div>
                 </CarboTableCell>
                 <CarboTableCell className="font-mono">{formatCurrency(rc.estimated_value)}</CarboTableCell>
-                <CarboTableCell className="text-sm text-muted-foreground">
-                  {(rc as any).needed_by ? format(new Date((rc as any).needed_by), "dd/MM/yyyy", { locale: ptBR }) : "—"}
-                </CarboTableCell>
+                <CarboTableCell className="text-sm text-muted-foreground">{dataBR(rc.needed_by)}</CarboTableCell>
                 <CarboTableCell>
                   <CarboBadge variant={statusVariantMap[rc.status]} dot>
                     {REQUEST_STATUS_LABELS[rc.status]}
                   </CarboBadge>
                 </CarboTableCell>
-                <CarboTableCell className="text-muted-foreground text-sm">
-                  {format(new Date(rc.created_at), "dd/MM/yyyy", { locale: ptBR })}
-                </CarboTableCell>
+                <CarboTableCell className="text-muted-foreground text-sm">{dataBR(rc.created_at)}</CarboTableCell>
                 <CarboTableCell onClick={(e) => e.stopPropagation()}>
-                  <div className="flex items-center gap-1">
-                    {canApprove && rc.status === "aguardando_aprovacao" ? (
-                      <Button size="sm" className="h-8 gap-1 bg-carbo-green hover:bg-carbo-green/90 text-white" onClick={() => setSelectedRC(rc)} title="Analisar e aprovar">
-                        <Eye className="h-4 w-4" /> Analisar
-                      </Button>
-                    ) : rc.status === "aprovada" ? (
-                      <Button size="sm" className="h-8 gap-1 bg-carbo-green hover:bg-carbo-green/90 text-white" onClick={() => setGerarOC(rc)} title="Gerar Ordem de Compra">
-                        <PackagePlus className="h-4 w-4" /> Gerar OC
-                      </Button>
-                    ) : (
-                      <Button variant="ghost" size="sm" className="h-8 gap-1 text-muted-foreground" onClick={() => setSelectedRC(rc)}>
-                        <Eye className="h-4 w-4" /> Ver
-                      </Button>
-                    )}
-                  </div>
+                  {rc.status === "aprovada" && (
+                    <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => setGerarOC(rc)}>
+                      <PackagePlus className="h-4 w-4" /> Gerar OC
+                    </Button>
+                  )}
                 </CarboTableCell>
               </CarboTableRow>
             ))
@@ -273,52 +334,57 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
         </CarboTableBody>
       </CarboTable>
 
-      {/* Details Dialog */}
-      <Dialog open={!!selectedRC} onOpenChange={() => setSelectedRC(null)}>
-        <DialogContent className="sm:max-w-2xl">
+      {/* Detalhe */}
+      <Dialog open={!!sel} onOpenChange={(o) => !o && setSelectedRC(null)}>
+        <DialogContent className="sm:max-w-2xl max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Requisição {selectedRC?.rc_number}</DialogTitle>
-            <DialogDescription>Detalhes da requisição de compra</DialogDescription>
+            <DialogTitle className="flex flex-wrap items-center gap-2">
+              Requisição {sel?.rc_number}
+              {sel && <CarboBadge variant={statusVariantMap[sel.status]} dot>{REQUEST_STATUS_LABELS[sel.status]}</CarboBadge>}
+            </DialogTitle>
+            <DialogDescription>
+              {sel ? `Aberta em ${dataBR(sel.created_at)}` : "Detalhes da requisição de compra"}
+            </DialogDescription>
           </DialogHeader>
-          {selectedRC && (
+          {sel && (
             <div className="space-y-4 min-w-0">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div><span className="text-muted-foreground">Solicitante:</span> <strong>{requesterName(selectedRC)}</strong></div>
-                {registradoPor(selectedRC) && (
-                  <div><span className="text-muted-foreground">Registrado por:</span> <strong>{registradoPor(selectedRC)}</strong></div>
+              <div className="grid grid-cols-1 gap-x-4 gap-y-2 text-sm sm:grid-cols-2">
+                <div><span className="text-muted-foreground">Solicitante:</span> <strong>{requesterName(sel)}</strong></div>
+                {registradoPor(sel) && (
+                  <div><span className="text-muted-foreground">Registrado por:</span> <strong>{registradoPor(sel)}</strong></div>
                 )}
-                <div><span className="text-muted-foreground">Setor:</span> <strong>{setorOf(selectedRC) ? (deptLabel[setorOf(selectedRC)!] ?? setorOf(selectedRC)) : "—"}</strong></div>
-                <div><span className="text-muted-foreground">Escopo:</span> <strong>{escopoOf(selectedRC) === "setor" ? "Do setor" : "Individual"}</strong></div>
-                {(selectedRC as any).motivo && (
-                  <div><span className="text-muted-foreground">Motivo:</span> <strong>{MOTIVO_LABELS[(selectedRC as any).motivo] ?? (selectedRC as any).motivo}</strong></div>
+                <div><span className="text-muted-foreground">Setor:</span> <strong>{setorOf(sel) ? (deptLabel[setorOf(sel)!] ?? setorOf(sel)) : "—"}</strong></div>
+                <div><span className="text-muted-foreground">Escopo:</span> <strong>{escopoOf(sel) === "setor" ? "Do setor" : "Individual"}</strong></div>
+                {sel.motivo && (
+                  <div><span className="text-muted-foreground">Motivo:</span> <strong>{MOTIVO_LABELS[sel.motivo] ?? sel.motivo}</strong></div>
                 )}
-                {(selectedRC as any).priority && (selectedRC as any).priority !== "normal" && (
-                  <div><span className="text-muted-foreground">Prioridade:</span> <strong>{PRIORITY_LABELS[(selectedRC as any).priority]}</strong></div>
+                {sel.priority && sel.priority !== "normal" && (
+                  <div><span className="text-muted-foreground">Prioridade:</span> <strong>{PRIORITY_LABELS[sel.priority]}</strong></div>
                 )}
-                {(selectedRC as any).needed_by && (
-                  <div><span className="text-muted-foreground">Precisa até:</span> <strong>{format(new Date((selectedRC as any).needed_by), "dd/MM/yyyy", { locale: ptBR })}</strong></div>
+                {sel.needed_by && (
+                  <div><span className="text-muted-foreground">Precisa até:</span> <strong>{dataBR(sel.needed_by)}</strong></div>
                 )}
-                <div><span className="text-muted-foreground">Centro de Custo:</span> <strong>{selectedRC.cost_center}</strong></div>
-                <div><span className="text-muted-foreground">Tipo:</span> <strong>{PURCHASE_TYPE_LABELS[selectedRC.purchase_type]}</strong></div>
-                <div><span className="text-muted-foreground">Fornecedor:</span> <strong>{selectedRC.suggested_supplier || "—"}</strong></div>
-                <div><span className="text-muted-foreground">Valor:</span> <strong className="kpi-number">{formatCurrency(selectedRC.estimated_value)}</strong></div>
-                {(selectedRC as any).reference_url && (
-                  <div className="col-span-2"><span className="text-muted-foreground">Link:</span> <a href={(selectedRC as any).reference_url} target="_blank" rel="noopener" className="text-carbo-green underline break-all">{(selectedRC as any).reference_url}</a></div>
+                <div><span className="text-muted-foreground">Centro de Custo:</span> <strong>{sel.cost_center}</strong></div>
+                <div><span className="text-muted-foreground">Tipo:</span> <strong>{PURCHASE_TYPE_LABELS[sel.purchase_type]}</strong></div>
+                <div><span className="text-muted-foreground">Fornecedor sugerido:</span> <strong>{sel.suggested_supplier || "—"}</strong></div>
+                <div><span className="text-muted-foreground">Valor estimado:</span> <strong className="kpi-number">{formatCurrency(sel.estimated_value)}</strong></div>
+                {sel.reference_url && (
+                  <div className="sm:col-span-2"><span className="text-muted-foreground">Link:</span> <a href={sel.reference_url} target="_blank" rel="noopener" className="text-carbo-green underline break-all">{sel.reference_url}</a></div>
                 )}
               </div>
-              {selectedRC.justification && (
+              {sel.justification && (
                 <div>
-                  <p className="text-sm text-muted-foreground mb-1">Observação</p>
-                  <p className="text-sm bg-muted/50 rounded-lg p-3">{selectedRC.justification}</p>
+                  <p className="text-sm text-muted-foreground mb-1">Justificativa</p>
+                  <p className="text-sm bg-muted/50 rounded-lg p-3 whitespace-pre-wrap">{sel.justification}</p>
                 </div>
               )}
-              {selectedRC.operational_impact && (
+              {sel.operational_impact && (
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">Impacto Operacional</p>
-                  <p className="text-sm bg-muted/50 rounded-lg p-3">{selectedRC.operational_impact}</p>
+                  <p className="text-sm bg-muted/50 rounded-lg p-3 whitespace-pre-wrap">{sel.operational_impact}</p>
                 </div>
               )}
-              {selectedRC.items?.length > 0 && (
+              {sel.items?.length > 0 && (
                 <div>
                   <p className="text-sm text-muted-foreground mb-2">Itens</p>
                   <div className="border border-border rounded-lg overflow-x-auto">
@@ -332,10 +398,10 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
                         </tr>
                       </thead>
                       <tbody>
-                        {selectedRC.items.map((item, idx) => (
+                        {sel.items.map((item, idx) => (
                           <tr key={idx} className="border-t border-border">
                             <td className="p-2">{item.descricao}</td>
-                            <td className="p-2 text-right">{item.quantidade} {item.unidade}</td>
+                            <td className="p-2 text-right whitespace-nowrap">{item.quantidade} {item.unidade}</td>
                             <td className="p-2 text-right font-mono">{formatCurrency(item.valor_unitario)}</td>
                             <td className="p-2 text-right font-mono">{formatCurrency(item.quantidade * item.valor_unitario)}</td>
                           </tr>
@@ -345,95 +411,85 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
                   </div>
                 </div>
               )}
-              {selectedRC.items?.length > 0 && (
+              {sel.items?.length > 0 && (
                 <div>
-                  <p className="text-sm text-muted-foreground mb-2">Cotações por item</p>
-                  <CotacoesPanel requestId={selectedRC.id} items={selectedRC.items as any} />
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Cotações por item
+                    {!editavel && <span className="ml-1 text-xs">(só leitura — a requisição já foi {REQUEST_STATUS_LABELS[sel.status].toLowerCase()})</span>}
+                  </p>
+                  <CotacoesPanel requestId={sel.id} items={sel.items as any} editable={editavel} />
                 </div>
               )}
-              {selectedRC.rejection_reason && (
+              {sel.rejection_reason && (
                 <div className="bg-destructive/10 rounded-lg p-3">
                   <p className="text-sm font-medium text-destructive">Motivo da Rejeição</p>
-                  <p className="text-sm mt-1">{selectedRC.rejection_reason}</p>
+                  <p className="text-sm mt-1 whitespace-pre-wrap">{sel.rejection_reason}</p>
                 </div>
               )}
             </div>
           )}
-          {selectedRC && (selectedRC.status === "aguardando_aprovacao" || selectedRC.status === "aprovada") && (
-            <DialogFooter className="flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+
+          {sel && (
+            <DialogFooter className="flex-col gap-3 sm:flex-col sm:space-x-0">
               <div className="text-xs text-muted-foreground">
-                Estimado <strong>{formatCurrency(selectedRC.estimated_value)}</strong>
-                {totalCotado > 0 && <> · Cotado <strong className="text-carbo-green">{formatCurrency(totalCotado)}</strong></>}
-                {itensSemCotacao > 0 && <> · <span className="text-warning-foreground">{itensSemCotacao} item(ns) sem cotação</span></>}
+                {(sel.status === "aguardando_aprovacao" || sel.status === "aprovada") && (
+                  <>
+                    Estimado <strong>{formatCurrency(sel.estimated_value)}</strong>
+                    {totalCotado > 0 && <> · Cotado <strong className="text-carbo-green">{formatCurrency(totalCotado)}</strong></>}
+                    {itensSemCotacao > 0 && <> · <span className="text-warning-foreground">{itensSemCotacao} item(ns) sem cotação</span></>}
+                  </>
+                )}
+                {gestor && sel.status === "aguardando_aprovacao" && aprovaPropria && (
+                  <p className="mt-1 text-warning-foreground">
+                    Esta requisição é sua — quem aprova é outro gestor.
+                  </p>
+                )}
               </div>
-              {canApprove && selectedRC.status === "aguardando_aprovacao" ? (
-                <div className="flex gap-2">
-                  <Button variant="outline" className="gap-1.5 text-destructive" onClick={() => { setRejectingId(selectedRC.id); setShowRejectDialog(true); }}>
-                    <XCircle className="h-4 w-4" /> Rejeitar
+
+              <div className="flex flex-wrap justify-end gap-2">
+                {podeMexer && podeCancelarRequisicao(sel.status) && (
+                  <Button variant="ghost" className="gap-1.5 text-destructive" disabled={ocupado} onClick={() => cancelarRC(sel)}>
+                    <Ban className="h-4 w-4" /> Cancelar requisição
                   </Button>
-                  <Button className="gap-1.5 bg-carbo-green hover:bg-carbo-green/90 text-white" onClick={() => setApproving(selectedRC)}>
-                    <CheckCircle2 className="h-4 w-4" /> Aprovar
+                )}
+
+                {sel.status === "rascunho" && podeMexer && (
+                  <Button className="gap-1.5 bg-carbo-green hover:bg-carbo-green/90 text-white" disabled={ocupado} onClick={() => enviarParaAprovacao(sel)}>
+                    <Send className="h-4 w-4" /> Enviar para aprovação
                   </Button>
-                </div>
-              ) : selectedRC.status === "aprovada" ? (
-                <Button
-                  className="gap-1.5 bg-carbo-green hover:bg-carbo-green/90 text-white"
-                  onClick={() => { setGerarOC(selectedRC); setSelectedRC(null); }}
-                >
-                  <PackagePlus className="h-4 w-4" /> Gerar Ordem de Compra
-                </Button>
-              ) : null}
+                )}
+
+                {sel.status === "aguardando_aprovacao" && gestor && (
+                  <>
+                    <Button variant="outline" className="gap-1.5 text-destructive" disabled={ocupado || aprovaPropria} onClick={() => rejeitar(sel)}>
+                      <XCircle className="h-4 w-4" /> Rejeitar
+                    </Button>
+                    <Button
+                      className="gap-1.5 bg-carbo-green hover:bg-carbo-green/90 text-white"
+                      disabled={ocupado || aprovaPropria}
+                      title={aprovaPropria ? "Você não pode aprovar a própria requisição" : undefined}
+                      onClick={() => aprovar(sel)}
+                    >
+                      <CheckCircle2 className="h-4 w-4" /> Aprovar
+                    </Button>
+                  </>
+                )}
+
+                {sel.status === "aprovada" && (
+                  <Button
+                    className="gap-1.5 bg-carbo-green hover:bg-carbo-green/90 text-white"
+                    onClick={() => { setGerarOC(sel); setSelectedRC(null); }}
+                  >
+                    <PackagePlus className="h-4 w-4" /> Gerar Ordem de Compra
+                  </Button>
+                )}
+              </div>
             </DialogFooter>
           )}
         </DialogContent>
       </Dialog>
 
       <GerarOCDialog rc={gerarOC} onClose={() => setGerarOC(null)} />
-
-      {/* Approve Dialog */}
-      <Dialog open={!!approving} onOpenChange={(o) => !o && setApproving(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Aprovar requisição</DialogTitle>
-            <DialogDescription>
-              {approving && (
-                <>
-                  Aprovar a RC <strong>{approving.rc_number}</strong>?<br />
-                  Valor estimado: <strong>{formatCurrency(approving.estimated_value)}</strong>
-                  {totalCotado > 0 && <> · Total cotado: <strong className="text-carbo-green">{formatCurrency(totalCotado)}</strong></>}
-                  {itensSemCotacao > 0 && <> · <span className="text-warning-foreground">{itensSemCotacao} item(ns) sem cotação escolhida</span></>}
-                </>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setApproving(null)}>Cancelar</Button>
-            <Button onClick={handleApprove} disabled={approveRC.isPending} className="gap-1.5 text-white bg-carbo-green hover:bg-carbo-green/90">
-              <CheckCircle2 className="h-4 w-4" /> Aprovar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Reject Dialog */}
-      <Dialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Rejeitar Requisição</DialogTitle>
-            <DialogDescription>Informe o motivo da rejeição</DialogDescription>
-          </DialogHeader>
-          <div>
-            <Label>Motivo *</Label>
-            <Textarea value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder="Descreva o motivo..." />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowRejectDialog(false)}>Cancelar</Button>
-            <Button variant="destructive" onClick={handleReject} disabled={!rejectReason || approveRC.isPending}>
-              Rejeitar RC
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

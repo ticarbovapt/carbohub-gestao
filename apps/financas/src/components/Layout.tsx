@@ -36,7 +36,7 @@ export function Layout() {
     });
   useAccessPing("carbo_financas");
   useFinanceRealtime();
-  const { user, profile } = useAuth();
+  const { user, profile, gestor } = useAuth();
   const chatUser = useMemo(
     () => ({ id: user?.id ?? "", full_name: profile?.full_name ?? null, avatar_url: (profile as { avatar_url?: string | null })?.avatar_url ?? null }),
     [user?.id, profile?.full_name, profile],
@@ -47,17 +47,26 @@ export function Layout() {
   // Navegação padronizada: topo = Início + Carbo Chat; depois seções por domínio.
   // Reusa os ícones/labels do FIN_NAV, referenciando por caminho (nada renomeado).
   const byPath = Object.fromEntries(FIN_NAV.map((i) => [i.path, i]));
-  const item = (path: string) => {
+  // `end` quando um caminho é prefixo de outro item do menu: sem ele,
+  // "/pagar" ficaria aceso também em "/pagar/assinaturas".
+  const item = (path: string, end = path === "/") => {
     const i = byPath[path];
-    return { to: i.path, label: i.label, icon: i.icon, end: i.path === "/" };
+    return { to: i.path, label: i.label, icon: i.icon, end };
   };
   const sections: ShellNavSection[] = [
     { items: [
         item("/"),
         { to: "/chat", label: "Carbo Chat", icon: MessagesSquare, badge: <ChatBadge /> },
     ] },
-    { label: "Financeiro", items: [item("/faturamento"), item("/comissionamento"), item("/pedidos")] },
-    { label: "Suprimentos", items: [item("/suprimentos"), item("/compras")] },
+    // Contas e caixa saíram de dentro de "Compras" (antes "Financeiro &
+    // Suprimentos", onze abas numa página só) e são itens do menu (21/10/2026).
+    { label: "Contas", items: [
+        item("/pagar", true), item("/pagar/assinaturas"), item("/receber"), item("/fluxo-caixa"),
+        ...(gestor ? [item("/painel-financeiro")] : []),
+    ] },
+    { label: "Vendas", items: [item("/faturamento"), item("/comissionamento"), item("/pedidos")] },
+    { label: "Suprimentos", items: [item("/compras"), item("/suprimentos")] },
+    { label: "Cadastros", items: [item("/cadastros/fornecedores"), item("/cadastros/formas-pagamento")] },
     // ⚠️ O MENU TEM DOIS LUGARES e esquecer este deixa a tela invisível sem erro
     // nenhum: o registro em `lib/financasNav.ts` (ícone e rótulo) E esta lista,
     // que é quem monta os grupos. Rota nova entra nos dois, na MESMA tarefa —

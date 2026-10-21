@@ -44,7 +44,8 @@ function destino(i: Item): string {
   const t = i.type ?? "";
   if (t === "ecommerce_sale" || t === "ecommerce_disconnected") return "https://admin.carbohub.com.br/ecommerce/vendas-online";
   if (t.startsWith("bug_")) return "https://ti.carbohub.com.br/bugs";
-  if (t.startsWith("finance_")) return "https://finance.carbohub.com.br/compras";
+  if (t === "finance_oc_nova") return "https://finance.carbohub.com.br/compras/ordens";
+  if (t.startsWith("finance_")) return "https://finance.carbohub.com.br/compras/requisicoes";
   // Pedido de acesso a curso do Academy → a fila do TI (`ACADEMY_FILA_URL` no packages/shell).
   if (t === "academy_acesso") return "https://ti.carbohub.com.br/academy/acessos";
   // Acesso liberado → o curso, no Academy.

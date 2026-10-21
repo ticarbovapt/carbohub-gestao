@@ -1,6 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { lerSemTeto } from "@carbo/shell";
+import { toast } from "@/hooks/use-toast";
+import { estaVencido } from "@/lib/datas";
+import { invalidarContasAPagar } from "@/hooks/usePurchasing";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Contas a Pagar (purchase_payables) — lançar, marcar pago, listar, excluir.
@@ -28,8 +31,6 @@ export interface Payable {
   overdue: boolean;
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
-
 export function usePayables() {
   return useQuery({
     queryKey: ["ops", "payables"],
@@ -40,11 +41,9 @@ export function usePayables() {
         .select("id, supplier_name, amount, due_date, status, paid_at, notes, purchase_orders(oc_number)")
         .order("due_date", { ascending: true })
         .order("id"));
-      const td = today();
       return rows.map((r: any) => {
         const status = (r.status ?? "programado") as PayableStatus;
         const due = r.due_date ? String(r.due_date).slice(0, 10) : "";
-        const aberto = status !== "pago" && status !== "cancelado";
         return {
           id: r.id,
           supplier_name: r.supplier_name ?? "—",
@@ -54,7 +53,8 @@ export function usePayables() {
           status,
           paid_at: r.paid_at ? String(r.paid_at).slice(0, 10) : null,
           notes: r.notes ?? null,
-          overdue: aberto && !!due && due < td,
+          // A regra ÚNICA de vencido (dia de Brasília), nunca o status gravado.
+          overdue: estaVencido({ status, due_date: due || null }),
         };
       });
     },
@@ -71,7 +71,10 @@ export interface CreatePayableInput {
 
 export function usePayableMutations() {
   const qc = useQueryClient();
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["ops", "payables"] });
+  // Invalida TODA leitura de contas a pagar (lista, resumo, badges, painéis),
+  // não só a deste hook — senão a outra tela fica com o número velho.
+  const invalidate = () => invalidarContasAPagar(qc);
+  const falhou = (titulo: string) => (e: any) => toast({ title: titulo, description: e?.message, variant: "destructive" });
 
   const create = useMutation({
     mutationFn: async (p: CreatePayableInput) => {
@@ -89,6 +92,7 @@ export function usePayableMutations() {
       if (res.error) throw res.error;
     },
     onSuccess: invalidate,
+    onError: falhou("Erro ao lançar a conta"),
   });
 
   const markPaid = useMutation({
@@ -100,6 +104,7 @@ export function usePayableMutations() {
       if (res.error) throw res.error;
     },
     onSuccess: invalidate,
+    onError: falhou("Erro ao dar baixa"),
   });
 
   const remove = useMutation({
@@ -108,6 +113,7 @@ export function usePayableMutations() {
       if (res.error) throw res.error;
     },
     onSuccess: invalidate,
+    onError: falhou("Erro ao excluir a conta"),
   });
 
   return { create, markPaid, remove };

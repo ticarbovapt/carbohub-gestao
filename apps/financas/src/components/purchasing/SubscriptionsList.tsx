@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { usePersistedState } from "@/hooks/usePersistedState";
+import { useParamUrl, confirmar } from "@carbo/shell";
 import { Plus, Edit2, Trash2, Pause, Play, RefreshCw, CreditCard, CalendarClock, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,13 +16,13 @@ import {
   type Subscription, type SubscriptionCycle, type SubscriptionStatus, type SubscriptionCharge,
 } from "@/types/purchasing";
 import { useAuth } from "@/contexts/AuthContext";
-import { format, differenceInCalendarDays } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { dataBR, diasAte, hojeISO } from "@/lib/datas";
 
 const money = (v: number, cur: string) =>
   new Intl.NumberFormat(cur === "USD" ? "en-US" : "pt-BR", { style: "currency", currency: cur || "BRL" }).format(v || 0);
 
 const statusVariant: Record<SubscriptionStatus, any> = { ativa: "success", pausada: "warning", cancelada: "cancelled" };
+const VISOES: SubscriptionStatus[] = ["ativa", "pausada", "cancelada"];
 
 const emptyForm = {
   nome: "", departamento: "", valor: "", currency: "BRL", ciclo: "mensal" as SubscriptionCycle,
@@ -33,11 +33,12 @@ const emptyForm = {
 export function SubscriptionsList() {
   const { gestor } = useAuth();
   const canManage = gestor;
-  const [view, setView] = usePersistedState<SubscriptionStatus>("compras.assin.view", "ativa");
-  const [setorFilter, setSetorFilter] = usePersistedState<string>("compras.assin.setor", "all");
+  // Filtros na URL: F5, link e Voltar.
+  const [viewUrl, setView] = useParamUrl("ver", "ativa");
+  const view: SubscriptionStatus = (VISOES as string[]).includes(viewUrl) ? (viewUrl as SubscriptionStatus) : "ativa";
+  const [setorFilter, setSetorFilter] = useParamUrl("setor", "all");
   const [showForm, setShowForm] = useState(false);
   const [editSub, setEditSub] = useState<Subscription | null>(null);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
 
   const { data: subs = [], isLoading } = useSubscriptions();
@@ -55,17 +56,22 @@ export function SubscriptionsList() {
     return true;
   });
 
-  // KPIs (só assinaturas ativas): custo mensal por moeda + próximas manuais.
+  // KPIs (só assinaturas ativas): custo mensal por moeda + manuais.
+  // ⚠️ `proximo_vencimento` é DATA PURA: `new Date("2026-10-21")` é meia-noite
+  // UTC e em Brasília vira o dia 20 — a data saía um dia antes. `diasAte` conta
+  // sem fuso. E "vencida" e "a vencer em 7 dias" são DOIS números: juntos, o
+  // cartão "a vencer" contava também o que já tinha passado.
+  const hoje = hojeISO();
   const kpis = useMemo(() => {
     const ativas = subs.filter((s) => s.status === "ativa");
     const byCur: Record<string, number> = {};
     ativas.forEach((s) => { byCur[s.currency] = (byCur[s.currency] || 0) + subscriptionMonthlyCost(s); });
-    // Manuais que vencem em ≤7 dias (ou já venceram) — as que exigem ação agora.
-    const manuaisProximas = ativas.filter((s) =>
-      s.cobranca === "manual" && s.proximo_vencimento && differenceInCalendarDays(new Date(s.proximo_vencimento), new Date()) <= 7
-    ).length;
-    return { qtd: ativas.length, byCur, manuaisProximas };
-  }, [subs]);
+    const manuais = ativas.filter((s) => s.cobranca === "manual" && s.proximo_vencimento);
+    const dias = (s: Subscription) => diasAte(s.proximo_vencimento, hoje) ?? Infinity;
+    const manuaisVencidas = manuais.filter((s) => dias(s) < 0).length;
+    const manuaisProximas = manuais.filter((s) => { const d = dias(s); return d >= 0 && d <= 7; }).length;
+    return { qtd: ativas.length, byCur, manuaisVencidas, manuaisProximas };
+  }, [subs, hoje]);
 
   const openCreate = () => { setForm(emptyForm); setEditSub(null); setShowForm(true); };
   const openEdit = (s: Subscription) => {
@@ -93,17 +99,31 @@ export function SubscriptionsList() {
       url: form.url || null,
       notes: form.notes || null,
     };
-    if (editSub) await update.mutateAsync({ id: editSub.id, ...payload });
-    else await create.mutateAsync(payload);
-    setShowForm(false);
+    try {
+      if (editSub) await update.mutateAsync({ id: editSub.id, ...payload });
+      else await create.mutateAsync(payload);
+      setShowForm(false);
+    } catch { /* o hook já avisou; o formulário fica aberto */ }
   };
 
+  // ⚠️ O botão só alterna PAUSADA ↔ ATIVA. Cancelada não volta por um clique:
+  // reativar uma assinatura encerrada é decisão, e mora no "Editar" (status).
   const setStatus = (s: Subscription, status: SubscriptionStatus) => update.mutate({ id: s.id, status });
+
+  const excluir = async (s: Subscription) => {
+    const ok = await confirmar({
+      titulo: `Excluir "${s.nome}"?`,
+      mensagem: "A assinatura some do cadastro e do histórico. Se ela só foi encerrada, marque como Cancelada em vez de excluir — o histórico fica.",
+      confirmar: "Excluir",
+      perigo: true,
+    });
+    if (ok) del.mutate(s.id);
+  };
 
   const dueBadge = (s: Subscription) => {
     if (!s.proximo_vencimento) return <span className="text-muted-foreground text-sm">—</span>;
-    const days = differenceInCalendarDays(new Date(s.proximo_vencimento), new Date());
-    const txt = format(new Date(s.proximo_vencimento), "dd/MM/yyyy", { locale: ptBR });
+    const days = diasAte(s.proximo_vencimento, hoje) ?? 0;
+    const txt = dataBR(s.proximo_vencimento);
     // Só alerta quando é cobrança manual (é o que exige lembrar de pagar).
     const alert = s.status === "ativa" && s.cobranca === "manual" && days <= 7;
     return (
@@ -117,7 +137,7 @@ export function SubscriptionsList() {
   return (
     <div className="space-y-4">
       {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 xl:grid-cols-5">
         <CarboCard variant="kpi" padding="sm">
           <CarboCardContent>
             <div className="flex items-center gap-2 mb-1"><RefreshCw className="h-4 w-4 text-carbo-green" /><span className="text-xs text-muted-foreground">Assinaturas ativas</span></div>
@@ -134,17 +154,23 @@ export function SubscriptionsList() {
         ))}
         <CarboCard variant="kpi" padding="sm">
           <CarboCardContent>
-            <div className="flex items-center gap-2 mb-1"><CalendarClock className="h-4 w-4 text-warning" /><span className="text-xs text-muted-foreground">Manual a vencer (7d)</span></div>
+            <div className="flex items-center gap-2 mb-1"><AlertTriangle className="h-4 w-4 text-destructive" /><span className="text-xs text-muted-foreground">Manual vencida</span></div>
+            <p className={`text-2xl font-bold kpi-number ${kpis.manuaisVencidas > 0 ? "text-destructive" : ""}`}>{kpis.manuaisVencidas}</p>
+          </CarboCardContent>
+        </CarboCard>
+        <CarboCard variant="kpi" padding="sm">
+          <CarboCardContent>
+            <div className="flex items-center gap-2 mb-1"><CalendarClock className="h-4 w-4 text-warning" /><span className="text-xs text-muted-foreground">Manual a vencer (7 dias)</span></div>
             <p className="text-2xl font-bold kpi-number">{kpis.manuaisProximas}</p>
           </CarboCardContent>
         </CarboCard>
       </div>
 
       {/* Toolbar: Ativas/Paradas + setor + novo */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
           <div className="inline-flex rounded-lg border border-border p-0.5">
-            {(["ativa", "pausada", "cancelada"] as SubscriptionStatus[]).map((st) => (
+            {VISOES.map((st) => (
               <button
                 key={st} onClick={() => setView(st)} aria-pressed={view === st}
                 className={`px-3 py-1.5 text-sm rounded-md transition-colors ${view === st ? "bg-carbo-green text-white" : "text-muted-foreground hover:text-foreground"}`}
@@ -154,7 +180,7 @@ export function SubscriptionsList() {
             ))}
           </div>
           <Select value={setorFilter} onValueChange={setSetorFilter}>
-            <SelectTrigger className="w-[180px]"><SelectValue placeholder="Setor" /></SelectTrigger>
+            <SelectTrigger className="w-full lg:w-[180px]"><SelectValue placeholder="Setor" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos os setores</SelectItem>
               {setores.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
@@ -162,13 +188,13 @@ export function SubscriptionsList() {
           </Select>
         </div>
         {canManage && (
-          <Button onClick={openCreate} className="gap-2 carbo-gradient text-white" size="sm">
+          <Button onClick={openCreate} className="gap-2 carbo-gradient text-white lg:self-auto self-start" size="sm">
             <Plus className="h-4 w-4" /> Nova assinatura
           </Button>
         )}
       </div>
 
-      <div className="rounded-lg border border-border overflow-hidden">
+      <div className="rounded-lg border border-border overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
@@ -215,10 +241,10 @@ export function SubscriptionsList() {
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(s)} title="Editar"><Edit2 className="h-3.5 w-3.5" /></Button>
                         {s.status === "ativa" ? (
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-warning" onClick={() => setStatus(s, "pausada")} title="Pausar"><Pause className="h-3.5 w-3.5" /></Button>
-                        ) : (
+                        ) : s.status === "pausada" ? (
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-success" onClick={() => setStatus(s, "ativa")} title="Reativar"><Play className="h-3.5 w-3.5" /></Button>
-                        )}
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteId(s.id)} title="Excluir"><Trash2 className="h-3.5 w-3.5" /></Button>
+                        ) : null}
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => excluir(s)} title="Excluir"><Trash2 className="h-3.5 w-3.5" /></Button>
                       </div>
                     </TableCell>
                   )}
@@ -234,7 +260,7 @@ export function SubscriptionsList() {
         <DialogContent className="sm:max-w-lg max-h-[90dvh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editSub ? "Editar assinatura" : "Nova assinatura"}</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <Label>Nome *</Label>
                 <Input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} placeholder="Claude Code, Supabase…" />
@@ -266,7 +292,7 @@ export function SubscriptionsList() {
                 </Select>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <Label>Cobrança</Label>
                 <Select value={form.cobranca} onValueChange={(v) => setForm({ ...form, cobranca: v as SubscriptionCharge })}>
@@ -282,7 +308,7 @@ export function SubscriptionsList() {
                 <Input type="date" value={form.proximo_vencimento} onChange={(e) => setForm({ ...form, proximo_vencimento: e.target.value })} />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <Label>Cartão / forma de pagamento</Label>
                 <Select value={form.payment_method_id || "none"} onValueChange={(v) => setForm({ ...form, payment_method_id: v === "none" ? "" : v })}>
@@ -323,17 +349,6 @@ export function SubscriptionsList() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete */}
-      <Dialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Confirmar exclusão</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground">Remover esta assinatura? Se ela só foi encerrada, considere marcar como "Cancelada" em vez de excluir (mantém o histórico).</p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteId(null)}>Cancelar</Button>
-            <Button variant="destructive" onClick={async () => { if (deleteId) { await del.mutateAsync(deleteId); setDeleteId(null); } }} disabled={del.isPending}>Excluir</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

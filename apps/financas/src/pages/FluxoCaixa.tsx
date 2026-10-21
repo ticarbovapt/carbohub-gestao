@@ -2,13 +2,14 @@ import { useMemo } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ComposedChart, Line, Cell,
 } from "recharts";
+import { Landmark, AlertTriangle } from "lucide-react";
+import { useParamUrl } from "@carbo/shell";
+import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent, CarboCardHeader, CarboCardTitle } from "@/components/ui/carbo-card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { usePersistedState } from "@/hooks/usePersistedState";
 import { useFinAging } from "@/hooks/useFinanceDashboard";
 import { useFinCashflow, useFinReceivablesAging, useFinReceivablesOnTime } from "@/hooks/useReceivables";
-import { format, parseISO } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { dataBR } from "@/lib/datas";
 
 const brl = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
 const brlC = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", notation: "compact" }).format(v || 0);
@@ -27,50 +28,73 @@ const agingChart = (rows: { bucket: string; total: number }[]) => {
 };
 const empty = <p className="text-muted-foreground text-sm text-center py-12">Sem dados</p>;
 
+const ORIGENS: [string, string][] = [["all", "Todas"], ["interno", "Sistema"], ["bling", "Bling"]];
+const SEMANAS = ["4", "8", "12"];
+
+function Segmentado({ opcoes, valor, onChange, rotulo }: {
+  opcoes: [string, string][]; valor: string; onChange: (v: string) => void; rotulo: string;
+}) {
+  return (
+    <div className="inline-flex rounded-lg border border-border p-0.5" role="group" aria-label={rotulo}>
+      {opcoes.map(([v, l]) => (
+        <button key={v} onClick={() => onChange(v)} aria-pressed={valor === v}
+          className={`px-3 py-1.5 text-sm rounded-md transition-colors ${valor === v ? "bg-carbo-green text-white" : "text-muted-foreground hover:text-foreground"}`}>{l}</button>
+      ))}
+    </div>
+  );
+}
+
 export default function FluxoCaixa() {
-  const [source, setSource] = usePersistedState<string>("fin.caixa.source", "all");
-  const { data: cashflow = [], isLoading: cashLoading, isError: cashError } = useFinCashflow(source, 8);
+  // Filtros na URL — F5 e link mantêm a mesma pergunta.
+  const [origemUrl, setOrigem] = useParamUrl("origem", "all");
+  const [semanasUrl, setSemanas] = useParamUrl("semanas", "8");
+  const source = ORIGENS.some(([v]) => v === origemUrl) ? origemUrl : "all";
+  const semanasTxt = SEMANAS.includes(semanasUrl) ? semanasUrl : "8";
+  const semanas = Number(semanasTxt);
+
+  const { data: cashflow = [], isLoading: cashLoading, isError: cashError } = useFinCashflow(source, semanas);
   const { data: payAging = [] } = useFinAging(source);
   const { data: recAging = [], isLoading: recLoading, isError: recError } = useFinReceivablesAging(source);
   const { data: onTime } = useFinReceivablesOnTime(source);
 
   // Fluxo semanal: entrada, saída e saldo ACUMULADO ao longo das semanas.
+  // `semana` é DATE (`AAAA-MM-DD`, a segunda-feira): lida como texto, sem fuso.
   const cashData = useMemo(() => {
     let acc = 0;
     return cashflow.map((c) => {
-      const net = Number(c.entrada) - Number(c.saida);
-      acc += net;
-      return {
-        semana: format(parseISO(c.semana), "dd/MM", { locale: ptBR }),
-        Entrada: Number(c.entrada), Saída: -Number(c.saida), saldo: acc,
-      };
+      acc += Number(c.entrada) - Number(c.saida);
+      return { semana: dataBR(c.semana).slice(0, 5), Entrada: Number(c.entrada), Saída: -Number(c.saida), saldo: acc };
     });
   }, [cashflow]);
 
   const totalEntrada = cashflow.reduce((s, c) => s + Number(c.entrada), 0);
   const totalSaida = cashflow.reduce((s, c) => s + Number(c.saida), 0);
-  const saldo8s = totalEntrada - totalSaida;
+  const saldoPrevisto = totalEntrada - totalSaida;
   const inadimplencia = recAging.filter((a) => a.bucket.startsWith("vencido")).reduce((s, a) => s + Number(a.total), 0);
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="inline-flex rounded-lg border border-border p-0.5">
-          {[["all", "Todas"], ["interno", "Sistema"], ["bling", "Bling"]].map(([v, l]) => (
-            <button key={v} onClick={() => setSource(v)} aria-pressed={source === v}
-              className={`px-3 py-1.5 text-sm rounded-md transition-colors ${source === v ? "bg-carbo-green text-white" : "text-muted-foreground hover:text-foreground"}`}>{l}</button>
-          ))}
-        </div>
-        <span className="text-[11px] text-muted-foreground">Contas em BRL. Origem "{source === "all" ? "todas" : source}".</span>
+      <CarboPageHeader
+        title="Fluxo de caixa"
+        description="Entradas previstas (a receber) × saídas previstas (a pagar), por semana. Contas em BRL."
+        icon={Landmark}
+      />
+
+      <div className="flex flex-wrap items-center gap-3">
+        <Segmentado rotulo="Origem" opcoes={ORIGENS} valor={source} onChange={setOrigem} />
+        <Segmentado rotulo="Horizonte" opcoes={SEMANAS.map((s) => [s, `${s} semanas`])} valor={semanasTxt} onChange={setSemanas} />
       </div>
 
       {/* KPIs — enquanto carrega, esqueleto; se a consulta falha, diz que falhou.
           Mostrar R$ 0,00 nos dois casos se lê como "não houve movimento". */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: "Entradas (8 sem.)", valor: totalEntrada, cor: "text-success", loading: cashLoading, error: cashError },
-          { label: "Saídas (8 sem.)", valor: totalSaida, cor: "text-destructive", loading: cashLoading, error: cashError },
-          { label: "Saldo projetado (8 sem.)", valor: saldo8s, cor: saldo8s < 0 ? "text-destructive" : "text-success", loading: cashLoading, error: cashError },
+          { label: `Entradas previstas (${semanas} sem.)`, valor: totalEntrada, cor: "text-success", loading: cashLoading, error: cashError },
+          { label: `Saídas previstas (${semanas} sem.)`, valor: totalSaida, cor: "text-destructive", loading: cashLoading, error: cashError },
+          {
+            label: `Saldo previsto (${semanas} sem.)`, valor: saldoPrevisto, cor: saldoPrevisto < 0 ? "text-destructive" : "text-success",
+            loading: cashLoading, error: cashError, sub: "Entradas − saídas previstas · não inclui saldo em banco",
+          },
           { label: "Inadimplência (vencido a receber)", valor: inadimplencia, cor: "text-destructive", loading: recLoading, error: recError },
         ].map((k) => (
           <CarboCard key={k.label} variant="kpi" padding="sm"><CarboCardContent>
@@ -78,31 +102,39 @@ export default function FluxoCaixa() {
             {k.loading ? <Skeleton className="h-7 w-28" />
               : k.error ? <p className="text-sm text-destructive">Erro ao carregar</p>
               : <p className={`text-lg font-bold kpi-number break-words ${k.cor}`}>{brl(k.valor)}</p>}
+            {k.sub && <p className="text-[11px] text-muted-foreground mt-0.5">{k.sub}</p>}
           </CarboCardContent></CarboCard>
         ))}
       </div>
 
       <CarboCard>
-        <CarboCardHeader><CarboCardTitle>Projeção de caixa — próximas 8 semanas</CarboCardTitle></CarboCardHeader>
+        <CarboCardHeader><CarboCardTitle>Projeção — próximas {semanas} semanas</CarboCardTitle></CarboCardHeader>
         <CarboCardContent>
+          {/* ⚠️ A RPC joga TODO o vencido em aberto, de qualquer data, na 1ª semana —
+              sem este aviso a primeira barra parece uma semana excepcional. */}
+          <p className="mb-2 flex items-start gap-1.5 rounded-md border border-warning/30 bg-warning/10 px-2 py-1.5 text-xs text-warning-foreground">
+            <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+            A 1ª semana inclui todo o vencido em aberto (a pagar e a receber), de qualquer data.
+          </p>
           {cashData.length === 0 ? empty : (
             <ResponsiveContainer width="100%" height={340}>
               <ComposedChart data={cashData} margin={{ left: 10 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="semana" tick={{ fontSize: 11 }} />
                 <YAxis tickFormatter={brlC} />
-                <Tooltip formatter={(v: number, n: string) => [brl(Math.abs(v)), n === "saldo" ? "Saldo acumulado" : n]} labelFormatter={(l) => `Semana de ${l}`} />
+                <Tooltip formatter={(v: number, n: string) => [brl(Math.abs(v)), n]} labelFormatter={(l) => `Semana de ${l}`} />
                 <Legend />
                 <Bar dataKey="Entrada" fill="hsl(145, 55%, 51%)" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="Saída" fill="hsl(0, 72%, 55%)" radius={[0, 0, 4, 4]} />
-                <Line type="monotone" dataKey="saldo" name="Saldo acumulado" stroke="hsl(45, 93%, 54%)" strokeWidth={2} dot />
+                <Line type="monotone" dataKey="saldo" name="Saldo previsto acumulado" stroke="hsl(45, 93%, 54%)" strokeWidth={2} dot />
               </ComposedChart>
             </ResponsiveContainer>
           )}
-          <p className="text-[11px] text-muted-foreground mt-1">
-            O vencido em aberto entra na 1ª semana (é desembolso/recebimento que já deveria ter ocorrido).
-            {onTime && onTime.recebidos > 0 && <> · Recebimento no prazo: {onTime.pct_no_prazo}% ({onTime.no_prazo}/{onTime.recebidos}).</>}
-          </p>
+          {onTime && onTime.recebidos > 0 && (
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Recebimento no prazo: {onTime.pct_no_prazo}% ({onTime.no_prazo}/{onTime.recebidos}).
+            </p>
+          )}
         </CarboCardContent>
       </CarboCard>
 

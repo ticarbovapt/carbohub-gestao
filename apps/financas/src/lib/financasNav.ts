@@ -1,11 +1,18 @@
-import { LayoutDashboard, Wallet, Package, ClipboardList, Link2, Receipt, Percent, Users, FileSpreadsheet, type LucideIcon } from "lucide-react";
+import { LayoutDashboard, Wallet, Package, ClipboardList, Link2, Receipt, Percent, Users, FileSpreadsheet, ShoppingCart, CreditCard, HandCoins, Landmark, RefreshCw, Building2, BarChart3, type LucideIcon } from "lucide-react";
 
 export interface FinNavItem { path: string; label: string; icon: LucideIcon; }
 
 // Navegação do Carbo Finanças — telas portadas 1:1 do Carbo Controle.
 export const FIN_NAV: FinNavItem[] = [
   { path: "/", label: "Início", icon: LayoutDashboard },
-  { path: "/compras", label: "Financeiro & Suprimentos", icon: Wallet },
+  { path: "/compras", label: "Compras", icon: ShoppingCart },
+  { path: "/pagar", label: "Contas a pagar", icon: CreditCard },
+  { path: "/pagar/assinaturas", label: "Assinaturas", icon: RefreshCw },
+  { path: "/receber", label: "Contas a receber", icon: HandCoins },
+  { path: "/fluxo-caixa", label: "Fluxo de caixa", icon: Landmark },
+  { path: "/painel-financeiro", label: "Painel financeiro", icon: BarChart3 },
+  { path: "/cadastros/fornecedores", label: "Fornecedores", icon: Building2 },
+  { path: "/cadastros/formas-pagamento", label: "Formas de pagamento", icon: Wallet },
   { path: "/suprimentos", label: "Suprimentos", icon: Package },
   { path: "/pedidos", label: "Pedidos de Venda", icon: ClipboardList },
   { path: "/faturamento", label: "Faturamento", icon: Receipt },

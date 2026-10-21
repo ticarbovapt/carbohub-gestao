@@ -1,5 +1,7 @@
-import { useState, useEffect } from "react";
-import { HandCoins, CheckCircle2, Ban, ChevronLeft, ChevronRight, Plus, FileDown } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { HandCoins, CheckCircle2, Ban, ChevronLeft, ChevronRight, Plus, FileDown, Search, AlertTriangle } from "lucide-react";
+import { useParamUrl, confirmar } from "@carbo/shell";
+import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,115 +16,210 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   useReceivablesOpen, useReceivablesPaged, useUpdateReceivableStatus, useCreateReceivable,
   useInvoicedOrdersNoReceivable, useGenerateReceivablesFromOrders,
-  RECEIVABLE_STATUS_LABELS, type Receivable, type ReceivableStatus,
+  RECEIVABLE_STATUS_LABELS, type Receivable, type ReceivableStatus, type FiltroStatusReceber, type TituloNovo,
 } from "@/hooks/useReceivables";
-import { format, isPast, isToday, differenceInCalendarDays, addMonths, parseISO } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { hojeISO, mesAtualISO, somarDias, diasAte, limitesDoMes, dataBR, estaVencido } from "@/lib/datas";
+import { parcelasDoPrazo, notaDaParcela, type Parcela } from "@/lib/parcelas";
 
 const brl = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
-const CURRENT_MONTH = new Date().toISOString().slice(0, 7);
-const isYm = (v: string) => /^\d{4}-\d{2}$/.test(v);
-const monthBounds = (ym: string) => {
-  const valid = isYm(ym) ? ym : CURRENT_MONTH;
-  const [y, m] = valid.split("-").map(Number);
-  const lastDay = new Date(y, m, 0).getDate();
-  return { first: `${valid}-01`, last: `${valid}-${String(lastDay).padStart(2, "0")}` };
+const isYm = (v: string) => /^\d{4}-(0[1-9]|1[0-2])$/.test(v);
+const isDia = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v);
+const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+const rotuloMes = (ym: string) => `${MESES[Number(ym.slice(5, 7)) - 1]} ${ym.slice(0, 4)}`;
+/** Soma meses a `AAAA-MM` por texto — sem `Date`, sem fuso. */
+const somarMeses = (ym: string, delta: number) => {
+  const t = Number(ym.slice(0, 4)) * 12 + Number(ym.slice(5, 7)) - 1 + delta;
+  return `${Math.floor(t / 12)}-${String((t % 12) + 1).padStart(2, "0")}`;
 };
 
 const statusVariant: Record<ReceivableStatus, any> = {
   programado: "info", recebido: "success", atrasado: "destructive", cancelado: "cancelled",
 };
-const isOverdue = (r: { status: ReceivableStatus; due_date: string }) =>
-  r.status !== "recebido" && r.status !== "cancelado" && isPast(parseISO(r.due_date)) && !isToday(parseISO(r.due_date));
+/** Vencido pela regra ÚNICA (`estaVencido`), não pelo status gravado. */
 const effectiveStatus = (r: { status: ReceivableStatus; due_date: string }): ReceivableStatus =>
-  isOverdue(r) ? "atrasado" : r.status;
+  estaVencido(r) ? "atrasado" : r.status === "atrasado" ? "programado" : r.status;
+
+const FILTROS_STATUS: { v: FiltroStatusReceber; l: string }[] = [
+  { v: "fila", l: "Fila: vencidos + 7 dias" },
+  { v: "aberto", l: "Em aberto (todos)" },
+  { v: "atrasado", l: "Vencidos" },
+  { v: "programado", l: "A vencer" },
+  { v: "recebido", l: "Recebidos" },
+  { v: "cancelado", l: "Cancelados" },
+  { v: "all", l: "Todos os status" },
+];
 
 export default function Recebiveis() {
   const { gestor } = useAuth();
-  const [statusFilter, setStatusFilter] = usePersistedState<string>("fin.receber.status", "all");
-  const [source, setSource] = usePersistedState<string>("fin.receber.source", "all");
-  const [mes, setMes] = usePersistedState<string>("fin.receber.mes", CURRENT_MONTH);
-  const [from, setFrom] = usePersistedState<string>("fin.receber.from", "");
-  const [to, setTo] = usePersistedState<string>("fin.receber.to", "");
-  const [page, setPage] = useState(0);
+  // Filtros na URL: F5, link mandado a alguém e Voltar funcionam.
+  const [statusUrl, setStatusUrl] = useParamUrl("status", "fila");
+  const [source, setSourceUrl] = useParamUrl("origem", "all");
+  const [mesUrl, setMesUrl] = useParamUrl("mes", "");
+  const [deUrl, setDeUrl] = useParamUrl("de", "");
+  const [ateUrl, setAteUrl] = useParamUrl("ate", "");
+  const [buscaUrl, setBuscaUrl] = useParamUrl("busca", "", { replace: true });
+  const [paginaUrl, setPaginaUrl] = useParamUrl("pagina", "1");
   const [pageSize, setPageSize] = usePersistedState<number>("fin.receber.pageSize", 20);
+
+  const status = (FILTROS_STATUS.some((f) => f.v === statusUrl) ? statusUrl : "fila") as FiltroStatusReceber;
+  const mes = isYm(mesUrl) ? mesUrl : "";
+  const de = isDia(deUrl) ? deUrl : "";
+  const ate = isDia(ateUrl) ? ateUrl : "";
+  const page = Math.max(0, (Number(paginaUrl) || 1) - 1);
+
+  // Toda troca de filtro volta à 1ª página.
+  const setStatus = (v: string) => {
+    setStatusUrl(v);
+    // A fila é a visão SEM recorte de data: escolhê-la limpa mês e intervalo.
+    if (v === "fila") { setMesUrl(null); setDeUrl(null); setAteUrl(null); }
+    setPaginaUrl(null);
+  };
+  const setSource = (v: string) => { setSourceUrl(v); setPaginaUrl(null); };
+  // Mês e De/Até são exclusivos: um limpa o outro. Sair da fila para um recorte
+  // de data passa a mostrar todos os status daquele recorte.
+  const setMes = (v: string | null) => {
+    if (v && status === "fila") setStatusUrl("all");
+    setMesUrl(v); setDeUrl(null); setAteUrl(null); setPaginaUrl(null);
+  };
+  const setIntervalo = (campo: "de" | "ate", v: string) => {
+    if (v && status === "fila") setStatusUrl("all");
+    (campo === "de" ? setDeUrl : setAteUrl)(v || null);
+    setMesUrl(null); setPaginaUrl(null);
+  };
+  const setPage = (p: number) => setPaginaUrl(p <= 0 ? null : String(p + 1));
+
+  // Busca: digitada no campo, gravada na URL depois de uma pausa.
+  const [busca, setBusca] = useState(buscaUrl);
+  // Voltar/link mudam a URL por fora: o campo acompanha (sem comer o espaço que está sendo digitado).
+  useEffect(() => { setBusca((b) => (b.trim() === buscaUrl ? b : buscaUrl)); }, [buscaUrl]);
+  useEffect(() => {
+    if (busca.trim() === buscaUrl) return;
+    const t = setTimeout(() => { setBuscaUrl(busca.trim() || null); setPaginaUrl(null); }, 350);
+    return () => clearTimeout(t);
+  }, [busca, buscaUrl, setBuscaUrl, setPaginaUrl]);
+
+  const recorte = mes ? limitesDoMes(mes) : { de, ate };
+  const hoje = hojeISO();
+
   const [receiving, setReceiving] = useState<Receivable | null>(null);
-  const [recAt, setRecAt] = useState(new Date().toISOString().slice(0, 10));
+  const [recAt, setRecAt] = useState(hoje);
   const [showNew, setShowNew] = useState(false);
-  const [form, setForm] = useState({ customer_name: "", amount: "", due_date: CURRENT_MONTH + "-01", notes: "" });
+  const formVazio = () => ({ customer_name: "", amount: "", due_date: hojeISO(), notes: "" });
+  const [form, setForm] = useState(formVazio);
   const [showGerar, setShowGerar] = useState(false);
-
-  const mesSafe = isYm(mes) ? mes : CURRENT_MONTH;
-  const usaPeriodo = !!(from || to);
-  const periodo = usaPeriodo ? { first: from, last: to } : monthBounds(mesSafe);
-  const shiftMes = (delta: number) => setMes(format(addMonths(parseISO(`${mesSafe}-01`), delta), "yyyy-MM"));
-
-  useEffect(() => { setPage(0); }, [statusFilter, source, mes, from, to, pageSize]);
 
   const update = useUpdateReceivableStatus();
   const create = useCreateReceivable();
   const { data: openRows } = useReceivablesOpen(source);
-  const { data: paged, isLoading } = useReceivablesPaged({ source, status: statusFilter, from: periodo.first, to: periodo.last, page, pageSize });
+  const { data: paged, isLoading, isError, error } = useReceivablesPaged({
+    source, status, de: recorte.de, ate: recorte.ate, busca: buscaUrl, page, pageSize,
+  });
   const rows = paged?.rows ?? [];
   const total = paged?.count ?? 0;
 
   const abertas = openRows ?? [];
   const sum = (arr: any[]) => arr.reduce((s, p) => s + Number(p.amount || 0), 0);
-  const vencidas = abertas.filter(isOverdue);
-  const venceHoje = abertas.filter((p) => isToday(parseISO(p.due_date)));
-  const vence7 = abertas.filter((p) => { const d = differenceInCalendarDays(parseISO(p.due_date), new Date()); return d >= 1 && d <= 7; });
+  const vencidas = abertas.filter((p) => estaVencido(p, hoje));
+  const venceHoje = abertas.filter((p) => p.due_date?.slice(0, 10) === hoje);
+  const vence7 = abertas.filter((p) => { const d = diasAte(p.due_date, hoje); return d != null && d >= 1 && d <= 7; });
 
   const from1 = total === 0 ? 0 : page * pageSize + 1;
   const to1 = Math.min(total, (page + 1) * pageSize);
   const lastPage = Math.max(0, Math.ceil(total / pageSize) - 1);
 
-  const doReceive = async () => { if (receiving) { await update.mutateAsync({ id: receiving.id, status: "recebido", received_at: recAt }); setReceiving(null); } };
+  const doReceive = async () => {
+    if (!receiving || !recAt) return;
+    await update.mutateAsync({ id: receiving.id, status: "recebido", received_at: recAt });
+    setReceiving(null);
+  };
   const doCreate = async () => {
     if (!form.amount || !form.due_date) return;
     await create.mutateAsync({ customer_name: form.customer_name || null, amount: Number(form.amount), due_date: form.due_date, notes: form.notes || null });
-    setShowNew(false); setForm({ customer_name: "", amount: "", due_date: CURRENT_MONTH + "-01", notes: "" });
+    setShowNew(false); setForm(formVazio());
   };
+  const estornar = async (r: Receivable) => {
+    const ok = await confirmar({
+      titulo: "Estornar o recebimento?",
+      mensagem: `${r.customer_name || "Título"} · ${brl(r.amount)}, recebido em ${dataBR(r.received_at)}.\nO título volta a ficar em aberto e a data de recebimento é apagada.`,
+      confirmar: "Estornar", perigo: true,
+    });
+    if (ok) update.mutate({ id: r.id, status: "programado" });
+  };
+  const cancelar = async (r: Receivable) => {
+    const ok = await confirmar({
+      titulo: "Cancelar este título?",
+      mensagem: `${r.customer_name || "Título"} · ${brl(r.amount)}, vencimento ${dataBR(r.due_date)}.\nTítulo cancelado sai do a receber, do aging e do fluxo de caixa.`,
+      confirmar: "Cancelar título", cancelar: "Voltar", perigo: true,
+    });
+    if (ok) update.mutate({ id: r.id, status: "cancelado" });
+  };
+
+  const descricaoRecorte = status === "fila" && !mes && !de && !ate
+    ? `Fila: tudo o que está vencido e o que vence até ${dataBR(somarDias(hoje, 7))}.`
+    : mes || de || ate
+      ? `${status === "recebido" ? "Recebidos" : "Vencimento"} ${mes ? `em ${rotuloMes(mes)}` : `${de ? `de ${dataBR(de)}` : ""}${ate ? ` até ${dataBR(ate)}` : ""}`}.`
+      : "Sem recorte de data.";
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-        <p className="text-sm text-muted-foreground">Títulos a receber de clientes — do sistema e do Bling — com baixa e aging.</p>
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
-          <Button variant="outline" onClick={() => setShowGerar(true)} className="gap-2"><FileDown className="h-4 w-4" /> Gerar de pedidos faturados</Button>
-          <Button onClick={() => setShowNew(true)} className="gap-2 carbo-gradient text-white"><Plus className="h-4 w-4" /> Novo recebível</Button>
-        </div>
-      </div>
+      <CarboPageHeader
+        title="Contas a receber"
+        description="Títulos a receber de clientes — do sistema e do Bling — com baixa e inadimplência."
+        icon={HandCoins}
+        actions={
+          <>
+            <Button variant="outline" onClick={() => setShowGerar(true)} className="gap-2"><FileDown className="h-4 w-4" /> Gerar de pedidos faturados</Button>
+            <Button onClick={() => setShowNew(true)} className="gap-2 carbo-gradient text-white"><Plus className="h-4 w-4" /> Novo título</Button>
+          </>
+        }
+      />
 
-      {/* Aging */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      {/* Aging — sempre sobre TODO o em aberto, independente dos filtros da lista. */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="rounded-xl border border-border p-3">
           <p className="text-xs text-muted-foreground">A receber (em aberto)</p>
-          <p className="text-lg font-bold">{brl(sum(abertas))}</p>
+          <p className="text-lg font-bold break-words">{brl(sum(abertas))}</p>
           <p className="text-[11px] text-muted-foreground">{abertas.length} título(s)</p>
         </div>
         <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3">
           <p className="text-xs text-destructive">Vencido (inadimplência)</p>
-          <p className="text-lg font-bold text-destructive">{brl(sum(vencidas))}</p>
+          <p className="text-lg font-bold text-destructive break-words">{brl(sum(vencidas))}</p>
           <p className="text-[11px] text-muted-foreground">{vencidas.length} título(s)</p>
         </div>
         <div className="rounded-xl border border-warning/30 bg-warning/5 p-3">
           <p className="text-xs text-warning-foreground">Vence hoje</p>
-          <p className="text-lg font-bold">{brl(sum(venceHoje))}</p>
+          <p className="text-lg font-bold break-words">{brl(sum(venceHoje))}</p>
           <p className="text-[11px] text-muted-foreground">{venceHoje.length} título(s)</p>
         </div>
         <div className="rounded-xl border border-border p-3">
           <p className="text-xs text-muted-foreground">Próximos 7 dias</p>
-          <p className="text-lg font-bold">{brl(sum(vence7))}</p>
+          <p className="text-lg font-bold break-words">{brl(sum(vence7))}</p>
           <p className="text-[11px] text-muted-foreground">{vence7.length} título(s)</p>
         </div>
       </div>
 
       {/* Filtros */}
       <div className="flex flex-wrap items-end gap-3">
+        <div className="space-y-1 w-full sm:w-auto">
+          <Label className="text-xs text-muted-foreground">Buscar</Label>
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input className="pl-8 w-full sm:w-[220px]" placeholder="Cliente, pedido, nº Bling" value={busca} onChange={(e) => setBusca(e.target.value)} />
+          </div>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Status</Label>
+          <Select value={status} onValueChange={setStatus}>
+            <SelectTrigger className="w-[200px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {FILTROS_STATUS.map((f) => <SelectItem key={f.v} value={f.v}>{f.l}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
         <div className="space-y-1">
           <Label className="text-xs text-muted-foreground">Origem</Label>
           <Select value={source} onValueChange={setSource}>
-            <SelectTrigger className="w-[150px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-[170px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todas as origens</SelectItem>
               <SelectItem value="interno">Criadas no sistema</SelectItem>
@@ -131,27 +228,26 @@ export default function Recebiveis() {
           </Select>
         </div>
         <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Status</Label>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os status</SelectItem>
-              {Object.entries(RECEIVABLE_STATUS_LABELS).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <Label className="text-xs text-muted-foreground">{status === "recebido" ? "Mês do recebimento" : "Mês do vencimento"}</Label>
+          {mes ? (
+            <div className="inline-flex items-center rounded-md border border-border h-10">
+              <button className="px-2 h-full hover:text-carbo-green" onClick={() => setMes(somarMeses(mes, -1))} aria-label="Mês anterior"><ChevronLeft className="h-4 w-4" /></button>
+              <span className="px-2 text-sm min-w-[120px] text-center capitalize">{rotuloMes(mes)}</span>
+              <button className="px-2 h-full hover:text-carbo-green" onClick={() => setMes(somarMeses(mes, 1))} aria-label="Próximo mês"><ChevronRight className="h-4 w-4" /></button>
+            </div>
+          ) : (
+            <Button variant="outline" className="h-10" onClick={() => setMes(mesAtualISO())}>Escolher mês</Button>
+          )}
         </div>
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Mês</Label>
-          <div className={`inline-flex items-center rounded-md border border-border h-10 ${usaPeriodo ? "opacity-40" : ""}`}>
-            <button className="px-2 h-full hover:text-carbo-green disabled:opacity-40" onClick={() => shiftMes(-1)} disabled={usaPeriodo}><ChevronLeft className="h-4 w-4" /></button>
-            <span className="px-2 text-sm min-w-[120px] text-center capitalize">{format(parseISO(`${mesSafe}-01`), "MMMM yyyy", { locale: ptBR })}</span>
-            <button className="px-2 h-full hover:text-carbo-green disabled:opacity-40" onClick={() => shiftMes(1)} disabled={usaPeriodo}><ChevronRight className="h-4 w-4" /></button>
-          </div>
-        </div>
-        <div className="space-y-1"><Label className="text-xs text-muted-foreground">De</Label><Input type="date" className="w-[150px]" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
-        <div className="space-y-1"><Label className="text-xs text-muted-foreground">Até</Label><Input type="date" className="w-[150px]" value={to} onChange={(e) => setTo(e.target.value)} /></div>
-        {usaPeriodo && <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => { setFrom(""); setTo(""); }}>Limpar De/Até</Button>}
+        <div className="space-y-1"><Label className="text-xs text-muted-foreground">De</Label><Input type="date" className="w-[150px]" value={de} onChange={(e) => setIntervalo("de", e.target.value)} /></div>
+        <div className="space-y-1"><Label className="text-xs text-muted-foreground">Até</Label><Input type="date" className="w-[150px]" value={ate} onChange={(e) => setIntervalo("ate", e.target.value)} /></div>
+        {(mes || de || ate) && (
+          <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => { setMesUrl(null); setDeUrl(null); setAteUrl(null); setPaginaUrl(null); }}>
+            Limpar datas
+          </Button>
+        )}
       </div>
+      <p className="text-xs text-muted-foreground -mt-1">{descricaoRecorte}</p>
 
       <CarboTable>
         <CarboTableHeader>
@@ -168,9 +264,16 @@ export default function Recebiveis() {
         <CarboTableBody>
           {isLoading ? (
             <CarboTableRow><CarboTableCell colSpan={7} className="text-center text-muted-foreground py-8">Carregando...</CarboTableCell></CarboTableRow>
+          ) : isError ? (
+            <CarboTableRow><CarboTableCell colSpan={7} className="text-center text-destructive py-8">
+              Não foi possível ler os títulos: {(error as Error)?.message ?? "erro desconhecido"}
+            </CarboTableCell></CarboTableRow>
           ) : !rows.length ? (
             <CarboTableRow><CarboTableCell colSpan={7} className="text-center text-muted-foreground py-8">
-              <div className="flex flex-col items-center gap-2"><HandCoins className="h-8 w-8 text-muted-foreground/50" /><span>Nenhum recebível com esses filtros</span></div>
+              <div className="flex flex-col items-center gap-2">
+                <HandCoins className="h-8 w-8 text-muted-foreground/50" />
+                <span>{status === "fila" && !buscaUrl ? "Nada vencido nem vencendo nos próximos 7 dias." : "Nenhum título com esses filtros."}</span>
+              </div>
             </CarboTableCell></CarboTableRow>
           ) : (
             rows.map((r) => {
@@ -178,23 +281,28 @@ export default function Recebiveis() {
               const isBling = r.source === "bling";
               return (
                 <CarboTableRow key={r.id}>
-                  <CarboTableCell className="font-medium">{r.customer_name || "—"}</CarboTableCell>
+                  <CarboTableCell className="font-medium">
+                    <p>{r.customer_name || "—"}</p>
+                    {(r.notes || r.bling_numero) && (
+                      <p className="text-[11px] font-normal text-muted-foreground truncate max-w-[260px]">{r.notes || `Bling nº ${r.bling_numero}`}</p>
+                    )}
+                  </CarboTableCell>
                   <CarboTableCell><CarboBadge variant={isBling ? "secondary" : "info"} className="text-[10px]">{isBling ? "Bling" : "Sistema"}</CarboBadge></CarboTableCell>
-                  <CarboTableCell className="font-mono">{brl(r.amount)}</CarboTableCell>
-                  <CarboTableCell className="text-sm">{format(parseISO(r.due_date), "dd/MM/yyyy", { locale: ptBR })}</CarboTableCell>
+                  <CarboTableCell className="font-mono whitespace-nowrap">{brl(r.amount)}</CarboTableCell>
+                  <CarboTableCell className="text-sm whitespace-nowrap">{dataBR(r.due_date)}</CarboTableCell>
                   <CarboTableCell><CarboBadge variant={statusVariant[eff]} dot>{RECEIVABLE_STATUS_LABELS[eff]}</CarboBadge></CarboTableCell>
-                  <CarboTableCell className="text-sm text-muted-foreground">{r.received_at ? format(new Date(r.received_at), "dd/MM/yyyy", { locale: ptBR }) : "—"}</CarboTableCell>
+                  <CarboTableCell className="text-sm text-muted-foreground whitespace-nowrap">{dataBR(r.received_at)}</CarboTableCell>
                   <CarboTableCell>
                     {!gestor ? <span className="text-muted-foreground text-xs">—</span>
                       : r.status === "recebido" ? (
-                        <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" onClick={() => update.mutate({ id: r.id, status: "programado" })}>Estornar</Button>
+                        <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" onClick={() => estornar(r)}>Estornar</Button>
                       ) : r.status === "cancelado" ? <span className="text-muted-foreground text-xs">—</span>
                       : (
                         <div className="flex items-center gap-1">
-                          <Button variant="ghost" size="sm" className="gap-1.5 text-success" onClick={() => { setRecAt(new Date().toISOString().slice(0, 10)); setReceiving(r); }}>
+                          <Button variant="ghost" size="sm" className="gap-1.5 text-success" onClick={() => { setRecAt(hojeISO()); setReceiving(r); }}>
                             <CheckCircle2 className="h-3.5 w-3.5" /> Receber
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => update.mutate({ id: r.id, status: "cancelado" })} title="Cancelar título"><Ban className="h-3.5 w-3.5" /></Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => cancelar(r)} title="Cancelar título" aria-label="Cancelar título"><Ban className="h-3.5 w-3.5" /></Button>
                         </div>
                       )}
                   </CarboTableCell>
@@ -209,16 +317,16 @@ export default function Recebiveis() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <span>Por página</span>
-          <Select value={String(pageSize)} onValueChange={(v) => setPageSize(Number(v))}>
+          <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setPaginaUrl(null); }}>
             <SelectTrigger className="w-[80px] h-8"><SelectValue /></SelectTrigger>
             <SelectContent><SelectItem value="20">20</SelectItem><SelectItem value="50">50</SelectItem><SelectItem value="100">100</SelectItem></SelectContent>
           </Select>
           <span>{from1}–{to1} de {total}</span>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="gap-1" disabled={page <= 0} onClick={() => setPage((p) => Math.max(0, p - 1))}><ChevronLeft className="h-4 w-4" /> Anterior</Button>
-          <span className="text-sm text-muted-foreground">{page + 1} / {lastPage + 1}</span>
-          <Button variant="outline" size="sm" className="gap-1" disabled={page >= lastPage} onClick={() => setPage((p) => Math.min(lastPage, p + 1))}>Próxima <ChevronRight className="h-4 w-4" /></Button>
+          <Button variant="outline" size="sm" className="gap-1" disabled={page <= 0} onClick={() => setPage(Math.max(0, page - 1))}><ChevronLeft className="h-4 w-4" /> Anterior</Button>
+          <span className="text-sm text-muted-foreground">{Math.min(page, lastPage) + 1} / {lastPage + 1}</span>
+          <Button variant="outline" size="sm" className="gap-1" disabled={page >= lastPage} onClick={() => setPage(Math.min(lastPage, page + 1))}>Próxima <ChevronRight className="h-4 w-4" /></Button>
         </div>
       </div>
 
@@ -229,27 +337,26 @@ export default function Recebiveis() {
           {receiving && (
             <div className="space-y-2 text-sm">
               <div className="rounded-lg border border-border p-3 space-y-1">
-                <div className="flex justify-between"><span className="text-muted-foreground">Cliente</span><strong>{receiving.customer_name || "—"}</strong></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Valor</span><strong className="font-mono">{brl(receiving.amount)}</strong></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Vencimento</span><strong>{format(parseISO(receiving.due_date), "dd/MM/yyyy", { locale: ptBR })}</strong></div>
+                <div className="flex justify-between gap-2"><span className="text-muted-foreground">Cliente</span><strong className="text-right">{receiving.customer_name || "—"}</strong></div>
+                <div className="flex justify-between gap-2"><span className="text-muted-foreground">Valor</span><strong className="font-mono">{brl(receiving.amount)}</strong></div>
+                <div className="flex justify-between gap-2"><span className="text-muted-foreground">Vencimento</span><strong>{dataBR(receiving.due_date)}</strong></div>
               </div>
-              <div className="space-y-1.5"><Label>Data do recebimento</Label><Input type="date" value={recAt} onChange={(e) => setRecAt(e.target.value)} /></div>
+              <div className="space-y-1.5"><Label>Data do recebimento</Label><Input type="date" value={recAt} max={hoje} onChange={(e) => setRecAt(e.target.value)} /></div>
             </div>
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setReceiving(null)}>Cancelar</Button>
-            <Button onClick={doReceive} disabled={update.isPending} className="gap-1.5 carbo-gradient text-white"><CheckCircle2 className="h-4 w-4" /> Confirmar recebimento</Button>
+            <Button onClick={doReceive} disabled={update.isPending || !recAt} className="gap-1.5 carbo-gradient text-white"><CheckCircle2 className="h-4 w-4" /> Confirmar recebimento</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Gerar de pedidos faturados */}
       <GerarDeVendasDialog open={showGerar} onClose={() => setShowGerar(false)} />
 
-      {/* Novo recebível */}
+      {/* Novo título */}
       <Dialog open={showNew} onOpenChange={setShowNew}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Novo recebível</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Novo título a receber</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5"><Label>Cliente</Label><Input value={form.customer_name} onChange={(e) => setForm({ ...form, customer_name: e.target.value })} placeholder="Nome do cliente" /></div>
             <div className="grid grid-cols-2 gap-3">
@@ -260,7 +367,7 @@ export default function Recebiveis() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowNew(false)}>Cancelar</Button>
-            <Button onClick={doCreate} disabled={!form.amount || !form.due_date || create.isPending} className="carbo-gradient text-white">Criar</Button>
+            <Button onClick={doCreate} disabled={!form.amount || !form.due_date || create.isPending} className="carbo-gradient text-white">Criar título</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -268,35 +375,64 @@ export default function Recebiveis() {
   );
 }
 
-// Vencimento estimado do pedido: data da venda + nº de dias achado no prazo
-// de pagamento (ex.: "30", "boleto 28 dias"). Sem número → vence na venda.
-const dueFromOrder = (o: { sale_date: string | null; created_at: string; payment_terms: string | null }) => {
-  const base = (o.sale_date || o.created_at || "").slice(0, 10) || CURRENT_MONTH + "-01";
-  const days = o.payment_terms ? Number(o.payment_terms.match(/\d+/)?.[0] ?? 0) : 0;
-  const d = parseISO(base + "T12:00:00");
-  d.setDate(d.getDate() + (Number.isFinite(days) ? days : 0));
-  return format(d, "yyyy-MM-dd");
-};
+// ── Gerar de pedidos faturados ───────────────────────────────────────────────
+// ⚠️ Abre com NADA marcado: gerar título é afirmar que o cliente deve aquilo
+// naquela data, e o histórico inteiro de pedidos já pagos aparece aqui como
+// candidato. Marcar tudo por padrão era um clique de distância de criar
+// centenas de títulos falsos.
+// ⚠️ Prazo que o parser não reconhece NÃO ganha vencimento inventado: o pedido
+// só pode ser marcado depois de alguém digitar a data.
+
+const STATUS_PEDIDO: Record<string, string> = { invoiced: "Faturado", shipped: "Enviado", delivered: "Entregue" };
+const POR_VEZ = 50;
 
 function GerarDeVendasDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { data: pedidos = [], isLoading } = useInvoicedOrdersNoReceivable();
+  const { data: pedidos = [], isLoading, isError, error } = useInvoicedOrdersNoReceivable(open);
   const gen = useGenerateReceivablesFromOrders();
   const [sel, setSel] = useState<Record<string, boolean>>({});
   const [due, setDue] = useState<Record<string, string>>({});
+  const [busca, setBusca] = useState("");
+  const [mostrar, setMostrar] = useState(POR_VEZ);
 
+  // Reabrir zera tudo — de propósito NÃO depende de `pedidos`: recarregar a
+  // lista no meio não pode remarcar nada.
   useEffect(() => {
     if (!open) return;
-    const s: Record<string, boolean> = {}, d: Record<string, string> = {};
-    pedidos.forEach((p) => { s[p.id] = true; d[p.id] = dueFromOrder(p); });
-    setSel(s); setDue(d);
-  }, [open, pedidos]);
+    setSel({}); setDue({}); setBusca(""); setMostrar(POR_VEZ);
+  }, [open]);
 
-  const selecionados = pedidos.filter((p) => sel[p.id]);
+  const parcelasPorPedido = useMemo(() => {
+    const m = new Map<string, Parcela[] | null>();
+    pedidos.forEach((p) => m.set(p.id, parcelasDoPrazo(p.payment_terms, p.total, p.base)));
+    return m;
+  }, [pedidos]);
+
+  /** As parcelas que SERÃO criadas: as do prazo, ou uma única na data digitada. */
+  const parcelasDe = (id: string, total: number): Parcela[] | null => {
+    const p = parcelasPorPedido.get(id);
+    if (p) return p;
+    const d = due[id];
+    return d && isDia(d) ? [{ numero: 1, de: 1, vencimento: d, valor: total }] : null;
+  };
+
+  const filtrados = useMemo(() => {
+    const b = busca.trim().toLowerCase();
+    if (!b) return pedidos;
+    return pedidos.filter((p) => `${p.order_number ?? ""} ${p.customer_name ?? ""}`.toLowerCase().includes(b));
+  }, [pedidos, busca]);
+  const visiveis = filtrados.slice(0, mostrar);
+
+  const selecionados = pedidos.filter((p) => sel[p.id] && parcelasDe(p.id, p.total));
+  const titulos: TituloNovo[] = selecionados.flatMap((p) =>
+    (parcelasDe(p.id, p.total) ?? []).map((x) => ({
+      order_id: p.id, customer_name: p.customer_name, amount: x.valor, due_date: x.vencimento,
+      notes: notaDaParcela(x, p.order_number),
+    })));
   const totalSel = selecionados.reduce((s, p) => s + p.total, 0);
 
   const gerar = async () => {
-    const items = selecionados.map((p) => ({ order_id: p.id, customer_name: p.customer_name, amount: p.total, due_date: due[p.id] || dueFromOrder(p) }));
-    if (items.length) await gen.mutateAsync(items);
+    if (!titulos.length) return;
+    await gen.mutateAsync(titulos);
     onClose();
   };
 
@@ -306,30 +442,84 @@ function GerarDeVendasDialog({ open, onClose }: { open: boolean; onClose: () => 
         <DialogHeader>
           <DialogTitle>Gerar títulos a receber de pedidos faturados</DialogTitle>
         </DialogHeader>
-        <p className="text-[11px] text-warning-foreground bg-warning/10 border border-warning/30 rounded-lg p-2">
-          Só gere de pedidos cujo título <strong>ainda não veio do Bling</strong>, pra não duplicar. O vencimento é estimado pelo prazo de pagamento — confira.
-        </p>
+        <div className="text-[11px] text-warning-foreground bg-warning/10 border border-warning/30 rounded-lg p-2 space-y-1">
+          <p>
+            <strong>Título vindo do Bling não tem pedido vinculado</strong> — se este pedido já tem título importado do Bling,
+            gerar aqui duplica. Confira a lista de contas a receber antes.
+          </p>
+          <p>Um título por parcela, com os vencimentos tirados do prazo de pagamento do pedido, a partir da data da venda. Venda on-line fica de fora (é paga na plataforma).</p>
+        </div>
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input className="pl-8" placeholder="Buscar pedido ou cliente" value={busca} onChange={(e) => { setBusca(e.target.value); setMostrar(POR_VEZ); }} />
+        </div>
         {isLoading ? <p className="text-sm text-muted-foreground py-6">Carregando…</p>
+          : isError ? <p className="text-sm text-destructive py-6">Não foi possível ler os pedidos: {(error as Error)?.message ?? "erro desconhecido"}</p>
           : pedidos.length === 0 ? <p className="text-sm text-muted-foreground py-6 text-center">Nenhum pedido faturado sem título a receber.</p>
+          : filtrados.length === 0 ? <p className="text-sm text-muted-foreground py-6 text-center">Nenhum pedido com essa busca.</p>
           : (
-            <div className="space-y-1.5 py-1">
-              {pedidos.map((p) => (
-                <div key={p.id} className="flex items-center gap-2 text-sm border-b border-border pb-1.5">
-                  <input type="checkbox" checked={!!sel[p.id]} onChange={(e) => setSel((s) => ({ ...s, [p.id]: e.target.checked }))} />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-mono truncate">{p.order_number || "—"}</p>
-                    <p className="text-[11px] text-muted-foreground truncate">{p.customer_name || "—"} · {brl(p.total)}{p.payment_terms ? ` · ${p.payment_terms}` : ""}</p>
+            <div className="space-y-2 py-1">
+              {visiveis.map((p) => {
+                const doPrazo = parcelasPorPedido.get(p.id);
+                const reconhecido = !!doPrazo;
+                const parcelas = parcelasDe(p.id, p.total);
+                const podeMarcar = !!parcelas && parcelas.length > 0;
+                return (
+                  <div key={p.id} className="flex items-start gap-2 text-sm border-b border-border pb-2">
+                    <input
+                      type="checkbox" className="mt-1"
+                      checked={!!sel[p.id] && podeMarcar} disabled={!podeMarcar}
+                      aria-label={`Gerar títulos do pedido ${p.order_number ?? ""}`}
+                      onChange={(e) => setSel((s) => ({ ...s, [p.id]: e.target.checked }))}
+                    />
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <div className="flex flex-wrap items-baseline gap-x-2">
+                        <span className="font-mono">{p.order_number || "—"}</span>
+                        <span className="text-[11px] text-muted-foreground">{STATUS_PEDIDO[p.status] ?? p.status} · venda {dataBR(p.base)}</span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground break-words">
+                        {p.customer_name || "—"} · <strong className="text-foreground">{brl(p.total)}</strong> · {p.payment_terms || "sem prazo informado"}
+                      </p>
+                      {reconhecido ? (
+                        <ul className="flex flex-wrap gap-1.5">
+                          {doPrazo!.map((x) => (
+                            <li key={x.numero} className="rounded border border-border px-1.5 py-0.5 text-[11px] font-mono">
+                              {x.numero}/{x.de} · {dataBR(x.vencimento)} · {brl(x.valor)}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="inline-flex items-center gap-1 text-[11px] text-warning-foreground">
+                            <AlertTriangle className="h-3.5 w-3.5" /> Prazo não reconhecido — informe o vencimento
+                          </span>
+                          <Input
+                            type="date" className="w-[150px] h-8" value={due[p.id] ?? ""}
+                            aria-label={`Vencimento do pedido ${p.order_number ?? ""}`}
+                            onChange={(e) => setDue((d) => ({ ...d, [p.id]: e.target.value }))}
+                          />
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <Input type="date" className="w-[150px] h-9" value={due[p.id] ?? dueFromOrder(p)} onChange={(e) => setDue((d) => ({ ...d, [p.id]: e.target.value }))} />
-                </div>
-              ))}
+                );
+              })}
+              {filtrados.length > visiveis.length && (
+                <Button variant="ghost" size="sm" className="w-full" onClick={() => setMostrar((n) => n + POR_VEZ)}>
+                  Mostrar mais ({filtrados.length - visiveis.length} restantes)
+                </Button>
+              )}
             </div>
           )}
         <DialogFooter className="flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <span className="text-xs text-muted-foreground">{selecionados.length} selecionado(s) · {brl(totalSel)}</span>
+          <span className="text-xs text-muted-foreground">
+            {selecionados.length} pedido(s) · {titulos.length} título(s) · {brl(totalSel)}
+          </span>
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose}>Cancelar</Button>
-            <Button onClick={gerar} disabled={selecionados.length === 0 || gen.isPending} className="carbo-gradient text-white">Gerar {selecionados.length} título(s)</Button>
+            <Button onClick={gerar} disabled={titulos.length === 0 || gen.isPending} className="carbo-gradient text-white">
+              Gerar {titulos.length} título(s)
+            </Button>
           </div>
         </DialogFooter>
       </DialogContent>

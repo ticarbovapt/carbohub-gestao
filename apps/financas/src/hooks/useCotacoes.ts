@@ -99,8 +99,14 @@ export function useSelectQuote() {
         if (error) throw error;
       }
     },
-    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ["purchase_quotes", v.request_id] }),
-    onError: (e: Error) => toast.error("Erro ao escolher cotação: " + e.message),
+    // ⚠️ São DOIS updates (desmarca o item, marca a escolhida) — não é atômico
+    // (Fase 3: RPC). Se o segundo falhar, o item fica SEM cotação escolhida; por
+    // isso relê sempre (onSettled) e a mensagem diz o estado em que ficou.
+    onSettled: (_d, _e, v) => qc.invalidateQueries({ queryKey: ["purchase_quotes", v.request_id] }),
+    onError: (e: Error, v) => toast.error(
+      v.selected ? "Erro ao escolher cotação — confira o item, ele pode ter ficado sem cotação escolhida" : "Erro ao desmarcar cotação",
+      { description: e.message },
+    ),
   });
 }
 
@@ -146,7 +152,10 @@ export function useDeleteQuote() {
       const { error } = await db.from("purchase_quotes").delete().eq("id", q.id);
       if (error) throw error;
     },
-    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ["purchase_quotes", v.request_id] }),
-    onError: (e: Error) => toast.error("Erro ao remover cotação: " + e.message),
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ["purchase_quotes", v.request_id] });
+      toast.success("Cotação excluída.");
+    },
+    onError: (e: Error) => toast.error("Erro ao remover cotação", { description: e.message }),
   });
 }
