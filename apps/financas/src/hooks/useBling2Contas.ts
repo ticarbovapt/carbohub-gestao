@@ -1,0 +1,159 @@
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { lerSemTeto } from "@carbo/shell";
+import { hojeISO, somarDias } from "@/lib/datas";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Contas a receber / a pagar da FILIAL (Bling 2) — SOMENTE LEITURA.
+//
+// `bling2_contas_receber` e `bling2_contas_pagar` são espelho do Bling da conta
+// 2, escritos só pelo `bling2-sync`. Nada aqui grava: a baixa é feita no Bling.
+// Ficam SEGMENTADAS da matriz de propósito (decisão do dono do processo, 21/10:
+// "pq qualquer coisa só apagamos") — nunca somadas a `receivables`.
+//
+// ⚠️ `situacao` é o id do Bling em TEXTO: '1' em aberto · '2' recebido/pago ·
+// '3' parcialmente · '4' devolvido · '5' cancelado. Valor desconhecido aparece
+// CRU na tela — nunca vira "em aberto" por omissão.
+// ⚠️ "Em aberto" = '1' ou '3'. "Vencido" = em aberto e vencimento < hoje
+// (Brasília, `hojeISO`).
+// ⚠️ São ~1.400 títulos abertos na conta a receber (acima do teto de 1.000 do
+// PostgREST): contagem no BANCO (`head: true`), soma por `lerSemTeto`, lista
+// paginada com `.range()` e ordem estável (vencimento, id).
+// ─────────────────────────────────────────────────────────────────────────────
+
+const db = supabase as unknown as { from: (t: string) => any };
+
+export type Bling2Tipo = "receber" | "pagar";
+export type FiltroBling2 = "fila" | "aberto" | "quitados" | "todos";
+
+export const SITUACOES_ABERTAS = ["1", "3"] as const;
+
+export interface Bling2Conta {
+  id: string;
+  bling_id: number;
+  numero: string | null;
+  nome: string | null;          // cliente (receber) ou fornecedor (pagar)
+  valor: number | null;
+  saldo: number | null;
+  vencimento: string | null;
+  data_emissao: string | null;
+  data_pagamento: string | null;
+  situacao: string | null;
+  historico: string | null;
+}
+
+export const tabelaBling2 = (tipo: Bling2Tipo) =>
+  tipo === "receber" ? "bling2_contas_receber" : "bling2_contas_pagar";
+export const colunaNomeBling2 = (tipo: Bling2Tipo) => (tipo === "receber" ? "cliente" : "fornecedor");
+
+const COLUNAS = (tipo: Bling2Tipo) =>
+  `id, bling_id, numero, ${colunaNomeBling2(tipo)}, valor, saldo, vencimento, data_emissao, data_pagamento, situacao, historico`;
+
+const paraConta = (tipo: Bling2Tipo) => (r: any): Bling2Conta => ({
+  id: r.id, bling_id: r.bling_id, numero: r.numero ?? null,
+  nome: r[colunaNomeBling2(tipo)] ?? null,
+  valor: r.valor == null ? null : Number(r.valor),
+  saldo: r.saldo == null ? null : Number(r.saldo),
+  vencimento: r.vencimento ?? null, data_emissao: r.data_emissao ?? null,
+  data_pagamento: r.data_pagamento ?? null, situacao: r.situacao == null ? null : String(r.situacao),
+  historico: r.historico ?? null,
+});
+
+/** Quanto falta: parcial ('3') vale o SALDO; em aberto ('1') vale o valor do título. */
+export function valorEmAberto(c: { situacao: string | null; valor: number | null; saldo: number | null }): number {
+  if (c.situacao === "3" && c.saldo != null) return c.saldo;
+  return c.valor ?? 0;
+}
+
+/** O texto da busca vai dentro de um `.or()` do PostgREST: vírgula, parêntese e curinga quebram a sintaxe. */
+const limparBusca = (s: string) => s.replace(/[,()*%\\]/g, " ").trim();
+
+function falhou(error: any): never {
+  throw new Error(error?.message ? `${error.message}${error.code ? ` (${error.code})` : ""}` : "erro desconhecido");
+}
+
+export interface ResumoBling2 {
+  aberto: { qtd: number; valor: number };
+  vencido: { qtd: number; valor: number };
+  semana: { qtd: number; valor: number };
+  ultimaSincronizacao: string | null;
+}
+
+/**
+ * Cartões do topo. Contagem no BANCO; valor somado sobre TODO o em aberto
+ * (lido sem teto). "Semana" = vence de hoje até hoje + 7 — somado ao vencido,
+ * fecha exatamente com a fila.
+ */
+export function useBling2Resumo(tipo: Bling2Tipo) {
+  return useQuery({
+    queryKey: ["bling2-contas-resumo", tipo, hojeISO()],
+    queryFn: async (): Promise<ResumoBling2> => {
+      const hoje = hojeISO();
+      const ate7 = somarDias(hoje, 7);
+      const tabela = tabelaBling2(tipo);
+      const contar = async (montar: (q: any) => any) => {
+        const { count, error } = await montar(
+          db.from(tabela).select("id", { count: "exact", head: true }).in("situacao", SITUACOES_ABERTAS as unknown as string[]),
+        );
+        if (error) falhou(error);
+        return count ?? 0;
+      };
+      const [qAberto, qVencido, qSemana, abertas, ultima] = await Promise.all([
+        contar((q) => q),
+        contar((q) => q.lt("vencimento", hoje)),
+        contar((q) => q.gte("vencimento", hoje).lte("vencimento", ate7)),
+        lerSemTeto<any>(() =>
+          db.from(tabela).select("id, valor, saldo, vencimento, situacao")
+            .in("situacao", SITUACOES_ABERTAS as unknown as string[])
+            .order("vencimento", { ascending: true }).order("id", { ascending: true })),
+        db.from(tabela).select("synced_at").order("synced_at", { ascending: false }).limit(1),
+      ]);
+      if (ultima?.error) falhou(ultima.error);
+      const soma = (arr: any[]) => arr.reduce((s, r) => s + valorEmAberto({
+        situacao: r.situacao == null ? null : String(r.situacao),
+        valor: r.valor == null ? null : Number(r.valor),
+        saldo: r.saldo == null ? null : Number(r.saldo),
+      }), 0);
+      const venc = (r: any) => (r.vencimento ? String(r.vencimento).slice(0, 10) : null);
+      return {
+        aberto: { qtd: qAberto, valor: soma(abertas) },
+        vencido: { qtd: qVencido, valor: soma(abertas.filter((r) => { const v = venc(r); return v != null && v < hoje; })) },
+        semana: { qtd: qSemana, valor: soma(abertas.filter((r) => { const v = venc(r); return v != null && v >= hoje && v <= ate7; })) },
+        ultimaSincronizacao: ultima?.data?.[0]?.synced_at ?? null,
+      };
+    },
+  });
+}
+
+/**
+ * Lista paginada no servidor. Fila/aberto do mais antigo para o mais novo;
+ * quitados/todos do mais recente para trás (o histórico vai a anos).
+ */
+export function useBling2ContasPaged(params: {
+  tipo: Bling2Tipo; filtro: FiltroBling2; busca: string; page: number; pageSize: number;
+}) {
+  return useQuery({
+    queryKey: ["bling2-contas-paged", params, hojeISO()],
+    queryFn: async () => {
+      const hoje = hojeISO();
+      const nome = colunaNomeBling2(params.tipo);
+      let q = db.from(tabelaBling2(params.tipo)).select(COLUNAS(params.tipo), { count: "exact" });
+      switch (params.filtro) {
+        case "fila": q = q.in("situacao", SITUACOES_ABERTAS as unknown as string[]).lte("vencimento", somarDias(hoje, 7)); break;
+        case "aberto": q = q.in("situacao", SITUACOES_ABERTAS as unknown as string[]); break;
+        case "quitados": q = q.eq("situacao", "2"); break;
+        default: break;
+      }
+      const b = limparBusca(params.busca);
+      if (b) q = q.or(`${nome}.ilike.%${b}%,numero.ilike.%${b}%`);
+      const asc = params.filtro === "fila" || params.filtro === "aberto";
+      const de = params.page * params.pageSize;
+      q = q.order("vencimento", { ascending: asc, nullsFirst: false })
+        .order("id", { ascending: asc })
+        .range(de, de + params.pageSize - 1);
+      const { data, error, count } = await q;
+      if (error) falhou(error);
+      return { rows: ((data ?? []) as any[]).map(paraConta(params.tipo)), count: count ?? 0 };
+    },
+  });
+}

@@ -10,7 +10,7 @@ export type ReceivableStatus = "programado" | "recebido" | "atrasado" | "cancela
 
 export interface Receivable {
   id: string;
-  source: string;               // interno | bling
+  source: string;               // interno | bling | nf
   bling_numero: string | null;
   customer_name: string | null;
   order_id: string | null;
@@ -22,7 +22,36 @@ export interface Receivable {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  // ── Colunas da automação "título nasce da NF" (migração de 21/10/2026). ──
+  // ⚠️ OPCIONAIS de propósito: o front pode subir antes do SQL, e aí elas não
+  // existem — `select("*")` simplesmente não as traz (undefined), nunca erro.
+  parcela?: number | null;
+  parcelas_total?: number | null;
+  empresa?: string | null;          // matriz | filial
+  nf_numero?: string | null;
+  documento?: string | null;        // CNPJ/CPF
+  order_number?: string | null;
+  nosso_numero?: string | null;
+  linha_digitavel?: string | null;
+  txid?: string | null;
+  valor_recebido?: number | null;
+  recebido_via?: string | null;     // manual | banco
 }
+
+export const RECEIVABLE_SOURCE_LABELS: Record<string, string> = {
+  interno: "Sistema",
+  bling: "Bling",
+  nf: "NF",
+};
+
+/**
+ * Coluna que ainda não existe no banco (front no ar antes da migração):
+ * 42703 = coluna inexistente no Postgres (filtro), PGRST204 = coluna fora do
+ * cache de esquema do PostgREST (insert/update). É o ÚNICO erro que autoriza
+ * repetir sem as colunas novas — qualquer outro sobe.
+ */
+export const ehColunaAusente = (e: any) =>
+  !!e && (e.code === "42703" || e.code === "PGRST204");
 
 export const RECEIVABLE_STATUS_LABELS: Record<ReceivableStatus, string> = {
   programado: "A receber",
@@ -69,36 +98,57 @@ export function useReceivablesPaged(params: {
   return useQuery({
     queryKey: ["receivables-paged", params, hojeISO()],
     queryFn: async () => {
-      const hoje = hojeISO();
-      let q = db.from("receivables").select("*", { count: "exact" });
-      if (params.source !== "all") q = q.eq("source", params.source);
-      const aberto = () => q.neq("status", "recebido").neq("status", "cancelado");
-      switch (params.status) {
-        case "recebido": q = q.eq("status", "recebido"); break;
-        case "cancelado": q = q.eq("status", "cancelado"); break;
-        case "aberto": q = aberto(); break;
-        case "atrasado": q = aberto().lt("due_date", hoje); break;
-        case "programado": q = aberto().gte("due_date", hoje); break;
-        case "fila": q = aberto().lte("due_date", somarDias(hoje, 7)); break;
-        default: break;
-      }
-      if (params.status === "recebido") {
-        // received_at é instante: o dia de Brasília vai de 00:00 a 00:00 do dia seguinte.
-        if (params.de) q = q.gte("received_at", `${params.de}T00:00:00-03:00`);
-        if (params.ate) q = q.lt("received_at", `${somarDias(params.ate, 1)}T00:00:00-03:00`);
-      } else {
-        if (params.de) q = q.gte("due_date", params.de);
-        if (params.ate) q = q.lte("due_date", params.ate);
-      }
-      const b = limparBusca(params.busca);
-      if (b) q = q.or(`customer_name.ilike.%${b}%,notes.ilike.%${b}%,bling_numero.ilike.%${b}%`);
-      const fromIdx = params.page * params.pageSize;
-      q = q.order("due_date", { ascending: true }).order("id", { ascending: true }).range(fromIdx, fromIdx + params.pageSize - 1);
-      const { data, error, count } = await q;
-      if (error) throw error;
-      return { rows: (data || []) as Receivable[], count: count || 0 };
+      // ⚠️ A busca passou a olhar pedido, NF e documento — colunas da migração
+      // de 21/10. Antes dela o PostgREST recusa o filtro com 42703; aí a
+      // consulta é refeita só com as colunas antigas, em vez de a lista sumir.
+      const comNovas = await montarPaginaReceber(params, true);
+      if (!comNovas.error) return comNovas.resultado;
+      if (!ehColunaAusente(comNovas.error) || !limparBusca(params.busca)) throw comNovas.error;
+      const semNovas = await montarPaginaReceber(params, false);
+      if (semNovas.error) throw semNovas.error;
+      return semNovas.resultado;
     },
   });
+}
+
+async function montarPaginaReceber(params: {
+  source: string; status: FiltroStatusReceber; de: string; ate: string; busca: string; page: number; pageSize: number;
+}, colunasNovas: boolean): Promise<{ error: any; resultado: { rows: Receivable[]; count: number } }> {
+  const hoje = hojeISO();
+  let q = db.from("receivables").select("*", { count: "exact" });
+  if (params.source !== "all") q = q.eq("source", params.source);
+  const aberto = () => q.neq("status", "recebido").neq("status", "cancelado");
+  switch (params.status) {
+    case "recebido": q = q.eq("status", "recebido"); break;
+    case "cancelado": q = q.eq("status", "cancelado"); break;
+    case "aberto": q = aberto(); break;
+    case "atrasado": q = aberto().lt("due_date", hoje); break;
+    case "programado": q = aberto().gte("due_date", hoje); break;
+    case "fila": q = aberto().lte("due_date", somarDias(hoje, 7)); break;
+    default: break;
+  }
+  if (params.status === "recebido") {
+    // received_at é instante: o dia de Brasília vai de 00:00 a 00:00 do dia seguinte.
+    if (params.de) q = q.gte("received_at", `${params.de}T00:00:00-03:00`);
+    if (params.ate) q = q.lt("received_at", `${somarDias(params.ate, 1)}T00:00:00-03:00`);
+  } else {
+    if (params.de) q = q.gte("due_date", params.de);
+    if (params.ate) q = q.lte("due_date", params.ate);
+  }
+  const b = limparBusca(params.busca);
+  if (b) {
+    const campos = ["customer_name", "notes", "bling_numero"];
+    if (colunasNovas) campos.push("order_number", "nf_numero", "documento");
+    // Documento digitado com pontuação também acha o gravado só com dígitos.
+    const digitos = b.replace(/\D/g, "");
+    const termos = campos.map((c) => `${c}.ilike.%${b}%`);
+    if (colunasNovas && digitos.length >= 5 && digitos !== b) termos.push(`documento.ilike.%${digitos}%`);
+    q = q.or(termos.join(","));
+  }
+  const fromIdx = params.page * params.pageSize;
+  q = q.order("due_date", { ascending: true }).order("id", { ascending: true }).range(fromIdx, fromIdx + params.pageSize - 1);
+  const { data, error, count } = await q;
+  return { error, resultado: { rows: (data || []) as Receivable[], count: count || 0 } };
 }
 
 function invalidate(qc: ReturnType<typeof useQueryClient>) {
@@ -110,18 +160,31 @@ function invalidate(qc: ReturnType<typeof useQueryClient>) {
 export function useUpdateReceivableStatus() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, status, received_at }: { id: string; status: ReceivableStatus; received_at?: string }) => {
+    mutationFn: async ({ id, status, received_at, amount }: { id: string; status: ReceivableStatus; received_at?: string; amount?: number }) => {
       const { data: u } = await supabase.auth.getUser();
       const updates: any = { status, updated_at: new Date().toISOString() };
+      // Colunas da migração de 21/10: a baixa da TELA é sempre `manual` e
+      // recebe o valor cheio do título; a do banco (retorno/extrato) grava
+      // `banco` por outro caminho. Estorno/cancelamento limpa as duas.
+      const novas: any = {};
       if (status === "recebido") {
         // A data do <input type="date"> vira meio-dia de Brasília: nenhum fuso a troca de dia.
         updates.received_at = instanteDoDia(received_at || hojeISO());
         updates.received_by = u?.user?.id ?? null;
+        novas.recebido_via = "manual";
+        novas.valor_recebido = amount ?? null;
       } else {
         updates.received_at = null; updates.received_by = null;
+        novas.recebido_via = null;
+        novas.valor_recebido = null;
       }
-      const { error } = await db.from("receivables").update(updates).eq("id", id);
-      if (error) throw error;
+      const { error } = await db.from("receivables").update({ ...updates, ...novas }).eq("id", id);
+      if (!error) return;
+      // ⚠️ Antes da migração as colunas não existem (PGRST204): repete só com
+      // as antigas, senão ninguém daria baixa até o SQL rodar.
+      if (!ehColunaAusente(error)) throw error;
+      const { error: e2 } = await db.from("receivables").update(updates).eq("id", id);
+      if (e2) throw e2;
     },
     onSuccess: () => { invalidate(qc); toast({ title: "Recebível atualizado" }); },
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
