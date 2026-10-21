@@ -19,14 +19,18 @@ import {
 const LOJAS_POR_PAGINA = 10;
 const PORTE_COLORS = ["#22c55e", "#3b82f6", "#8b5cf6", "#f59e0b", "#14b8a6", "#ef4444"];
 
-// Porte do MOTOR, por cilindrada — define preço e consumo de reagente.
-// O enum no banco guarda só a letra ('P' | 'M' | 'G'), ilegível na legenda.
-const PORTE_LABELS: Record<string, { nome: string; motor: string }> = {
-  P: { nome: "Pequeno", motor: "até 2.5L" },
-  M: { nome: "Médio", motor: "2.6L a 3.9L" },
-  G: { nome: "Grande", motor: "acima de 4.0L" },
+// DUAS categorias desde o comunicado de 09/10/2026 (leves e caminhonetes
+// R$ 700, pesados R$ 1.400) — a mesma leitura do Licenciados (#179 de lá) e do
+// `/vender`. O enum no banco continua guardando a LETRA (o histórico e as vagas
+// de OS usam P, M e G): P e M são LEVES, G é PESADO. O gráfico SOMA P com M,
+// então a fatia de leves inclui o histórico de antes da mudança.
+const CATEGORIA_DO_PORTE: Record<string, string> = {
+  P: "Leves e caminhonetes",
+  M: "Leves e caminhonetes",
+  G: "Pesados",
 };
-const porteInfo = (p: string) => PORTE_LABELS[p?.toUpperCase?.()] ?? { nome: p || "Não informado", motor: "" };
+const categoriaDoPorte = (p: string | null | undefined) =>
+  CATEGORIA_DO_PORTE[(p ?? "").toUpperCase()] ?? (p || "Não informado");
 
 // Compacto — só para eixos e rótulos DENTRO de gráfico. Valores de card e de
 // lista usam fmtBRL/fmtBRLc, para não perder precisão (um ticket de R$1.480
@@ -101,10 +105,19 @@ export default function DashboardsFranqueados() {
   const porte = porteQ.data ?? [];
   // O RPC de porte ignora serviços com porte nulo (a coluna só existe desde
   // jun/2026), então esses somem do gráfico. Contamos a diferença para avisar.
-  const porteData = porte.map((p) => {
-    const info = porteInfo(p.porte);
-    return { ...p, label: info.nome, motor: info.motor };
-  });
+  const porteData = useMemo(() => {
+    const soma = new Map<string, number>();
+    for (const p of porte) {
+      const label = categoriaDoPorte(p.porte);
+      soma.set(label, (soma.get(label) ?? 0) + p.total);
+    }
+    // Ordem fixa (leves, pesados, o resto), senão a cor de cada fatia muda
+    // conforme a ordem em que o RPC devolve.
+    const ordem = ["Leves e caminhonetes", "Pesados"];
+    return [...soma.entries()]
+      .sort(([a], [b]) => (ordem.indexOf(a) + 1 || 99) - (ordem.indexOf(b) + 1 || 99))
+      .map(([label, total]) => ({ label, total }));
+  }, [porte]);
   const servicosComPorte = porte.reduce((s, p) => s + p.total, 0);
   const servicosSemPorte = Math.max(0, (kpisQ.data?.total_services ?? 0) - servicosComPorte);
   const recentes = recentesQ.data ?? [];
@@ -296,10 +309,10 @@ export default function DashboardsFranqueados() {
             <Card className="rounded-2xl border-0 shadow-sm">
               <CardHeader className="pb-2 pt-5 px-5">
                 <CardTitle className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
-                  <Gauge className="h-3.5 w-3.5 text-primary" /> Serviços por Porte
+                  <Gauge className="h-3.5 w-3.5 text-primary" /> Serviços por Categoria
                 </CardTitle>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Porte do motor por cilindrada — define o preço e o consumo de reagente
+                  Leves e caminhonetes (R$ 700) × pesados (R$ 1.400)
                 </p>
               </CardHeader>
               <CardContent className="px-2 pb-4 h-[280px]">
@@ -315,17 +328,14 @@ export default function DashboardsFranqueados() {
                         {porteData.map((_, i) => <Cell key={i} fill={PORTE_COLORS[i % PORTE_COLORS.length]} />)}
                       </Pie>
                       <Tooltip contentStyle={TOOLTIP_STYLE}
-                        formatter={(v: number, _n: string, item: any) => {
-                          const motor = item?.payload?.motor;
-                          return [`${v} serviço${v !== 1 ? "s" : ""}${motor ? ` · motor ${motor}` : ""}`, ""];
-                        }} />
+                        formatter={(v: number) => [`${v} serviço${v !== 1 ? "s" : ""}`, ""]} />
                       <Legend formatter={(v) => <span className="text-xs">{v}</span>} />
                     </PieChart>
                   </ResponsiveContainer>
                 )}
                 {!porteQ.isLoading && servicosSemPorte > 0 && (
                   <p className="px-3 -mt-2 text-[11px] text-muted-foreground text-center">
-                    {servicosSemPorte} serviço{servicosSemPorte !== 1 ? "s" : ""} sem porte informado
+                    {servicosSemPorte} serviço{servicosSemPorte !== 1 ? "s" : ""} sem categoria informada
                     {" "}não {servicosSemPorte !== 1 ? "entram" : "entra"} neste gráfico
                   </p>
                 )}
@@ -349,7 +359,7 @@ export default function DashboardsFranqueados() {
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-foreground truncate">{s.loja_name}</p>
                     <p className="text-xs text-muted-foreground truncate capitalize">
-                      {[s.porte, s.fuel_type].filter(Boolean).join(" · ") || "—"}
+                      {[s.porte ? categoriaDoPorte(s.porte) : null, s.fuel_type].filter(Boolean).join(" · ") || "—"}
                       {s.performed_at ? ` · ${new Date(s.performed_at).toLocaleDateString("pt-BR")}` : ""}
                     </p>
                   </div>
