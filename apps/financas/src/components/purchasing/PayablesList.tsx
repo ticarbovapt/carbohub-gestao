@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { usePurchasePayablesOpen, usePurchasePayablesPaged, useUpdatePayableStatus, type FiltroPagar } from "@/hooks/usePurchasing";
-import { useAuth } from "@/contexts/AuthContext";
+import { FilialBling2, SeletorEmpresa, useEmpresaUrl } from "@/components/financeiro/FilialBling2";
 import { PAYABLE_STATUS_LABELS, type PayableStatus, type PurchasePayable } from "@/types/purchasing";
 import { hojeISO, mesAtualISO, limitesDoMes, dataBR, diasAte, estaVencido, emAberto } from "@/lib/datas";
 import {
@@ -94,7 +94,21 @@ const prazoRelativo = (p: PurchasePayable, hoje: string) => {
  *   Fica aceito só para a página antiga continuar compilando na transição.
  */
 export function PayablesList(_props: { initialStatus?: string } = {}) {
-  const { gestor } = useAuth();
+  // ⚠️ Matriz e filial são telas SEPARADAS (`?empresa=filial`): a filial é o
+  // espelho do Bling 2, só leitura, e nunca soma com a matriz.
+  const [empresa, trocarEmpresa] = useEmpresaUrl();
+  return (
+    <div className="space-y-4">
+      <SeletorEmpresa valor={empresa} onChange={trocarEmpresa} />
+      {empresa === "filial" ? <FilialBling2 tipo="pagar" /> : <PayablesMatriz />}
+    </div>
+  );
+}
+
+// ⚠️ Baixa, cancelamento e estorno valem para QUALQUER pessoa com o app
+// Finanças (decisão do dono do processo, 21/10/2026) — o banco já libera por
+// `carbo_tem_app`. A confirmação das ações perigosas continua.
+function PayablesMatriz() {
   const [statusUrl, setStatus] = useParamUrl("status", "fila");
   const [source, setSource] = useParamUrl("origem", "all");
   const [mesUrl, setMes] = useParamUrl("mes", "");
@@ -387,9 +401,7 @@ export function PayablesList(_props: { initialStatus?: string } = {}) {
                     {p.paid_at ? dataBR(p.paid_at) : p.status === "pago" && isBling ? <span title="Baixado no Bling — o espelho não traz a data">no Bling</span> : "—"}
                   </CarboTableCell>
                   <CarboTableCell onClick={(e) => e.stopPropagation()}>
-                    {!gestor ? (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    ) : p.status === "pago" ? (
+                    {p.status === "pago" ? (
                       <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" onClick={() => estornar(p)} title="Estornar pagamento">
                         <Undo2 className="h-3.5 w-3.5" /> Estornar
                       </Button>

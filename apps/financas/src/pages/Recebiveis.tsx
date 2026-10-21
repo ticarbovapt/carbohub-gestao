@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { HandCoins, CheckCircle2, Ban, ChevronLeft, ChevronRight, Plus, FileDown, Search, AlertTriangle } from "lucide-react";
 import { useParamUrl, confirmar } from "@carbo/shell";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
@@ -12,11 +12,11 @@ import {
   CarboTable, CarboTableHeader, CarboTableBody, CarboTableRow, CarboTableHead, CarboTableCell,
 } from "@/components/ui/carbo-table";
 import { usePersistedState } from "@/hooks/usePersistedState";
-import { useAuth } from "@/contexts/AuthContext";
+import { FilialBling2, SeletorEmpresa, useEmpresaUrl } from "@/components/financeiro/FilialBling2";
 import {
   useReceivablesOpen, useReceivablesPaged, useUpdateReceivableStatus, useCreateReceivable,
   useInvoicedOrdersNoReceivable, useGenerateReceivablesFromOrders,
-  RECEIVABLE_STATUS_LABELS, type Receivable, type ReceivableStatus, type FiltroStatusReceber, type TituloNovo,
+  RECEIVABLE_STATUS_LABELS, RECEIVABLE_SOURCE_LABELS, type Receivable, type ReceivableStatus, type FiltroStatusReceber, type TituloNovo,
 } from "@/hooks/useReceivables";
 import { hojeISO, mesAtualISO, somarDias, diasAte, limitesDoMes, dataBR, estaVencido } from "@/lib/datas";
 import { parcelasDoPrazo, notaDaParcela, type Parcela } from "@/lib/parcelas";
@@ -49,8 +49,55 @@ const FILTROS_STATUS: { v: FiltroStatusReceber; l: string }[] = [
   { v: "all", l: "Todos os status" },
 ];
 
+/**
+ * O que aparece abaixo do cliente. Título que nasceu da NF diz a parcela, o
+ * pedido e a nota pelas COLUNAS próprias; título antigo não as tem (ou a
+ * migração ainda não rodou) e cai no `notes`, que era onde isso morava.
+ */
+function linhasDoTitulo(r: Receivable): string[] {
+  const out: string[] = [];
+  if (r.parcela && r.parcelas_total) {
+    out.push(`Parcela ${r.parcela}/${r.parcelas_total}${r.order_number ? ` · ${r.order_number}` : ""}`);
+  } else if (r.notes) {
+    out.push(r.notes);
+  } else if (r.order_number) {
+    out.push(`Pedido ${r.order_number}`);
+  } else if (r.bling_numero) {
+    out.push(`Bling nº ${r.bling_numero}`);
+  }
+  if (r.nf_numero) out.push(`NF ${r.nf_numero}`);
+  return out;
+}
+
+/** Origem → cor do selo. `nf` = nasceu sozinho da NF de venda emitida. */
+const SOURCE_VARIANT: Record<string, any> = { interno: "info", bling: "secondary", nf: "default" };
+
+const TITULO = "Contas a receber";
+const DESCRICAO = "Títulos a receber de clientes — do faturamento, do sistema e do Bling — com baixa e inadimplência.";
+
+/**
+ * ⚠️ Matriz e filial são telas SEPARADAS (`?empresa=filial`): a filial é o
+ * espelho do Bling 2, só leitura, e nunca soma com a matriz.
+ */
 export default function Recebiveis() {
-  const { gestor } = useAuth();
+  const [empresa, trocarEmpresa] = useEmpresaUrl();
+  const seletor = <SeletorEmpresa valor={empresa} onChange={trocarEmpresa} />;
+  if (empresa === "filial") {
+    return (
+      <div className="space-y-4">
+        <CarboPageHeader title={TITULO} description={DESCRICAO} icon={HandCoins} />
+        {seletor}
+        <FilialBling2 tipo="receber" />
+      </div>
+    );
+  }
+  return <RecebiveisMatriz seletor={seletor} />;
+}
+
+// ⚠️ Receber, cancelar e estornar valem para QUALQUER pessoa com o app Finanças
+// (decisão do dono do processo, 21/10/2026) — o banco já libera por
+// `carbo_tem_app`. A confirmação das ações perigosas continua.
+function RecebiveisMatriz({ seletor }: { seletor: ReactNode }) {
   // Filtros na URL: F5, link mandado a alguém e Voltar funcionam.
   const [statusUrl, setStatusUrl] = useParamUrl("status", "fila");
   const [source, setSourceUrl] = useParamUrl("origem", "all");
@@ -129,7 +176,7 @@ export default function Recebiveis() {
 
   const doReceive = async () => {
     if (!receiving || !recAt) return;
-    await update.mutateAsync({ id: receiving.id, status: "recebido", received_at: recAt });
+    await update.mutateAsync({ id: receiving.id, status: "recebido", received_at: recAt, amount: Number(receiving.amount) });
     setReceiving(null);
   };
   const doCreate = async () => {
@@ -163,16 +210,28 @@ export default function Recebiveis() {
   return (
     <div className="space-y-4">
       <CarboPageHeader
-        title="Contas a receber"
-        description="Títulos a receber de clientes — do sistema e do Bling — com baixa e inadimplência."
+        title={TITULO}
+        description={DESCRICAO}
         icon={HandCoins}
         actions={
           <>
-            <Button variant="outline" onClick={() => setShowGerar(true)} className="gap-2"><FileDown className="h-4 w-4" /> Gerar de pedidos faturados</Button>
+            <Button
+              variant="outline" onClick={() => setShowGerar(true)} className="gap-2"
+              title="Para pedido sem prazo reconhecido ou anterior à automação"
+            >
+              <FileDown className="h-4 w-4" /> Gerar de pedidos faturados
+            </Button>
             <Button onClick={() => setShowNew(true)} className="gap-2 carbo-gradient text-white"><Plus className="h-4 w-4" /> Novo título</Button>
           </>
         }
       />
+
+      {seletor}
+
+      <p className="text-xs text-muted-foreground">
+        Os títulos nascem sozinhos quando a NF de venda é emitida (CarboZé pelo Bling, CarboVAPT pela NFS-e), uma
+        parcela por vencimento do prazo.
+      </p>
 
       {/* Aging — sempre sobre TODO o em aberto, independente dos filtros da lista. */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -200,11 +259,11 @@ export default function Recebiveis() {
 
       {/* Filtros */}
       <div className="flex flex-wrap items-end gap-3">
-        <div className="space-y-1 w-full sm:w-auto">
+        <div className="space-y-1 w-full lg:w-auto">
           <Label className="text-xs text-muted-foreground">Buscar</Label>
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input className="pl-8 w-full sm:w-[220px]" placeholder="Cliente, pedido, nº Bling" value={busca} onChange={(e) => setBusca(e.target.value)} />
+            <Input className="pl-8 w-full lg:w-[240px]" placeholder="Cliente, pedido, NF, CNPJ/CPF" value={busca} onChange={(e) => setBusca(e.target.value)} />
           </div>
         </div>
         <div className="space-y-1">
@@ -219,9 +278,10 @@ export default function Recebiveis() {
         <div className="space-y-1">
           <Label className="text-xs text-muted-foreground">Origem</Label>
           <Select value={source} onValueChange={setSource}>
-            <SelectTrigger className="w-[170px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-[190px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todas as origens</SelectItem>
+              <SelectItem value="nf">Faturamento (NF)</SelectItem>
               <SelectItem value="interno">Criadas no sistema</SelectItem>
               <SelectItem value="bling">Importadas do Bling</SelectItem>
             </SelectContent>
@@ -278,23 +338,30 @@ export default function Recebiveis() {
           ) : (
             rows.map((r) => {
               const eff = effectiveStatus(r);
-              const isBling = r.source === "bling";
+              const sub = linhasDoTitulo(r);
               return (
                 <CarboTableRow key={r.id}>
                   <CarboTableCell className="font-medium">
                     <p>{r.customer_name || "—"}</p>
-                    {(r.notes || r.bling_numero) && (
-                      <p className="text-[11px] font-normal text-muted-foreground truncate max-w-[260px]">{r.notes || `Bling nº ${r.bling_numero}`}</p>
-                    )}
+                    {sub.map((t, i) => (
+                      <p key={i} className="text-[11px] font-normal text-muted-foreground truncate max-w-[260px]" title={t}>{t}</p>
+                    ))}
                   </CarboTableCell>
-                  <CarboTableCell><CarboBadge variant={isBling ? "secondary" : "info"} className="text-[10px]">{isBling ? "Bling" : "Sistema"}</CarboBadge></CarboTableCell>
+                  <CarboTableCell>
+                    <div className="flex flex-wrap items-center gap-1">
+                      <CarboBadge variant={SOURCE_VARIANT[r.source] ?? "outline"} className="text-[10px]">{RECEIVABLE_SOURCE_LABELS[r.source] ?? r.source}</CarboBadge>
+                      {r.empresa === "filial" && <CarboBadge variant="outline" className="text-[10px]">Filial SP</CarboBadge>}
+                    </div>
+                  </CarboTableCell>
                   <CarboTableCell className="font-mono whitespace-nowrap">{brl(r.amount)}</CarboTableCell>
                   <CarboTableCell className="text-sm whitespace-nowrap">{dataBR(r.due_date)}</CarboTableCell>
                   <CarboTableCell><CarboBadge variant={statusVariant[eff]} dot>{RECEIVABLE_STATUS_LABELS[eff]}</CarboBadge></CarboTableCell>
-                  <CarboTableCell className="text-sm text-muted-foreground whitespace-nowrap">{dataBR(r.received_at)}</CarboTableCell>
+                  <CarboTableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                    {dataBR(r.received_at)}
+                    {r.status === "recebido" && r.recebido_via === "banco" && <span className="block text-[11px]">pelo banco</span>}
+                  </CarboTableCell>
                   <CarboTableCell>
-                    {!gestor ? <span className="text-muted-foreground text-xs">—</span>
-                      : r.status === "recebido" ? (
+                    {r.status === "recebido" ? (
                         <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" onClick={() => estornar(r)}>Estornar</Button>
                       ) : r.status === "cancelado" ? <span className="text-muted-foreground text-xs">—</span>
                       : (
@@ -338,6 +405,9 @@ export default function Recebiveis() {
             <div className="space-y-2 text-sm">
               <div className="rounded-lg border border-border p-3 space-y-1">
                 <div className="flex justify-between gap-2"><span className="text-muted-foreground">Cliente</span><strong className="text-right">{receiving.customer_name || "—"}</strong></div>
+                {linhasDoTitulo(receiving).map((t, i) => (
+                  <p key={i} className="text-right text-xs text-muted-foreground break-words">{t}</p>
+                ))}
                 <div className="flex justify-between gap-2"><span className="text-muted-foreground">Valor</span><strong className="font-mono">{brl(receiving.amount)}</strong></div>
                 <div className="flex justify-between gap-2"><span className="text-muted-foreground">Vencimento</span><strong>{dataBR(receiving.due_date)}</strong></div>
               </div>
@@ -443,6 +513,10 @@ function GerarDeVendasDialog({ open, onClose }: { open: boolean; onClose: () => 
           <DialogTitle>Gerar títulos a receber de pedidos faturados</DialogTitle>
         </DialogHeader>
         <div className="text-[11px] text-warning-foreground bg-warning/10 border border-warning/30 rounded-lg p-2 space-y-1">
+          <p>
+            <strong>Para pedido sem prazo reconhecido ou anterior à automação.</strong> Hoje o título nasce sozinho
+            quando a NF de venda é emitida (origem "NF") — pedido que já tem título não aparece aqui.
+          </p>
           <p>
             <strong>Título vindo do Bling não tem pedido vinculado</strong> — se este pedido já tem título importado do Bling,
             gerar aqui duplica. Confira a lista de contas a receber antes.
