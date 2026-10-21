@@ -1,3 +1,4 @@
+import { rpcCompras } from "@/hooks/usePurchasing";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -89,22 +90,13 @@ export function useAddQuote() {
 export function useSelectQuote() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (q: { id: string; request_id: string; item_index: number; selected: boolean }) => {
-      // Zera a seleção do item e, se estamos escolhendo, marca só esta.
-      const un = await db.from("purchase_quotes").update({ selected: false })
-        .eq("request_id", q.request_id).eq("item_index", q.item_index);
-      if (un.error) throw un.error;
-      if (q.selected) {
-        const { error } = await db.from("purchase_quotes").update({ selected: true }).eq("id", q.id);
-        if (error) throw error;
-      }
-    },
-    // ⚠️ São DOIS updates (desmarca o item, marca a escolhida) — não é atômico
-    // (Fase 3: RPC). Se o segundo falhar, o item fica SEM cotação escolhida; por
-    // isso relê sempre (onSettled) e a mensagem diz o estado em que ficou.
+    // ⚠️ Pelo BANCO (`fin_cotacao_escolher`): desmarcar as outras e marcar esta
+    // é UMA transação — antes eram dois updates e o item podia ficar sem vencedora.
+    mutationFn: (q: { id: string; request_id: string; item_index: number; selected: boolean }) =>
+      rpcCompras("fin_cotacao_escolher", { p_quote_id: q.id, p_selecionar: q.selected }),
     onSettled: (_d, _e, v) => qc.invalidateQueries({ queryKey: ["purchase_quotes", v.request_id] }),
     onError: (e: Error, v) => toast.error(
-      v.selected ? "Erro ao escolher cotação — confira o item, ele pode ter ficado sem cotação escolhida" : "Erro ao desmarcar cotação",
+      v.selected ? "Erro ao escolher cotação" : "Erro ao desmarcar cotação",
       { description: e.message },
     ),
   });

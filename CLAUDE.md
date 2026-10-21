@@ -3210,9 +3210,29 @@ botão "Nova Requisição" em todas. Hoje cada área tem rota e item de menu:
    (`hooks/useRequisicaoAcoes.ts`); cotação travada depois da aprovação; gestor
    não aprova a PRÓPRIA RC (só na TELA — o banco ainda aceita); recebimento
    parcial volta à fila pelo SALDO.
-10. ⚠️ **PENDENTE (Fase 3, banco)**: aprovar/emitir OC/receber/lançar NF ainda são
-   `update` soltos do navegador (sem alçada, sem atomicidade, numeração `MAX+1`);
-   "Já foi paga" na OC não registra a saída; NF gera UMA parcela só.
+10. ✅ **Fase 3 — as compras gravam pelo BANCO** (`20261126`, 21/10/2026):
+   numeração por CONTADOR (`carbo_numeracao` + `carbo_numero_proximo`, índice
+   único em rc/oc_number; `lpad` com largura MÍNIMA — o `lpad(n,5)` cortava a
+   partir de 100.000); a regra de transição em GATILHO (`fin_rc_guarda`,
+   `fin_oc_guarda`, `fin_cotacao_guarda`), valendo para qualquer caminho, inclusive
+   a raiz; e as operações de vários passos em funções ATÔMICAS: `fin_rc_enviar/
+   _decidir/_cancelar`, `fin_cotacao_escolher`, `fin_oc_gerar` (todas as OCs ou
+   nenhuma; total calculado no banco), `fin_oc_registrar_compra` ("já paga" vira
+   título PAGO em contas a pagar), `fin_oc_cancelar`, `fin_recebimento_registrar`
+   (saldo, divergência e status calculados no banco) e `fin_nf_lancar` (NF + N
+   parcelas que têm de FECHAR com a NF; OC paga na compra não gera conta).
+   ⚠️ Recebimento, NF, OC e conta a pagar NASCEM só pelas funções (gatilho recusa
+   insert de usuário). Sem usuário (cron, service role, SQL Editor) passa — é o
+   espelho do Bling. ⚠️ "Via função" é `set_config('carbo.compras_rpc','on',true)`,
+   local da transação: cada pedido do PostgREST é uma transação, ninguém o liga de fora.
+   ⚠️ ALÇADA é cadastro (`fin_compras_alcada`, `fin_pode_aprovar_compra`): nasce
+   com UMA faixa "qualquer gestor, sem teto" = o comportamento de antes. Faixa nova
+   = INSERT. `purchase_approval_config` (antiga, papéis legados) continua sem uso.
+   ⚠️ A tela de Suprimentos não monta mais Recebimento/NF: são links para
+   `/compras/...` (o `?aba=` antigo redireciona). Hooks de compras mortos saíram do
+   Finanças e do Marketing.
+   ⚠️ PENDENTE: o bucket `purchase-invoices` é PÚBLICO (URL da NF de fornecedor
+   abre sem login). Fechar exige trocar `getPublicUrl` por URL assinada na leitura.
    **(Fase 4)**: conta a pagar manual, campos do boleto, conta bancária de saída,
    valor pago. **(Fase 5)**: contas bancárias + importação de extrato/retorno e
    casamento por IDENTIDADE (nosso número, código de barras, txid).

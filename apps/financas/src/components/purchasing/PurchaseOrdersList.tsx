@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { usePurchaseOrders, useUpdatePurchaseOrderStatus } from "@/hooks/usePurchasing";
+import { usePurchaseOrders, useCancelarOC } from "@/hooks/usePurchasing";
 import { useAuth } from "@/contexts/AuthContext";
 import { ORDER_STATUS_LABELS, PAYMENT_METHOD_TYPE_LABELS, type PurchaseOrder, type PurchaseOrderStatus } from "@/types/purchasing";
 import { dataBR } from "@/lib/datas";
@@ -39,7 +39,7 @@ export function PurchaseOrdersList() {
   const { data: methods = [] } = usePaymentMethods();
   const pmById = new Map(methods.map((m) => [m.id, m]));
   const { gestor } = useAuth();
-  const updateStatus = useUpdatePurchaseOrderStatus();
+  const cancelar = useCancelarOC();
   const [selectedOC, setSelectedOC] = useState<PurchaseOrder | null>(null);
   const [comprarOC, setComprarOC] = useState<PurchaseOrder | null>(null);
 
@@ -55,7 +55,7 @@ export function PurchaseOrdersList() {
       perigo: true,
     });
     if (!ok) return;
-    updateStatus.mutate({ id: oc.id, status: "cancelada" }, { onSuccess: () => setSelectedOC(null) });
+    cancelar.mutate(oc.id, { onSuccess: () => setSelectedOC(null) });
   };
 
   return (
@@ -206,7 +206,7 @@ export function PurchaseOrdersList() {
           {selectedOC && (selectedOC.status === "gerada" || (gestor && selectedOC.status === "comprada")) && (
             <DialogFooter className="flex-wrap gap-2">
               {gestor && (
-                <Button variant="ghost" className="gap-1.5 text-destructive" disabled={updateStatus.isPending} onClick={() => cancelarOC(selectedOC)}>
+                <Button variant="ghost" className="gap-1.5 text-destructive" disabled={cancelar.isPending} onClick={() => cancelarOC(selectedOC)}>
                   <Ban className="h-4 w-4" /> Cancelar OC
                 </Button>
               )}
