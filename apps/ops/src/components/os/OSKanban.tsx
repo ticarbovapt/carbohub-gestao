@@ -59,7 +59,7 @@ function Coluna({ stage, items, hoje }: { stage: StageMeta; items: OSView[]; hoj
 
 function Cartao({ os, stage, hoje }: { os: OSView; stage: StageMeta; hoje: string }) {
   const atrasada = !!os.agendamento && os.agendamento < hoje && stage.id !== "concluida";
-  const temPortes = /[PMG]/.test(os.portes);
+  const temPortes = /leve|pesado/.test(os.portes);
   const pct = os.vagas > 0 ? Math.min(100, Math.round((os.vagasExecutadas / os.vagas) * 100)) : 0;
   const temVenda = !!os.pedido || os.valor != null;
 

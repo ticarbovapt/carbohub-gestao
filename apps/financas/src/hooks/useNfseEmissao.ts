@@ -31,7 +31,7 @@ export interface NfsePreparo {
     documento: string | null; customer_email: string | null; customer_phone: string | null;
     delivery_address: string | null; delivery_city: string | null; delivery_state: string | null;
     delivery_zip: string | null; po_number: string | null; sale_date: string | null; created_at: string;
-    total: number; itens: Array<{ quantity?: number; name?: string }> | null;
+    total: number; itens: Array<{ quantity?: number; name?: string; is_bonificacao?: boolean; modality?: string | null }> | null;
     descarb_os_id: string | null; so_servico: boolean; vendedor: string | null;
   };
   veiculos: NfseVeiculo[];

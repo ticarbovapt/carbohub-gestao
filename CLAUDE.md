@@ -118,8 +118,46 @@ pagamento, dados estratégicos e observações.
    ⚠️ Extra NÃO torna a venda válida — `erroDeModo()` exige
    `validServiceItems()`, senão nasceria pedido de R$ 0,00. E eles não viram
    vaga de veículo na OS: laudo não é carro para descarbonizar.
+   ⭐ **Desde 21/10/2026 (dono do processo): SEMPRE bonificados, um por
+   veículo, com preço de TABELA riscado** (`DescarbExtra.price`: opacidade
+   R$ 200, ruído 0 = só "Bonificado"). A linha vai com o preço cheio e 100% de
+   desconto (o desenho do gêmeo de produto), quantidade = veículos da venda
+   (editável, `extrasQtd` no snapshot). ⚠️ Ela NÃO entra em
+   `orderSubtotal`/`orderDesconto`/`orderTotal` — o desconto do PEDIDO segue
+   sendo só o que o vendedor deu, e alçada, faturamento e NFS-e não mudam.
+   ⚠️ O `NfseEmitirDialog` contava TODA linha de serviço como veículo; hoje só
+   as com `modality`.
+   **"Veículos"** (texto livre, `descricao` no item) sai abaixo do nome no PDF,
+   e o PDF do CarboVAPT monta "A proposta contempla…" a partir das LINHAS —
+   por isso `kind`/`modality`/`descricao` atravessam o map do `Vendas.tsx`.
 8. **Itens de Serviço nasce com UMA linha**, como o `rows` do CarboZé — inclusive
    ao TROCAR de modo, senão quem volta ao CarboVAPT acha a seção fechada de novo.
+
+9. ⭐ **DUAS CATEGORIAS, não mais P/M/G** (comunicado de 09/10/2026; Sales em
+   21/10). Leves e caminhonetes **R$ 700**, pesados **R$ 1.400** — a mesma
+   tabela do Licenciados (#179 de lá, `get_price_table` P=M=700, G=1.400).
+   ⚠️ As LETRAS continuam no dado: são o `porte` da vaga na OS e o que o
+   Licenciados usa para frascos e estoque. Leve é vendido como **M** (o único
+   porte que existe no flex E no diesel — o Sales não sabe o combustível, quem
+   executa escolhe na OS). **P** saiu da lista e continua LIDO como leve
+   (`porteVendavel`): orçamento antigo com P reabre como M, a R$ 700. As telas
+   de OS (crm·ops, `osView.ts`) dizem "8 leves · 1 pesado".
+   ⚠️ O nome da linha virou `Descarbonização CarboVAPT - Pesados` (pedido
+   antigo guarda o nome antigo — é texto gravado no item, não se recalcula).
+   O painel de franqueados do Admin (`DashboardsFranqueados`) também: o
+   gráfico "Serviços por Categoria" SOMA P+M em leves e G em pesados
+   (`categoriaDoPorte`), inclusive o histórico de antes da mudança.
+10. ⭐ **O PDF do CarboVAPT tem a identidade da CarboVAPT** (21/10/2026): a
+   proposta comercial da Canva reproduzida no `quotePdf.ts`
+   (`gerarPropostaCarbovapt`) — logo, marca d'água vertical, cartão claro com
+   a tabela, valor grande em verde-água, contatos e as faixas no rodapé. Quem
+   decide é o PEDIDO (`ehPropostaCarbovapt`: toda linha `kind: "service"` e ao
+   menos uma com `modality`), então a segunda via sai igual. CarboZé segue no
+   layout do Grupo Carbo. As imagens moram em
+   `packages/shell/src/carbovaptMarca.ts` (base64, `carregarMarcaCarbovapt()`
+   = import dinâmico: um pedaço de ~160 KB que só quem gera o PDF baixa).
+   ⚠️ O desconto por linha é a MESMA função nos dois layouts
+   (`descontosPorLinha`): o papel não pode mudar de número por mudar de cara.
 
 ⚠️ **PENDENTE (fase 2), e decidido pelo dono do processo:** vários locais de
 execução moram **na OS, não na venda** — a OS do CarboVAPT vai para o portal de

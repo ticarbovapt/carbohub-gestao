@@ -37,9 +37,9 @@ export const snapCarboze = {
 export const snapVapt = {
   ...snapCarboze, mode: "carbovapt", customerName: "Transportadora Litoral", doc: "23.456.789/0001-01",
   rows: [], serviceRows: [
-    { id: "s1", modality: "P", qty: 2, hasBonus: false, bonusQty: 0, discType: "percent", discValue: 0 },
+    { id: "s1", modality: "G", qty: 2, hasBonus: false, bonusQty: 0, discType: "percent", discValue: 0, veiculos: "2 caminhões" },
     { id: "s2", modality: "M", qty: 1, hasBonus: true, bonusQty: 1, discType: "percent", discValue: 0 },
-  ], extras: ["opacidade"], executionDate: dataFutura(7), deliveryDate: "", discReason: "",
+  ], extras: ["opacidade", "ruido"], executionDate: dataFutura(7), deliveryDate: "", discReason: "",
 };
 export const pedidosEdit: Record<string, unknown>[] = [
   { id: "orc1", order_number: "V2026100035", status: "quote", quote_form_snapshot: snapCarboze, descarb_os_id: null, invoice_number: null, bling_nf_id: null, vendedor_id: U.colab.id },

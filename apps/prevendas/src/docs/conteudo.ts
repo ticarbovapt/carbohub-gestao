@@ -353,10 +353,10 @@ export const SECOES: Secao[] = [
         titulo: "CarboVAPT (serviço)",
         print: { chave: "vender-vapt", legenda: "Itens de serviço e previsão de execução." },
         itens: [
-          { n: 1, titulo: "Modalidade", texto: "Descarbonização P (até 2.5L, flex), M (2.6L a 3.9L) ou G (acima de 4.0L, diesel). O preço é fixo." },
+          { n: 1, titulo: "Categoria", texto: "Veículos leves e caminhonetes (R$ 700,00) ou veículos pesados (R$ 1.400,00). O preço é fixo. Em “Veículos” dá para escrever quais são (ex.: 2 caminhões e 1 colheitadeira) — sai no orçamento." },
           { n: 2, titulo: "Tem bonificação", texto: "Veículos de cortesia: entram na OS e saem a R$ 0,00." },
           { n: 3, titulo: "Ordem de serviço", texto: "Mostra quantos veículos a OS vai ter para o licenciado executar." },
-          { n: 4, titulo: "Serviços que acompanham", texto: "Laudo de Opacidade e Medição de Ruído: entram no orçamento como bonificação, a R$ 0,00. Precisam de ao menos uma descarbonização." },
+          { n: 4, titulo: "Serviços que acompanham", texto: "Laudo de Opacidade e Medição de Ruído: sempre bonificados, um por veículo (a quantidade pode ser mudada). Não mudam o valor. Precisam de ao menos uma descarbonização." },
           { n: 5, titulo: "Previsão de execução", texto: "A data estimada da descarbonização." },
         ],
       },

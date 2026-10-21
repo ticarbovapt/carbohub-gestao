@@ -32,8 +32,8 @@ import { useVincularOrcamento } from "@/hooks/useLeadOrcamento";
 import { useProdutos, useFaixasPreco } from "@/hooks/useProdutos";
 import { useCreateOSFromSale } from "@/hooks/useDescarbOS";
 import {
-  DESCARB_MODALIDADES, DESCARB_EXTRAS, extraLabel,
-  modalidadePrice, modalidadeLabel, modalidadeHint,
+  DESCARB_MODALIDADES, DESCARB_EXTRAS, extraLabel, extraPrice,
+  modalidadePrice, modalidadeLabel, porteVendavel,
   servicoPadraoPorDoc, type DescarbServiceType,
 } from "@carbo/shell";
 import { useDiscountTiersPublic } from "@/hooks/useDiscountTiers";
@@ -104,6 +104,9 @@ const normalizarModo = (v: unknown, linhasDeServico?: unknown): VendaModo => {
 interface ServiceRow {
   id: string; modality: "" | "P" | "M" | "G"; qty: number; hasBonus: boolean; bonusQty: number;
   discType: "percent" | "value"; discValue: number;
+  /** Texto livre do que vai ser descarbonizado ("2 caminhões e 1 colheitadeira").
+   *  Sai no orçamento abaixo do nome da linha. Opcional — orçamento antigo não tem. */
+  veiculos?: string;
 }
 const emptyServiceRow = (): ServiceRow => ({ id: crypto.randomUUID(), modality: "", qty: 1, hasBonus: false, bonusQty: 0, discType: "percent", discValue: 0 });
 
@@ -317,6 +320,9 @@ export default function Vender() {
   // Serviços que acompanham a descarbonização (laudo, medição). Guardados por
   // CHAVE, nunca por rótulo: o texto muda e o histórico não pode mudar junto.
   const [extras, setExtras] = useState<string[]>([]);
+  // Quantidade de cada extra, só quando o vendedor MUDOU. Sem entrada aqui, a
+  // quantidade acompanha o número de veículos da venda (um laudo por veículo).
+  const [extrasQtd, setExtrasQtd] = useState<Record<string, number>>({});
   const [obsPublica, setObsPublica] = useState("");
   const [notasInternas, setNotasInternas] = useState("");
   const [tipoPonto, setTipoPonto] = useState("");
@@ -652,7 +658,15 @@ export default function Vender() {
     });
 
   /**
-   * Os extras como LINHA do orçamento: bonificação a R$ 0,00.
+   * Os extras como LINHA do orçamento: SEMPRE bonificação, total R$ 0,00.
+   *
+   * ⭐ Desde 21/10/2026 a linha leva o preço de TABELA (`extraPrice`) com 100%
+   * de desconto, e a quantidade = veículos da venda. É o mesmo desenho do gêmeo
+   * de bonificação dos produtos: o PDF risca o preço cheio e diz "Bonificado",
+   * e o cliente vê o tamanho do que ganha. ⚠️ Ele NÃO entra em
+   * `orderSubtotal`/`orderDesconto`/`orderTotal` (que só somam `serviceRows`):
+   * o desconto do PEDIDO continua sendo só o que o vendedor deu, e a alçada,
+   * o faturamento e a NFS-e não mudam.
    *
    * ⚠️ Eles são item do PEDIDO, não campo do snapshot, e essa é a decisão
    * inteira. O PDF é regerado a partir do pedido gravado (`Vendas.tsx`), não do
@@ -672,6 +686,15 @@ export default function Vender() {
    * ⚠️ E eles NÃO vão para a OS: as vagas de veículo saem de `serviceItemsRpc`,
    * que lê `serviceRows`. Laudo não é carro para descarbonizar.
    */
+  // Veículos da venda (pagos + bonificados) — a MESMA conta de
+  // `vagasPrevistas`, mas lida direto do state: esta função é chamada também
+  // pelo `extrasItens`, que está ACIMA daquele `const` (TDZ).
+  const veiculosDaVenda = () =>
+    serviceRows
+      .filter((s) => s.modality && s.qty > 0)
+      .reduce((n, s) => n + s.qty + (s.hasBonus ? Math.max(0, s.bonusQty) : 0), 0);
+  const qtdDoExtra = (k: string) => Math.max(1, extrasQtd[k] ?? veiculosDaVenda());
+
   const extrasItens = () => {
     if (mode !== "carbovapt") return [];
     if (!serviceRows.some((s) => s.modality && s.qty > 0)) return [];
@@ -680,21 +703,27 @@ export default function Vender() {
       // Chave que saiu da lista some da linha em vez de imprimir "opacidade"
       // cru no papel do cliente.
       .filter((x): x is { k: string; label: string } => !!x.label)
-      .map((x) => ({
-        name: x.label,
-        kind: "service" as const,
-        modality: null,
-        product_id: null,
-        product_code: null,
-        quantity: 1,
-        unit_price: 0,
-        bonus_quantity: 0,
-        is_bonificacao: true,
-        discount_type: "none" as const,
-        discount_value: 0,
-        discount_amount: 0,
-        total: 0,
-      }));
+      .map((x) => {
+        const quantity = qtdDoExtra(x.k);
+        const unit_price = extraPrice(x.k);
+        const bruto = round2(quantity * unit_price);
+        return {
+          name: x.label,
+          kind: "service" as const,
+          modality: null,
+          product_id: null,
+          product_code: null,
+          quantity,
+          unit_price,
+          bonus_quantity: 0,
+          is_bonificacao: true,
+          // 100% de desconto, travado — o total da linha é sempre zero.
+          discount_type: (bruto > 0 ? "percent" : "none") as "percent" | "none",
+          discount_value: bruto > 0 ? 100 : 0,
+          discount_amount: bruto,
+          total: 0,
+        };
+      });
   };
 
   // Itens que a caixa não cobre. Some quantidade + bonificação porque o produto
@@ -734,6 +763,7 @@ export default function Vender() {
         name: modalidadeLabel(s.modality),
         kind: "service" as const,
         modality: s.modality as "P" | "M" | "G",
+        descricao: s.veiculos?.trim() || undefined,
         product_id: null,
         product_code: null,
         quantity: s.qty,
@@ -768,7 +798,7 @@ export default function Vender() {
     // Os extras são do CarboVAPT. Deixá-los marcados fora dele seria campo
     // escondido indo junto no payload — o mesmo tropeço do endereço de
     // faturamento, e a razão de `enderecoFaturamentoOuNulo` existir.
-    if (novo === "carboze") setExtras([]);
+    if (novo === "carboze") { setExtras([]); setExtrasQtd({}); }
     // ⚠️ Repõe a linha vazia ao ENTRAR no modo: sem isto, quem volta ao
     // CarboVAPT depois de ter trocado encontra a seção fechada de novo — que é
     // exatamente o que esta mudança corrige.
@@ -843,13 +873,14 @@ export default function Vender() {
     modalidade?: "producao" | "pronta_entrega";
     serviceRows: ServiceRow[]; executionDate: string; serviceType?: DescarbServiceType;
     extras?: string[];
+    extrasQtd?: Record<string, number>;
   };
   function formSnapshot(): FormSnapshot {
     return {
       mode, doc, customerName, email, phone, isLicenciado, rows, obsPublica, notasInternas,
       tipoPonto, classificacao, volumeMedio, atuaDiesel, atuaFrotas, vendedorId, endereco, fatMesmo,
       fatEndereco, ie, ieUf, pagModalidade, pagParcelas, pagFaturamento, discReason, deliveryDate,
-      serviceRows, executionDate, serviceType, extras,
+      serviceRows, executionDate, serviceType, extras, extrasQtd,
       modalidade,
     };
   }
@@ -872,9 +903,17 @@ export default function Vender() {
       setDiscReason(snap.discReason ?? ""); setDeliveryDate(snap.deliveryDate ?? "");
       // Orçamento antigo não tem o campo: produção, que é o de sempre.
       setModalidade(snap.modalidade ?? "producao");
-      setServiceRows(Array.isArray(snap.serviceRows) && snap.serviceRows.length ? snap.serviceRows : [emptyServiceRow()]);
+      // ⚠️ P saiu da lista (duas categorias, 09/10/2026): o orçamento antigo
+      // reabre com P trocado por M — a mesma categoria (leve), o preço da tabela
+      // nova. Sem isto o seletor abriria VAZIO carregando um porte que a tela não
+      // oferece mais.
+      setServiceRows(Array.isArray(snap.serviceRows) && snap.serviceRows.length
+        ? snap.serviceRows.map((r) => ({ ...r, modality: porteVendavel(r.modality) as ServiceRow["modality"] }))
+        : [emptyServiceRow()]);
       setExecutionDate(snap.executionDate ?? "");
       setExtras(Array.isArray(snap.extras) ? snap.extras : []);
+      // Orçamento antigo não tem o campo: a quantidade acompanha os veículos.
+      setExtrasQtd(snap.extrasQtd && typeof snap.extrasQtd === "object" ? snap.extrasQtd : {});
       // Orçamento antigo não tem o campo: cai no palpite pelo documento.
       if (snap.serviceType) { setServiceType(snap.serviceType); setServiceTypeTocado(true); }
       else setServiceType(servicoPadraoPorDoc(snap.doc ?? ""));
@@ -920,6 +959,7 @@ export default function Vender() {
         produto: i.name,
         kind: "service",
         modalidade: i.modality,
+        descricao: i.descricao,
         product_id: null as string | null,
         product_code: null as string | null,
         quantidade: i.quantity,
@@ -936,16 +976,17 @@ export default function Vender() {
         product_id: null as string | null,
         product_code: null as string | null,
         quantidade: i.quantity,
-        preco_unitario: 0,
+        // Preço de TABELA com 100% de desconto (ver `extrasItens`).
+        preco_unitario: i.unit_price,
         bonificacao: 0,
         // ⚠️ É esta marca que faz o PDF imprimir a linha no bloco de
         // bonificação e a MANTÉM fora da base de rateio do desconto. Sem ela,
         // uma linha de R$ 0,00 encolheria o fator e todas as outras receberiam
         // desconto a menos — o total deixaria de fechar.
         is_bonificacao: true,
-        discount_type: "none",
-        discount_value: 0,
-        discount_amount: 0,
+        discount_type: i.discount_type,
+        discount_value: i.discount_value,
+        discount_amount: i.discount_amount,
       })),
     ];
     return {
@@ -993,7 +1034,7 @@ export default function Vender() {
     setDiscReason("");
     setDeliveryDate("");
     setRecorrente(false); setRecPeriodo("mensal"); setRecParcelas(6);
-    setServiceRows([emptyServiceRow()]); setExecutionDate(""); setExtras([]);
+    setServiceRows([emptyServiceRow()]); setExecutionDate(""); setExtras([]); setExtrasQtd({});
     setServiceType("b2c"); setServiceTypeTocado(false);
   }
 
@@ -1814,23 +1855,19 @@ export default function Vender() {
               <div key={s.id} className="rounded-xl border p-3 space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_90px_120px_auto] gap-3 items-end">
                   <div className="space-y-1.5">
-                    <Label>Modalidade</Label>
+                    <Label>Categoria</Label>
+                    {/* Duas categorias desde 09/10/2026 (ver `descarb.ts`).
+                        O porte P antigo é trocado por M ao reabrir. */}
                     <Select value={s.modality} onValueChange={(v) => updateServiceRow(s.id, { modality: v as ServiceRow["modality"] })}>
                       <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                       <SelectContent>
                         {DESCARB_MODALIDADES.map((m) => (
                           <SelectItem key={m.key} value={m.key}>
                             {m.label} — {brl(m.price)}
-                            <span className="text-muted-foreground"> · {m.motor} · {m.fuels.length === 2 ? "flex ou diesel" : m.fuels[0]}</span>
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                    {/* O vendedor não vê o veículo — a faixa de motor é o que
-                        evita vender P para um caminhão. */}
-                    {s.modality && (
-                      <p className="text-[11px] text-muted-foreground">{modalidadeHint(s.modality)}</p>
-                    )}
                   </div>
                   <div className="space-y-1.5">
                     <Label>Quantidade</Label>
@@ -1853,6 +1890,14 @@ export default function Vender() {
                     <button onClick={() => setServiceRows((p) => p.filter((x) => x.id !== s.id))}
                       className="p-2.5 sm:p-1.5 rounded hover:bg-destructive/10 text-destructive"><Trash2 className="h-4 w-4" /></button>
                   </div>
+                </div>
+                {/* Sai no orçamento abaixo do nome da linha. Só texto: as
+                    vagas da OS continuam saindo da quantidade. */}
+                <div className="space-y-1.5">
+                  <Label>Veículos <span className="text-xs font-normal text-muted-foreground">(opcional)</span></Label>
+                  <Input value={s.veiculos ?? ""} maxLength={120}
+                    onChange={(e) => updateServiceRow(s.id, { veiculos: e.target.value })}
+                    placeholder="ex.: 2 caminhões e 1 colheitadeira" />
                 </div>
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
                   <label className="flex items-center gap-2">
@@ -1912,21 +1957,43 @@ export default function Vender() {
             <div>
               <Label>Serviços que acompanham <span className="text-xs font-normal text-muted-foreground">(opcional)</span></Label>
               <p className="text-[11px] text-muted-foreground">
-                Não alteram o valor — entram no orçamento como bonificação, a R$ 0,00.
+                Não alteram o valor — entram no orçamento como bonificados, um por veículo.
               </p>
             </div>
-            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-4">
-              {DESCARB_EXTRAS.map((ex) => (
-                <label key={ex.key} className="flex items-center gap-2 text-sm cursor-pointer">
-                  <Checkbox
-                    checked={extras.includes(ex.key)}
-                    onCheckedChange={(c) =>
-                      setExtras((p) => (c ? [...new Set([...p, ex.key])] : p.filter((k) => k !== ex.key)))
-                    }
-                  />
-                  {ex.label}
-                </label>
-              ))}
+            <div className="space-y-2">
+              {DESCARB_EXTRAS.map((ex) => {
+                const marcado = extras.includes(ex.key);
+                return (
+                  <div key={ex.key} className="flex items-center gap-3">
+                    <label className="flex min-w-0 flex-1 items-center gap-2 text-sm cursor-pointer">
+                      <Checkbox
+                        checked={marcado}
+                        onCheckedChange={(c) =>
+                          setExtras((p) => (c ? [...new Set([...p, ex.key])] : p.filter((k) => k !== ex.key)))
+                        }
+                      />
+                      <span className="min-w-0">
+                        <span className="block">{ex.label}</span>
+                        <span className="block text-xs text-muted-foreground">
+                          {ex.price > 0 && <span className="line-through mr-1">{brl(ex.price)}</span>}
+                          Bonificado
+                        </span>
+                      </span>
+                    </label>
+                    {marcado && (
+                      <div className="flex shrink-0 items-center gap-2">
+                        <Label className="text-xs">Qtd</Label>
+                        <Input type="number" min={1} className="w-20"
+                          value={qtdDoExtra(ex.key)}
+                          onChange={(e) => {
+                            const n = Math.floor(Number(e.target.value));
+                            setExtrasQtd((p) => ({ ...p, [ex.key]: Number.isFinite(n) && n > 0 ? n : 1 }));
+                          }} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
             {/* ⚠️ O aviso só aparece com caixinha marcada E sem serviço na
                 venda. Marcar isto sozinho NÃO gera pedido — `erroDeModo()`

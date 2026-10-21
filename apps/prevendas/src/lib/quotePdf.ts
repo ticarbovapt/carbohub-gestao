@@ -1,6 +1,7 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import logoUrl from "@/assets/logo-grupo-carbo.png";
+import { carregarMarcaCarbovapt } from "@carbo/shell";
 
 // Orçamento (ou PEDIDO, depois de convertido — ver `status`) em PDF com a
 // identidade do Grupo Carbo.
@@ -39,6 +40,12 @@ interface QuoteItem {
    *  mantê-la na base encolheria o fator de desconto, fazendo todas as outras
    *  linhas receberem desconto a menos e o total deixar de fechar. */
   is_bonificacao?: boolean;
+  /** `service` nas linhas do CarboVAPT. Com `modality` (P/M/G) é descarbonização;
+   *  sem ela, é um serviço que acompanha (laudo, medição). */
+  kind?: string;
+  modality?: string | null;
+  /** Texto livre da linha ("2 caminhões e 1 colheitadeira"), abaixo do nome. */
+  descricao?: string;
 }
 
 type Endereco = Record<string, unknown> | null | undefined;
@@ -135,7 +142,376 @@ function fmtAddrLines(e: Endereco): string[] {
   return [l1, l2, l3].filter(Boolean);
 }
 
+const centavos = (n: number) => Math.round(n * 100) / 100;
+
+/** O desconto de cada linha PAGA — por item quando as linhas fecham com o
+ *  pedido, senão rateado. A explicação inteira está no comentário de
+ *  `generateQuotePdf`, onde isto nasceu; os DOIS layouts (Grupo Carbo e
+ *  CarboVAPT) usam esta mesma conta, e é por isso que ela é função. */
+function descontosPorLinha(pagos: QuoteItem[], descontoPedido: number) {
+  const brutoTotal = pagos.reduce((s, it) => s + (it.quantity ?? 0) * (it.unit_price ?? 0), 0);
+  const temDesconto = descontoPedido > 0 && brutoTotal > 0;
+
+  // O desconto que cada linha declara. Soma-se para decidir o modo.
+  const porItem = pagos.map((it) => Math.max(0, Number(it.discount_amount ?? 0)));
+  const somaPorItem = centavos(porItem.reduce((s, d) => s + d, 0));
+  // ⚠️ Tolerância de 2 centavos: o dado vem de `round2` do lado da venda, e
+  // exigir igualdade exata jogaria de volta no rateio por um centavo de
+  // arredondamento — trocando a verdade por um detalhe invisível.
+  const usaPorItem = temDesconto && somaPorItem > 0
+    && Math.abs(somaPorItem - descontoPedido) <= 0.02;
+
+  const descUnit: number[] = [];   // desconto de UMA unidade, já em centavos redondos
+  const descLinha: number[] = [];  // desconto da linha inteira
+  if (temDesconto) {
+    pagos.forEach((it, i) => {
+      const qty = it.quantity ?? 0;
+      const unit = it.unit_price ?? 0;
+      // No modo por item o alvo é o desconto da própria linha; no rateio, a
+      // fatia proporcional. Daí para baixo o tratamento é o MESMO — inclusive
+      // o arredondamento do unitário, que é o que faz unit × qtd fechar exato.
+      const alvo = usaPorItem ? porItem[i] : unit * qty * (descontoPedido / brutoTotal);
+      const du = qty > 0 ? Math.min(unit, centavos(alvo / qty)) : 0;
+      descUnit.push(du);                                   // nunca abaixo de zero
+      descLinha.push(centavos(du * qty));
+    });
+
+    /* A sobra tem de cair em alguma linha (ver o comentário acima).
+     *
+     * ⚠️ No modo por item ela só pode cair numa linha que JÁ TEM desconto.
+     * Jogá-la na menor quantidade em geral inventaria um desconto de centavos
+     * num produto que não recebeu nenhum — que é, em miniatura, exatamente o
+     * defeito que esta correção conserta. */
+    const candidatos = pagos
+      .map((_, i) => i)
+      .filter((i) => !usaPorItem || descLinha[i] > 0);
+    if (candidatos.length) {
+      let absorve = candidatos[0];
+      for (const i of candidatos) {
+        if ((pagos[i].quantity ?? 0) < (pagos[absorve].quantity ?? 0)) absorve = i;
+      }
+      const sobra = centavos(descontoPedido - descLinha.reduce((s, d) => s + d, 0));
+      const bruto = (pagos[absorve].quantity ?? 0) * (pagos[absorve].unit_price ?? 0);
+      descLinha[absorve] = Math.min(bruto, Math.max(0, centavos(descLinha[absorve] + sobra)));
+    }
+  }
+  return { temDesconto, descUnit, descLinha };
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// PROPOSTA COMERCIAL CARBOVAPT
+//
+// Pedido do dono do processo (21/10/2026): o orçamento de serviço "o mais
+// próximo possível" da proposta montada na Canva — logo e marca d'água da
+// CarboVAPT, cartão claro com a tabela, valor grande em verde-água, contatos e
+// as faixas inclinadas no rodapé. As imagens moram em
+// `packages/shell/src/carbovaptMarca.ts` (carregadas sob demanda).
+//
+// ⚠️ Quem decide é o PEDIDO, não a tela: toda linha é `kind: "service"` e ao
+// menos uma é descarbonização (`modality`). Assim a segunda via (Vendas.tsx)
+// sai igual à primeira — e por isso `kind`/`modality`/`descricao` atravessam
+// aquele map.
+// ⚠️ O desconto usa a MESMA conta do layout do Grupo Carbo
+// (`descontosPorLinha`): o papel não pode mudar de número por mudar de cara.
+// ═════════════════════════════════════════════════════════════════════════════
+
+type RGB = [number, number, number];
+const V_NAVY: RGB = [4, 53, 90];        // títulos e texto
+const V_ROXO: RGB = [81, 93, 161];      // início do degradê
+const V_VERDE: RGB = [103, 168, 163];   // fim do degradê, valor em destaque
+const V_CARTAO: RGB = [236, 244, 243];  // fundo do cartão
+const V_TEXTO: RGB = [63, 88, 128];     // texto corrido
+
+const UF_NOME: Record<string, string> = {
+  AC: "Acre", AL: "Alagoas", AP: "Amapá", AM: "Amazonas", BA: "Bahia", CE: "Ceará",
+  DF: "Distrito Federal", ES: "Espírito Santo", GO: "Goiás", MA: "Maranhão",
+  MT: "Mato Grosso", MS: "Mato Grosso do Sul", MG: "Minas Gerais", PA: "Pará",
+  PB: "Paraíba", PR: "Paraná", PE: "Pernambuco", PI: "Piauí", RJ: "Rio de Janeiro",
+  RN: "Rio Grande do Norte", RS: "Rio Grande do Sul", RO: "Rondônia", RR: "Roraima",
+  SC: "Santa Catarina", SP: "São Paulo", SE: "Sergipe", TO: "Tocantins",
+};
+
+const CONTATO_VAPT = {
+  telefone: "(11) 4000-2112",
+  email: "carbovapt@carbovapt.com.br",
+  site: "carbovapt.com.br",
+  instagram: "carbovapt",
+};
+
+const itensDoPedido = (order: QuotePdfData) =>
+  ((Array.isArray(order.items) ? order.items : []) as QuoteItem[])
+    .filter((it) => (it.name || it.product_code) && (it.quantity ?? 0) > 0);
+
+function ehPropostaCarbovapt(order: QuotePdfData): boolean {
+  const itens = itensDoPedido(order);
+  return itens.length > 0
+    && itens.every((it) => it.kind === "service")
+    && itens.some((it) => !!it.modality);
+}
+
+const mistura = (a: RGB, b: RGB, t: number): RGB =>
+  [0, 1, 2].map((i) => Math.round(a[i] + (b[i] - a[i]) * t)) as RGB;
+
+/** Faixa em degradê horizontal (o jsPDF não tem degradê: são fatias finas). */
+function degrade(doc: jsPDF, x: number, y: number, w: number, h: number, fatias = 60) {
+  const fw = w / fatias;
+  for (let i = 0; i < fatias; i++) {
+    doc.setFillColor(...mistura(V_ROXO, V_VERDE, i / (fatias - 1)));
+    doc.rect(x + i * fw, y, fw + 0.05, h, "F");
+  }
+}
+
+/** Paralelogramo inclinado para a direita, como as faixas da marca. */
+function faixa(doc: jsPDF, xBase: number, y: number, w: number, h: number, incl: number, cor: RGB) {
+  doc.setFillColor(...cor);
+  doc.lines([[w, 0], [-incl, h], [-w, 0]], xBase + incl, y, [1, 1], "F", true);
+}
+
+const lista = (xs: string[]) =>
+  xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} e ${xs[xs.length - 1]}`;
+
+/** "A proposta contempla…" — montado das LINHAS (vale na segunda via). */
+function textoDaProposta(itens: QuoteItem[]): string {
+  const descarbs = itens.filter((it) => !!it.modality);
+  const acompanham = itens.filter((it) => !it.modality).map((it) => it.name || "").filter(Boolean);
+  const textos = descarbs.map((it) => it.descricao?.trim()).filter(Boolean) as string[];
+  const n = descarbs.reduce((t, it) => t + (it.quantity ?? 0) + (it.bonus_quantity ?? 0), 0);
+  const emQue = textos.length ? lista(textos) : `${n} ${n === 1 ? "veículo" : "veículos"}`;
+  return "A proposta contempla a higienização e descarbonização da câmara de combustão"
+    + (acompanham.length
+      ? `, além de ${lista(acompanham)}, com emissão de laudo por equipamento certificado pelo INMETRO`
+      : "")
+    + `, em ${emQue}.`;
+}
+
+async function gerarPropostaCarbovapt(order: QuotePdfData, opts?: { download?: boolean }) {
+  const marca = await carregarMarcaCarbovapt().catch(() => null);
+  const doc = new jsPDF();
+  const pageW = doc.internal.pageSize.getWidth();   // 210
+  const ehPedido = !!order.status && order.status !== "quote";
+
+  const itens = itensDoPedido(order);
+  const pagos = itens.filter((it) => !it.is_bonificacao);
+  const bonificados = itens.filter((it) => it.is_bonificacao);
+  const { temDesconto, descLinha } = descontosPorLinha(pagos, Number(order.discount ?? 0));
+  const descarbs = itens.filter((it) => !!it.modality);
+  const nVeic = descarbs.reduce((t, it) => t + (it.quantity ?? 0) + (it.bonus_quantity ?? 0), 0);
+
+  // ── Logo e título ──────────────────────────────────────────────────────────
+  if (marca) {
+    const lw = 38, lh = lw * (marca.LOGO.h / marca.LOGO.w);
+    doc.addImage(marca.LOGO.src, "PNG", (pageW - lw) / 2, 17, lw, lh);
+  } else {
+    doc.setFont("helvetica", "bold"); doc.setFontSize(18); doc.setTextColor(...V_NAVY);
+    doc.text("CARBOVAPT", pageW / 2, 26, { align: "center" });
+  }
+  const titulo = ehPedido ? "PEDIDO" : "PROPOSTA COMERCIAL";
+  doc.setFont("helvetica", "bold"); doc.setTextColor(...V_NAVY);
+  doc.setFontSize(26);
+  const alvo = ehPedido ? 50 : 111;  // largura do título na proposta da Canva
+  doc.setFontSize(Math.min(30, 26 * alvo / doc.getTextWidth(titulo)));
+  doc.text(titulo, pageW / 2, 47, { align: "center" });
+  const barraW = Math.max(alvo, doc.getTextWidth(titulo));
+  degrade(doc, (pageW - barraW) / 2, 49.6, barraW, 1.6);
+
+  // Número, datas e consultor — o que o modelo da Canva não tinha e o sistema precisa.
+  const created = dateBR(order.created_at);
+  const validade = new Date(order.created_at ? new Date(order.created_at) : new Date());
+  validade.setDate(validade.getDate() + (order.validityDays ?? 7));
+  const meta = [
+    order.order_number ? `Nº ${order.order_number}` : "",
+    `Emissão ${created}`,
+    ehPedido ? "" : `Válida até ${validade.toLocaleDateString("pt-BR")}`,
+    order.vendedor_name ? `Consultor: ${order.vendedor_name}` : "",
+  ].filter(Boolean).join("   ·   ");
+  doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.setTextColor(...V_TEXTO);
+  doc.text(meta, pageW / 2, 56, { align: "center" });
+
+  // ── Empresa · Quantidade · Localização ─────────────────────────────────────
+  const e = order.endereco;
+  const cidade = s(e, "cidade"), uf = s(e, "uf").toUpperCase();
+  const local = [cidade, UF_NOME[uf] ?? uf].filter(Boolean).join(" · ") || "—";
+  const colunas: [number, string, string[]][] = [
+    [27, "Empresa:", [order.customer_name || order.legal_name || "—", order.cnpj ? `CNPJ/CPF ${order.cnpj}` : ""]],
+    [92, "Quantidade:", [`${nVeic} ${nVeic === 1 ? "veículo" : "veículos"}`]],
+    [150, "Localização:", [local]],
+  ];
+  let infoFim = 68;
+  for (const [x, rot, vals] of colunas) {
+    doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(...V_NAVY);
+    doc.text(rot, x, 68);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(8.5);
+    let yy = 72.5;
+    for (const v of vals.filter(Boolean)) {
+      const ls = doc.splitTextToSize(v, x === 150 ? 44 : 58);
+      doc.text(ls, x, yy);
+      yy += ls.length * 3.8;
+    }
+    infoFim = Math.max(infoFim, yy);
+  }
+
+  // ── Linhas da tabela ───────────────────────────────────────────────────────
+  const corpo: string[][] = [];
+  const risco: (string | null)[] = [];   // texto a riscar no começo da célula "Valor Unit."
+  const qtdTexto = (it: QuoteItem, q: number) =>
+    it.modality
+      ? (it.descricao?.trim() || `${q} ${q === 1 ? "veículo" : "veículos"}`)
+      : `${q} und`;
+  pagos.forEach((it, i) => {
+    const q = it.quantity ?? 0, unit = it.unit_price ?? 0;
+    const d = temDesconto ? descLinha[i] : 0;
+    const nome = it.name || it.product_code || "—";
+    if (d > 0) {
+      const unitCom = centavos((q * unit - d) / q);
+      corpo.push([nome, qtdTexto(it, q), `${brl(unit)}  ${brl(unitCom)}`, brl(centavos(q * unit - d))]);
+      risco.push(brl(unit));
+    } else {
+      corpo.push([nome, qtdTexto(it, q), brl(unit), brl(q * unit)]);
+      risco.push(null);
+    }
+    // Modelo antigo: carros bonificados dentro da própria linha.
+    const bonus = it.bonus_quantity ?? 0;
+    if (bonus > 0) {
+      corpo.push([`${nome} (bonificação)`, `${bonus} ${bonus === 1 ? "veículo" : "veículos"}`, unit > 0 ? `${brl(unit)}  Bonificado` : "Bonificado", brl(0)]);
+      risco.push(unit > 0 ? brl(unit) : null);
+    }
+  });
+  bonificados.forEach((it) => {
+    const q = it.quantity ?? 0, unit = it.unit_price ?? 0;
+    corpo.push([it.name || it.product_code || "—", qtdTexto(it, q), unit > 0 ? `${brl(unit)}  Bonificado` : "Bonificado", brl(0)]);
+    risco.push(unit > 0 ? brl(unit) : null);
+  });
+  const total = Number(order.total ?? order.subtotal ?? 0);
+  const desconto = Number(order.discount ?? 0);
+  const rodapeTabela: string[][] = [];
+  if (desconto > 0) {
+    rodapeTabela.push(["Subtotal", "", "", brl(Number(order.subtotal ?? total + desconto))]);
+    rodapeTabela.push([`Desconto${order.discount_percent ? ` (${order.discount_percent}%)` : ""}`, "", "", `- ${brl(desconto)}`]);
+  }
+  rodapeTabela.push(["Total", "", "", brl(total)]);
+
+  // ── O cartão: mede numa folha de rascunho, depois desenha de verdade ───────
+  // O fundo do cartão tem de vir ANTES do texto, e a altura dele depende do
+  // conteúdo. O autoTable não diz a altura antes de desenhar — então ele
+  // desenha uma vez num documento descartável.
+  const cartaoX = 14.3, cartaoW = 181.6, cartaoY = Math.max(89.5, infoFim + 8);
+  const desenharCorpo = (d: jsPDF, y0: number): number => {
+    let y = y0 + 12;
+    // faixinhas da marca + título do bloco
+    const xs = [24.8, 31.2, 37.6, 44, 50.4];
+    xs.forEach((x, i) => faixa(d, x, y, 5.2, 4.3, 1.8, mistura(V_ROXO, V_VERDE, i / 5)));
+    faixa(d, 56.8, y, 10.5, 4.3, 1.8, V_VERDE);
+    y += 11;
+    d.setFont("helvetica", "bold"); d.setFontSize(13); d.setTextColor(...V_NAVY);
+    d.text(ehPedido ? "PEDIDO CARBOVAPT" : "ORÇAMENTO CARBOVAPT", 24.8, y);
+    y += 6;
+    const tracejado = (yy: number) => {
+      d.setDrawColor(...mistura(V_VERDE, [255, 255, 255], 0.35)); d.setLineWidth(0.25);
+      d.setLineDashPattern([0.8, 0.8], 0); d.line(20.6, yy, 189.5, yy); d.setLineDashPattern([], 0);
+    };
+    tracejado(y);
+    autoTable(d, {
+      startY: y + 4,
+      head: [["Item", "Qtd.", "Valor Unit.", "Valor Total"]],
+      body: corpo,
+      foot: rodapeTabela,
+      showFoot: "lastPage",
+      theme: "plain",
+      margin: { left: 24.8, right: 20.5 },
+      styles: { font: "helvetica", fontSize: 8.5, textColor: V_NAVY, cellPadding: { top: 2.6, bottom: 2.6, left: 1.6, right: 1.6 }, valign: "top" },
+      headStyles: { fontStyle: "bolditalic", fontSize: 8, textColor: V_NAVY },
+      footStyles: { fontStyle: "bold", textColor: V_NAVY },
+      columnStyles: { 0: { cellWidth: 41 }, 1: { cellWidth: 50 }, 2: { cellWidth: 46 } },
+      didDrawCell: (data: any) => {
+        if (data.section !== "body" || data.column.index !== 2) return;
+        const txt = risco[data.row.index];
+        if (!txt) return;
+        const larg = d.getTextWidth(txt);
+        const x0 = data.cell.x + data.cell.padding("left");
+        const altLinha = (data.cell.styles.fontSize * d.getLineHeightFactor()) / d.internal.scaleFactor;
+        const ym = data.cell.y + data.cell.padding("top") + altLinha / 2;
+        d.setDrawColor(...V_NAVY); d.setLineWidth(0.3);
+        d.line(x0, ym, x0 + larg, ym);
+      },
+    });
+    y = (d as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 4;
+    tracejado(y);
+    y += 10;
+    // Texto da proposta à esquerda · valor grande à direita
+    d.setFont("helvetica", "normal"); d.setFontSize(8); d.setTextColor(...V_TEXTO);
+    const txt = d.splitTextToSize(textoDaProposta(itens), 66);
+    d.text(txt, 27.6, y, { align: "justify", maxWidth: 66 });
+    const fimTexto = y + txt.length * 3.5;
+    d.setFont("helvetica", "bold"); d.setFontSize(25); d.setTextColor(...V_VERDE);
+    d.text(brl(total), 178, y + 11, { align: "right" });
+    d.setFont("helvetica", "normal"); d.setFontSize(8); d.setTextColor(...V_TEXTO);
+    const pag = order.payment_terms ? `Pagamento: ${order.payment_terms}` : "No boleto ou via cartão de crédito";
+    const pagL = d.splitTextToSize(pag, 50);
+    d.text(pagL, 178, y + 16.5, { align: "right" });
+    y = Math.max(fimTexto, y + 16.5 + pagL.length * 3.5);
+    if (order.notes) {
+      y += 5;
+      d.setFont("helvetica", "bold"); d.setFontSize(8); d.setTextColor(...V_NAVY);
+      d.text("Observações", 27.6, y);
+      d.setFont("helvetica", "normal"); d.setFontSize(7.5); d.setTextColor(...V_TEXTO);
+      const nl = d.splitTextToSize(order.notes, 150);
+      d.text(nl, 27.6, y + 4);
+      y += 4 + nl.length * 3.3;
+    }
+    return y + 10;
+  };
+  const rascunho = new jsPDF();
+  const cartaoFim = Math.max(250, desenharCorpo(rascunho, cartaoY));
+  doc.setFillColor(...V_CARTAO);
+  doc.roundedRect(cartaoX, cartaoY, cartaoW, cartaoFim - cartaoY, 4, 4, "F");
+  // Marca d'água vertical à direita: no modelo ela passa POR CIMA do cartão
+  // (cinza-claro), então vem depois do fundo e antes do texto.
+  if (marca) {
+    const h = 277, w = h * (marca.MARCA_DAGUA.w / marca.MARCA_DAGUA.h);
+    // No modelo ela é bem apagada — cheia, ela competia com a tabela.
+    doc.saveGraphicsState();
+    doc.setGState(new (doc as unknown as { GState: new (o: { opacity: number }) => unknown }).GState({ opacity: 0.45 }) as never);
+    doc.addImage(marca.MARCA_DAGUA.src, "PNG", pageW - w - 3, 10, w, h);
+    doc.restoreGraphicsState();
+  }
+  desenharCorpo(doc, cartaoY);
+
+  // ── Rodapé: contatos e as faixas inclinadas ────────────────────────────────
+  // Se o cartão passou do lugar do rodapé (proposta com muitas linhas), o
+  // rodapé vai para uma página nova em vez de cair por cima da tabela.
+  if (doc.getNumberOfPages() > 1 || cartaoFim > 258) doc.addPage();
+  const contatos: [keyof typeof CONTATO_VAPT, string][] = [
+    ["telefone", CONTATO_VAPT.telefone], ["email", CONTATO_VAPT.email],
+    ["site", CONTATO_VAPT.site], ["instagram", CONTATO_VAPT.instagram],
+  ];
+  doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(...V_NAVY);
+  contatos.forEach(([k, v], i) => {
+    const y = 263 + i * 6.9;
+    if (marca) doc.addImage(marca.ICONES[k], "PNG", 14.6, y - 2.6, 3.3, 3.3);
+    doc.text(v, 19.2, y);
+  });
+  for (let i = 0; i < 6; i++) {
+    faixa(doc, 71.4 + i * 22.2, 261, i === 5 ? 30 : 18, 24, 4.8, mistura(V_ROXO, V_VERDE, i / 5));
+  }
+  doc.setFontSize(6); doc.setTextColor(150);
+  doc.text(
+    ehPedido
+      ? "Este documento é um pedido e não possui valor fiscal. O documento fiscal é a nota fiscal."
+      : "Este documento é um orçamento e não possui valor fiscal. Valores sujeitos a confirmação.",
+    14.6, 292,
+  );
+
+  const filename = `${ehPedido ? "pedido" : "proposta"}-carbovapt-${order.order_number || "carbo"}.pdf`;
+  if (opts?.download !== false) doc.save(filename);
+  const base64 = doc.output("datauristring").split(",")[1] ?? "";
+  return { filename, base64 };
+}
+
 export async function generateQuotePdf(order: QuotePdfData, opts?: { download?: boolean }) {
+  // ⭐ Venda de SERVIÇO (CarboVAPT) sai na identidade da CarboVAPT — o modelo da
+  // proposta comercial da Canva (21/10/2026). Produto (CarboZé) segue aqui.
+  if (ehPropostaCarbovapt(order)) return gerarPropostaCarbovapt(order, opts);
+
   const doc = new jsPDF();
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
@@ -294,54 +670,7 @@ export async function generateQuotePdf(order: QuotePdfData, opts?: { download?: 
    * volta para o vendedor explicar.
    */
   const descontoPedido = Number(order.discount ?? 0);
-  const brutoTotal = pagos.reduce((s, it) => s + (it.quantity ?? 0) * (it.unit_price ?? 0), 0);
-  const temDesconto = descontoPedido > 0 && brutoTotal > 0;
-
-  const centavos = (n: number) => Math.round(n * 100) / 100;
-
-  // O desconto que cada linha declara. Soma-se para decidir o modo.
-  const porItem = pagos.map((it) => Math.max(0, Number(it.discount_amount ?? 0)));
-  const somaPorItem = centavos(porItem.reduce((s, d) => s + d, 0));
-  // ⚠️ Tolerância de 2 centavos: o dado vem de `round2` do lado da venda, e
-  // exigir igualdade exata jogaria de volta no rateio por um centavo de
-  // arredondamento — trocando a verdade por um detalhe invisível.
-  const usaPorItem = temDesconto && somaPorItem > 0
-    && Math.abs(somaPorItem - descontoPedido) <= 0.02;
-
-  const descUnit: number[] = [];   // desconto de UMA unidade, já em centavos redondos
-  const descLinha: number[] = [];  // desconto da linha inteira
-  if (temDesconto) {
-    pagos.forEach((it, i) => {
-      const qty = it.quantity ?? 0;
-      const unit = it.unit_price ?? 0;
-      // No modo por item o alvo é o desconto da própria linha; no rateio, a
-      // fatia proporcional. Daí para baixo o tratamento é o MESMO — inclusive
-      // o arredondamento do unitário, que é o que faz unit × qtd fechar exato.
-      const alvo = usaPorItem ? porItem[i] : unit * qty * (descontoPedido / brutoTotal);
-      const du = qty > 0 ? Math.min(unit, centavos(alvo / qty)) : 0;
-      descUnit.push(du);                                   // nunca abaixo de zero
-      descLinha.push(centavos(du * qty));
-    });
-
-    /* A sobra tem de cair em alguma linha (ver o comentário acima).
-     *
-     * ⚠️ No modo por item ela só pode cair numa linha que JÁ TEM desconto.
-     * Jogá-la na menor quantidade em geral inventaria um desconto de centavos
-     * num produto que não recebeu nenhum — que é, em miniatura, exatamente o
-     * defeito que esta correção conserta. */
-    const candidatos = pagos
-      .map((_, i) => i)
-      .filter((i) => !usaPorItem || descLinha[i] > 0);
-    if (candidatos.length) {
-      let absorve = candidatos[0];
-      for (const i of candidatos) {
-        if ((pagos[i].quantity ?? 0) < (pagos[absorve].quantity ?? 0)) absorve = i;
-      }
-      const sobra = centavos(descontoPedido - descLinha.reduce((s, d) => s + d, 0));
-      const bruto = (pagos[absorve].quantity ?? 0) * (pagos[absorve].unit_price ?? 0);
-      descLinha[absorve] = Math.min(bruto, Math.max(0, centavos(descLinha[absorve] + sobra)));
-    }
-  }
+  const { temDesconto, descUnit, descLinha } = descontosPorLinha(pagos, descontoPedido);
 
   // Quais linhas do corpo levam preço riscado — o índice muda por causa das
   // linhas de bonificação, que entram no meio e não têm desconto.
@@ -352,7 +681,8 @@ export async function generateQuotePdf(order: QuotePdfData, opts?: { download?: 
     const qty = it.quantity ?? 0;
     const unit = it.unit_price ?? 0;
     const bonus = it.bonus_quantity ?? 0;
-    const nome = it.name || it.product_code || "—";
+    const nomeBase = it.name || it.product_code || "—";
+    const nome = it.descricao?.trim() ? `${nomeBase}\n${it.descricao.trim()}` : nomeBase;
     const bruto = qty * unit;
 
     if (temDesconto) {
@@ -377,8 +707,8 @@ export async function generateQuotePdf(order: QuotePdfData, opts?: { download?: 
     // bonificada é grátis e não faz parte da paga.
     if (bonus > 0) {
       body.push(temDesconto
-        ? [`${nome} (bonificação)`, String(bonus), brl(0), "—", brl(0), brl(0)]
-        : [`${nome} (bonificação)`, String(bonus), brl(0), brl(0)]);
+        ? [`${nomeBase} (bonificação)`, String(bonus), brl(0), "—", brl(0), brl(0)]
+        : [`${nomeBase} (bonificação)`, String(bonus), brl(0), brl(0)]);
       riscar.push(false);
     }
   });
@@ -394,9 +724,15 @@ export async function generateQuotePdf(order: QuotePdfData, opts?: { download?: 
     const qty = it.quantity ?? 0;
     const unit = it.unit_price ?? 0;
     const nome = it.name || it.product_code || "—";
+    // ⚠️ Sem desconto no pedido (o caso do CarboVAPT com laudo) não existe a
+    // coluna "Desconto" para mostrar o −100%: o preço de tabela sai riscado e
+    // "Bonificado" logo abaixo, como na proposta comercial. Sem preço de
+    // tabela (medição de ruído), só "Bonificado" — nada para riscar.
+    // Com desconto, a coluna existe: o gêmeo de produto continua como sempre
+    // foi, e o extra sem preço diz "Bonificado" em vez de "- R$ 0,00".
     body.push(temDesconto
-      ? [nome, String(qty), brl(unit), `- ${brl(qty * unit)}`, brl(0), brl(0)]
-      : [nome, String(qty), brl(unit), brl(0)]);
+      ? [nome, String(qty), brl(unit), unit > 0 ? `- ${brl(qty * unit)}` : "Bonificado", brl(0), brl(0)]
+      : [nome, String(qty), unit > 0 ? `${brl(unit)}\nBonificado` : "Bonificado", brl(0)]);
     // ⚠️ Riscar só faz sentido quando HÁ um valor cheio para riscar. O
     // extra do CarboVAPT (laudo, medição) entra a R$ 0,00 de verdade — não
     // tem gêmeo no catálogo, não espelha preço nenhum —, e o traço sobre
@@ -440,14 +776,19 @@ export async function generateQuotePdf(order: QuotePdfData, opts?: { download?: 
     // de fato têm desconto — riscar a bonificação (que já é R$ 0,00) seria
     // dizer que ela ficou mais barata.
     didDrawCell: (data: any) => {
-      if (!temDesconto) return;
       if (data.section !== "body" || data.column.index !== 2) return;
       if (!riscar[data.row.index]) return;
-      const txt = String(data.cell.raw ?? "");
+      // Risca só a PRIMEIRA linha da célula (o preço): na bonificação sem
+      // desconto no pedido a segunda é "Bonificado", que não se risca.
+      const txt = String((Array.isArray(data.cell.text) ? data.cell.text[0] : data.cell.raw) ?? "");
       if (!txt) return;
       const larg = doc.getTextWidth(txt);
       const xFim = data.cell.x + data.cell.width - data.cell.padding("right");
-      const yMeio = data.cell.y + data.cell.height / 2;
+      // A célula é alinhada ao TOPO: o meio da primeira linha fica a meia
+      // altura de linha abaixo do respiro de cima — e não no meio da célula,
+      // que desce quando o nome do item quebra em duas linhas.
+      const altLinha = (data.cell.styles.fontSize * doc.getLineHeightFactor()) / doc.internal.scaleFactor;
+      const yMeio = data.cell.y + data.cell.padding("top") + altLinha / 2;
       doc.setDrawColor(140);
       doc.setLineWidth(0.35);
       doc.line(xFim - larg, yMeio, xFim, yMeio);
