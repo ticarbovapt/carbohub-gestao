@@ -114,7 +114,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   // ── 2. O interruptor ──────────────────────────────────────────────────────
   const { data: cfg, error: eCfg } = await db.from("fin_bling_baixa_config")
-    .select("ativo, teste_ids, portador_padrao_id, categoria_padrao_id").maybeSingle();
+    .select("ativo, teste_ids, portador_padrao_id").maybeSingle();
   if (eCfg) return json({ ok: false, mensagem: `Configuração ilegível: ${eCfg.message}` }, 500);
   const liberado = !!cfg?.ativo || ((cfg?.teste_ids ?? []) as string[]).includes(id);
   if (!liberado) return json({ ok: true, pulado: "desligado", mensagem: "Envio ao Bling desligado — a baixa ficou só no sistema." });
@@ -186,10 +186,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
       }
 
       const portador = Number(d.portador?.id) || Number(cfg?.portador_padrao_id) || null;
-      const categoria = Number(d.categoria?.id) || Number(cfg?.categoria_padrao_id) || null;
-      if (!portador || !categoria) {
-        const m = `O Bling exige ${!portador ? "a conta (portador)" : "a categoria"} para dar baixa, e o título não tem` +
-          " — cadastre o padrão em fin_bling_baixa_config.";
+      // ⚠️ Categoria é a do PRÓPRIO título, ou nenhuma. Medido em 21/10/2026:
+      // 160 de 161 títulos abertos não têm categoria no Bling — e categoria de
+      // receita ≠ de despesa, então um "padrão" único erraria metade. Sem ela o
+      // campo não vai; se o Bling exigir, a recusa dele aparece na linha.
+      const categoria = Number(d.categoria?.id) || null;
+      if (!portador) {
+        const m = "O Bling exige a conta (portador) para dar baixa, e o título não tem" +
+          " — preencha a conta no título, no Bling, ou o portador padrão em fin_bling_baixa_config.";
         await marcar({ bling_baixa_erro: m });
         return json({ ok: false, mensagem: m });
       }
@@ -200,7 +204,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         data: diaBrasilia(tt[QUANDO[tipo]]),
         usarDataVencimento: false,
         portador: { id: portador },
-        categoria: { id: categoria },
+        ...(categoria ? { categoria: { id: categoria } } : {}),
         historico: `Baixa pelo CarboHub Finanças${quem ? ` (${quem})` : ""}`,
       };
       // ⚠️ Valor só no parcial: sem valor, o Bling baixa o SALDO, que é o caso
