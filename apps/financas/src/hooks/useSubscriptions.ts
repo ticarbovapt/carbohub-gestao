@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { lerSemTeto } from "@carbo/shell";
 import type { Subscription } from "@/types/purchasing";
 
 const db = supabase as unknown as { from: (t: string) => any };
@@ -11,12 +12,12 @@ export function useSubscriptions() {
   return useQuery({
     queryKey: ["subscriptions"],
     queryFn: async (): Promise<Subscription[]> => {
-      const { data, error } = await db
+      // Sem teto e com ordem estável (`id` desempata nomes iguais).
+      return lerSemTeto<Subscription>(() => db
         .from("subscriptions")
         .select("*")
-        .order("nome", { ascending: true });
-      if (error) throw error;
-      return (data ?? []) as Subscription[];
+        .order("nome", { ascending: true })
+        .order("id"));
     },
   });
 }

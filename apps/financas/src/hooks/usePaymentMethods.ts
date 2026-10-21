@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { lerSemTeto } from "@carbo/shell";
 import type { PaymentMethod } from "@/types/purchasing";
 
 const db = supabase as unknown as { from: (t: string) => any };
@@ -11,11 +12,12 @@ export function usePaymentMethods(onlyActive = false) {
   return useQuery({
     queryKey: ["payment_methods", onlyActive],
     queryFn: async (): Promise<PaymentMethod[]> => {
-      let q = db.from("payment_methods").select("*").order("apelido", { ascending: true });
-      if (onlyActive) q = q.eq("is_active", true);
-      const { data, error } = await q;
-      if (error) throw error;
-      return (data ?? []) as PaymentMethod[];
+      // Sem teto e com ordem estável (`id` desempata apelidos iguais).
+      return lerSemTeto<PaymentMethod>(() => {
+        let q = db.from("payment_methods").select("*").order("apelido", { ascending: true }).order("id");
+        if (onlyActive) q = q.eq("is_active", true);
+        return q;
+      });
     },
   });
 }
@@ -71,7 +73,18 @@ export function useDeletePaymentMethod() {
       qc.invalidateQueries({ queryKey: ["payment_methods"] });
       toast({ title: "Forma de pagamento removida" });
     },
-    onError: (e: any) => toast({ title: "Erro ao remover", description: e.message, variant: "destructive" }),
+    onError: (e: any) => {
+      // 23503 = chave estrangeira: OC ou assinatura aponta para este cartão.
+      if (e?.code === "23503") {
+        toast({
+          title: "Este cartão tem compras ligadas — desative em vez de excluir.",
+          description: "Ordens de compra ou assinaturas usam esta forma de pagamento.",
+          variant: "destructive",
+        });
+        return;
+      }
+      toast({ title: "Erro ao remover", description: e.message, variant: "destructive" });
+    },
   });
 }
 

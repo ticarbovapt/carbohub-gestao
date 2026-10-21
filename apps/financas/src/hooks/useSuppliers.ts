@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { lerSemTeto } from "@carbo/shell";
 
 export interface Supplier {
   id: string;
@@ -24,18 +25,18 @@ export function useSuppliers(filters?: { search?: string; active?: boolean }) {
   return useQuery({
     queryKey: ["suppliers", filters],
     queryFn: async () => {
-      let query = supabase
-        .from("suppliers")
-        .select("*")
-        .order("name", { ascending: true });
-
-      if (filters?.active !== undefined) {
-        query = query.eq("is_active", filters.active);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-      return (data || []) as unknown as Supplier[];
+      // ⚠️ Sem teto: o PostgREST corta em 1.000 linhas calado. `id` desempata
+      // nomes iguais — sem ele a paginação repete uma linha e perde outra.
+      const data = await lerSemTeto<Supplier>(() => {
+        let query = supabase
+          .from("suppliers")
+          .select("*")
+          .order("name", { ascending: true })
+          .order("id");
+        if (filters?.active !== undefined) query = query.eq("is_active", filters.active);
+        return query;
+      });
+      return data as unknown as Supplier[];
     },
   });
 }
@@ -109,6 +110,16 @@ export function useDeleteSupplier() {
       toast({ title: "Fornecedor removido" });
     },
     onError: (err: any) => {
+      // 23503 = chave estrangeira: há cotação, OC ou conta a pagar apontando
+      // para ele. Apagar sumiria com o vínculo do histórico — o banco recusa.
+      if (err?.code === "23503") {
+        toast({
+          title: "Este fornecedor tem compras ligadas",
+          description: "Cotações, ordens de compra ou contas a pagar apontam para ele. Inative em vez de excluir.",
+          variant: "destructive",
+        });
+        return;
+      }
       toast({ title: "Erro ao remover", description: err.message, variant: "destructive" });
     },
   });

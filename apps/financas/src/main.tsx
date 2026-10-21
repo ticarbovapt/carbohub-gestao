@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter } from "react-router-dom";
 import { Toaster } from "sonner";
+import { Toaster as ToasterShadcn } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "./contexts/AuthContext";
 import { BloqueioAoVivo } from "./components/BloqueioAoVivo";
@@ -21,6 +22,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <BloqueioAoVivo />
           </TooltipProvider>
           <Toaster richColors position="top-right" offset={72} />
+          {/* ⚠️ Os hooks de compras, contas e cadastros avisam por `@/hooks/use-toast`
+              (shadcn), e esse Toaster NUNCA foi montado aqui: todo "salvo" e todo
+              erro deles era invisível (achado em 21/10/2026). Os dois convivem. */}
+          <ToasterShadcn />
         </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>

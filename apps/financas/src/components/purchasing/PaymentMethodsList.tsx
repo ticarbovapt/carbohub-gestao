@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { Plus, Edit2, Trash2, CreditCard, Power, PowerOff } from "lucide-react";
+import { confirmar } from "@carbo/shell";
+import { Plus, Edit2, Trash2, Power, PowerOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CarboCard, CarboCardContent, CarboCardHeader, CarboCardTitle } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -21,7 +21,6 @@ export function PaymentMethodsList() {
   const { gestor } = useAuth();
   const [showForm, setShowForm] = useState(false);
   const [editPM, setEditPM] = useState<PaymentMethod | null>(null);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
 
   const { data: methods = [], isLoading } = usePaymentMethods();
@@ -50,47 +49,57 @@ export function PaymentMethodsList() {
       departamento: form.departamento || null,
       notes: form.notes || null,
     };
-    if (editPM) await update.mutateAsync({ id: editPM.id, ...payload });
-    else await create.mutateAsync(payload);
-    setShowForm(false);
+    try {
+      if (editPM) await update.mutateAsync({ id: editPM.id, ...payload });
+      else await create.mutateAsync(payload);
+      setShowForm(false);
+    } catch { /* o hook já avisou; o formulário fica aberto */ }
+  };
+
+  // ⚠️ Excluir esbarra em chave estrangeira: OC e assinatura apontam para o
+  // cartão, e o banco RECUSA (23503) — o histórico não perde o vínculo. A
+  // confirmação diz isso antes; o hook traduz a recusa depois.
+  const excluir = async (pm: PaymentMethod) => {
+    const ok = await confirmar({
+      titulo: `Excluir "${pm.apelido}"?`,
+      mensagem: "Só dá para excluir um cartão que nunca foi usado. Se alguma compra ou assinatura usa este cartão, o sistema recusa — nesse caso, desative em vez de excluir.",
+      confirmar: "Excluir",
+      perigo: true,
+    });
+    if (ok) del.mutate(pm.id);
   };
 
   return (
-    <CarboCard variant="elevated" padding="default">
-      <CarboCardHeader>
-        <div className="flex flex-wrap items-center justify-between gap-2 w-full">
-          <CarboCardTitle className="flex items-center gap-2">
-            <CreditCard className="h-5 w-5 text-primary" />
-            Cartões e Formas de Pagamento
-          </CarboCardTitle>
-          {canManage && (
-            <Button onClick={openCreate} className="gap-2 carbo-gradient text-white" size="sm">
-              <Plus className="h-4 w-4" /> Nova forma de pagamento
-            </Button>
-          )}
-        </div>
-      </CarboCardHeader>
-      <CarboCardContent className="space-y-4">
+    <div className="space-y-4">
+      {/* Barra: o aviso à esquerda, a ação principal à direita */}
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <p className="text-xs text-muted-foreground">
           Por segurança guardamos apenas os <strong>4 últimos dígitos</strong> e a bandeira — nunca o número completo.
         </p>
-        <div className="rounded-lg border border-border overflow-hidden">
+        {canManage && (
+          <Button onClick={openCreate} className="gap-2 carbo-gradient text-white self-start lg:self-auto" size="sm">
+            <Plus className="h-4 w-4" /> Nova forma de pagamento
+          </Button>
+        )}
+      </div>
+        <div className="rounded-lg border border-border overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Apelido</TableHead>
                 <TableHead>Tipo</TableHead>
                 <TableHead>Identificação</TableHead>
+                <TableHead>Titular</TableHead>
                 <TableHead>Setor</TableHead>
                 <TableHead>Status</TableHead>
-                {canManage && <TableHead className="w-[80px]">Ações</TableHead>}
+                {canManage && <TableHead className="w-[110px]">Ações</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={canManage ? 7 : 6} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
               ) : methods.length === 0 ? (
-                <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhuma forma de pagamento cadastrada</TableCell></TableRow>
+                <TableRow><TableCell colSpan={canManage ? 7 : 6} className="text-center py-8 text-muted-foreground">Nenhuma forma de pagamento cadastrada</TableCell></TableRow>
               ) : (
                 methods.map((pm) => (
                   <TableRow key={pm.id}>
@@ -101,6 +110,7 @@ export function PaymentMethodsList() {
                         ? [pm.bandeira, pm.ultimos4 ? `••${pm.ultimos4}` : null].filter(Boolean).join(" ") || "—"
                         : "—"}
                     </TableCell>
+                    <TableCell className="text-sm">{pm.titular || "—"}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">{pm.departamento || "—"}</TableCell>
                     <TableCell>
                       <CarboBadge variant={pm.is_active ? "success" : "secondary"}>
@@ -116,7 +126,7 @@ export function PaymentMethodsList() {
                           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => update.mutate({ id: pm.id, is_active: !pm.is_active })} title={pm.is_active ? "Inativar" : "Ativar"}>
                             {pm.is_active ? <PowerOff className="h-3.5 w-3.5" /> : <Power className="h-3.5 w-3.5 text-success" />}
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteId(pm.id)} title="Excluir">
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => excluir(pm)} title="Excluir">
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </div>
@@ -128,7 +138,6 @@ export function PaymentMethodsList() {
             </TableBody>
           </Table>
         </div>
-      </CarboCardContent>
 
       {/* Create/Edit */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
@@ -142,7 +151,7 @@ export function PaymentMethodsList() {
               <Label>Apelido *</Label>
               <Input value={form.apelido} onChange={(e) => setForm({ ...form, apelido: e.target.value })} placeholder='Ex: "Nubank TI", "Inter PJ"' />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <Label>Tipo</Label>
                 <Select value={form.tipo} onValueChange={(v) => setForm({ ...form, tipo: v as PaymentMethodType })}>
@@ -160,7 +169,7 @@ export function PaymentMethodsList() {
               </div>
             </div>
             {isCard(form.tipo) && (
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <Label>Bandeira</Label>
                   <Select value={form.bandeira} onValueChange={(v) => setForm({ ...form, bandeira: v })}>
@@ -180,9 +189,14 @@ export function PaymentMethodsList() {
                 </div>
               </div>
             )}
+            {/* O formulário guardava `titular` sem mostrá-lo. Agora são dois campos. */}
             <div>
-              <Label>Titular / Observação (opcional)</Label>
-              <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Dono, dia de vencimento da fatura…" />
+              <Label>Titular (opcional)</Label>
+              <Input value={form.titular} onChange={(e) => setForm({ ...form, titular: e.target.value })} placeholder="Nome impresso no cartão / dono da conta" />
+            </div>
+            <div>
+              <Label>Observação (opcional)</Label>
+              <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Dia de vencimento da fatura, limite…" />
             </div>
           </div>
           <DialogFooter>
@@ -195,17 +209,6 @@ export function PaymentMethodsList() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete */}
-      <Dialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Confirmar exclusão</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground">Remover esta forma de pagamento? Compras/assinaturas já vinculadas mantêm o histórico.</p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteId(null)}>Cancelar</Button>
-            <Button variant="destructive" onClick={async () => { if (deleteId) { await del.mutateAsync(deleteId); setDeleteId(null); } }} disabled={del.isPending}>Excluir</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </CarboCard>
+    </div>
   );
 }

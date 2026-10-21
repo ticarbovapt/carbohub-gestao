@@ -68,7 +68,7 @@ export default function Home() {
 
         {/* Painel executivo */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-          <Kpi to="/pagar?status=atrasado" icon={AlertTriangle} label="A pagar vencido" value={brl(pagarVencido)} tone={pagarVencido > 0 ? "text-destructive" : ""} />
+          <Kpi to="/pagar?status=vencido" icon={AlertTriangle} label="A pagar vencido" value={brl(pagarVencido)} tone={pagarVencido > 0 ? "text-destructive" : ""} />
           <Kpi to="/pagar" icon={Clock} label="A pagar (30 dias)" value={brl(pagar30)} />
           <Kpi to="/receber?status=atrasado" icon={HandCoins} label="A receber vencido" value={brl(receberVencido)} tone={receberVencido > 0 ? "text-destructive" : ""} sub="inadimplência" />
           <Kpi to="/fluxo-caixa" icon={TrendingUp} label="Previsto (8 sem.)" sub="sem saldo em banco" value={brl(saldo8)} tone={saldo8 < 0 ? "text-destructive" : "text-success"} />
