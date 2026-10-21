@@ -174,24 +174,51 @@ Deno.serve(async (req) => {
       }
       // ── A data de pagamento: o borderô mais recente do título quitado ─────
       // ⚠️ Só lê. Borderô pode cobrir vários títulos; aqui ele só dá a DATA.
-      let borderos = 0;
-      const { data: semData } = await db.from(tabela).select("bling_id, detalhe")
+      // ⚠️ Esta fase NUNCA derruba a rodada: um borderô recusado pelo Bling
+      // (404, 400…) abortaria tudo e o de PAGAR não seria nem listado — o
+      // espelho deixaria de andar por causa de uma DATA. Falha vira contagem e
+      // o PRIMEIRO erro vai para o log, que é onde se diagnostica.
+      const b = { gravados: 0, sem_bordero: 0, sem_data: 0, erros: 0, parou_por_tempo: false,
+                  candidatos: 0, primeiro_erro: null as string | null, exemplo_sem_bordero: null as unknown,
+                  exemplo_sem_data: null as unknown };
+      // Só a lista de borderôs, não o detalhe inteiro: são até 1.000 linhas.
+      const { data: semData, error: eSem } = await db.from(tabela).select("bling_id, borderos:detalhe->borderos")
         .in("situacao", ["2", "3"]).is("data_pagamento", null).not("detalhe", "is", null)
-        .order("bling_id", { ascending: false }).limit(BORDEROS_POR_RODADA);
-      for (const r of semData ?? []) {
-        if (Date.now() - inicio > ORCAMENTO_BORDERO_MS[tipo]) break;
-        const ids = ((r.detalhe as any)?.borderos ?? [])
-          .map((x: any) => Number(typeof x === "object" ? x?.id : x)).filter((n: number) => n > 0);
-        if (!ids.length) continue;
-        await dormir(PAUSA_MS);
-        const bo = (await blingGet(token, `/borderos/${Math.max(...ids)}`))?.data ?? {};
-        const dia = dataOuNull(bo.data);
-        if (!dia) continue;
-        const { error } = await db.from(tabela).update({ data_pagamento: dia }).eq("bling_id", r.bling_id);
-        if (error) throw new Error(`borderô ${tabela} ${r.bling_id}: ${error.message}`);
-        borderos++;
+        .order("bling_id", { ascending: false }).limit(1000);
+      if (eSem) { b.erros++; b.primeiro_erro = `ler pendentes: ${eSem.message}`; }
+      b.candidatos = semData?.length ?? 0;
+      // ⚠️ SORTEIO, nunca "os 40 mais recentes": título que não dá data (sem
+      // borderô, borderô recusado) continua pendente, e numa fila em ordem fixa
+      // os mesmos 40 voltariam a cada rodada e a fila nunca andaria.
+      const fila = [...(semData ?? [])].sort(() => Math.random() - 0.5).slice(0, BORDEROS_POR_RODADA);
+      for (const r of fila) {
+        if (Date.now() - inicio > ORCAMENTO_BORDERO_MS[tipo]) { b.parou_por_tempo = true; break; }
+        try {
+          const lista = (r as any).borderos;
+          const ids = (Array.isArray(lista) ? lista : [])
+            .map((x: any) => Number(typeof x === "object" ? x?.id : x)).filter((n: number) => n > 0);
+          if (!ids.length) {
+            b.sem_bordero++;
+            if (!b.exemplo_sem_bordero) b.exemplo_sem_bordero = { bling_id: r.bling_id, borderos: lista ?? null };
+            continue;
+          }
+          await dormir(PAUSA_MS);
+          const bo = (await blingGet(token, `/borderos/${Math.max(...ids)}`))?.data ?? {};
+          const dia = dataOuNull(bo.data ?? bo.dataPagamento);
+          if (!dia) {
+            b.sem_data++;
+            if (!b.exemplo_sem_data) b.exemplo_sem_data = { bling_id: r.bling_id, chaves: Object.keys(bo), data: bo.data ?? null };
+            continue;
+          }
+          const { error } = await db.from(tabela).update({ data_pagamento: dia }).eq("bling_id", r.bling_id);
+          if (error) throw new Error(`gravar ${r.bling_id}: ${error.message}`);
+          b.gravados++;
+        } catch (e) {
+          b.erros++;
+          if (!b.primeiro_erro) b.primeiro_erro = e instanceof Error ? e.message : String(e);
+        }
       }
-      resumo[tipo] = { lidos, detalhados, faltam_detalhe: Math.max(0, precisaDetalhe.length - detalhados), borderos };
+      resumo[tipo] = { lidos, detalhados, faltam_detalhe: Math.max(0, precisaDetalhe.length - detalhados), bordero: b };
     }
     await log(true, {});
     return json(200, resumo);
