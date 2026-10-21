@@ -34,6 +34,7 @@ export interface VendaItemInput {
   discount_amount?: number;  // R$ efetivamente abatido na linha
   kind?: string;             // 'product' (default) | 'service' (descarbonização)
   modalidade?: string;       // P | M | G — só para itens de serviço
+  descricao?: string;        // texto livre da linha de serviço ("2 caminhões…") — sai no orçamento
 }
 
 export interface NovaVendaInput {
@@ -289,7 +290,9 @@ async function buildOrderFields(input: NovaVendaInput) {
       };
       // Itens de produto continuam EXATAMENTE como antes; serviço leva kind/modality e product_id nulo.
       return isService
-        ? { ...base, product_id: null, kind: "service", modality: i.modalidade ?? null }
+        ? { ...base, product_id: null, kind: "service", modality: i.modalidade ?? null,
+            // Só grava quando existe: item sem o campo continua igual ao de antes.
+            ...(i.descricao ? { descricao: i.descricao } : {}) }
         : base;
     });
   const { data: u } = await supabase.auth.getUser();

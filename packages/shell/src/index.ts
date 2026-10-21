@@ -19,7 +19,7 @@ export { useVoltarFecha, FecharComVoltar } from "./voltarFecha";
 export { confirmar, pedirTexto } from "./confirmar";
 export {
   DESCARB_MODALIDADES, DESCARB_SERVICE_TYPES, DESCARB_EXTRAS,
-  modalidadePrice, modalidadeLabel, modalidadeHint, extraLabel,
+  modalidadePrice, modalidadeLabel, modalidadeHint, extraLabel, extraPrice,
   servicoPadraoPorDoc, totalVagas,
 } from "./descarb";
 export type {

@@ -481,6 +481,10 @@ export default function Vendas() {
         name: it.name, product_code: it.product_code, quantity: it.quantity,
         unit_price: it.unit_price, bonus_quantity: it.bonificacao,
         discount_amount: it.discount_amount, is_bonificacao: it.is_bonificacao,
+        // `kind`/`modality`/`descricao` montam a linha do serviço e o texto
+        // "A proposta contempla…" no papel do CarboVAPT. Campo que o PDF lê
+        // tem de atravessar este map — senão a segunda via sai diferente.
+        kind: it.kind, modality: it.modality, descricao: it.descricao,
       }));
       await generateQuotePdf({
         order_number: data.order_number ?? undefined,

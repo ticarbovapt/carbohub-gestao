@@ -118,6 +118,18 @@ pagamento, dados estratégicos e observações.
    ⚠️ Extra NÃO torna a venda válida — `erroDeModo()` exige
    `validServiceItems()`, senão nasceria pedido de R$ 0,00. E eles não viram
    vaga de veículo na OS: laudo não é carro para descarbonizar.
+   ⭐ **Desde 21/10/2026 (dono do processo): SEMPRE bonificados, um por
+   veículo, com preço de TABELA riscado** (`DescarbExtra.price`: opacidade
+   R$ 200, ruído 0 = só "Bonificado"). A linha vai com o preço cheio e 100% de
+   desconto (o desenho do gêmeo de produto), quantidade = veículos da venda
+   (editável, `extrasQtd` no snapshot). ⚠️ Ela NÃO entra em
+   `orderSubtotal`/`orderDesconto`/`orderTotal` — o desconto do PEDIDO segue
+   sendo só o que o vendedor deu, e alçada, faturamento e NFS-e não mudam.
+   ⚠️ O `NfseEmitirDialog` contava TODA linha de serviço como veículo; hoje só
+   as com `modality`.
+   **"Veículos"** (texto livre, `descricao` no item) sai abaixo do nome no PDF,
+   e o PDF do CarboVAPT monta "A proposta contempla…" a partir das LINHAS —
+   por isso `kind`/`modality`/`descricao` atravessam o map do `Vendas.tsx`.
 8. **Itens de Serviço nasce com UMA linha**, como o `rows` do CarboZé — inclusive
    ao TROCAR de modo, senão quem volta ao CarboVAPT acha a seção fechada de novo.
 

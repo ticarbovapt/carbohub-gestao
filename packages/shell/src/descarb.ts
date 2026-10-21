@@ -62,15 +62,27 @@ export function modalidadeHint(m: string): string {
 // cadastro e o outro em código criaria o par que diverge, e esta lista é a
 // mesma nos sete apps pelo mesmo motivo que aquela. Preço é o que muda sozinho;
 // isto não. O custo assumido: item novo aqui pede deploy.
+//
+// ⚠️ SEMPRE bonificados (dono do processo, 21/10/2026). `price` é o preço de
+// TABELA, que o orçamento mostra RISCADO ao lado de "Bonificado" — é o que
+// mostra ao cliente o tamanho do que ele ganha, igual ao gêmeo de bonificação
+// dos produtos. Ele NUNCA entra no total, no subtotal nem no desconto do
+// pedido. Zero = sem preço de tabela: sai só "Bonificado", sem nada riscado.
+// A quantidade nasce = número de veículos (um laudo por veículo).
 export interface DescarbExtra {
   key: string;
   label: string;
+  price: number;
 }
 
 export const DESCARB_EXTRAS: DescarbExtra[] = [
-  { key: "opacidade", label: "Laudo de Opacidade (Opacímetro)" },
-  { key: "ruido",     label: "Medição de Ruído (Decibelímetro)" },
+  { key: "opacidade", label: "Laudo de Opacidade (Opacímetro)",  price: 200 },
+  { key: "ruido",     label: "Medição de Ruído (Decibelímetro)", price: 0 },
 ];
+
+/** Preço de tabela do extra (0 se não tem, ou se a chave saiu da lista). */
+export const extraPrice = (k: string): number =>
+  DESCARB_EXTRAS.find((x) => x.key === k)?.price ?? 0;
 
 /** Rótulo do extra. ⚠️ Chave desconhecida devolve `null`, NUNCA a própria
  *  chave: orçamento antigo com um extra que saiu da lista mostraria

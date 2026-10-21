@@ -39,6 +39,12 @@ interface QuoteItem {
    *  mantê-la na base encolheria o fator de desconto, fazendo todas as outras
    *  linhas receberem desconto a menos e o total deixar de fechar. */
   is_bonificacao?: boolean;
+  /** `service` nas linhas do CarboVAPT. Com `modality` (P/M/G) é descarbonização;
+   *  sem ela, é um serviço que acompanha (laudo, medição). */
+  kind?: string;
+  modality?: string | null;
+  /** Texto livre da linha ("2 caminhões e 1 colheitadeira"), abaixo do nome. */
+  descricao?: string;
 }
 
 type Endereco = Record<string, unknown> | null | undefined;
@@ -352,7 +358,8 @@ export async function generateQuotePdf(order: QuotePdfData, opts?: { download?: 
     const qty = it.quantity ?? 0;
     const unit = it.unit_price ?? 0;
     const bonus = it.bonus_quantity ?? 0;
-    const nome = it.name || it.product_code || "—";
+    const nomeBase = it.name || it.product_code || "—";
+    const nome = it.descricao?.trim() ? `${nomeBase}\n${it.descricao.trim()}` : nomeBase;
     const bruto = qty * unit;
 
     if (temDesconto) {
@@ -377,8 +384,8 @@ export async function generateQuotePdf(order: QuotePdfData, opts?: { download?: 
     // bonificada é grátis e não faz parte da paga.
     if (bonus > 0) {
       body.push(temDesconto
-        ? [`${nome} (bonificação)`, String(bonus), brl(0), "—", brl(0), brl(0)]
-        : [`${nome} (bonificação)`, String(bonus), brl(0), brl(0)]);
+        ? [`${nomeBase} (bonificação)`, String(bonus), brl(0), "—", brl(0), brl(0)]
+        : [`${nomeBase} (bonificação)`, String(bonus), brl(0), brl(0)]);
       riscar.push(false);
     }
   });
@@ -394,9 +401,15 @@ export async function generateQuotePdf(order: QuotePdfData, opts?: { download?: 
     const qty = it.quantity ?? 0;
     const unit = it.unit_price ?? 0;
     const nome = it.name || it.product_code || "—";
+    // ⚠️ Sem desconto no pedido (o caso do CarboVAPT com laudo) não existe a
+    // coluna "Desconto" para mostrar o −100%: o preço de tabela sai riscado e
+    // "Bonificado" logo abaixo, como na proposta comercial. Sem preço de
+    // tabela (medição de ruído), só "Bonificado" — nada para riscar.
+    // Com desconto, a coluna existe: o gêmeo de produto continua como sempre
+    // foi, e o extra sem preço diz "Bonificado" em vez de "- R$ 0,00".
     body.push(temDesconto
-      ? [nome, String(qty), brl(unit), `- ${brl(qty * unit)}`, brl(0), brl(0)]
-      : [nome, String(qty), brl(unit), brl(0)]);
+      ? [nome, String(qty), brl(unit), unit > 0 ? `- ${brl(qty * unit)}` : "Bonificado", brl(0), brl(0)]
+      : [nome, String(qty), unit > 0 ? `${brl(unit)}\nBonificado` : "Bonificado", brl(0)]);
     // ⚠️ Riscar só faz sentido quando HÁ um valor cheio para riscar. O
     // extra do CarboVAPT (laudo, medição) entra a R$ 0,00 de verdade — não
     // tem gêmeo no catálogo, não espelha preço nenhum —, e o traço sobre
@@ -440,14 +453,19 @@ export async function generateQuotePdf(order: QuotePdfData, opts?: { download?: 
     // de fato têm desconto — riscar a bonificação (que já é R$ 0,00) seria
     // dizer que ela ficou mais barata.
     didDrawCell: (data: any) => {
-      if (!temDesconto) return;
       if (data.section !== "body" || data.column.index !== 2) return;
       if (!riscar[data.row.index]) return;
-      const txt = String(data.cell.raw ?? "");
+      // Risca só a PRIMEIRA linha da célula (o preço): na bonificação sem
+      // desconto no pedido a segunda é "Bonificado", que não se risca.
+      const txt = String((Array.isArray(data.cell.text) ? data.cell.text[0] : data.cell.raw) ?? "");
       if (!txt) return;
       const larg = doc.getTextWidth(txt);
       const xFim = data.cell.x + data.cell.width - data.cell.padding("right");
-      const yMeio = data.cell.y + data.cell.height / 2;
+      // A célula é alinhada ao TOPO: o meio da primeira linha fica a meia
+      // altura de linha abaixo do respiro de cima — e não no meio da célula,
+      // que desce quando o nome do item quebra em duas linhas.
+      const altLinha = (data.cell.styles.fontSize * doc.getLineHeightFactor()) / doc.internal.scaleFactor;
+      const yMeio = data.cell.y + data.cell.padding("top") + altLinha / 2;
       doc.setDrawColor(140);
       doc.setLineWidth(0.35);
       doc.line(xFim - larg, yMeio, xFim, yMeio);
@@ -476,6 +494,31 @@ export async function generateQuotePdf(order: QuotePdfData, opts?: { download?: 
   doc.text(`Total: ${brl(total)}`, pageW - M - 3, ty + 6, { align: "right" });
   doc.setTextColor(0); doc.setFont("helvetica", "normal");
   ty += 9;
+
+  // ── O que a proposta contempla (CarboVAPT) ─────────────────────────────────
+  // Montado a partir das LINHAS, e não guardado à parte: a segunda via é
+  // regerada do pedido gravado (`Vendas.tsx`), e texto que só existisse no
+  // formulário sumiria do papel nela.
+  const descarbs = visiveis.filter((it) => it.kind === "service" && !!it.modality);
+  if (descarbs.length > 0 && visiveis.every((it) => it.kind === "service")) {
+    const acompanham = visiveis.filter((it) => it.kind === "service" && !it.modality).map((it) => it.name || "");
+    const textos = descarbs.map((it) => it.descricao?.trim()).filter(Boolean) as string[];
+    const nVeic = descarbs.reduce((n, it) => n + (it.quantity ?? 0) + (it.bonus_quantity ?? 0), 0);
+    const lista = (xs: string[]) => xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} e ${xs[xs.length - 1]}`;
+    const emQue = textos.length ? lista(textos) : `${nVeic} ${nVeic === 1 ? "veículo" : "veículos"}`;
+    const frase = "A proposta contempla a higienização e descarbonização da câmara de combustão"
+      + (acompanham.length
+        ? `, além de ${lista(acompanham)}, com emissão de laudo por equipamento certificado pelo INMETRO`
+        : "")
+      + `, em ${emQue}.`;
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(60);
+    const linhas = doc.splitTextToSize(frase, pageW - M * 2);
+    if (ty + 8 + linhas.length * 4.5 > pageH - 20) { doc.addPage(); ty = 10; }
+    ty += 8;
+    doc.text(linhas, M, ty);
+    ty += (linhas.length - 1) * 4.5;
+    doc.setTextColor(0);
+  }
 
   // ── Pagamento ────────────────────────────────────────────────────────────────
   ty += 10;

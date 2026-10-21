@@ -80,7 +80,15 @@ export function NfseEmitirDialog({ orderId, onOpenChange }: { orderId: string | 
     if (!data || f) return;
     const p = data.pedido;
     const end = partesDoEndereco(p.delivery_address);
-    const qtd = (p.itens ?? []).reduce((s, i) => s + (Number(i.quantity) || 0), 0);
+    // ⚠️ Só as linhas de DESCARBONIZAÇÃO são veículos. Os serviços que
+    // acompanham (laudo, medição) também são linhas de serviço, e com eles a
+    // conta dizia "6 VEÍCULOS" numa venda de 3 carros com laudo.
+    // Pedido antigo sem `modality` gravada: conta como antes (tira só o bonificado).
+    const linhas = p.itens ?? [];
+    const temPorte = linhas.some((i) => !!i.modality);
+    const qtd = linhas
+      .filter((i) => (temPorte ? !!i.modality : !i.is_bonificacao))
+      .reduce((s, i) => s + (Number(i.quantity) || 0), 0);
     // ⚠️ Já houve tentativa? Reabre com o que FOI ENVIADO, não com o padrão: o
     // reenvio de uma sem resposta tem de sair igual à primeira, e a correção
     // de uma recusada parte do que a pessoa já tinha conferido.
