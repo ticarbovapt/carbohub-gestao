@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { PackageCheck, FileUp, Loader2, CheckCircle2, XCircle, ShoppingCart, Clock, AlertTriangle } from "lucide-react";
+import { PackageCheck, FileUp, Loader2, CheckCircle2, XCircle, ShoppingCart, Clock, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -8,10 +8,11 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { supabase } from "@/integrations/supabase/client";
-import { useCreateReceiving, useCreateInvoice, useCreatePayable, usePurchaseReceivings, useRegisterOCPurchase } from "@/hooks/usePurchasing";
+import { useCreateReceiving, useLancarNF, usePurchaseReceivings, useRegisterOCPurchase } from "@/hooks/usePurchasing";
 import { usePaymentMethods, labelPaymentMethod } from "@/hooks/usePaymentMethods";
 import { PAYMENT_METHOD_TYPE_LABELS, type PurchaseOrder, type PurchaseReceiving, type ReceivedItem } from "@/types/purchasing";
-import { hojeISO } from "@/lib/datas";
+import { hojeISO, somarDias } from "@/lib/datas";
+import { parcelasDoPrazo } from "@/lib/parcelas";
 
 const brl = (v: number) => (v ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 // Hoje em BRASÍLIA — o `toISOString()` de antes já era amanhã depois das 21h.
@@ -56,21 +57,22 @@ export function RegistrarCompraDialog({ oc, onClose }: { oc: PurchaseOrder | nul
   const [choice, setChoice] = useState<string>("");
   const [isPaid, setIsPaid] = useState(true);
   const [venc, setVenc] = useState(today());
+  const [pagoEm, setPagoEm] = useState(today());
   const [lastId, setLastId] = useState<string | null>(null);
-  if (oc && oc.id !== lastId) { setLastId(oc.id); setChoice(""); setIsPaid(true); setVenc(today()); }
+  if (oc && oc.id !== lastId) { setLastId(oc.id); setChoice(""); setIsPaid(true); setVenc(today()); setPagoEm(today()); }
   if (!oc) return null;
 
   // "Já paga" exige a forma de pagamento (como foi pago). "A pagar" exige a
   // previsão de vencimento (a forma de pagamento fica pra depois, na conta).
-  const canSubmit = isPaid ? !!choice : !!venc;
+  const canSubmit = isPaid ? (!!choice && !!pagoEm) : !!venc;
 
   const submit = () => {
     if (!canSubmit) return;
     const [kind, val] = choice.split(":");
     const payload = isPaid
       ? (kind === "card"
-          ? { id: oc.id, payment_method_id: val, payment_type: null, is_paid: true }
-          : { id: oc.id, payment_method_id: null, payment_type: kind === "type" ? val : null, is_paid: true })
+          ? { id: oc.id, payment_method_id: val, payment_type: null, is_paid: true, paid_on: pagoEm }
+          : { id: oc.id, payment_method_id: null, payment_type: kind === "type" ? val : null, is_paid: true, paid_on: pagoEm })
       : { id: oc.id, payment_method_id: null, payment_type: null, is_paid: false, payment_due_date: venc };
     register.mutate(payload, { onSuccess: onClose });
   };
@@ -92,7 +94,7 @@ export function RegistrarCompraDialog({ oc, onClose }: { oc: PurchaseOrder | nul
                 className={`rounded-lg border px-3 py-2.5 text-sm text-left transition-colors ${isPaid ? "border-carbo-green bg-carbo-green/10 text-carbo-green font-medium" : "border-border text-muted-foreground hover:border-carbo-green/40"}`}
               >
                 <div className="flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4" /> Já foi paga</div>
-                <p className="text-[11px] text-muted-foreground mt-0.5 font-normal">Pagamento feito agora</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5 font-normal">A saída entra em Contas a pagar, já paga</p>
               </button>
               <button
                 type="button" onClick={() => setIsPaid(false)}
@@ -122,6 +124,8 @@ export function RegistrarCompraDialog({ oc, onClose }: { oc: PurchaseOrder | nul
               {methods.length === 0 && (
                 <p className="text-[11px] text-muted-foreground">Cadastre cartões na aba "Cartões" pra escolher aqui.</p>
               )}
+              <Label className="pt-1 block">Pago em *</Label>
+              <Input type="date" value={pagoEm} max={today()} onChange={(e) => setPagoEm(e.target.value)} />
             </div>
           ) : (
             <div className="space-y-1.5">
@@ -173,15 +177,15 @@ export function ReceberDialog({ oc, onClose }: { oc: PurchaseOrder | null; onClo
     return r.recebida !== (saldo[i] ?? 0) || r.qualidade !== "ok";
   });
 
+  // ⚠️ O banco recalcula o saldo, a divergência e o novo status da OC
+  // (`fin_recebimento_registrar`) — a tela só manda o que chegou, item a item, na
+  // ordem da OC. O saldo daqui é a PRÉVIA para quem confere.
   const submit = () => {
-    const items_received: ReceivedItem[] = items.map((it, i) => ({
-      descricao: it.descricao,
-      // ⚠️ O esperado DESTE recebimento (o saldo), não o pedido inteiro.
-      qtd_esperada: saldo[i] ?? 0,
-      qtd_recebida: rows[i]?.recebida ?? 0,
-      status_qualidade: rows[i]?.qualidade ?? "ok",
-    }));
-    create.mutate({ purchase_order_id: oc.id, items_received, has_divergence: divergente, divergence_notes: divergente ? notes : undefined }, { onSuccess: onClose });
+    create.mutate({
+      purchase_order_id: oc.id,
+      itens: items.map((_it, i) => ({ qtd_recebida: rows[i]?.recebida ?? 0, status_qualidade: rows[i]?.qualidade ?? "ok" })),
+      observacao: divergente ? notes : undefined,
+    }, { onSuccess: onClose });
   };
 
   return (
@@ -247,85 +251,89 @@ export function ReceberDialog({ oc, onClose }: { oc: PurchaseOrder | null; onClo
   );
 }
 
-// ── Lançar NF (com 3-way match automático) + gerar conta a pagar ─────────────
+// ── Lançar NF (com 3-way match) + as PARCELAS da conta a pagar ───────────────
+// ⚠️ Uma chamada só (`fin_nf_lancar`): a NF e as N parcelas nascem juntas, e o
+// banco recusa parcelas que não fecham com o valor da NF. Antes eram dois passos
+// e UMA parcela só, mesmo com a NF parcelada.
+type LinhaParcela = { vencimento: string; valor: number };
+
+const dividir = (valor: number, n: number, base: string, passoDias = 30): LinhaParcela[] => {
+  const centavos = Math.round((valor || 0) * 100);
+  const cada = Math.floor(centavos / n);
+  return Array.from({ length: n }, (_, i) => ({
+    vencimento: somarDias(base, passoDias * (i + 1)),
+    valor: (cada + (i === n - 1 ? centavos - cada * n : 0)) / 100,
+  }));
+};
+
 export function LancarNFDialog({ oc, onClose }: { oc: PurchaseOrder | null; onClose: () => void }) {
-  const createInvoice = useCreateInvoice();
-  const createPayable = useCreatePayable();
+  const lancar = useLancarNF();
   const { data: receivings = [] } = usePurchaseReceivings();
 
   const [numero, setNumero] = useState("");
   const [dataNF, setDataNF] = useState(today());
   const [valor, setValor] = useState<number>(0);
   const [gerarPagavel, setGerarPagavel] = useState(true);
-  const [vencimento, setVencimento] = useState(today());
+  const [prazo, setPrazo] = useState("");
+  const [parcelas, setParcelas] = useState<LinhaParcela[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
-  // NF já gravada cuja conta a pagar FALHOU: o botão passa a tentar só a conta.
-  // Reenviar o formulário inteiro criaria uma SEGUNDA NF.
-  const [nfGravada, setNfGravada] = useState<{ id: string | undefined; erro: string } | null>(null);
   const [lastId, setLastId] = useState<string | null>(null);
-  // OC já paga não deve gerar conta a pagar (senão duplica). "A pagar" pré-preenche
-  // o vencimento com a previsão registrada na compra.
-  if (oc && oc.id !== lastId) { setLastId(oc.id); setNumero(""); setDataNF(today()); setValor(Number(oc.total_value) || 0); setGerarPagavel(!oc.is_paid); setVencimento(oc.payment_due_date || today()); setFile(null); setNfGravada(null); }
+  // OC já paga não gera conta a pagar (o banco recusa: seria pagar duas vezes).
+  if (oc && oc.id !== lastId) {
+    const v = Number(oc.total_value) || 0;
+    setLastId(oc.id); setNumero(""); setDataNF(today()); setValor(v); setGerarPagavel(!oc.is_paid);
+    setPrazo(oc.payment_condition ?? "");
+    setParcelas([{ vencimento: oc.payment_due_date || today(), valor: v }]);
+    setFile(null);
+  }
   if (!oc) return null;
 
-  // 3-way match automático: OC existe; recebimento OK existe; valor bate (tol. 1%).
+  // 3-way match (prévia — o banco calcula o que grava): recebimento conferido e valor (tol. 1%).
   const rec = receivings.find((r: any) => r.purchase_order_id === oc.id);
-  const oc_match = true;
-  const receiving_match = !!rec && rec.status === "conferido_ok";
+  const receiving_match = !!rec && rec.status === "conferido_ok" && oc.status === "recebida";
   const value_match = Math.abs(valor - Number(oc.total_value)) <= Math.max(0.01, Number(oc.total_value) * 0.01);
-  const matched = oc_match && receiving_match && value_match;
+  const matched = receiving_match && value_match;
 
-  const criarConta = async (invoiceId: string | undefined) => {
-    try {
-      await createPayable.mutateAsync({
-        purchase_order_id: oc.id, invoice_id: invoiceId, supplier_name: oc.supplier_name,
-        supplier_id: (oc as any).supplier_id || undefined,
-        amount: valor, due_date: vencimento,
-      });
-      return true;
-    } catch (e: any) {
-      const msg = e?.message ?? String(e);
-      setNfGravada({ id: invoiceId, erro: msg });
-      toast.error("NF gravada, mas a conta a pagar NÃO foi criada", { description: msg, duration: 20000 });
-      return false;
-    }
+  const soma = Math.round(parcelas.reduce((t, p) => t + (Number(p.valor) || 0), 0) * 100) / 100;
+  const fecha = Math.abs(soma - Math.round(valor * 100) / 100) <= 0.01;
+  const parcelasOk = !gerarPagavel || (parcelas.length > 0 && fecha && parcelas.every((p) => p.vencimento && p.valor > 0));
+
+  const aplicarPrazo = (texto: string) => {
+    setPrazo(texto);
+    const ps = parcelasDoPrazo(texto, valor, dataNF);
+    if (ps && ps.length) setParcelas(ps.map((p) => ({ vencimento: p.vencimento, valor: p.valor })));
+  };
+  const trocarValor = (v: number) => {
+    setValor(v);
+    // Mantém a quantidade de parcelas e redistribui o novo valor.
+    const ps = parcelasDoPrazo(prazo, v, dataNF);
+    if (ps && ps.length) setParcelas(ps.map((p) => ({ vencimento: p.vencimento, valor: p.valor })));
+    else setParcelas((atual) => (atual.length <= 1 ? [{ vencimento: atual[0]?.vencimento || today(), valor: v }] : dividir(v, atual.length, dataNF)));
   };
 
   const submit = async () => {
-    if (nfGravada) {
-      if (await criarConta(nfGravada.id)) { setNfGravada(null); onClose(); }
-      return;
-    }
-    if (!numero.trim()) return;
-    let inv: any;
-    let etapa: "anexo" | "nf" = "anexo";
+    if (!numero.trim() || !parcelasOk) return;
+    let file_url: string | undefined;
     try {
-      // Anexo opcional (PDF/XML) → Supabase Storage; guarda a URL pública na NF.
-      let file_url: string | undefined;
       if (file) {
         setUploading(true);
         const safe = file.name.replace(/[^\w.\-]/g, "_");
         const path = `${oc.id}/${numero.trim()}-${safe}`;
         const up = await supabase.storage.from("purchase-invoices").upload(path, file, { upsert: true, contentType: file.type || undefined });
-        setUploading(false);
         if (up.error) throw new Error(`Falha ao enviar o anexo: ${up.error.message}`);
         file_url = supabase.storage.from("purchase-invoices").getPublicUrl(path).data.publicUrl;
       }
-      etapa = "nf";
-      inv = await createInvoice.mutateAsync({
-        purchase_order_id: oc.id, receiving_id: rec?.id, invoice_number: numero.trim(),
-        invoice_date: dataNF, invoice_value: valor, file_url, oc_match, receiving_match, value_match,
-      });
     } catch (e: any) {
-      setUploading(false);
-      // Nada foi gravado: a NF não existe, pode tentar de novo. O erro do INSERT
-      // da NF o `onError` do useCreateInvoice já mostra; o do anexo só a tela sabe.
-      if (etapa === "anexo") toast.error("A NF não foi lançada", { description: e?.message ?? String(e) });
+      toast.error("A NF não foi lançada", { description: e?.message ?? String(e) });
       return;
+    } finally {
+      setUploading(false);
     }
-    if (gerarPagavel && !(await criarConta(inv?.id))) return;
-    onClose();
+    lancar.mutate({
+      purchase_order_id: oc.id, invoice_number: numero.trim(), invoice_date: dataNF, invoice_value: valor,
+      file_url, parcelas: gerarPagavel ? parcelas.map((p) => ({ vencimento: p.vencimento, valor: Number(p.valor) })) : [],
+    }, { onSuccess: onClose });
   };
 
   const MatchTag = ({ ok, label }: { ok: boolean; label: string }) => (
@@ -336,25 +344,25 @@ export function LancarNFDialog({ oc, onClose }: { oc: PurchaseOrder | null; onCl
 
   return (
     <Dialog open={!!oc} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Lançar NF — {oc.oc_number}</DialogTitle>
           <DialogDescription>Fornecedor {oc.supplier_name} · OC {brl(Number(oc.total_value))}</DialogDescription>
         </DialogHeader>
-        <div className="space-y-3 py-1">
+        <div className="space-y-3 py-1 min-w-0">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5"><Label>Nº da NF *</Label><Input value={numero} disabled={!!nfGravada} onChange={(e) => setNumero(e.target.value)} placeholder="000123" /></div>
-            <div className="space-y-1.5"><Label>Data</Label><Input type="date" value={dataNF} disabled={!!nfGravada} onChange={(e) => setDataNF(e.target.value)} /></div>
+            <div className="space-y-1.5"><Label>Nº da NF *</Label><Input value={numero} onChange={(e) => setNumero(e.target.value)} placeholder="000123" /></div>
+            <div className="space-y-1.5"><Label>Data</Label><Input type="date" value={dataNF} onChange={(e) => setDataNF(e.target.value)} /></div>
           </div>
-          <div className="space-y-1.5"><Label>Valor da NF (R$)</Label><Input type="number" min={0} step="0.01" value={valor} onChange={(e) => setValor(Number(e.target.value))} /></div>
+          <div className="space-y-1.5"><Label>Valor da NF (R$)</Label><Input type="number" min={0} step="0.01" value={valor} onChange={(e) => trocarValor(Number(e.target.value))} /></div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            <MatchTag ok={oc_match} label="OC" />
+            <MatchTag ok={true} label="OC" />
             <MatchTag ok={receiving_match} label="Recebimento" />
             <MatchTag ok={value_match} label="Valor" />
             {matched ? <CarboBadge variant="success" className="text-[10px]">3-way OK</CarboBadge> : <CarboBadge variant="warning" className="text-[10px]">Divergência</CarboBadge>}
           </div>
-          {!receiving_match && <p className="text-[11px] text-muted-foreground">Sem recebimento conferido pra esta OC — receba antes pra fechar o match.</p>}
+          {!receiving_match && <p className="text-[11px] text-muted-foreground">Sem recebimento completo e conferido — o match de recebimento fica marcado como divergente.</p>}
 
           <div className="space-y-1.5">
             <Label>Anexo da NF (PDF ou XML)</Label>
@@ -364,28 +372,49 @@ export function LancarNFDialog({ oc, onClose }: { oc: PurchaseOrder | null; onCl
               : <p className="text-[11px] text-muted-foreground">Opcional — fica arquivado e disponível pra download depois.</p>}
           </div>
 
-          {nfGravada && (
-            <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-2.5 text-xs text-destructive">
-              <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-              <span>
-                <strong>NF gravada, mas a conta a pagar NÃO foi criada:</strong> {nfGravada.erro}.
-                Confira vencimento e valor e tente criar a conta de novo — a NF não será lançada outra vez.
-              </span>
-            </div>
+          {oc.is_paid ? (
+            <p className="text-[11px] text-success">OC paga na compra — o pagamento já está em Contas a pagar; a NF não gera outra conta.</p>
+          ) : (
+            <label className="flex items-center gap-2 text-sm pt-1">
+              <input type="checkbox" checked={gerarPagavel} onChange={(e) => setGerarPagavel(e.target.checked)} /> Gerar conta a pagar
+            </label>
           )}
-          {oc.is_paid && <p className="text-[11px] text-success">OC já paga na compra — normalmente não gera conta a pagar.</p>}
-          <label className="flex items-center gap-2 text-sm pt-1">
-            <input type="checkbox" checked={gerarPagavel} disabled={!!nfGravada} onChange={(e) => setGerarPagavel(e.target.checked)} /> Gerar conta a pagar
-          </label>
-          {gerarPagavel && (
-            <div className="space-y-1.5"><Label>Vencimento</Label><Input type="date" value={vencimento} onChange={(e) => setVencimento(e.target.value)} /></div>
+          {gerarPagavel && !oc.is_paid && (
+            <div className="space-y-2 rounded-lg border border-border p-2.5">
+              <div className="space-y-1.5">
+                <Label>Prazo</Label>
+                <Input value={prazo} onChange={(e) => aplicarPrazo(e.target.value)} placeholder="ex.: 30/60/90, 28 dias, à vista" />
+                <p className="text-[11px] text-muted-foreground">Monta as parcelas a partir da data da NF. Ajuste data e valor de cada uma, se precisar.</p>
+              </div>
+              {parcelas.map((p, i) => (
+                <div key={i} className="grid grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2">
+                  <span className="text-xs text-muted-foreground w-10">{i + 1}/{parcelas.length}</span>
+                  <Input type="date" value={p.vencimento} aria-label={`Vencimento da parcela ${i + 1}`}
+                    onChange={(e) => setParcelas((ps) => ps.map((x, j) => (j === i ? { ...x, vencimento: e.target.value } : x)))} />
+                  <Input type="number" min={0} step="0.01" value={p.valor} aria-label={`Valor da parcela ${i + 1}`}
+                    onChange={(e) => setParcelas((ps) => ps.map((x, j) => (j === i ? { ...x, valor: Number(e.target.value) } : x)))} />
+                  <Button type="button" variant="ghost" size="icon" className="h-8 w-8" disabled={parcelas.length === 1} aria-label="Tirar parcela"
+                    onClick={() => setParcelas((ps) => ps.filter((_x, j) => j !== i))}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ))}
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <Button type="button" variant="outline" size="sm" className="gap-1" onClick={() => setParcelas((ps) => dividir(valor, ps.length + 1, dataNF))}>
+                  <Plus className="h-3.5 w-3.5" /> Parcela
+                </Button>
+                <span className={`text-xs ${fecha ? "text-muted-foreground" : "text-destructive font-medium"}`}>
+                  Soma {brl(soma)} {fecha ? "· fecha com a NF" : `· falta ${brl(Math.round((valor - soma) * 100) / 100)}`}
+                </span>
+              </div>
+            </div>
           )}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>{nfGravada ? "Fechar sem a conta" : "Cancelar"}</Button>
-          <Button onClick={submit} disabled={(!nfGravada && !numero.trim()) || uploading || createInvoice.isPending || createPayable.isPending} className="gap-1.5 bg-carbo-green hover:bg-carbo-green/90 text-white">
-            {(uploading || createInvoice.isPending || createPayable.isPending) ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
-            {uploading ? "Enviando anexo…" : nfGravada ? "Tentar criar a conta a pagar" : `Lançar NF${gerarPagavel ? " + conta" : ""}`}
+          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button onClick={submit} disabled={!numero.trim() || !parcelasOk || uploading || lancar.isPending} className="gap-1.5 bg-carbo-green hover:bg-carbo-green/90 text-white">
+            {(uploading || lancar.isPending) ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
+            {uploading ? "Enviando anexo…" : `Lançar NF${gerarPagavel && !oc.is_paid ? ` + ${parcelas.length} parcela(s)` : ""}`}
           </Button>
         </DialogFooter>
       </DialogContent>

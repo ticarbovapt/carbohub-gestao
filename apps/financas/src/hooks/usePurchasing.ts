@@ -17,6 +17,24 @@ import type {
   ReceivedItem,
 } from "@/types/purchasing";
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ⚠️ As COMPRAS gravam pelo BANCO (migração 20261126): aprovar, gerar OC,
+// registrar compra, receber e lançar NF são funções `fin_*` ATÔMICAS, e a regra
+// (alçada, "não aprova a própria", transições, numeração) mora em gatilho — vale
+// para qualquer caminho, não só para esta tela. O navegador só chama e mostra a
+// recusa do banco, que já vem em português.
+// ─────────────────────────────────────────────────────────────────────────────
+export async function rpcCompras<T = unknown>(nome: string, args: Record<string, unknown>): Promise<T> {
+  const { data, error } = await (supabase as any).rpc(nome, args);
+  if (error) {
+    if (error.code === "PGRST202") {
+      throw new Error("O banco ainda não recebeu a atualização das compras (migração 20261126). Avise o TI.");
+    }
+    throw new Error(error.message || "Erro no banco");
+  }
+  return data as T;
+}
+
 // ---- Purchase Requests ----
 
 export function usePurchaseRequests(filters?: { status?: string; costCenter?: string }) {
@@ -96,26 +114,19 @@ export function useCreatePurchaseRequest() {
 
 export function useApprovePurchaseRequest() {
   const queryClient = useQueryClient();
-  const { user } = useAuth();
 
   return useMutation({
-    mutationFn: async ({ id, approved, rejection_reason }: { id: string; approved: boolean; rejection_reason?: string }) => {
-      const updates: any = {
-        status: approved ? "aprovada" : "rejeitada",
-        approved_by: user!.id,
-        approved_at: new Date().toISOString(),
-      };
-      if (!approved && rejection_reason) updates.rejection_reason = rejection_reason;
-
-      const { error } = await supabase.from("purchase_requests").update(updates).eq("id", id);
-      if (error) throw error;
-    },
+    mutationFn: ({ id, approved, rejection_reason }: { id: string; approved: boolean; rejection_reason?: string }) =>
+      rpcCompras("fin_rc_decidir", { p_id: id, p_aprovar: approved, p_motivo: rejection_reason ?? null }),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["purchase-requests"] });
       toast({ title: variables.approved ? "RC aprovada" : "RC rejeitada" });
     },
     onError: (err: any) => {
       toast({ title: "Erro na aprovação", description: err.message, variant: "destructive" });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["purchase-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["purchasing-badges"] });
     },
   });
 }
@@ -141,60 +152,29 @@ export function usePurchaseOrders(filters?: { status?: string }) {
   });
 }
 
-export function useCreatePurchaseOrder() {
+export interface GrupoDeOC {
+  supplier_name: string;
+  supplier_id?: string | null;
+  itens: { descricao: string; quantidade: number; unidade: string; valor_unitario: number }[];
+}
+
+/** Gera TODAS as OCs da RC numa transação: ou todas nascem, ou nenhuma (o total é calculado no banco). */
+export function useGerarOCs() {
   const queryClient = useQueryClient();
-  const { user } = useAuth();
 
   return useMutation({
-    mutationFn: async (values: {
-      purchase_request_id: string;
-      service_order_id?: string;
-      supplier_name: string;
-      supplier_id?: string;
-      supplier_document?: string;
-      supplier_contact?: string;
-      items: PurchaseRequestItem[];
-      total_value: number;
-      payment_condition?: string;
-      expected_delivery?: string;
-    }) => {
-      const { data, error } = await supabase
-        .from("purchase_orders")
-        .insert({
-          oc_number: "TEMP",
-          purchase_request_id: values.purchase_request_id,
-          service_order_id: values.service_order_id || null,
-          supplier_name: values.supplier_name,
-          supplier_id: values.supplier_id || null,
-          supplier_document: values.supplier_document || null,
-          supplier_contact: values.supplier_contact || null,
-          items: values.items as any,
-          total_value: values.total_value,
-          payment_condition: values.payment_condition || null,
-          expected_delivery: values.expected_delivery || null,
-          generated_by: user!.id,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Fecha o ciclo: a requisição vira "Convertida em OC" (sai da fila de
-      // pendências e fica rastreável, em vez de ficar "aprovada" pra sempre).
-      await supabase
-        .from("purchase_requests")
-        .update({ status: "convertida" as any })
-        .eq("id", values.purchase_request_id);
-
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["purchase-orders"] });
-      queryClient.invalidateQueries({ queryKey: ["purchase-requests"] });
-      toast({ title: "Ordem de Compra gerada com sucesso" });
+    mutationFn: ({ rcId, grupos }: { rcId: string; grupos: GrupoDeOC[] }) =>
+      rpcCompras<{ id: string; oc_number: string; total: number }[]>("fin_oc_gerar", { p_rc_id: rcId, p_grupos: grupos }),
+    onSuccess: (ocs) => {
+      toast({ title: ocs.length > 1 ? `${ocs.length} ordens de compra geradas` : `Ordem de compra ${ocs[0]?.oc_number ?? ""} gerada` });
     },
     onError: (err: any) => {
-      toast({ title: "Erro ao gerar OC", description: err.message, variant: "destructive" });
+      toast({ title: "Nenhuma OC foi gerada", description: err.message, variant: "destructive" });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["purchase-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["purchase-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["purchasing-badges"] });
     },
   });
 }
@@ -205,56 +185,50 @@ export function useRegisterOCPurchase() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (values: {
+    mutationFn: (values: {
       id: string;
       payment_method_id?: string | null;
       payment_type?: string | null;
       is_paid: boolean;
       payment_due_date?: string | null;
-    }) => {
-      const now = new Date().toISOString();
-      const { error } = await supabase
-        .from("purchase_orders")
-        .update({
-          status: "comprada" as any,
-          payment_method_id: values.payment_method_id || null,
-          payment_type: values.payment_type || null,
-          purchased_at: now,
-          is_paid: values.is_paid,
-          paid_at: values.is_paid ? now : null,
-          payment_due_date: values.is_paid ? null : (values.payment_due_date || null),
-        } as any)
-        .eq("id", values.id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["purchase-orders"] });
-      queryClient.invalidateQueries({ queryKey: ["purchasing-kpis"] });
-      toast({ title: "Compra registrada" });
+      paid_on?: string | null;
+    }) => rpcCompras("fin_oc_registrar_compra", {
+      p_oc_id: values.id,
+      p_payment_method_id: values.payment_method_id || null,
+      p_payment_type: values.payment_type || null,
+      p_pago: values.is_paid,
+      p_vencimento: values.is_paid ? null : (values.payment_due_date || null),
+      p_pago_em: values.is_paid ? (values.paid_on || null) : null,
+    }),
+    onSuccess: (_, v) => {
+      // Paga na compra ⇒ o banco já lançou a SAÍDA como conta paga.
+      if (v.is_paid) invalidarContasAPagar(queryClient);
+      toast({ title: v.is_paid ? "Compra registrada — pagamento lançado em Contas a pagar" : "Compra registrada" });
     },
     onError: (err: any) => {
       toast({ title: "Erro ao registrar compra", description: err.message, variant: "destructive" });
     },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["purchase-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["purchasing-kpis"] });
+      queryClient.invalidateQueries({ queryKey: ["purchasing-badges"] });
+    },
   });
 }
 
-export function useUpdatePurchaseOrderStatus() {
+export function useCancelarOC() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const { error } = await supabase
-        .from("purchase_orders")
-        .update({ status: status as any })
-        .eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["purchase-orders"] });
-      toast({ title: "Status da OC atualizado" });
-    },
+    mutationFn: (id: string) => rpcCompras("fin_oc_cancelar", { p_oc_id: id }),
+    onSuccess: () => toast({ title: "OC cancelada" }),
     onError: (err: any) => {
-      toast({ title: "Erro ao atualizar a OC", description: err.message, variant: "destructive" });
+      toast({ title: "Não foi possível cancelar a OC", description: err.message, variant: "destructive" });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["purchase-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["purchasing-badges"] });
+      invalidarContasAPagar(queryClient);
     },
   });
 }
@@ -280,49 +254,26 @@ export function usePurchaseReceivings(purchaseOrderId?: string) {
   });
 }
 
+/** Recebe contra a OC. O SALDO, a divergência e o novo status da OC são calculados no banco. */
 export function useCreateReceiving() {
   const queryClient = useQueryClient();
-  const { user } = useAuth();
 
   return useMutation({
-    mutationFn: async (values: {
+    mutationFn: (values: {
       purchase_order_id: string;
-      items_received: ReceivedItem[];
-      has_divergence: boolean;
-      divergence_notes?: string;
-    }) => {
-      const status = values.has_divergence ? "conferido_divergencia" : "conferido_ok";
-      const { data, error } = await supabase
-        .from("purchase_receivings")
-        .insert({
-          purchase_order_id: values.purchase_order_id,
-          received_by: user!.id,
-          items_received: values.items_received as any,
-          status: status as any,
-          has_divergence: values.has_divergence,
-          divergence_notes: values.divergence_notes || null,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Update OC status
-      const allReceived = !values.has_divergence;
-      await supabase
-        .from("purchase_orders")
-        .update({ status: (allReceived ? "recebida" : "parcialmente_recebida") as any })
-        .eq("id", values.purchase_order_id);
-
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["purchase-receivings"] });
-      queryClient.invalidateQueries({ queryKey: ["purchase-orders"] });
-      toast({ title: "Recebimento registrado" });
-    },
+      itens: { qtd_recebida: number; status_qualidade: string }[];
+      observacao?: string;
+    }) => rpcCompras<string>("fin_recebimento_registrar", {
+      p_oc_id: values.purchase_order_id, p_itens: values.itens, p_observacao: values.observacao || null,
+    }),
+    onSuccess: () => toast({ title: "Recebimento registrado" }),
     onError: (err: any) => {
       toast({ title: "Erro ao registrar recebimento", description: err.message, variant: "destructive" });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["purchase-receivings"] });
+      queryClient.invalidateQueries({ queryKey: ["purchase-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["purchasing-badges"] });
     },
   });
 }
@@ -348,51 +299,32 @@ export function usePurchaseInvoices(purchaseOrderId?: string) {
   });
 }
 
-export function useCreateInvoice() {
+/** Lança a NF e as PARCELAS da conta a pagar numa transação (as parcelas têm de fechar com a NF). */
+export function useLancarNF() {
   const queryClient = useQueryClient();
-  const { user } = useAuth();
 
   return useMutation({
-    mutationFn: async (values: {
+    mutationFn: (values: {
       purchase_order_id: string;
-      receiving_id?: string;
       invoice_number: string;
       invoice_date: string;
       invoice_value: number;
       file_url?: string;
-      oc_match: boolean;
-      receiving_match: boolean;
-      value_match: boolean;
       notes?: string;
-    }) => {
-      const { data, error } = await supabase
-        .from("purchase_invoices")
-        .insert({
-          purchase_order_id: values.purchase_order_id,
-          receiving_id: values.receiving_id || null,
-          invoice_number: values.invoice_number,
-          invoice_date: values.invoice_date,
-          invoice_value: values.invoice_value,
-          file_url: values.file_url || null,
-          oc_match: values.oc_match,
-          receiving_match: values.receiving_match,
-          value_match: values.value_match,
-          verified_by: user!.id,
-          verified_at: new Date().toISOString(),
-          notes: values.notes || null,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["purchase-invoices"] });
-      toast({ title: "Nota fiscal registrada" });
-    },
+      parcelas: { vencimento: string; valor: number }[];
+    }) => rpcCompras<string>("fin_nf_lancar", {
+      p_oc_id: values.purchase_order_id, p_numero: values.invoice_number, p_data: values.invoice_date,
+      p_valor: values.invoice_value, p_file_url: values.file_url || null, p_notas: values.notes || null,
+      p_parcelas: values.parcelas,
+    }),
+    onSuccess: (_, v) => toast({ title: v.parcelas.length ? `NF lançada + ${v.parcelas.length} parcela(s) a pagar` : "NF lançada" }),
     onError: (err: any) => {
-      toast({ title: "Erro ao registrar NF", description: err.message, variant: "destructive" });
+      toast({ title: "A NF não foi lançada", description: err.message, variant: "destructive" });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["purchase-invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["purchase-orders"] });
+      invalidarContasAPagar(queryClient);
     },
   });
 }
@@ -530,48 +462,6 @@ export function usePurchasePayablesPaged(params: {
       const { data, error, count } = await q;
       if (error) throw error;
       return { rows: (data || []) as unknown as PurchasePayable[], count: count || 0 };
-    },
-  });
-}
-
-export function useCreatePayable() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (values: {
-      invoice_id?: string;
-      purchase_order_id: string;
-      service_order_id?: string;
-      supplier_name: string;
-      supplier_id?: string;
-      amount: number;
-      due_date: string;
-      notes?: string;
-    }) => {
-      const { data, error } = await supabase
-        .from("purchase_payables")
-        .insert({
-          invoice_id: values.invoice_id || null,
-          purchase_order_id: values.purchase_order_id,
-          service_order_id: values.service_order_id || null,
-          supplier_name: values.supplier_name,
-          supplier_id: values.supplier_id || null,
-          amount: values.amount,
-          due_date: values.due_date,
-          notes: values.notes || null,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      invalidarContasAPagar(queryClient);
-      toast({ title: "Conta a pagar criada" });
-    },
-    onError: (err: any) => {
-      toast({ title: "Erro ao criar conta a pagar", description: err.message, variant: "destructive" });
     },
   });
 }
