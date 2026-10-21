@@ -10,8 +10,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useSuprimentosKPIs } from "@/hooks/useStockMovements";
 import { StockOverview } from "@/components/suprimentos/StockOverview";
 import { StockMovementsList } from "@/components/suprimentos/StockMovementsList";
-import { ReceivingsList } from "@/components/purchasing/ReceivingsList";
-import { InvoicesList } from "@/components/purchasing/InvoicesList";
+import { Link, Navigate } from "react-router-dom";
 
 import { PendingSuggestions } from "@/components/suprimentos/PendingSuggestions";
 import { SkuStockPolicy } from "@/components/suprimentos/SkuStockPolicy";
@@ -24,6 +23,12 @@ export default function Suprimentos() {
   const { gestor } = useAuth();
 
   const canApprove = gestor;
+
+  // ⚠️ Recebimento e NF de compra moram em Compras (`/compras/recebimento`,
+  // `/compras/notas`). Esta página montava uma SEGUNDA cópia das duas telas —
+  // cópia que diverge. O endereço antigo (`?aba=recebimento|notas`) leva para lá.
+  if (activeTab === "recebimento") return <Navigate to="/compras/recebimento" replace />;
+  if (activeTab === "notas") return <Navigate to="/compras/notas" replace />;
 
   return (
     <>
@@ -117,14 +122,14 @@ export default function Suprimentos() {
               <History className="h-3.5 w-3.5" />
               Movimentações
             </TabsTrigger>
-            <TabsTrigger value="recebimento" className="gap-1.5">
+            <Link to="/compras/recebimento" className="inline-flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground">
               <ArrowDownToLine className="h-3.5 w-3.5" />
-              Recebimento
-            </TabsTrigger>
-            <TabsTrigger value="notas" className="gap-1.5">
+              Recebimento ↗
+            </Link>
+            <Link to="/compras/notas" className="inline-flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground">
               <BarChart3 className="h-3.5 w-3.5" />
-              Notas Fiscais
-            </TabsTrigger>
+              Notas Fiscais ↗
+            </Link>
             <TabsTrigger value="politica" className="gap-1.5">
               <Shield className="h-3.5 w-3.5" />
               Política de Estoque
@@ -136,12 +141,6 @@ export default function Suprimentos() {
           </TabsContent>
           <TabsContent value="movimentacoes">
             <StockMovementsList />
-          </TabsContent>
-          <TabsContent value="recebimento">
-            <ReceivingsList />
-          </TabsContent>
-          <TabsContent value="notas">
-            <InvoicesList />
           </TabsContent>
           <TabsContent value="politica">
             <SkuStockPolicy />

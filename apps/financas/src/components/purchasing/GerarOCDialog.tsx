@@ -4,8 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from "@/components/ui/button";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { useQuotes } from "@/hooks/useCotacoes";
-import { useCreatePurchaseOrder } from "@/hooks/usePurchasing";
-import { toast } from "sonner";
+import { useGerarOCs } from "@/hooks/usePurchasing";
 import type { PurchaseRequest } from "@/types/purchasing";
 
 const brl = (v: number) => (v ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -23,7 +22,7 @@ interface Line { i: number; descricao: string; quantidade: number; unidade: stri
 // diferentes, gera UMA OC por fornecedor (split PO — comportamento correto).
 export function GerarOCDialog({ rc, onClose }: { rc: PurchaseRequest | null; onClose: () => void }) {
   const { data: quotes = [] } = useQuotes(rc?.id ?? null);
-  const createOC = useCreatePurchaseOrder();
+  const gerarOCs = useGerarOCs();
 
   const items = (rc?.items ?? []) as any[];
   const selByItem = new Map<number, any>();
@@ -60,35 +59,18 @@ export function GerarOCDialog({ rc, onClose }: { rc: PurchaseRequest | null; onC
 
   const semCotacao = lines.filter((l) => !l.fromQuote).length;
 
-  const gerar = async () => {
-    let feitas = 0;
-    try {
-      for (const [, supplier, ls] of groups) {
-        const ocItems = ls.map((l) => ({ descricao: l.descricao, quantidade: l.quantidade, unidade: l.unidade, valor_unitario: l.unit_price }));
-        const total = ls.reduce((s, l) => s + l.quantidade * l.unit_price, 0);
-        await createOC.mutateAsync({
-          purchase_request_id: rc!.id,
-          supplier_name: supplier,
-          supplier_id: ls.find((l) => l.supplier_id)?.supplier_id ?? undefined,
-          items: ocItems as any,
-          total_value: total,
-          expected_delivery: rc?.needed_by || undefined,
-        });
-        feitas++;
-      }
-      onClose();
-    } catch (e: any) {
-      // O hook avisa o erro da OC que falhou. O que só a tela sabe é o estado
-      // PARCIAL: a RC vira "convertida" já na primeira OC, então as que faltam
-      // não podem mais ser geradas por aqui (Fase 3: gerar tudo numa transação).
-      if (feitas > 0) {
-        toast.error(`Só ${feitas} de ${groups.length} OCs foram geradas`, {
-          description: `A requisição já ficou como convertida e as OCs restantes NÃO foram criadas. Avise o TI. Erro: ${e?.message ?? e}`,
-          duration: 20000,
-        });
-        onClose();
-      }
-    }
+  // ⚠️ UMA chamada para todas as OCs (`fin_oc_gerar`): ou todas nascem e a RC
+  // vira "convertida", ou nenhuma — antes, cair na 2ª deixava a RC convertida
+  // com OCs faltando. O total de cada OC é calculado no banco a partir dos itens.
+  const gerar = () => {
+    gerarOCs.mutate({
+      rcId: rc!.id,
+      grupos: groups.map(([, supplier, ls]) => ({
+        supplier_name: supplier,
+        supplier_id: ls.find((l) => l.supplier_id)?.supplier_id ?? null,
+        itens: ls.map((l) => ({ descricao: l.descricao, quantidade: l.quantidade, unidade: l.unidade, valor_unitario: l.unit_price })),
+      })),
+    }, { onSuccess: onClose });
   };
 
   if (!rc) return null;
@@ -140,8 +122,8 @@ export function GerarOCDialog({ rc, onClose }: { rc: PurchaseRequest | null; onC
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={gerar} disabled={createOC.isPending || groups.length === 0} className="gap-1.5 bg-carbo-green hover:bg-carbo-green/90 text-white">
-            {createOC.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Gerando…</> : <><PackagePlus className="h-4 w-4" /> Gerar {groups.length > 1 ? `${groups.length} OCs` : "OC"}</>}
+          <Button onClick={gerar} disabled={gerarOCs.isPending || groups.length === 0} className="gap-1.5 bg-carbo-green hover:bg-carbo-green/90 text-white">
+            {gerarOCs.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Gerando…</> : <><PackagePlus className="h-4 w-4" /> Gerar {groups.length > 1 ? `${groups.length} OCs` : "OC"}</>}
           </Button>
         </DialogFooter>
       </DialogContent>
