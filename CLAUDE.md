@@ -3301,6 +3301,16 @@ supabase/migrations/20261121000000_espelho_contas_bling1.sql
    ⚠️ A função atualiza o ESPELHO na hora (situação + `detalhe_em` nulo):
    senão o aplicador dos 10 min leria o Bling velho e desfaria o que acabou de
    acontecer. Nunca renova o token: perto de vencer, chama o `bling-sync`.
+   **ENSAIO sem mexer em nada** (`supabase/consultas/ensaio_baixa_bling.sql`):
+   com `X-Cron-Secret` e `{"ensaio": true}`, a função lê os títulos em aberto
+   no Bling e devolve o corpo EXATO do POST (a mesma `decidirBaixa` do envio de
+   verdade), mais um borderô de título quitado (a data do sentido inverso).
+   Não escreve no Bling nem aqui. ⚠️ Não prova o Bling ACEITAR o POST. Por
+   causa dele a função sobe com `--no-verify-jwt` — o JWT do caminho de
+   verdade é conferido por dentro (`auth.getUser`).
+   ⚠️ A fase do borderô do espelho NUNCA derruba a rodada (falha vira
+   `resumo.<tipo>.bordero.erros`) e a fila é SORTEADA: em ordem fixa, os mesmos
+   40 títulos sem data voltariam toda rodada.
 
 ### App novo no hub — os QUATRO lugares que precisam aprender a interface
 Criar a pasta do app é a parte fácil. O que faz um app existir é a flag em
