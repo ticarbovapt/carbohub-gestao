@@ -3233,6 +3233,35 @@ supabase/migrations/20261120000000_contas_a_receber_nasce_da_nf.sql
    o Finanças por policy SOMADA. Baixa e cancelamento: qualquer um com o app
    (decisão do dono do processo, "por hora").
 
+### Espelho das contas do Bling 1 — ACRÉSCIMO, e nunca renova o token (21/10/2026)
+Medido no código: o `bling-sync` sabe ler `/contas/pagar` e `/contas/receber`, mas o
+cron (`bling-auto-sync`) NUNCA roda essas fases — `receivables` (Bling) estava vazia
+e as 1.455 contas a pagar eram de UMA carga manual, nunca atualizada.
+
+```
+supabase/functions/bling-contas-espelho          cron `bling-contas-espelho-10min` (23-59/10)
+bling_contas_receber · bling_contas_pagar        o espelho (listagem + detalhe CRUS)
+bling_contas_espelho_log                         o DESFECHO de cada rodada (faxina de 7 dias)
+supabase/migrations/20261121000000_espelho_contas_bling1.sql
+```
+
+1. ⚠️ **É ACRÉSCIMO, por ordem do dono do processo** ("não é para quebrar nada que
+   funciona"): não toca `bling-sync` (a EMISSÃO DE NF mora lá), `receivables` nem
+   `purchase_payables`. Grava só nas tabelas dela.
+2. ⚠️ **NUNCA RENOVA o token do Bling.** O `refresh_token` troca a cada renovação e
+   o `bling-sync` DESATIVA a integração quando a renovação falha: duas funções
+   renovando = a corrida do ML (`20260986`), e aqui ela parava a emissão de NF.
+   Token a < 10 min de vencer ⇒ a rodada PULA e diz no log. 401 ⇒ registra e para.
+3. A listagem do Bling é magra; a DATA DE PAGAMENTO e a ORIGEM (pedido) vêm do
+   detalhe, pedido só para título novo ou que mudou de situação (60 por rodada,
+   o resto drena).
+4. ⚠️ **Desfecho no `bling_contas_espelho_log`**, nunca no `cron.job_run_details`
+   (`net.http_post` é assíncrono; `succeeded` = o POST saiu).
+5. **PRÓXIMO PASSO, com aprovação**: a tela ler o espelho; ligar o título do Bling
+   ao título que nasceu da NF (pela origem) sem duplicar; e a baixa feita no
+   Finanças ir para o Bling (`POST /contas/<tipo>/{id}/baixar`) — escrita em dado
+   financeiro de outro sistema, testada com UM título antes.
+
 ### App novo no hub — os QUATRO lugares que precisam aprender a interface
 Criar a pasta do app é a parte fácil. O que faz um app existir é a flag em
 `profiles.allowed_interfaces` (ex.: `carbo_atendimento`) ser reconhecida em

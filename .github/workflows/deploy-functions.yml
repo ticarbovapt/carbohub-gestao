@@ -71,6 +71,9 @@ jobs:
           dep status-sonda --no-verify-jwt
           dep bling-auth --no-verify-jwt
           dep bling-sync --no-verify-jwt
+          # Espelho das contas a pagar/receber do Bling 1 — SÓ LÊ e NUNCA renova o
+          # token (a renovação é do bling-sync). Chamada pelo pg_cron com X-Cron-Secret.
+          dep bling-contas-espelho --no-verify-jwt
           # Bling 2 — segunda conta. --no-verify-jwt em todas: a auth e a sync
           # validam o JWT por dentro, e a auto-sync é chamada pelo pg_cron, que
           # manda só o X-Cron-Secret e nenhum Authorization.
