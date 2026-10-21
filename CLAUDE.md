@@ -3182,6 +3182,57 @@ botão "Nova Requisição" em todas. Hoje cada área tem rota e item de menu:
    ⚠️ `Suprimentos.tsx` ainda monta Recebimento e NF de compra como abas próprias
    (segunda cópia da mesma tela) — virar link para `/compras/...` é o próximo passo.
 
+### Contas a receber NASCE da NF — e o banco dá baixa por IDENTIDADE (21/10/2026)
+Decisão do dono do processo: *"quando é faturado (emitido a NF) já gera o contas
+a receber … de acordo com o prazo/parcelas … e pronto para quando o banco mandar
+as coisas da integração"*. Hoje (medido) o time cadastra o título no Bling, olha
+no internet banking e marca "recebido" à mão no Bling; `receivables` da matriz
+estava VAZIA.
+
+```
+carbo_prazos_do_texto(text)        prazo → dias  (espelho de apps/financas/src/lib/parcelas.ts)
+fin_receber_gerar_da_nf(p_ensaio)  cron `fin-receber-da-nf-10min` (21-59/10), SQL puro
+fin_receber_config                 o MARCO ZERO (`gerar_a_partir_de`) e o interruptor
+fin_contas_bancarias               cadastro das contas da empresa
+fin_banco_eventos                  o CRU que a integração do banco mandar (append-only)
+fin_banco_conciliar()              a baixa automática — parada até existir integração
+supabase/migrations/20261120000000_contas_a_receber_nasce_da_nf.sql
+```
+
+1. **Fonte**: NF de VENDA válida pelo Bling (matriz `bling_nf_id` ou filial
+   `bling2_nf_id`, pela `carbo_vendas_metrica` — bonificação e remessa ficam de
+   fora) **ou** NFS-e autorizada em PRODUÇÃO (CarboVAPT). ⚠️ `segmento = 'online'`
+   fica de fora: é pago na plataforma, não há boleto.
+2. **Um título por parcela**, `source = 'nf'`, colunas `parcela`/`parcelas_total`/
+   `empresa`/`nf_numero`/`documento`. Valor = o da NOTA (com frete), centavos da
+   sobra na última. Base = data de emissão.
+3. ⚠️ **A trava contra título em dobro é índice** (`receivables_nf_parcela_uq`,
+   parcial: cancelado sai dele, e é isso que deixa pedido RE-faturado ganhar
+   título novo). Pedido que já tem QUALQUER título vivo (manual, de antes) é pulado.
+4. ⚠️ **Prazo não reconhecido NÃO vira título** — vai para `sem_prazo` no retorno
+   e para o diálogo "Gerar de pedidos faturados", que pede o vencimento.
+5. ⚠️ **Marco zero nasce HOJE.** Voltá-lo cria título para boleto que talvez já
+   foi pago no banco, e ele aparece como VENCIDO. Decisão consciente, nunca padrão.
+6. **Cancelamento anda sozinho**: pedido cancelado ou NF que deixou de valer
+   cancela o que está ABERTO. ⚠️ Recebido nunca é tocado.
+7. **Baixa pelo banco**: `fin_banco_conciliar` casa evento de `liquidacao` com
+   título por `nosso_numero` (+ conta), `linha_digitavel` ou `txid`, e SÓ com
+   casamento ÚNICO (`ambíguo` e `sem título` ficam anotados no evento). Grava
+   `recebido_via = 'banco'`, `valor_recebido` e a data do banco. ⚠️ Valor + data
+   nunca é chave. ⚠️ Os índices únicos de identidade em `receivables` são o
+   que permite isso — não os afrouxe.
+8. ⚠️ **PENDENTE**: o título nasce SEM boleto (o boleto continua sendo emitido no
+   banco à mão). A integração vai (a) emitir o boleto pelo banco ao nascer o
+   título e gravar `nosso_numero`/`linha_digitavel`, e (b) gravar o retorno em
+   `fin_banco_eventos` e chamar `fin_banco_conciliar`. Qual banco: pendente.
+   ⚠️ E o Bling continua com o contas a receber MANUAL dele — se o espelho de
+   contas a receber do Bling 1 voltar a gravar em `receivables` (`source = 'bling'`),
+   cada venda aparecerá DUAS vezes. Medir antes de religar.
+9. **A filial (Bling 2) aparece SEGMENTADA** nas telas de pagar e receber
+   (`?empresa=filial`), só leitura, lendo `bling2_contas_*` — liberadas a quem tem
+   o Finanças por policy SOMADA. Baixa e cancelamento: qualquer um com o app
+   (decisão do dono do processo, "por hora").
+
 ### App novo no hub — os QUATRO lugares que precisam aprender a interface
 Criar a pasta do app é a parte fácil. O que faz um app existir é a flag em
 `profiles.allowed_interfaces` (ex.: `carbo_atendimento`) ser reconhecida em
