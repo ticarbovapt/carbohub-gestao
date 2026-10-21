@@ -1,0 +1,83 @@
+import { CreditCard, RefreshCw, Building2, Wallet, BarChart3 } from "lucide-react";
+import { CarboPageHeader } from "@/components/ui/carbo-page-header";
+import { useAuth } from "@/contexts/AuthContext";
+import { PayablesList } from "@/components/purchasing/PayablesList";
+import { SubscriptionsList } from "@/components/purchasing/SubscriptionsList";
+import { SuppliersList } from "@/components/purchasing/SuppliersList";
+import { PaymentMethodsList } from "@/components/purchasing/PaymentMethodsList";
+import { PurchasingDashboard } from "@/components/purchasing/PurchasingDashboard";
+
+// Páginas que antes eram abas de "/compras" (Financeiro & Suprimentos). Cada
+// uma tem o próprio endereço, título de guia e cabeçalho; a AÇÃO principal
+// ("Novo…") mora na barra do próprio componente, não aqui — assim não volta a
+// existir um botão de cabeçalho comum a telas que não têm nada a ver com ele.
+
+export function ContasPagar() {
+  return (
+    <div className="space-y-6">
+      <CarboPageHeader
+        title="Contas a pagar"
+        description="O que vence e o que já venceu, com baixa e estorno"
+        icon={CreditCard}
+      />
+      <PayablesList />
+    </div>
+  );
+}
+
+export function Assinaturas() {
+  return (
+    <div className="space-y-6">
+      <CarboPageHeader
+        title="Assinaturas"
+        description="Serviços recorrentes: o que renova, quando e em qual cartão"
+        icon={RefreshCw}
+      />
+      <SubscriptionsList />
+    </div>
+  );
+}
+
+export function Fornecedores() {
+  return (
+    <div className="space-y-6">
+      <CarboPageHeader title="Fornecedores" description="Cadastro de fornecedores" icon={Building2} />
+      <SuppliersList />
+    </div>
+  );
+}
+
+export function FormasPagamento() {
+  return (
+    <div className="space-y-6">
+      <CarboPageHeader
+        title="Formas de pagamento"
+        description="Cartões e meios usados nas compras"
+        icon={Wallet}
+      />
+      <PaymentMethodsList />
+    </div>
+  );
+}
+
+// ⚠️ Só gestor. Antes, quem não era gestor e abria o link caía CALADO em
+// outra aba — parecia que o link estava quebrado. Agora a tela diz o porquê.
+export function PainelFinanceiro() {
+  const { gestor } = useAuth();
+  return (
+    <div className="space-y-6">
+      <CarboPageHeader
+        title="Painel financeiro"
+        description="Aging, previsão, curva ABC e indicadores"
+        icon={BarChart3}
+      />
+      {gestor ? (
+        <PurchasingDashboard />
+      ) : (
+        <p className="rounded-lg border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
+          O painel financeiro é só para gestores. Se você precisa dele, peça ao Admin para marcar a sua função como gestor.
+        </p>
+      )}
+    </div>
+  );
+}
