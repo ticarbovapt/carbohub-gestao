@@ -3257,10 +3257,29 @@ supabase/migrations/20261121000000_espelho_contas_bling1.sql
    o resto drena).
 4. ⚠️ **Desfecho no `bling_contas_espelho_log`**, nunca no `cron.job_run_details`
    (`net.http_post` é assíncrono; `succeeded` = o POST saiu).
-5. **PRÓXIMO PASSO, com aprovação**: a tela ler o espelho; ligar o título do Bling
-   ao título que nasceu da NF (pela origem) sem duplicar; e a baixa feita no
-   Finanças ir para o Bling (`POST /contas/<tipo>/{id}/baixar`) — escrita em dado
-   financeiro de outro sistema, testada com UM título antes.
+5. ✅ **As TELAS leem o Bling 1** (`20261122`, `fin_bling1_contas_aplicar`, cron
+   `fin-bling1-contas-10min` 27-59/10, SQL puro): o espelho atualiza
+   `purchase_payables`/`receivables` (`source = 'bling'`), que telas, fluxo,
+   Início e `fin_*` já liam. Medido antes: dos 320 "em aberto" a pagar, 128 já
+   estavam PAGOS no Bling (R$ 404 mil) e 59 tinham sumido de lá; 458 títulos do
+   Bling nunca tinham chegado (136 em aberto, R$ 343 mil).
+   ⚠️ O Bling manda no que veio dele, MAS baixa feita aqui (`paid_by`/
+   `received_by`) e cancelamento feito aqui ficam. ⚠️ "Sumiu do Bling" só cancela
+   com o espelho em dia (rodada boa < 1 h e ≥ 100 linhas). ⚠️ Só grava o que
+   MUDA (`is distinct from`) — a tabela está no Realtime e na auditoria.
+   ⚠️ `p_ensaio` nasce TRUE e o ensaio é EXATO: grava num sub-bloco e o desfaz
+   com uma exceção própria (`__ensaio__`); as variáveis sobrevivem ao rollback.
+   ⚠️ **A DATA DE PAGAMENTO não vem** — nem listagem nem detalhe a trazem (fica no
+   BORDERÔ, `detalhe->'borderos'`). A tela diz "no Bling"; filtro de recebidos
+   por mês não os acha. Pendente.
+   ⚠️ **O título do Bling NÃO diz o pedido de origem** (`origem.id = 0` no
+   medido), então a geração pela NF (`fin_receber_gerar_da_nf`) foi DESLIGADA e
+   o "Gerar de pedidos faturados" saiu da tela: os dois duplicariam os títulos
+   do Bling sem ter como saber. Ficam no radar (decisão do dono do processo).
+   A filial passou de 1×/dia para 30 min (`bling2-contas-30min`, 17,47).
+6. **PRÓXIMO PASSO, com aprovação**: a baixa feita no Finanças ir para o Bling
+   (`POST /contas/<tipo>/{id}/baixar`, exige o PORTADOR — `detalhe->'portador'`)
+   — escrita em dado financeiro de outro sistema, testada com UM título antes.
 
 ### App novo no hub — os QUATRO lugares que precisam aprender a interface
 Criar a pasta do app é a parte fácil. O que faz um app existir é a flag em

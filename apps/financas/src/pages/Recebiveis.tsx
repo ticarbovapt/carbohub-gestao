@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { HandCoins, CheckCircle2, Ban, ChevronLeft, ChevronRight, Plus, FileDown, Search, AlertTriangle } from "lucide-react";
+import { HandCoins, CheckCircle2, Ban, ChevronLeft, ChevronRight, Plus, Search, AlertTriangle } from "lucide-react";
 import { useParamUrl, confirmar } from "@carbo/shell";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboBadge } from "@/components/ui/carbo-badge";
@@ -153,7 +153,6 @@ function RecebiveisMatriz({ seletor }: { seletor: ReactNode }) {
   const [showNew, setShowNew] = useState(false);
   const formVazio = () => ({ customer_name: "", amount: "", due_date: hojeISO(), notes: "" });
   const [form, setForm] = useState(formVazio);
-  const [showGerar, setShowGerar] = useState(false);
 
   const update = useUpdateReceivableStatus();
   const create = useCreateReceivable();
@@ -215,12 +214,6 @@ function RecebiveisMatriz({ seletor }: { seletor: ReactNode }) {
         icon={HandCoins}
         actions={
           <>
-            <Button
-              variant="outline" onClick={() => setShowGerar(true)} className="gap-2"
-              title="Para pedido sem prazo reconhecido ou anterior à automação"
-            >
-              <FileDown className="h-4 w-4" /> Gerar de pedidos faturados
-            </Button>
             <Button onClick={() => setShowNew(true)} className="gap-2 carbo-gradient text-white"><Plus className="h-4 w-4" /> Novo título</Button>
           </>
         }
@@ -228,9 +221,13 @@ function RecebiveisMatriz({ seletor }: { seletor: ReactNode }) {
 
       {seletor}
 
+      {/* ⚠️ A matriz mostra o contas a receber do BLING 1, copiado a cada 10 min
+          (`fin_bling1_contas_aplicar`). O "Gerar de pedidos faturados" saiu: com
+          os títulos do Bling aqui, ele criaria de novo todo pedido faturado — o
+          título do Bling não guarda o pedido de origem, então não há como saber
+          que já existe. A geração pela NF está DESLIGADA (fica no radar). */}
       <p className="text-xs text-muted-foreground">
-        Os títulos nascem sozinhos quando a NF de venda é emitida (CarboZé pelo Bling, CarboVAPT pela NFS-e), uma
-        parcela por vencimento do prazo.
+        Matriz: o contas a receber do Bling 1, atualizado a cada 10 minutos. A baixa feita aqui ainda não volta ao Bling.
       </p>
 
       {/* Aging — sempre sobre TODO o em aberto, independente dos filtros da lista. */}
@@ -421,7 +418,6 @@ function RecebiveisMatriz({ seletor }: { seletor: ReactNode }) {
         </DialogContent>
       </Dialog>
 
-      <GerarDeVendasDialog open={showGerar} onClose={() => setShowGerar(false)} />
 
       {/* Novo título */}
       <Dialog open={showNew} onOpenChange={setShowNew}>
@@ -456,7 +452,9 @@ function RecebiveisMatriz({ seletor }: { seletor: ReactNode }) {
 const STATUS_PEDIDO: Record<string, string> = { invoiced: "Faturado", shipped: "Enviado", delivered: "Entregue" };
 const POR_VEZ = 50;
 
-function GerarDeVendasDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+// ⚠️ FORA DA TELA desde 21/10/2026 (ver o comentário acima da faixa da
+// matriz). Fica para quando a geração pela NF voltar a valer.
+export function GerarDeVendasDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { data: pedidos = [], isLoading, isError, error } = useInvoicedOrdersNoReceivable(open);
   const gen = useGenerateReceivablesFromOrders();
   const [sel, setSel] = useState<Record<string, boolean>>({});
