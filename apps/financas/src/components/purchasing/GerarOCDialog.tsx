@@ -5,9 +5,15 @@ import { Button } from "@/components/ui/button";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { useQuotes } from "@/hooks/useCotacoes";
 import { useCreatePurchaseOrder } from "@/hooks/usePurchasing";
+import { toast } from "sonner";
 import type { PurchaseRequest } from "@/types/purchasing";
 
 const brl = (v: number) => (v ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+// Chave do agrupamento: "Acme", "acme " e "ACME  Ltda" com espaço dobrado não
+// podem virar OCs separadas para o MESMO fornecedor.
+const SEM_COTACAO = "::sem-cotacao";
+const chaveFornecedor = (nome: string) => nome.trim().toLowerCase().replace(/\s+/g, " ");
 
 interface Line { i: number; descricao: string; quantidade: number; unidade: string; unit_price: number; supplier: string; supplier_id: string | null; fromQuote: boolean; }
 
@@ -37,18 +43,27 @@ export function GerarOCDialog({ rc, onClose }: { rc: PurchaseRequest | null; onC
     };
   });
 
+  // [chave, nome exibido/gravado, linhas]. O nome é o da 1ª cotação COM
+  // fornecedor cadastrado (supplier_id), senão o da 1ª linha, sem espaço sobrando.
   const groups = useMemo(() => {
-    const m = new Map<string, Line[]>();
-    for (const l of lines) { const arr = m.get(l.supplier) ?? []; arr.push(l); m.set(l.supplier, arr); }
-    return Array.from(m.entries());
+    const m = new Map<string, { nome: string; ls: Line[] }>();
+    for (const l of lines) {
+      const chave = l.fromQuote ? chaveFornecedor(l.supplier) : SEM_COTACAO;
+      const g = m.get(chave) ?? { nome: l.fromQuote ? l.supplier.trim().replace(/\s+/g, " ") : "A definir", ls: [] };
+      if (l.fromQuote && l.supplier_id && !g.ls.some((x) => x.supplier_id)) g.nome = l.supplier.trim().replace(/\s+/g, " ");
+      g.ls.push(l);
+      m.set(chave, g);
+    }
+    return Array.from(m.entries()).map(([chave, g]) => [chave, g.nome, g.ls] as const);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(lines)]);
 
   const semCotacao = lines.filter((l) => !l.fromQuote).length;
 
   const gerar = async () => {
+    let feitas = 0;
     try {
-      for (const [supplier, ls] of groups) {
+      for (const [, supplier, ls] of groups) {
         const ocItems = ls.map((l) => ({ descricao: l.descricao, quantidade: l.quantidade, unidade: l.unidade, valor_unitario: l.unit_price }));
         const total = ls.reduce((s, l) => s + l.quantidade * l.unit_price, 0);
         await createOC.mutateAsync({
@@ -57,11 +72,23 @@ export function GerarOCDialog({ rc, onClose }: { rc: PurchaseRequest | null; onC
           supplier_id: ls.find((l) => l.supplier_id)?.supplier_id ?? undefined,
           items: ocItems as any,
           total_value: total,
-          expected_delivery: (rc as any)?.needed_by || undefined,
+          expected_delivery: rc?.needed_by || undefined,
         });
+        feitas++;
       }
       onClose();
-    } catch { /* erro tratado no hook */ }
+    } catch (e: any) {
+      // O hook avisa o erro da OC que falhou. O que só a tela sabe é o estado
+      // PARCIAL: a RC vira "convertida" já na primeira OC, então as que faltam
+      // não podem mais ser geradas por aqui (Fase 3: gerar tudo numa transação).
+      if (feitas > 0) {
+        toast.error(`Só ${feitas} de ${groups.length} OCs foram geradas`, {
+          description: `A requisição já ficou como convertida e as OCs restantes NÃO foram criadas. Avise o TI. Erro: ${e?.message ?? e}`,
+          duration: 20000,
+        });
+        onClose();
+      }
+    }
   };
 
   if (!rc) return null;
@@ -79,11 +106,11 @@ export function GerarOCDialog({ rc, onClose }: { rc: PurchaseRequest | null; onC
         </DialogHeader>
 
         <div className="space-y-3 py-1 min-w-0">
-          {groups.map(([supplier, ls]) => {
+          {groups.map(([chave, supplier, ls]) => {
             const total = ls.reduce((s, l) => s + l.quantidade * l.unit_price, 0);
-            const semQuote = supplier === "A definir";
+            const semQuote = chave === SEM_COTACAO;
             return (
-              <div key={supplier} className="rounded-lg border border-border">
+              <div key={chave} className="rounded-lg border border-border">
                 <div className="flex items-center justify-between gap-2 px-3 py-2 bg-muted/40 rounded-t-lg">
                   <span className="font-medium text-sm flex items-center gap-2 min-w-0 break-words">
                     {supplier}
@@ -106,7 +133,7 @@ export function GerarOCDialog({ rc, onClose }: { rc: PurchaseRequest | null; onC
           {semCotacao > 0 && (
             <div className="flex items-start gap-2 text-xs text-warning-foreground bg-warning/10 border border-warning/30 rounded-lg p-2.5">
               <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-              <span>{semCotacao} item(ns) sem cotação escolhida entram como <strong>"A definir"</strong> com o valor estimado. Você pode ajustar o fornecedor depois na OC.</span>
+              <span>{semCotacao} item(ns) sem cotação escolhida vão numa OC <strong>"A definir"</strong> com o valor estimado — e a OC não pode ser editada depois. Escolha a cotação antes, se quiser o fornecedor certo.</span>
             </div>
           )}
         </div>

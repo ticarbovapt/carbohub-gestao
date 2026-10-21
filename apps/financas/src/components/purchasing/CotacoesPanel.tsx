@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Plus, Trash2, Check, Award, ExternalLink } from "lucide-react";
+import { confirmar } from "@carbo/shell";
 import { CarboButton } from "@/components/ui/carbo-button";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { CarboInput } from "@/components/ui/carbo-input";
@@ -71,9 +72,18 @@ export function CotacoesPanel({
     }
   };
 
-  const doDelete = (r: Row) => {
-    if (isDraft) draft!.onChange(draft!.quotes.filter((q) => q.key !== r.rowKey));
-    else if (requestId) del.mutate({ id: r.rowKey, request_id: requestId });
+  const doDelete = async (r: Row) => {
+    // Rascunho é estado local (nada foi gravado): remove direto. Cotação gravada
+    // some do banco, então pergunta antes.
+    if (isDraft) { draft!.onChange(draft!.quotes.filter((q) => q.key !== r.rowKey)); return; }
+    if (!requestId) return;
+    const ok = await confirmar({
+      titulo: `Excluir a cotação de ${r.supplier_name}?`,
+      mensagem: r.selected ? "Ela é a cotação ESCOLHIDA deste item — o item fica sem cotação escolhida." : undefined,
+      confirmar: "Excluir",
+      perigo: true,
+    });
+    if (ok) del.mutate({ id: r.rowKey, request_id: requestId });
   };
 
   const totalEscolhido = rows.filter((r) => r.selected).reduce((s, r) => s + r.unit_price * r.quantidade, 0);
@@ -86,7 +96,7 @@ export function CotacoesPanel({
         const min = qs.length ? Math.min(...qs.map((q) => q.unit_price)) : null;
         return (
           <div key={i} className="rounded-lg border border-border">
-            <div className="flex items-center justify-between px-3 py-2 bg-muted/40 rounded-t-lg">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-muted/40 rounded-t-lg">
               <div className="text-sm">
                 <span className="font-medium">{it.descricao || `Item ${i + 1}`}</span>
                 <span className="text-muted-foreground ml-2">{it.quantidade} {it.unidade}</span>
@@ -103,8 +113,8 @@ export function CotacoesPanel({
             ) : (
               <div className="divide-y divide-border">
                 {qs.map((q) => (
-                  <div key={q.rowKey} className={`flex items-center gap-2 px-3 py-2 text-sm ${q.selected ? "bg-carbo-green/5" : ""}`}>
-                    <div className="flex-1 min-w-0">
+                  <div key={q.rowKey} className={`flex flex-wrap items-center gap-2 px-3 py-2 text-sm ${q.selected ? "bg-carbo-green/5" : ""}`}>
+                    <div className="flex-1 min-w-[10rem]">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium truncate">{q.supplier_name}</span>
                         {q.unit_price === min && qs.length > 1 && <CarboBadge variant="success" className="text-[10px]">menor preço</CarboBadge>}
@@ -119,10 +129,10 @@ export function CotacoesPanel({
                     </div>
                     {editable && (
                       <div className="flex items-center gap-1 shrink-0">
-                        <CarboButton size="sm" variant={q.selected ? "default" : "outline"} className="h-7 gap-1" onClick={() => doSelect(q)}>
+                        <CarboButton size="sm" variant={q.selected ? "default" : "outline"} className="h-7 gap-1" disabled={select.isPending} onClick={() => doSelect(q)}>
                           <Check className="h-3.5 w-3.5" /> {q.selected ? "Escolhida" : "Escolher"}
                         </CarboButton>
-                        <CarboButton size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => doDelete(q)}>
+                        <CarboButton size="icon" variant="ghost" className="h-7 w-7 text-destructive" disabled={del.isPending} onClick={() => doDelete(q)} title="Excluir cotação" aria-label="Excluir cotação">
                           <Trash2 className="h-3.5 w-3.5" />
                         </CarboButton>
                       </div>
@@ -136,7 +146,7 @@ export function CotacoesPanel({
       })}
 
       {rows.length > 0 && (
-        <div className="flex items-center justify-between text-sm px-1">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm px-1">
           <span className="text-muted-foreground">
             {semEscolha === 0 ? "Todos os itens têm cotação escolhida." : `${semEscolha} item(ns) sem cotação escolhida.`}
           </span>

@@ -5,8 +5,7 @@ import { Button } from "@/components/ui/button";
 import { usePurchaseInvoices, usePurchaseOrders } from "@/hooks/usePurchasing";
 import { LancarNFDialog } from "./OCActionsDialogs";
 import type { PurchaseOrder } from "@/types/purchasing";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { dataBR } from "@/lib/datas";
 import {
   CarboTable, CarboTableHeader, CarboTableBody, CarboTableRow, CarboTableHead, CarboTableCell,
 } from "@/components/ui/carbo-table";
@@ -31,6 +30,7 @@ export function InvoicesList() {
 
   const ocNumberById = new Map((orders ?? []).map((o: any) => [o.id, o.oc_number]));
   const ocValueById = new Map((orders ?? []).map((o: any) => [o.id, Number(o.total_value) || 0]));
+  const ocSupplierById = new Map((orders ?? []).map((o: any) => [o.id, o.supplier_name as string]));
   const ocWithInvoice = new Set((invoices ?? []).map((i) => i.purchase_order_id));
 
   // OCs recebidas (total ou parcial) e ainda sem NF lançada.
@@ -52,7 +52,7 @@ export function InvoicesList() {
               <CarboTableHead>OC</CarboTableHead>
               <CarboTableHead>Fornecedor</CarboTableHead>
               <CarboTableHead>Valor OC</CarboTableHead>
-              <CarboTableHead>Ações</CarboTableHead>
+              <CarboTableHead><span className="sr-only">Ação</span></CarboTableHead>
             </CarboTableRow>
           </CarboTableHeader>
           <CarboTableBody>
@@ -67,12 +67,17 @@ export function InvoicesList() {
               </CarboTableRow>
             ) : (
               aguardando.map((oc) => (
-                <CarboTableRow key={oc.id} interactive className="cursor-pointer" onClick={() => setNfOC(oc)}>
-                  <CarboTableCell className="font-mono font-medium">{oc.oc_number}</CarboTableCell>
+                <CarboTableRow key={oc.id}>
+                  <CarboTableCell className="font-mono font-medium">
+                    <div className="flex items-center gap-2">
+                      {oc.oc_number}
+                      {oc.status === "parcialmente_recebida" && <CarboBadge variant="warning" className="text-[10px]">parcial</CarboBadge>}
+                    </div>
+                  </CarboTableCell>
                   <CarboTableCell>{oc.supplier_name}</CarboTableCell>
                   <CarboTableCell className="font-mono">{brl(oc.total_value)}</CarboTableCell>
-                  <CarboTableCell onClick={(e) => e.stopPropagation()}>
-                    <Button size="sm" className="h-8 gap-1 bg-carbo-green hover:bg-carbo-green/90 text-white" onClick={() => setNfOC(oc)}>
+                  <CarboTableCell>
+                    <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => setNfOC(oc)}>
                       <FileUp className="h-4 w-4" /> Lançar NF
                     </Button>
                   </CarboTableCell>
@@ -91,6 +96,7 @@ export function InvoicesList() {
             <CarboTableRow>
               <CarboTableHead>Nº NF</CarboTableHead>
               <CarboTableHead>OC</CarboTableHead>
+              <CarboTableHead>Fornecedor</CarboTableHead>
               <CarboTableHead>Data NF</CarboTableHead>
               <CarboTableHead>Valor</CarboTableHead>
               <CarboTableHead>OC ✓</CarboTableHead>
@@ -103,11 +109,11 @@ export function InvoicesList() {
           <CarboTableBody>
             {isLoading ? (
               <CarboTableRow>
-                <CarboTableCell colSpan={9} className="text-center text-muted-foreground py-8">Carregando...</CarboTableCell>
+                <CarboTableCell colSpan={10} className="text-center text-muted-foreground py-8">Carregando...</CarboTableCell>
               </CarboTableRow>
             ) : !invoices?.length ? (
               <CarboTableRow>
-                <CarboTableCell colSpan={9} className="text-center text-muted-foreground py-8">
+                <CarboTableCell colSpan={10} className="text-center text-muted-foreground py-8">
                   <div className="flex flex-col items-center gap-2">
                     <Receipt className="h-8 w-8 text-muted-foreground/50" />
                     <span>Nenhuma nota fiscal registrada</span>
@@ -121,9 +127,8 @@ export function InvoicesList() {
                   <CarboTableRow key={inv.id}>
                     <CarboTableCell className="font-mono font-medium">{inv.invoice_number}</CarboTableCell>
                     <CarboTableCell className="font-mono text-sm">{ocNumberById.get(inv.purchase_order_id) ?? "—"}</CarboTableCell>
-                    <CarboTableCell className="text-sm">
-                      {format(new Date(inv.invoice_date), "dd/MM/yyyy", { locale: ptBR })}
-                    </CarboTableCell>
+                    <CarboTableCell className="text-sm">{ocSupplierById.get(inv.purchase_order_id) ?? "—"}</CarboTableCell>
+                    <CarboTableCell className="text-sm">{dataBR(inv.invoice_date)}</CarboTableCell>
                     <CarboTableCell className="font-mono">
                       {brl(inv.invoice_value)}
                       {!inv.value_match && ocValueById.has(inv.purchase_order_id) && (

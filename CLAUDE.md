@@ -3127,6 +3127,61 @@ nada se perde"*. Saíram do **Admin** e entraram no **TI**, byte a byte:
 5. ⚠️ **Quem tinha só o Admin perdeu essas telas** — o BLOCO A da `20261117`
    lista quem (`tem_ti = false`).
 
+### Finanças: "Financeiro & Suprimentos" virou SEIS áreas (21/10/2026)
+Queixa do dono do processo sobre `/compras/requisicoes`: *"tem coisa demais aqui
+em botões… muita coisa incompleta, sem nexo"*. Era UMA página com onze abas
+(compras, contas a pagar, a receber, fluxo, cadastros, painel), cinco cartões e o
+botão "Nova Requisição" em todas. Hoje cada área tem rota e item de menu:
+
+```
+/compras/requisicoes|ordens|recebimento|notas   pages/Compras.tsx (abas são <Link>)
+/pagar · /pagar/assinaturas                     pages/TelasFinanceiras.tsx
+/receber · /fluxo-caixa                         pages/Recebiveis.tsx · FluxoCaixa.tsx
+/cadastros/fornecedores|formas-pagamento        pages/TelasFinanceiras.tsx
+/painel-financeiro (gestor; os outros LEEM o porquê, não caem calados noutra aba)
+```
+
+1. ⚠️ **Os endereços antigos redirecionam COM a query** (`IrPara` no `App.tsx`):
+   `/compras/pagar?status=atrasado` chega em `/pagar?status=atrasado`. `<Navigate>`
+   puro descarta a query.
+2. ⚠️ **Dia é o de Brasília, num lugar só: `src/lib/datas.ts`.** `toISOString()`
+   virava "amanhã" depois das 21h e `new Date("AAAA-MM-DD")` mostrava a data UM
+   DIA ANTES. Data pura é texto; instante sai em `America/Sao_Paulo`.
+3. ⚠️ **"Vencido" = em aberto E vencimento < hoje (`estaVencido`), NUNCA o status
+   gravado.** Medido: 44 títulos do Bling gravados `atrasado` e 170 `programado`
+   já vencidos — o cartão contava uns, a pílula da aba outros.
+4. **Fila de trabalho é a tela padrão** (vencidos + hoje + 7 dias, SEM recorte de
+   mês) em pagar e receber; mês e De/Até são filtro opcional. Filtros na URL
+   (`useParamUrl`), nunca no localStorage.
+5. ⚠️ **O `<Toaster/>` do shadcn NUNCA esteve montado no Finanças** — todo aviso de
+   `@/hooks/use-toast` (salvo, erro) era invisível. Hoje ele convive com o do
+   `sonner` no `main.tsx`.
+6. **Contas a pagar é 100% espelho do Bling 1** (medido: zero título interno; os
+   1.135 pagos com `paid_at` NULO; o `bling_raw` só traz id, valor, contato,
+   situação, vencimento e forma). A baixa feita aqui NÃO volta ao Bling, e a tela
+   diz isso. ⚠️ **O Bling não traz NADA de boleto** (linha digitável, nosso
+   número, data de pagamento): a conciliação bancária só pode vir do ARQUIVO do
+   banco (OFX + retorno CNAB), nunca do espelho.
+7. **Contas a receber da matriz está VAZIA** (medido); a filial (Bling 2) tem
+   2.634 títulos em `bling2_contas_receber` que nenhuma tela mostra — decisão
+   pendente do dono do processo.
+8. **"Gerar de pedidos faturados" abre SEM nada marcado e cria UM título por
+   parcela** (`lib/parcelas.ts`; aceita `30/60`, `30\60`, `30 60`, `30/60 dias`,
+   `Cartão de crédito Nx`). Prazo não reconhecido devolve `null` e a tela pede o
+   vencimento — nunca inventa. Antes, "Cartão 3x" virava vencimento em 3 DIAS.
+9. **Compras (só tela)**: rascunho ganhou "Enviar para aprovação" e cancelar
+   (`hooks/useRequisicaoAcoes.ts`); cotação travada depois da aprovação; gestor
+   não aprova a PRÓPRIA RC (só na TELA — o banco ainda aceita); recebimento
+   parcial volta à fila pelo SALDO.
+10. ⚠️ **PENDENTE (Fase 3, banco)**: aprovar/emitir OC/receber/lançar NF ainda são
+   `update` soltos do navegador (sem alçada, sem atomicidade, numeração `MAX+1`);
+   "Já foi paga" na OC não registra a saída; NF gera UMA parcela só.
+   **(Fase 4)**: conta a pagar manual, campos do boleto, conta bancária de saída,
+   valor pago. **(Fase 5)**: contas bancárias + importação de extrato/retorno e
+   casamento por IDENTIDADE (nosso número, código de barras, txid).
+   ⚠️ `Suprimentos.tsx` ainda monta Recebimento e NF de compra como abas próprias
+   (segunda cópia da mesma tela) — virar link para `/compras/...` é o próximo passo.
+
 ### App novo no hub — os QUATRO lugares que precisam aprender a interface
 Criar a pasta do app é a parte fácil. O que faz um app existir é a flag em
 `profiles.allowed_interfaces` (ex.: `carbo_atendimento`) ser reconhecida em

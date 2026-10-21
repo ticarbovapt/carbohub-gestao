@@ -625,7 +625,7 @@ export function usePurchasingBadges() {
       const [rc, ocGerada, ocReceber, payAtras, recAtras] = await Promise.all([
         supabase.from("purchase_requests").select("*", head).eq("status", "aguardando_aprovacao" as any),
         supabase.from("purchase_orders").select("*", head).eq("status", "gerada" as any),
-        supabase.from("purchase_orders").select("*", head).in("status", ["comprada", "enviada_fornecedor"] as any),
+        supabase.from("purchase_orders").select("*", head).in("status", ["comprada", "enviada_fornecedor", "parcialmente_recebida"] as any),
         // Mesma regra de "vencido" da lista (STATUS_EM_ABERTO + vencimento < hoje).
         supabase.from("purchase_payables").select("id", head).in("status", STATUS_EM_ABERTO as any).lt("due_date", today),
         supabase.from("receivables").select("id", head).neq("status", "recebido").neq("status", "cancelado").lt("due_date", today),

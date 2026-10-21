@@ -5,6 +5,12 @@ const rpc = supabase as unknown as { rpc: (fn: string, args?: any) => any };
 
 // Hooks do Dashboard financeiro — cada um chama uma função SQL agregadora
 // (retorna já somado). p_source: 'all' | 'interno' | 'bling'.
+//
+// ⚠️ `p_from`/`p_to` são DATE (`AAAA-MM-DD`, dia de Brasília — monte com
+// `src/lib/datas`, nunca com `toISOString()`, que é o dia em UTC). E as colunas
+// `semana`/`mes` que voltam também são DATE: leia como TEXTO. `new Date(...)`
+// numa data pura é meia-noite UTC = véspera em Brasília (a semana saía como
+// domingo e outubro como "set").
 
 export interface AgingRow { bucket: string; qtd: number; total: number }
 export function useFinAging(source: string) {
@@ -18,6 +24,7 @@ export function useFinAging(source: string) {
   });
 }
 
+/** `semana` = segunda-feira da semana, `AAAA-MM-DD`. */
 export interface ForecastRow { semana: string; total: number; qtd: number }
 export function useFinForecast(source: string, weeks = 8) {
   return useQuery({
@@ -42,6 +49,7 @@ export function useFinStatusSummary(source: string, from?: string, to?: string) 
   });
 }
 
+/** `mes` = dia 1 do mês, `AAAA-MM-DD`. */
 export interface MonthlyRow { mes: string; pago: number; aberto: number }
 export function useFinMonthly(source: string, from?: string, to?: string) {
   return useQuery({

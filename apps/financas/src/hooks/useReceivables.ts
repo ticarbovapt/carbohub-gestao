@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { lerSemTeto } from "@carbo/shell";
+import { diaBrasilia, hojeISO, instanteDoDia, somarDias } from "@/lib/datas";
 
 const db = supabase as unknown as { from: (t: string) => any; rpc: (fn: string, args?: any) => any };
 
@@ -46,24 +47,53 @@ export function useReceivablesOpen(source?: string) {
   });
 }
 
-// Lista paginada no servidor (mesmo padrão de Contas a Pagar).
+export type FiltroStatusReceber = "fila" | "aberto" | "programado" | "atrasado" | "recebido" | "cancelado" | "all";
+
+/** O texto da busca vai dentro de um `.or()` do PostgREST: vírgula, parêntese e curinga quebram a sintaxe. */
+const limparBusca = (s: string) => s.replace(/[,()*%\\]/g, " ").trim();
+
+/**
+ * Lista paginada no servidor, ordem ESTÁVEL (vencimento, id).
+ *
+ * ⚠️ O recorte de data muda de coluna conforme o status: título RECEBIDO é
+ * recortado por `received_at` (o dia de Brasília em que entrou o dinheiro);
+ * os demais, por `due_date`. "Recebidos em outubro" filtrado por vencimento
+ * trazia o que venceu em outubro, mesmo que tenha entrado em novembro.
+ *
+ * `fila` = em aberto vencendo até hoje + 7 dias (inclui todo o vencido) — a
+ * visão padrão, sem recorte de mês.
+ */
 export function useReceivablesPaged(params: {
-  source: string; status: string; from: string; to: string; page: number; pageSize: number;
+  source: string; status: FiltroStatusReceber; de: string; ate: string; busca: string; page: number; pageSize: number;
 }) {
   return useQuery({
-    queryKey: ["receivables-paged", params],
+    queryKey: ["receivables-paged", params, hojeISO()],
     queryFn: async () => {
-      const today = new Date().toISOString().slice(0, 10);
+      const hoje = hojeISO();
       let q = db.from("receivables").select("*", { count: "exact" });
       if (params.source !== "all") q = q.eq("source", params.source);
-      if (params.status === "recebido") q = q.eq("status", "recebido");
-      else if (params.status === "cancelado") q = q.eq("status", "cancelado");
-      else if (params.status === "atrasado") q = q.neq("status", "recebido").neq("status", "cancelado").lt("due_date", today);
-      else if (params.status === "programado") q = q.neq("status", "recebido").neq("status", "cancelado").gte("due_date", today);
-      if (params.from) q = q.gte("due_date", params.from);
-      if (params.to) q = q.lte("due_date", params.to);
+      const aberto = () => q.neq("status", "recebido").neq("status", "cancelado");
+      switch (params.status) {
+        case "recebido": q = q.eq("status", "recebido"); break;
+        case "cancelado": q = q.eq("status", "cancelado"); break;
+        case "aberto": q = aberto(); break;
+        case "atrasado": q = aberto().lt("due_date", hoje); break;
+        case "programado": q = aberto().gte("due_date", hoje); break;
+        case "fila": q = aberto().lte("due_date", somarDias(hoje, 7)); break;
+        default: break;
+      }
+      if (params.status === "recebido") {
+        // received_at é instante: o dia de Brasília vai de 00:00 a 00:00 do dia seguinte.
+        if (params.de) q = q.gte("received_at", `${params.de}T00:00:00-03:00`);
+        if (params.ate) q = q.lt("received_at", `${somarDias(params.ate, 1)}T00:00:00-03:00`);
+      } else {
+        if (params.de) q = q.gte("due_date", params.de);
+        if (params.ate) q = q.lte("due_date", params.ate);
+      }
+      const b = limparBusca(params.busca);
+      if (b) q = q.or(`customer_name.ilike.%${b}%,notes.ilike.%${b}%,bling_numero.ilike.%${b}%`);
       const fromIdx = params.page * params.pageSize;
-      q = q.order("due_date", { ascending: true }).range(fromIdx, fromIdx + params.pageSize - 1);
+      q = q.order("due_date", { ascending: true }).order("id", { ascending: true }).range(fromIdx, fromIdx + params.pageSize - 1);
       const { data, error, count } = await q;
       if (error) throw error;
       return { rows: (data || []) as Receivable[], count: count || 0 };
@@ -84,7 +114,8 @@ export function useUpdateReceivableStatus() {
       const { data: u } = await supabase.auth.getUser();
       const updates: any = { status, updated_at: new Date().toISOString() };
       if (status === "recebido") {
-        updates.received_at = received_at ? new Date(received_at + "T12:00:00").toISOString() : new Date().toISOString();
+        // A data do <input type="date"> vira meio-dia de Brasília: nenhum fuso a troca de dia.
+        updates.received_at = instanteDoDia(received_at || hojeISO());
         updates.received_by = u?.user?.id ?? null;
       } else {
         updates.received_at = null; updates.received_by = null;
@@ -123,43 +154,76 @@ export function useCreateReceivable() {
 // ── Order-to-cash: gerar título a receber de pedido faturado ──────────────────
 export interface InvoicedOrder {
   id: string; order_number: string | null; customer_name: string | null;
-  total: number; sale_date: string | null; payment_terms: string | null; created_at: string;
+  total: number; payment_terms: string | null; status: string;
+  /** Data-base das parcelas (`AAAA-MM-DD`): venda → faturamento → criação. */
+  base: string;
 }
 
-/** Pedidos FATURADOS que ainda não têm título a receber vinculado (order_id). */
-export function useInvoicedOrdersNoReceivable() {
+/**
+ * Pedidos faturados/enviados/entregues que ainda não têm NENHUM título a
+ * receber ligado (`receivables.order_id`).
+ *
+ * ⚠️ Lê de `carboze_orders`, não da `carboze_orders_secure`: a view MASCARA o
+ * nome do cliente para quem não é admin/CEO ("Jo***va") — e esse nome seria
+ * gravado no título — e não expõe `payment_terms`, que é de onde saem as
+ * parcelas. A RLS de `carboze_orders` já é a do time interno.
+ * ⚠️ Fora a venda ON-LINE (`segmento = 'online'`): ela é paga na plataforma e
+ * não gera título a receber da empresa com o cliente.
+ * ⚠️ Sem teto, nos DOIS lados: com `.limit(300)` antes do filtro, a lista
+ * parava de mostrar pedido assim que 300 recentes já tivessem título.
+ */
+export function useInvoicedOrdersNoReceivable(enabled = true) {
   return useQuery({
     queryKey: ["invoiced-no-receivable"],
+    enabled,
     queryFn: async (): Promise<InvoicedOrder[]> => {
-      const recs = await lerSemTeto<any>(() =>
+      const recs = await lerSemTeto<{ order_id: string }>(() =>
         db.from("receivables").select("order_id").not("order_id", "is", null).order("id"));
-      const linked = new Set((recs ?? []).map((r: any) => r.order_id));
-      const { data: orders, error } = await db
-        .from("carboze_orders_secure")
-        .select("*")
-        .eq("status", "invoiced")
-        .order("created_at", { ascending: false })
-        .limit(300);
-      if (error) throw error;
-      return ((orders ?? []) as any[])
-        .filter((o) => !linked.has(o.id))
-        .map((o) => ({ id: o.id, order_number: o.order_number ?? null, customer_name: o.customer_name ?? null, total: Number(o.total || 0), sale_date: o.sale_date ?? null, payment_terms: o.payment_terms ?? null, created_at: o.created_at }));
+      const linked = new Set(recs.map((r) => r.order_id));
+      const orders = await lerSemTeto<any>(() =>
+        db.from("carboze_orders")
+          .select("id, order_number, customer_name, total, sale_date, invoiced_at, created_at, payment_terms, status, segmento")
+          .in("status", ["invoiced", "shipped", "delivered"])
+          .or("segmento.is.null,segmento.neq.online")
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: true }));
+      return orders
+        .filter((o) => !linked.has(o.id) && (o.segmento ?? "") !== "online" && Number(o.total || 0) > 0)
+        .map((o) => ({
+          id: o.id, order_number: o.order_number ?? null, customer_name: o.customer_name ?? null,
+          total: Number(o.total || 0), payment_terms: o.payment_terms ?? null, status: o.status,
+          base: o.sale_date ? String(o.sale_date).slice(0, 10)
+            : diaBrasilia(new Date(o.invoiced_at ?? o.created_at)),
+        }))
+        .sort((x, y) => (x.base < y.base ? 1 : x.base > y.base ? -1 : 0));
     },
   });
 }
 
+export interface TituloNovo { order_id: string; customer_name: string | null; amount: number; due_date: string; notes: string }
+
+/**
+ * Um `receivable` por PARCELA, num INSERT só.
+ * ⚠️ Não dividir em lotes: um insert é uma transação. Em lotes, falhar no
+ * segundo deixaria pedido com metade das parcelas — e, como ele já tem título,
+ * sairia da lista de candidatos e a outra metade nunca seria gerada.
+ */
 export function useGenerateReceivablesFromOrders() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (items: { order_id: string; customer_name: string | null; amount: number; due_date: string }[]) => {
+    mutationFn: async (items: TituloNovo[]) => {
       const { data: u } = await supabase.auth.getUser();
       const rows = items.map((i) => ({
-        source: "interno", customer_name: i.customer_name, order_id: i.order_id,
+        source: "interno", customer_name: i.customer_name, order_id: i.order_id, notes: i.notes,
         amount: i.amount, currency: "BRL", due_date: i.due_date, status: "programado", created_by: u?.user?.id ?? null,
       }));
-      if (rows.length) { const { error } = await db.from("receivables").insert(rows); if (error) throw error; }
+      if (rows.length) {
+        const { error } = await db.from("receivables").insert(rows);
+        if (error) throw error;
+      }
+      return rows.length;
     },
-    onSuccess: () => { invalidate(qc); qc.invalidateQueries({ queryKey: ["invoiced-no-receivable"] }); toast({ title: "Títulos a receber gerados" }); },
+    onSuccess: (n) => { invalidate(qc); qc.invalidateQueries({ queryKey: ["invoiced-no-receivable"] }); toast({ title: `${n} título(s) a receber gerado(s)` }); },
     onError: (e: any) => toast({ title: "Erro ao gerar títulos", description: e.message, variant: "destructive" }),
   });
 }
