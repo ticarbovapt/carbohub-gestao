@@ -144,8 +144,9 @@ pagamento, dados estratégicos e observações.
    de OS (crm·ops, `osView.ts`) dizem "8 leves · 1 pesado".
    ⚠️ O nome da linha virou `Descarbonização CarboVAPT - Pesados` (pedido
    antigo guarda o nome antigo — é texto gravado no item, não se recalcula).
-   ⚠️ PENDENTE: `admin…/DashboardsFranqueados` ainda separa o histórico por
-   P/M/G (`porteInfo`).
+   O painel de franqueados do Admin (`DashboardsFranqueados`) também: o
+   gráfico "Serviços por Categoria" SOMA P+M em leves e G em pesados
+   (`categoriaDoPorte`), inclusive o histórico de antes da mudança.
 10. ⭐ **O PDF do CarboVAPT tem a identidade da CarboVAPT** (21/10/2026): a
    proposta comercial da Canva reproduzida no `quotePdf.ts`
    (`gerarPropostaCarbovapt`) — logo, marca d'água vertical, cartão claro com
