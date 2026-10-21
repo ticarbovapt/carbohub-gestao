@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { lerSemTeto } from "@carbo/shell";
 import { hojeISO, somarDias, instanteDoDia } from "@/lib/datas";
+import { COLUNAS_BAIXA_BLING, faltaColunaDaBaixa } from "@/lib/blingBaixa";
 import type { QueryClient } from "@tanstack/react-query";
 import type {
   PurchaseRequest,
@@ -449,17 +450,24 @@ export function usePurchasePayablesOpen(source?: string) {
   return useQuery({
     queryKey: ["purchase-payables-open", source ?? "all"],
     queryFn: async () => {
-      const data = await lerSemTeto(() => {
-        let q = supabase
-          .from("purchase_payables")
-          .select("id, amount, due_date, status, source, currency")
+      const ler = (colunas: string) => lerSemTeto(() => {
+        let q = (supabase.from("purchase_payables") as any)
+          .select(colunas)
           .in("status", STATUS_EM_ABERTO as any)
           .order("due_date")
           .order("id");
         if (source && source !== "all") q = q.eq("source", source as any);
         return q;
       });
-      return (data || []) as any[];
+      const antigas = "id, amount, due_date, status, source, currency";
+      // ⚠️ As colunas da baixa no Bling podem ainda não existir (front antes do
+      // SQL): aí repete com as antigas, em vez de o resumo sumir.
+      try {
+        return ((await ler(`${antigas}, bling_id, paid_by, ${COLUNAS_BAIXA_BLING}`)) || []) as any[];
+      } catch (e) {
+        if (!faltaColunaDaBaixa(e)) throw e;
+        return ((await ler(antigas)) || []) as any[];
+      }
     },
   });
 }
@@ -478,6 +486,8 @@ export type FiltroPagar = "fila" | "vencido" | "hoje" | "7dias" | "a_vencer" | "
 
 // Lista PAGINADA no servidor com filtros (origem, status efetivo, período, busca).
 // Evita carregar todo o histórico do Bling de uma vez.
+// `select("*")`: traz `bling_id`, `paid_by` e as colunas `bling_baixa_*` quando
+// existem — e, antes do SQL, simplesmente não as traz, sem erro.
 export function usePurchasePayablesPaged(params: {
   source: string; status: string; from: string; to: string; page: number; pageSize: number; busca?: string;
 }) {

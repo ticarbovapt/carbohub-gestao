@@ -3277,9 +3277,29 @@ supabase/migrations/20261121000000_espelho_contas_bling1.sql
    o "Gerar de pedidos faturados" saiu da tela: os dois duplicariam os títulos
    do Bling sem ter como saber. Ficam no radar (decisão do dono do processo).
    A filial passou de 1×/dia para 30 min (`bling2-contas-30min`, 17,47).
-6. **PRÓXIMO PASSO, com aprovação**: a baixa feita no Finanças ir para o Bling
-   (`POST /contas/<tipo>/{id}/baixar`, exige o PORTADOR — `detalhe->'portador'`)
-   — escrita em dado financeiro de outro sistema, testada com UM título antes.
+6. **A baixa feita no Finanças VAI para o Bling** (`20261123`, função
+   `bling-contas-baixar`, chamada pela TELA logo depois da baixa local;
+   `lib/blingBaixa.ts` + `components/financeiro/BaixaNoBling.tsx`). E a data do
+   pagamento do Bling chega: o espelho lê o BORDERÔ (`GET /borderos/{id}`,
+   fase própria, 40 por tipo por rodada) e o aplicador a põe em `paid_at`/
+   `received_at` (12:00 de Brasília).
+   ⚠️ **Nasce DESLIGADA** (`fin_bling_baixa_config.ativo`), e `teste_ids`
+   libera títulos UM A UM para o teste. Sem escrita pela API: liga pelo SQL.
+   ⚠️ A baixa LOCAL vem primeiro e a recusa do Bling NÃO a desfaz
+   (`bling_baixa_erro` + "Tentar de novo" na linha). O ESTORNO é o contrário:
+   Bling PRIMEIRO, e só o borderô NOSSO e de UM título (borderô pode cobrir
+   vários — apagá-lo estornaria os outros). Baixa feita no Bling se desfaz no
+   Bling; a tela recusa estornar aqui (senão o aplicador a traria de volta).
+   ⚠️ Reconfere o título no Bling antes de baixar: já pago lá ⇒ só registra
+   (borderô em dobro é o erro a evitar). Exige portador e categoria (do título
+   ou o PADRÃO da config). Valor só no parcial — o nome do campo no pagar
+   (`valorPago`) não está medido.
+   ⚠️ **Quem manda depois do envio é o Bling**: lido de novo DEPOIS de
+   `bling_baixa_em` e aberto ⇒ estornaram lá ⇒ o aplicador reabre aqui. Antes do
+   envio (desligado ou recusado), a baixa daqui fica, como sempre ficou.
+   ⚠️ A função atualiza o ESPELHO na hora (situação + `detalhe_em` nulo):
+   senão o aplicador dos 10 min leria o Bling velho e desfaria o que acabou de
+   acontecer. Nunca renova o token: perto de vencer, chama o `bling-sync`.
 
 ### App novo no hub — os QUATRO lugares que precisam aprender a interface
 Criar a pasta do app é a parte fácil. O que faz um app existir é a flag em
