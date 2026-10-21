@@ -30,6 +30,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const URL_SB = Deno.env.get("SUPABASE_URL")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const CRON_SECRET = Deno.env.get("CRON_SECRET");
 const BLING_API = "https://api.bling.com.br/Api/v3";
 const MARGEM_TOKEN_MS = 2 * 60 * 1000;
 
@@ -86,11 +87,145 @@ function diaBrasilia(instante: string | null): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(d);
 }
 
+/**
+ * O que a baixa FARIA com este título do Bling — a MESMA regra no envio de
+ * verdade e no ensaio (teste por outro caminho provaria o caminho errado).
+ */
+function decidirBaixa(tipo: Tipo, d: any, portadorPadrao: unknown, dia: string, quem: string | null):
+  { decisao: "enviar"; corpo: Record<string, unknown> } |
+  { decisao: "ja_pago_no_bling" | "cancelado_no_bling" | "sem_portador"; mensagem: string } {
+  const situacao = d.situacao != null ? String(d.situacao) : null;
+  if (situacao === "2") return { decisao: "ja_pago_no_bling", mensagem: "Já estava baixado no Bling — nada enviado." };
+  if (situacao === "4" || situacao === "5") {
+    return { decisao: "cancelado_no_bling", mensagem: "O título está cancelado no Bling — a baixa não foi enviada." };
+  }
+  const portador = Number(d.portador?.id) || Number(portadorPadrao) || null;
+  // ⚠️ Categoria é a do PRÓPRIO título, ou nenhuma. Medido em 21/10/2026:
+  // 160 de 161 títulos abertos não têm categoria no Bling — e categoria de
+  // receita ≠ de despesa, então um "padrão" único erraria metade. Sem ela o
+  // campo não vai; se o Bling exigir, a recusa dele aparece na linha.
+  const categoria = Number(d.categoria?.id) || null;
+  if (!portador) {
+    return { decisao: "sem_portador", mensagem: "O Bling exige a conta (portador) para dar baixa, e o título não tem" +
+      " — preencha a conta no título, no Bling, ou o portador padrão em fin_bling_baixa_config." };
+  }
+  const corpo: Record<string, unknown> = {
+    data: dia,
+    usarDataVencimento: false,
+    portador: { id: portador },
+    ...(categoria ? { categoria: { id: categoria } } : {}),
+    historico: `Baixa pelo CarboHub Finanças${quem ? ` (${quem})` : ""}`,
+  };
+  // ⚠️ Valor só no parcial: sem valor, o Bling baixa o SALDO, que é o caso
+  // comum — e o nome do campo no contas a PAGAR não está medido.
+  if (situacao === "3" && Number(d.saldo) > 0) {
+    corpo[tipo === "receber" ? "valorRecebido" : "valorPago"] = Number(d.saldo);
+  }
+  return { decisao: "enviar", corpo };
+}
+
+const dormir = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
+
+/**
+ * ENSAIO — responde "a baixa funcionaria?" SEM escrever em lugar nenhum: nem no
+ * Bling, nem aqui. Lê o token, lê cada título no Bling AGORA e devolve o corpo
+ * EXATO que seria enviado (pela mesma `decidirBaixa`). E lê um borderô de
+ * título já quitado, que é de onde vem a data de pagamento no sentido inverso.
+ * Chamado pelo SQL Editor com o X-Cron-Secret — por isso existe sem JWT.
+ * ⚠️ O que ele NÃO prova: o Bling ACEITAR o POST. Isso só um envio de verdade.
+ */
+async function ensaio(b: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const db = createClient(URL_SB, SERVICE, { auth: { persistSession: false } });
+  const tipos: Tipo[] = b.tipo === "pagar" ? ["pagar"] : b.tipo === "receber" ? ["receber"] : ["receber", "pagar"];
+  const limite = Math.min(Math.max(Number(b.limite) || 5, 1), 25);
+  const saida: Record<string, unknown> = { marcador: "bling-contas-baixar-ensaio", escreveu: false };
+
+  const { data: cfg } = await db.from("fin_bling_baixa_config").select("ativo, teste_ids, portador_padrao_id").maybeSingle();
+  saida.config = cfg ?? "sem linha em fin_bling_baixa_config";
+
+  const { data: integ } = await db.from("bling_integration")
+    .select("access_token, expires_at").eq("is_active", true).maybeSingle();
+  if (!integ?.access_token) return { ...saida, ok: false, mensagem: "Sem integração ativa do Bling 1." };
+  // ⚠️ O ensaio NÃO pede renovação (não tem usuário para chamar o bling-sync).
+  if (new Date(integ.expires_at).getTime() - Date.now() < MARGEM_TOKEN_MS) {
+    return { ...saida, ok: false, mensagem: "Token do Bling perto de vencer — o bling-sync renova; rode o ensaio de novo em alguns minutos." };
+  }
+  const token = integ.access_token as string;
+  const hoje = diaBrasilia(null);
+
+  for (const tipo of tipos) {
+    const tabela = TABELA[tipo];
+    let q = db.from(tabela).select("id, bling_id, status, amount, due_date")
+      .eq("source", "bling").not("bling_id", "is", null);
+    const ids = Array.isArray(b.ids) ? (b.ids as unknown[]).map(String).filter((x) => /^[0-9a-f-]{36}$/i.test(x)) : [];
+    q = ids.length ? q.in("id", ids) : q.not("status", "in", `(${PAGO[tipo]},cancelado)`)
+      .order("due_date", { ascending: false }).limit(limite);
+    const { data: locais, error } = await q;
+    if (error) { saida[tipo] = { erro: `ler ${tabela}: ${error.message}` }; continue; }
+
+    const titulos: unknown[] = [];
+    const contagem: Record<string, number> = {};
+    for (const t of (locais ?? []).slice(0, 25)) {
+      await dormir(350);
+      try {
+        const d = (await bling(token, "GET", `/contas/${tipo}/${t.bling_id}`))?.data ?? {};
+        const r = decidirBaixa(tipo, d, cfg?.portador_padrao_id, hoje, "nome de quem baixou");
+        contagem[r.decisao] = (contagem[r.decisao] ?? 0) + 1;
+        titulos.push({
+          id: t.id, bling_id: t.bling_id, status_aqui: t.status, valor: t.amount, vencimento: t.due_date,
+          no_bling: { situacao: d.situacao ?? null, valor: d.valor ?? null, saldo: d.saldo ?? null,
+                      portador: d.portador?.id ?? null, categoria: d.categoria?.id ?? null },
+          decisao: r.decisao,
+          ...(r.decisao === "enviar"
+            ? { enviaria: { metodo: "POST", caminho: `/contas/${tipo}/${t.bling_id}/baixar`, corpo: r.corpo } }
+            : { mensagem: r.mensagem }),
+        });
+      } catch (e) {
+        contagem.erro_ao_ler = (contagem.erro_ao_ler ?? 0) + 1;
+        titulos.push({ id: t.id, bling_id: t.bling_id, erro: e instanceof Error ? e.message : String(e) });
+      }
+    }
+
+    // O sentido inverso: a data de pagamento vem do borderô de título quitado.
+    let bordero: unknown = "nenhum título quitado com borderô no espelho";
+    const { data: quitado } = await db.from(ESPELHO[tipo]).select("bling_id, borderos:detalhe->borderos")
+      .in("situacao", ["2", "3"]).not("detalhe", "is", null).order("bling_id", { ascending: false }).limit(50);
+    const com = (quitado ?? []).find((x: any) => Array.isArray(x.borderos) && x.borderos.length);
+    if (com) {
+      const idB = Math.max(...(com as any).borderos.map((x: any) => Number(typeof x === "object" ? x?.id : x)).filter((n: number) => n > 0));
+      try {
+        await dormir(350);
+        const bo = (await bling(token, "GET", `/borderos/${idB}`))?.data ?? {};
+        bordero = { titulo_bling_id: (com as any).bling_id, bordero_id: idB, data: bo.data ?? null,
+                    chaves: Object.keys(bo), pagamentos: Array.isArray(bo.pagamentos) ? bo.pagamentos.length : null };
+      } catch (e) {
+        bordero = { titulo_bling_id: (com as any).bling_id, bordero_id: idB, erro: e instanceof Error ? e.message : String(e) };
+      }
+    } else if ((quitado ?? []).length) {
+      bordero = { mensagem: "títulos quitados SEM borderôs no detalhe", exemplo: quitado![0] };
+    }
+    saida[tipo] = { contagem, titulos, bordero_amostra: bordero };
+  }
+  return { ...saida, ok: true };
+}
+
 Deno.serve(async (req: Request): Promise<Response> => {
   const h = { "Content-Type": "application/json", ...cors(req) };
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors(req) });
   const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: h });
   if (req.method !== "POST") return json({ ok: false, mensagem: "Use POST" }, 405);
+
+  // ── 0. Ensaio (SQL Editor, X-Cron-Secret): só lê, nunca escreve ──────────
+  const segredo = req.headers.get("x-cron-secret");
+  if (segredo != null) {
+    const marcador = "bling-contas-baixar-ensaio";   // é por ele que o SQL Editor acha a resposta
+    if (!CRON_SECRET) return json({ marcador, ok: false, mensagem: "CRON_SECRET ausente no servidor." }, 500);
+    if (segredo !== CRON_SECRET) return json({ marcador, ok: false, mensagem: "não autorizado" }, 401);
+    const corpo = await req.json().catch(() => ({})) as Record<string, unknown>;
+    if (corpo.ensaio !== true) return json({ marcador, ok: false, mensagem: "Com o segredo só se roda o ENSAIO ({\"ensaio\": true})." }, 400);
+    try { return json(await ensaio(corpo)); }
+    catch (e) { return json({ marcador, ok: false, mensagem: e instanceof Error ? e.message : String(e) }, 500); }
+  }
 
   // ── 1. Quem chama ─────────────────────────────────────────────────────────
   const auth = req.headers.get("Authorization") ?? "";
@@ -173,45 +308,20 @@ Deno.serve(async (req: Request): Promise<Response> => {
         await marcar({ bling_baixa_erro: null });
         return json({ ok: true, pulado: "ja_enviado", mensagem: "Esta baixa já está no Bling.", bordero: tt.bling_baixa_bordero });
       }
-      if (situacao === "2") {
+      const { data: perfil } = await db.from("profiles").select("full_name").eq("id", u.user.id).maybeSingle();
+      const quem = (perfil?.full_name as string | null)?.trim() || null;
+      const dec = decidirBaixa(tipo, d, cfg?.portador_padrao_id, diaBrasilia(tt[QUANDO[tipo]]), quem);
+      if (dec.decisao === "ja_pago_no_bling") {
         // Pago lá por alguém: NÃO baixa de novo. Sem borderô nosso — o estorno
         // desta baixa é no Bling.
         await marcar({ bling_baixa_em: new Date().toISOString(), bling_baixa_erro: null });
-        return json({ ok: true, pulado: "ja_pago_no_bling", mensagem: "Já estava baixado no Bling — nada enviado." });
+        return json({ ok: true, pulado: "ja_pago_no_bling", mensagem: dec.mensagem });
       }
-      if (situacao === "4" || situacao === "5") {
-        const m = "O título está cancelado no Bling — a baixa não foi enviada.";
-        await marcar({ bling_baixa_erro: m });
-        return json({ ok: false, mensagem: m });
+      if (dec.decisao !== "enviar") {
+        await marcar({ bling_baixa_erro: dec.mensagem });
+        return json({ ok: false, mensagem: dec.mensagem });
       }
-
-      const portador = Number(d.portador?.id) || Number(cfg?.portador_padrao_id) || null;
-      // ⚠️ Categoria é a do PRÓPRIO título, ou nenhuma. Medido em 21/10/2026:
-      // 160 de 161 títulos abertos não têm categoria no Bling — e categoria de
-      // receita ≠ de despesa, então um "padrão" único erraria metade. Sem ela o
-      // campo não vai; se o Bling exigir, a recusa dele aparece na linha.
-      const categoria = Number(d.categoria?.id) || null;
-      if (!portador) {
-        const m = "O Bling exige a conta (portador) para dar baixa, e o título não tem" +
-          " — preencha a conta no título, no Bling, ou o portador padrão em fin_bling_baixa_config.";
-        await marcar({ bling_baixa_erro: m });
-        return json({ ok: false, mensagem: m });
-      }
-
-      const { data: perfil } = await db.from("profiles").select("full_name").eq("id", u.user.id).maybeSingle();
-      const quem = (perfil?.full_name as string | null)?.trim() || null;
-      const corpo: Record<string, unknown> = {
-        data: diaBrasilia(tt[QUANDO[tipo]]),
-        usarDataVencimento: false,
-        portador: { id: portador },
-        ...(categoria ? { categoria: { id: categoria } } : {}),
-        historico: `Baixa pelo CarboHub Finanças${quem ? ` (${quem})` : ""}`,
-      };
-      // ⚠️ Valor só no parcial: sem valor, o Bling baixa o SALDO, que é o caso
-      // comum — e o nome do campo no contas a PAGAR não está medido.
-      if (situacao === "3" && Number(d.saldo) > 0) {
-        corpo[tipo === "receber" ? "valorRecebido" : "valorPago"] = Number(d.saldo);
-      }
+      const corpo = dec.corpo;
 
       const r = await bling(token, "POST", `/contas/${tipo}/${tt.bling_id}/baixar`, corpo);
       const bordero = Number(r?.data?.bordero?.id ?? r?.bordero?.id ?? r?.data?.id) || null;
