@@ -136,13 +136,22 @@ export function useMensagensDaConversa(numeroId: string | null | undefined, waId
   return useQuery({
     queryKey: ["wa-conversas", "mensagens", numeroId ?? null, waId ?? null],
     enabled: !!numeroId && !!waId,
-    queryFn: async (): Promise<MensagemConversa[]> =>
-      lerTudo<MensagemConversa>((de, ate) => (supabase as any)
+    queryFn: async (): Promise<MensagemConversa[]> => {
+      // ⚠️ Pela função (20261125), que roda como dono: lida pela view, a RLS de
+      // quem NÃO é admin custava ~150 ms POR MENSAGEM (varredura de
+      // bling2_orders para achar o nome) — conversa longa estourava o tempo só
+      // para essas pessoas. Sem a função (front antes do SQL), cai na leitura antiga.
+      const { data, error } = await (supabase as any)
+        .rpc("carbo_wa_conversa_mensagens", { p_numero_id: numeroId, p_wa_id: waId });
+      if (!error) return (data ?? []) as MensagemConversa[];
+      if (error.code !== "PGRST202" && !/carbo_wa_conversa_mensagens/.test(error.message ?? "")) throw error;
+      return lerTudo<MensagemConversa>((de, ate) => (supabase as any)
         .from("carbo_wa_conversas")
         .select("*").eq("numero_id", numeroId).eq("wa_id", waId)
         .order("ocorrido_em", { ascending: true })
         .order("wamid", { ascending: true })
-        .range(de, ate)),
+        .range(de, ate));
+    },
     refetchInterval: 30_000,
   });
 }
