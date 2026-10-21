@@ -33,7 +33,7 @@ import { useProdutos, useFaixasPreco } from "@/hooks/useProdutos";
 import { useCreateOSFromSale } from "@/hooks/useDescarbOS";
 import {
   DESCARB_MODALIDADES, DESCARB_EXTRAS, extraLabel, extraPrice,
-  modalidadePrice, modalidadeLabel, modalidadeHint,
+  modalidadePrice, modalidadeLabel, porteVendavel,
   servicoPadraoPorDoc, type DescarbServiceType,
 } from "@carbo/shell";
 import { useDiscountTiersPublic } from "@/hooks/useDiscountTiers";
@@ -903,7 +903,13 @@ export default function Vender() {
       setDiscReason(snap.discReason ?? ""); setDeliveryDate(snap.deliveryDate ?? "");
       // Orçamento antigo não tem o campo: produção, que é o de sempre.
       setModalidade(snap.modalidade ?? "producao");
-      setServiceRows(Array.isArray(snap.serviceRows) && snap.serviceRows.length ? snap.serviceRows : [emptyServiceRow()]);
+      // ⚠️ P saiu da lista (duas categorias, 09/10/2026): o orçamento antigo
+      // reabre com P trocado por M — a mesma categoria (leve), o preço da tabela
+      // nova. Sem isto o seletor abriria VAZIO carregando um porte que a tela não
+      // oferece mais.
+      setServiceRows(Array.isArray(snap.serviceRows) && snap.serviceRows.length
+        ? snap.serviceRows.map((r) => ({ ...r, modality: porteVendavel(r.modality) as ServiceRow["modality"] }))
+        : [emptyServiceRow()]);
       setExecutionDate(snap.executionDate ?? "");
       setExtras(Array.isArray(snap.extras) ? snap.extras : []);
       // Orçamento antigo não tem o campo: a quantidade acompanha os veículos.
@@ -1849,23 +1855,19 @@ export default function Vender() {
               <div key={s.id} className="rounded-xl border p-3 space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_90px_120px_auto] gap-3 items-end">
                   <div className="space-y-1.5">
-                    <Label>Modalidade</Label>
+                    <Label>Categoria</Label>
+                    {/* Duas categorias desde 09/10/2026 (ver `descarb.ts`).
+                        O porte P antigo é trocado por M ao reabrir. */}
                     <Select value={s.modality} onValueChange={(v) => updateServiceRow(s.id, { modality: v as ServiceRow["modality"] })}>
                       <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                       <SelectContent>
                         {DESCARB_MODALIDADES.map((m) => (
                           <SelectItem key={m.key} value={m.key}>
                             {m.label} — {brl(m.price)}
-                            <span className="text-muted-foreground"> · {m.motor} · {m.fuels.length === 2 ? "flex ou diesel" : m.fuels[0]}</span>
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                    {/* O vendedor não vê o veículo — a faixa de motor é o que
-                        evita vender P para um caminhão. */}
-                    {s.modality && (
-                      <p className="text-[11px] text-muted-foreground">{modalidadeHint(s.modality)}</p>
-                    )}
                   </div>
                   <div className="space-y-1.5">
                     <Label>Quantidade</Label>

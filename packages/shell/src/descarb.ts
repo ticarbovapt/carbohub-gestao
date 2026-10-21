@@ -5,8 +5,22 @@
 // cópias do preço é cinco chances de divergir em silêncio.
 //
 // ⚠️ ESPELHO FORA DESTE REPO: carbohub-licenciados tem a MESMA tabela em
-//    src/pages/Sales/NewSalePage.tsx (PRECOS / PORTES_BY_FUEL / FRASCOS).
-//    Mudou o preço aqui, mude lá — não há como um repo importar do outro.
+//    src/pages/Sales/NewSalePage.tsx (PRECOS_FALLBACK / PORTES_BY_FUEL /
+//    FRASCOS) e no banco (`get_price_table`). Mudou o preço aqui, mude lá —
+//    não há como um repo importar do outro.
+//
+// ⭐ DUAS CATEGORIAS desde o comunicado de 09/10/2026: leves e caminhonetes
+// R$ 700, pesados R$ 1.400. O Licenciados mudou em 13/10 (#179); o Sales
+// seguiu em 21/10/2026.
+//
+// ⚠️ As LETRAS continuam (P/M/G), e não é resto: são o `porte` da vaga na OS
+// (`licenciados.os_create_from_sale`, enum `vehicle_porte`), e é por elas que
+// o Licenciados decide frascos de reagente e estoque. Por isso:
+//   - leve é vendido como **M**: o Sales não sabe o combustível, e M é o
+//     porte que existe no flex E no diesel — quem executa escolhe na OS.
+//   - **P** saiu da lista, mas continua sendo LIDO (pedido/orçamento antigo)
+//     como leve, a R$ 700 — o mesmo que o Licenciados faz. `porteVendavel`
+//     troca P por M ao reabrir um orçamento.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type DescarbPorte = "P" | "M" | "G";
@@ -14,38 +28,38 @@ export type DescarbFuel = "flex" | "diesel";
 
 export interface DescarbModalidade {
   key: DescarbPorte;
+  /** O que aparece na escolha ("Veículos leves e caminhonetes"). */
   label: string;
+  /** O nome da LINHA do pedido e do orçamento. */
+  itemName: string;
   price: number;
-  /** Faixa de cilindrada — a referência que o operador usa no Carbox. */
-  motor: string;
   /** Combustíveis em que este porte existe (regra do Licenciados). */
   fuels: DescarbFuel[];
 }
 
+/** As categorias que se VENDEM hoje. */
 export const DESCARB_MODALIDADES: DescarbModalidade[] = [
-  { key: "P", label: "Descarbonização P", price: 400,  motor: "até 2.5L",     fuels: ["flex"] },
-  { key: "M", label: "Descarbonização M", price: 700,  motor: "2.6L a 3.9L",  fuels: ["flex", "diesel"] },
-  { key: "G", label: "Descarbonização G", price: 1400, motor: "acima de 4.0L", fuels: ["diesel"] },
+  { key: "M", label: "Veículos leves e caminhonetes", itemName: "Descarbonização CarboVAPT - Leves e caminhonetes", price: 700,  fuels: ["flex", "diesel"] },
+  { key: "G", label: "Veículos pesados",              itemName: "Descarbonização CarboVAPT - Pesados",              price: 1400, fuels: ["diesel"] },
 ];
 
-const byKey = (m: string) => DESCARB_MODALIDADES.find((x) => x.key === m);
+/** O porte antigo P é leve, como no Licenciados. */
+export const porteVendavel = (m: string): string => (m === "P" ? "M" : m);
 
-/** Preço fixo do porte (0 se ainda não escolheu). */
+const byKey = (m: string) => DESCARB_MODALIDADES.find((x) => x.key === porteVendavel(m));
+
+/** Preço fixo da categoria (0 se ainda não escolheu). */
 export const modalidadePrice = (m: string): number => byKey(m)?.price ?? 0;
 
-/** Rótulo do porte ("Descarbonização G"). */
-export const modalidadeLabel = (m: string): string => byKey(m)?.label ?? "Serviço";
+/** Nome da linha do pedido ("Descarbonização CarboVAPT - Pesados"). */
+export const modalidadeLabel = (m: string): string => byKey(m)?.itemName ?? "Serviço";
 
-/**
- * Dica de motor/combustível do porte — o vendedor não vê o veículo, então
- * mostrar isso ao lado da opção é o que evita vender P para um caminhão.
- * Ex.: "acima de 4.0L · diesel".
- */
+/** Categoria por extenso ("Veículos pesados"), para dica e telas. */
+export const categoriaLabel = (m: string): string => byKey(m)?.label ?? "";
+
+/** @deprecated sem faixa de motor desde as duas categorias; devolve a categoria. */
 export function modalidadeHint(m: string): string {
-  const mod = byKey(m);
-  if (!mod) return "";
-  const fuel = mod.fuels.length === 2 ? "flex ou diesel" : mod.fuels[0];
-  return `${mod.motor} · ${fuel}`;
+  return categoriaLabel(m);
 }
 
 // ── Serviços que ACOMPANHAM a descarbonização ────────────────────────────────

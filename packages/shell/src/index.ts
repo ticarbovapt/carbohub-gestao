@@ -19,7 +19,7 @@ export { useVoltarFecha, FecharComVoltar } from "./voltarFecha";
 export { confirmar, pedirTexto } from "./confirmar";
 export {
   DESCARB_MODALIDADES, DESCARB_SERVICE_TYPES, DESCARB_EXTRAS,
-  modalidadePrice, modalidadeLabel, modalidadeHint, extraLabel, extraPrice,
+  modalidadePrice, modalidadeLabel, modalidadeHint, categoriaLabel, porteVendavel, extraLabel, extraPrice,
   servicoPadraoPorDoc, totalVagas,
 } from "./descarb";
 export type {
@@ -36,3 +36,6 @@ export {
   ACADEMY_FILA_URL, ACADEMY_URL, chaveDoPedido, abrirFilaDoAcademy, toastDoPedidoAcademy,
   abrirCursoDoAcademy, toastDeCursoLiberado,
 } from "./academyAcesso";
+// Identidade CarboVAPT do PDF — import dinâmico: o base64 vira um pedaço à
+// parte e só é baixado por quem gera a proposta.
+export const carregarMarcaCarbovapt = () => import("./carbovaptMarca");

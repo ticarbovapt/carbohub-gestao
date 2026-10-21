@@ -133,6 +133,31 @@ pagamento, dados estratégicos e observações.
 8. **Itens de Serviço nasce com UMA linha**, como o `rows` do CarboZé — inclusive
    ao TROCAR de modo, senão quem volta ao CarboVAPT acha a seção fechada de novo.
 
+9. ⭐ **DUAS CATEGORIAS, não mais P/M/G** (comunicado de 09/10/2026; Sales em
+   21/10). Leves e caminhonetes **R$ 700**, pesados **R$ 1.400** — a mesma
+   tabela do Licenciados (#179 de lá, `get_price_table` P=M=700, G=1.400).
+   ⚠️ As LETRAS continuam no dado: são o `porte` da vaga na OS e o que o
+   Licenciados usa para frascos e estoque. Leve é vendido como **M** (o único
+   porte que existe no flex E no diesel — o Sales não sabe o combustível, quem
+   executa escolhe na OS). **P** saiu da lista e continua LIDO como leve
+   (`porteVendavel`): orçamento antigo com P reabre como M, a R$ 700. As telas
+   de OS (crm·ops, `osView.ts`) dizem "8 leves · 1 pesado".
+   ⚠️ O nome da linha virou `Descarbonização CarboVAPT - Pesados` (pedido
+   antigo guarda o nome antigo — é texto gravado no item, não se recalcula).
+   ⚠️ PENDENTE: `admin…/DashboardsFranqueados` ainda separa o histórico por
+   P/M/G (`porteInfo`).
+10. ⭐ **O PDF do CarboVAPT tem a identidade da CarboVAPT** (21/10/2026): a
+   proposta comercial da Canva reproduzida no `quotePdf.ts`
+   (`gerarPropostaCarbovapt`) — logo, marca d'água vertical, cartão claro com
+   a tabela, valor grande em verde-água, contatos e as faixas no rodapé. Quem
+   decide é o PEDIDO (`ehPropostaCarbovapt`: toda linha `kind: "service"` e ao
+   menos uma com `modality`), então a segunda via sai igual. CarboZé segue no
+   layout do Grupo Carbo. As imagens moram em
+   `packages/shell/src/carbovaptMarca.ts` (base64, `carregarMarcaCarbovapt()`
+   = import dinâmico: um pedaço de ~160 KB que só quem gera o PDF baixa).
+   ⚠️ O desconto por linha é a MESMA função nos dois layouts
+   (`descontosPorLinha`): o papel não pode mudar de número por mudar de cara.
+
 ⚠️ **PENDENTE (fase 2), e decidido pelo dono do processo:** vários locais de
 execução moram **na OS, não na venda** — a OS do CarboVAPT vai para o portal de
 licenciados, onde os funcionários registram e executam. Isso atravessa DOIS

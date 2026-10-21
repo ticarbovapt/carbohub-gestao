@@ -16,7 +16,7 @@ export interface OSView {
   stage: OsStageId | string;
   vagas: number;
   vagasExecutadas: number;
-  portes: string;        // "5P · 3M · 1G"
+  portes: string;        // "8 leves · 1 pesado"
   pedido: string | null;
   valor: number | null;
 }
@@ -66,8 +66,19 @@ export const dt = (s: string | null) => (s ? parseData(s).toLocaleDateString("pt
 export const brl = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 
-const portesLabel = (p: Record<string, number>) =>
-  ["P", "M", "G", "—"].filter((k) => p[k]).map((k) => `${p[k]}${k === "—" ? "" : k}`).join(" · ");
+// Duas categorias desde 09/10/2026 (ver `descarb.ts` do packages/shell): P e M
+// são LEVES, G é PESADO. As letras continuam no banco por causa do histórico e
+// da OS; na tela, a categoria. Vaga sem porte fica como número solto.
+const portesLabel = (p: Record<string, number>) => {
+  const leves = (p.P ?? 0) + (p.M ?? 0);
+  const pesados = p.G ?? 0;
+  const sem = p["—"] ?? 0;
+  return [
+    leves ? `${leves} ${leves === 1 ? "leve" : "leves"}` : "",
+    pesados ? `${pesados} ${pesados === 1 ? "pesado" : "pesados"}` : "",
+    sem ? String(sem) : "",
+  ].filter(Boolean).join(" · ");
+};
 
 export function toView(o: OSRow): OSView {
   const veiculo = [o.placa, o.modelo].filter(Boolean).join(" · ");
