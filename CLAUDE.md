@@ -3291,8 +3291,9 @@ supabase/migrations/20261121000000_espelho_contas_bling1.sql
    vários — apagá-lo estornaria os outros). Baixa feita no Bling se desfaz no
    Bling; a tela recusa estornar aqui (senão o aplicador a traria de volta).
    ⚠️ Reconfere o título no Bling antes de baixar: já pago lá ⇒ só registra
-   (borderô em dobro é o erro a evitar). Exige portador e categoria (do título
-   ou o PADRÃO da config). Valor só no parcial — o nome do campo no pagar
+   (borderô em dobro é o erro a evitar). Exige o portador (do título ou o
+   PADRÃO da config); categoria só a do PRÓPRIO título — medido: 160 de 161
+   abertos não têm, e padrão único misturaria receita com despesa. Valor só no parcial — o nome do campo no pagar
    (`valorPago`) não está medido.
    ⚠️ **Quem manda depois do envio é o Bling**: lido de novo DEPOIS de
    `bling_baixa_em` e aberto ⇒ estornaram lá ⇒ o aplicador reabre aqui. Antes do
