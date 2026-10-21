@@ -32,6 +32,13 @@ const BLING_API = "https://api.bling.com.br/Api/v3";
 const MARGEM_TOKEN_MS = 10 * 60 * 1000;   // menos que isso para vencer: não usa
 const DETALHES_POR_RODADA = 60;
 const PAUSA_MS = 350;                     // o Bling aceita ~3 req/s
+// ⚠️ ORÇAMENTO DE TEMPO. A função é morta em 150 s, e morta ela não grava o
+// log — falharia CALADA. A 1ª rodada de verdade (21/10/2026) levou 128 s: 35
+// páginas de listagem + 120 detalhes. Passou de 100 s, o detalhe para e o que
+// faltou fica para a próxima rodada (é só uma fila que drena). O de RECEBER
+// para mais cedo para sobrar tempo para a LISTAGEM do de pagar, que vem depois
+// e não pode ser pulada (é ela que deixa o espelho em dia).
+const ORCAMENTO_MS: Record<"receber" | "pagar", number> = { receber: 50_000, pagar: 105_000 };
 
 const json = (status: number, obj: unknown) =>
   new Response(JSON.stringify(obj), { status, headers: { "Content-Type": "application/json" } });
@@ -136,6 +143,7 @@ Deno.serve(async (req) => {
 
       let detalhados = 0;
       for (const id of precisaDetalhe.slice(0, DETALHES_POR_RODADA)) {
+        if (Date.now() - inicio > ORCAMENTO_MS[tipo]) break;
         await dormir(PAUSA_MS);
         const d = (await blingGet(token, `/contas/${tipo}/${id}`))?.data ?? {};
         const { error } = await db.from(tabela).update({
