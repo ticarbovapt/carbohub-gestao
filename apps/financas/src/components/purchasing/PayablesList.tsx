@@ -5,15 +5,15 @@ import { usePersistedState } from "@/hooks/usePersistedState";
 import { CreditCard, CheckCircle2, Plus, RefreshCw } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { usePurchasePayablesOpen, usePurchasePayablesPaged, useUpdatePayableStatus, invalidarContasAPagar, type FiltroPagar } from "@/hooks/usePurchasing";
 import { FilialBling2, LinhaEmpresa, SeletorEmpresa, useEmpresaUrl } from "@/components/financeiro/FilialBling2";
 import {
-  BarraFiltros, CampoBusca, CelulaVencimento, FiltroPeriodo, FiltroSelect, Kpi, KpiGrade, LimparFiltros,
-  LinhaEstado, MenuAcoes, Paginacao, SituacaoBadge, Valor,
+  BarraFiltros, CabecalhoOrdem, CampoBusca, CelulaVencimento, FiltroOrdem, FiltroPeriodo, FiltroSelect, Kpi, KpiGrade,
+  LimparFiltros, LinhaEstado, MenuAcoes, Paginacao, SituacaoBadge, Valor, useOrdemUrl,
 } from "@/components/financeiro/ContasUI";
+import { DatePickerInput } from "@/components/ui/date-picker-input";
 import { BaixaNoBling } from "@/components/financeiro/BaixaNoBling";
 import { NovaContaPagar } from "@/components/financeiro/NovaContaPagar";
 import { chamarContasPagar, useContaPagarConfig } from "@/lib/contaPagarBling";
@@ -138,6 +138,7 @@ function PayablesMatriz({ seletor }: { seletor: ReactNode }) {
   // intervalo explícito manda.
   const periodo = usaIntervalo ? { de, ate } : mes ? limitesDoMes(mes) : { de: "", ate: "" };
   const page = Math.max(0, (Number(paginaUrl) || 1) - 1);
+  const { ordem, definir: definirOrdem, alternar: ordenarPor } = useOrdemUrl(() => setPagina(null));
 
   // A busca é digitada aqui e vai para a URL depois de uma pausa (replace: o
   // Voltar não apaga letra a letra). Voltar/link trazem a busca de volta ao campo.
@@ -173,7 +174,7 @@ function PayablesMatriz({ seletor }: { seletor: ReactNode }) {
   const [estornando, setEstornando] = useState<string | null>(null);
   const { data: openRows } = usePurchasePayablesOpen(source);
   const { data: paged, isLoading, isError, error } = usePurchasePayablesPaged({
-    source, status, from: periodo.de, to: periodo.ate, page, pageSize, busca,
+    source, status, from: periodo.de, to: periodo.ate, page, pageSize, busca, ordem,
   });
   const rows = paged?.rows ?? [];
   const total = paged?.count ?? 0;
@@ -284,9 +285,10 @@ function PayablesMatriz({ seletor }: { seletor: ReactNode }) {
 
   const irParaPagina = (n: number) => setPagina(n <= 0 ? null : String(n + 1));
 
-  const filtrado = status !== "fila" || source !== "all" || !!periodo.de || !!periodo.ate || !!busca;
+  const filtrado = status !== "fila" || source !== "all" || !!periodo.de || !!periodo.ate || !!busca || !!ordem;
   const limparTudo = () => {
     setStatus(null); setSource(null); setMes(null); setDe(null); setAte(null); setBusca(null); setPagina(null);
+    definirOrdem(null);
     setBuscaTxt("");
   };
 
@@ -323,6 +325,7 @@ function PayablesMatriz({ seletor }: { seletor: ReactNode }) {
           }}
           onLimpar={limparPeriodo}
         />
+        <FiltroOrdem ordem={ordem} onChange={definirOrdem} quitado="Pagamento" />
         <LimparFiltros visivel={filtrado} onClick={limparTudo} />
       </BarraFiltros>
 
@@ -330,11 +333,11 @@ function PayablesMatriz({ seletor }: { seletor: ReactNode }) {
         <CarboTable>
           <CarboTableHeader>
             <CarboTableRow>
-              <CarboTableHead>Fornecedor</CarboTableHead>
-              <CarboTableHead>Vencimento</CarboTableHead>
-              <CarboTableHead className="text-right [&>div]:justify-end">Valor</CarboTableHead>
+              <CabecalhoOrdem col="nome" ordem={ordem} onOrdenar={ordenarPor}>Fornecedor</CabecalhoOrdem>
+              <CabecalhoOrdem col="vencimento" ordem={ordem} onOrdenar={ordenarPor}>Vencimento</CabecalhoOrdem>
+              <CabecalhoOrdem col="valor" ordem={ordem} onOrdenar={ordenarPor} direita>Valor</CabecalhoOrdem>
               <CarboTableHead>Situação</CarboTableHead>
-              <CarboTableHead>Pago em</CarboTableHead>
+              <CabecalhoOrdem col="quitado" ordem={ordem} onOrdenar={ordenarPor}>Pago em</CabecalhoOrdem>
               <CarboTableHead className="w-px" />
             </CarboTableRow>
           </CarboTableHeader>
@@ -426,7 +429,7 @@ function PayablesMatriz({ seletor }: { seletor: ReactNode }) {
                 </div>
                 <div className="space-y-1.5">
                   <Label>Data do pagamento</Label>
-                  <Input type="date" value={paidAt} max={hoje} onChange={(e) => setPaidAt(e.target.value)} />
+                  <DatePickerInput value={paidAt} onChange={setPaidAt} disableFuture clearable={false} className="h-9 w-full hover:bg-muted/60 hover:text-foreground data-[state=open]:bg-muted/60" />
                 </div>
                 {payingPayable.source === "bling" && (vaiAoBling(cfgBling, payingPayable) ? (
                   <p className="rounded-md border border-border bg-muted/40 p-2 text-xs">

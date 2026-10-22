@@ -1,14 +1,18 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { CalendarDays, ChevronLeft, ChevronRight, MoreHorizontal, Search, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, CalendarDays, ChevronLeft, ChevronRight, MoreHorizontal, Search, X } from "lucide-react";
+import { ptBR } from "date-fns/locale";
+import type { DateRange } from "react-day-picker";
+import { useParamUrl } from "@carbo/shell";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { CarboTableCell, CarboTableRow } from "@/components/ui/carbo-table";
+import { CarboTableCell, CarboTableHead, CarboTableRow } from "@/components/ui/carbo-table";
 import { dataBR, hojeISO, limitesDoMes, mesAtualISO, somarDias } from "@/lib/datas";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -114,6 +118,11 @@ const somarMeses = (ym: string, delta: number) => {
   return `${Math.floor(t / 12)}-${String((t % 12) + 1).padStart(2, "0")}`;
 };
 const dataCurta = (iso: string) => { const [a, m, d] = iso.split("-"); return `${d}/${m}/${a.slice(2)}`; };
+// ⚠️ Dia ISO ↔ Date ao MEIO-DIA local: à meia-noite um fuso negativo jogaria
+// a data para o dia anterior.
+const paraDate = (iso: string) => (iso ? new Date(`${iso}T12:00:00`) : undefined);
+const paraIso = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
 export function FiltroPeriodo({
   rotulo = "Vencimento", mes, de, ate, onMes, onIntervalo, onLimpar,
@@ -128,14 +137,15 @@ export function FiltroPeriodo({
   const [aberto, setAberto] = useState(false);
   const [modo, setModo] = useState<"mes" | "intervalo">(de || ate ? "intervalo" : "mes");
   const [ano, setAno] = useState(Number((mes || mesAtualISO()).slice(0, 4)));
-  const [deTxt, setDeTxt] = useState(de);
-  const [ateTxt, setAteTxt] = useState(ate);
+  const [faixa, setFaixa] = useState<DateRange | undefined>(undefined);
   useEffect(() => {
     if (!aberto) return;
     setModo(de || ate ? "intervalo" : "mes");
     setAno(Number((mes || mesAtualISO()).slice(0, 4)));
-    setDeTxt(de); setAteTxt(ate);
+    setFaixa(de || ate ? { from: paraDate(de || ate), to: paraDate(ate) } : undefined);
   }, [aberto, mes, de, ate]);
+  const deSel = faixa?.from ? paraIso(faixa.from) : "";
+  const ateSel = faixa?.to ? paraIso(faixa.to) : "";
 
   const ativo = !!(mes || de || ate);
   const texto = mes
@@ -202,24 +212,34 @@ export function FiltroPeriodo({
             </div>
           ) : (
             <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-2">
-                <label className="space-y-1 text-xs text-muted-foreground">
-                  De
-                  <Input type="date" className="h-9" value={deTxt} onChange={(e) => setDeTxt(e.target.value)} />
-                </label>
-                <label className="space-y-1 text-xs text-muted-foreground">
-                  Até
-                  <Input type="date" className="h-9" value={ateTxt} onChange={(e) => setAteTxt(e.target.value)} />
-                </label>
-              </div>
+              {/* Clique no primeiro dia e depois no último — sem digitar. */}
+              <p className="text-center text-xs text-muted-foreground">
+                {deSel ? <><strong className="font-medium text-foreground">{dataCurta(deSel)}</strong> até {ateSel ? <strong className="font-medium text-foreground">{dataCurta(ateSel)}</strong> : "…"}</> : "Escolha o primeiro e o último dia"}
+              </p>
+              <Calendar
+                mode="range" locale={ptBR} numberOfMonths={1}
+                selected={faixa} onSelect={setFaixa}
+                defaultMonth={faixa?.from ?? paraDate(hoje)}
+                className="flex justify-center p-0"
+                // Faixa discreta: só as pontas em cor cheia; o meio é um tom leve.
+                classNames={{
+                  cell: "h-9 w-9 p-0 text-center text-sm relative focus-within:relative focus-within:z-20 [&:has([aria-selected])]:bg-carbo-green/15 [&:has(.day-range-start)]:rounded-l-md [&:has(.day-range-end)]:rounded-r-md first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md",
+                  day_range_start: "day-range-start",
+                  day_range_end: "day-range-end",
+                  day_selected: "bg-carbo-green text-white hover:bg-carbo-green hover:text-white focus:bg-carbo-green focus:text-white",
+                  day_range_middle: "aria-selected:bg-transparent aria-selected:text-foreground",
+                  day_today: "font-semibold text-carbo-green",
+                }}
+              />
               <div className="flex flex-wrap gap-1.5">
                 <Button type="button" variant="secondary" size="sm" className="h-7 text-xs" onClick={() => atalho(somarDias(hoje, -30), hoje)}>Últimos 30 dias</Button>
                 <Button type="button" variant="secondary" size="sm" className="h-7 text-xs" onClick={() => atalho(hoje, somarDias(hoje, 30))}>Próximos 30 dias</Button>
                 <Button type="button" variant="secondary" size="sm" className="h-7 text-xs"
                   onClick={() => { const l = limitesDoMes(somarMeses(mesHoje, -1)); atalho(l.de, l.ate); }}>Mês passado</Button>
               </div>
-              <Button type="button" className="h-8 w-full" disabled={!deTxt && !ateTxt}
-                onClick={() => atalho(deTxt, ateTxt)}>
+              {/* Um dia só (sem o último) vale como aquele dia. */}
+              <Button type="button" className="h-8 w-full" disabled={!deSel}
+                onClick={() => atalho(deSel, ateSel || deSel)}>
                 Aplicar
               </Button>
             </div>
@@ -253,6 +273,80 @@ export function LimparFiltros({ visivel, onClick }: { visivel: boolean; onClick:
     <Button type="button" variant="ghost" size="sm" className="h-9 gap-1 text-muted-foreground" onClick={onClick}>
       <X className="h-3.5 w-3.5" /> Limpar filtros
     </Button>
+  );
+}
+
+// ── Ordenação ───────────────────────────────────────────────────────────────
+// Mora na URL (`?ordem=valor` / `?ordem=-valor`), como os filtros. Vazio = a
+// ordem padrão de cada tela (a fila: vencimento mais antigo primeiro).
+// ⚠️ A lista é paginada no BANCO, então quem ordena é a consulta — ordenar só
+// a página na tela mostraria "o maior valor" dos 20 que vieram, não de todos.
+
+export type ColunaOrdem = "nome" | "vencimento" | "valor" | "quitado";
+export type Ordem = { col: ColunaOrdem; asc: boolean } | null;
+
+const COLUNAS_ORDEM: ColunaOrdem[] = ["nome", "vencimento", "valor", "quitado"];
+// Primeiro clique numa coluna: o sentido que se costuma querer nela.
+const SENTIDO_INICIAL: Record<ColunaOrdem, boolean> = { nome: true, vencimento: true, valor: false, quitado: false };
+
+const lerOrdem = (v: string): Ordem => {
+  const desc = v.startsWith("-");
+  const col = (desc ? v.slice(1) : v) as ColunaOrdem;
+  return COLUNAS_ORDEM.includes(col) ? { col, asc: !desc } : null;
+};
+const gravarOrdem = (o: Ordem) => (o ? `${o.asc ? "" : "-"}${o.col}` : null);
+
+/** `aoMudar` roda junto (volta à página 1 no MESMO clique). */
+export function useOrdemUrl(aoMudar?: () => void) {
+  const [v, set] = useParamUrl("ordem", "");
+  const ordem = lerOrdem(v);
+  const definir = (o: Ordem) => { set(gravarOrdem(o)); aoMudar?.(); };
+  /** Clique no cabeçalho: a mesma coluna inverte; outra começa no sentido dela. */
+  const alternar = (col: ColunaOrdem) =>
+    definir(ordem?.col === col ? { col, asc: !ordem.asc } : { col, asc: SENTIDO_INICIAL[col] });
+  return { ordem, definir, alternar };
+}
+
+/** O "Ordenar por" da barra — os mesmos estados que o clique no cabeçalho. */
+export function FiltroOrdem({
+  ordem, onChange, quitado,
+}: { ordem: Ordem; onChange: (o: Ordem) => void; quitado: string }) {
+  const opcoes = [
+    { v: "__padrao", l: "Padrão" },
+    { v: "vencimento", l: "Vencimento: mais antigo" },
+    { v: "-vencimento", l: "Vencimento: mais distante" },
+    { v: "-valor", l: "Maior valor" },
+    { v: "valor", l: "Menor valor" },
+    { v: "nome", l: "Nome: A → Z" },
+    { v: "-nome", l: "Nome: Z → A" },
+    { v: "-quitado", l: `${quitado}: mais recente` },
+    { v: "quitado", l: `${quitado}: mais antigo` },
+  ];
+  // ⚠️ O Select do Radix não aceita valor vazio: "padrão" tem nome próprio.
+  return (
+    <FiltroSelect
+      rotulo="Ordenar" valor={gravarOrdem(ordem) ?? "__padrao"} opcoes={opcoes}
+      onChange={(v) => onChange(v === "__padrao" ? null : lerOrdem(v))}
+    />
+  );
+}
+
+/** Cabeçalho que ordena no clique, com a seta do sentido atual. */
+export function CabecalhoOrdem({
+  col, ordem, onOrdenar, children, direita,
+}: { col: ColunaOrdem; ordem: Ordem; onOrdenar: (c: ColunaOrdem) => void; children: ReactNode; direita?: boolean }) {
+  const ativo = ordem?.col === col;
+  const Icone = !ativo ? ArrowUpDown : ordem!.asc ? ArrowUp : ArrowDown;
+  return (
+    <CarboTableHead className={cn(direita && "text-right [&>div]:justify-end")}
+      aria-sort={ativo ? (ordem!.asc ? "ascending" : "descending") : "none"}>
+      <button type="button" onClick={() => onOrdenar(col)}
+        className={cn("group -mx-1 inline-flex items-center gap-1 rounded px-1 py-0.5 hover:text-foreground",
+          ativo && "text-foreground")}>
+        {children}
+        <Icone className={cn("h-3.5 w-3.5", ativo ? "opacity-100" : "opacity-30 group-hover:opacity-70")} />
+      </button>
+    </CarboTableHead>
   );
 }
 
