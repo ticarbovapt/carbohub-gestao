@@ -7,7 +7,9 @@ import { hojeISO, somarDias } from "@/lib/datas";
 // Contas a receber / a pagar da FILIAL (Bling 2) — SOMENTE LEITURA.
 //
 // `bling2_contas_receber` e `bling2_contas_pagar` são espelho do Bling da conta
-// 2, escritos só pelo `bling2-sync`. Nada aqui grava: a baixa é feita no Bling.
+// 2, escritos pelo `bling2-sync` (varredura) e pela `bling2-contas` (os abertos,
+// a cada 10 min). A tela não grava: a baixa pedida aqui vai ao Bling 2 pela
+// função (`lib/bling2Baixa.ts`), e é ela que atualiza o espelho.
 // Ficam SEGMENTADAS da matriz de propósito (decisão do dono do processo, 21/10:
 // "pq qualquer coisa só apagamos") — nunca somadas a `receivables`.
 //
@@ -40,6 +42,12 @@ export interface Bling2Conta {
   data_pagamento: string | null;
   situacao: string | null;
   historico: string | null;
+  /** A baixa feita AQUI que chegou ao Bling 2 (migração 20261131). */
+  cb_baixa_em: string | null;
+  cb_baixa_por_nome: string | null;
+  cb_baixa_bordero: number | null;
+  /** A última recusa do Bling 2 a uma baixa pedida daqui. */
+  cb_baixa_erro: string | null;
 }
 
 export const tabelaBling2 = (tipo: Bling2Tipo) =>
@@ -48,6 +56,11 @@ export const colunaNomeBling2 = (tipo: Bling2Tipo) => (tipo === "receber" ? "cli
 
 const COLUNAS = (tipo: Bling2Tipo) =>
   `id, bling_id, numero, ${colunaNomeBling2(tipo)}, valor, saldo, vencimento, data_emissao, data_pagamento, situacao, historico`;
+// ⚠️ Colunas da baixa pela tela (20261131). Front no ar antes do SQL: a consulta
+// com elas falha (42703) e a tela relê SEM elas — nunca fica vazia por isso.
+const COLUNAS_BAIXA = "cb_baixa_em, cb_baixa_por_nome, cb_baixa_bordero, cb_baixa_erro";
+const faltaColuna = (e: any) =>
+  !!e && (e.code === "42703" || e.code === "PGRST204" || (/cb_baixa_/.test(String(e.message ?? "")) && /does not exist|schema cache|Could not find/i.test(String(e.message ?? ""))));
 
 const paraConta = (tipo: Bling2Tipo) => (r: any): Bling2Conta => ({
   id: r.id, bling_id: r.bling_id, numero: r.numero ?? null,
@@ -57,6 +70,10 @@ const paraConta = (tipo: Bling2Tipo) => (r: any): Bling2Conta => ({
   vencimento: r.vencimento ?? null, data_emissao: r.data_emissao ?? null,
   data_pagamento: r.data_pagamento ?? null, situacao: r.situacao == null ? null : String(r.situacao),
   historico: r.historico ?? null,
+  cb_baixa_em: r.cb_baixa_em ?? null,
+  cb_baixa_por_nome: r.cb_baixa_por_nome ?? null,
+  cb_baixa_bordero: r.cb_baixa_bordero == null ? null : Number(r.cb_baixa_bordero),
+  cb_baixa_erro: r.cb_baixa_erro ?? null,
 });
 
 /** Quanto falta: parcial ('3') vale o SALDO; em aberto ('1') vale o valor do título. */
@@ -137,21 +154,24 @@ export function useBling2ContasPaged(params: {
     queryFn: async () => {
       const hoje = hojeISO();
       const nome = colunaNomeBling2(params.tipo);
-      let q = db.from(tabelaBling2(params.tipo)).select(COLUNAS(params.tipo), { count: "exact" });
-      switch (params.filtro) {
-        case "fila": q = q.in("situacao", SITUACOES_ABERTAS as unknown as string[]).lte("vencimento", somarDias(hoje, 7)); break;
-        case "aberto": q = q.in("situacao", SITUACOES_ABERTAS as unknown as string[]); break;
-        case "quitados": q = q.eq("situacao", "2"); break;
-        default: break;
-      }
-      const b = limparBusca(params.busca);
-      if (b) q = q.or(`${nome}.ilike.%${b}%,numero.ilike.%${b}%`);
-      const asc = params.filtro === "fila" || params.filtro === "aberto";
-      const de = params.page * params.pageSize;
-      q = q.order("vencimento", { ascending: asc, nullsFirst: false })
-        .order("id", { ascending: asc })
-        .range(de, de + params.pageSize - 1);
-      const { data, error, count } = await q;
+      const montar = (colunas: string) => {
+        let q = db.from(tabelaBling2(params.tipo)).select(colunas, { count: "exact" });
+        switch (params.filtro) {
+          case "fila": q = q.in("situacao", SITUACOES_ABERTAS as unknown as string[]).lte("vencimento", somarDias(hoje, 7)); break;
+          case "aberto": q = q.in("situacao", SITUACOES_ABERTAS as unknown as string[]); break;
+          case "quitados": q = q.eq("situacao", "2"); break;
+          default: break;
+        }
+        const b = limparBusca(params.busca);
+        if (b) q = q.or(`${nome}.ilike.%${b}%,numero.ilike.%${b}%`);
+        const asc = params.filtro === "fila" || params.filtro === "aberto";
+        const de = params.page * params.pageSize;
+        return q.order("vencimento", { ascending: asc, nullsFirst: false })
+          .order("id", { ascending: asc })
+          .range(de, de + params.pageSize - 1);
+      };
+      let { data, error, count } = await montar(`${COLUNAS(params.tipo)}, ${COLUNAS_BAIXA}`);
+      if (faltaColuna(error)) ({ data, error, count } = await montar(COLUNAS(params.tipo)));
       if (error) falhou(error);
       return { rows: ((data ?? []) as any[]).map(paraConta(params.tipo)), count: count ?? 0 };
     },

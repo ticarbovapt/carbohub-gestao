@@ -1,0 +1,120 @@
+import { describe, it, expect } from "vitest";
+import {
+  decidirBaixa, dataDaBaixa, planejarEspelho, idsDeBordero, diaBrasilia,
+  type LocalConta, type ListadaConta,
+} from "../../../supabase/functions/_shared/blingContasRegra";
+
+/**
+ * ⚠️ O primeiro caso é o do ENSAIO real de 22/10/2026 (Bling 1, título a
+ * receber 27180852028, R$ 832): o corpo que o ensaio mostrou é o que esta regra
+ * tem de continuar produzindo — a mesma função serve à matriz e à filial.
+ */
+describe("decidirBaixa — a mesma regra para matriz e filial", () => {
+  it("título em aberto com portador próprio: o corpo que o ensaio de 22/10 mostrou", () => {
+    const d = { situacao: 1, valor: 832, saldo: 832, portador: { id: 14890150954 }, categoria: { id: 0 } };
+    expect(decidirBaixa("receber", d, null, "2026-10-22", "nome de quem baixou")).toEqual({
+      decisao: "enviar",
+      corpo: {
+        data: "2026-10-22",
+        usarDataVencimento: false,
+        portador: { id: 14890150954 },
+        historico: "Baixa pelo CarboHub Finanças (nome de quem baixou)",
+      },
+    });
+  });
+
+  it("já pago no Bling: NÃO envia (borderô em dobro é o erro a evitar)", () => {
+    expect(decidirBaixa("pagar", { situacao: 2 }, 1, "2026-10-22", null).decisao).toBe("ja_pago_no_bling");
+  });
+
+  it("devolvido ou cancelado: recusa", () => {
+    expect(decidirBaixa("pagar", { situacao: 4, portador: { id: 1 } }, null, "2026-10-22", null).decisao).toBe("cancelado_no_bling");
+    expect(decidirBaixa("pagar", { situacao: "5", portador: { id: 1 } }, null, "2026-10-22", null).decisao).toBe("cancelado_no_bling");
+  });
+
+  it("sem portador no título nem padrão: recusa dizendo o que falta", () => {
+    const r = decidirBaixa("receber", { situacao: 1 }, null, "2026-10-22", null);
+    expect(r.decisao).toBe("sem_portador");
+  });
+
+  it("sem portador no título usa o padrão da configuração", () => {
+    const r = decidirBaixa("receber", { situacao: 1 }, 777, "2026-10-22", null);
+    expect(r.decisao === "enviar" && r.corpo.portador).toEqual({ id: 777 });
+  });
+
+  it("parcial manda o SALDO, com o nome de campo do tipo", () => {
+    const rec = decidirBaixa("receber", { situacao: 3, saldo: 100, portador: { id: 1 } }, null, "2026-10-22", null);
+    const pag = decidirBaixa("pagar", { situacao: 3, saldo: 50, portador: { id: 1 } }, null, "2026-10-22", null);
+    expect(rec.decisao === "enviar" && rec.corpo.valorRecebido).toBe(100);
+    expect(pag.decisao === "enviar" && pag.corpo.valorPago).toBe(50);
+  });
+
+  it("categoria só a do próprio título", () => {
+    const r = decidirBaixa("pagar", { situacao: 1, portador: { id: 1 }, categoria: { id: 9 } }, null, "2026-10-22", null);
+    expect(r.decisao === "enviar" && r.corpo.categoria).toEqual({ id: 9 });
+  });
+});
+
+describe("dataDaBaixa — a data escolhida na tela", () => {
+  const hoje = "2026-10-22";
+  it("vazia = hoje", () => { expect(dataDaBaixa(undefined, hoje)).toBe(hoje); expect(dataDaBaixa("", hoje)).toBe(hoje); });
+  it("passada vale", () => expect(dataDaBaixa("2026-10-15", hoje)).toBe("2026-10-15"));
+  it("futura é RECUSADA, nunca trocada por hoje", () => expect(dataDaBaixa("2026-10-23", hoje)).toBeNull());
+  it("data impossível é recusada", () => { expect(dataDaBaixa("2026-02-30", hoje)).toBeNull(); expect(dataDaBaixa("15/10/2026", hoje)).toBeNull(); });
+});
+
+describe("diaBrasilia", () => {
+  it("21h de Brasília ainda é o mesmo dia (não o UTC seguinte)", () => {
+    expect(diaBrasilia("2026-10-23T00:30:00Z")).toBe("2026-10-22");
+  });
+});
+
+describe("idsDeBordero", () => {
+  it("aceita [{id}] e [id], ignora lixo", () => {
+    expect(idsDeBordero([{ id: 5 }, 7, null, { id: "x" }])).toEqual([5, 7]);
+    expect(idsDeBordero(undefined)).toEqual([]);
+  });
+});
+
+describe("planejarEspelho — a rodada que só lê os ABERTOS", () => {
+  const loc = (situacao: string, valor = 10, saldo: number | null = null, vencimento = "2026-11-01"): LocalConta =>
+    ({ situacao, valor, saldo, vencimento });
+  const lis = (bling_id: number, situacao: string, valor = 10, saldo: number | null = null, vencimento = "2026-11-01"): ListadaConta =>
+    ({ bling_id, situacao, valor, saldo, vencimento });
+
+  it("⚠️ o Bling IGNOROU o filtro: plano VAZIO, nunca 'todo o resto foi pago'", () => {
+    const locais = new Map([[1, loc("1")], [2, loc("1")]]);
+    const p = planejarEspelho(locais, [lis(1, "1"), lis(99, "2")]);
+    expect(p).toEqual({ filtroIgnorado: true, novos: [], mudaram: [], sumiram: [] });
+  });
+
+  it("novo, mudou e sumiu, cada um no seu balde", () => {
+    const locais = new Map([[1, loc("1")], [2, loc("1", 10)], [3, loc("3", 10, 4)]]);
+    const p = planejarEspelho(locais, [lis(1, "1"), lis(2, "1", 12), lis(4, "1")]);
+    expect(p.filtroIgnorado).toBe(false);
+    expect(p.novos).toEqual([4]);
+    expect(p.mudaram).toEqual([2]);
+    expect(p.sumiram).toEqual([3]);
+  });
+
+  it("título quitado aqui que reaparece aberto (estornado no Bling) é MUDANÇA", () => {
+    const p = planejarEspelho(new Map([[5, loc("2")]]), [lis(5, "1")]);
+    expect(p.mudaram).toEqual([5]);
+    expect(p.sumiram).toEqual([]);
+  });
+
+  it("⚠️ saldo/vencimento ausentes na listagem NÃO contam como mudança", () => {
+    const p = planejarEspelho(new Map([[1, loc("3", 10, 4)]]), [{ bling_id: 1, situacao: "3", valor: 10, saldo: null, vencimento: null }]);
+    expect(p.mudaram).toEqual([]);
+  });
+
+  it("quitado aqui que não está na lista de abertos não é 'sumiu'", () => {
+    const p = planejarEspelho(new Map([[1, loc("2")]]), []);
+    expect(p.sumiram).toEqual([]);
+  });
+
+  it("centavo de arredondamento não é mudança", () => {
+    const p = planejarEspelho(new Map([[1, loc("1", 10.001)]]), [lis(1, "1", 10)]);
+    expect(p.mudaram).toEqual([]);
+  });
+});

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { useParamUrl } from "@carbo/shell";
-import { Building2, ChevronLeft, ChevronRight, Info, Search } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { confirmar, useParamUrl } from "@carbo/shell";
+import { Building2, Check, ChevronLeft, ChevronRight, Info, Search, Undo2 } from "lucide-react";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +12,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   CarboTable, CarboTableHeader, CarboTableBody, CarboTableRow, CarboTableHead, CarboTableCell,
 } from "@/components/ui/carbo-table";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { usePersistedState } from "@/hooks/usePersistedState";
+import { baixaLiberada, pedirAoBling2, useBaixaBling2Config, type BaixaBling2Config } from "@/lib/bling2Baixa";
 import {
   useBling2Resumo, useBling2ContasPaged, valorEmAberto,
   type Bling2Tipo, type Bling2Conta, type FiltroBling2,
@@ -23,9 +27,10 @@ import { hojeISO, somarDias, dataBR, dataHoraBR, diasAte } from "@/lib/datas";
 // ⚠️ SEGMENTADA, nunca somada à matriz (decisão do dono do processo, 21/10/2026:
 // "pq qualquer coisa só apagamos"). O seletor troca a tela INTEIRA; não existe
 // visão "as duas juntas".
-// ⚠️ SOMENTE LEITURA: é espelho do Bling da conta 2, e a baixa é feita lá. Botão
-// de baixa aqui seria a segunda verdade sobre o mesmo título — a próxima
-// sincronização a desfaria, calada.
+// ⚠️ É ESPELHO do Bling da conta 2. A baixa pedida AQUI vai ao Bling 2 NA HORA
+// (`bling2-contas`) e só então o espelho muda — nunca uma marca local que a
+// próxima sincronização desfaria, calada. Sem o interruptor ligado
+// (`fin_bling2_baixa_config`), a tela continua só de leitura.
 // ⚠️ Erro de leitura (RLS ainda não liberada, tabela ausente) APARECE com a
 // mensagem do banco. Nunca vira lista vazia: "não carregou" e "não há nada" não
 // podem ter a mesma cara.
@@ -116,6 +121,8 @@ export function FilialBling2({ tipo }: { tipo: Bling2Tipo }) {
   const rows = paged?.rows ?? [];
   const total = paged?.count ?? 0;
   const situacoes = ROTULO_SITUACAO(tipo);
+  const { data: cfgBaixa } = useBaixaBling2Config();
+  const algumaLiberada = !!cfgBaixa && (cfgBaixa.ativo || cfgBaixa.teste_ids.length > 0);
 
   const from1 = total === 0 ? 0 : page * pageSize + 1;
   const to1 = Math.min(total, (page + 1) * pageSize);
@@ -135,7 +142,14 @@ export function FilialBling2({ tipo }: { tipo: Bling2Tipo }) {
       <div className="flex items-start gap-2 rounded-lg border border-carbo-blue/30 bg-carbo-blue/5 p-3 text-sm">
         <Info className="mt-0.5 h-4 w-4 shrink-0 text-carbo-blue" />
         <div className="space-y-0.5">
-          <p><strong>Espelho do Bling da filial (conta 2).</strong> Só leitura: a baixa é feita no Bling.</p>
+          <p>
+            <strong>Espelho do Bling da filial (conta 2).</strong>{" "}
+            {cfgBaixa?.ativo
+              ? "A baixa feita aqui vai na hora para o Bling 2; a feita no Bling chega aqui em até 10 min."
+              : algumaLiberada
+                ? "Baixa pelo sistema em TESTE: só o título liberado mostra o botão."
+                : "Só leitura: a baixa é feita no Bling."}
+          </p>
           <p className="text-xs text-muted-foreground">
             Estes títulos não entram nos totais da matriz.
             {resumo.data?.ultimaSincronizacao && <> Última sincronização: {dataHoraBR(resumo.data.ultimaSincronizacao)}.</>}
@@ -196,17 +210,18 @@ export function FilialBling2({ tipo }: { tipo: Bling2Tipo }) {
             <CarboTableHead>Saldo</CarboTableHead>
             <CarboTableHead>Situação</CarboTableHead>
             <CarboTableHead>{quitado}</CarboTableHead>
+            <CarboTableHead>Baixa</CarboTableHead>
           </CarboTableRow>
         </CarboTableHeader>
         <CarboTableBody>
           {isLoading ? (
-            <CarboTableRow><CarboTableCell colSpan={8} className="py-8 text-center text-muted-foreground">Carregando...</CarboTableCell></CarboTableRow>
+            <CarboTableRow><CarboTableCell colSpan={9} className="py-8 text-center text-muted-foreground">Carregando...</CarboTableCell></CarboTableRow>
           ) : isError ? (
-            <CarboTableRow><CarboTableCell colSpan={8} className="py-8 text-center text-destructive">
+            <CarboTableRow><CarboTableCell colSpan={9} className="py-8 text-center text-destructive">
               Não foi possível ler os títulos da filial: {(error as Error)?.message ?? "erro desconhecido"}
             </CarboTableCell></CarboTableRow>
           ) : !rows.length ? (
-            <CarboTableRow><CarboTableCell colSpan={8} className="py-8 text-center text-muted-foreground">
+            <CarboTableRow><CarboTableCell colSpan={9} className="py-8 text-center text-muted-foreground">
               <div className="flex flex-col items-center gap-2">
                 <Building2 className="h-8 w-8 text-muted-foreground/50" />
                 <span>{filtro === "fila" && !buscaUrl ? "Nada vencido nem vencendo nos próximos 7 dias na filial." : "Nenhum título da filial com esses filtros."}</span>
@@ -246,6 +261,7 @@ export function FilialBling2({ tipo }: { tipo: Bling2Tipo }) {
                     )}
                   </CarboTableCell>
                   <CarboTableCell className="whitespace-nowrap text-sm text-muted-foreground">{dataBR(c.data_pagamento)}</CarboTableCell>
+                  <CarboTableCell><AcoesDaFilial conta={c} tipo={tipo} cfg={cfgBaixa} /></CarboTableCell>
                 </CarboTableRow>
               );
             })
@@ -268,6 +284,118 @@ export function FilialBling2({ tipo }: { tipo: Bling2Tipo }) {
           <Button variant="outline" size="sm" className="gap-1" disabled={page >= lastPage} onClick={() => irPara(Math.min(lastPage, page + 1))}>Próxima <ChevronRight className="h-4 w-4" /></Button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A baixa de UM título da filial, pela tela.
+//   aberto + liberado        → "Dar baixa" (diálogo com a data)
+//   baixado AQUI (borderô)   → "por <quem>" + "Desfazer" (só o borderô nosso)
+//   última tentativa recusada → "Bling recusou" com o motivo
+// ⚠️ Baixa feita NO Bling 2 não ganha "Desfazer" aqui: desfaz-se lá, e o
+// espelho acompanha. Desfazer daqui apagaria um borderô que não é nosso.
+// ─────────────────────────────────────────────────────────────────────────────
+function AcoesDaFilial({ conta: c, tipo, cfg }: { conta: Bling2Conta; tipo: Bling2Tipo; cfg: BaixaBling2Config | undefined }) {
+  const qc = useQueryClient();
+  const [aberto, setAberto] = useState(false);
+  const [dia, setDia] = useState(hojeISO());
+  const [enviando, setEnviando] = useState(false);
+  const liberada = baixaLiberada(cfg, c.id);
+  const recarregar = () => {
+    qc.invalidateQueries({ queryKey: ["bling2-contas-paged"] });
+    qc.invalidateQueries({ queryKey: ["bling2-contas-resumo"] });
+  };
+  const verbo = tipo === "receber" ? "recebimento" : "pagamento";
+
+  const baixar = async () => {
+    setEnviando(true);
+    try {
+      const r = await pedirAoBling2("baixar", tipo, c.id, dia);
+      if (r.ok) {
+        toast.success(r.pulado === "ja_pago_no_bling" ? "Já estava baixado no Bling 2" : "Baixa feita no Bling da filial",
+          { description: r.pulado ? r.mensagem : r.bordero ? `Borderô ${r.bordero}` : undefined });
+        setAberto(false);
+      } else {
+        toast.error("O Bling 2 não aceitou a baixa — nada mudou", { description: r.mensagem });
+      }
+    } finally {
+      setEnviando(false);
+      recarregar();
+    }
+  };
+
+  const desfazer = async () => {
+    const ok = await confirmar({
+      titulo: "Desfazer a baixa no Bling 2?",
+      mensagem: `O borderô ${c.cb_baixa_bordero} é apagado no Bling da filial e o título volta a ficar em aberto.`,
+      confirmar: "Desfazer", perigo: true,
+    });
+    if (!ok) return;
+    setEnviando(true);
+    try {
+      const r = await pedirAoBling2("estornar", tipo, c.id);
+      if (r.ok) toast.success("Baixa desfeita no Bling da filial");
+      else toast.error("Não foi possível desfazer", { description: r.mensagem });
+    } finally {
+      setEnviando(false);
+      recarregar();
+    }
+  };
+
+  if (c.cb_baixa_bordero && !aberta(c)) {
+    return (
+      <div className="flex flex-wrap items-center gap-1">
+        <span className="inline-flex items-center gap-0.5 text-[11px] text-muted-foreground"
+          title={`Baixa feita pelo sistema${c.cb_baixa_em ? ` em ${dataHoraBR(c.cb_baixa_em)}` : ""} · borderô ${c.cb_baixa_bordero}`}>
+          <Check className="h-3 w-3" /> {c.cb_baixa_por_nome ? `por ${c.cb_baixa_por_nome.split(" ")[0]}` : "pelo sistema"}
+        </span>
+        {liberada && (
+          <Button variant="ghost" size="sm" className="h-6 gap-1 px-1.5 text-[11px]" disabled={enviando} onClick={desfazer}>
+            <Undo2 className="h-3 w-3" /> {enviando ? "Desfazendo…" : "Desfazer"}
+          </Button>
+        )}
+      </div>
+    );
+  }
+  if (!aberta(c)) return <span className="text-xs text-muted-foreground">—</span>;
+
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      {c.cb_baixa_erro && <CarboBadge variant="destructive" size="sm" title={c.cb_baixa_erro}>Bling recusou</CarboBadge>}
+      {liberada ? (
+        <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={enviando}
+          onClick={() => { setDia(hojeISO()); setAberto(true); }}>
+          {c.cb_baixa_erro ? "Tentar de novo" : "Dar baixa"}
+        </Button>
+      ) : !c.cb_baixa_erro && <span className="text-xs text-muted-foreground">no Bling</span>}
+
+      <Dialog open={aberto} onOpenChange={(v) => !enviando && setAberto(v)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Dar baixa no Bling da filial</DialogTitle>
+            <DialogDescription>
+              {c.nome || "—"} · nº {c.numero || "—"} · {brl(valorEmAberto(c))}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 text-sm">
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Data do {verbo}</Label>
+              <Input type="date" value={dia} max={hojeISO()} onChange={(e) => setDia(e.target.value)} />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              A baixa é feita NO Bling 2 agora, pelo valor em aberto, na conta (portador) do próprio título.
+              Se o Bling recusar, nada muda e o motivo aparece aqui.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" disabled={enviando} onClick={() => setAberto(false)}>Cancelar</Button>
+            <Button disabled={enviando || !dia || dia > hojeISO()} onClick={baixar}>
+              {enviando ? "Enviando ao Bling…" : "Dar baixa"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

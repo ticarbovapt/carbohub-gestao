@@ -3376,6 +3376,54 @@ supabase/migrations/20261121000000_espelho_contas_bling1.sql
    `resumo.<tipo>.bordero.erros`) e a fila é SORTEADA: em ordem fixa, os mesmos
    40 títulos sem data voltariam toda rodada.
 
+### Filial (Bling 2): baixa nos dois sentidos e espelho que ESCALA (22/10/2026)
+Pedido do dono do processo: a baixa da filial *"ao vivo nos dois caminhos,
+indo e voltando"*, e *"pronto para escala, sem retrabalho"*.
+
+```
+supabase/functions/bling2-contas             espelho (cron) · baixar/estornar (tela) · ensaio
+supabase/functions/_shared/blingContasRegra.ts   decidirBaixa · planejarEspelho (PURO, testado)
+fin_bling2_baixa_config                      interruptor (nasce DESLIGADO) + teste_ids + filtro
+fin_bling2_baixa_log                         quem baixou/desfez, append-only
+bling2_contas_espelho_log                    o desfecho de cada rodada (faxina de 7 dias)
+cron `bling2-contas-ao-vivo-10min`           19-59/10
+apps/financas … FilialBling2.tsx + lib/bling2Baixa.ts
+supabase/migrations/20261131000000_filial_baixa_e_espelho_ao_vivo.sql
+```
+
+1. ⚠️ **O espelho lê só os ABERTOS**, nunca o histórico: o custo segue o
+   volume em aberto, não os anos de título quitado. Quem SAIU da lista de
+   abertos ganha o detalhe (um a um, 60 por rodada) e a data vem do borderô.
+   ⚠️ **"Sumiu da lista" só significa "foi pago" se a lista É a de abertos**:
+   se o Bling ignorar o filtro (vier título quitado), `planejarEspelho` devolve
+   plano VAZIO e a rodada diz `O Bling ignorou o filtro` no log — nunca marca o
+   resto como pago. Lista cortada no teto (`MAX_PAGINAS`) também não conta
+   "sumidos". O filtro é CADASTRO (`filtro_abertos`), conferido pelo ENSAIO.
+2. ⚠️ **É ACRÉSCIMO**: o `bling2-sync` (fases contas_*, `bling2-contas-30min`)
+   continua como varredura completa. A listagem dele não traz data de pagamento
+   (e às vezes nem saldo) e o upsert gravaria NULO por cima — o gatilho
+   `bling2_contas_nao_apaga_pagamento` impede (exceção: título que voltou a
+   aberto perde a data). Quando o espelho novo estiver provado, a varredura
+   pode ir para 1×/dia — decisão, não feita.
+3. ⚠️ **A baixa vai PRIMEIRO ao Bling**, ao contrário da matriz: a filial não
+   tem título próprio aqui, só o espelho. Recusou ⇒ nada mudou, e a tela diz.
+   Aceitou ⇒ o espelho muda NA HORA (situação 2, data escolhida), sem esperar a
+   rodada. A data é escolhida na tela (padrão hoje, nunca futura).
+4. **A regra da baixa é UMA para as duas contas** (`decidirBaixa`, mesmo
+   arquivo que o `bling-contas-baixar` importa): já pago lá ⇒ não baixa de
+   novo; cancelado ⇒ recusa; portador do título ou o padrão; parcial manda o
+   saldo. ⚠️ Mudou a regra, muda para as duas — e o teste
+   `src/test/bling/contasRegra.test.ts` carrega o corpo do ensaio real de 22/10.
+5. ⚠️ **Desfazer só o borderô NOSSO e de UM título** (`cb_baixa_bordero`), e
+   depois RELÊ o título no Bling (pode voltar parcial). Baixa feita no próprio
+   Bling 2 não ganha "Desfazer" aqui.
+6. ⚠️ **NUNCA renova o token do Bling 2** — quem renova é o `bling2-sync`
+   (o incremental de 1 min renova com < 5 min). Perto de vencer: o espelho
+   PULA (e loga), a baixa pede "tente em 1 minuto".
+7. ⚠️ **Nasce DESLIGADA** e se testa com UM título (BLOCO 6: o número do título,
+   que tem de casar com EXATAMENTE um aberto a receber). Front no ar antes do
+   SQL: a lista relê sem as colunas `cb_baixa_*` e o botão não aparece.
+
 ### App novo no hub — os QUATRO lugares que precisam aprender a interface
 Criar a pasta do app é a parte fácil. O que faz um app existir é a flag em
 `profiles.allowed_interfaces` (ex.: `carbo_atendimento`) ser reconhecida em
