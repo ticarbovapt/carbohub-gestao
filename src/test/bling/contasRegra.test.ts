@@ -79,9 +79,25 @@ describe("decidirBaixa com o que a pessoa escolheu no diálogo", () => {
     expect(r.decisao === "enviar" && r.esperado.parcial).toBe(false);
   });
 
-  it("tarifa vai no campo próprio e não muda o valor pago", () => {
-    const r = decidirBaixa("receber", aberto, null, "2026-10-22", null, { tarifa: 3.2 });
-    expect(r.decisao === "enviar" && r.corpo).toMatchObject({ tarifa: 3.2, valorRecebido: 250 });
+  it("tarifa é o que foi RETIDO: abate do valor recebido e ainda quita (borderô real do ML)", () => {
+    const ml = { situacao: 1, valor: 39.9, saldo: 39.9, portador: { id: 1 } };
+    const r = decidirBaixa("receber", ml, null, "2026-10-19", null, { tarifa: 11.64 });
+    expect(r.decisao === "enviar" && r.corpo).toMatchObject({ tarifa: 11.64, valorPago: 28.26, valorRecebido: 28.26 });
+    expect(r.decisao === "enviar" && r.esperado).toEqual({ saldoAntes: 39.9, principal: 39.9, valor: 28.26, parcial: false, saldoDepois: 0 });
+    // Informando o valor que entrou (28,26) com a tarifa, também quita.
+    const r2 = decidirBaixa("receber", ml, null, "2026-10-19", null, { tarifa: 11.64, valor: 28.26 });
+    expect(r2.decisao === "enviar" && r2.esperado.parcial).toBe(false);
+  });
+
+  it("tarifa no pagamento é recusada (o sentido dela ali não foi medido)", () => {
+    expect(decidirBaixa("pagar", aberto, null, "2026-10-22", null, { tarifa: 2 }).decisao).toBe("ajuste_invalido");
+  });
+
+  it("juros no pagamento como no borderô real: 534,87 pagos quitam 520 com 14,87 de juros", () => {
+    const t = { situacao: 1, valor: 520, saldo: 520, portador: { id: 1 } };
+    const r = decidirBaixa("pagar", t, null, "2026-10-19", null, { juros: 14.87 });
+    expect(r.decisao === "enviar" && r.corpo).toMatchObject({ juros: 14.87, valorPago: 534.87 });
+    expect(r.decisao === "enviar" && r.corpo.valorRecebido).toBeUndefined();
   });
 
   it("valor menor que o saldo é PARCIAL, e o esperado diz quanto fica em aberto", () => {

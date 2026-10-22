@@ -96,14 +96,16 @@ export function DialogoBaixa({
     juros: lerReais(txt.juros), multa: lerReais(txt.multa),
     desconto: lerReais(txt.desconto), tarifa: lerReais(txt.tarifa),
   };
-  const automatico = titulo ? Math.round((titulo.saldo + (n.juros || 0) + (n.multa || 0) - (n.desconto || 0)) * 100) / 100 : 0;
+  // Tarifa (só no recebimento) é o que o banco/plataforma reteve: entra a menos.
+  const tarifa = tipo === "receber" ? (n.tarifa || 0) : 0;
+  const automatico = titulo ? Math.round((titulo.saldo + (n.juros || 0) + (n.multa || 0) - (n.desconto || 0) - tarifa) * 100) / 100 : 0;
   // Enquanto ninguém mexeu no valor, ele acompanha juros/multa/desconto, como no Bling.
   useEffect(() => {
     if (!valorEditado && titulo) setValorTxt(reaisTxt(Math.max(automatico, 0)));
   }, [automatico, valorEditado]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const valor = lerReais(valorTxt);
-  const calc = titulo ? calcularBaixa(titulo.saldo, { ...n, valor }) : { erro: "" };
+  const calc = titulo ? calcularBaixa(tipo, titulo.saldo, { ...n, tarifa, valor }) : { erro: "" };
   const erroParcial = "parcial" in calc && calc.parcial && !podeParcial
     ? (motivoSemParcial ?? "Baixa parcial só com o envio ao Bling ligado.") : null;
 
@@ -126,7 +128,7 @@ export function DialogoBaixa({
       parcial: calc.parcial,
       ajustes: {
         portador_id: portador, portador_nome: portador ? nomeConta(contaSel) : null,
-        juros: n.juros, multa: n.multa, desconto: n.desconto, tarifa: n.tarifa, valor,
+        juros: n.juros, multa: n.multa, desconto: n.desconto, tarifa, valor,
         historico: historico.trim() || null,
       },
     });
@@ -181,11 +183,12 @@ export function DialogoBaixa({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {/* Tarifa só no recebimento: é o que a plataforma/banco reteve (o "Tarifa" do Bling). */}
+            <div className={cn("grid grid-cols-2 gap-3", tipo === "receber" ? "sm:grid-cols-4" : "sm:grid-cols-3")}>
               {campo("juros", "Juros")}
               {campo("multa", "Multa")}
               {campo("desconto", "Desconto")}
-              {campo("tarifa", "Tarifa")}
+              {tipo === "receber" && campo("tarifa", "Tarifa")}
             </div>
 
             <div className="space-y-1">

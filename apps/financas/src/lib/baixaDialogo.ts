@@ -47,13 +47,15 @@ const cents = (v: number) => Math.round(v * 100);
  * Quita ou fica parcial? O espelho, na tela, de `decidirBaixa`.
  * Devolve o erro (texto) ou o resultado.
  */
-export function calcularBaixa(saldo: number, a: { juros: number; multa: number; desconto: number; tarifa: number; valor: number }):
+export function calcularBaixa(tipo: "pagar" | "receber", saldo: number, a: { juros: number; multa: number; desconto: number; tarifa: number; valor: number }):
   { erro: string } | { parcial: boolean; restante: number } {
   if ([a.juros, a.multa, a.desconto, a.tarifa, a.valor].some((x) => !Number.isFinite(x) || x < 0)) {
     return { erro: "Use valores em reais, sem sinal de menos." };
   }
   if (a.valor <= 0) return { erro: "O valor pago tem de ser maior que zero." };
-  const principal = cents(a.valor) - cents(a.juros) - cents(a.multa) + cents(a.desconto);
+  if (tipo === "pagar" && a.tarifa > 0) return { erro: "Tarifa só existe no recebimento." };
+  // Juros e multa vêm A MAIS no valor; desconto e tarifa (o que foi retido) a menos.
+  const principal = cents(a.valor) - cents(a.juros) - cents(a.multa) + cents(a.desconto) + cents(a.tarifa);
   if (principal <= 0) return { erro: "O valor pago não cobre os juros e a multa." };
   if (principal > cents(saldo)) {
     return { erro: `O valor passa do saldo em aberto (R$ ${reaisTxt(saldo)}) — a diferença entra como juros ou multa.` };
