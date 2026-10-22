@@ -2262,6 +2262,15 @@ Aconteceu: 15 h de espelho parado, `pg_cron` marcando `succeeded` o tempo todo,
    religar, confira `items is null or raw_detalhe is null`: sem `raw_detalhe`
    não há `nf_bling_id` e o pedido fica preso em "Confirmado". Ele drena 60 por
    rodada de 10 min — espere UMA rodada antes de concluir que não drenou.
+⚠️ **E a causa que se REPETIA era a corrida de renovação** (medido em 22/10/2026):
+quatro conexões, cada uma morta em 1–2 semanas, sempre logo DEPOIS de uma
+renovação bem-sucedida (`updated_at` = a renovação, `is_active = false`). Duas
+rodadas do `bling2-sync` no mesmo décimo de segundo renovaram com o MESMO
+`refresh_token` (uso único): uma gravou o token novo, a outra levou
+invalid_grant e DESATIVOU a conexão recém-renovada. Hoje quem perde espera,
+relê e usa o token do vencedor, e só desativa com `.eq("refresh_token", o que
+falhou)` — no `bling2-sync` E no `bling-sync` (que também renova o da filial ao
+emitir). É a lição do ML (`20260986`) que faltava aplicar aqui.
 5. **A fila de mensagens NÃO acumula rajada**: `carbo_msg_fila` é view do estado
    ATUAL, uma etapa por pedido. Pedido que andou três etapas na queda gera uma
    mensagem, não três — e `saiu_entrega` exige entrega em aberto.

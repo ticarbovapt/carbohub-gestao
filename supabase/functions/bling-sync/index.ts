@@ -126,11 +126,26 @@ async function refreshBlingToken(
 
   if (!refreshResponse.ok || refreshData.error) {
     console.error("[bling-sync] Token refresh FAILED:", JSON.stringify(refreshData));
-    // Deactivate integration
+    // ⚠️ O `refresh_token` do Bling é de USO ÚNICO: com duas funções renovando
+    // ao mesmo tempo, quem perde recebe invalid_grant — e desativar aqui
+    // derrubava a conexão que o vencedor ACABARA de renovar (Bling 2, 21/10/2026).
+    // Quem perdeu espera o vencedor gravar e usa o token dele; só desativa se a
+    // linha AINDA tem o refresh que falhou.
+    for (const espera of [1500, 3000]) {
+      await new Promise((ok) => setTimeout(ok, espera));
+      const { data: atual } = await supabaseAdmin.from(CONTAS[conta].integration)
+        .select("access_token, refresh_token, expires_at").eq("id", integration.id).maybeSingle();
+      if (atual && atual.refresh_token !== integration.refresh_token
+          && new Date(atual.expires_at as string).getTime() > Date.now() + 60_000) {
+        console.log("[bling-sync] outra função renovou o token no mesmo instante — usando o dela");
+        return { token: atual.access_token as string };
+      }
+    }
     await supabaseAdmin
       .from(CONTAS[conta].integration)
       .update({ is_active: false })
-      .eq("id", integration.id);
+      .eq("id", integration.id)
+      .eq("refresh_token", integration.refresh_token);
     return { token: "", error: `Token refresh failed: ${refreshData.error_description || refreshData.error || "unknown"}. Please reconnect to Bling.` };
   }
 
