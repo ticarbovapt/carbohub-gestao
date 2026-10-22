@@ -102,8 +102,17 @@ describe("decidirBaixa com o que a pessoa escolheu no diálogo", () => {
   });
 
   it("lerAjustes aceita o JSON da tela e ignora o resto", () => {
-    expect(lerAjustes({ portador_id: "77", juros: "1.5", lixo: 1 })).toEqual({ portadorId: 77, juros: 1.5, multa: null, desconto: null, tarifa: null, valor: null });
-    expect(lerAjustes(undefined)).toEqual({ portadorId: null, juros: null, multa: null, desconto: null, tarifa: null, valor: null });
+    expect(lerAjustes({ portador_id: "77", juros: "1.5", lixo: 1 })).toEqual({ portadorId: 77, juros: 1.5, multa: null, desconto: null, tarifa: null, valor: null, historico: null });
+    expect(lerAjustes(undefined)).toEqual({ portadorId: null, juros: null, multa: null, desconto: null, tarifa: null, valor: null, historico: null });
+  });
+
+  it("o histórico escrito na tela vai como está; vazio usa a marca padrão", () => {
+    const com = decidirBaixa("receber", aberto, null, "2026-10-22", "Ana", { historico: "  Ref. ao pedido 219 | pix  " });
+    const sem = decidirBaixa("receber", aberto, null, "2026-10-22", "Ana", { historico: "   " });
+    expect(com.decisao === "enviar" && com.corpo.historico).toBe("Ref. ao pedido 219 | pix");
+    expect(sem.decisao === "enviar" && sem.corpo.historico).toBe("Baixa pelo CarboHub Finanças (Ana)");
+    const longo = decidirBaixa("pagar", aberto, null, "2026-10-22", null, { historico: "x".repeat(2100) });
+    expect(longo.decisao === "enviar" && String(longo.corpo.historico).length).toBe(2000);
   });
 });
 

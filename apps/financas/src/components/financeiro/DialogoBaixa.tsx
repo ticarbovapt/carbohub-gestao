@@ -4,13 +4,14 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePickerInput } from "@/components/ui/date-picker-input";
 import { dataBR, hojeISO } from "@/lib/datas";
 import type { ContaBling } from "@/lib/contaPagarBling";
 import {
-  calcularBaixa, lerReais, reaisTxt, usePortadorDoTitulo, usePortadores,
+  calcularBaixa, lerReais, reaisTxt, useDoTituloNoBling, usePortadores, MAX_HISTORICO,
   type AjustesTela, type TabelaEspelho,
 } from "@/lib/baixaDialogo";
 
@@ -33,6 +34,8 @@ export interface TituloParaBaixa {
   valor: number;
   /** O que ainda está em aberto (igual ao valor, salvo parcial anterior). */
   saldo: number;
+  /** O histórico do título, quando a tela já o tem (a reserva do que vem do espelho). */
+  historico?: string | null;
 }
 
 export interface ConfirmacaoBaixa { dia: string; ajustes: AjustesTela; parcial: boolean }
@@ -56,13 +59,16 @@ export function DialogoBaixa({
 }) {
   const verbo = tipo === "receber" ? "recebimento" : "pagamento";
   const { data: portadores, isLoading: carregandoContas } = usePortadores(conta, open);
-  const { data: doTitulo } = usePortadorDoTitulo(espelho, blingId, open);
+  const { data: noBling } = useDoTituloNoBling(espelho, blingId, open);
+  const doTitulo = noBling?.portador ?? null;
 
   const [dia, setDia] = useState(hojeISO());
   const [contaSel, setContaSel] = useState<string>(DO_TITULO);
   const [txt, setTxt] = useState({ juros: "", multa: "", desconto: "", tarifa: "" });
   const [valorTxt, setValorTxt] = useState("");
   const [valorEditado, setValorEditado] = useState(false);
+  const [historico, setHistorico] = useState("");
+  const [historicoEditado, setHistoricoEditado] = useState(false);
 
   // Abriu com outro título: tudo volta ao padrão.
   useEffect(() => {
@@ -72,12 +78,19 @@ export function DialogoBaixa({
     setTxt({ juros: "", multa: "", desconto: "", tarifa: "" });
     setValorTxt(reaisTxt(titulo.saldo));
     setValorEditado(false);
+    setHistorico((titulo.historico ?? "").slice(0, MAX_HISTORICO));
+    setHistoricoEditado(false);
   }, [open, titulo?.nome, titulo?.saldo]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   // A conta do título, quando o Bling a tem, já vem escolhida.
   useEffect(() => {
     if (open && doTitulo && contaSel === DO_TITULO) setContaSel(String(doTitulo));
   }, [open, doTitulo]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  // O histórico do título no Bling, como lá: vem escrito, e a pessoa completa.
+  useEffect(() => {
+    if (open && noBling?.historico && !historicoEditado) setHistorico(noBling.historico.slice(0, MAX_HISTORICO));
+  }, [open, noBling?.historico]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const n = {
     juros: lerReais(txt.juros), multa: lerReais(txt.multa),
@@ -114,6 +127,7 @@ export function DialogoBaixa({
       ajustes: {
         portador_id: portador, portador_nome: portador ? nomeConta(contaSel) : null,
         juros: n.juros, multa: n.multa, desconto: n.desconto, tarifa: n.tarifa, valor,
+        historico: historico.trim() || null,
       },
     });
   };
@@ -186,6 +200,16 @@ export function DialogoBaixa({
               </div>
               <Input inputMode="decimal" value={valorTxt} className="h-10 text-base font-medium tabular-nums"
                 onChange={(e) => { setValorEditado(true); setValorTxt(e.target.value); }} />
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Histórico</Label>
+              <Textarea rows={3} maxLength={MAX_HISTORICO} value={historico} className="resize-none text-sm"
+                placeholder="Ex.: Ref. ao pedido 219 | pix"
+                onChange={(e) => { setHistoricoEditado(true); setHistorico(e.target.value); }} />
+              <p className="text-right text-[11px] tabular-nums text-muted-foreground">
+                {historico.length.toLocaleString("pt-BR")} de {MAX_HISTORICO.toLocaleString("pt-BR")} caracteres
+              </p>
             </div>
 
             <div className={cn("rounded-md px-3 py-2 text-xs",

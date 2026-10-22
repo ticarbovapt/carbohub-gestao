@@ -3491,6 +3491,12 @@ desenho da "Baixa de lançamentos" do Bling; `lib/baixaDialogo.ts`; a regra é a
    (`useEspelhoMatriz`) — a tabela local não guarda saldo.
 6. ⚠️ Front e funções sobem ANTES do SQL sem quebrar: quem lê/grava
    `baixa_ajustes` tolera a ausência (a baixa segue; só os ajustes não ficam).
+7. **Histórico** (pedido do time, 22/10/2026): o texto que elas escrevem para
+   achar a baixa depois vai no `historico` do borderô, nos dois Blings. Vem
+   PRÉ-PREENCHIDO com o histórico do título (espelho `bling_contas_*` /
+   `bling2_contas_*`), como na tela do Bling; limite 2.000 (`MAX_HISTORICO`,
+   cortado no servidor também). Vazio ⇒ "Baixa pelo CarboHub Finanças (quem)".
+   Fica em `baixa_ajustes.historico` — o "Tentar de novo" manda o mesmo texto.
 
 ### Conta a pagar NASCE no Finanças e é criada NO BLING (22/10/2026)
 "Nova conta a pagar" em `/pagar`, para a matriz (Bling 1) ou a filial (Bling 2)

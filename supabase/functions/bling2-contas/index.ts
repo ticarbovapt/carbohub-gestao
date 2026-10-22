@@ -573,6 +573,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         baixa_ajustes: {
           portador_id: aj.portadorId ?? null, juros: aj.juros ?? 0, multa: aj.multa ?? 0,
           desconto: aj.desconto ?? 0, tarifa: aj.tarifa ?? 0, valor: dec.esperado.valor > 0 ? dec.esperado.valor : null,
+          historico: aj.historico ?? null,
         },
       }).eq("id", id);
       await registrar(true, "Baixa enviada ao Bling 2.", bordero);

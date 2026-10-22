@@ -23,7 +23,12 @@ export interface AjustesTela {
   tarifa: number;
   /** O que saiu/entrou de fato (o "Valor pago" do Bling). */
   valor: number;
+  /** O "Histórico" da baixa no Bling — o texto pelo qual o time acha a baixa depois. */
+  historico: string | null;
 }
+
+/** O limite do campo no Bling ("N de 2.000 caracteres"). Igual a MAX_HISTORICO do servidor. */
+export const MAX_HISTORICO = 2000;
 
 /** "1.234,56", "1234,56" ou "1234.56" → número; vazio = 0; inválido = NaN. */
 export function lerReais(txt: string): number {
@@ -72,17 +77,21 @@ export function usePortadores(conta: ContaBling, ligado: boolean) {
 
 export type TabelaEspelho = "bling_contas_pagar" | "bling_contas_receber" | "bling2_contas_pagar" | "bling2_contas_receber";
 
-/** A conta (portador) que o título já tem no Bling — vem pré-escolhida. */
-export function usePortadorDoTitulo(tabela: TabelaEspelho, blingId: number | null | undefined, ligado: boolean) {
+/**
+ * A conta (portador) e o histórico que o título já tem no Bling — vêm
+ * pré-preenchidos, como na "Baixa de lançamentos" de lá.
+ */
+export function useDoTituloNoBling(tabela: TabelaEspelho, blingId: number | null | undefined, ligado: boolean) {
   return useQuery({
-    queryKey: ["bling-portador-titulo", tabela, blingId],
+    queryKey: ["bling-do-titulo", tabela, blingId],
     enabled: ligado && !!blingId,
     staleTime: 5 * 60_000,
-    queryFn: async (): Promise<number | null> => {
-      const { data, error } = await db.from(tabela).select("portador:detalhe->portador->>id").eq("bling_id", blingId).maybeSingle();
-      if (error) return null;
+    queryFn: async (): Promise<{ portador: number | null; historico: string | null }> => {
+      const { data, error } = await db.from(tabela).select("historico, portador:detalhe->portador->>id").eq("bling_id", blingId).maybeSingle();
+      if (error) return { portador: null, historico: null };
       const id = Number(data?.portador);
-      return id > 0 ? id : null;
+      const h = typeof data?.historico === "string" ? data.historico.trim() : "";
+      return { portador: id > 0 ? id : null, historico: h || null };
     },
   });
 }
