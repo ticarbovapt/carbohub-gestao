@@ -6,6 +6,7 @@ import { lerSemTeto } from "@carbo/shell";
 import { hojeISO, somarDias, instanteDoDia } from "@/lib/datas";
 import { COLUNAS_BAIXA_BLING, faltaColunaDaBaixa } from "@/lib/blingBaixa";
 import type { QueryClient } from "@tanstack/react-query";
+import type { ColunaOrdem, Ordem } from "@/components/financeiro/ContasUI";
 import type {
   PurchaseRequest,
   PurchaseOrder,
@@ -420,8 +421,14 @@ export type FiltroPagar = "fila" | "vencido" | "hoje" | "7dias" | "a_vencer" | "
 // Evita carregar todo o histórico do Bling de uma vez.
 // `select("*")`: traz `bling_id`, `paid_by` e as colunas `bling_baixa_*` quando
 // existem — e, antes do SQL, simplesmente não as traz, sem erro.
+const COLUNA_ORDEM_PAGAR: Record<ColunaOrdem, string> = {
+  nome: "supplier_name", vencimento: "due_date", valor: "amount", quitado: "paid_at",
+};
+
 export function usePurchasePayablesPaged(params: {
   source: string; status: string; from: string; to: string; page: number; pageSize: number; busca?: string;
+  /** Escolhida na tela; nula = a ordem padrão abaixo. */
+  ordem?: Ordem;
 }) {
   return useQuery({
     queryKey: ["purchase-payables-paged", params],
@@ -454,9 +461,11 @@ export function usePurchasePayablesPaged(params: {
       // cancelado, todos) sem período: o mais recente primeiro. ⚠️ `id` desempata — sem ele
       // a mesma linha aparece em duas páginas e outra em nenhuma.
       // Com período escolhido, a leitura é cronológica dentro dele.
-      const crescente = !!(params.from || params.to) || !["pago", "cancelado", "all"].includes(params.status);
+      const crescente = params.ordem ? params.ordem.asc
+        : !!(params.from || params.to) || !["pago", "cancelado", "all"].includes(params.status);
+      const coluna = params.ordem ? COLUNA_ORDEM_PAGAR[params.ordem.col] : "due_date";
       q = q
-        .order("due_date", { ascending: crescente })
+        .order(coluna, { ascending: crescente, nullsFirst: false })
         .order("id", { ascending: crescente })
         .range(fromIdx, fromIdx + params.pageSize - 1);
       const { data, error, count } = await q;

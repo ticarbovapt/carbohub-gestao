@@ -13,9 +13,10 @@ import {
 import { usePersistedState } from "@/hooks/usePersistedState";
 import { FilialBling2, LinhaEmpresa, SeletorEmpresa, useEmpresaUrl } from "@/components/financeiro/FilialBling2";
 import {
-  BarraFiltros, CampoBusca, CelulaVencimento, FiltroPeriodo, FiltroSelect, Kpi, KpiGrade, LimparFiltros,
-  LinhaEstado, MenuAcoes, Paginacao, SituacaoBadge, Valor,
+  BarraFiltros, CabecalhoOrdem, CampoBusca, CelulaVencimento, FiltroOrdem, FiltroPeriodo, FiltroSelect, Kpi, KpiGrade,
+  LimparFiltros, LinhaEstado, MenuAcoes, Paginacao, SituacaoBadge, Valor, useOrdemUrl,
 } from "@/components/financeiro/ContasUI";
+import { DatePickerInput } from "@/components/ui/date-picker-input";
 import { BaixaNoBling } from "@/components/financeiro/BaixaNoBling";
 import { toast } from "@/hooks/use-toast";
 import { useBaixaBlingConfig, vaiAoBling, enviarAoBling, avisarBaixaNoBling } from "@/lib/blingBaixa";
@@ -103,6 +104,7 @@ function RecebiveisMatriz({ seletor }: { seletor: ReactNode }) {
   const de = isDia(deUrl) ? deUrl : "";
   const ate = isDia(ateUrl) ? ateUrl : "";
   const page = Math.max(0, (Number(paginaUrl) || 1) - 1);
+  const { ordem, definir: definirOrdem, alternar: ordenarPor } = useOrdemUrl(() => setPaginaUrl(null));
 
   // Toda troca de filtro volta à 1ª página.
   const setStatus = (v: string) => {
@@ -151,7 +153,7 @@ function RecebiveisMatriz({ seletor }: { seletor: ReactNode }) {
   const [estornando, setEstornando] = useState<string | null>(null);
   const { data: openRows } = useReceivablesOpen(source);
   const { data: paged, isLoading, isError, error } = useReceivablesPaged({
-    source, status, de: recorte.de, ate: recorte.ate, busca: buscaUrl, page, pageSize,
+    source, status, de: recorte.de, ate: recorte.ate, busca: buscaUrl, page, pageSize, ordem,
   });
   const rows = paged?.rows ?? [];
   const total = paged?.count ?? 0;
@@ -222,10 +224,10 @@ function RecebiveisMatriz({ seletor }: { seletor: ReactNode }) {
     if (ok) update.mutate({ id: r.id, status: "cancelado" });
   };
 
-  const filtrado = status !== "fila" || source !== "all" || !!mes || !!de || !!ate || !!buscaUrl;
+  const filtrado = status !== "fila" || source !== "all" || !!mes || !!de || !!ate || !!buscaUrl || !!ordem;
   const limparTudo = () => {
     setStatusUrl(null); setSourceUrl(null); setMesUrl(null); setDeUrl(null); setAteUrl(null);
-    setBuscaUrl(null); setPaginaUrl(null); setBusca("");
+    setBuscaUrl(null); setPaginaUrl(null); setBusca(""); definirOrdem(null);
   };
   /** Atalho dos cartões: o filtro que reproduz o número, sem período nem busca. */
   const aplicarCartao = (v: FiltroStatusReceber) => {
@@ -277,6 +279,7 @@ function RecebiveisMatriz({ seletor }: { seletor: ReactNode }) {
           }}
           onLimpar={() => { setMesUrl(null); setDeUrl(null); setAteUrl(null); setPaginaUrl(null); }}
         />
+        <FiltroOrdem ordem={ordem} onChange={definirOrdem} quitado="Recebimento" />
         <LimparFiltros visivel={filtrado} onClick={limparTudo} />
       </BarraFiltros>
 
@@ -284,11 +287,11 @@ function RecebiveisMatriz({ seletor }: { seletor: ReactNode }) {
         <CarboTable>
           <CarboTableHeader>
             <CarboTableRow>
-              <CarboTableHead>Cliente</CarboTableHead>
-              <CarboTableHead>Vencimento</CarboTableHead>
-              <CarboTableHead className="text-right [&>div]:justify-end">Valor</CarboTableHead>
+              <CabecalhoOrdem col="nome" ordem={ordem} onOrdenar={ordenarPor}>Cliente</CabecalhoOrdem>
+              <CabecalhoOrdem col="vencimento" ordem={ordem} onOrdenar={ordenarPor}>Vencimento</CabecalhoOrdem>
+              <CabecalhoOrdem col="valor" ordem={ordem} onOrdenar={ordenarPor} direita>Valor</CabecalhoOrdem>
               <CarboTableHead>Situação</CarboTableHead>
-              <CarboTableHead>Recebido em</CarboTableHead>
+              <CabecalhoOrdem col="quitado" ordem={ordem} onOrdenar={ordenarPor}>Recebido em</CabecalhoOrdem>
               <CarboTableHead className="w-px" />
             </CarboTableRow>
           </CarboTableHeader>
@@ -373,7 +376,7 @@ function RecebiveisMatriz({ seletor }: { seletor: ReactNode }) {
                 <div className="flex justify-between gap-2"><span className="text-muted-foreground">Valor</span><strong className="font-mono">{brl(receiving.amount)}</strong></div>
                 <div className="flex justify-between gap-2"><span className="text-muted-foreground">Vencimento</span><strong>{dataBR(receiving.due_date)}</strong></div>
               </div>
-              <div className="space-y-1.5"><Label>Data do recebimento</Label><Input type="date" value={recAt} max={hoje} onChange={(e) => setRecAt(e.target.value)} /></div>
+              <div className="space-y-1.5"><Label>Data do recebimento</Label><DatePickerInput value={recAt} onChange={setRecAt} disableFuture clearable={false} className="h-9 w-full hover:bg-muted/60 hover:text-foreground data-[state=open]:bg-muted/60" /></div>
               {vaiAoBling(cfgBling, receiving) && (
                 <p className="rounded-md border border-border bg-muted/40 p-2 text-xs">A baixa feita aqui vai para o Bling na hora.</p>
               )}
@@ -395,7 +398,7 @@ function RecebiveisMatriz({ seletor }: { seletor: ReactNode }) {
             <div className="space-y-1.5"><Label>Cliente</Label><Input value={form.customer_name} onChange={(e) => setForm({ ...form, customer_name: e.target.value })} placeholder="Nome do cliente" /></div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5"><Label>Valor (R$)</Label><Input type="number" min={0} step="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} /></div>
-              <div className="space-y-1.5"><Label>Vencimento</Label><Input type="date" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label>Vencimento</Label><DatePickerInput value={form.due_date} onChange={(v) => setForm({ ...form, due_date: v })} clearable={false} className="h-9 w-full hover:bg-muted/60 hover:text-foreground data-[state=open]:bg-muted/60" /></div>
             </div>
             <div className="space-y-1.5"><Label>Observação</Label><Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
           </div>

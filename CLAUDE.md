@@ -3453,6 +3453,14 @@ entra lá, nunca numa cópia.
    excluir no Bling, desfazer) ficam no ⋯ — e as confirmações continuam.
 3. ⚠️ O menu ⋯ abre a confirmação ADIADA (`setTimeout`): abrir o diálogo no
    mesmo tique em que o menu fecha faz os dois brigarem pelo foco.
+4. **Ordenar** (`?ordem=valor` / `?ordem=-valor`, `useOrdemUrl`): clique no
+   cabeçalho (Nome, Vencimento, Valor, Pago/Recebido em) ou "Ordenar" na barra
+   — os dois são o MESMO estado. ⚠️ Quem ordena é a CONSULTA (`ordem` nos três
+   hooks paginados), nunca a tela: a lista é paginada no banco, e ordenar a
+   página mostraria "o maior valor" dos 20 que vieram. Sem `ordem`, cada tela
+   segue a ordem padrão de antes. A filial ganhou o mesmo filtro de período.
+5. **Data é clicada, nunca digitada**: o período usa o `Calendar` em faixa e os
+   diálogos usam `DatePickerInput` (dia ISO ↔ Date ao MEIO-DIA local).
 
 ### Conta a pagar NASCE no Finanças e é criada NO BLING (22/10/2026)
 "Nova conta a pagar" em `/pagar`, para a matriz (Bling 1) ou a filial (Bling 2)

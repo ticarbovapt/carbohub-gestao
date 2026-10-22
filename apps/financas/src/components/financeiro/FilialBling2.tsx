@@ -5,7 +5,6 @@ import { toast } from "sonner";
 import { confirmar, useParamUrl } from "@carbo/shell";
 import { Check, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   CarboTable, CarboTableHeader, CarboTableBody, CarboTableRow, CarboTableHead, CarboTableCell,
@@ -18,11 +17,12 @@ import {
   useBling2Resumo, useBling2ContasPaged, valorEmAberto,
   type Bling2Tipo, type Bling2Conta, type FiltroBling2,
 } from "@/hooks/useBling2Contas";
-import { hojeISO, dataBR, dataHoraBR, diasAte } from "@/lib/datas";
+import { hojeISO, dataBR, dataHoraBR, diasAte, limitesDoMes } from "@/lib/datas";
 import {
-  BarraFiltros, CampoBusca, CelulaVencimento, FiltroSelect, Kpi, KpiGrade, LimparFiltros, LinhaEstado,
-  MenuAcoes, Paginacao, SituacaoBadge, Valor, brl, type Situacao,
+  BarraFiltros, CabecalhoOrdem, CampoBusca, CelulaVencimento, FiltroOrdem, FiltroPeriodo, FiltroSelect, Kpi, KpiGrade,
+  LimparFiltros, LinhaEstado, MenuAcoes, Paginacao, SituacaoBadge, Valor, brl, useOrdemUrl, type Situacao,
 } from "@/components/financeiro/ContasUI";
+import { DatePickerInput } from "@/components/ui/date-picker-input";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // A FILIAL (Bling 2) nas telas de Contas a receber e Contas a pagar.
@@ -116,10 +116,19 @@ export function FilialBling2({ tipo, seletor }: { tipo: Bling2Tipo; seletor: Rea
   const [filtroUrl, setFiltroUrl] = useParamUrl("situacao", "fila");
   const [buscaUrl, setBuscaUrl] = useParamUrl("busca", "", { replace: true });
   const [paginaUrl, setPaginaUrl] = useParamUrl("pagina", "1");
+  const [mesUrl, setMesUrl] = useParamUrl("mes", "");
+  const [deUrl, setDeUrl] = useParamUrl("de", "");
+  const [ateUrl, setAteUrl] = useParamUrl("ate", "");
   const [pageSize, setPageSize] = usePersistedState<number>(`fin.filial.${tipo}.pageSize`, 20);
 
   const filtro = (FILTROS.some((f) => f.v === filtroUrl) ? filtroUrl : "fila") as FiltroBling2;
   const page = Math.max(0, (Number(paginaUrl) || 1) - 1);
+  const { ordem, definir: definirOrdem, alternar: ordenarPor } = useOrdemUrl(() => setPaginaUrl(null));
+  // Mês OU intervalo de vencimento, como na matriz: um limpa o outro.
+  const mes = /^\d{4}-\d{2}$/.test(mesUrl) ? mesUrl : "";
+  const de = /^\d{4}-\d{2}-\d{2}$/.test(deUrl) ? deUrl : "";
+  const ate = /^\d{4}-\d{2}-\d{2}$/.test(ateUrl) ? ateUrl : "";
+  const periodo = de || ate ? { de, ate } : mes ? limitesDoMes(mes) : { de: "", ate: "" };
   const hoje = hojeISO();
   const quitado = tipo === "receber" ? "Recebido em" : "Pago em";
   const quem = tipo === "receber" ? "Cliente" : "Fornecedor";
@@ -134,13 +143,22 @@ export function FilialBling2({ tipo, seletor }: { tipo: Bling2Tipo; seletor: Rea
   }, [busca, buscaUrl, setBuscaUrl, setPaginaUrl]);
 
   const resumo = useBling2Resumo(tipo);
-  const { data: paged, isLoading, isError, error } = useBling2ContasPaged({ tipo, filtro, busca: buscaUrl, page, pageSize });
+  const { data: paged, isLoading, isError, error } = useBling2ContasPaged({
+    tipo, filtro, busca: buscaUrl, page, pageSize, ordem, de: periodo.de, ate: periodo.ate,
+  });
   const rows = paged?.rows ?? [];
   const total = paged?.count ?? 0;
   const { data: cfgBaixa } = useBaixaBling2Config();
   const irPara = (n: number) => setPaginaUrl(n <= 0 ? null : String(n + 1));
   const aplicar = (f: FiltroBling2) => { setFiltroUrl(f === "fila" ? null : f); setPaginaUrl(null); };
-  const filtrado = filtro !== "fila" || !!buscaUrl;
+  // A fila já é um recorte de datas (até hoje+7); somada a um período, esvaziaria
+  // qualquer mês futuro sem explicar por quê — então o período passa a "Todos".
+  const sairDaFila = () => { if (filtro === "fila") setFiltroUrl("todos"); };
+  const limparPeriodo = () => { setMesUrl(null); setDeUrl(null); setAteUrl(null); setPaginaUrl(null); };
+  const filtrado = filtro !== "fila" || !!buscaUrl || !!periodo.de || !!periodo.ate || !!ordem;
+  const limparTudo = () => {
+    setBusca(""); setBuscaUrl(null); limparPeriodo(); definirOrdem(null); aplicar("fila");
+  };
 
   const meta = (
     <>
@@ -163,7 +181,8 @@ export function FilialBling2({ tipo, seletor }: { tipo: Bling2Tipo; seletor: Rea
       ) : (
         <KpiGrade colunas={3}>
           <Kpi titulo="Em aberto" valor={resumo.data?.aberto.valor ?? 0} qtd={resumo.data?.aberto.qtd ?? 0}
-            ativo={filtro === "aberto" && !buscaUrl} onClick={() => aplicar("aberto")} />
+            ativo={filtro === "aberto" && !buscaUrl && !periodo.de && !periodo.ate}
+            onClick={() => { setBusca(""); setBuscaUrl(null); limparPeriodo(); aplicar("aberto"); }} />
           <Kpi titulo="Vencido" tom="perigo" valor={resumo.data?.vencido.valor ?? 0} qtd={resumo.data?.vencido.qtd ?? 0} />
           <Kpi titulo="Hoje e próximos 7 dias" tom="alerta" valor={resumo.data?.semana.valor ?? 0} qtd={resumo.data?.semana.qtd ?? 0} />
         </KpiGrade>
@@ -171,19 +190,27 @@ export function FilialBling2({ tipo, seletor }: { tipo: Bling2Tipo; seletor: Rea
 
       <BarraFiltros>
         <CampoBusca valor={busca} onChange={setBusca} placeholder={`Buscar ${quem.toLowerCase()} ou nº`} />
-        <FiltroSelect rotulo="Situação" valor={filtro} opcoes={FILTROS} onChange={(v) => aplicar(v as FiltroBling2)} />
-        <LimparFiltros visivel={filtrado} onClick={() => { setBusca(""); setBuscaUrl(null); aplicar("fila"); }} />
+        <FiltroSelect rotulo="Situação" valor={filtro} opcoes={FILTROS}
+          onChange={(v) => { if (v === "fila") limparPeriodo(); aplicar(v as FiltroBling2); }} />
+        <FiltroPeriodo
+          mes={de || ate ? "" : mes} de={de} ate={ate}
+          onMes={(ym) => { setMesUrl(ym); setDeUrl(null); setAteUrl(null); setPaginaUrl(null); if (ym) sairDaFila(); }}
+          onIntervalo={(d, a) => { setDeUrl(d || null); setAteUrl(a || null); setMesUrl(null); setPaginaUrl(null); if (d || a) sairDaFila(); }}
+          onLimpar={limparPeriodo}
+        />
+        <FiltroOrdem ordem={ordem} onChange={definirOrdem} quitado={tipo === "receber" ? "Recebimento" : "Pagamento"} />
+        <LimparFiltros visivel={filtrado} onClick={limparTudo} />
       </BarraFiltros>
 
       <div className="space-y-3">
         <CarboTable>
           <CarboTableHeader>
             <CarboTableRow>
-              <CarboTableHead>{quem}</CarboTableHead>
-              <CarboTableHead>Vencimento</CarboTableHead>
-              <CarboTableHead className="text-right [&>div]:justify-end">Valor</CarboTableHead>
+              <CabecalhoOrdem col="nome" ordem={ordem} onOrdenar={ordenarPor}>{quem}</CabecalhoOrdem>
+              <CabecalhoOrdem col="vencimento" ordem={ordem} onOrdenar={ordenarPor}>Vencimento</CabecalhoOrdem>
+              <CabecalhoOrdem col="valor" ordem={ordem} onOrdenar={ordenarPor} direita>Valor</CabecalhoOrdem>
               <CarboTableHead>Situação</CarboTableHead>
-              <CarboTableHead>{quitado}</CarboTableHead>
+              <CabecalhoOrdem col="quitado" ordem={ordem} onOrdenar={ordenarPor}>{quitado}</CabecalhoOrdem>
               <CarboTableHead className="w-px" />
             </CarboTableRow>
           </CarboTableHeader>
@@ -194,7 +221,7 @@ export function FilialBling2({ tipo, seletor }: { tipo: Bling2Tipo; seletor: Rea
               <LinhaEstado colunas={6} tipo="erro" texto={`Não foi possível ler os títulos da filial: ${(error as Error)?.message ?? "erro desconhecido"}`} />
             ) : !rows.length ? (
               <LinhaEstado colunas={6} tipo="vazio"
-                texto={filtro === "fila" && !buscaUrl ? "Nada vencido nem vencendo nos próximos 7 dias." : "Nenhum título com esses filtros."} />
+                texto={filtro === "fila" && !buscaUrl && !periodo.de ? "Nada vencido nem vencendo nos próximos 7 dias." : "Nenhum título com esses filtros."} />
             ) : (
               rows.map((c) => {
                 const d = aberta(c) ? diasAte(c.vencimento, hoje) : null;
@@ -353,7 +380,7 @@ function AcoesDaFilial({ conta: c, tipo, cfg }: { conta: Bling2Conta; tipo: Blin
             </dl>
             <div className="space-y-1.5">
               <Label>Data do {verbo}</Label>
-              <Input type="date" value={dia} max={hojeISO()} onChange={(e) => setDia(e.target.value)} />
+              <DatePickerInput value={dia} onChange={setDia} disableFuture clearable={false} className="h-9 w-full hover:bg-muted/60 hover:text-foreground data-[state=open]:bg-muted/60" />
             </div>
             <p className="text-xs text-muted-foreground">A baixa é feita no Bling da filial. Se o Bling recusar, nada muda.</p>
           </div>

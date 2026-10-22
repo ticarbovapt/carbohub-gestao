@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { Search, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePickerInput } from "@/components/ui/date-picker-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -210,7 +211,7 @@ export function NovaContaPagar({ conta, open, onOpenChange, onCriada }: {
             </div>
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">1º vencimento</Label>
-              <Input type="date" value={primeiro} onChange={(e) => setPrimeiro(e.target.value)} />
+              <DatePickerInput value={primeiro} onChange={setPrimeiro} clearable={false} className="h-9 w-full hover:bg-muted/60 hover:text-foreground data-[state=open]:bg-muted/60" />
             </div>
           </div>
 
@@ -219,8 +220,8 @@ export function NovaContaPagar({ conta, open, onOpenChange, onCriada }: {
               {parcelas.map((p, i) => (
                 <div key={i} className="grid grid-cols-[2.5rem_1fr_1fr] items-center gap-2">
                   <span className="text-xs text-muted-foreground">{i + 1}/{parcelas.length}</span>
-                  <Input type="date" value={p.vencimento}
-                    onChange={(e) => setParcelas((ps) => ps.map((x, j) => (j === i ? { ...x, vencimento: e.target.value } : x)))} />
+                  <DatePickerInput value={p.vencimento} clearable={false} className="h-9 w-full hover:bg-muted/60 hover:text-foreground data-[state=open]:bg-muted/60"
+                    onChange={(v) => setParcelas((ps) => ps.map((x, j) => (j === i ? { ...x, vencimento: v } : x)))} />
                   <Input inputMode="decimal" value={p.valor}
                     onChange={(e) => setParcelas((ps) => ps.map((x, j) => (j === i ? { ...x, valor: e.target.value } : x)))} />
                 </div>

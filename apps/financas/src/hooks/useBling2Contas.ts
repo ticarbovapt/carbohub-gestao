@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { lerSemTeto } from "@carbo/shell";
 import { hojeISO, somarDias } from "@/lib/datas";
+import type { Ordem } from "@/components/financeiro/ContasUI";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Contas a receber / a pagar da FILIAL (Bling 2) — SOMENTE LEITURA.
@@ -153,6 +154,9 @@ export function useBling2Resumo(tipo: Bling2Tipo) {
  */
 export function useBling2ContasPaged(params: {
   tipo: Bling2Tipo; filtro: FiltroBling2; busca: string; page: number; pageSize: number;
+  ordem?: Ordem;
+  /** Recorte por VENCIMENTO (dia ISO); vazio = sem aquela ponta. */
+  de?: string; ate?: string;
 }) {
   return useQuery({
     queryKey: ["bling2-contas-paged", params, hojeISO()],
@@ -167,11 +171,17 @@ export function useBling2ContasPaged(params: {
           case "quitados": q = q.eq("situacao", "2"); break;
           default: break;
         }
+        if (params.de) q = q.gte("vencimento", params.de);
+        if (params.ate) q = q.lte("vencimento", params.ate);
         const b = limparBusca(params.busca);
         if (b) q = q.or(`${nome}.ilike.%${b}%,numero.ilike.%${b}%`);
-        const asc = params.filtro === "fila" || params.filtro === "aberto";
+        // Ordem escolhida na tela; nula = a padrão (fila/abertos do mais antigo,
+        // quitados e todos do mais recente).
+        const asc = params.ordem ? params.ordem.asc : params.filtro === "fila" || params.filtro === "aberto";
+        const coluna = !params.ordem ? "vencimento"
+          : { nome, vencimento: "vencimento", valor: "valor", quitado: "data_pagamento" }[params.ordem.col];
         const de = params.page * params.pageSize;
-        return q.order("vencimento", { ascending: asc, nullsFirst: false })
+        return q.order(coluna, { ascending: asc, nullsFirst: false })
           .order("id", { ascending: asc })
           .range(de, de + params.pageSize - 1);
       };

@@ -4,6 +4,7 @@ import { toast } from "@/hooks/use-toast";
 import { lerSemTeto } from "@carbo/shell";
 import { diaBrasilia, hojeISO, instanteDoDia, somarDias } from "@/lib/datas";
 import { COLUNAS_BAIXA_BLING, faltaColunaDaBaixa } from "@/lib/blingBaixa";
+import type { ColunaOrdem, Ordem } from "@/components/financeiro/ContasUI";
 
 const db = supabase as unknown as { from: (t: string) => any; rpc: (fn: string, args?: any) => any };
 
@@ -113,6 +114,7 @@ const limparBusca = (s: string) => s.replace(/[,()*%\\]/g, " ").trim();
  */
 export function useReceivablesPaged(params: {
   source: string; status: FiltroStatusReceber; de: string; ate: string; busca: string; page: number; pageSize: number;
+  ordem?: Ordem;
 }) {
   return useQuery({
     queryKey: ["receivables-paged", params, hojeISO()],
@@ -130,8 +132,13 @@ export function useReceivablesPaged(params: {
   });
 }
 
+const COLUNA_ORDEM_RECEBER: Record<ColunaOrdem, string> = {
+  nome: "customer_name", vencimento: "due_date", valor: "amount", quitado: "received_at",
+};
+
 async function montarPaginaReceber(params: {
   source: string; status: FiltroStatusReceber; de: string; ate: string; busca: string; page: number; pageSize: number;
+  ordem?: Ordem;
 }, colunasNovas: boolean): Promise<{ error: any; resultado: { rows: Receivable[]; count: number } }> {
   const hoje = hojeISO();
   let q = db.from("receivables").select("*", { count: "exact" });
@@ -165,7 +172,10 @@ async function montarPaginaReceber(params: {
     q = q.or(termos.join(","));
   }
   const fromIdx = params.page * params.pageSize;
-  q = q.order("due_date", { ascending: true }).order("id", { ascending: true }).range(fromIdx, fromIdx + params.pageSize - 1);
+  // Ordem escolhida na tela; nula = vencimento mais antigo primeiro (a de sempre).
+  const asc = params.ordem ? params.ordem.asc : true;
+  const coluna = params.ordem ? COLUNA_ORDEM_RECEBER[params.ordem.col] : "due_date";
+  q = q.order(coluna, { ascending: asc, nullsFirst: false }).order("id", { ascending: asc }).range(fromIdx, fromIdx + params.pageSize - 1);
   const { data, error, count } = await q;
   return { error, resultado: { rows: (data || []) as Receivable[], count: count || 0 } };
 }
