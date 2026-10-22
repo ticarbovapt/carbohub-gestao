@@ -91,6 +91,24 @@ function toNum(v: unknown): number | null {
 
 // ── Token ──────────────────────────────────────────────────────────────────
 
+/**
+ * Depois de uma renovação recusada: outra rodada renovou com o MESMO refresh
+ * no mesmo instante? Espera o vencedor gravar e relê. Devolve o access token
+ * novo, ou null se a linha continua com o refresh que falhou.
+ */
+async function tokenDeQuemRenovou(admin: Admin, tabela: string, integration: any): Promise<string | null> {
+  for (const espera of [1500, 3000]) {
+    await new Promise((ok) => setTimeout(ok, espera));
+    const { data } = await admin.from(tabela).select("access_token, refresh_token, expires_at")
+      .eq("id", integration.id).maybeSingle();
+    if (data && data.refresh_token !== integration.refresh_token
+        && new Date(data.expires_at as string).getTime() > Date.now() + 60_000) {
+      return data.access_token as string;
+    }
+  }
+  return null;
+}
+
 async function refreshToken(
   admin: Admin, integration: any, clientId: string, clientSecret: string
 ): Promise<{ token: string; error?: string }> {
@@ -112,7 +130,20 @@ async function refreshToken(
 
   if (!resp.ok || data.error) {
     console.error("[bling2-sync] refresh FALHOU:", JSON.stringify(data));
-    await admin.from("bling2_integration").update({ is_active: false }).eq("id", integration.id);
+    // ⚠️ O `refresh_token` do Bling é de USO ÚNICO. Duas rodadas renovando ao
+    // mesmo tempo (medido em 21/10/2026, 12:35: dois `orders_recente` no mesmo
+    // décimo de segundo) ⇒ uma ganha e grava o token novo, a outra recebe
+    // invalid_grant. Desativar aqui derrubava a conexão que ACABARA de ser
+    // renovada — foi assim que as quatro conexões morreram, uma a cada ~2
+    // semanas. Quem perdeu espera o vencedor gravar e usa o token dele; só
+    // desativa se a linha AINDA tem o refresh que falhou (`.eq` condicional).
+    const ganhou = await tokenDeQuemRenovou(admin, "bling2_integration", integration);
+    if (ganhou) {
+      console.log("[bling2-sync] outra rodada renovou o token no mesmo instante — usando o dela");
+      return { token: ganhou };
+    }
+    await admin.from("bling2_integration").update({ is_active: false })
+      .eq("id", integration.id).eq("refresh_token", integration.refresh_token);
     return {
       token: "",
       error: `Refresh do Bling 2 falhou: ${data.error_description || data.error || "desconhecido"}. Reconecte.`,
