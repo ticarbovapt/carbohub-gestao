@@ -3439,6 +3439,21 @@ supabase/migrations/20261131000000_filial_baixa_e_espelho_ao_vivo.sql
    voltavam toda rodada e a fila parava; e o cartão "Em aberto" da filial
    somava título que não existe. A tela diz "Excluído no Bling".
 
+### Contas a pagar e a receber: UMA cara para matriz e filial (22/10/2026)
+Queixa do dono do processo: *"muito feio… filial e matriz coisas diferentes…
+poluído, cheio de comentário de IA"*. Só FRONT — nenhuma consulta mudou.
+`components/financeiro/ContasUI.tsx` tem as peças que as QUATRO telas usam
+(cartões, busca, `FiltroSelect` com o rótulo dentro do campo, `FiltroPeriodo`
+= mês OU intervalo num botão só, vencimento com o prazo embaixo, etiqueta de
+situação, menu ⋯ e paginação). Tela nova de contas usa essas peças; peça nova
+entra lá, nunca numa cópia.
+1. ⚠️ **Texto explicativo saiu da tela**: a regra continua nos comentários do
+   código, e na tela fica só a linha "Bling N · sincronizado…" ao lado das abas.
+2. A ação principal (Pagar/Receber) é botão; as perigosas (cancelar, estornar,
+   excluir no Bling, desfazer) ficam no ⋯ — e as confirmações continuam.
+3. ⚠️ O menu ⋯ abre a confirmação ADIADA (`setTimeout`): abrir o diálogo no
+   mesmo tique em que o menu fecha faz os dois brigarem pelo foco.
+
 ### Conta a pagar NASCE no Finanças e é criada NO BLING (22/10/2026)
 "Nova conta a pagar" em `/pagar`, para a matriz (Bling 1) ou a filial (Bling 2)
 conforme o seletor de empresa. Função `fin-contas-pagar` (opcoes · fornecedores ·
