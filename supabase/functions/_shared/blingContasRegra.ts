@@ -34,6 +34,8 @@ export interface AjustesBaixa {
   desconto?: number | null;
   tarifa?: number | null;
   valor?: number | null;
+  /** O texto que a pessoa escreveu (vai para o histórico da baixa no Bling). */
+  historico?: string | null;
 }
 
 /** O que o título tem de mostrar no Bling DEPOIS da baixa — é o que se confere. */
@@ -53,6 +55,15 @@ export type DecisaoBaixa =
 const centavos = (v: number) => Math.round(v * 100);
 const reais = (c: number) => c / 100;
 const brl = (v: number) => `R$ ${v.toFixed(2).replace(".", ",")}`;
+
+/** Limite do campo no Bling ("2.000 caracteres" na tela de baixa). */
+export const MAX_HISTORICO = 2000;
+
+/** O histórico da tela, limpo: vazio = null (usa a marca padrão); passa do limite = cortado. */
+export function historicoDaBaixa(h: unknown): string | null {
+  const t = typeof h === "string" ? h.trim() : "";
+  return t ? t.slice(0, MAX_HISTORICO) : null;
+}
 
 /** Lê um ajuste: vazio = 0; negativo, não numérico ou com mais de 2 casas = inválido (null). */
 function ajuste(v: unknown): number | null {
@@ -93,7 +104,9 @@ export function decidirBaixa(
     usarDataVencimento: false,
     portador: { id: portador },
     ...(categoria ? { categoria: { id: categoria } } : {}),
-    historico: `Baixa pelo CarboHub Finanças${quem ? ` (${quem})` : ""}`,
+    // O texto da pessoa vai como ela escreveu (é por ele que ela acha a baixa
+    // no Bling depois); vazio, a marca de sempre.
+    historico: historicoDaBaixa(aj.historico) ?? `Baixa pelo CarboHub Finanças${quem ? ` (${quem})` : ""}`,
   };
   const juros = ajuste(aj.juros), multa = ajuste(aj.multa), desconto = ajuste(aj.desconto), tarifa = ajuste(aj.tarifa);
   if (juros == null || multa == null || desconto == null || tarifa == null) {
@@ -177,6 +190,7 @@ export function lerAjustes(x: unknown): AjustesBaixa {
     portadorId: Number(o.portador_id ?? o.portadorId) > 0 ? Number(o.portador_id ?? o.portadorId) : null,
     juros: num(o.juros), multa: num(o.multa), desconto: num(o.desconto), tarifa: num(o.tarifa),
     valor: num(o.valor),
+    historico: historicoDaBaixa(o.historico),
   };
 }
 

@@ -372,7 +372,7 @@ function AcoesDaFilial({ conta: c, tipo, cfg }: { conta: Bling2Conta; tipo: Blin
       <DialogoBaixa
         open={aberto} onOpenChange={setAberto} tipo={tipo} conta={2}
         espelho={tipo === "receber" ? "bling2_contas_receber" : "bling2_contas_pagar"} blingId={c.bling_id}
-        titulo={{ nome: c.nome || "—", numero: c.numero, vencimento: c.vencimento, valor: c.valor ?? valorEmAberto(c), saldo: valorEmAberto(c) }}
+        titulo={{ nome: c.nome || "—", numero: c.numero, vencimento: c.vencimento, valor: c.valor ?? valorEmAberto(c), saldo: valorEmAberto(c), historico: c.historico }}
         podeParcial enviando={enviando} onConfirmar={baixar}
         aviso="A baixa é feita no Bling da filial. Se o Bling recusar, nada muda."
       />

@@ -206,6 +206,7 @@ function ajustesGravados(aj: AjustesBaixa, valor: number) {
   return {
     portador_id: aj.portadorId ?? null, juros: aj.juros ?? 0, multa: aj.multa ?? 0,
     desconto: aj.desconto ?? 0, tarifa: aj.tarifa ?? 0, valor: valor > 0 ? valor : null,
+    historico: aj.historico ?? null,
   };
 }
 
