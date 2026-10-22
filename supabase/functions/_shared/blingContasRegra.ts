@@ -112,9 +112,19 @@ export function decidirBaixa(
   if (juros == null || multa == null || desconto == null || tarifa == null) {
     return { decisao: "ajuste_invalido", mensagem: "Juros, multa, desconto e tarifa têm de ser valores em reais, sem sinal de menos." };
   }
+  // ⚠️ Tarifa só no RECEBIMENTO. Medido nos borderôs reais da matriz (22/10/2026,
+  // 24 de 30 a receber, todas do ML): a tarifa é o que a plataforma/banco RETEVE,
+  // e o Bling a soma ao valor recebido para quitar — 28,26 recebidos + 11,64 de
+  // tarifa quitam 39,90. No pagamento nenhum dos 30 borderôs usou tarifa, e o
+  // sentido dela ali não está medido: recusar é melhor que adivinhar.
+  if (tipo === "pagar" && tarifa > 0) {
+    return { decisao: "ajuste_invalido", mensagem: "Tarifa só existe no recebimento — no pagamento, some o custo ao valor pago como juros ou multa." };
+  }
   const saldoAntes = Number(d?.saldo) > 0 ? Number(d.saldo) : Number(d?.valor) || 0;
   const cSaldo = centavos(saldoAntes);
-  const cAcres = centavos(juros) + centavos(multa) - centavos(desconto);
+  // O que o valor de fato tem A MAIS que o principal: juros e multa somam,
+  // desconto e tarifa (retida) abatem.
+  const cAcres = centavos(juros) + centavos(multa) - centavos(desconto) - centavos(tarifa);
   const informado = aj.valor == null || (aj.valor as unknown) === "" ? null : Number(aj.valor);
   if (informado != null && (!Number.isFinite(informado) || informado <= 0 || Math.abs(informado * 100 - Math.round(informado * 100)) > 1e-6)) {
     return { decisao: "ajuste_invalido", mensagem: "O valor pago tem de ser maior que zero, com até 2 casas." };
@@ -138,10 +148,11 @@ export function decidirBaixa(
   const parcial = cPrincipal < cSaldo;
   const temAjuste = cAcres !== 0 || centavos(tarifa) > 0;
 
-  // ⚠️ Os nomes `juros`, `desconto`, `acrescimo` (a MULTA da tela do Bling) e
-  // `tarifa` são os da documentação da API v3 — e o Bling IGNORA CALADO o campo
-  // que não conhece. Quem prova que foram lidos é a CONFERÊNCIA depois do envio
-  // (`conferirBaixa`), nunca o 200.
+  // Os nomes `juros`, `desconto`, `acrescimo` (a MULTA da tela do Bling) e
+  // `tarifa` são os que o Bling devolve nos borderôs reais (raio-x de
+  // 22/10/2026: `pagamentos[].juros/tarifa/desconto/acrescimo/valorPago`).
+  // ⚠️ O Bling IGNORA CALADO campo que não conhece, então quem prova que o
+  // POST os leu continua sendo a CONFERÊNCIA (`conferirBaixa`), nunca o 200.
   if (juros > 0) corpo.juros = juros;
   if (multa > 0) corpo.acrescimo = multa;
   if (desconto > 0) corpo.desconto = desconto;
@@ -149,8 +160,14 @@ export function decidirBaixa(
   // ⚠️ Valor só quando é preciso: sem ele o Bling baixa o SALDO, que é o caso
   // comum (o corpo do ensaio de 22/10). Parcial, título já parcial ou com
   // ajuste mandam o valor de fato.
+  // ⚠️ No recebimento vão os DOIS nomes, com o mesmo valor: a doc fala em
+  // `valorRecebido`, e o borderô real devolve `valorPago` também nos títulos a
+  // receber. O que o Bling não conhecer ele ignora; e se ignorasse o valor,
+  // uma baixa com tarifa quitaria pelo valor CHEIO — certo no saldo, errado no
+  // banco, e a conferência não veria.
   if (parcial || temAjuste || situacao === "3") {
-    corpo[tipo === "receber" ? "valorRecebido" : "valorPago"] = reais(cValor);
+    corpo.valorPago = reais(cValor);
+    if (tipo === "receber") corpo.valorRecebido = reais(cValor);
   }
   return {
     decisao: "enviar", corpo,

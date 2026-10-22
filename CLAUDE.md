@@ -3491,6 +3491,19 @@ desenho da "Baixa de lançamentos" do Bling; `lib/baixaDialogo.ts`; a regra é a
    (`useEspelhoMatriz`) — a tabela local não guarda saldo.
 6. ⚠️ Front e funções sobem ANTES do SQL sem quebrar: quem lê/grava
    `baixa_ajustes` tolera a ausência (a baixa segue; só os ajustes não ficam).
+6b. ✅ **Nomes MEDIDOS nos borderôs reais** (raio-x do ensaio, `{"borderos": N}`,
+   `supabase/consultas/raio_x_baixa_bling.sql`, 22/10/2026, matriz): o Bling
+   devolve `pagamentos[].juros/tarifa/desconto/acrescimo/valorPago` e
+   `historico`/`portador` no topo — os nomes que a baixa manda.
+   ⚠️ **TARIFA é o que foi RETIDO e abate do valor**: 28,26 recebidos + 11,64
+   de tarifa quitam 39,90 (24 de 30 borderôs a receber, ML). A 1ª versão a
+   tratava como neutra e chamaria isso de parcial. Tarifa só no RECEBIMENTO:
+   nenhum borderô a pagar a usou, e o servidor recusa no pagar.
+   ⚠️ No receber vão `valorPago` **e** `valorRecebido` (mesmo valor): o borderô
+   diz `valorPago` também a receber; nome ignorado com tarifa quitaria pelo
+   valor cheio — saldo certo, banco errado, e a conferência não veria.
+   ⚠️ O raio-x da FILIAL voltou vazio (o espelho dela não tinha borderô a ler);
+   a API é a mesma, e a filial já tinha baixa real aceita.
 7. **Histórico** (pedido do time, 22/10/2026): o texto que elas escrevem para
    achar a baixa depois vai no `historico` do borderô, nos dois Blings. Vem
    PRÉ-PREENCHIDO com o histórico do título (espelho `bling_contas_*` /
