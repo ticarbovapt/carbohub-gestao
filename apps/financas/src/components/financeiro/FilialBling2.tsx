@@ -1,18 +1,16 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { confirmar, useParamUrl } from "@carbo/shell";
-import { Building2, Check, ChevronLeft, ChevronRight, Info, Search, Undo2 } from "lucide-react";
-import { CarboBadge } from "@/components/ui/carbo-badge";
+import { Check, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   CarboTable, CarboTableHeader, CarboTableBody, CarboTableRow, CarboTableHead, CarboTableCell,
 } from "@/components/ui/carbo-table";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { usePersistedState } from "@/hooks/usePersistedState";
 import { baixaLiberada, pedirAoBling2, useBaixaBling2Config, type BaixaBling2Config } from "@/lib/bling2Baixa";
 import { chamarContasPagar } from "@/lib/contaPagarBling";
@@ -20,7 +18,11 @@ import {
   useBling2Resumo, useBling2ContasPaged, valorEmAberto,
   type Bling2Tipo, type Bling2Conta, type FiltroBling2,
 } from "@/hooks/useBling2Contas";
-import { hojeISO, somarDias, dataBR, dataHoraBR, diasAte } from "@/lib/datas";
+import { hojeISO, dataBR, dataHoraBR, diasAte } from "@/lib/datas";
+import {
+  BarraFiltros, CampoBusca, CelulaVencimento, FiltroSelect, Kpi, KpiGrade, LimparFiltros, LinhaEstado,
+  MenuAcoes, Paginacao, SituacaoBadge, Valor, brl, type Situacao,
+} from "@/components/financeiro/ContasUI";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // A FILIAL (Bling 2) nas telas de Contas a receber e Contas a pagar.
@@ -56,18 +58,18 @@ export function useEmpresaUrl(): [Empresa, (e: Empresa) => void] {
 
 export function SeletorEmpresa({ valor, onChange }: { valor: Empresa; onChange: (e: Empresa) => void }) {
   const opcoes: { v: Empresa; l: string }[] = [
-    { v: "matriz", l: "Matriz · sistema" },
-    { v: "filial", l: "Filial SP · Bling 2" },
+    { v: "matriz", l: "Matriz" },
+    { v: "filial", l: "Filial SP" },
   ];
   return (
-    <div className="flex w-full rounded-lg border border-border bg-muted/40 p-1 lg:inline-flex lg:w-auto" role="group" aria-label="Empresa">
+    <div className="inline-flex rounded-lg bg-muted p-1" role="group" aria-label="Empresa">
       {opcoes.map((o) => (
         <button
           key={o.v}
           type="button"
           aria-pressed={valor === o.v}
           onClick={() => valor !== o.v && onChange(o.v)}
-          className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors lg:flex-none ${
+          className={`min-w-[96px] rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
             valor === o.v ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
           }`}
         >
@@ -78,27 +80,39 @@ export function SeletorEmpresa({ valor, onChange }: { valor: Empresa; onChange: 
   );
 }
 
-const ROTULO_SITUACAO = (tipo: Bling2Tipo): Record<string, { rotulo: string; variant: any }> => ({
-  "1": { rotulo: "Em aberto", variant: "info" },
-  "2": { rotulo: tipo === "receber" ? "Recebido" : "Pago", variant: "success" },
-  "3": { rotulo: tipo === "receber" ? "Parcialmente recebido" : "Parcialmente pago", variant: "warning" },
-  "4": { rotulo: "Devolvido", variant: "secondary" },
-  "5": { rotulo: "Cancelado", variant: "cancelled" },
-  // Não existe mais no Bling 2 (a consulta dá 404): o espelho marca, nunca apaga.
-  excluido: { rotulo: "Excluído no Bling", variant: "cancelled" },
-});
+/** A linha logo abaixo do título: empresa à esquerda, de onde vêm os dados à direita. */
+export function LinhaEmpresa({ seletor, meta }: { seletor: ReactNode; meta?: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      {seletor}
+      {meta && <div className="flex items-center gap-1.5 text-xs text-muted-foreground">{meta}</div>}
+    </div>
+  );
+}
+
+/** Situação do Bling 2 → a mesma etiqueta das telas da matriz. */
+function situacaoDe(c: Bling2Conta, tipo: Bling2Tipo, vencido: boolean): { s: Situacao; texto?: string } {
+  if (aberta(c)) return vencido ? { s: "vencido" } : c.situacao === "3" ? { s: "parcial" } : { s: "aberto" };
+  switch (c.situacao) {
+    case "2": return { s: tipo === "receber" ? "recebido" : "pago" };
+    case "4": return { s: "devolvido" };
+    case "5": return { s: "cancelado" };
+    case "excluido": return { s: "excluido" };
+    // Situação que o código não conhece aparece CRUA — nunca adivinhada.
+    default: return { s: "desconhecido", texto: c.situacao ?? "sem situação" };
+  }
+}
 
 const FILTROS: { v: FiltroBling2; l: string }[] = [
-  { v: "fila", l: "Fila: vencidos + 7 dias" },
-  { v: "aberto", l: "Em aberto (todos)" },
+  { v: "fila", l: "Fila de trabalho" },
+  { v: "aberto", l: "Em aberto" },
   { v: "quitados", l: "Quitados" },
   { v: "todos", l: "Todos" },
 ];
 
-const brl = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
 const aberta = (c: Bling2Conta) => c.situacao === "1" || c.situacao === "3";
 
-export function FilialBling2({ tipo }: { tipo: Bling2Tipo }) {
+export function FilialBling2({ tipo, seletor }: { tipo: Bling2Tipo; seletor: ReactNode }) {
   const [filtroUrl, setFiltroUrl] = useParamUrl("situacao", "fila");
   const [buscaUrl, setBuscaUrl] = useParamUrl("busca", "", { replace: true });
   const [paginaUrl, setPaginaUrl] = useParamUrl("pagina", "1");
@@ -123,170 +137,98 @@ export function FilialBling2({ tipo }: { tipo: Bling2Tipo }) {
   const { data: paged, isLoading, isError, error } = useBling2ContasPaged({ tipo, filtro, busca: buscaUrl, page, pageSize });
   const rows = paged?.rows ?? [];
   const total = paged?.count ?? 0;
-  const situacoes = ROTULO_SITUACAO(tipo);
   const { data: cfgBaixa } = useBaixaBling2Config();
-  const algumaLiberada = !!cfgBaixa && (cfgBaixa.ativo || cfgBaixa.teste_ids.length > 0);
-
-  const from1 = total === 0 ? 0 : page * pageSize + 1;
-  const to1 = Math.min(total, (page + 1) * pageSize);
-  const lastPage = Math.max(0, Math.ceil(total / pageSize) - 1);
   const irPara = (n: number) => setPaginaUrl(n <= 0 ? null : String(n + 1));
+  const aplicar = (f: FiltroBling2) => { setFiltroUrl(f === "fila" ? null : f); setPaginaUrl(null); };
+  const filtrado = filtro !== "fila" || !!buscaUrl;
 
-  const cartoes = resumo.data
-    ? [
-        { t: "Em aberto", r: resumo.data.aberto, tom: "border-border", txt: "" },
-        { t: "Vencido", r: resumo.data.vencido, tom: "border-destructive/30 bg-destructive/5", txt: "text-destructive" },
-        { t: `Vence até ${dataBR(somarDias(hoje, 7))}`, r: resumo.data.semana, tom: "border-warning/30 bg-warning/5", txt: "" },
-      ]
-    : [];
+  const meta = (
+    <>
+      <RefreshCw className="h-3 w-3" />
+      <span>
+        Bling 2{resumo.data?.ultimaSincronizacao ? ` · sincronizado ${dataHoraBR(resumo.data.ultimaSincronizacao)}` : ""}
+        {cfgBaixa && !cfgBaixa.ativo ? " · baixa só pelo Bling" : ""}
+      </span>
+    </>
+  );
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-start gap-2 rounded-lg border border-carbo-blue/30 bg-carbo-blue/5 p-3 text-sm">
-        <Info className="mt-0.5 h-4 w-4 shrink-0 text-carbo-blue" />
-        <div className="space-y-0.5">
-          <p>
-            <strong>Espelho do Bling da filial (conta 2).</strong>{" "}
-            {cfgBaixa?.ativo
-              ? "A baixa feita aqui vai na hora para o Bling 2; a feita no Bling chega aqui em até 10 min."
-              : algumaLiberada
-                ? "Baixa pelo sistema em TESTE: só o título liberado mostra o botão."
-                : "Só leitura: a baixa é feita no Bling."}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Estes títulos não entram nos totais da matriz.
-            {resumo.data?.ultimaSincronizacao && <> Última sincronização: {dataHoraBR(resumo.data.ultimaSincronizacao)}.</>}
-          </p>
-        </div>
-      </div>
+    <div className="space-y-5">
+      <LinhaEmpresa seletor={seletor} meta={meta} />
 
       {resumo.isError ? (
         <p className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
           Não foi possível ler o resumo da filial: {(resumo.error as Error)?.message ?? "erro desconhecido"}
         </p>
-      ) : resumo.isLoading ? (
-        <p className="text-sm text-muted-foreground">Carregando o resumo…</p>
       ) : (
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-          {cartoes.map((c) => (
-            <div key={c.t} className={`rounded-xl border p-3 ${c.tom}`}>
-              <p className={`text-xs ${c.txt || "text-muted-foreground"}`}>{c.t}</p>
-              <p className={`text-lg font-bold break-words ${c.txt}`}>{brl(c.r.valor)}</p>
-              <p className="text-[11px] text-muted-foreground">{c.r.qtd} título(s)</p>
-            </div>
-          ))}
-        </div>
+        <KpiGrade colunas={3}>
+          <Kpi titulo="Em aberto" valor={resumo.data?.aberto.valor ?? 0} qtd={resumo.data?.aberto.qtd ?? 0}
+            ativo={filtro === "aberto" && !buscaUrl} onClick={() => aplicar("aberto")} />
+          <Kpi titulo="Vencido" tom="perigo" valor={resumo.data?.vencido.valor ?? 0} qtd={resumo.data?.vencido.qtd ?? 0} />
+          <Kpi titulo="Hoje e próximos 7 dias" tom="alerta" valor={resumo.data?.semana.valor ?? 0} qtd={resumo.data?.semana.qtd ?? 0} />
+        </KpiGrade>
       )}
 
-      <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-end">
-        <div className="space-y-1 lg:w-[260px]">
-          <Label className="text-xs text-muted-foreground">Buscar</Label>
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input className="pl-8" placeholder={`${quem} ou nº do título`} value={busca} onChange={(e) => setBusca(e.target.value)} />
-          </div>
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Situação</Label>
-          <Select value={filtro} onValueChange={(v) => { setFiltroUrl(v); setPaginaUrl(null); }}>
-            <SelectTrigger className="w-full lg:w-[220px]"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {FILTROS.map((f) => <SelectItem key={f.v} value={f.v}>{f.l}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-      {filtro === "fila" && !buscaUrl && (
-        <p className="-mt-1 text-xs text-muted-foreground">
-          Fila: em aberto já vencidos e os que vencem até {dataBR(somarDias(hoje, 7))}, do mais antigo para o mais novo.
-        </p>
-      )}
+      <BarraFiltros>
+        <CampoBusca valor={busca} onChange={setBusca} placeholder={`Buscar ${quem.toLowerCase()} ou nº`} />
+        <FiltroSelect rotulo="Situação" valor={filtro} opcoes={FILTROS} onChange={(v) => aplicar(v as FiltroBling2)} />
+        <LimparFiltros visivel={filtrado} onClick={() => { setBusca(""); setBuscaUrl(null); aplicar("fila"); }} />
+      </BarraFiltros>
 
-      <CarboTable>
-        <CarboTableHeader>
-          <CarboTableRow>
-            <CarboTableHead>{quem}</CarboTableHead>
-            <CarboTableHead>Número</CarboTableHead>
-            <CarboTableHead>Emissão</CarboTableHead>
-            <CarboTableHead>Vencimento</CarboTableHead>
-            <CarboTableHead>Valor</CarboTableHead>
-            <CarboTableHead>Saldo</CarboTableHead>
-            <CarboTableHead>Situação</CarboTableHead>
-            <CarboTableHead>{quitado}</CarboTableHead>
-            <CarboTableHead>Baixa</CarboTableHead>
-          </CarboTableRow>
-        </CarboTableHeader>
-        <CarboTableBody>
-          {isLoading ? (
-            <CarboTableRow><CarboTableCell colSpan={9} className="py-8 text-center text-muted-foreground">Carregando...</CarboTableCell></CarboTableRow>
-          ) : isError ? (
-            <CarboTableRow><CarboTableCell colSpan={9} className="py-8 text-center text-destructive">
-              Não foi possível ler os títulos da filial: {(error as Error)?.message ?? "erro desconhecido"}
-            </CarboTableCell></CarboTableRow>
-          ) : !rows.length ? (
-            <CarboTableRow><CarboTableCell colSpan={9} className="py-8 text-center text-muted-foreground">
-              <div className="flex flex-col items-center gap-2">
-                <Building2 className="h-8 w-8 text-muted-foreground/50" />
-                <span>{filtro === "fila" && !buscaUrl ? "Nada vencido nem vencendo nos próximos 7 dias na filial." : "Nenhum título da filial com esses filtros."}</span>
-              </div>
-            </CarboTableCell></CarboTableRow>
-          ) : (
-            rows.map((c) => {
-              const sit = c.situacao != null ? situacoes[c.situacao] : undefined;
-              const d = aberta(c) ? diasAte(c.vencimento, hoje) : null;
-              const vencido = d != null && d < 0;
-              return (
-                <CarboTableRow key={c.id}>
-                  <CarboTableCell className="font-medium">
-                    <p>{c.nome || "—"}</p>
-                    {c.cb_criado_nome && <p className="text-[11px] font-normal text-muted-foreground">criada aqui por {c.cb_criado_nome.split(" ")[0]}</p>}
-                    {c.historico && <p className="max-w-[280px] truncate text-[11px] font-normal text-muted-foreground" title={c.historico}>{c.historico}</p>}
-                  </CarboTableCell>
-                  <CarboTableCell className="font-mono text-xs text-muted-foreground">{c.numero || "—"}</CarboTableCell>
-                  <CarboTableCell className="whitespace-nowrap text-sm text-muted-foreground">{dataBR(c.data_emissao)}</CarboTableCell>
-                  <CarboTableCell className="whitespace-nowrap text-sm">
-                    {dataBR(c.vencimento)}
-                    {d != null && (
-                      <span className={`ml-1 text-xs ${vencido ? "text-destructive" : "text-muted-foreground"}`}>
-                        ({d === 0 ? "hoje" : d < 0 ? `há ${-d} d` : `em ${d} d`})
-                      </span>
-                    )}
-                  </CarboTableCell>
-                  <CarboTableCell className="whitespace-nowrap font-mono">{c.valor == null ? "—" : brl(c.valor)}</CarboTableCell>
-                  <CarboTableCell className="whitespace-nowrap font-mono text-muted-foreground">
-                    {aberta(c) ? brl(valorEmAberto(c)) : c.saldo == null ? "—" : brl(c.saldo)}
-                  </CarboTableCell>
-                  <CarboTableCell>
-                    {sit ? (
-                      <CarboBadge variant={vencido ? "destructive" : sit.variant} dot>{vencido ? `${sit.rotulo} · vencido` : sit.rotulo}</CarboBadge>
-                    ) : (
-                      // Situação que o código não conhece aparece CRUA — nunca adivinhada.
-                      <CarboBadge variant="outline" title="Situação do Bling não reconhecida">{c.situacao ?? "sem situação"}</CarboBadge>
-                    )}
-                  </CarboTableCell>
-                  <CarboTableCell className="whitespace-nowrap text-sm text-muted-foreground">{dataBR(c.data_pagamento)}</CarboTableCell>
-                  <CarboTableCell><AcoesDaFilial conta={c} tipo={tipo} cfg={cfgBaixa} /></CarboTableCell>
-                </CarboTableRow>
-              );
-            })
-          )}
-        </CarboTableBody>
-      </CarboTable>
+      <div className="space-y-3">
+        <CarboTable>
+          <CarboTableHeader>
+            <CarboTableRow>
+              <CarboTableHead>{quem}</CarboTableHead>
+              <CarboTableHead>Vencimento</CarboTableHead>
+              <CarboTableHead className="text-right [&>div]:justify-end">Valor</CarboTableHead>
+              <CarboTableHead>Situação</CarboTableHead>
+              <CarboTableHead>{quitado}</CarboTableHead>
+              <CarboTableHead className="w-px" />
+            </CarboTableRow>
+          </CarboTableHeader>
+          <CarboTableBody>
+            {isLoading ? (
+              <LinhaEstado colunas={6} tipo="carregando" texto="Carregando…" />
+            ) : isError ? (
+              <LinhaEstado colunas={6} tipo="erro" texto={`Não foi possível ler os títulos da filial: ${(error as Error)?.message ?? "erro desconhecido"}`} />
+            ) : !rows.length ? (
+              <LinhaEstado colunas={6} tipo="vazio"
+                texto={filtro === "fila" && !buscaUrl ? "Nada vencido nem vencendo nos próximos 7 dias." : "Nenhum título com esses filtros."} />
+            ) : (
+              rows.map((c) => {
+                const d = aberta(c) ? diasAte(c.vencimento, hoje) : null;
+                const sit = situacaoDe(c, tipo, d != null && d < 0);
+                const saldo = valorEmAberto(c);
+                const parcial = aberta(c) && c.valor != null && Math.abs(saldo - c.valor) > 0.005;
+                return (
+                  <CarboTableRow key={c.id} className="hover:bg-muted/30">
+                    <CarboTableCell className="min-w-[220px] py-3">
+                      <p className="font-medium">{c.nome || "—"}</p>
+                      <p className="max-w-[420px] truncate text-xs text-muted-foreground" title={c.historico ?? undefined}>
+                        {[c.numero && `nº ${c.numero}`, c.historico, c.cb_criado_nome && `criada por ${c.cb_criado_nome.split(" ")[0]}`]
+                          .filter(Boolean).join(" · ")}
+                      </p>
+                    </CarboTableCell>
+                    <CarboTableCell className="py-3"><CelulaVencimento data={c.vencimento} dias={d} /></CarboTableCell>
+                    <CarboTableCell className="py-3 text-right">
+                      <Valor v={parcial ? saldo : c.valor} />
+                      {parcial && <span className="block text-xs text-muted-foreground tabular-nums">de {brl(c.valor ?? 0)}</span>}
+                    </CarboTableCell>
+                    <CarboTableCell className="py-3"><SituacaoBadge s={sit.s} texto={sit.texto} /></CarboTableCell>
+                    <CarboTableCell className="py-3 whitespace-nowrap text-muted-foreground tabular-nums">
+                      {c.data_pagamento ? dataBR(c.data_pagamento) : "—"}
+                    </CarboTableCell>
+                    <CarboTableCell className="py-3"><AcoesDaFilial conta={c} tipo={tipo} cfg={cfgBaixa} /></CarboTableCell>
+                  </CarboTableRow>
+                );
+              })
+            )}
+          </CarboTableBody>
+        </CarboTable>
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <span>Por página</span>
-          <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setPaginaUrl(null); }}>
-            <SelectTrigger className="h-8 w-[80px]"><SelectValue /></SelectTrigger>
-            <SelectContent><SelectItem value="20">20</SelectItem><SelectItem value="50">50</SelectItem><SelectItem value="100">100</SelectItem></SelectContent>
-          </Select>
-          <span>{from1}–{to1} de {total}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="gap-1" disabled={page <= 0} onClick={() => irPara(Math.max(0, page - 1))}><ChevronLeft className="h-4 w-4" /> Anterior</Button>
-          <span className="text-sm text-muted-foreground">{Math.min(page, lastPage) + 1} / {lastPage + 1}</span>
-          <Button variant="outline" size="sm" className="gap-1" disabled={page >= lastPage} onClick={() => irPara(Math.min(lastPage, page + 1))}>Próxima <ChevronRight className="h-4 w-4" /></Button>
-        </div>
+        <Paginacao page={page} pageSize={pageSize} total={total} onPage={irPara}
+          onPageSize={(n) => { setPageSize(n); setPaginaUrl(null); }} />
       </div>
     </div>
   );
@@ -294,8 +236,8 @@ export function FilialBling2({ tipo }: { tipo: Bling2Tipo }) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // A baixa de UM título da filial, pela tela.
-//   aberto + liberado        → "Dar baixa" (diálogo com a data)
-//   baixado AQUI (borderô)   → "por <quem>" + "Desfazer" (só o borderô nosso)
+//   aberto + liberado        → "Pagar"/"Receber" (diálogo com a data)
+//   baixado AQUI (borderô)   → quem baixou + "Desfazer baixa" no menu ⋯ (só o borderô nosso)
 //   última tentativa recusada → "Bling recusou" com o motivo
 // ⚠️ Baixa feita NO Bling 2 não ganha "Desfazer" aqui: desfaz-se lá, e o
 // espelho acompanha. Desfazer daqui apagaria um borderô que não é nosso.
@@ -347,22 +289,21 @@ function AcoesDaFilial({ conta: c, tipo, cfg }: { conta: Bling2Conta; tipo: Blin
     }
   };
 
+  const acao = tipo === "receber" ? "Receber" : "Pagar";
+  const celula = (filhos: ReactNode) => <div className="flex items-center justify-end gap-1">{filhos}</div>;
+
   if (c.cb_baixa_bordero && !aberta(c)) {
-    return (
-      <div className="flex flex-wrap items-center gap-1">
-        <span className="inline-flex items-center gap-0.5 text-[11px] text-muted-foreground"
+    return celula(
+      <>
+        <span className="inline-flex items-center gap-1 whitespace-nowrap text-xs text-muted-foreground"
           title={`Baixa feita pelo sistema${c.cb_baixa_em ? ` em ${dataHoraBR(c.cb_baixa_em)}` : ""} · borderô ${c.cb_baixa_bordero}`}>
-          <Check className="h-3 w-3" /> {c.cb_baixa_por_nome ? `por ${c.cb_baixa_por_nome.split(" ")[0]}` : "pelo sistema"}
+          <Check className="h-3 w-3 text-success" /> {c.cb_baixa_por_nome ? c.cb_baixa_por_nome.split(" ")[0] : "sistema"}
         </span>
-        {liberada && (
-          <Button variant="ghost" size="sm" className="h-6 gap-1 px-1.5 text-[11px]" disabled={enviando} onClick={desfazer}>
-            <Undo2 className="h-3 w-3" /> {enviando ? "Desfazendo…" : "Desfazer"}
-          </Button>
-        )}
-      </div>
+        <MenuAcoes itens={liberada ? [{ l: enviando ? "Desfazendo…" : "Desfazer baixa", onClick: desfazer, perigo: true, disabled: enviando }] : []} />
+      </>,
     );
   }
-  if (!aberta(c)) return <span className="text-xs text-muted-foreground">—</span>;
+  if (!aberta(c)) return celula(<MenuAcoes itens={[]} />);
 
   // ⚠️ Conta a pagar que NASCEU aqui: excluir vai ao Bling 2 (a função confere
   // que ela está em aberto lá e que foi criada pelo sistema).
@@ -384,47 +325,46 @@ function AcoesDaFilial({ conta: c, tipo, cfg }: { conta: Bling2Conta; tipo: Blin
     }
   };
 
-  return (
-    <div className="flex flex-wrap items-center gap-1">
-      {tipo === "pagar" && c.cb_criado_nome && (
-        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-destructive" disabled={enviando} onClick={excluir}>
-          Excluir
-        </Button>
+  return celula(
+    <>
+      {c.cb_baixa_erro && (
+        <span className="whitespace-nowrap text-xs font-medium text-destructive" title={c.cb_baixa_erro}>Bling recusou</span>
       )}
-      {c.cb_baixa_erro && <CarboBadge variant="destructive" size="sm" title={c.cb_baixa_erro}>Bling recusou</CarboBadge>}
       {liberada ? (
-        <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={enviando}
+        <Button variant="outline" size="sm" className="h-8 px-3" disabled={enviando}
           onClick={() => { setDia(hojeISO()); setAberto(true); }}>
-          {c.cb_baixa_erro ? "Tentar de novo" : "Dar baixa"}
+          {c.cb_baixa_erro ? "Tentar de novo" : acao}
         </Button>
-      ) : !c.cb_baixa_erro && <span className="text-xs text-muted-foreground">no Bling</span>}
+      ) : !c.cb_baixa_erro && <span className="whitespace-nowrap text-xs text-muted-foreground">baixa no Bling</span>}
+      <MenuAcoes itens={tipo === "pagar" && c.cb_criado_nome
+        ? [{ l: "Excluir no Bling", onClick: excluir, perigo: true, disabled: enviando }] : []} />
 
       <Dialog open={aberto} onOpenChange={(v) => !enviando && setAberto(v)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Dar baixa no Bling da filial</DialogTitle>
-            <DialogDescription>
-              {c.nome || "—"} · nº {c.numero || "—"} · {brl(valorEmAberto(c))}
-            </DialogDescription>
+            <DialogTitle>Registrar {verbo}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 text-sm">
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Data do {verbo}</Label>
+          <div className="space-y-4 text-sm">
+            <dl className="space-y-1.5 rounded-lg border border-border p-3">
+              <div className="flex justify-between gap-3"><dt className="text-muted-foreground">{tipo === "receber" ? "Cliente" : "Fornecedor"}</dt><dd className="text-right font-medium">{c.nome || "—"}</dd></div>
+              <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Título</dt><dd className="tabular-nums">{c.numero || "—"}</dd></div>
+              <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Valor em aberto</dt><dd className="font-medium tabular-nums">{brl(valorEmAberto(c))}</dd></div>
+              <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Vencimento</dt><dd className="tabular-nums">{dataBR(c.vencimento)}</dd></div>
+            </dl>
+            <div className="space-y-1.5">
+              <Label>Data do {verbo}</Label>
               <Input type="date" value={dia} max={hojeISO()} onChange={(e) => setDia(e.target.value)} />
             </div>
-            <p className="text-xs text-muted-foreground">
-              A baixa é feita NO Bling 2 agora, pelo valor em aberto, na conta (portador) do próprio título.
-              Se o Bling recusar, nada muda e o motivo aparece aqui.
-            </p>
+            <p className="text-xs text-muted-foreground">A baixa é feita no Bling da filial. Se o Bling recusar, nada muda.</p>
           </div>
           <DialogFooter>
             <Button variant="outline" disabled={enviando} onClick={() => setAberto(false)}>Cancelar</Button>
             <Button disabled={enviando || !dia || dia > hojeISO()} onClick={baixar}>
-              {enviando ? "Enviando ao Bling…" : "Dar baixa"}
+              {enviando ? "Enviando ao Bling…" : `Confirmar ${verbo}`}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </>,
   );
 }

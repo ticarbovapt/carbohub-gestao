@@ -1,4 +1,4 @@
-import { CreditCard, RefreshCw, Building2, Wallet, BarChart3 } from "lucide-react";
+import { RefreshCw, Building2, Wallet, BarChart3 } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { useAuth } from "@/contexts/AuthContext";
 import { PayablesList } from "@/components/purchasing/PayablesList";
@@ -12,17 +12,10 @@ import { PurchasingDashboard } from "@/components/purchasing/PurchasingDashboard
 // ("Novo…") mora na barra do próprio componente, não aqui — assim não volta a
 // existir um botão de cabeçalho comum a telas que não têm nada a ver com ele.
 
+// O cabeçalho mora no `PayablesList`: o botão "Nova conta a pagar" depende da
+// empresa escolhida, que é estado dele.
 export function ContasPagar() {
-  return (
-    <div className="space-y-6">
-      <CarboPageHeader
-        title="Contas a pagar"
-        description="O que vence e o que já venceu, com baixa e estorno"
-        icon={CreditCard}
-      />
-      <PayablesList />
-    </div>
-  );
+  return <PayablesList />;
 }
 
 export function Assinaturas() {

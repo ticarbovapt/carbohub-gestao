@@ -1,23 +1,26 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useParamUrl, confirmar } from "@carbo/shell";
 import { usePersistedState } from "@/hooks/usePersistedState";
-import { CreditCard, CheckCircle2, Undo2, Ban, ChevronLeft, ChevronRight, Search, X, CalendarRange, Plus } from "lucide-react";
-import { CarboBadge } from "@/components/ui/carbo-badge";
+import { CreditCard, CheckCircle2, Plus, RefreshCw } from "lucide-react";
+import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { usePurchasePayablesOpen, usePurchasePayablesPaged, useUpdatePayableStatus, invalidarContasAPagar, type FiltroPagar } from "@/hooks/usePurchasing";
-import { FilialBling2, SeletorEmpresa, useEmpresaUrl } from "@/components/financeiro/FilialBling2";
+import { FilialBling2, LinhaEmpresa, SeletorEmpresa, useEmpresaUrl } from "@/components/financeiro/FilialBling2";
+import {
+  BarraFiltros, CampoBusca, CelulaVencimento, FiltroPeriodo, FiltroSelect, Kpi, KpiGrade, LimparFiltros,
+  LinhaEstado, MenuAcoes, Paginacao, SituacaoBadge, Valor,
+} from "@/components/financeiro/ContasUI";
 import { BaixaNoBling } from "@/components/financeiro/BaixaNoBling";
 import { NovaContaPagar } from "@/components/financeiro/NovaContaPagar";
 import { chamarContasPagar, useContaPagarConfig } from "@/lib/contaPagarBling";
 import { toast } from "@/hooks/use-toast";
 import { useBaixaBlingConfig, vaiAoBling, enviarAoBling, avisarBaixaNoBling } from "@/lib/blingBaixa";
-import { PAYABLE_STATUS_LABELS, type PayableStatus, type PurchasePayable } from "@/types/purchasing";
-import { hojeISO, mesAtualISO, limitesDoMes, dataBR, diasAte, estaVencido, emAberto } from "@/lib/datas";
+import type { PayableStatus, PurchasePayable } from "@/types/purchasing";
+import { hojeISO, limitesDoMes, dataBR, diasAte, estaVencido, emAberto } from "@/lib/datas";
 import {
   CarboTable, CarboTableHeader, CarboTableBody, CarboTableRow, CarboTableHead, CarboTableCell,
 } from "@/components/ui/carbo-table";
@@ -38,23 +41,16 @@ import {
 // reproduz o número dele (status + origem, sem período nem busca).
 // ─────────────────────────────────────────────────────────────────────────────
 
-const statusVariantMap: Record<PayableStatus, any> = {
-  programado: "info",
-  pago: "success",
-  atrasado: "destructive",
-  cancelado: "cancelled",
-};
-
 const FILTROS: { valor: FiltroPagar; rotulo: string }[] = [
-  { valor: "fila", rotulo: "Fila (vencidos + 7 dias)" },
+  { valor: "fila", rotulo: "Fila de trabalho" },
   { valor: "vencido", rotulo: "Vencidos" },
   { valor: "hoje", rotulo: "Vencem hoje" },
   { valor: "7dias", rotulo: "Próximos 7 dias" },
-  { valor: "a_vencer", rotulo: "A vencer (hoje em diante)" },
-  { valor: "aberto", rotulo: "Em aberto (todos)" },
+  { valor: "a_vencer", rotulo: "A vencer" },
+  { valor: "aberto", rotulo: "Em aberto" },
   { valor: "pago", rotulo: "Pagos" },
   { valor: "cancelado", rotulo: "Cancelados" },
-  { valor: "all", rotulo: "Todos os status" },
+  { valor: "all", rotulo: "Todos" },
 ];
 
 // Nomes antigos (links e favoritos de antes) continuam valendo.
@@ -67,16 +63,6 @@ const normalizarFiltro = (v: string): FiltroPagar => {
 const isYm = (v: string) => /^\d{4}-\d{2}$/.test(v);
 const isData = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v);
 
-const somarMes = (ym: string, delta: number) => {
-  const [a, m] = ym.split("-").map(Number);
-  const d = new Date(Date.UTC(a, m - 1 + delta, 1));
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-};
-const nomeDoMes = (ym: string) => {
-  const [a, m] = ym.split("-").map(Number);
-  return new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(a, m - 1, 15)));
-};
-
 const formatCurrency = (val: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val);
 
@@ -86,39 +72,34 @@ const statusEfetivo = (p: { status: PayableStatus; due_date: string }): PayableS
   return estaVencido(p) ? "atrasado" : "programado";
 };
 
-const prazoRelativo = (p: PurchasePayable, hoje: string) => {
-  if (!emAberto(p.status)) return null;
-  const d = diasAte(p.due_date, hoje);
-  if (d === null) return null;
-  if (d === 0) return "hoje";
-  if (d < 0) return `há ${-d} d`;
-  return `em ${d} d`;
-};
-
 /**
  * @param _props.initialStatus  ⚠️ Ignorado — o filtro vem da URL (`?status=`).
  *   Fica aceito só para a página antiga continuar compilando na transição.
  */
 export function PayablesList(_props: { initialStatus?: string } = {}) {
   // ⚠️ Matriz e filial são telas SEPARADAS (`?empresa=filial`): a filial é o
-  // espelho do Bling 2, só leitura, e nunca soma com a matriz.
+  // espelho do Bling 2 e nunca soma com a matriz.
   const [empresa, trocarEmpresa] = useEmpresaUrl();
   const qc = useQueryClient();
   const { data: cfgCriar } = useContaPagarConfig();
   const [nova, setNova] = useState(false);
   const conta = empresa === "filial" ? 2 : 1;
+  const seletor = <SeletorEmpresa valor={empresa} onChange={trocarEmpresa} />;
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-        <SeletorEmpresa valor={empresa} onChange={trocarEmpresa} />
-        {/* ⚠️ Só aparece com o interruptor da empresa ligado (`fin_contas_pagar_config`). */}
-        {cfgCriar?.[conta] && (
-          <Button className="w-full gap-1.5 lg:w-auto" onClick={() => setNova(true)}>
-            <Plus className="h-4 w-4" /> Nova conta a pagar
-          </Button>
-        )}
-      </div>
-      {empresa === "filial" ? <FilialBling2 tipo="pagar" /> : <PayablesMatriz />}
+    <div className="space-y-5">
+      <CarboPageHeader
+        title="Contas a pagar"
+        icon={CreditCard}
+        actions={
+          // ⚠️ Só aparece com o interruptor da empresa ligado (`fin_contas_pagar_config`).
+          cfgCriar?.[conta] ? (
+            <Button className="gap-1.5" onClick={() => setNova(true)}>
+              <Plus className="h-4 w-4" /> Nova conta a pagar
+            </Button>
+          ) : undefined
+        }
+      />
+      {empresa === "filial" ? <FilialBling2 tipo="pagar" seletor={seletor} /> : <PayablesMatriz seletor={seletor} />}
       <NovaContaPagar
         conta={conta} open={nova} onOpenChange={setNova}
         onCriada={() => {
@@ -134,7 +115,7 @@ export function PayablesList(_props: { initialStatus?: string } = {}) {
 // ⚠️ Baixa, cancelamento e estorno valem para QUALQUER pessoa com o app
 // Finanças (decisão do dono do processo, 21/10/2026) — o banco já libera por
 // `carbo_tem_app`. A confirmação das ações perigosas continua.
-function PayablesMatriz() {
+function PayablesMatriz({ seletor }: { seletor: ReactNode }) {
   const [statusUrl, setStatus] = useParamUrl("status", "fila");
   const [source, setSource] = useParamUrl("origem", "all");
   const [mesUrl, setMes] = useParamUrl("mes", "");
@@ -177,11 +158,6 @@ function PayablesMatriz() {
     // A fila já é um recorte de datas (até hoje+7); somada a um mês, esvaziaria
     // qualquer mês futuro sem explicar por quê.
     if (ym && status === "fila") setStatus("all");
-  };
-  const escolherData = (qual: "de" | "ate", v: string) => {
-    (qual === "de" ? setDe : setAte)(v || null);
-    setMes(null); setPagina(null);
-    if (v && status === "fila") setStatus("all");
   };
   const limparPeriodo = () => { setMes(null); setDe(null); setAte(null); setPagina(null); };
 
@@ -306,238 +282,128 @@ function PayablesMatriz() {
     if (ok) updateStatus.mutate({ id: p.id, status: "cancelado" });
   };
 
-  const from1 = total === 0 ? 0 : page * pageSize + 1;
-  const to1 = Math.min(total, (page + 1) * pageSize);
-  const lastPage = Math.max(0, Math.ceil(total / pageSize) - 1);
   const irParaPagina = (n: number) => setPagina(n <= 0 ? null : String(n + 1));
 
+  const filtrado = status !== "fila" || source !== "all" || !!periodo.de || !!periodo.ate || !!busca;
+  const limparTudo = () => {
+    setStatus(null); setSource(null); setMes(null); setDe(null); setAte(null); setBusca(null); setPagina(null);
+    setBuscaTxt("");
+  };
+
   return (
-    <div className="space-y-4">
-      {/* Resumo de aging — cada cartão é atalho para o filtro dele */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {cartoes.map((c) => {
-          const ativo = semRecorte && status === c.filtro;
-          return (
-            <button
-              key={c.filtro}
-              type="button"
-              onClick={() => aplicarCartao(c.filtro)}
-              aria-pressed={ativo}
-              title="Mostrar exatamente estas contas"
-              className={`rounded-xl border p-3 text-left transition-colors hover:border-carbo-green/60 ${c.tom} ${ativo ? "ring-2 ring-carbo-green/60" : ""}`}
-            >
-              <p className={`text-xs ${c.filtro === "vencido" ? "text-destructive" : "text-muted-foreground"}`}>{c.titulo}</p>
-              <p className={`text-lg font-bold break-words ${c.filtro === "vencido" ? "text-destructive" : ""}`}>{formatCurrency(c.r.valor)}</p>
-              <p className="text-[11px] text-muted-foreground">
-                {c.r.qtd} conta(s){c.r.outraMoeda > 0 ? ` · ${c.r.outraMoeda} em outra moeda, fora do total` : ""}
-              </p>
-            </button>
-          );
-        })}
-      </div>
+    <div className="space-y-5">
+      <LinhaEmpresa
+        seletor={seletor}
+        meta={cfgBling?.ativo ? <><RefreshCw className="h-3 w-3" /><span>Bling 1 · baixa vai para o Bling na hora</span></> : undefined}
+      />
 
-      {status === "fila" && semRecorte && (
-        <p className="text-xs text-muted-foreground">
-          Fila de trabalho: contas vencidas, que vencem hoje e nos próximos 7 dias, da mais antiga para a mais nova.
-        </p>
-      )}
+      {/* Cada cartão é atalho para o filtro que reproduz o número dele. */}
+      <KpiGrade>
+        {cartoes.map((c) => (
+          <Kpi
+            key={c.filtro} titulo={c.titulo} valor={c.r.valor} qtd={c.r.qtd}
+            tom={c.filtro === "vencido" ? "perigo" : c.filtro === "hoje" ? "alerta" : "neutro"}
+            nota={c.r.outraMoeda > 0 ? `${c.r.outraMoeda} em outra moeda` : undefined}
+            ativo={semRecorte && status === c.filtro} onClick={() => aplicarCartao(c.filtro)}
+          />
+        ))}
+      </KpiGrade>
 
-      {/* Filtros */}
-      <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-end">
-        <div className="space-y-1 lg:w-[260px]">
-          <Label className="text-xs text-muted-foreground">Buscar</Label>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={buscaTxt}
-              onChange={(e) => setBuscaTxt(e.target.value)}
-              placeholder="Fornecedor ou nº do documento"
-              className="pl-9"
-            />
-          </div>
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Status</Label>
-          <Select value={status} onValueChange={comPagina1(setStatus)}>
-            <SelectTrigger className="w-full lg:w-[210px]"><SelectValue placeholder="Status" /></SelectTrigger>
-            <SelectContent>
-              {FILTROS.map((f) => <SelectItem key={f.valor} value={f.valor}>{f.rotulo}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Origem</Label>
-          <Select value={source} onValueChange={comPagina1(setSource)}>
-            <SelectTrigger className="w-full lg:w-[180px]"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas as origens</SelectItem>
-              <SelectItem value="interno">Criadas no sistema</SelectItem>
-              <SelectItem value="bling">Importadas do Bling</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Mês</Label>
-          {mes && !usaIntervalo ? (
-            <div className="inline-flex h-10 w-full items-center justify-between rounded-md border border-border lg:w-auto">
-              <button type="button" className="h-full px-2 hover:text-carbo-green" onClick={() => escolherMes(somarMes(mes, -1))} title="Mês anterior">
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              <span className="min-w-[120px] px-2 text-center text-sm capitalize">{nomeDoMes(mes)}</span>
-              <button type="button" className="h-full px-2 hover:text-carbo-green" onClick={() => escolherMes(somarMes(mes, 1))} title="Próximo mês">
-                <ChevronRight className="h-4 w-4" />
-              </button>
-              <button type="button" className="h-full border-l border-border px-2 text-muted-foreground hover:text-foreground" onClick={() => escolherMes(null)} title="Tirar o filtro de mês">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          ) : (
-            <Button type="button" variant="outline" className="w-full gap-2 lg:w-auto" onClick={() => escolherMes(mesAtualISO())}>
-              <CalendarRange className="h-4 w-4" /> Filtrar por mês
-            </Button>
-          )}
-        </div>
-        <div className="grid grid-cols-2 gap-3 lg:flex">
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">De</Label>
-            <Input type="date" className="lg:w-[150px]" value={de} onChange={(e) => escolherData("de", e.target.value)} />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Até</Label>
-            <Input type="date" className="lg:w-[150px]" value={ate} onChange={(e) => escolherData("ate", e.target.value)} />
-          </div>
-        </div>
-        {(usaIntervalo || mes) && (
-          <Button variant="ghost" size="sm" className="text-muted-foreground lg:self-end" onClick={limparPeriodo}>
-            Limpar período
-          </Button>
-        )}
-      </div>
+      <BarraFiltros>
+        <CampoBusca valor={buscaTxt} onChange={setBuscaTxt} placeholder="Buscar fornecedor ou nº" />
+        <FiltroSelect rotulo="Status" valor={status} opcoes={FILTROS.map((f) => ({ v: f.valor, l: f.rotulo }))} onChange={comPagina1(setStatus)} />
+        <FiltroSelect rotulo="Origem" valor={source} onChange={comPagina1(setSource)}
+          opcoes={[{ v: "all", l: "Todas" }, { v: "bling", l: "Bling" }, { v: "interno", l: "Sistema" }]} />
+        <FiltroPeriodo
+          mes={usaIntervalo ? "" : mes} de={de} ate={ate}
+          onMes={escolherMes}
+          onIntervalo={(d, a) => {
+            setDe(d || null); setAte(a || null); setMes(null); setPagina(null);
+            if ((d || a) && status === "fila") setStatus("all");
+          }}
+          onLimpar={limparPeriodo}
+        />
+        <LimparFiltros visivel={filtrado} onClick={limparTudo} />
+      </BarraFiltros>
 
-      <CarboTable>
-        <CarboTableHeader>
-          <CarboTableRow>
-            <CarboTableHead>Fornecedor</CarboTableHead>
-            <CarboTableHead>Documento</CarboTableHead>
-            <CarboTableHead>Origem</CarboTableHead>
-            <CarboTableHead>Valor</CarboTableHead>
-            <CarboTableHead>Vencimento</CarboTableHead>
-            <CarboTableHead>Status</CarboTableHead>
-            <CarboTableHead>Pago em</CarboTableHead>
-            <CarboTableHead>Ações</CarboTableHead>
-          </CarboTableRow>
-        </CarboTableHeader>
-        <CarboTableBody>
-          {isLoading ? (
+      <div className="space-y-3">
+        <CarboTable>
+          <CarboTableHeader>
             <CarboTableRow>
-              <CarboTableCell colSpan={8} className="py-8 text-center text-muted-foreground">Carregando...</CarboTableCell>
+              <CarboTableHead>Fornecedor</CarboTableHead>
+              <CarboTableHead>Vencimento</CarboTableHead>
+              <CarboTableHead className="text-right [&>div]:justify-end">Valor</CarboTableHead>
+              <CarboTableHead>Situação</CarboTableHead>
+              <CarboTableHead>Pago em</CarboTableHead>
+              <CarboTableHead className="w-px" />
             </CarboTableRow>
-          ) : isError ? (
-            <CarboTableRow>
-              <CarboTableCell colSpan={8} className="py-8 text-center text-destructive">
-                Não foi possível ler as contas: {(error as Error)?.message ?? "erro desconhecido"}
-              </CarboTableCell>
-            </CarboTableRow>
-          ) : !rows.length ? (
-            <CarboTableRow>
-              <CarboTableCell colSpan={8} className="py-8 text-center text-muted-foreground">
-                <div className="flex flex-col items-center gap-2">
-                  <CreditCard className="h-8 w-8 text-muted-foreground/50" />
-                  <span>
-                    {status === "fila" && semRecorte
-                      ? "Nada vencido nem vencendo nos próximos 7 dias."
-                      : "Nenhuma conta a pagar com esses filtros"}
-                  </span>
-                </div>
-              </CarboTableCell>
-            </CarboTableRow>
-          ) : (
-            rows.map((p) => {
-              const eff = statusEfetivo(p);
-              const isBling = p.source === "bling";
-              const rel = prazoRelativo(p, hoje);
-              return (
-                <CarboTableRow key={p.id}>
-                  <CarboTableCell className="font-medium">
-                    <p>{p.supplier_name}</p>
-                    {p.criado_aqui_nome && <p className="text-[11px] font-normal text-muted-foreground">criada aqui por {p.criado_aqui_nome.split(" ")[0]}</p>}
-                  </CarboTableCell>
-                  <CarboTableCell className="font-mono text-xs text-muted-foreground">{p.bling_numero || "—"}</CarboTableCell>
-                  <CarboTableCell>
-                    <CarboBadge variant={isBling ? "secondary" : "info"} className="text-[10px]">
-                      {isBling ? "Bling" : "Sistema"}
-                    </CarboBadge>
-                  </CarboTableCell>
-                  <CarboTableCell className="whitespace-nowrap font-mono">{formatCurrency(p.amount)}</CarboTableCell>
-                  <CarboTableCell className="whitespace-nowrap text-sm">
-                    {dataBR(p.due_date)}
-                    {rel && <span className={`ml-1 text-xs ${eff === "atrasado" ? "text-destructive" : "text-muted-foreground"}`}>({rel})</span>}
-                  </CarboTableCell>
-                  <CarboTableCell>
-                    <CarboBadge variant={statusVariantMap[eff]} dot>{PAYABLE_STATUS_LABELS[eff]}</CarboBadge>
-                  </CarboTableCell>
-                  <CarboTableCell className="whitespace-nowrap text-sm text-muted-foreground">
-                    {/* ⚠️ O espelho do Bling não grava a data da baixa: dizer
-                        "no Bling" é a verdade; inventar uma data, não. */}
-                    {p.paid_at ? dataBR(p.paid_at) : p.status === "pago" && isBling ? <span title="Baixado no Bling — o espelho não traz a data">no Bling</span> : "—"}
-                  </CarboTableCell>
-                  <CarboTableCell onClick={(e) => e.stopPropagation()}>
-                    {p.status === "pago" ? (
-                      <div className="flex flex-col items-start gap-0.5 lg:flex-row lg:flex-wrap lg:items-center lg:gap-1">
-                        <Button
-                          variant="ghost" size="sm" className="gap-1.5 text-muted-foreground"
-                          disabled={estornando === p.id} onClick={() => estornar(p)} title="Estornar pagamento"
-                        >
-                          <Undo2 className="h-3.5 w-3.5" /> {estornando === p.id ? "Estornando…" : "Estornar"}
-                        </Button>
-                        <BaixaNoBling
-                          titulo={p} tipo="pagar" cfg={cfgBling} pago baixadoAqui={!!p.paid_by}
-                          onDepois={() => invalidarContasAPagar(qc)}
-                        />
+          </CarboTableHeader>
+          <CarboTableBody>
+            {isLoading ? (
+              <LinhaEstado colunas={6} tipo="carregando" texto="Carregando…" />
+            ) : isError ? (
+              <LinhaEstado colunas={6} tipo="erro" texto={`Não foi possível ler as contas: ${(error as Error)?.message ?? "erro desconhecido"}`} />
+            ) : !rows.length ? (
+              <LinhaEstado colunas={6} tipo="vazio"
+                texto={status === "fila" && semRecorte ? "Nada vencido nem vencendo nos próximos 7 dias." : "Nenhuma conta com esses filtros."} />
+            ) : (
+              rows.map((p) => {
+                const eff = statusEfetivo(p);
+                const isBling = p.source === "bling";
+                const sub = [
+                  p.bling_numero && `nº ${p.bling_numero}`,
+                  isBling ? "Bling" : "Sistema",
+                  p.criado_aqui_nome && `criada por ${p.criado_aqui_nome.split(" ")[0]}`,
+                ].filter(Boolean).join(" · ");
+                return (
+                  <CarboTableRow key={p.id} className="hover:bg-muted/30">
+                    <CarboTableCell className="min-w-[220px] py-3">
+                      <p className="font-medium">{p.supplier_name}</p>
+                      <p className="text-xs text-muted-foreground">{sub}</p>
+                    </CarboTableCell>
+                    <CarboTableCell className="py-3">
+                      <CelulaVencimento data={p.due_date} dias={emAberto(p.status) ? diasAte(p.due_date, hoje) : null} />
+                    </CarboTableCell>
+                    <CarboTableCell className="py-3 text-right"><Valor v={p.amount} /></CarboTableCell>
+                    <CarboTableCell className="py-3">
+                      <SituacaoBadge s={eff === "atrasado" ? "vencido" : eff === "programado" ? "aberto" : eff === "pago" ? "pago" : "cancelado"} />
+                    </CarboTableCell>
+                    <CarboTableCell className="py-3 whitespace-nowrap text-muted-foreground tabular-nums">
+                      {/* ⚠️ O espelho do Bling não grava a data da baixa: dizer
+                          "no Bling" é a verdade; inventar uma data, não. */}
+                      {p.paid_at ? dataBR(p.paid_at) : p.status === "pago" && isBling ? <span title="Baixado no Bling — o espelho não traz a data">no Bling</span> : "—"}
+                    </CarboTableCell>
+                    <CarboTableCell className="py-3" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-end gap-1">
+                        {p.status === "pago" ? (
+                          <>
+                            <BaixaNoBling
+                              titulo={p} tipo="pagar" cfg={cfgBling} pago baixadoAqui={!!p.paid_by}
+                              onDepois={() => invalidarContasAPagar(qc)}
+                            />
+                            <MenuAcoes itens={[{ l: estornando === p.id ? "Estornando…" : "Estornar pagamento", onClick: () => estornar(p), disabled: estornando === p.id }]} />
+                          </>
+                        ) : p.status === "cancelado" ? (
+                          <MenuAcoes itens={[]} />
+                        ) : (
+                          <>
+                            <Button variant="outline" size="sm" className="h-8 px-3" onClick={() => { setPaidAt(hojeISO()); setPayingId(p.id); }}>
+                              Pagar
+                            </Button>
+                            <MenuAcoes itens={[{ l: p.criado_aqui_por ? "Excluir no Bling" : "Cancelar conta", onClick: () => cancelar(p), perigo: true }]} />
+                          </>
+                        )}
                       </div>
-                    ) : p.status === "cancelado" ? (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    ) : (
-                      <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="sm" className="gap-1.5 text-success" onClick={() => { setPaidAt(hojeISO()); setPayingId(p.id); }}>
-                          <CheckCircle2 className="h-3.5 w-3.5" /> Pagar
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => cancelar(p)} title={p.criado_aqui_por ? "Excluir no Bling" : "Cancelar conta"}>
-                          <Ban className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    )}
-                  </CarboTableCell>
-                </CarboTableRow>
-              );
-            })
-          )}
-        </CarboTableBody>
-      </CarboTable>
+                    </CarboTableCell>
+                  </CarboTableRow>
+                );
+              })
+            )}
+          </CarboTableBody>
+        </CarboTable>
 
-      {/* Paginação */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <span>Por página</span>
-          <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setPagina(null); }}>
-            <SelectTrigger className="h-8 w-[80px]"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="20">20</SelectItem>
-              <SelectItem value="50">50</SelectItem>
-              <SelectItem value="100">100</SelectItem>
-            </SelectContent>
-          </Select>
-          <span>{from1}–{to1} de {total}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="gap-1" disabled={page <= 0} onClick={() => irParaPagina(Math.max(0, page - 1))}>
-            <ChevronLeft className="h-4 w-4" /> Anterior
-          </Button>
-          <span className="text-sm text-muted-foreground">{Math.min(page, lastPage) + 1} / {lastPage + 1}</span>
-          <Button variant="outline" size="sm" className="gap-1" disabled={page >= lastPage} onClick={() => irParaPagina(Math.min(lastPage, page + 1))}>
-            Próxima <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
+        <Paginacao page={page} pageSize={pageSize} total={total} onPage={irParaPagina}
+          onPageSize={(n) => { setPageSize(n); setPagina(null); }} />
       </div>
 
       {/* Baixa */}
