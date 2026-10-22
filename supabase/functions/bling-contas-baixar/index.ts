@@ -35,7 +35,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // A regra da baixa é a MESMA da filial (`bling2-contas`): um arquivo só.
-import { conferirBaixa, decidirBaixa, diaBrasilia, lerAjustes, type AjustesBaixa } from "../_shared/blingContasRegra.ts";
+import { censoBorderos, conferirBaixa, decidirBaixa, diaBrasilia, lerAjustes, ultimoBordero, type AjustesBaixa } from "../_shared/blingContasRegra.ts";
 
 const URL_SB = Deno.env.get("SUPABASE_URL")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -189,9 +189,37 @@ async function ensaio(b: Record<string, unknown>): Promise<Record<string, unknow
     } else if ((quitado ?? []).length) {
       bordero = { mensagem: "títulos quitados SEM borderôs no detalhe", exemplo: quitado![0] };
     }
-    saida[tipo] = { contagem, titulos, bordero_amostra: bordero };
+    saida[tipo] = { contagem, titulos, bordero_amostra: bordero,
+                    ...(b.borderos ? { raio_x: await raioX(db, token, ESPELHO[tipo], Number(b.borderos)) } : {}) };
   }
   return { ...saida, ok: true };
+}
+
+/**
+ * RAIO-X: lê os borderôs de títulos já baixados no Bling (pelo time, lá) e conta
+ * quais campos vêm com valor — é assim que se sabe, SEM escrever, se juros/multa/
+ * desconto/tarifa e o valor parcial têm os nomes que a baixa manda.
+ */
+async function raioX(db: any, token: string, espelho: string, n: number) {
+  const max = Math.min(Math.max(n || 30, 1), 60);
+  const { data, error } = await db.from(espelho).select("bling_id, situacao, borderos:detalhe->borderos")
+    .in("situacao", ["2", "3"]).not("detalhe", "is", null).order("bling_id", { ascending: false }).limit(600);
+  if (error) return { erro: `ler ${espelho}: ${error.message}` };
+  // Parciais primeiro (são poucas e são o caso que mais importa), depois as quitadas.
+  const cands = ((data ?? []) as any[]).map((r) => ({ titulo: Number(r.bling_id), situacao: r.situacao == null ? null : String(r.situacao), id: ultimoBordero(r.borderos) }))
+    .filter((x) => x.id).sort((a, b) => (a.situacao === "3" ? 0 : 1) - (b.situacao === "3" ? 0 : 1));
+  const lidos: { titulo: number; situacao: string | null; bordero: any }[] = [];
+  const erros: string[] = [];
+  const vistos = new Set<number>();
+  for (const c of cands) {
+    if (lidos.length >= max) break;
+    if (vistos.has(c.id!)) continue;
+    vistos.add(c.id!);
+    await dormir(350);
+    try { lidos.push({ titulo: c.titulo, situacao: c.situacao, bordero: (await bling(token, "GET", `/borderos/${c.id}`))?.data ?? {} }); }
+    catch (e) { if (erros.length < 3) erros.push(e instanceof Error ? e.message : String(e)); }
+  }
+  return { candidatos: cands.length, ...censoBorderos(lidos), erros };
 }
 
 /** AAAA-MM-DD válida e não futura (dia de Brasília), ou null. */

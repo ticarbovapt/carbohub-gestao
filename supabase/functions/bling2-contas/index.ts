@@ -32,7 +32,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
-  conferirBaixa, decidirBaixa, diaBrasilia, dataDaBaixa, estaAberta, idsDeBordero, lerAjustes, planejarEspelho,
+  censoBorderos, conferirBaixa, decidirBaixa, diaBrasilia, ultimoBordero, dataDaBaixa, estaAberta, idsDeBordero, lerAjustes, planejarEspelho,
   type LocalConta, type ListadaConta, type TipoConta,
 } from "../_shared/blingContasRegra.ts";
 
@@ -390,11 +390,38 @@ async function ensaio(db: Db, b: Record<string, unknown>) {
       } else {
         r.bordero_amostra = "nenhum título quitado na 1ª página";
       }
+      if (b.borderos) r.raio_x = await raioX(db, token, TABELA[tipo], Number(b.borderos));
     } catch (e) {
       r.erro = e instanceof Error ? e.message : String(e);
     }
   }
   return { ...saida, ok: true };
+}
+
+/**
+ * RAIO-X: lê os borderôs de títulos já baixados no Bling 2 (pelo time, lá) e
+ * conta quais campos vêm com valor — os nomes que o Bling de fato usa, SEM
+ * escrever nada. Mesma `censoBorderos` da matriz.
+ */
+async function raioX(db: Db, token: string, tabela: string, n: number) {
+  const max = Math.min(Math.max(n || 30, 1), 60);
+  const { data, error } = await db.from(tabela).select("bling_id, situacao, borderos:detalhe->borderos")
+    .in("situacao", ["2", "3"]).not("detalhe", "is", null).order("bling_id", { ascending: false }).limit(600);
+  if (error) return { erro: `ler ${tabela}: ${error.message}` };
+  const cands = ((data ?? []) as any[]).map((x) => ({ titulo: Number(x.bling_id), situacao: x.situacao == null ? null : String(x.situacao), id: ultimoBordero(x.borderos) }))
+    .filter((x) => x.id).sort((a, b) => (a.situacao === "3" ? 0 : 1) - (b.situacao === "3" ? 0 : 1));
+  const lidos: { titulo: number; situacao: string | null; bordero: any }[] = [];
+  const erros: string[] = [];
+  const vistos = new Set<number>();
+  for (const c of cands) {
+    if (lidos.length >= max) break;
+    if (vistos.has(c.id!)) continue;
+    vistos.add(c.id!);
+    await dormir(PAUSA_MS);
+    try { lidos.push({ titulo: c.titulo, situacao: c.situacao, bordero: (await bling(token, "GET", `/borderos/${c.id}`))?.data ?? {} }); }
+    catch (e) { if (erros.length < 3) erros.push(e instanceof Error ? e.message : String(e)); }
+  }
+  return { candidatos: cands.length, ...censoBorderos(lidos), erros };
 }
 
 // ── CORS (a tela chama do navegador; a porta de verdade é o JWT) ────────────
