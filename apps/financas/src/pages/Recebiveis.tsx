@@ -17,6 +17,8 @@ import {
   LimparFiltros, LinhaEstado, MenuAcoes, Paginacao, SituacaoBadge, Valor, useOrdemUrl,
 } from "@/components/financeiro/ContasUI";
 import { DatePickerInput } from "@/components/ui/date-picker-input";
+import { DialogoBaixa, type ConfirmacaoBaixa } from "@/components/financeiro/DialogoBaixa";
+import { resumoAjustes, salvarAjustes, useEspelhoMatriz } from "@/lib/baixaDialogo";
 import { BaixaNoBling } from "@/components/financeiro/BaixaNoBling";
 import { toast } from "@/hooks/use-toast";
 import { useBaixaBlingConfig, vaiAoBling, enviarAoBling, avisarBaixaNoBling } from "@/lib/blingBaixa";
@@ -141,7 +143,7 @@ function RecebiveisMatriz({ seletor }: { seletor: ReactNode }) {
   const hoje = hojeISO();
 
   const [receiving, setReceiving] = useState<Receivable | null>(null);
-  const [recAt, setRecAt] = useState(hoje);
+  const [recebendo, setRecebendo] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const formVazio = () => ({ customer_name: "", amount: "", due_date: hojeISO(), notes: "" });
   const [form, setForm] = useState(formVazio);
@@ -157,6 +159,12 @@ function RecebiveisMatriz({ seletor }: { seletor: ReactNode }) {
   });
   const rows = paged?.rows ?? [];
   const total = paged?.count ?? 0;
+  // Situação e saldo do Bling 1: é ele que sabe da baixa PARCIAL.
+  const { data: espelho } = useEspelhoMatriz("receber", rows.map((r) => r.bling_id));
+  const saldoDe = (r: Receivable) => {
+    const e = r.bling_id ? espelho?.get(Number(r.bling_id)) : undefined;
+    return e?.situacao === "3" && e.saldo != null && e.saldo > 0 ? e.saldo : null;
+  };
 
   const abertas = openRows ?? [];
   const sum = (arr: any[]) => arr.reduce((s, p) => s + Number(p.amount || 0), 0);
@@ -165,18 +173,35 @@ function RecebiveisMatriz({ seletor }: { seletor: ReactNode }) {
   const vence7 = abertas.filter((p) => { const d = diasAte(p.due_date, hoje); return d != null && d >= 1 && d <= 7; });
 
 
-  const doReceive = async () => {
-    if (!receiving || !recAt) return;
+  const doReceive = async ({ dia, ajustes, parcial }: ConfirmacaoBaixa) => {
     const titulo = receiving;
+    if (!titulo) return;
+    setRecebendo(true);
     try {
-      await update.mutateAsync({ id: titulo.id, status: "recebido", received_at: recAt, amount: Number(titulo.amount) });
-      setReceiving(null);
-    } catch { return; /* o hook já avisou; o diálogo fica aberto para tentar de novo */ }
-    // ⚠️ A baixa LOCAL já está gravada; o Bling é o passo seguinte, e a recusa
-    // dele NÃO a desfaz — fica em `bling_baixa_erro`, com "Tentar de novo" na linha.
-    if (vaiAoBling(cfgBling, titulo)) {
-      avisarBaixaNoBling(await enviarAoBling("baixar", "receber", titulo.id));
-      invalidarContasAReceber(qc);
+      // ⚠️ PARCIAL vai ao Bling PRIMEIRO e não marca nada como recebido aqui: o
+      // título continua aberto, com o saldo que o Bling disser.
+      if (parcial) {
+        const r = await enviarAoBling("baixar", "receber", titulo.id, { ajustes, data: dia });
+        avisarBaixaNoBling(r);
+        invalidarContasAReceber(qc);
+        qc.invalidateQueries({ queryKey: ["espelho-matriz"] });
+        if (r.ok) setReceiving(null);
+        return;
+      }
+      try {
+        await update.mutateAsync({ id: titulo.id, status: "recebido", received_at: dia, amount: ajustes.valor });
+        await salvarAjustes("receivables", titulo.id, ajustes);
+        setReceiving(null);
+      } catch { return; /* o hook já avisou; o diálogo fica aberto para tentar de novo */ }
+      // ⚠️ A baixa LOCAL já está gravada; o Bling é o passo seguinte, e a recusa
+      // dele NÃO a desfaz — fica em `bling_baixa_erro`, com "Tentar de novo" na linha.
+      if (vaiAoBling(cfgBling, titulo)) {
+        avisarBaixaNoBling(await enviarAoBling("baixar", "receber", titulo.id, { ajustes }));
+        invalidarContasAReceber(qc);
+        qc.invalidateQueries({ queryKey: ["espelho-matriz"] });
+      }
+    } finally {
+      setRecebendo(false);
     }
   };
   const doCreate = async () => {
@@ -213,7 +238,7 @@ function RecebiveisMatriz({ seletor }: { seletor: ReactNode }) {
       }
       if (res.pulado) toast({ title: "Bling", description: res.mensagem });
     }
-    update.mutate({ id: r.id, status: "programado" });
+    update.mutate({ id: r.id, status: "programado" }, { onSuccess: () => salvarAjustes("receivables", r.id, null) });
   };
   const cancelar = async (r: Receivable) => {
     const ok = await confirmar({
@@ -312,6 +337,8 @@ function RecebiveisMatriz({ seletor }: { seletor: ReactNode }) {
                   r.empresa === "filial" ? "Filial SP" : null,
                 ].filter(Boolean).join(" · ");
                 const aberto = r.status !== "recebido" && r.status !== "cancelado";
+                const saldo = aberto ? saldoDe(r) : null;
+                const ajustes = resumoAjustes((r as any).baixa_ajustes, r.amount);
                 return (
                   <CarboTableRow key={r.id} className="hover:bg-muted/30">
                     <CarboTableCell className="min-w-[220px] py-3">
@@ -321,12 +348,16 @@ function RecebiveisMatriz({ seletor }: { seletor: ReactNode }) {
                     <CarboTableCell className="py-3">
                       <CelulaVencimento data={r.due_date} dias={aberto ? diasAte(r.due_date, hoje) : null} />
                     </CarboTableCell>
-                    <CarboTableCell className="py-3 text-right"><Valor v={r.amount} /></CarboTableCell>
+                    <CarboTableCell className="py-3 text-right">
+                      <Valor v={saldo ?? r.amount} />
+                      {saldo != null && <span className="block text-xs text-muted-foreground tabular-nums">de {brl(r.amount)}</span>}
+                    </CarboTableCell>
                     <CarboTableCell className="py-3">
-                      <SituacaoBadge s={eff === "atrasado" ? "vencido" : eff === "programado" ? "aberto" : eff === "recebido" ? "recebido" : "cancelado"} />
+                      <SituacaoBadge s={eff === "atrasado" ? "vencido" : eff === "programado" ? (saldo != null ? "parcial" : "aberto") : eff === "recebido" ? "recebido" : "cancelado"} />
                     </CarboTableCell>
                     <CarboTableCell className="py-3 whitespace-nowrap text-muted-foreground tabular-nums">
                       {dataBR(r.received_at)}
+                      {r.status === "recebido" && ajustes && <span className="block text-xs">{ajustes}</span>}
                       {r.status === "recebido" && r.recebido_via === "banco" && <span className="block text-xs">pelo banco</span>}
                     </CarboTableCell>
                     <CarboTableCell className="py-3">
@@ -343,7 +374,7 @@ function RecebiveisMatriz({ seletor }: { seletor: ReactNode }) {
                           <MenuAcoes itens={[]} />
                         ) : (
                           <>
-                            <Button variant="outline" size="sm" className="h-8 px-3" onClick={() => { setRecAt(hojeISO()); setReceiving(r); }}>
+                            <Button variant="outline" size="sm" className="h-8 px-3" onClick={() => setReceiving(r)}>
                               Receber
                             </Button>
                             <MenuAcoes itens={[{ l: "Cancelar título", onClick: () => cancelar(r), perigo: true }]} />
@@ -362,33 +393,21 @@ function RecebiveisMatriz({ seletor }: { seletor: ReactNode }) {
           onPageSize={(n) => { setPageSize(n); setPaginaUrl(null); }} />
       </div>
 
-      {/* Baixa */}
-      <Dialog open={!!receiving} onOpenChange={() => setReceiving(null)}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Registrar recebimento</DialogTitle></DialogHeader>
-          {receiving && (
-            <div className="space-y-2 text-sm">
-              <div className="rounded-lg border border-border p-3 space-y-1">
-                <div className="flex justify-between gap-2"><span className="text-muted-foreground">Cliente</span><strong className="text-right">{receiving.customer_name || "—"}</strong></div>
-                {linhasDoTitulo(receiving).map((t, i) => (
-                  <p key={i} className="text-right text-xs text-muted-foreground break-words">{t}</p>
-                ))}
-                <div className="flex justify-between gap-2"><span className="text-muted-foreground">Valor</span><strong className="font-mono">{brl(receiving.amount)}</strong></div>
-                <div className="flex justify-between gap-2"><span className="text-muted-foreground">Vencimento</span><strong>{dataBR(receiving.due_date)}</strong></div>
-              </div>
-              <div className="space-y-1.5"><Label>Data do recebimento</Label><DatePickerInput value={recAt} onChange={setRecAt} disableFuture clearable={false} className="h-9 w-full hover:bg-muted/60 hover:text-foreground data-[state=open]:bg-muted/60" /></div>
-              {vaiAoBling(cfgBling, receiving) && (
-                <p className="rounded-md border border-border bg-muted/40 p-2 text-xs">A baixa feita aqui vai para o Bling na hora.</p>
-              )}
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setReceiving(null)}>Cancelar</Button>
-            <Button onClick={doReceive} disabled={update.isPending || !recAt} className="gap-1.5 carbo-gradient text-white"><CheckCircle2 className="h-4 w-4" /> Confirmar recebimento</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
+      {/* Baixa: conta (banco), data, juros/multa/desconto/tarifa e o valor de fato */}
+      <DialogoBaixa
+        open={!!receiving} onOpenChange={(o) => { if (!o) setReceiving(null); }}
+        tipo="receber" conta={1} espelho="bling_contas_receber" blingId={receiving?.bling_id ? Number(receiving.bling_id) : null}
+        titulo={receiving ? {
+          nome: receiving.customer_name || "—", numero: receiving.bling_numero ?? receiving.nf_numero ?? null, vencimento: receiving.due_date,
+          valor: Number(receiving.amount), saldo: saldoDe(receiving) ?? Number(receiving.amount),
+        } : null}
+        podeParcial={!!receiving && vaiAoBling(cfgBling, receiving)}
+        motivoSemParcial="Baixa parcial só com o envio ao Bling ligado — é o Bling que guarda o saldo."
+        enviando={recebendo || update.isPending} onConfirmar={doReceive}
+        aviso={receiving?.source === "bling"
+          ? (vaiAoBling(cfgBling, receiving) ? "A baixa vai para o Bling na hora, na conta escolhida." : "A baixa vale só aqui — no Bling o título continua em aberto.")
+          : undefined}
+      />
 
       {/* Novo título */}
       <Dialog open={showNew} onOpenChange={setShowNew}>

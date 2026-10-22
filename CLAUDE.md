@@ -3462,6 +3462,36 @@ entra lá, nunca numa cópia.
 5. **Data é clicada, nunca digitada**: o período usa o `Calendar` em faixa e os
    diálogos usam `DatePickerInput` (dia ISO ↔ Date ao MEIO-DIA local).
 
+### Baixa com CONTA (banco), juros, multa, desconto, tarifa e PARCIAL (22/10/2026)
+Pedido do time do Finanças: no Bling elas marcam o BANCO ao dar baixa (é o que
+faz "pagos/recebidos no Bradesco" bater) e há valor diferente (parcial, juros).
+`components/financeiro/DialogoBaixa.tsx` é o diálogo das QUATRO telas, no
+desenho da "Baixa de lançamentos" do Bling; `lib/baixaDialogo.ts`; a regra é a
+única `decidirBaixa` + `conferirBaixa` (`_shared/blingContasRegra.ts`); colunas
+`baixa_ajustes` (20261133).
+1. **Conta escolhida > conta do título > padrão da config.** A lista é a
+   `opcoes` da `fin-contas-pagar` (`/contas-contabeis`), que passou a responder
+   ANTES do interruptor de "criar conta" — é só leitura.
+2. **`valor` é o que saiu/entrou de fato** (juros e multa somados, desconto
+   abatido); abate do título `valor − juros − multa + desconto`. Menor que o
+   saldo = PARCIAL; maior = RECUSA ("entra como juros ou multa"). Sem ajuste e
+   sem parcial o corpo é o de sempre (sem valor) — o do ensaio de 22/10.
+3. ⚠️ **Nomes `juros`/`desconto`/`acrescimo` (= multa)/`tarifa` são da doc da
+   API v3 e o Bling IGNORA CALADO campo desconhecido** (medido por terceiros:
+   valor parcial mal nomeado quitou o título inteiro com 200). Por isso as duas
+   funções RELEEM o título depois do POST e comparam com o esperado; divergiu ⇒
+   desfazem o borderô NOSSO (só se ele cobrir UM título) e a tela diz por quê.
+   ⚠️ A conferência prova SITUAÇÃO e SALDO, não que o juros foi registrado — a
+   resposta traz `bordero_lido` para medir isso no 1º teste.
+4. ⚠️ **PARCIAL vai ao Bling PRIMEIRO e não marca nada pago aqui** (matriz
+   também): o título fica aberto com o saldo do Bling, e o borderô dela NÃO vai
+   para o título (senão a baixa do resto viraria "já enviado"). Desfaz-se no
+   Bling. Na matriz só existe com o envio ao Bling ligado.
+5. **A matriz mostra o saldo da parcial** lendo `bling_contas_*` da página
+   (`useEspelhoMatriz`) — a tabela local não guarda saldo.
+6. ⚠️ Front e funções sobem ANTES do SQL sem quebrar: quem lê/grava
+   `baixa_ajustes` tolera a ausência (a baixa segue; só os ajustes não ficam).
+
 ### Conta a pagar NASCE no Finanças e é criada NO BLING (22/10/2026)
 "Nova conta a pagar" em `/pagar`, para a matriz (Bling 1) ou a filial (Bling 2)
 conforme o seletor de empresa. Função `fin-contas-pagar` (opcoes · fornecedores ·

@@ -24,10 +24,18 @@
 //     vencer, pede ao `bling-sync` — o único que renova — e relê.
 //   • Trava por linha (`bling_baixa_tentando_em`): dois cliques ou duas abas não
 //     criam dois borderôs.
+//   • A CONTA (portador), juros, multa, desconto, tarifa e o valor de fato vêm
+//     do diálogo (`ajustes`) e ficam em `baixa_ajustes` — é de lá que o "tentar
+//     de novo" os relê. ⚠️ Baixa PARCIAL vai ao Bling PRIMEIRO e não marca nada
+//     como pago aqui: o título continua aberto, com o saldo que o Bling disser.
+//   • ⚠️ CONFERE depois do envio: relê o título e compara com o esperado
+//     (`conferirBaixa`). O Bling ignora campo que não conhece CALADO — divergiu
+//     (ex.: pediu parcial e ele quitou tudo), o borderô NOSSO é desfeito e a
+//     tela diz o motivo. O 200 sozinho não prova nada.
 // ─────────────────────────────────────────────────────────────────────────────
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // A regra da baixa é a MESMA da filial (`bling2-contas`): um arquivo só.
-import { decidirBaixa, diaBrasilia } from "../_shared/blingContasRegra.ts";
+import { conferirBaixa, decidirBaixa, diaBrasilia, lerAjustes, type AjustesBaixa } from "../_shared/blingContasRegra.ts";
 
 const URL_SB = Deno.env.get("SUPABASE_URL")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -86,6 +94,24 @@ async function bling(token: string, metodo: string, caminho: string, corpo?: unk
 const dormir = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
 
 /**
+ * Desfaz o borderô que ESTA chamada acabou de criar, quando a conferência
+ * divergiu. ⚠️ Só se ele cobrir UM título (borderô de vários desfaria a baixa
+ * dos outros). Devolve a frase que completa a mensagem da tela.
+ */
+async function desfazerBordero(token: string, bordero: number | null): Promise<string> {
+  if (!bordero) return "O Bling não devolveu o borderô: confira e desfaça a baixa no Bling.";
+  try {
+    const bo = (await bling(token, "GET", `/borderos/${bordero}`))?.data ?? {};
+    const n = Array.isArray(bo.pagamentos) ? bo.pagamentos.length : 0;
+    if (n > 1) return `O borderô ${bordero} cobre ${n} títulos — desfaça a baixa no Bling.`;
+    await bling(token, "DELETE", `/borderos/${bordero}`);
+    return "A baixa foi DESFEITA no Bling — faça-a lá, ou tente de novo sem esse ajuste.";
+  } catch (e) {
+    return `E não deu para desfazer (${e instanceof Error ? e.message : String(e)}) — desfaça o borderô ${bordero} no Bling.`;
+  }
+}
+
+/**
  * ENSAIO — responde "a baixa funcionaria?" SEM escrever em lugar nenhum: nem no
  * Bling, nem aqui. Lê o token, lê cada título no Bling AGORA e devolve o corpo
  * EXATO que seria enviado (pela mesma `decidirBaixa`). E lê um borderô de
@@ -128,7 +154,7 @@ async function ensaio(b: Record<string, unknown>): Promise<Record<string, unknow
       await dormir(350);
       try {
         const d = (await bling(token, "GET", `/contas/${tipo}/${t.bling_id}`))?.data ?? {};
-        const r = decidirBaixa(tipo, d, cfg?.portador_padrao_id, hoje, "nome de quem baixou");
+        const r = decidirBaixa(tipo, d, cfg?.portador_padrao_id, hoje, "nome de quem baixou", lerAjustes(b.ajustes));
         contagem[r.decisao] = (contagem[r.decisao] ?? 0) + 1;
         titulos.push({
           id: t.id, bling_id: t.bling_id, status_aqui: t.status, valor: t.amount, vencimento: t.due_date,
@@ -136,7 +162,7 @@ async function ensaio(b: Record<string, unknown>): Promise<Record<string, unknow
                       portador: d.portador?.id ?? null, categoria: d.categoria?.id ?? null },
           decisao: r.decisao,
           ...(r.decisao === "enviar"
-            ? { enviaria: { metodo: "POST", caminho: `/contas/${tipo}/${t.bling_id}/baixar`, corpo: r.corpo } }
+            ? { enviaria: { metodo: "POST", caminho: `/contas/${tipo}/${t.bling_id}/baixar`, corpo: r.corpo }, esperado: r.esperado }
             : { mensagem: r.mensagem }),
         });
       } catch (e) {
@@ -166,6 +192,21 @@ async function ensaio(b: Record<string, unknown>): Promise<Record<string, unknow
     saida[tipo] = { contagem, titulos, bordero_amostra: bordero };
   }
   return { ...saida, ok: true };
+}
+
+/** AAAA-MM-DD válida e não futura (dia de Brasília), ou null. */
+function dataValida(x: unknown): string | null {
+  const s = typeof x === "string" ? x.slice(0, 10) : "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  return s <= diaBrasilia(null) && s >= "2000-01-01" ? s : null;
+}
+
+/** O que fica guardado no título: o que foi escolhido, para o "tentar de novo" e a tela. */
+function ajustesGravados(aj: AjustesBaixa, valor: number) {
+  return {
+    portador_id: aj.portadorId ?? null, juros: aj.juros ?? 0, multa: aj.multa ?? 0,
+    desconto: aj.desconto ?? 0, tarifa: aj.tarifa ?? 0, valor: valor > 0 ? valor : null,
+  };
 }
 
 Deno.serve(async (req: Request): Promise<Response> => {
@@ -259,38 +300,88 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const situacao = d.situacao != null ? String(d.situacao) : null;
 
     if (acao === "baixar") {
-      if (tt.status !== PAGO[tipo]) {
-        await marcar({});
-        return json({ ok: false, mensagem: "O título não está baixado no sistema." }, 400);
+      // Os ajustes do diálogo; sem eles (o "tentar de novo"), os guardados no título.
+      let aj: AjustesBaixa = lerAjustes(b.ajustes);
+      if (b.ajustes == null) {
+        const { data: guardado } = await db.from(tabela).select("baixa_ajustes").eq("id", id).maybeSingle();
+        aj = lerAjustes((guardado as any)?.baixa_ajustes);   // coluna ausente (antes do SQL) = sem ajustes
       }
-      if (tt.bling_baixa_bordero) {
+      if (tt.bling_baixa_bordero && tt.status === PAGO[tipo]) {
         await marcar({ bling_baixa_erro: null });
         return json({ ok: true, pulado: "ja_enviado", mensagem: "Esta baixa já está no Bling.", bordero: tt.bling_baixa_bordero });
       }
       const { data: perfil } = await db.from("profiles").select("full_name").eq("id", u.user.id).maybeSingle();
       const quem = (perfil?.full_name as string | null)?.trim() || null;
-      const dec = decidirBaixa(tipo, d, cfg?.portador_padrao_id, diaBrasilia(tt[QUANDO[tipo]]), quem);
+      // Parcial não tem baixa local: a data é a que a tela mandou (ou hoje).
+      const dia = tt[QUANDO[tipo]] ? diaBrasilia(tt[QUANDO[tipo]]) : (dataValida(b.data) ?? diaBrasilia(null));
+      const dec = decidirBaixa(tipo, d, cfg?.portador_padrao_id, dia, quem, aj);
       if (dec.decisao === "ja_pago_no_bling") {
         // Pago lá por alguém: NÃO baixa de novo. Sem borderô nosso — o estorno
         // desta baixa é no Bling.
-        await marcar({ bling_baixa_em: new Date().toISOString(), bling_baixa_erro: null });
+        await marcar(tt.status === PAGO[tipo] ? { bling_baixa_em: new Date().toISOString(), bling_baixa_erro: null } : {});
         return json({ ok: true, pulado: "ja_pago_no_bling", mensagem: dec.mensagem });
       }
       if (dec.decisao !== "enviar") {
-        await marcar({ bling_baixa_erro: dec.mensagem });
+        await marcar(tt.status === PAGO[tipo] ? { bling_baixa_erro: dec.mensagem } : {});
         return json({ ok: false, mensagem: dec.mensagem });
       }
-      const corpo = dec.corpo;
+      const parcial = dec.esperado.parcial;
+      // Baixa inteira: a local vem antes (o título já está pago aqui). Parcial:
+      // nada é marcado aqui, e o título continua aberto.
+      if (!parcial && tt.status !== PAGO[tipo]) {
+        await marcar({});
+        return json({ ok: false, mensagem: "O título não está baixado no sistema." }, 400);
+      }
+      if (parcial && tt.status === PAGO[tipo]) {
+        await marcar({ bling_baixa_erro: "Baixa parcial num título já marcado pago aqui — estorne aqui e refaça como parcial." });
+        return json({ ok: false, mensagem: "Este título está marcado pago aqui: a parcial não cabe. Estorne e refaça." }, 400);
+      }
 
-      const r = await bling(token, "POST", `/contas/${tipo}/${tt.bling_id}/baixar`, corpo);
+      const r = await bling(token, "POST", `/contas/${tipo}/${tt.bling_id}/baixar`, dec.corpo);
       const bordero = Number(r?.data?.bordero?.id ?? r?.bordero?.id ?? r?.data?.id) || null;
+
+      // ── A conferência: o título relido tem de bater com o esperado ────────
+      await dormir(700);
+      let depois: any = null;
+      try { depois = (await bling(token, "GET", `/contas/${tipo}/${tt.bling_id}`))?.data ?? null; }
+      catch { /* não deu para reler: segue sem conferir, e diz */ }
+      const divergencia = depois ? conferirBaixa(dec.esperado, depois) : null;
+      if (divergencia) {
+        const desfeita = await desfazerBordero(token, bordero);
+        const m = `${divergencia} ${desfeita}`;
+        await marcar(parcial ? {} : { bling_baixa_erro: m });
+        return json({ ok: false, mensagem: m, corpo_enviado: dec.corpo });
+      }
+      let borderoLido: unknown = null;
+      if (bordero) {
+        try { borderoLido = (await bling(token, "GET", `/borderos/${bordero}`))?.data ?? null; } catch { /* só medida */ }
+      }
+
       const agora = new Date().toISOString();
-      await marcar({ bling_baixa_em: agora, bling_baixa_bordero: bordero, bling_baixa_erro: null });
+      const situacaoDepois = depois?.situacao != null ? String(depois.situacao) : (parcial ? "3" : "2");
+      if (parcial) {
+        // ⚠️ O borderô da parcial NÃO vai para o título: ele continua aberto, e
+        // a próxima baixa (o resto) precisa poder acontecer. Desfaz-se no Bling.
+        await marcar({ bling_baixa_erro: null });
+      } else {
+        await marcar({ bling_baixa_em: agora, bling_baixa_bordero: bordero, bling_baixa_erro: null });
+        await db.from(tabela).update({ baixa_ajustes: ajustesGravados(aj, dec.esperado.valor) }).eq("id", id);   // coluna ausente: ignora
+      }
       // O espelho passa a dizer a verdade já, sem esperar a próxima rodada —
       // senão o aplicador dos 10 min leria "aberto no Bling" com dado velho.
-      await db.from(ESPELHO[tipo]).update({ situacao: "2", data_pagamento: corpo.data, detalhe_em: null })
-        .eq("bling_id", tt.bling_id);
-      return json({ ok: true, mensagem: "Baixa enviada ao Bling.", bordero });
+      await db.from(ESPELHO[tipo]).update({
+        situacao: situacaoDepois,
+        saldo: depois?.saldo != null ? Number(depois.saldo) : dec.esperado.saldoDepois,
+        ...(parcial ? {} : { data_pagamento: dec.corpo.data }),
+        detalhe_em: null,
+      }).eq("bling_id", tt.bling_id);
+      return json({
+        ok: true,
+        mensagem: parcial
+          ? `Baixa parcial no Bling — ficam R$ ${dec.esperado.saldoDepois.toFixed(2).replace(".", ",")} em aberto.`
+          : "Baixa enviada ao Bling.",
+        bordero, parcial, conferido: !!depois, bordero_lido: borderoLido,
+      });
     }
 
     // ── acao === "estornar" ───────────────────────────────────────────────────
@@ -310,6 +401,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
     await bling(token, "DELETE", `/borderos/${tt.bling_baixa_bordero}`);
     await marcar({ bling_baixa_em: null, bling_baixa_bordero: null, bling_baixa_erro: null });
+    await db.from(tabela).update({ baixa_ajustes: null }).eq("id", id);   // coluna ausente: ignora
     await db.from(ESPELHO[tipo]).update({ situacao: "1", data_pagamento: null, detalhe_em: null })
       .eq("bling_id", tt.bling_id);
     return json({ ok: true, mensagem: "Baixa desfeita no Bling." });

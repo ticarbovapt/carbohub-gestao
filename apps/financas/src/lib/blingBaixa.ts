@@ -14,6 +14,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import type { AjustesTela } from "@/lib/baixaDialogo";
 
 export type TipoConta = "pagar" | "receber";
 
@@ -23,6 +24,7 @@ export interface RespostaBling {
   pulado?: string;
   mensagem: string;
   bordero?: number | null;
+  parcial?: boolean;
 }
 
 export interface BaixaBlingConfig {
@@ -82,7 +84,7 @@ export const faltaColunaDaBaixa = (e: any): boolean => {
 /** O aviso da tela depois da baixa enviada — um lugar só para as duas telas. */
 export function avisarBaixaNoBling(r: RespostaBling) {
   if (r.ok && r.pulado) toast({ title: "Bling", description: r.mensagem });
-  else if (r.ok) toast({ title: "Baixa enviada ao Bling", description: r.bordero ? `Borderô ${r.bordero}` : undefined });
+  else if (r.ok) toast({ title: r.parcial ? "Baixa parcial no Bling" : "Baixa enviada ao Bling", description: r.parcial ? r.mensagem : r.bordero ? `Borderô ${r.bordero}` : undefined });
   else toast({ title: "Baixado aqui, mas o Bling recusou", description: r.mensagem, variant: "destructive" });
 }
 
@@ -90,9 +92,13 @@ export function avisarBaixaNoBling(r: RespostaBling) {
  * Pede à função que dê a baixa (ou a desfaça) no Bling.
  * Nunca lança: devolve `ok: false` com a mensagem que a tela deve mostrar.
  */
-export async function enviarAoBling(acao: "baixar" | "estornar", tipo: TipoConta, id: string): Promise<RespostaBling> {
+export async function enviarAoBling(
+  acao: "baixar" | "estornar", tipo: TipoConta, id: string,
+  /** A conta e os ajustes do diálogo; `data` só importa na PARCIAL (que não tem baixa local). */
+  extra: { ajustes?: AjustesTela; data?: string } = {},
+): Promise<RespostaBling> {
   try {
-    const { data, error } = await supabase.functions.invoke("bling-contas-baixar", { body: { acao, tipo, id } });
+    const { data, error } = await supabase.functions.invoke("bling-contas-baixar", { body: { acao, tipo, id, ...extra } });
     if (error) {
       // `functions.invoke` em não-2xx só diz "non-2xx status code": o motivo
       // está no CORPO, e é ele que a pessoa precisa ler.
