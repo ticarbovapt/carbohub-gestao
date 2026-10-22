@@ -1359,7 +1359,7 @@ mostra MUITA coisa             pagina na TELA (.range + "mostrar mais"), nunca b
 1. ⚠️ **Proibido o corte calado**: `.select()` de lista sem `.range()`/helper
    em tabela que cresce, `.limit(N)` com N ≥ 1.000 (o PostgREST corta igual) e
    RPC `returns setof` para lista que cresce (o teto vale para RPC — devolva
-   `jsonb`). Janela pequena e DECLARADA de tela (`.limit(50)` do sininho) pode,
+   `jsonb`). Janela pequena e DECLARADA de tela pode,
    desde que nada some/conte o resultado como se fosse tudo.
 2. ⚠️ **O alarme**: os oito `client.ts` usam `fetchQueAcusaTeto` — leitura que
    volta com 1.000 linhas sem ter pedido limite cai no console e em
@@ -1384,6 +1384,12 @@ mostra MUITA coisa             pagina na TELA (.range + "mostrar mais"), nunca b
    também `bling2_sync_log` e `bling_treatment_log` (30 dias).
    ⚠️ Regras de SELECT se somam com OR: embrulhar UMA (a `20261083`) não basta
    se a outra da mesma tabela continua solta — as duas rodam por linha.
+   ⚠️ **O sininho ERA o exemplo de janela declarada, e não servia** (22/10/2026):
+   o `.limit(50)` escondia a 51ª notificação e o contador de não lidas parava em
+   50 — nos 13 sininhos (8 apps, o Controle, Portal, md, Academy, Licenciados).
+   Hoje: contagem no BANCO (`count: exact, head: true`), lista em páginas de 50
+   com "Carregar mais antigas", e "Não lidas" com consulta própria. Lista que a
+   pessoa precisa alcançar inteira não é janela — é paginação.
 6. ⚠️ **Polling é custo por ABA, vezes o time.** O sininho relia
    `notifications` a cada 15 s em toda aba dos oito apps, com o Realtime já
    trazendo a novidade na hora. Hoje é 120 s, como rede de segurança. Tela nova

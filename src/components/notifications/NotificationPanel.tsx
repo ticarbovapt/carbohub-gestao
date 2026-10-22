@@ -38,12 +38,31 @@ const TYPE_CONFIG: Record<string, { Icon: React.ElementType; label: string; colo
   ecommerce_disconnected: { Icon: WifiOff,     label: "E-commerce caído",   color: "text-destructive",  bg: "bg-destructive/10" },
 };
 
+// O fim da página NÃO é o fim das notificações (22/10/2026): antes a lista
+// parava nas 50 mais recentes e as antigas ficavam inalcançáveis.
+function CarregarMais({ onClick, carregando }: { onClick: () => void; carregando: boolean }) {
+  return (
+    <div className="p-2 flex justify-center">
+      <Button variant="ghost" size="sm" className="text-xs h-7 text-muted-foreground hover:text-foreground" onClick={onClick} disabled={carregando}>
+        {carregando ? "Carregando…" : "Carregar mais antigas"}
+      </Button>
+    </div>
+  );
+}
+
 export function NotificationPanel({ onClose }: NotificationPanelProps) {
   const navigate = useNavigate();
   const {
     notifications,
     unreadNotifications,
     readNotifications,
+    unreadCount,
+    totalCount,
+    hasMore,
+    loadMore,
+    hasMoreUnread,
+    loadMoreUnread,
+    isLoadingMore,
     isLoading,
     markAsRead,
     markAllAsRead,
@@ -149,14 +168,14 @@ export function NotificationPanel({ onClose }: NotificationPanelProps) {
             <Bell className="h-4 w-4 text-primary" />
           </div>
           <h3 className="font-semibold text-sm">Notificações</h3>
-          {unreadNotifications.length > 0 && (
+          {unreadCount > 0 && (
             <Badge variant="destructive" className="h-5 min-w-5 px-1.5 text-[10px] font-bold">
-              {unreadNotifications.length}
+              {unreadCount}
             </Badge>
           )}
         </div>
 
-        {unreadNotifications.length > 0 && (
+        {unreadCount > 0 && (
           <Button
             variant="ghost"
             size="sm"
@@ -175,15 +194,15 @@ export function NotificationPanel({ onClose }: NotificationPanelProps) {
           <TabsTrigger value="unread" className="gap-1.5 text-xs h-7">
             <Clock className="h-3 w-3" />
             Não lidas
-            {unreadNotifications.length > 0 && (
+            {unreadCount > 0 && (
               <span className="h-4 min-w-4 px-1 text-[10px] font-bold bg-primary text-primary-foreground rounded-full flex items-center justify-center">
-                {unreadNotifications.length}
+                {unreadCount}
               </span>
             )}
           </TabsTrigger>
           <TabsTrigger value="all" className="gap-1.5 text-xs h-7">
             <Bell className="h-3 w-3" />
-            Todas ({notifications.length})
+            Todas ({totalCount})
           </TabsTrigger>
         </TabsList>
 
@@ -196,6 +215,7 @@ export function NotificationPanel({ onClose }: NotificationPanelProps) {
                 {unreadNotifications.map((notification) => (
                   <NotificationItem key={notification.id} notification={notification} />
                 ))}
+                {hasMoreUnread && <CarregarMais onClick={loadMoreUnread} carregando={isLoadingMore} />}
               </div>
             )}
           </ScrollArea>
@@ -210,6 +230,7 @@ export function NotificationPanel({ onClose }: NotificationPanelProps) {
                 {notifications.map((notification) => (
                   <NotificationItem key={notification.id} notification={notification} />
                 ))}
+                {hasMore && <CarregarMais onClick={loadMore} carregando={isLoadingMore} />}
               </div>
             )}
           </ScrollArea>
