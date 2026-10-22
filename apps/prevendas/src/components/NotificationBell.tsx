@@ -78,6 +78,18 @@ function NotificationItem({
   );
 }
 
+// O fim da página NÃO é o fim das notificações: sem este botão, a 51ª e as
+// mais antigas ficavam inalcançáveis (22/10/2026).
+function CarregarMais({ onClick, carregando }: { onClick: () => void; carregando: boolean }) {
+  return (
+    <div className="p-2 flex justify-center">
+      <Button variant="ghost" size="sm" className="text-xs h-7 text-muted-foreground hover:text-foreground" onClick={onClick} disabled={carregando}>
+        {carregando ? "Carregando…" : "Carregar mais antigas"}
+      </Button>
+    </div>
+  );
+}
+
 function EmptyState({ message }: { message: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
@@ -134,7 +146,8 @@ export function NotificationBell() {
     }
   };
   const {
-    notifications, unreadNotifications, unreadCount,
+    notifications, unreadNotifications, unreadCount, totalCount,
+    hasMore, loadMore, hasMoreUnread, loadMoreUnread, isLoadingMore,
     markAsRead, markAllAsRead, deleteNotification,
   } = useNotifications();
 
@@ -178,7 +191,7 @@ export function NotificationBell() {
                 )}
               </TabsTrigger>
               <TabsTrigger value="all" className="gap-1.5 text-xs h-7">
-                <Bell className="h-3 w-3" /> Todas ({notifications.length})
+                <Bell className="h-3 w-3" /> Todas ({totalCount})
               </TabsTrigger>
             </TabsList>
 
@@ -187,9 +200,12 @@ export function NotificationBell() {
                 {unreadNotifications.length === 0 ? (
                   <EmptyState message="Nenhuma notificação nova" />
                 ) : (
-                  unreadNotifications.map((n) => (
-                    <NotificationItem key={n.id} notification={n} onRead={markAsRead} onDelete={deleteNotification} onOpen={handleOpen} />
-                  ))
+                  <>
+                    {unreadNotifications.map((n) => (
+                      <NotificationItem key={n.id} notification={n} onRead={markAsRead} onDelete={deleteNotification} onOpen={handleOpen} />
+                    ))}
+                    {hasMoreUnread && <CarregarMais onClick={loadMoreUnread} carregando={isLoadingMore} />}
+                  </>
                 )}
               </ScrollArea>
             </TabsContent>
@@ -199,9 +215,12 @@ export function NotificationBell() {
                 {notifications.length === 0 ? (
                   <EmptyState message="Nenhuma notificação ainda" />
                 ) : (
-                  notifications.map((n) => (
-                    <NotificationItem key={n.id} notification={n} onRead={markAsRead} onDelete={deleteNotification} onOpen={handleOpen} />
-                  ))
+                  <>
+                    {notifications.map((n) => (
+                      <NotificationItem key={n.id} notification={n} onRead={markAsRead} onDelete={deleteNotification} onOpen={handleOpen} />
+                    ))}
+                    {hasMore && <CarregarMais onClick={loadMore} carregando={isLoadingMore} />}
+                  </>
                 )}
               </ScrollArea>
             </TabsContent>
