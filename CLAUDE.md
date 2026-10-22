@@ -3433,6 +3433,35 @@ supabase/migrations/20261131000000_filial_baixa_e_espelho_ao_vivo.sql
    que tem de casar com EXATAMENTE um aberto a receber). Front no ar antes do
    SQL: a lista relê sem as colunas `cb_baixa_*` e o botão não aparece.
 
+### Conta a pagar NASCE no Finanças e é criada NO BLING (22/10/2026)
+"Nova conta a pagar" em `/pagar`, para a matriz (Bling 1) ou a filial (Bling 2)
+conforme o seletor de empresa. Função `fin-contas-pagar` (opcoes · fornecedores ·
+criar · excluir · ensaio), `lib/contaPagarBling.ts`,
+`components/financeiro/NovaContaPagar.tsx`, migração `20261132`.
+
+1. ⚠️ **O BLING PRIMEIRO, e o id dele é a identidade.** A linha daqui nasce com o
+   `bling_id` devolvido (`source = 'bling'`) e o espelho a ATUALIZA. Criar aqui
+   e mandar depois daria título em dobro na primeira rodada do espelho.
+2. ⚠️ **O espelho é escrito NA HORA** (`bling_contas_pagar` / `bling2_contas_pagar`):
+   sem ele o `fin_bling1_contas_aplicar` leria "não está mais no Bling 1" e
+   CANCELARIA a conta recém-criada.
+3. **Parcelada = N contas de ocorrência ÚNICA** (`ocorrencia.tipo = 1`, a forma
+   de 1.342 das contas medidas; 2 = parcelada do Bling, 3 = recorrente). A forma
+   do corpo veio de conta REAL aceita pelo Bling (`corpoContaPagar`, testado).
+   ⚠️ Falhou no meio ⇒ as já criadas são EXCLUÍDAS de volta: todas ou nenhuma.
+4. **Fornecedor = cadastro de contatos do Bling DAQUELA conta** (`bling_contacts`
+   1.282 · `bling2_contacts` 1.824). ⚠️ `is_supplier` não filtra nada na matriz
+   (os 1.282 são `true`). CNPJ casa por dígitos nos DOIS lados.
+5. **Portador** (conta de saída) é lido do Bling (`/contas-contabeis`), os mais
+   usados primeiro; sem a lista, os usados aparecem pelo id. Não é obrigatório
+   (73 contas reais não têm).
+6. ⚠️ **Excluir daqui só conta que NASCEU aqui** (prova: linha `criar` ok em
+   `fin_contas_pagar_log`) e ainda em aberto, sem borderô, lá. Na matriz o
+   "Cancelar" da linha dessas contas EXCLUI no Bling — cancelar só aqui a
+   deixaria aberta lá.
+7. ⚠️ **Nasce DESLIGADA por empresa** (`fin_contas_pagar_config`); nunca renova
+   token (matriz perto de vencer pede ao `bling-sync`; filial, "tente em 1 min").
+
 ### App novo no hub — os QUATRO lugares que precisam aprender a interface
 Criar a pasta do app é a parte fácil. O que faz um app existir é a flag em
 `profiles.allowed_interfaces` (ex.: `carbo_atendimento`) ser reconhecida em

@@ -193,6 +193,9 @@ export interface PurchasePayable {
   bling_baixa_em?: string | null;
   bling_baixa_bordero?: number | null;
   bling_baixa_erro?: string | null;
+  // ── Conta criada AQUI no Bling (`fin-contas-pagar`, migração 20261132). ──
+  criado_aqui_por?: string | null;
+  criado_aqui_nome?: string | null;
 }
 
 export interface ApprovalConfig {

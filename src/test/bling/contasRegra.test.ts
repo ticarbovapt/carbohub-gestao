@@ -118,3 +118,50 @@ describe("planejarEspelho — a rodada que só lê os ABERTOS", () => {
     expect(p.mudaram).toEqual([]);
   });
 });
+
+import { erroDaContaNova, corpoContaPagar, dividirEmParcelas } from "../../../supabase/functions/_shared/blingContasRegra";
+
+describe("conta a pagar criada pelo sistema no Bling", () => {
+  const base = { contatoId: 18466371935, portadorId: 14890756828, historico: "LOCAÇÃO", numeroDocumento: null,
+                 parcelas: [{ vencimento: "2026-11-16", valor: 2500 }] };
+
+  it("o corpo segue a forma de uma conta real que o Bling aceitou (ocorrência única)", () => {
+    expect(corpoContaPagar(base, 0, "2026-10-22")).toEqual({
+      vencimento: "2026-11-16", valor: 2500, contato: { id: 18466371935 }, portador: { id: 14890756828 },
+      historico: "LOCAÇÃO", dataEmissao: "2026-10-22", competencia: "2026-10-22", ocorrencia: { tipo: 1 },
+    });
+  });
+
+  it("sem portador o campo não vai (73 contas reais não têm); número só se preenchido", () => {
+    const c = corpoContaPagar({ ...base, portadorId: null, numeroDocumento: " 123 " }, 0, "2026-10-22");
+    expect(c.portador).toBeUndefined();
+    expect(c.numeroDocumento).toBe("123");
+  });
+
+  it("parcelada: cada parcela diz qual é no histórico", () => {
+    const c = { ...base, parcelas: dividirEmParcelas(1000, 3, "2026-11-10") };
+    expect(corpoContaPagar(c, 1, "2026-10-22").historico).toBe("LOCAÇÃO — parcela 2/3");
+  });
+
+  it("dividir: a sobra de centavo vai na última, e a soma FECHA", () => {
+    const p = dividirEmParcelas(100, 3, "2026-11-10");
+    expect(p.map((x) => x.valor)).toEqual([33.33, 33.33, 33.34]);
+    expect(Math.round(p.reduce((s, x) => s + x.valor, 0) * 100)).toBe(10000);
+    expect(p.map((x) => x.vencimento)).toEqual(["2026-11-10", "2026-12-10", "2027-01-10"]);
+  });
+
+  it("dividir: dia 31 em mês curto vira o último dia DAQUELE mês", () => {
+    expect(dividirEmParcelas(300, 3, "2027-01-31").map((x) => x.vencimento)).toEqual(["2027-01-31", "2027-02-28", "2027-03-31"]);
+  });
+
+  it("recusa, nunca corrige: sem fornecedor, sem histórico, valor zero, data impossível, parcelas demais", () => {
+    const h = "2026-10-22";
+    expect(erroDaContaNova(base, h)).toBeNull();
+    expect(erroDaContaNova({ ...base, contatoId: 0 }, h)).toMatch(/fornecedor/);
+    expect(erroDaContaNova({ ...base, historico: "  " }, h)).toMatch(/histórico/);
+    expect(erroDaContaNova({ ...base, parcelas: [{ vencimento: "2026-11-16", valor: 0 }] }, h)).toMatch(/Valor/);
+    expect(erroDaContaNova({ ...base, parcelas: [{ vencimento: "2026-02-30", valor: 1 }] }, h)).toMatch(/Vencimento/);
+    expect(erroDaContaNova({ ...base, parcelas: dividirEmParcelas(370, 37, "2026-11-01") }, h)).toMatch(/máximo/);
+    expect(erroDaContaNova({ ...base, parcelas: [{ vencimento: "2026-11-16", valor: 1.005 }] }, h)).toMatch(/2 casas/);
+  });
+});

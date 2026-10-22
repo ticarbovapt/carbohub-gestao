@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useParamUrl, confirmar } from "@carbo/shell";
 import { usePersistedState } from "@/hooks/usePersistedState";
-import { CreditCard, CheckCircle2, Undo2, Ban, ChevronLeft, ChevronRight, Search, X, CalendarRange } from "lucide-react";
+import { CreditCard, CheckCircle2, Undo2, Ban, ChevronLeft, ChevronRight, Search, X, CalendarRange, Plus } from "lucide-react";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { usePurchasePayablesOpen, usePurchasePayablesPaged, useUpdatePayableStatus, invalidarContasAPagar, type FiltroPagar } from "@/hooks/usePurchasing";
 import { FilialBling2, SeletorEmpresa, useEmpresaUrl } from "@/components/financeiro/FilialBling2";
 import { BaixaNoBling } from "@/components/financeiro/BaixaNoBling";
+import { NovaContaPagar } from "@/components/financeiro/NovaContaPagar";
+import { chamarContasPagar, useContaPagarConfig } from "@/lib/contaPagarBling";
 import { toast } from "@/hooks/use-toast";
 import { useBaixaBlingConfig, vaiAoBling, enviarAoBling, avisarBaixaNoBling } from "@/lib/blingBaixa";
 import { PAYABLE_STATUS_LABELS, type PayableStatus, type PurchasePayable } from "@/types/purchasing";
@@ -101,10 +103,30 @@ export function PayablesList(_props: { initialStatus?: string } = {}) {
   // ⚠️ Matriz e filial são telas SEPARADAS (`?empresa=filial`): a filial é o
   // espelho do Bling 2, só leitura, e nunca soma com a matriz.
   const [empresa, trocarEmpresa] = useEmpresaUrl();
+  const qc = useQueryClient();
+  const { data: cfgCriar } = useContaPagarConfig();
+  const [nova, setNova] = useState(false);
+  const conta = empresa === "filial" ? 2 : 1;
   return (
     <div className="space-y-4">
-      <SeletorEmpresa valor={empresa} onChange={trocarEmpresa} />
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+        <SeletorEmpresa valor={empresa} onChange={trocarEmpresa} />
+        {/* ⚠️ Só aparece com o interruptor da empresa ligado (`fin_contas_pagar_config`). */}
+        {cfgCriar?.[conta] && (
+          <Button className="w-full gap-1.5 lg:w-auto" onClick={() => setNova(true)}>
+            <Plus className="h-4 w-4" /> Nova conta a pagar
+          </Button>
+        )}
+      </div>
       {empresa === "filial" ? <FilialBling2 tipo="pagar" /> : <PayablesMatriz />}
+      <NovaContaPagar
+        conta={conta} open={nova} onOpenChange={setNova}
+        onCriada={() => {
+          invalidarContasAPagar(qc);
+          qc.invalidateQueries({ queryKey: ["bling2-contas-paged"] });
+          qc.invalidateQueries({ queryKey: ["bling2-contas-resumo"] });
+        }}
+      />
     </div>
   );
 }
@@ -255,6 +277,22 @@ function PayablesMatriz() {
   };
 
   const cancelar = async (p: PurchasePayable) => {
+    // ⚠️ Conta que NASCEU aqui (criada pelo Finanças no Bling): cancelar é
+    // EXCLUIR no Bling — senão ela ficaria aberta lá e cancelada aqui.
+    if (p.criado_aqui_por && p.bling_id) {
+      const ok = await confirmar({
+        titulo: "Excluir esta conta no Bling?",
+        mensagem: `${p.supplier_name} · ${formatCurrency(p.amount)} · venc. ${dataBR(p.due_date)}\n\n` +
+          "Ela foi criada pelo sistema: é excluída no Bling da matriz e cancelada aqui. Se o Bling recusar, nada muda.",
+        confirmar: "Excluir no Bling", cancelar: "Voltar", perigo: true,
+      });
+      if (!ok) return;
+      const r = await chamarContasPagar("excluir", 1, { bling_id: Number(p.bling_id) });
+      if (r.ok) toast({ title: "Conta excluída no Bling" });
+      else toast({ title: "O Bling não excluiu — nada mudou", description: r.mensagem, variant: "destructive" });
+      invalidarContasAPagar(qc);
+      return;
+    }
     const ok = await confirmar({
       titulo: "Cancelar esta conta?",
       mensagem: `${p.supplier_name} · ${formatCurrency(p.amount)} · venc. ${dataBR(p.due_date)}\n\n` +
@@ -420,7 +458,10 @@ function PayablesMatriz() {
               const rel = prazoRelativo(p, hoje);
               return (
                 <CarboTableRow key={p.id}>
-                  <CarboTableCell className="font-medium">{p.supplier_name}</CarboTableCell>
+                  <CarboTableCell className="font-medium">
+                    <p>{p.supplier_name}</p>
+                    {p.criado_aqui_nome && <p className="text-[11px] font-normal text-muted-foreground">criada aqui por {p.criado_aqui_nome.split(" ")[0]}</p>}
+                  </CarboTableCell>
                   <CarboTableCell className="font-mono text-xs text-muted-foreground">{p.bling_numero || "—"}</CarboTableCell>
                   <CarboTableCell>
                     <CarboBadge variant={isBling ? "secondary" : "info"} className="text-[10px]">
@@ -461,7 +502,7 @@ function PayablesMatriz() {
                         <Button variant="ghost" size="sm" className="gap-1.5 text-success" onClick={() => { setPaidAt(hojeISO()); setPayingId(p.id); }}>
                           <CheckCircle2 className="h-3.5 w-3.5" /> Pagar
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => cancelar(p)} title="Cancelar conta">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => cancelar(p)} title={p.criado_aqui_por ? "Excluir no Bling" : "Cancelar conta"}>
                           <Ban className="h-3.5 w-3.5" />
                         </Button>
                       </div>
