@@ -347,3 +347,58 @@ export function dividirEmParcelas(total: number, n: number, primeiroVencimento: 
   }
   return out;
 }
+
+// ── Raio-x dos borderôs (ENSAIO, só lê) ─────────────────────────────────────
+// Os nomes de juros/multa/desconto/tarifa e do valor parcial vieram da doc, e o
+// Bling IGNORA calado campo desconhecido. A prova mais barata, sem escrever
+// nada, é ler os borderôs que o time JÁ fez no próprio Bling: neles, cada campo
+// que vem com valor diferente de zero é um nome que o Bling de fato usa.
+
+const AJUSTE = /juro|multa|desc|acresc|tarifa|taxa/i;
+
+/** Conta as chaves dos borderôs (topo e pagamentos) e separa os exemplos que importam. */
+export function censoBorderos(lista: { titulo: number; situacao: string | null; bordero: any }[]) {
+  const topo: Record<string, number> = {};
+  const pag: Record<string, number> = {};
+  const naoZero: Record<string, number> = {};
+  const historicos: string[] = [];
+  let doCarbohub = 0;
+  const comAjuste: unknown[] = [];
+  const parciais: unknown[] = [];
+  for (const { titulo, situacao, bordero } of lista) {
+    const bo = bordero ?? {};
+    for (const k of Object.keys(bo)) topo[k] = (topo[k] ?? 0) + 1;
+    const h = typeof bo.historico === "string" ? bo.historico.trim() : "";
+    if (h) { if (historicos.length < 8 && !historicos.includes(h)) historicos.push(h); if (/carbohub/i.test(h)) doCarbohub++; }
+    let temAjuste = false;
+    for (const p of Array.isArray(bo.pagamentos) ? bo.pagamentos : []) {
+      for (const [k, v] of Object.entries(p ?? {})) {
+        pag[k] = (pag[k] ?? 0) + 1;
+        if (typeof v === "number" && v !== 0) { naoZero[k] = (naoZero[k] ?? 0) + 1; if (AJUSTE.test(k)) temAjuste = true; }
+      }
+    }
+    for (const [k, v] of Object.entries(bo)) {
+      if (typeof v === "number" && v !== 0 && AJUSTE.test(k)) { naoZero[`(topo) ${k}`] = (naoZero[`(topo) ${k}`] ?? 0) + 1; temAjuste = true; }
+    }
+    if (temAjuste && comAjuste.length < 5) comAjuste.push({ titulo, situacao, bordero: bo });
+    if (situacao === "3" && parciais.length < 3) parciais.push({ titulo, bordero: bo });
+  }
+  return {
+    lidos: lista.length,
+    chaves_do_bordero: topo,
+    chaves_dos_pagamentos: pag,
+    campos_com_valor: naoZero,
+    historicos_exemplo: historicos,
+    historicos_do_carbohub: doCarbohub,
+    exemplos_com_ajuste: comAjuste,
+    exemplos_parcial: parciais,
+    exemplo_simples: lista.find((x) => !comAjuste.some((c: any) => c.titulo === x.titulo))?.bordero ?? null,
+  };
+}
+
+/** O último borderô de cada título (o `detalhe->borderos` do espelho). */
+export function ultimoBordero(borderos: unknown): number | null {
+  if (!Array.isArray(borderos)) return null;
+  const ids = borderos.map((x: any) => Number(typeof x === "object" ? x?.id : x)).filter((n) => n > 0);
+  return ids.length ? Math.max(...ids) : null;
+}

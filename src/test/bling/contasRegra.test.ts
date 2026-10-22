@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  censoBorderos, ultimoBordero,
   decidirBaixa, dataDaBaixa, planejarEspelho, idsDeBordero, diaBrasilia, conferirBaixa, lerAjustes,
   type LocalConta, type ListadaConta,
 } from "../../../supabase/functions/_shared/blingContasRegra";
@@ -235,5 +236,24 @@ describe("conta a pagar criada pelo sistema no Bling", () => {
     expect(erroDaContaNova({ ...base, parcelas: [{ vencimento: "2026-02-30", valor: 1 }] }, h)).toMatch(/Vencimento/);
     expect(erroDaContaNova({ ...base, parcelas: dividirEmParcelas(370, 37, "2026-11-01") }, h)).toMatch(/máximo/);
     expect(erroDaContaNova({ ...base, parcelas: [{ vencimento: "2026-11-16", valor: 1.005 }] }, h)).toMatch(/2 casas/);
+  });
+});
+
+describe("censoBorderos (raio-x do ensaio)", () => {
+  it("conta os campos com valor e separa exemplos com ajuste e parciais", () => {
+    const r = censoBorderos([
+      { titulo: 1, situacao: "2", bordero: { id: 9, historico: "Baixa pelo CarboHub Finanças (Ana)", pagamentos: [{ valorPago: 100, juros: 2.5, desconto: 0 }] } },
+      { titulo: 2, situacao: "3", bordero: { id: 8, historico: "pix", pagamentos: [{ valorPago: 40, juros: 0 }] } },
+      { titulo: 3, situacao: "2", bordero: { id: 7, pagamentos: [{ valorPago: 10 }] } },
+    ]);
+    expect(r.campos_com_valor).toEqual({ valorPago: 3, juros: 1 });
+    expect(r.historicos_do_carbohub).toBe(1);
+    expect(r.exemplos_com_ajuste).toHaveLength(1);
+    expect(r.exemplos_parcial).toHaveLength(1);
+    expect(r.chaves_dos_pagamentos.juros).toBe(2);
+  });
+  it("último borderô = o maior id, aceitando objeto ou número", () => {
+    expect(ultimoBordero([{ id: 5 }, { id: 12 }, 3])).toBe(12);
+    expect(ultimoBordero(null)).toBeNull();
   });
 });
