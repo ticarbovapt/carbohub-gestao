@@ -48,6 +48,8 @@ export interface Bling2Conta {
   cb_baixa_bordero: number | null;
   /** A última recusa do Bling 2 a uma baixa pedida daqui. */
   cb_baixa_erro: string | null;
+  /** Conta a PAGAR criada aqui no Bling 2 (`fin-contas-pagar`, migração 20261132). */
+  cb_criado_nome: string | null;
 }
 
 export const tabelaBling2 = (tipo: Bling2Tipo) =>
@@ -59,8 +61,10 @@ const COLUNAS = (tipo: Bling2Tipo) =>
 // ⚠️ Colunas da baixa pela tela (20261131). Front no ar antes do SQL: a consulta
 // com elas falha (42703) e a tela relê SEM elas — nunca fica vazia por isso.
 const COLUNAS_BAIXA = "cb_baixa_em, cb_baixa_por_nome, cb_baixa_bordero, cb_baixa_erro";
+// Só o contas a PAGAR tem quem a criou aqui (20261132).
+const COLUNAS_CRIADO = "cb_criado_nome";
 const faltaColuna = (e: any) =>
-  !!e && (e.code === "42703" || e.code === "PGRST204" || (/cb_baixa_/.test(String(e.message ?? "")) && /does not exist|schema cache|Could not find/i.test(String(e.message ?? ""))));
+  !!e && (e.code === "42703" || e.code === "PGRST204" || (/cb_(baixa|criado)_/.test(String(e.message ?? "")) && /does not exist|schema cache|Could not find/i.test(String(e.message ?? ""))));
 
 const paraConta = (tipo: Bling2Tipo) => (r: any): Bling2Conta => ({
   id: r.id, bling_id: r.bling_id, numero: r.numero ?? null,
@@ -74,6 +78,7 @@ const paraConta = (tipo: Bling2Tipo) => (r: any): Bling2Conta => ({
   cb_baixa_por_nome: r.cb_baixa_por_nome ?? null,
   cb_baixa_bordero: r.cb_baixa_bordero == null ? null : Number(r.cb_baixa_bordero),
   cb_baixa_erro: r.cb_baixa_erro ?? null,
+  cb_criado_nome: r.cb_criado_nome ?? null,
 });
 
 /** Quanto falta: parcial ('3') vale o SALDO; em aberto ('1') vale o valor do título. */
@@ -170,8 +175,18 @@ export function useBling2ContasPaged(params: {
           .order("id", { ascending: asc })
           .range(de, de + params.pageSize - 1);
       };
-      let { data, error, count } = await montar(`${COLUNAS(params.tipo)}, ${COLUNAS_BAIXA}`);
-      if (faltaColuna(error)) ({ data, error, count } = await montar(COLUNAS(params.tipo)));
+      // Do mais completo ao mais antigo: coluna que ainda não existe derruba só
+      // o que depende dela, nunca a lista.
+      const tentativas = [
+        ...(params.tipo === "pagar" ? [`${COLUNAS(params.tipo)}, ${COLUNAS_BAIXA}, ${COLUNAS_CRIADO}`] : []),
+        `${COLUNAS(params.tipo)}, ${COLUNAS_BAIXA}`,
+        COLUNAS(params.tipo),
+      ];
+      let { data, error, count } = await montar(tentativas[0]);
+      for (const cols of tentativas.slice(1)) {
+        if (!faltaColuna(error)) break;
+        ({ data, error, count } = await montar(cols));
+      }
       if (error) falhou(error);
       return { rows: ((data ?? []) as any[]).map(paraConta(params.tipo)), count: count ?? 0 };
     },

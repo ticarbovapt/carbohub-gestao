@@ -15,6 +15,7 @@ import {
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { usePersistedState } from "@/hooks/usePersistedState";
 import { baixaLiberada, pedirAoBling2, useBaixaBling2Config, type BaixaBling2Config } from "@/lib/bling2Baixa";
+import { chamarContasPagar } from "@/lib/contaPagarBling";
 import {
   useBling2Resumo, useBling2ContasPaged, valorEmAberto,
   type Bling2Tipo, type Bling2Conta, type FiltroBling2,
@@ -236,6 +237,7 @@ export function FilialBling2({ tipo }: { tipo: Bling2Tipo }) {
                 <CarboTableRow key={c.id}>
                   <CarboTableCell className="font-medium">
                     <p>{c.nome || "—"}</p>
+                    {c.cb_criado_nome && <p className="text-[11px] font-normal text-muted-foreground">criada aqui por {c.cb_criado_nome.split(" ")[0]}</p>}
                     {c.historico && <p className="max-w-[280px] truncate text-[11px] font-normal text-muted-foreground" title={c.historico}>{c.historico}</p>}
                   </CarboTableCell>
                   <CarboTableCell className="font-mono text-xs text-muted-foreground">{c.numero || "—"}</CarboTableCell>
@@ -360,8 +362,33 @@ function AcoesDaFilial({ conta: c, tipo, cfg }: { conta: Bling2Conta; tipo: Blin
   }
   if (!aberta(c)) return <span className="text-xs text-muted-foreground">—</span>;
 
+  // ⚠️ Conta a pagar que NASCEU aqui: excluir vai ao Bling 2 (a função confere
+  // que ela está em aberto lá e que foi criada pelo sistema).
+  const excluir = async () => {
+    const ok = await confirmar({
+      titulo: "Excluir esta conta no Bling da filial?",
+      mensagem: `${c.nome || "—"} · ${brl(valorEmAberto(c))} · venc. ${dataBR(c.vencimento)}\n\nEla foi criada pelo sistema e é excluída no Bling 2. Se o Bling recusar, nada muda.`,
+      confirmar: "Excluir no Bling", perigo: true,
+    });
+    if (!ok) return;
+    setEnviando(true);
+    try {
+      const r = await chamarContasPagar("excluir", 2, { bling_id: c.bling_id });
+      if (r.ok) toast.success("Conta excluída no Bling da filial");
+      else toast.error("O Bling não excluiu — nada mudou", { description: r.mensagem });
+    } finally {
+      setEnviando(false);
+      recarregar();
+    }
+  };
+
   return (
     <div className="flex flex-wrap items-center gap-1">
+      {tipo === "pagar" && c.cb_criado_nome && (
+        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-destructive" disabled={enviando} onClick={excluir}>
+          Excluir
+        </Button>
+      )}
       {c.cb_baixa_erro && <CarboBadge variant="destructive" size="sm" title={c.cb_baixa_erro}>Bling recusou</CarboBadge>}
       {liberada ? (
         <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={enviando}

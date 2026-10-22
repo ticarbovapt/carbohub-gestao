@@ -133,3 +133,83 @@ export function planejarEspelho(locais: Map<number, LocalConta>, listados: Lista
   for (const [id, loc] of locais) if (estaAberta(loc.situacao) && !vistos.has(id)) sumiram.push(id);
   return { filtroIgnorado: false, novos, mudaram, sumiram };
 }
+
+// ── Conta a pagar CRIADA pelo sistema no Bling ──────────────────────────────
+
+export interface ParcelaNova { vencimento: string; valor: number }
+export interface ContaPagarNova {
+  contatoId: number;
+  portadorId: number | null;
+  historico: string;
+  numeroDocumento: string | null;
+  parcelas: ParcelaNova[];
+}
+
+export const MAX_PARCELAS = 36;
+
+/**
+ * Confere o pedido da tela ANTES de falar com o Bling. Devolve o motivo da
+ * recusa, ou null. ⚠️ Nada é corrigido calado: data inválida, valor zerado ou
+ * parcela demais RECUSAM — trocar por outro valor seria criar título errado.
+ */
+export function erroDaContaNova(c: ContaPagarNova, hoje: string): string | null {
+  if (!Number.isFinite(c.contatoId) || c.contatoId <= 0) return "Escolha o fornecedor.";
+  if (!c.historico || !c.historico.trim()) return "Diga do que é a conta (histórico).";
+  if (c.historico.trim().length > 250) return "O histórico passa de 250 caracteres.";
+  if (!Array.isArray(c.parcelas) || c.parcelas.length === 0) return "Informe ao menos uma parcela.";
+  if (c.parcelas.length > MAX_PARCELAS) return `No máximo ${MAX_PARCELAS} parcelas.`;
+  for (const [i, p] of c.parcelas.entries()) {
+    const n = c.parcelas.length > 1 ? ` (parcela ${i + 1})` : "";
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(p.vencimento ?? "")) return `Vencimento inválido${n}.`;
+    const d = new Date(`${p.vencimento}T12:00:00Z`);
+    if (isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== p.vencimento) return `Vencimento inválido${n}.`;
+    if (p.vencimento < "2000-01-01" || p.vencimento > "2100-12-31") return `Vencimento fora do razoável${n}.`;
+    if (!Number.isFinite(p.valor) || p.valor <= 0) return `Valor inválido${n}.`;
+    if (Math.round(p.valor * 100) !== Math.round(p.valor * 100 * 1e6) / 1e6) return `Valor com mais de 2 casas${n}.`;
+  }
+  void hoje;
+  return null;
+}
+
+/**
+ * O corpo do POST /contas/pagar de UMA parcela — a forma de uma conta real que
+ * o Bling já aceitou (medida em 22/10/2026). ⚠️ Cada parcela vira uma conta de
+ * ocorrência ÚNICA (tipo 1, 1.342 das contas medidas): número, datas e valores
+ * ficam sob o nosso controle, e o espelho traz cada uma como sempre trouxe.
+ */
+export function corpoContaPagar(c: ContaPagarNova, i: number, hoje: string): Record<string, unknown> {
+  const p = c.parcelas[i];
+  const total = c.parcelas.length;
+  const historico = c.historico.trim() + (total > 1 ? ` — parcela ${i + 1}/${total}` : "");
+  return {
+    vencimento: p.vencimento,
+    valor: Math.round(p.valor * 100) / 100,
+    contato: { id: c.contatoId },
+    ...(c.portadorId ? { portador: { id: c.portadorId } } : {}),
+    historico,
+    dataEmissao: hoje,
+    competencia: hoje,
+    ...(c.numeroDocumento?.trim() ? { numeroDocumento: c.numeroDocumento.trim() } : {}),
+    ocorrencia: { tipo: 1 },
+  };
+}
+
+/**
+ * Parcelas iguais a partir de um total: centavos da sobra na ÚLTIMA (a mesma
+ * regra do contas a receber), vencimentos de mês em mês a partir do primeiro.
+ * ⚠️ Dia 31 em mês curto vira o último dia daquele mês, nunca o mês seguinte.
+ */
+export function dividirEmParcelas(total: number, n: number, primeiroVencimento: string): ParcelaNova[] {
+  if (!(n >= 1) || !Number.isFinite(total) || total <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(primeiroVencimento)) return [];
+  const centavos = Math.round(total * 100);
+  const base = Math.floor(centavos / n);
+  const [a, m, d] = primeiroVencimento.split("-").map(Number);
+  const out: ParcelaNova[] = [];
+  for (let i = 0; i < n; i++) {
+    const ultimoDia = new Date(Date.UTC(a, m - 1 + i + 1, 0)).getUTCDate();
+    const dt = new Date(Date.UTC(a, m - 1 + i, Math.min(d, ultimoDia)));
+    const valor = i === n - 1 ? centavos - base * (n - 1) : base;
+    out.push({ vencimento: dt.toISOString().slice(0, 10), valor: valor / 100 });
+  }
+  return out;
+}
