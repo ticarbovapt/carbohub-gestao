@@ -2,18 +2,17 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useParamUrl, confirmar } from "@carbo/shell";
 import { usePersistedState } from "@/hooks/usePersistedState";
-import { CreditCard, CheckCircle2, Plus, RefreshCw } from "lucide-react";
+import { CreditCard, Plus, RefreshCw } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { usePurchasePayablesOpen, usePurchasePayablesPaged, useUpdatePayableStatus, invalidarContasAPagar, type FiltroPagar } from "@/hooks/usePurchasing";
 import { FilialBling2, LinhaEmpresa, SeletorEmpresa, useEmpresaUrl } from "@/components/financeiro/FilialBling2";
 import {
   BarraFiltros, CabecalhoOrdem, CampoBusca, CelulaVencimento, FiltroOrdem, FiltroPeriodo, FiltroSelect, Kpi, KpiGrade,
   LimparFiltros, LinhaEstado, MenuAcoes, Paginacao, SituacaoBadge, Valor, useOrdemUrl,
 } from "@/components/financeiro/ContasUI";
-import { DatePickerInput } from "@/components/ui/date-picker-input";
+import { DialogoBaixa, type ConfirmacaoBaixa } from "@/components/financeiro/DialogoBaixa";
+import { resumoAjustes, salvarAjustes, useEspelhoMatriz } from "@/lib/baixaDialogo";
 import { BaixaNoBling } from "@/components/financeiro/BaixaNoBling";
 import { NovaContaPagar } from "@/components/financeiro/NovaContaPagar";
 import { chamarContasPagar, useContaPagarConfig } from "@/lib/contaPagarBling";
@@ -126,7 +125,7 @@ function PayablesMatriz({ seletor }: { seletor: ReactNode }) {
   // Tamanho de página é preferência da pessoa, não pergunta: fica no navegador.
   const [pageSize, setPageSize] = usePersistedState<number>("compras.pagar.pageSize", 20);
   const [payingId, setPayingId] = useState<string | null>(null);
-  const [paidAt, setPaidAt] = useState(hojeISO());
+  const [pagando, setPagando] = useState(false);
 
   const hoje = hojeISO();
   const status = normalizarFiltro(statusUrl);
@@ -178,6 +177,12 @@ function PayablesMatriz({ seletor }: { seletor: ReactNode }) {
   });
   const rows = paged?.rows ?? [];
   const total = paged?.count ?? 0;
+  // Situação e saldo do Bling 1: é ele que sabe da baixa PARCIAL.
+  const { data: espelho } = useEspelhoMatriz("pagar", rows.map((p) => p.bling_id));
+  const saldoDe = (p: PurchasePayable) => {
+    const e = p.bling_id ? espelho?.get(Number(p.bling_id)) : undefined;
+    return e?.situacao === "3" && e.saldo != null && e.saldo > 0 ? e.saldo : null;
+  };
 
   // Resumo (aging) sobre o que está EM ABERTO (respeita só o filtro de origem).
   // ⚠️ Soma só real: um título em USD somado em R$ seria número sem moeda.
@@ -198,20 +203,37 @@ function PayablesMatriz({ seletor }: { seletor: ReactNode }) {
   const semRecorte = !periodo.de && !periodo.ate && !busca;
 
   const payingPayable = rows.find((p) => p.id === payingId);
-  const handlePay = async () => {
-    if (!payingId) return;
-    // A linha é lida ANTES de fechar o diálogo: depois do update ela pode já ter
-    // saído da página (a fila não mostra pago).
-    const titulo = rows.find((p) => p.id === payingId);
+  const handlePay = async ({ dia, ajustes, parcial }: ConfirmacaoBaixa) => {
+    const titulo = payingPayable;
+    if (!titulo) return;
+    setPagando(true);
     try {
-      await updateStatus.mutateAsync({ id: payingId, status: "pago", paid_at: paidAt || hojeISO() });
-      setPayingId(null);
-    } catch { return; /* o hook já avisou; o diálogo fica aberto para tentar de novo */ }
-    // ⚠️ A baixa LOCAL já está gravada; o Bling é o passo seguinte, e a recusa
-    // dele NÃO a desfaz — fica em `bling_baixa_erro`, com "Tentar de novo" na linha.
-    if (titulo && vaiAoBling(cfgBling, titulo)) {
-      avisarBaixaNoBling(await enviarAoBling("baixar", "pagar", titulo.id));
-      invalidarContasAPagar(qc);
+      // ⚠️ PARCIAL vai ao Bling PRIMEIRO e não marca nada como pago aqui: o
+      // título continua aberto, com o saldo que o Bling disser.
+      if (parcial) {
+        const r = await enviarAoBling("baixar", "pagar", titulo.id, { ajustes, data: dia });
+        avisarBaixaNoBling(r);
+        invalidarContasAPagar(qc);
+        qc.invalidateQueries({ queryKey: ["espelho-matriz"] });
+        if (r.ok) setPayingId(null);
+        return;
+      }
+      // A linha é lida ANTES de fechar o diálogo: depois do update ela pode já
+      // ter saído da página (a fila não mostra pago).
+      try {
+        await updateStatus.mutateAsync({ id: titulo.id, status: "pago", paid_at: dia || hojeISO() });
+        await salvarAjustes("purchase_payables", titulo.id, ajustes);
+        setPayingId(null);
+      } catch { return; /* o hook já avisou; o diálogo fica aberto para tentar de novo */ }
+      // ⚠️ A baixa LOCAL já está gravada; o Bling é o passo seguinte, e a recusa
+      // dele NÃO a desfaz — fica em `bling_baixa_erro`, com "Tentar de novo" na linha.
+      if (vaiAoBling(cfgBling, titulo)) {
+        avisarBaixaNoBling(await enviarAoBling("baixar", "pagar", titulo.id, { ajustes }));
+        invalidarContasAPagar(qc);
+        qc.invalidateQueries({ queryKey: ["espelho-matriz"] });
+      }
+    } finally {
+      setPagando(false);
     }
   };
 
@@ -250,7 +272,7 @@ function PayablesMatriz({ seletor }: { seletor: ReactNode }) {
       }
       if (r.pulado) toast({ title: "Bling", description: r.mensagem });
     }
-    updateStatus.mutate({ id: p.id, status: "programado" });
+    updateStatus.mutate({ id: p.id, status: "programado" }, { onSuccess: () => salvarAjustes("purchase_payables", p.id, null) });
   };
 
   const cancelar = async (p: PurchasePayable) => {
@@ -353,6 +375,8 @@ function PayablesMatriz({ seletor }: { seletor: ReactNode }) {
               rows.map((p) => {
                 const eff = statusEfetivo(p);
                 const isBling = p.source === "bling";
+                const saldo = emAberto(p.status) ? saldoDe(p) : null;
+                const ajustes = resumoAjustes((p as any).baixa_ajustes, p.amount);
                 const sub = [
                   p.bling_numero && `nº ${p.bling_numero}`,
                   isBling ? "Bling" : "Sistema",
@@ -367,14 +391,18 @@ function PayablesMatriz({ seletor }: { seletor: ReactNode }) {
                     <CarboTableCell className="py-3">
                       <CelulaVencimento data={p.due_date} dias={emAberto(p.status) ? diasAte(p.due_date, hoje) : null} />
                     </CarboTableCell>
-                    <CarboTableCell className="py-3 text-right"><Valor v={p.amount} /></CarboTableCell>
+                    <CarboTableCell className="py-3 text-right">
+                      <Valor v={saldo ?? p.amount} />
+                      {saldo != null && <span className="block text-xs text-muted-foreground tabular-nums">de {formatCurrency(p.amount)}</span>}
+                    </CarboTableCell>
                     <CarboTableCell className="py-3">
-                      <SituacaoBadge s={eff === "atrasado" ? "vencido" : eff === "programado" ? "aberto" : eff === "pago" ? "pago" : "cancelado"} />
+                      <SituacaoBadge s={eff === "atrasado" ? "vencido" : eff === "programado" ? (saldo != null ? "parcial" : "aberto") : eff === "pago" ? "pago" : "cancelado"} />
                     </CarboTableCell>
                     <CarboTableCell className="py-3 whitespace-nowrap text-muted-foreground tabular-nums">
                       {/* ⚠️ O espelho do Bling não grava a data da baixa: dizer
                           "no Bling" é a verdade; inventar uma data, não. */}
                       {p.paid_at ? dataBR(p.paid_at) : p.status === "pago" && isBling ? <span title="Baixado no Bling — o espelho não traz a data">no Bling</span> : "—"}
+                      {p.status === "pago" && ajustes && <span className="block text-xs">{ajustes}</span>}
                     </CarboTableCell>
                     <CarboTableCell className="py-3" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1">
@@ -390,7 +418,7 @@ function PayablesMatriz({ seletor }: { seletor: ReactNode }) {
                           <MenuAcoes itens={[]} />
                         ) : (
                           <>
-                            <Button variant="outline" size="sm" className="h-8 px-3" onClick={() => { setPaidAt(hojeISO()); setPayingId(p.id); }}>
+                            <Button variant="outline" size="sm" className="h-8 px-3" onClick={() => setPayingId(p.id)}>
                               Pagar
                             </Button>
                             <MenuAcoes itens={[{ l: p.criado_aqui_por ? "Excluir no Bling" : "Cancelar conta", onClick: () => cancelar(p), perigo: true }]} />
@@ -409,51 +437,21 @@ function PayablesMatriz({ seletor }: { seletor: ReactNode }) {
           onPageSize={(n) => { setPageSize(n); setPagina(null); }} />
       </div>
 
-      {/* Baixa */}
-      <Dialog open={!!payingId} onOpenChange={(o) => { if (!o) setPayingId(null); }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Confirmar pagamento</DialogTitle>
-          </DialogHeader>
-          <form noValidate className="grid gap-4" onSubmit={(e) => { e.preventDefault(); handlePay(); }}>
-            {payingPayable ? (
-              <div className="space-y-2 text-sm">
-                <p className="text-muted-foreground">Marcar esta conta como paga?</p>
-                <div className="space-y-1 rounded-lg border border-border p-3">
-                  <div className="flex justify-between gap-3"><span className="text-muted-foreground">Fornecedor</span><strong className="text-right">{payingPayable.supplier_name}</strong></div>
-                  {payingPayable.bling_numero && (
-                    <div className="flex justify-between gap-3"><span className="text-muted-foreground">Documento</span><strong className="font-mono">{payingPayable.bling_numero}</strong></div>
-                  )}
-                  <div className="flex justify-between gap-3"><span className="text-muted-foreground">Valor</span><strong className="font-mono">{formatCurrency(payingPayable.amount)}</strong></div>
-                  <div className="flex justify-between gap-3"><span className="text-muted-foreground">Vencimento</span><strong>{dataBR(payingPayable.due_date)}</strong></div>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Data do pagamento</Label>
-                  <DatePickerInput value={paidAt} onChange={setPaidAt} disableFuture clearable={false} className="h-9 w-full hover:bg-muted/60 hover:text-foreground data-[state=open]:bg-muted/60" />
-                </div>
-                {payingPayable.source === "bling" && (vaiAoBling(cfgBling, payingPayable) ? (
-                  <p className="rounded-md border border-border bg-muted/40 p-2 text-xs">
-                    A baixa feita aqui vai para o Bling na hora.
-                  </p>
-                ) : (
-                  <p className="rounded-md border border-warning/40 bg-warning/10 p-2 text-xs">
-                    A baixa vale só aqui — no Bling o título continua em aberto.
-                  </p>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">Deseja marcar esta conta como paga?</p>
-            )}
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setPayingId(null)}>Cancelar</Button>
-              <Button type="submit" disabled={updateStatus.isPending || !paidAt} className="carbo-gradient gap-1.5 text-white">
-                <CheckCircle2 className="h-4 w-4" />
-                Confirmar pagamento
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {/* Baixa: conta (banco), data, juros/multa/desconto/tarifa e o valor de fato */}
+      <DialogoBaixa
+        open={!!payingId} onOpenChange={(o) => { if (!o) setPayingId(null); }}
+        tipo="pagar" conta={1} espelho="bling_contas_pagar" blingId={payingPayable?.bling_id ? Number(payingPayable.bling_id) : null}
+        titulo={payingPayable ? {
+          nome: payingPayable.supplier_name, numero: payingPayable.bling_numero, vencimento: payingPayable.due_date,
+          valor: Number(payingPayable.amount), saldo: saldoDe(payingPayable) ?? Number(payingPayable.amount),
+        } : null}
+        podeParcial={!!payingPayable && vaiAoBling(cfgBling, payingPayable)}
+        motivoSemParcial="Baixa parcial só com o envio ao Bling ligado — é o Bling que guarda o saldo."
+        enviando={pagando || updateStatus.isPending} onConfirmar={handlePay}
+        aviso={payingPayable?.source === "bling"
+          ? (vaiAoBling(cfgBling, payingPayable) ? "A baixa vai para o Bling na hora, na conta escolhida." : "A baixa vale só aqui — no Bling o título continua em aberto.")
+          : undefined}
+      />
     </div>
   );
 }

@@ -51,6 +51,8 @@ export interface Bling2Conta {
   cb_baixa_erro: string | null;
   /** Conta a PAGAR criada aqui no Bling 2 (`fin-contas-pagar`, migração 20261132). */
   cb_criado_nome: string | null;
+  /** Conta e ajustes da baixa feita AQUI (20261133). */
+  baixa_ajustes: Record<string, any> | null;
 }
 
 export const tabelaBling2 = (tipo: Bling2Tipo) =>
@@ -64,8 +66,10 @@ const COLUNAS = (tipo: Bling2Tipo) =>
 const COLUNAS_BAIXA = "cb_baixa_em, cb_baixa_por_nome, cb_baixa_bordero, cb_baixa_erro";
 // Só o contas a PAGAR tem quem a criou aqui (20261132).
 const COLUNAS_CRIADO = "cb_criado_nome";
+// A conta e os ajustes da baixa feita aqui (20261133).
+const COLUNAS_AJUSTES = "baixa_ajustes";
 const faltaColuna = (e: any) =>
-  !!e && (e.code === "42703" || e.code === "PGRST204" || (/cb_(baixa|criado)_/.test(String(e.message ?? "")) && /does not exist|schema cache|Could not find/i.test(String(e.message ?? ""))));
+  !!e && (e.code === "42703" || e.code === "PGRST204" || (/cb_(baixa|criado)_|baixa_ajustes/.test(String(e.message ?? "")) && /does not exist|schema cache|Could not find/i.test(String(e.message ?? ""))));
 
 const paraConta = (tipo: Bling2Tipo) => (r: any): Bling2Conta => ({
   id: r.id, bling_id: r.bling_id, numero: r.numero ?? null,
@@ -80,6 +84,7 @@ const paraConta = (tipo: Bling2Tipo) => (r: any): Bling2Conta => ({
   cb_baixa_bordero: r.cb_baixa_bordero == null ? null : Number(r.cb_baixa_bordero),
   cb_baixa_erro: r.cb_baixa_erro ?? null,
   cb_criado_nome: r.cb_criado_nome ?? null,
+  baixa_ajustes: r.baixa_ajustes ?? null,
 });
 
 /** Quanto falta: parcial ('3') vale o SALDO; em aberto ('1') vale o valor do título. */
@@ -188,7 +193,9 @@ export function useBling2ContasPaged(params: {
       // Do mais completo ao mais antigo: coluna que ainda não existe derruba só
       // o que depende dela, nunca a lista.
       const tentativas = [
-        ...(params.tipo === "pagar" ? [`${COLUNAS(params.tipo)}, ${COLUNAS_BAIXA}, ${COLUNAS_CRIADO}`] : []),
+        ...(params.tipo === "pagar"
+          ? [`${COLUNAS(params.tipo)}, ${COLUNAS_BAIXA}, ${COLUNAS_CRIADO}, ${COLUNAS_AJUSTES}`, `${COLUNAS(params.tipo)}, ${COLUNAS_BAIXA}, ${COLUNAS_CRIADO}`]
+          : [`${COLUNAS(params.tipo)}, ${COLUNAS_BAIXA}, ${COLUNAS_AJUSTES}`]),
         `${COLUNAS(params.tipo)}, ${COLUNAS_BAIXA}`,
         COLUNAS(params.tipo),
       ];

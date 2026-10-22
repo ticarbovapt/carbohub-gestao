@@ -20,22 +20,64 @@ export function diaBrasilia(instante: string | Date | null): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(d);
 }
 
+/**
+ * O que a pessoa escolheu no diálogo de baixa. Tudo opcional: sem nada, a baixa
+ * é a de sempre (o saldo inteiro, pela conta do título).
+ * ⚠️ `valor` é o que SAIU/ENTROU de fato (o "Valor pago" do Bling), já com juros
+ * e multa somados e o desconto abatido. A parte que abate o título é
+ * `valor − juros − multa + desconto`; menor que o saldo = baixa PARCIAL.
+ */
+export interface AjustesBaixa {
+  portadorId?: number | null;
+  juros?: number | null;
+  multa?: number | null;
+  desconto?: number | null;
+  tarifa?: number | null;
+  valor?: number | null;
+}
+
+/** O que o título tem de mostrar no Bling DEPOIS da baixa — é o que se confere. */
+export interface EsperadoBaixa {
+  saldoAntes: number;
+  /** Quanto do título esta baixa abate. */
+  principal: number;
+  valor: number;
+  parcial: boolean;
+  saldoDepois: number;
+}
+
 export type DecisaoBaixa =
-  | { decisao: "enviar"; corpo: Record<string, unknown> }
-  | { decisao: "ja_pago_no_bling" | "cancelado_no_bling" | "sem_portador"; mensagem: string };
+  | { decisao: "enviar"; corpo: Record<string, unknown>; esperado: EsperadoBaixa }
+  | { decisao: "ja_pago_no_bling" | "cancelado_no_bling" | "sem_portador" | "ajuste_invalido"; mensagem: string };
+
+const centavos = (v: number) => Math.round(v * 100);
+const reais = (c: number) => c / 100;
+const brl = (v: number) => `R$ ${v.toFixed(2).replace(".", ",")}`;
+
+/** Lê um ajuste: vazio = 0; negativo, não numérico ou com mais de 2 casas = inválido (null). */
+function ajuste(v: unknown): number | null {
+  if (v == null || v === "") return 0;
+  const n = Number(v);
+  if (!Number.isFinite(n) || n < 0) return null;
+  if (Math.abs(n * 100 - Math.round(n * 100)) > 1e-6) return null;
+  return n;
+}
 
 /**
  * O que a baixa FARIA com este título do Bling (o detalhe `d`, lido AGORA) —
  * a MESMA regra no envio de verdade e no ensaio (teste por outro caminho
  * provaria o caminho errado).
  */
-export function decidirBaixa(tipo: TipoConta, d: any, portadorPadrao: unknown, dia: string, quem: string | null): DecisaoBaixa {
+export function decidirBaixa(
+  tipo: TipoConta, d: any, portadorPadrao: unknown, dia: string, quem: string | null, aj: AjustesBaixa = {},
+): DecisaoBaixa {
   const situacao = d?.situacao != null ? String(d.situacao) : null;
   if (situacao === "2") return { decisao: "ja_pago_no_bling", mensagem: "Já estava baixado no Bling — nada enviado." };
   if (situacao === "4" || situacao === "5") {
     return { decisao: "cancelado_no_bling", mensagem: "O título está cancelado no Bling — a baixa não foi enviada." };
   }
-  const portador = Number(d?.portador?.id) || Number(portadorPadrao) || null;
+  // A conta escolhida na tela vence a do título, que vence a padrão.
+  const portador = Number(aj.portadorId) || Number(d?.portador?.id) || Number(portadorPadrao) || null;
   // ⚠️ Categoria é a do PRÓPRIO título, ou nenhuma. Medido em 21/10/2026:
   // 160 de 161 títulos abertos não têm categoria no Bling — e categoria de
   // receita ≠ de despesa, então um "padrão" único erraria metade. Sem ela o
@@ -43,8 +85,9 @@ export function decidirBaixa(tipo: TipoConta, d: any, portadorPadrao: unknown, d
   const categoria = Number(d?.categoria?.id) || null;
   if (!portador) {
     return { decisao: "sem_portador", mensagem: "O Bling exige a conta (portador) para dar baixa, e o título não tem" +
-      " — preencha a conta no título, no Bling, ou o portador padrão na configuração da baixa." };
+      " — escolha a conta no diálogo, preencha no título no Bling, ou o portador padrão na configuração da baixa." };
   }
+
   const corpo: Record<string, unknown> = {
     data: dia,
     usarDataVencimento: false,
@@ -52,12 +95,89 @@ export function decidirBaixa(tipo: TipoConta, d: any, portadorPadrao: unknown, d
     ...(categoria ? { categoria: { id: categoria } } : {}),
     historico: `Baixa pelo CarboHub Finanças${quem ? ` (${quem})` : ""}`,
   };
-  // ⚠️ Valor só no parcial: sem valor, o Bling baixa o SALDO, que é o caso
-  // comum — e o nome do campo no contas a PAGAR não está medido.
-  if (situacao === "3" && Number(d?.saldo) > 0) {
-    corpo[tipo === "receber" ? "valorRecebido" : "valorPago"] = Number(d.saldo);
+  const juros = ajuste(aj.juros), multa = ajuste(aj.multa), desconto = ajuste(aj.desconto), tarifa = ajuste(aj.tarifa);
+  if (juros == null || multa == null || desconto == null || tarifa == null) {
+    return { decisao: "ajuste_invalido", mensagem: "Juros, multa, desconto e tarifa têm de ser valores em reais, sem sinal de menos." };
   }
-  return { decisao: "enviar", corpo };
+  const saldoAntes = Number(d?.saldo) > 0 ? Number(d.saldo) : Number(d?.valor) || 0;
+  const cSaldo = centavos(saldoAntes);
+  const cAcres = centavos(juros) + centavos(multa) - centavos(desconto);
+  const informado = aj.valor == null || (aj.valor as unknown) === "" ? null : Number(aj.valor);
+  if (informado != null && (!Number.isFinite(informado) || informado <= 0 || Math.abs(informado * 100 - Math.round(informado * 100)) > 1e-6)) {
+    return { decisao: "ajuste_invalido", mensagem: "O valor pago tem de ser maior que zero, com até 2 casas." };
+  }
+  // Saldo que o Bling não informou: só a baixa de sempre (sem valor) é segura —
+  // parcial ou ajuste exigiriam saber de quanto é o título.
+  if (cSaldo <= 0) {
+    if (informado != null || cAcres !== 0 || centavos(tarifa) > 0) {
+      return { decisao: "ajuste_invalido", mensagem: "O Bling não informou o saldo do título — dê a baixa sem ajustes, ou faça-a no Bling." };
+    }
+    return { decisao: "enviar", corpo, esperado: { saldoAntes: 0, principal: 0, valor: 0, parcial: false, saldoDepois: 0 } };
+  }
+  const cValor = informado != null ? centavos(informado) : cSaldo + cAcres;
+  const cPrincipal = cValor - cAcres;
+  if (cPrincipal <= 0) {
+    return { decisao: "ajuste_invalido", mensagem: "O valor pago não cobre os juros e a multa — nada abateria do título." };
+  }
+  if (cPrincipal > cSaldo) {
+    return { decisao: "ajuste_invalido", mensagem: `O valor pago passa do saldo em aberto (${brl(saldoAntes)}) — a diferença entra como juros ou multa.` };
+  }
+  const parcial = cPrincipal < cSaldo;
+  const temAjuste = cAcres !== 0 || centavos(tarifa) > 0;
+
+  // ⚠️ Os nomes `juros`, `desconto`, `acrescimo` (a MULTA da tela do Bling) e
+  // `tarifa` são os da documentação da API v3 — e o Bling IGNORA CALADO o campo
+  // que não conhece. Quem prova que foram lidos é a CONFERÊNCIA depois do envio
+  // (`conferirBaixa`), nunca o 200.
+  if (juros > 0) corpo.juros = juros;
+  if (multa > 0) corpo.acrescimo = multa;
+  if (desconto > 0) corpo.desconto = desconto;
+  if (tarifa > 0) corpo.tarifa = tarifa;
+  // ⚠️ Valor só quando é preciso: sem ele o Bling baixa o SALDO, que é o caso
+  // comum (o corpo do ensaio de 22/10). Parcial, título já parcial ou com
+  // ajuste mandam o valor de fato.
+  if (parcial || temAjuste || situacao === "3") {
+    corpo[tipo === "receber" ? "valorRecebido" : "valorPago"] = reais(cValor);
+  }
+  return {
+    decisao: "enviar", corpo,
+    esperado: { saldoAntes, principal: reais(cPrincipal), valor: reais(cValor), parcial, saldoDepois: reais(cSaldo - cPrincipal) },
+  };
+}
+
+/**
+ * Confere o título relido no Bling DEPOIS da baixa contra o esperado. Devolve o
+ * motivo da divergência, ou null se bate. ⚠️ Existe porque o Bling ignora campo
+ * desconhecido em silêncio: medido por terceiros, um valor parcial mal nomeado
+ * QUITOU o título inteiro com 200. Divergiu ⇒ quem chama desfaz o borderô.
+ */
+export function conferirBaixa(esp: EsperadoBaixa, depois: { situacao?: unknown; saldo?: unknown }): string | null {
+  const sit = depois?.situacao != null ? String(depois.situacao) : null;
+  const saldo = Number(depois?.saldo);
+  if (esp.parcial) {
+    if (sit === "2") return `O Bling quitou o título inteiro em vez da baixa parcial de ${brl(esp.principal)}.`;
+    if (sit !== "3") return `O título não ficou parcial no Bling (situação ${sit ?? "desconhecida"}).`;
+    if (Number.isFinite(saldo) && Math.abs(centavos(saldo) - centavos(esp.saldoDepois)) > 1) {
+      return `O Bling deixou ${brl(saldo)} em aberto; o esperado era ${brl(esp.saldoDepois)}.`;
+    }
+    return null;
+  }
+  if (sit === "3") {
+    return `O Bling deixou ${Number.isFinite(saldo) ? brl(saldo) : "um saldo"} em aberto em vez de quitar o título.`;
+  }
+  if (sit !== "2") return `O título não ficou baixado no Bling (situação ${sit ?? "desconhecida"}).`;
+  return null;
+}
+
+/** Os ajustes que vieram da tela (JSON solto) — só os campos conhecidos. */
+export function lerAjustes(x: unknown): AjustesBaixa {
+  const o = (x && typeof x === "object") ? x as Record<string, unknown> : {};
+  const num = (v: unknown) => (v == null || v === "" ? null : Number(v));
+  return {
+    portadorId: Number(o.portador_id ?? o.portadorId) > 0 ? Number(o.portador_id ?? o.portadorId) : null,
+    juros: num(o.juros), multa: num(o.multa), desconto: num(o.desconto), tarifa: num(o.tarifa),
+    valor: num(o.valor),
+  };
 }
 
 /** Os ids de borderô do detalhe do título (a lista vem como `[{id}]` ou `[id]`). */

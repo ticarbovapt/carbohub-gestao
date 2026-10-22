@@ -13,6 +13,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Bling2Tipo } from "@/hooks/useBling2Contas";
+import type { AjustesTela } from "@/lib/baixaDialogo";
 
 export interface BaixaBling2Config { ativo: boolean; teste_ids: string[] }
 const DESLIGADO: BaixaBling2Config = { ativo: false, teste_ids: [] };
@@ -37,14 +38,14 @@ export function useBaixaBling2Config() {
 export const baixaLiberada = (cfg: BaixaBling2Config | undefined, id: string) =>
   !!cfg && (cfg.ativo || cfg.teste_ids.includes(id));
 
-export interface RespostaBling2 { ok: boolean; pulado?: string; mensagem: string; bordero?: number | null }
+export interface RespostaBling2 { ok: boolean; pulado?: string; mensagem: string; bordero?: number | null; parcial?: boolean }
 
 /** Nunca lança: devolve `ok: false` com a mensagem que a tela deve mostrar. */
 export async function pedirAoBling2(
-  acao: "baixar" | "estornar", tipo: Bling2Tipo, id: string, data?: string,
+  acao: "baixar" | "estornar", tipo: Bling2Tipo, id: string, data?: string, ajustes?: AjustesTela,
 ): Promise<RespostaBling2> {
   try {
-    const { data: r, error } = await supabase.functions.invoke("bling2-contas", { body: { acao, tipo, id, data } });
+    const { data: r, error } = await supabase.functions.invoke("bling2-contas", { body: { acao, tipo, id, data, ajustes } });
     if (error) {
       // `functions.invoke` em não-2xx só diz "non-2xx status code": o motivo
       // está no CORPO, e é ele que a pessoa precisa ler.

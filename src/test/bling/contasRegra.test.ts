@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  decidirBaixa, dataDaBaixa, planejarEspelho, idsDeBordero, diaBrasilia,
+  decidirBaixa, dataDaBaixa, planejarEspelho, idsDeBordero, diaBrasilia, conferirBaixa, lerAjustes,
   type LocalConta, type ListadaConta,
 } from "../../../supabase/functions/_shared/blingContasRegra";
 
@@ -20,6 +20,7 @@ describe("decidirBaixa — a mesma regra para matriz e filial", () => {
         portador: { id: 14890150954 },
         historico: "Baixa pelo CarboHub Finanças (nome de quem baixou)",
       },
+      esperado: { saldoAntes: 832, principal: 832, valor: 832, parcial: false, saldoDepois: 0 },
     });
   });
 
@@ -53,6 +54,68 @@ describe("decidirBaixa — a mesma regra para matriz e filial", () => {
     const r = decidirBaixa("pagar", { situacao: 1, portador: { id: 1 }, categoria: { id: 9 } }, null, "2026-10-22", null);
     expect(r.decisao === "enviar" && r.corpo.categoria).toEqual({ id: 9 });
   });
+});
+
+describe("decidirBaixa com o que a pessoa escolheu no diálogo", () => {
+  const aberto = { situacao: 1, valor: 250, saldo: 250, portador: { id: 1 } };
+
+  it("a conta escolhida na tela vence a do título", () => {
+    const r = decidirBaixa("pagar", aberto, 9, "2026-10-22", null, { portadorId: 55 });
+    expect(r.decisao === "enviar" && r.corpo.portador).toEqual({ id: 55 });
+  });
+
+  it("juros e multa somam no valor pago e vão nos campos do Bling (multa = acrescimo)", () => {
+    const r = decidirBaixa("pagar", aberto, null, "2026-10-22", null, { juros: 5, multa: 2.5 });
+    expect(r.decisao).toBe("enviar");
+    if (r.decisao !== "enviar") return;
+    expect(r.corpo).toMatchObject({ juros: 5, acrescimo: 2.5, valorPago: 257.5 });
+    expect(r.esperado).toEqual({ saldoAntes: 250, principal: 250, valor: 257.5, parcial: false, saldoDepois: 0 });
+  });
+
+  it("desconto abate do valor recebido e quita o título", () => {
+    const r = decidirBaixa("receber", aberto, null, "2026-10-22", null, { desconto: 10 });
+    expect(r.decisao === "enviar" && r.corpo).toMatchObject({ desconto: 10, valorRecebido: 240 });
+    expect(r.decisao === "enviar" && r.esperado.parcial).toBe(false);
+  });
+
+  it("tarifa vai no campo próprio e não muda o valor pago", () => {
+    const r = decidirBaixa("receber", aberto, null, "2026-10-22", null, { tarifa: 3.2 });
+    expect(r.decisao === "enviar" && r.corpo).toMatchObject({ tarifa: 3.2, valorRecebido: 250 });
+  });
+
+  it("valor menor que o saldo é PARCIAL, e o esperado diz quanto fica em aberto", () => {
+    const r = decidirBaixa("receber", aberto, null, "2026-10-22", null, { valor: 100 });
+    expect(r.decisao === "enviar" && r.corpo.valorRecebido).toBe(100);
+    expect(r.decisao === "enviar" && r.esperado).toEqual({ saldoAntes: 250, principal: 100, valor: 100, parcial: true, saldoDepois: 150 });
+  });
+
+  it("parcial sobre título JÁ parcial parte do saldo, não do valor original", () => {
+    const r = decidirBaixa("pagar", { situacao: 3, valor: 250, saldo: 90, portador: { id: 1 } }, null, "2026-10-22", null, { valor: 40 });
+    expect(r.decisao === "enviar" && r.esperado.saldoDepois).toBe(50);
+  });
+
+  it("recusa, nunca corrige: valor acima do saldo, valor que não cobre os juros, ajuste negativo", () => {
+    expect(decidirBaixa("pagar", aberto, null, "2026-10-22", null, { valor: 300 }).decisao).toBe("ajuste_invalido");
+    expect(decidirBaixa("pagar", aberto, null, "2026-10-22", null, { juros: 50, valor: 40 }).decisao).toBe("ajuste_invalido");
+    expect(decidirBaixa("pagar", aberto, null, "2026-10-22", null, { desconto: -1 }).decisao).toBe("ajuste_invalido");
+    expect(decidirBaixa("pagar", aberto, null, "2026-10-22", null, { juros: 1.005 }).decisao).toBe("ajuste_invalido");
+  });
+
+  it("lerAjustes aceita o JSON da tela e ignora o resto", () => {
+    expect(lerAjustes({ portador_id: "77", juros: "1.5", lixo: 1 })).toEqual({ portadorId: 77, juros: 1.5, multa: null, desconto: null, tarifa: null, valor: null });
+    expect(lerAjustes(undefined)).toEqual({ portadorId: null, juros: null, multa: null, desconto: null, tarifa: null, valor: null });
+  });
+});
+
+describe("conferirBaixa — o Bling ignora campo que não conhece, então se confere", () => {
+  const total = { saldoAntes: 250, principal: 250, valor: 250, parcial: false, saldoDepois: 0 };
+  const parcial = { saldoAntes: 250, principal: 100, valor: 100, parcial: true, saldoDepois: 150 };
+  it("quitou como esperado", () => expect(conferirBaixa(total, { situacao: 2, saldo: 0 })).toBeNull());
+  it("parcial como esperado", () => expect(conferirBaixa(parcial, { situacao: "3", saldo: 150 })).toBeNull());
+  it("⚠️ pediu parcial e o Bling quitou tudo: divergência", () => expect(conferirBaixa(parcial, { situacao: 2, saldo: 0 })).toMatch(/inteiro/));
+  it("parcial com saldo diferente do esperado", () => expect(conferirBaixa(parcial, { situacao: 3, saldo: 200 })).toMatch(/esperado/));
+  it("pediu quitar e o Bling deixou saldo", () => expect(conferirBaixa(total, { situacao: 3, saldo: 10 })).toMatch(/em aberto/));
+  it("continuou em aberto", () => expect(conferirBaixa(total, { situacao: 1 })).toMatch(/não ficou baixado/));
 });
 
 describe("dataDaBaixa — a data escolhida na tela", () => {

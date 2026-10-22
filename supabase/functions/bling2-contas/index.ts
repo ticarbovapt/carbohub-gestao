@@ -32,7 +32,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
-  decidirBaixa, diaBrasilia, dataDaBaixa, estaAberta, idsDeBordero, planejarEspelho,
+  conferirBaixa, decidirBaixa, diaBrasilia, dataDaBaixa, estaAberta, idsDeBordero, lerAjustes, planejarEspelho,
   type LocalConta, type ListadaConta, type TipoConta,
 } from "../_shared/blingContasRegra.ts";
 
@@ -60,6 +60,24 @@ const SEM_NOME: Record<TipoConta, string> = { receber: "Cliente não identificad
 
 const dormir = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
 const numOuNull = (v: unknown): number | null => (v == null || v === "" || isNaN(Number(v)) ? null : Number(v));
+
+/**
+ * Desfaz o borderô que a baixa ACABOU de criar, quando a conferência divergiu
+ * (o Bling ignora campo desconhecido calado). ⚠️ Só se cobrir UM título.
+ * Devolve a frase que completa a mensagem da tela.
+ */
+async function desfazerBordero(token: string, bordero: number | null): Promise<string> {
+  if (!bordero) return "O Bling não devolveu o borderô: confira e desfaça a baixa no Bling.";
+  try {
+    const bo = (await bling(token, "GET", `/borderos/${bordero}`))?.data ?? {};
+    const n = Array.isArray(bo.pagamentos) ? bo.pagamentos.length : 0;
+    if (n > 1) return `O borderô ${bordero} cobre ${n} títulos — desfaça a baixa no Bling.`;
+    await bling(token, "DELETE", `/borderos/${bordero}`);
+    return "A baixa foi DESFEITA no Bling — faça-a lá, ou tente de novo sem esse ajuste.";
+  } catch (e) {
+    return `E não deu para desfazer (${e instanceof Error ? e.message : String(e)}) — desfaça o borderô ${bordero} no Bling.`;
+  }
+}
 const dataOuNull = (v: unknown): string | null => {
   const s = typeof v === "string" ? v.slice(0, 10) : "";
   return /^\d{4}-\d{2}-\d{2}$/.test(s) && s !== "0000-00-00" ? s : null;
@@ -475,11 +493,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   const { data: perfil } = await db.from("profiles").select("full_name").eq("id", u.user.id).maybeSingle();
   const quem = (perfil?.full_name as string | null)?.trim() || null;
+  const aj = lerAjustes(b.ajustes);
   const registrar = async (ok: boolean, mensagem: string, bordero: number | null = null) => {
-    await db.from("fin_bling2_baixa_log").insert({
+    const linha = {
       acao, tipo, conta_id: id, bling_id: tt.bling_id, ok, mensagem, bordero,
       data_baixa: acao === "baixar" ? dia : null, user_id: u.user.id, user_nome: quem,
-    });
+    };
+    // `ajustes` é coluna da 20261133: antes do SQL o insert com ela falha, e o
+    // log não pode sumir por isso — vai sem ela.
+    const { error } = await db.from("fin_bling2_baixa_log").insert({ ...linha, ajustes: b.ajustes ?? null });
+    if (error) await db.from("fin_bling2_baixa_log").insert(linha);
   };
   const soltar = async (campos: Record<string, unknown> = {}) => {
     await db.from(tabela).update({ ...campos, cb_baixa_tentando_em: null }).eq("id", id);
@@ -493,7 +516,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const agora = new Date().toISOString();
 
     if (acao === "baixar") {
-      const dec = decidirBaixa(tipo, d, cfg.portador_padrao_id, dia!, quem);
+      const dec = decidirBaixa(tipo, d, cfg.portador_padrao_id, dia!, quem, aj);
       if (dec.decisao === "ja_pago_no_bling") {
         // Pago lá por alguém: NÃO baixa de novo; só traz o espelho para a verdade.
         let dataPag: string | null = null;
@@ -509,14 +532,51 @@ Deno.serve(async (req: Request): Promise<Response> => {
       }
       const r = await bling(token, "POST", `/contas/${tipo}/${tt.bling_id}/baixar`, dec.corpo);
       const bordero = Number(r?.data?.bordero?.id ?? r?.bordero?.id ?? r?.data?.id) || null;
+      const parcial = dec.esperado.parcial;
+
+      // ── A conferência: o título relido tem de bater com o esperado ────────
+      await dormir(700);
+      let depois: any = null;
+      try { depois = (await bling(token, "GET", `/contas/${tipo}/${tt.bling_id}`))?.data ?? null; }
+      catch { /* não deu para reler: segue sem conferir */ }
+      const divergencia = depois ? conferirBaixa(dec.esperado, depois) : null;
+      if (divergencia) {
+        const m = `${divergencia} ${await desfazerBordero(token, bordero)}`;
+        await soltar({ cb_baixa_erro: m, detalhe_em: null });
+        await registrar(false, m, bordero);
+        return json({ ok: false, mensagem: m, corpo_enviado: dec.corpo });
+      }
+      let borderoLido: unknown = null;
+      if (bordero) {
+        try { borderoLido = (await bling(token, "GET", `/borderos/${bordero}`))?.data ?? null; } catch { /* só medida */ }
+      }
+      const saldoDepois = depois?.saldo != null ? numOuNull(depois.saldo) : dec.esperado.saldoDepois;
+
+      if (parcial) {
+        // ⚠️ O borderô da parcial NÃO vai para o título: ele continua aberto, e
+        // a próxima baixa (o resto) precisa poder acontecer. Desfaz-se no Bling.
+        await soltar({ situacao: "3", saldo: saldoDepois, detalhe_em: null, cb_baixa_erro: null });
+        await registrar(true, `Baixa parcial no Bling 2 — ficam ${saldoDepois} em aberto.`, bordero);
+        return json({
+          ok: true, parcial: true, bordero, conferido: !!depois, bordero_lido: borderoLido,
+          mensagem: `Baixa parcial feita no Bling da filial — ficam R$ ${dec.esperado.saldoDepois.toFixed(2).replace(".", ",")} em aberto.`,
+        });
+      }
       // O espelho diz a verdade JÁ — o detalhe é relido na próxima rodada.
       await soltar({
-        situacao: "2", data_pagamento: dia, detalhe_em: null,
+        situacao: "2", data_pagamento: dia, detalhe_em: null, ...(saldoDepois != null ? { saldo: saldoDepois } : {}),
         cb_baixa_em: agora, cb_baixa_por: u.user.id, cb_baixa_por_nome: quem,
         cb_baixa_bordero: bordero, cb_baixa_erro: null,
       });
+      // Os ajustes ficam no título para a tela (coluna da 20261133; ausente, ignora).
+      await db.from(tabela).update({
+        baixa_ajustes: {
+          portador_id: aj.portadorId ?? null, juros: aj.juros ?? 0, multa: aj.multa ?? 0,
+          desconto: aj.desconto ?? 0, tarifa: aj.tarifa ?? 0, valor: dec.esperado.valor > 0 ? dec.esperado.valor : null,
+        },
+      }).eq("id", id);
       await registrar(true, "Baixa enviada ao Bling 2.", bordero);
-      return json({ ok: true, mensagem: "Baixa feita no Bling da filial.", bordero });
+      return json({ ok: true, mensagem: "Baixa feita no Bling da filial.", bordero, conferido: !!depois, bordero_lido: borderoLido });
     }
 
     // ── estornar ────────────────────────────────────────────────────────────
@@ -550,6 +610,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       detalhe: Object.keys(depois).length ? depois : null, detalhe_em: Object.keys(depois).length ? new Date().toISOString() : null,
       cb_baixa_em: null, cb_baixa_por: null, cb_baixa_por_nome: null, cb_baixa_bordero: null, cb_baixa_erro: null,
     });
+    await db.from(tabela).update({ baixa_ajustes: null }).eq("id", id);   // coluna ausente: ignora
     await registrar(true, "Baixa desfeita no Bling 2.", Number(tt.cb_baixa_bordero));
     return json({ ok: true, mensagem: "Baixa desfeita no Bling da filial." });
   } catch (e) {

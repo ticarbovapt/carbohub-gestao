@@ -184,6 +184,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const conta = Number(b.conta) as Conta;
   if (![1, 2].includes(conta)) return json({ ok: false, mensagem: "Diga a empresa (conta 1 = matriz, 2 = filial)." }, 400);
 
+  // As contas (portadores) são só LEITURA, e o diálogo de baixa as usa mesmo com
+  // "criar conta a pagar" desligado — por isso respondem antes do interruptor.
+  if (acao === "opcoes") {
+    try { return json({ ok: true, ...(await opcoes(db, await tokenValido(db, conta, auth), conta)) }); }
+    catch (e) { return json({ ok: false, mensagem: e instanceof Error ? e.message : String(e) }); }
+  }
+
   const { data: cfg, error: eCfg } = await db.from("fin_contas_pagar_config").select("ativo").eq("conta", conta).maybeSingle();
   if (eCfg) return json({ ok: false, mensagem: `Configuração ilegível: ${eCfg.message}` }, 500);
   if (!cfg?.ativo) return json({ ok: false, pulado: "desligado", mensagem: `Criar conta a pagar no Bling da ${NOME_EMPRESA[conta]} ainda está desligado.` }, 409);
@@ -191,9 +198,6 @@ Deno.serve(async (req: Request): Promise<Response> => {
   try {
     if (acao === "fornecedores") {
       return json({ ok: true, fornecedores: await buscarFornecedores(db, conta, String(b.q ?? "")) });
-    }
-    if (acao === "opcoes") {
-      return json({ ok: true, ...(await opcoes(db, await tokenValido(db, conta, auth), conta)) });
     }
 
     const { data: perfil } = await db.from("profiles").select("full_name").eq("id", u.user.id).maybeSingle();

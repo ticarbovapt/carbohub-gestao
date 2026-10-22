@@ -5,11 +5,9 @@ import { toast } from "sonner";
 import { confirmar, useParamUrl } from "@carbo/shell";
 import { Check, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import {
   CarboTable, CarboTableHeader, CarboTableBody, CarboTableRow, CarboTableHead, CarboTableCell,
 } from "@/components/ui/carbo-table";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { usePersistedState } from "@/hooks/usePersistedState";
 import { baixaLiberada, pedirAoBling2, useBaixaBling2Config, type BaixaBling2Config } from "@/lib/bling2Baixa";
 import { chamarContasPagar } from "@/lib/contaPagarBling";
@@ -22,7 +20,8 @@ import {
   BarraFiltros, CabecalhoOrdem, CampoBusca, CelulaVencimento, FiltroOrdem, FiltroPeriodo, FiltroSelect, Kpi, KpiGrade,
   LimparFiltros, LinhaEstado, MenuAcoes, Paginacao, SituacaoBadge, Valor, brl, useOrdemUrl, type Situacao,
 } from "@/components/financeiro/ContasUI";
-import { DatePickerInput } from "@/components/ui/date-picker-input";
+import { DialogoBaixa, type ConfirmacaoBaixa } from "@/components/financeiro/DialogoBaixa";
+import { resumoAjustes } from "@/lib/baixaDialogo";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // A FILIAL (Bling 2) nas telas de Contas a receber e Contas a pagar.
@@ -245,6 +244,9 @@ export function FilialBling2({ tipo, seletor }: { tipo: Bling2Tipo; seletor: Rea
                     <CarboTableCell className="py-3"><SituacaoBadge s={sit.s} texto={sit.texto} /></CarboTableCell>
                     <CarboTableCell className="py-3 whitespace-nowrap text-muted-foreground tabular-nums">
                       {c.data_pagamento ? dataBR(c.data_pagamento) : "—"}
+                      {!aberta(c) && resumoAjustes(c.baixa_ajustes, c.valor) && (
+                        <span className="block text-xs">{resumoAjustes(c.baixa_ajustes, c.valor)}</span>
+                      )}
                     </CarboTableCell>
                     <CarboTableCell className="py-3"><AcoesDaFilial conta={c} tipo={tipo} cfg={cfgBaixa} /></CarboTableCell>
                   </CarboTableRow>
@@ -272,25 +274,26 @@ export function FilialBling2({ tipo, seletor }: { tipo: Bling2Tipo; seletor: Rea
 function AcoesDaFilial({ conta: c, tipo, cfg }: { conta: Bling2Conta; tipo: Bling2Tipo; cfg: BaixaBling2Config | undefined }) {
   const qc = useQueryClient();
   const [aberto, setAberto] = useState(false);
-  const [dia, setDia] = useState(hojeISO());
   const [enviando, setEnviando] = useState(false);
   const liberada = baixaLiberada(cfg, c.id);
   const recarregar = () => {
     qc.invalidateQueries({ queryKey: ["bling2-contas-paged"] });
     qc.invalidateQueries({ queryKey: ["bling2-contas-resumo"] });
   };
-  const verbo = tipo === "receber" ? "recebimento" : "pagamento";
 
-  const baixar = async () => {
+  // ⚠️ O Bling 2 PRIMEIRO, com a conta e os ajustes do diálogo: recusou ⇒ nada
+  // mudou. A função relê o título e desfaz o borderô se o Bling não fez o que
+  // foi pedido (ex.: quitou tudo numa parcial).
+  const baixar = async ({ dia, ajustes }: ConfirmacaoBaixa) => {
     setEnviando(true);
     try {
-      const r = await pedirAoBling2("baixar", tipo, c.id, dia);
+      const r = await pedirAoBling2("baixar", tipo, c.id, dia, ajustes);
       if (r.ok) {
-        toast.success(r.pulado === "ja_pago_no_bling" ? "Já estava baixado no Bling 2" : "Baixa feita no Bling da filial",
-          { description: r.pulado ? r.mensagem : r.bordero ? `Borderô ${r.bordero}` : undefined });
+        toast.success(r.pulado === "ja_pago_no_bling" ? "Já estava baixado no Bling 2" : r.parcial ? "Baixa parcial no Bling da filial" : "Baixa feita no Bling da filial",
+          { description: r.pulado || r.parcial ? r.mensagem : r.bordero ? `Borderô ${r.bordero}` : undefined });
         setAberto(false);
       } else {
-        toast.error("O Bling 2 não aceitou a baixa — nada mudou", { description: r.mensagem });
+        toast.error("O Bling 2 não fez a baixa — nada mudou", { description: r.mensagem });
       }
     } finally {
       setEnviando(false);
@@ -359,39 +362,20 @@ function AcoesDaFilial({ conta: c, tipo, cfg }: { conta: Bling2Conta; tipo: Blin
       )}
       {liberada ? (
         <Button variant="outline" size="sm" className="h-8 px-3" disabled={enviando}
-          onClick={() => { setDia(hojeISO()); setAberto(true); }}>
+          onClick={() => setAberto(true)}>
           {c.cb_baixa_erro ? "Tentar de novo" : acao}
         </Button>
       ) : !c.cb_baixa_erro && <span className="whitespace-nowrap text-xs text-muted-foreground">baixa no Bling</span>}
       <MenuAcoes itens={tipo === "pagar" && c.cb_criado_nome
         ? [{ l: "Excluir no Bling", onClick: excluir, perigo: true, disabled: enviando }] : []} />
 
-      <Dialog open={aberto} onOpenChange={(v) => !enviando && setAberto(v)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Registrar {verbo}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 text-sm">
-            <dl className="space-y-1.5 rounded-lg border border-border p-3">
-              <div className="flex justify-between gap-3"><dt className="text-muted-foreground">{tipo === "receber" ? "Cliente" : "Fornecedor"}</dt><dd className="text-right font-medium">{c.nome || "—"}</dd></div>
-              <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Título</dt><dd className="tabular-nums">{c.numero || "—"}</dd></div>
-              <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Valor em aberto</dt><dd className="font-medium tabular-nums">{brl(valorEmAberto(c))}</dd></div>
-              <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Vencimento</dt><dd className="tabular-nums">{dataBR(c.vencimento)}</dd></div>
-            </dl>
-            <div className="space-y-1.5">
-              <Label>Data do {verbo}</Label>
-              <DatePickerInput value={dia} onChange={setDia} disableFuture clearable={false} className="h-9 w-full hover:bg-muted/60 hover:text-foreground data-[state=open]:bg-muted/60" />
-            </div>
-            <p className="text-xs text-muted-foreground">A baixa é feita no Bling da filial. Se o Bling recusar, nada muda.</p>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" disabled={enviando} onClick={() => setAberto(false)}>Cancelar</Button>
-            <Button disabled={enviando || !dia || dia > hojeISO()} onClick={baixar}>
-              {enviando ? "Enviando ao Bling…" : `Confirmar ${verbo}`}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <DialogoBaixa
+        open={aberto} onOpenChange={setAberto} tipo={tipo} conta={2}
+        espelho={tipo === "receber" ? "bling2_contas_receber" : "bling2_contas_pagar"} blingId={c.bling_id}
+        titulo={{ nome: c.nome || "—", numero: c.numero, vencimento: c.vencimento, valor: c.valor ?? valorEmAberto(c), saldo: valorEmAberto(c) }}
+        podeParcial enviando={enviando} onConfirmar={baixar}
+        aviso="A baixa é feita no Bling da filial. Se o Bling recusar, nada muda."
+      />
     </>,
   );
 }
