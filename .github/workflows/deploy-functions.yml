@@ -80,6 +80,9 @@ jobs:
           # --no-verify-jwt só para o ENSAIO, que vem do SQL Editor com o
           # X-Cron-Secret, sem Authorization, e não escreve em lugar nenhum.
           dep bling-contas-baixar --no-verify-jwt
+          # Filial (Bling 2): espelho dos abertos (cron) + baixa pela tela. --no-verify-jwt
+          # pelo cron e pelo ENSAIO (X-Cron-Secret); o JWT da tela é conferido por dentro.
+          dep bling2-contas --no-verify-jwt
           # Bling 2 — segunda conta. --no-verify-jwt em todas: a auth e a sync
           # validam o JWT por dentro, e a auto-sync é chamada pelo pg_cron, que
           # manda só o X-Cron-Secret e nenhum Authorization.

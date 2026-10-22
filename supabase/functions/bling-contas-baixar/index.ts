@@ -26,6 +26,8 @@
 //     criam dois borderôs.
 // ─────────────────────────────────────────────────────────────────────────────
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+// A regra da baixa é a MESMA da filial (`bling2-contas`): um arquivo só.
+import { decidirBaixa, diaBrasilia } from "../_shared/blingContasRegra.ts";
 
 const URL_SB = Deno.env.get("SUPABASE_URL")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -79,49 +81,6 @@ async function bling(token: string, metodo: string, caminho: string, corpo?: unk
   }
   if (!texto) return {};
   try { return JSON.parse(texto); } catch { return {}; }
-}
-
-/** Dia de Brasília de um instante (o Bling quer AAAA-MM-DD). */
-function diaBrasilia(instante: string | null): string {
-  const d = instante ? new Date(instante) : new Date();
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(d);
-}
-
-/**
- * O que a baixa FARIA com este título do Bling — a MESMA regra no envio de
- * verdade e no ensaio (teste por outro caminho provaria o caminho errado).
- */
-function decidirBaixa(tipo: Tipo, d: any, portadorPadrao: unknown, dia: string, quem: string | null):
-  { decisao: "enviar"; corpo: Record<string, unknown> } |
-  { decisao: "ja_pago_no_bling" | "cancelado_no_bling" | "sem_portador"; mensagem: string } {
-  const situacao = d.situacao != null ? String(d.situacao) : null;
-  if (situacao === "2") return { decisao: "ja_pago_no_bling", mensagem: "Já estava baixado no Bling — nada enviado." };
-  if (situacao === "4" || situacao === "5") {
-    return { decisao: "cancelado_no_bling", mensagem: "O título está cancelado no Bling — a baixa não foi enviada." };
-  }
-  const portador = Number(d.portador?.id) || Number(portadorPadrao) || null;
-  // ⚠️ Categoria é a do PRÓPRIO título, ou nenhuma. Medido em 21/10/2026:
-  // 160 de 161 títulos abertos não têm categoria no Bling — e categoria de
-  // receita ≠ de despesa, então um "padrão" único erraria metade. Sem ela o
-  // campo não vai; se o Bling exigir, a recusa dele aparece na linha.
-  const categoria = Number(d.categoria?.id) || null;
-  if (!portador) {
-    return { decisao: "sem_portador", mensagem: "O Bling exige a conta (portador) para dar baixa, e o título não tem" +
-      " — preencha a conta no título, no Bling, ou o portador padrão em fin_bling_baixa_config." };
-  }
-  const corpo: Record<string, unknown> = {
-    data: dia,
-    usarDataVencimento: false,
-    portador: { id: portador },
-    ...(categoria ? { categoria: { id: categoria } } : {}),
-    historico: `Baixa pelo CarboHub Finanças${quem ? ` (${quem})` : ""}`,
-  };
-  // ⚠️ Valor só no parcial: sem valor, o Bling baixa o SALDO, que é o caso
-  // comum — e o nome do campo no contas a PAGAR não está medido.
-  if (situacao === "3" && Number(d.saldo) > 0) {
-    corpo[tipo === "receber" ? "valorRecebido" : "valorPago"] = Number(d.saldo);
-  }
-  return { decisao: "enviar", corpo };
 }
 
 const dormir = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
