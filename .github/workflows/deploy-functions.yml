@@ -12,10 +12,33 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # ⚠️ O setup-cli resolve "latest" pela API do GitHub, e ela tem limite de
+      # taxa: em 22/10/2026 o deploy inteiro falhou em 10 s com "Failed to
+      # resolve latest Supabase CLI release: rate limit exceeded", sem subir
+      # nenhuma função. A reserva baixa o binário pelo link de release (que não
+      # passa pela API), com repetição.
       - name: Setup Supabase CLI
+        id: setup_cli
+        continue-on-error: true
         uses: supabase/setup-cli@v1
         with:
           version: latest
+
+      - name: Setup Supabase CLI (reserva, sem a API do GitHub)
+        if: steps.setup_cli.outcome != 'success'
+        run: |
+          set -e
+          for t in 1 2 3; do
+            if curl -fsSL -o /tmp/supabase.tgz \
+                 https://github.com/supabase/cli/releases/latest/download/supabase_linux_amd64.tar.gz; then
+              break
+            fi
+            echo "::warning::download do Supabase CLI falhou (tentativa $t/3)"
+            sleep $((t * 15))
+          done
+          tar -xzf /tmp/supabase.tgz -C /tmp supabase
+          sudo install /tmp/supabase /usr/local/bin/supabase
+          supabase --version
 
       - name: Deploy Edge Functions
         env:
