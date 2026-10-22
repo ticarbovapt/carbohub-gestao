@@ -128,7 +128,19 @@ select r.status_code, r.created at time zone 'America/Sao_Paulo' as quando,
 -- Depois: na tela, "Nova conta a pagar" de R$ 1,00 com histórico "TESTE",
 -- conferir no Bling, e EXCLUIR pela tela (o "Cancelar" da linha).
 -- ════════════════════════════════════════════════════════════════
-update public.fin_contas_pagar_config set ativo = true, atualizado_em = now() where conta = 1;
+do $liga$
+declare v_resp jsonb;
+begin
+  select r.content::jsonb into v_resp from net._http_response r
+   where r.content like '%fin-contas-pagar-ensaio%' order by r.created desc limit 1;
+  if v_resp is null then
+    raise exception 'Nenhuma resposta do ensaio encontrada. Rode o BLOCO 2, espere 20 s e tente de novo. Nada foi ligado.';
+  end if;
+  if v_resp -> 'matriz' ? 'erro' then
+    raise exception 'O ensaio da matriz deu erro: %. Nada foi ligado.', v_resp -> 'matriz' ->> 'erro';
+  end if;
+  update public.fin_contas_pagar_config set ativo = true, atualizado_em = now() where conta = 1;
+end $liga$;
 select conta, ativo from public.fin_contas_pagar_config order by conta;
 
 
