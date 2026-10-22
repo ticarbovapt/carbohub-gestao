@@ -73,7 +73,9 @@ export function NovaContaPagar({ conta, open, onOpenChange, onCriada }: {
       if (!r.ok) { setAvisoPortador(r.mensagem ?? "Não foi possível ler as contas do Bling."); return; }
       const lista = r.portadores ?? [];
       setPortadores(lista);
-      setPortador(lista[0] ? String(lista[0].id) : "");
+      // Só sugere quando há histórico: sem uso nenhum (a filial), a lista sai em
+      // ordem alfabética e o "primeiro" seria AMAZON — escolha que ninguém fez.
+      setPortador(lista[0] && lista[0].usos > 0 ? String(lista[0].id) : "");
       if (r.erro_portadores) setAvisoPortador("O Bling não devolveu os nomes das contas — aparecem pelo número.");
     });
     return () => { vivo = false; };

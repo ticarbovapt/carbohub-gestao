@@ -3432,6 +3432,12 @@ supabase/migrations/20261131000000_filial_baixa_e_espelho_ao_vivo.sql
 7. ⚠️ **Nasce DESLIGADA** e se testa com UM título (BLOCO 6: o número do título,
    que tem de casar com EXATAMENTE um aberto a receber). Front no ar antes do
    SQL: a lista relê sem as colunas `cb_baixa_*` e o botão não aparece.
+8. ⚠️ **Título que o Bling não acha (404) vira `situacao = 'excluido'`**, nunca
+   é só pulado. Medido na 1ª rodada (22/10/2026): o espelho tinha 1.352
+   "abertos" a receber e o Bling, 754 — ~600 excluídos lá que a varredura do
+   `bling2-sync` (que só ACRESCENTA) nunca tirou daqui. Pulando, os mesmos 60
+   voltavam toda rodada e a fila parava; e o cartão "Em aberto" da filial
+   somava título que não existe. A tela diz "Excluído no Bling".
 
 ### Conta a pagar NASCE no Finanças e é criada NO BLING (22/10/2026)
 "Nova conta a pagar" em `/pagar`, para a matriz (Bling 1) ou a filial (Bling 2)
