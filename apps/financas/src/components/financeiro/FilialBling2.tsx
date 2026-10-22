@@ -84,6 +84,8 @@ const ROTULO_SITUACAO = (tipo: Bling2Tipo): Record<string, { rotulo: string; var
   "3": { rotulo: tipo === "receber" ? "Parcialmente recebido" : "Parcialmente pago", variant: "warning" },
   "4": { rotulo: "Devolvido", variant: "secondary" },
   "5": { rotulo: "Cancelado", variant: "cancelled" },
+  // Não existe mais no Bling 2 (a consulta dá 404): o espelho marca, nunca apaga.
+  excluido: { rotulo: "Excluído no Bling", variant: "cancelled" },
 });
 
 const FILTROS: { v: FiltroBling2; l: string }[] = [

@@ -250,7 +250,20 @@ async function espelho(db: Db, token: string, cfg: Awaited<ReturnType<typeof ler
         try {
           d = (await bling(token, "GET", `/contas/${tipo}/${id}`))?.data ?? {};
         } catch (e) {
-          if (e instanceof BlingRecusou && e.status === 404) { naoEncontrados++; continue; }
+          if (e instanceof BlingRecusou && e.status === 404) {
+            // ⚠️ O título NÃO EXISTE mais no Bling (excluído lá). Marcar é o que
+            // faz a fila ANDAR: só pular deixava os mesmos 60 voltarem toda
+            // rodada (medido em 22/10: 60 de 60 com 404, fila parada em 631).
+            // E é o que tira do "em aberto" o que não está aberto em lugar
+            // nenhum — a varredura do bling2-sync só ACRESCENTA, nunca remove.
+            naoEncontrados++;
+            const { error } = await db.from(tabela).update({
+              situacao: "excluido", detalhe_em: new Date().toISOString(),
+              synced_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+            }).eq("bling_id", id);
+            if (error) throw new Error(`marcar excluído ${tabela} ${id}: ${error.message}`);
+            continue;
+          }
           throw e;
         }
         const situacao = d.situacao != null ? String(d.situacao) : null;
@@ -281,6 +294,7 @@ async function espelho(db: Db, token: string, cfg: Awaited<ReturnType<typeof ler
       r.com_data_de_pagamento = comData;
       if (naoEncontrados) r.nao_encontrados_no_bling = naoEncontrados;
       r.faltam_detalhe = Math.max(0, plano.sumiram.length - detalhados - naoEncontrados);
+      if (naoEncontrados) r.marcados_excluidos = naoEncontrados;
     } catch (e) {
       r.erro = e instanceof Error ? e.message : String(e);
       if (e instanceof BlingRecusou && e.status === 401) break;   // token morto: não insiste no outro tipo
