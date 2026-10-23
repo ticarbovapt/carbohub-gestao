@@ -97,7 +97,7 @@ describe("decidirBaixa com o que a pessoa escolheu no diálogo", () => {
     const t = { situacao: 1, valor: 520, saldo: 520, portador: { id: 1 } };
     const r = decidirBaixa("pagar", t, null, "2026-10-19", null, { juros: 14.87 });
     expect(r.decisao === "enviar" && r.corpo).toMatchObject({ juros: 14.87, valorPago: 534.87 });
-    expect(r.decisao === "enviar" && r.corpo.valorRecebido).toBeUndefined();
+    expect(r.decisao === "enviar" && r.corpo.valorRecebido).toBe(534.87);
   });
 
   it("valor menor que o saldo é PARCIAL, e o esperado diz quanto fica em aberto", () => {
@@ -208,7 +208,7 @@ describe("planejarEspelho — a rodada que só lê os ABERTOS", () => {
   });
 });
 
-import { erroDaContaNova, corpoContaPagar, dividirEmParcelas } from "../../../supabase/functions/_shared/blingContasRegra";
+import { erroDaContaNova, corpoContaPagar, dividirEmParcelas, camposNaoGuardados } from "../../../supabase/functions/_shared/blingContasRegra";
 
 describe("conta a pagar criada pelo sistema no Bling", () => {
   const base = { contatoId: 18466371935, portadorId: 14890756828, historico: "LOCAÇÃO", numeroDocumento: null,
@@ -232,6 +232,27 @@ describe("conta a pagar criada pelo sistema no Bling", () => {
     expect(corpoContaPagar(c, 1, "2026-10-22").historico).toBe("LOCAÇÃO — parcela 2/3");
   });
 
+  it("campos do formulário do Bling: forma, categoria, emissão, competência; vendedor só no receber", () => {
+    const c = { ...base, formaPagamentoId: 77, categoriaId: 88, vendedorId: 99, emissao: "2026-10-20", competencia: "2026-10-01" };
+    const pagar = corpoContaPagar(c, 0, "2026-10-22");
+    expect(pagar).toMatchObject({ formaPagamento: { id: 77 }, categoria: { id: 88 }, dataEmissao: "2026-10-20", competencia: "2026-10-01" });
+    expect(pagar.vendedor).toBeUndefined();
+    expect(corpoContaPagar(c, 0, "2026-10-22", "receber").vendedor).toEqual({ id: 99 });
+    expect(erroDaContaNova({ ...base, vendedorId: 5 }, "2026-10-22", "pagar")).toMatch(/Vendedor/);
+    expect(erroDaContaNova({ ...base, contatoId: 0 }, "2026-10-22", "receber")).toMatch(/cliente/);
+    expect(erroDaContaNova({ ...base, emissao: "2026-13-01" }, "2026-10-22")).toMatch(/emissão/);
+  });
+
+  it("parcelada sem histórico: cada parcela ainda diz qual é", () => {
+    expect(corpoContaPagar({ ...base, historico: "", parcelas: dividirEmParcelas(100, 2, "2026-11-10") }, 1, "2026-10-22").historico).toBe("Parcela 2/2");
+  });
+
+  it("o que o Bling não guardou é dito, campo a campo", () => {
+    const corpo = { formaPagamento: { id: 1 }, portador: { id: 2 }, categoria: { id: 3 } };
+    expect(camposNaoGuardados(corpo, { formaPagamento: { id: 1 }, portador: { id: 2 }, categoria: { id: 0 } })).toEqual(["categoria"]);
+    expect(camposNaoGuardados({ historico: "x" }, {})).toEqual([]);
+  });
+
   it("dividir: a sobra de centavo vai na última, e a soma FECHA", () => {
     const p = dividirEmParcelas(100, 3, "2026-11-10");
     expect(p.map((x) => x.valor)).toEqual([33.33, 33.33, 33.34]);
@@ -247,7 +268,9 @@ describe("conta a pagar criada pelo sistema no Bling", () => {
     const h = "2026-10-22";
     expect(erroDaContaNova(base, h)).toBeNull();
     expect(erroDaContaNova({ ...base, contatoId: 0 }, h)).toMatch(/fornecedor/);
-    expect(erroDaContaNova({ ...base, historico: "  " }, h)).toMatch(/histórico/);
+    // Histórico é opcional, como no Bling; só não passa de 2.000.
+    expect(erroDaContaNova({ ...base, historico: "  " }, h)).toBeNull();
+    expect(erroDaContaNova({ ...base, historico: "x".repeat(2001) }, h)).toMatch(/2\.000/);
     expect(erroDaContaNova({ ...base, parcelas: [{ vencimento: "2026-11-16", valor: 0 }] }, h)).toMatch(/Valor/);
     expect(erroDaContaNova({ ...base, parcelas: [{ vencimento: "2026-02-30", valor: 1 }] }, h)).toMatch(/Vencimento/);
     expect(erroDaContaNova({ ...base, parcelas: dividirEmParcelas(370, 37, "2026-11-01") }, h)).toMatch(/máximo/);

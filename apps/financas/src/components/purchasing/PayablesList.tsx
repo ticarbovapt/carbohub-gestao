@@ -14,7 +14,8 @@ import {
 import { DialogoBaixa, type ConfirmacaoBaixa } from "@/components/financeiro/DialogoBaixa";
 import { resumoAjustes, salvarAjustes, useEspelhoMatriz } from "@/lib/baixaDialogo";
 import { BaixaNoBling } from "@/components/financeiro/BaixaNoBling";
-import { NovaContaPagar } from "@/components/financeiro/NovaContaPagar";
+import { NovaConta, type ContaCriada } from "@/components/financeiro/NovaConta";
+import { paraConta, type Bling2Conta } from "@/hooks/useBling2Contas";
 import { chamarContasPagar, useContaPagarConfig } from "@/lib/contaPagarBling";
 import { toast } from "@/hooks/use-toast";
 import { useBaixaBlingConfig, vaiAoBling, enviarAoBling, avisarBaixaNoBling } from "@/lib/blingBaixa";
@@ -82,7 +83,20 @@ export function PayablesList(_props: { initialStatus?: string } = {}) {
   const qc = useQueryClient();
   const { data: cfgCriar } = useContaPagarConfig();
   const [nova, setNova] = useState(false);
+  // "Salvar e dar baixa": a conta recém-lançada abre a MESMA baixa da linha.
+  const [baixaMatriz, setBaixaMatriz] = useState<PurchasePayable | null>(null);
+  const [baixaFilial, setBaixaFilial] = useState<Bling2Conta | null>(null);
   const conta = empresa === "filial" ? 2 : 1;
+  const criada = ({ locais, baixar }: ContaCriada) => {
+    invalidarContasAPagar(qc);
+    qc.invalidateQueries({ queryKey: ["bling2-contas-paged"] });
+    qc.invalidateQueries({ queryKey: ["bling2-contas-resumo"] });
+    const linha = locais[0];
+    if (!baixar) return;
+    if (!linha) { toast({ title: "Lançada no Bling — a baixa fica para a linha da conta, quando ela aparecer." }); return; }
+    if (conta === 2) setBaixaFilial(paraConta("pagar")(linha));
+    else setBaixaMatriz(linha as PurchasePayable);
+  };
   const seletor = <SeletorEmpresa valor={empresa} onChange={trocarEmpresa} />;
   return (
     <div className="space-y-5">
@@ -98,15 +112,10 @@ export function PayablesList(_props: { initialStatus?: string } = {}) {
           ) : undefined
         }
       />
-      {empresa === "filial" ? <FilialBling2 tipo="pagar" seletor={seletor} /> : <PayablesMatriz seletor={seletor} />}
-      <NovaContaPagar
-        conta={conta} open={nova} onOpenChange={setNova}
-        onCriada={() => {
-          invalidarContasAPagar(qc);
-          qc.invalidateQueries({ queryKey: ["bling2-contas-paged"] });
-          qc.invalidateQueries({ queryKey: ["bling2-contas-resumo"] });
-        }}
-      />
+      {empresa === "filial"
+        ? <FilialBling2 tipo="pagar" seletor={seletor} abrirBaixa={baixaFilial} onBaixaAberta={() => setBaixaFilial(null)} />
+        : <PayablesMatriz seletor={seletor} abrirBaixa={baixaMatriz} onBaixaAberta={() => setBaixaMatriz(null)} />}
+      <NovaConta tipo="pagar" conta={conta} open={nova} onOpenChange={setNova} onCriada={criada} />
     </div>
   );
 }
@@ -114,7 +123,9 @@ export function PayablesList(_props: { initialStatus?: string } = {}) {
 // ⚠️ Baixa, cancelamento e estorno valem para QUALQUER pessoa com o app
 // Finanças (decisão do dono do processo, 21/10/2026) — o banco já libera por
 // `carbo_tem_app`. A confirmação das ações perigosas continua.
-function PayablesMatriz({ seletor }: { seletor: ReactNode }) {
+function PayablesMatriz({ seletor, abrirBaixa, onBaixaAberta }: {
+  seletor: ReactNode; abrirBaixa?: PurchasePayable | null; onBaixaAberta?: () => void;
+}) {
   const [statusUrl, setStatus] = useParamUrl("status", "fila");
   const [source, setSource] = useParamUrl("origem", "all");
   const [mesUrl, setMes] = useParamUrl("mes", "");
@@ -125,6 +136,14 @@ function PayablesMatriz({ seletor }: { seletor: ReactNode }) {
   // Tamanho de página é preferência da pessoa, não pergunta: fica no navegador.
   const [pageSize, setPageSize] = usePersistedState<number>("compras.pagar.pageSize", 20);
   const [payingId, setPayingId] = useState<string | null>(null);
+  // A conta recém-lançada pode não estar na página aberta: a baixa a recebe inteira.
+  const [externa, setExterna] = useState<PurchasePayable | null>(null);
+  useEffect(() => {
+    if (!abrirBaixa) return;
+    setExterna(abrirBaixa);
+    setPayingId(abrirBaixa.id);
+    onBaixaAberta?.();
+  }, [abrirBaixa]);   // eslint-disable-line react-hooks/exhaustive-deps
   const [pagando, setPagando] = useState(false);
 
   const hoje = hojeISO();
@@ -202,7 +221,7 @@ function PayablesMatriz({ seletor }: { seletor: ReactNode }) {
   ];
   const semRecorte = !periodo.de && !periodo.ate && !busca;
 
-  const payingPayable = rows.find((p) => p.id === payingId);
+  const payingPayable = rows.find((p) => p.id === payingId) ?? (externa?.id === payingId ? externa : undefined);
   const handlePay = async ({ dia, ajustes, parcial }: ConfirmacaoBaixa) => {
     const titulo = payingPayable;
     if (!titulo) return;

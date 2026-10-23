@@ -3499,9 +3499,11 @@ desenho da "Baixa de lançamentos" do Bling; `lib/baixaDialogo.ts`; a regra é a
    de tarifa quitam 39,90 (24 de 30 borderôs a receber, ML). A 1ª versão a
    tratava como neutra e chamaria isso de parcial. Tarifa só no RECEBIMENTO:
    nenhum borderô a pagar a usou, e o servidor recusa no pagar.
-   ⚠️ No receber vão `valorPago` **e** `valorRecebido` (mesmo valor): o borderô
-   diz `valorPago` também a receber; nome ignorado com tarifa quitaria pelo
-   valor cheio — saldo certo, banco errado, e a conferência não veria.
+   ⚠️ Vão `valorPago` **e** `valorRecebido` (mesmo valor), nos DOIS tipos: o
+   borderô diz `valorPago` (pagar e receber) e a especificação da API v3 (SDK
+   `bling-erp-api`) diz `valorRecebido` no /baixar — inclusive do pagar. Nome
+   ignorado com tarifa quitaria pelo valor cheio — saldo certo, banco errado,
+   e a conferência não veria.
    ⚠️ O raio-x da FILIAL voltou vazio (o espelho dela não tinha borderô a ler);
    a API é a mesma, e a filial já tinha baixa real aceita.
 7. **Histórico** (pedido do time, 22/10/2026): o texto que elas escrevem para
@@ -3539,6 +3541,31 @@ criar · excluir · ensaio), `lib/contaPagarBling.ts`,
    deixaria aberta lá.
 7. ⚠️ **Nasce DESLIGADA por empresa** (`fin_contas_pagar_config`); nunca renova
    token (matriz perto de vencer pede ao `bling-sync`; filial, "tente em 1 min").
+8. ✅ **E a conta a RECEBER também** (23/10/2026, `20261134`, pedido do time):
+   o formulário é o do BLING, campo a campo — contato, valor, emissão,
+   competência, vencimento, histórico (2.000), forma de pagamento, conta
+   financeira, categoria, nº do documento e, só no receber, vendedor — e tem
+   **"Salvar e dar baixa"**. `components/financeiro/NovaConta.tsx` serve os
+   dois tipos (o `NovaContaPagar` saiu); a função ganhou `tipo` (ausente =
+   pagar) e a ação `cadastros` (formas, categorias, vendedores, os mais usados
+   do espelho primeiro). O interruptor é o MESMO por empresa. Sem ele ligado, a
+   matriz do receber mantém o "Novo título" só daqui.
+   ⚠️ **Juros mensal (%) e multa (%) são DA FORMA DE PAGAMENTO**, não da conta:
+   o POST /contas/{tipo} da API v3 não tem esses campos (conferido no SDK
+   gerado da especificação, `bling-erp-api` 6.0.0) e `/formas-pagamentos` os
+   traz. A tela os MOSTRA da forma escolhida, só leitura — como o Bling ao
+   escolher a forma. Mandá-los seria ignorado calado.
+   ⚠️ **Depois de criar, a função RELÊ cada conta** (`camposNaoGuardados`):
+   forma, conta financeira, categoria ou vendedor que o Bling não guardou vira
+   aviso na tela; o detalhe relido vai para o espelho.
+   ⚠️ **"Salvar e dar baixa" não tem baixa própria**: a função devolve a linha
+   criada (`locais`) e a tela abre a MESMA baixa da linha (`DialogoBaixa`,
+   matriz pelo `abrirBaixa` de `PayablesMatriz`/`RecebiveisMatriz`, filial
+   pelo `DialogoBaixaFilial`). Só em conta ÚNICA.
+   ⚠️ A categoria filtra pelo `tipo` que a empresa JÁ usa naquele lado (o código
+   receita/despesa não está medido); sem uso, a lista inteira.
+   ⚠️ `receivables` tem índice único PARCIAL em `bling_id`: o título nasce por
+   INSERT, nunca upsert por ele.
 
 ### App novo no hub — os QUATRO lugares que precisam aprender a interface
 Criar a pasta do app é a parte fácil. O que faz um app existir é a flag em

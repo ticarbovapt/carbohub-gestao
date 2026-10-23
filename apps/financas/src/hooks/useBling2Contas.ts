@@ -64,14 +64,15 @@ const COLUNAS = (tipo: Bling2Tipo) =>
 // ⚠️ Colunas da baixa pela tela (20261131). Front no ar antes do SQL: a consulta
 // com elas falha (42703) e a tela relê SEM elas — nunca fica vazia por isso.
 const COLUNAS_BAIXA = "cb_baixa_em, cb_baixa_por_nome, cb_baixa_bordero, cb_baixa_erro";
-// Só o contas a PAGAR tem quem a criou aqui (20261132).
+// Quem a criou aqui: pagar desde a 20261132, receber desde a 20261134.
 const COLUNAS_CRIADO = "cb_criado_nome";
 // A conta e os ajustes da baixa feita aqui (20261133).
 const COLUNAS_AJUSTES = "baixa_ajustes";
 const faltaColuna = (e: any) =>
   !!e && (e.code === "42703" || e.code === "PGRST204" || (/cb_(baixa|criado)_|baixa_ajustes/.test(String(e.message ?? "")) && /does not exist|schema cache|Could not find/i.test(String(e.message ?? ""))));
 
-const paraConta = (tipo: Bling2Tipo) => (r: any): Bling2Conta => ({
+/** A linha crua do banco → `Bling2Conta` (também usada para a conta recém-criada pela tela). */
+export const paraConta = (tipo: Bling2Tipo) => (r: any): Bling2Conta => ({
   id: r.id, bling_id: r.bling_id, numero: r.numero ?? null,
   nome: r[colunaNomeBling2(tipo)] ?? null,
   valor: r.valor == null ? null : Number(r.valor),
@@ -192,10 +193,12 @@ export function useBling2ContasPaged(params: {
       };
       // Do mais completo ao mais antigo: coluna que ainda não existe derruba só
       // o que depende dela, nunca a lista.
+      // ⚠️ O receber só ganhou "quem criou" na 20261134: antes dela a 1ª
+      // tentativa falha e cai na segunda, sem a coluna.
       const tentativas = [
-        ...(params.tipo === "pagar"
-          ? [`${COLUNAS(params.tipo)}, ${COLUNAS_BAIXA}, ${COLUNAS_CRIADO}, ${COLUNAS_AJUSTES}`, `${COLUNAS(params.tipo)}, ${COLUNAS_BAIXA}, ${COLUNAS_CRIADO}`]
-          : [`${COLUNAS(params.tipo)}, ${COLUNAS_BAIXA}, ${COLUNAS_AJUSTES}`]),
+        `${COLUNAS(params.tipo)}, ${COLUNAS_BAIXA}, ${COLUNAS_CRIADO}, ${COLUNAS_AJUSTES}`,
+        `${COLUNAS(params.tipo)}, ${COLUNAS_BAIXA}, ${COLUNAS_AJUSTES}`,
+        `${COLUNAS(params.tipo)}, ${COLUNAS_BAIXA}, ${COLUNAS_CRIADO}`,
         `${COLUNAS(params.tipo)}, ${COLUNAS_BAIXA}`,
         COLUNAS(params.tipo),
       ];

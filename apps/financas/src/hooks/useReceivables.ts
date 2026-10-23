@@ -41,6 +41,9 @@ export interface Receivable {
   bling_id?: number | string | null;
   /** Quem deu a baixa AQUI. Nulo num título recebido = baixado no Bling (veio pelo espelho). */
   received_by?: string | null;
+  /** Quem LANÇOU este título no Bling pelo Finanças (20261134) — libera o "Excluir no Bling". */
+  criado_aqui_por?: string | null;
+  criado_aqui_nome?: string | null;
   // ── A baixa feita aqui enviada ao Bling 1 (`bling-contas-baixar`). Opcionais pelo mesmo motivo. ──
   bling_baixa_em?: string | null;
   bling_baixa_bordero?: number | null;

@@ -111,7 +111,17 @@ const FILTROS: { v: FiltroBling2; l: string }[] = [
 
 const aberta = (c: Bling2Conta) => c.situacao === "1" || c.situacao === "3";
 
-export function FilialBling2({ tipo, seletor }: { tipo: Bling2Tipo; seletor: ReactNode }) {
+export function FilialBling2({ tipo, seletor, abrirBaixa, onBaixaAberta }: {
+  tipo: Bling2Tipo; seletor: ReactNode;
+  /** Conta recém-lançada pelo "Salvar e dar baixa": abre a baixa nela. */
+  abrirBaixa?: Bling2Conta | null; onBaixaAberta?: () => void;
+}) {
+  const [externa, setExterna] = useState<Bling2Conta | null>(null);
+  useEffect(() => {
+    if (!abrirBaixa) return;
+    setExterna(abrirBaixa);
+    onBaixaAberta?.();
+  }, [abrirBaixa]);   // eslint-disable-line react-hooks/exhaustive-deps
   const [filtroUrl, setFiltroUrl] = useParamUrl("situacao", "fila");
   const [buscaUrl, setBuscaUrl] = useParamUrl("busca", "", { replace: true });
   const [paginaUrl, setPaginaUrl] = useParamUrl("pagina", "1");
@@ -259,7 +269,50 @@ export function FilialBling2({ tipo, seletor }: { tipo: Bling2Tipo; seletor: Rea
         <Paginacao page={page} pageSize={pageSize} total={total} onPage={irPara}
           onPageSize={(n) => { setPageSize(n); setPaginaUrl(null); }} />
       </div>
+      {/* A conta recém-lançada ("Salvar e dar baixa"): a MESMA baixa da linha. */}
+      {externa && (
+        <DialogoBaixaFilial conta={externa} tipo={tipo} open onOpenChange={(v) => { if (!v) setExterna(null); }} />
+      )}
     </div>
+  );
+}
+
+/**
+ * O diálogo de baixa de UMA conta da filial — o da linha e o do "Salvar e dar
+ * baixa" são este mesmo. ⚠️ O Bling 2 PRIMEIRO, com a conta e os ajustes do
+ * diálogo: recusou ⇒ nada mudou. A função relê o título e desfaz o borderô se o
+ * Bling não fez o que foi pedido (ex.: quitou tudo numa parcial).
+ */
+function DialogoBaixaFilial({ conta: c, tipo, open, onOpenChange }: {
+  conta: Bling2Conta; tipo: Bling2Tipo; open: boolean; onOpenChange: (v: boolean) => void;
+}) {
+  const qc = useQueryClient();
+  const [enviando, setEnviando] = useState(false);
+  const baixar = async ({ dia, ajustes }: ConfirmacaoBaixa) => {
+    setEnviando(true);
+    try {
+      const r = await pedirAoBling2("baixar", tipo, c.id, dia, ajustes);
+      if (r.ok) {
+        toast.success(r.pulado === "ja_pago_no_bling" ? "Já estava baixado no Bling 2" : r.parcial ? "Baixa parcial no Bling da filial" : "Baixa feita no Bling da filial",
+          { description: r.pulado || r.parcial ? r.mensagem : r.bordero ? `Borderô ${r.bordero}` : undefined });
+        onOpenChange(false);
+      } else {
+        toast.error("O Bling 2 não fez a baixa — nada mudou", { description: r.mensagem });
+      }
+    } finally {
+      setEnviando(false);
+      qc.invalidateQueries({ queryKey: ["bling2-contas-paged"] });
+      qc.invalidateQueries({ queryKey: ["bling2-contas-resumo"] });
+    }
+  };
+  return (
+    <DialogoBaixa
+      open={open} onOpenChange={(v) => !enviando && onOpenChange(v)} tipo={tipo} conta={2}
+      espelho={tipo === "receber" ? "bling2_contas_receber" : "bling2_contas_pagar"} blingId={c.bling_id}
+      titulo={{ nome: c.nome || "—", numero: c.numero, vencimento: c.vencimento, valor: c.valor ?? valorEmAberto(c), saldo: valorEmAberto(c), historico: c.historico }}
+      podeParcial enviando={enviando} onConfirmar={baixar}
+      aviso="A baixa é feita no Bling da filial. Se o Bling recusar, nada muda."
+    />
   );
 }
 
@@ -279,26 +332,6 @@ function AcoesDaFilial({ conta: c, tipo, cfg }: { conta: Bling2Conta; tipo: Blin
   const recarregar = () => {
     qc.invalidateQueries({ queryKey: ["bling2-contas-paged"] });
     qc.invalidateQueries({ queryKey: ["bling2-contas-resumo"] });
-  };
-
-  // ⚠️ O Bling 2 PRIMEIRO, com a conta e os ajustes do diálogo: recusou ⇒ nada
-  // mudou. A função relê o título e desfaz o borderô se o Bling não fez o que
-  // foi pedido (ex.: quitou tudo numa parcial).
-  const baixar = async ({ dia, ajustes }: ConfirmacaoBaixa) => {
-    setEnviando(true);
-    try {
-      const r = await pedirAoBling2("baixar", tipo, c.id, dia, ajustes);
-      if (r.ok) {
-        toast.success(r.pulado === "ja_pago_no_bling" ? "Já estava baixado no Bling 2" : r.parcial ? "Baixa parcial no Bling da filial" : "Baixa feita no Bling da filial",
-          { description: r.pulado || r.parcial ? r.mensagem : r.bordero ? `Borderô ${r.bordero}` : undefined });
-        setAberto(false);
-      } else {
-        toast.error("O Bling 2 não fez a baixa — nada mudou", { description: r.mensagem });
-      }
-    } finally {
-      setEnviando(false);
-      recarregar();
-    }
   };
 
   const desfazer = async () => {
@@ -335,8 +368,8 @@ function AcoesDaFilial({ conta: c, tipo, cfg }: { conta: Bling2Conta; tipo: Blin
   }
   if (!aberta(c)) return celula(<MenuAcoes itens={[]} />);
 
-  // ⚠️ Conta a pagar que NASCEU aqui: excluir vai ao Bling 2 (a função confere
-  // que ela está em aberto lá e que foi criada pelo sistema).
+  // ⚠️ Conta que NASCEU aqui (pagar ou receber): excluir vai ao Bling 2 (a função
+  // confere que ela está em aberto lá e que foi criada pelo sistema).
   const excluir = async () => {
     const ok = await confirmar({
       titulo: "Excluir esta conta no Bling da filial?",
@@ -346,7 +379,7 @@ function AcoesDaFilial({ conta: c, tipo, cfg }: { conta: Bling2Conta; tipo: Blin
     if (!ok) return;
     setEnviando(true);
     try {
-      const r = await chamarContasPagar("excluir", 2, { bling_id: c.bling_id });
+      const r = await chamarContasPagar("excluir", 2, { bling_id: c.bling_id, tipo });
       if (r.ok) toast.success("Conta excluída no Bling da filial");
       else toast.error("O Bling não excluiu — nada mudou", { description: r.mensagem });
     } finally {
@@ -366,16 +399,10 @@ function AcoesDaFilial({ conta: c, tipo, cfg }: { conta: Bling2Conta; tipo: Blin
           {c.cb_baixa_erro ? "Tentar de novo" : acao}
         </Button>
       ) : !c.cb_baixa_erro && <span className="whitespace-nowrap text-xs text-muted-foreground">baixa no Bling</span>}
-      <MenuAcoes itens={tipo === "pagar" && c.cb_criado_nome
+      <MenuAcoes itens={c.cb_criado_nome
         ? [{ l: "Excluir no Bling", onClick: excluir, perigo: true, disabled: enviando }] : []} />
 
-      <DialogoBaixa
-        open={aberto} onOpenChange={setAberto} tipo={tipo} conta={2}
-        espelho={tipo === "receber" ? "bling2_contas_receber" : "bling2_contas_pagar"} blingId={c.bling_id}
-        titulo={{ nome: c.nome || "—", numero: c.numero, vencimento: c.vencimento, valor: c.valor ?? valorEmAberto(c), saldo: valorEmAberto(c), historico: c.historico }}
-        podeParcial enviando={enviando} onConfirmar={baixar}
-        aviso="A baixa é feita no Bling da filial. Se o Bling recusar, nada muda."
-      />
+      {aberto && <DialogoBaixaFilial conta={c} tipo={tipo} open onOpenChange={(v) => { setAberto(v); if (!v) recarregar(); }} />}
     </>,
   );
 }

@@ -22,6 +22,9 @@ import { resumoAjustes, salvarAjustes, useEspelhoMatriz } from "@/lib/baixaDialo
 import { BaixaNoBling } from "@/components/financeiro/BaixaNoBling";
 import { toast } from "@/hooks/use-toast";
 import { useBaixaBlingConfig, vaiAoBling, enviarAoBling, avisarBaixaNoBling } from "@/lib/blingBaixa";
+import { NovaConta, type ContaCriada } from "@/components/financeiro/NovaConta";
+import { chamarContasPagar, useContaPagarConfig } from "@/lib/contaPagarBling";
+import { paraConta, type Bling2Conta } from "@/hooks/useBling2Contas";
 import {
   useReceivablesOpen, useReceivablesPaged, useUpdateReceivableStatus, useCreateReceivable,
   useInvoicedOrdersNoReceivable, useGenerateReceivablesFromOrders, invalidarContasAReceber,
@@ -75,22 +78,53 @@ const TITULO = "Contas a receber";
  */
 export default function Recebiveis() {
   const [empresa, trocarEmpresa] = useEmpresaUrl();
+  const qc = useQueryClient();
   const seletor = <SeletorEmpresa valor={empresa} onChange={trocarEmpresa} />;
-  if (empresa === "filial") {
-    return (
-      <div className="space-y-5">
-        <CarboPageHeader title={TITULO} icon={HandCoins} />
-        <FilialBling2 tipo="receber" seletor={seletor} />
-      </div>
-    );
-  }
-  return <RecebiveisMatriz seletor={seletor} />;
+  const conta = empresa === "filial" ? 2 : 1;
+  // ⚠️ "Nova conta a receber" lança NO BLING da empresa, e só aparece com o
+  // interruptor dela ligado (`fin_contas_pagar_config`, o mesmo do pagar).
+  const { data: cfgCriar } = useContaPagarConfig();
+  const [nova, setNova] = useState(false);
+  // "Salvar e dar baixa": a conta recém-lançada abre a MESMA baixa da linha.
+  const [baixaMatriz, setBaixaMatriz] = useState<Receivable | null>(null);
+  const [baixaFilial, setBaixaFilial] = useState<Bling2Conta | null>(null);
+  const criada = ({ locais, baixar }: ContaCriada) => {
+    invalidarContasAReceber(qc);
+    qc.invalidateQueries({ queryKey: ["bling2-contas-paged"] });
+    qc.invalidateQueries({ queryKey: ["bling2-contas-resumo"] });
+    const linha = locais[0];
+    if (!baixar) return;
+    if (!linha) { toast({ title: "Lançada no Bling — a baixa fica para a linha da conta, quando ela aparecer." }); return; }
+    if (conta === 2) setBaixaFilial(paraConta("receber")(linha));
+    else setBaixaMatriz(linha as Receivable);
+  };
+  const botaoNova = cfgCriar?.[conta]
+    ? <Button onClick={() => setNova(true)} className="gap-1.5"><Plus className="h-4 w-4" /> Nova conta a receber</Button>
+    : undefined;
+  return (
+    <>
+      {empresa === "filial" ? (
+        <div className="space-y-5">
+          <CarboPageHeader title={TITULO} icon={HandCoins} actions={botaoNova} />
+          <FilialBling2 tipo="receber" seletor={seletor} abrirBaixa={baixaFilial} onBaixaAberta={() => setBaixaFilial(null)} />
+        </div>
+      ) : (
+        <RecebiveisMatriz seletor={seletor} botaoNova={botaoNova} abrirBaixa={baixaMatriz} onBaixaAberta={() => setBaixaMatriz(null)} />
+      )}
+      <NovaConta tipo="receber" conta={conta} open={nova} onOpenChange={setNova} onCriada={criada} />
+    </>
+  );
 }
 
 // ⚠️ Receber, cancelar e estornar valem para QUALQUER pessoa com o app Finanças
 // (decisão do dono do processo, 21/10/2026) — o banco já libera por
 // `carbo_tem_app`. A confirmação das ações perigosas continua.
-function RecebiveisMatriz({ seletor }: { seletor: ReactNode }) {
+function RecebiveisMatriz({ seletor, botaoNova, abrirBaixa, onBaixaAberta }: {
+  seletor: ReactNode;
+  /** "Nova conta a receber" no Bling; sem o interruptor ligado, fica o "Novo título" só daqui. */
+  botaoNova?: ReactNode;
+  abrirBaixa?: Receivable | null; onBaixaAberta?: () => void;
+}) {
   // Filtros na URL: F5, link mandado a alguém e Voltar funcionam.
   const [statusUrl, setStatusUrl] = useParamUrl("status", "fila");
   const [source, setSourceUrl] = useParamUrl("origem", "all");
@@ -143,6 +177,11 @@ function RecebiveisMatriz({ seletor }: { seletor: ReactNode }) {
   const hoje = hojeISO();
 
   const [receiving, setReceiving] = useState<Receivable | null>(null);
+  useEffect(() => {
+    if (!abrirBaixa) return;
+    setReceiving(abrirBaixa);
+    onBaixaAberta?.();
+  }, [abrirBaixa]);   // eslint-disable-line react-hooks/exhaustive-deps
   const [recebendo, setRecebendo] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const formVazio = () => ({ customer_name: "", amount: "", due_date: hojeISO(), notes: "" });
@@ -241,6 +280,22 @@ function RecebiveisMatriz({ seletor }: { seletor: ReactNode }) {
     update.mutate({ id: r.id, status: "programado" }, { onSuccess: () => salvarAjustes("receivables", r.id, null) });
   };
   const cancelar = async (r: Receivable) => {
+    // ⚠️ Título que NASCEU aqui no Bling: cancelar só aqui o deixaria aberto lá,
+    // então ele é EXCLUÍDO no Bling (a função confere que está em aberto lá).
+    if (r.criado_aqui_por && r.bling_id) {
+      const ok = await confirmar({
+        titulo: "Excluir este título no Bling?",
+        mensagem: `${r.customer_name || "Título"} · ${brl(r.amount)} · venc. ${dataBR(r.due_date)}\n\n` +
+          "Ele foi lançado pelo sistema: é excluído no Bling da matriz e cancelado aqui. Se o Bling recusar, nada muda.",
+        confirmar: "Excluir no Bling", cancelar: "Voltar", perigo: true,
+      });
+      if (!ok) return;
+      const x = await chamarContasPagar("excluir", 1, { bling_id: Number(r.bling_id), tipo: "receber" });
+      if (x.ok) toast({ title: "Título excluído no Bling" });
+      else toast({ title: "O Bling não excluiu — nada mudou", description: x.mensagem, variant: "destructive" });
+      invalidarContasAReceber(qc);
+      return;
+    }
     const ok = await confirmar({
       titulo: "Cancelar este título?",
       mensagem: `${r.customer_name || "Título"} · ${brl(r.amount)}, vencimento ${dataBR(r.due_date)}.\nTítulo cancelado sai do a receber, do aging e do fluxo de caixa.`,
@@ -266,7 +321,7 @@ function RecebiveisMatriz({ seletor }: { seletor: ReactNode }) {
       <CarboPageHeader
         title={TITULO}
         icon={HandCoins}
-        actions={<Button onClick={() => setShowNew(true)} className="gap-1.5"><Plus className="h-4 w-4" /> Novo título</Button>}
+        actions={botaoNova ?? <Button onClick={() => setShowNew(true)} className="gap-1.5"><Plus className="h-4 w-4" /> Novo título</Button>}
       />
 
       {/* ⚠️ A matriz mostra o contas a receber do BLING 1, copiado a cada 10 min
