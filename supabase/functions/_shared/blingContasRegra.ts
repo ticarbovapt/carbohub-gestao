@@ -160,14 +160,15 @@ export function decidirBaixa(
   // ⚠️ Valor só quando é preciso: sem ele o Bling baixa o SALDO, que é o caso
   // comum (o corpo do ensaio de 22/10). Parcial, título já parcial ou com
   // ajuste mandam o valor de fato.
-  // ⚠️ No recebimento vão os DOIS nomes, com o mesmo valor: a doc fala em
-  // `valorRecebido`, e o borderô real devolve `valorPago` também nos títulos a
-  // receber. O que o Bling não conhecer ele ignora; e se ignorasse o valor,
-  // uma baixa com tarifa quitaria pelo valor CHEIO — certo no saldo, errado no
-  // banco, e a conferência não veria.
+  // ⚠️ Vão os DOIS nomes, com o mesmo valor, nos DOIS tipos: o borderô real
+  // devolve `valorPago` (a pagar e a receber), e a especificação da API v3
+  // (o SDK gerado dela, bling-erp-api 6.0.0) declara `valorRecebido` no corpo
+  // do /baixar — também no de contas a PAGAR. O que o Bling não conhecer ele
+  // ignora; e se ignorasse o valor, uma baixa com tarifa quitaria pelo valor
+  // CHEIO — certo no saldo, errado no banco, e a conferência não veria.
   if (parcial || temAjuste || situacao === "3") {
     corpo.valorPago = reais(cValor);
-    if (tipo === "receber") corpo.valorRecebido = reais(cValor);
+    corpo.valorRecebido = reais(cValor);
   }
   return {
     decisao: "enviar", corpo,
@@ -285,7 +286,16 @@ export function planejarEspelho(locais: Map<number, LocalConta>, listados: Lista
   return { filtroIgnorado: false, novos, mudaram, sumiram };
 }
 
-// ── Conta a pagar CRIADA pelo sistema no Bling ──────────────────────────────
+// ── Conta a pagar E a receber CRIADA pelo sistema no Bling ──────────────────
+// O formulário é o do Bling ("Conta a pagar" / "Conta a receber"): contato,
+// valor, emissão, competência, vencimento, histórico, forma de pagamento, conta
+// financeira (portador), categoria, nº do documento e — só no receber — vendedor.
+// Os nomes dos campos são os do POST /contas/pagar e /contas/receber da API v3.
+// ⚠️ Juros mensal (%) e multa (%) NÃO são campos da conta: no Bling eles vêm da
+// FORMA DE PAGAMENTO (`/formas-pagamentos` traz `juros` e `multa`). É por isso
+// que a tela do Bling os preenche ao escolher a forma — e por isso a nossa os
+// MOSTRA da forma escolhida, sem mandá-los. Mandar um campo que a API não tem
+// seria ignorado calado.
 
 export interface ParcelaNova { vencimento: string; valor: number }
 export interface ContaPagarNova {
@@ -294,27 +304,45 @@ export interface ContaPagarNova {
   historico: string;
   numeroDocumento: string | null;
   parcelas: ParcelaNova[];
+  /** AAAA-MM-DD; ausente = hoje. */
+  emissao?: string | null;
+  /** AAAA-MM-DD; ausente = hoje. */
+  competencia?: string | null;
+  formaPagamentoId?: number | null;
+  categoriaId?: number | null;
+  /** Só no RECEBER. */
+  vendedorId?: number | null;
 }
+/** O nome diz pagar por história; vale para os dois tipos. */
+export type ContaNova = ContaPagarNova;
 
 export const MAX_PARCELAS = 36;
+/** "0 de 2.000 caracteres", como na tela do Bling. */
+export const MAX_HISTORICO_CONTA = 2000;
+
+const diaValido = (v: string | null | undefined) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v ?? "")) return false;
+  const d = new Date(`${v}T12:00:00Z`);
+  return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v && v! >= "2000-01-01" && v! <= "2100-12-31";
+};
 
 /**
  * Confere o pedido da tela ANTES de falar com o Bling. Devolve o motivo da
  * recusa, ou null. ⚠️ Nada é corrigido calado: data inválida, valor zerado ou
  * parcela demais RECUSAM — trocar por outro valor seria criar título errado.
+ * O histórico é opcional, como no Bling.
  */
-export function erroDaContaNova(c: ContaPagarNova, hoje: string): string | null {
-  if (!Number.isFinite(c.contatoId) || c.contatoId <= 0) return "Escolha o fornecedor.";
-  if (!c.historico || !c.historico.trim()) return "Diga do que é a conta (histórico).";
-  if (c.historico.trim().length > 250) return "O histórico passa de 250 caracteres.";
+export function erroDaContaNova(c: ContaPagarNova, hoje: string, tipo: TipoConta = "pagar"): string | null {
+  if (!Number.isFinite(c.contatoId) || c.contatoId <= 0) return tipo === "receber" ? "Escolha o cliente." : "Escolha o fornecedor.";
+  if ((c.historico ?? "").trim().length > MAX_HISTORICO_CONTA) return `O histórico passa de ${MAX_HISTORICO_CONTA.toLocaleString("pt-BR")} caracteres.`;
+  if (c.emissao != null && c.emissao !== "" && !diaValido(c.emissao)) return "Data de emissão inválida.";
+  if (c.competencia != null && c.competencia !== "" && !diaValido(c.competencia)) return "Competência inválida.";
+  if (tipo === "pagar" && Number(c.vendedorId) > 0) return "Vendedor só existe na conta a receber.";
   if (!Array.isArray(c.parcelas) || c.parcelas.length === 0) return "Informe ao menos uma parcela.";
   if (c.parcelas.length > MAX_PARCELAS) return `No máximo ${MAX_PARCELAS} parcelas.`;
   for (const [i, p] of c.parcelas.entries()) {
     const n = c.parcelas.length > 1 ? ` (parcela ${i + 1})` : "";
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(p.vencimento ?? "")) return `Vencimento inválido${n}.`;
-    const d = new Date(`${p.vencimento}T12:00:00Z`);
-    if (isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== p.vencimento) return `Vencimento inválido${n}.`;
-    if (p.vencimento < "2000-01-01" || p.vencimento > "2100-12-31") return `Vencimento fora do razoável${n}.`;
+    if (!diaValido(p.vencimento)) return `Vencimento inválido${n}.`;
     if (!Number.isFinite(p.valor) || p.valor <= 0) return `Valor inválido${n}.`;
     if (Math.round(p.valor * 100) !== Math.round(p.valor * 100 * 1e6) / 1e6) return `Valor com mais de 2 casas${n}.`;
   }
@@ -323,26 +351,50 @@ export function erroDaContaNova(c: ContaPagarNova, hoje: string): string | null 
 }
 
 /**
- * O corpo do POST /contas/pagar de UMA parcela — a forma de uma conta real que
- * o Bling já aceitou (medida em 22/10/2026). ⚠️ Cada parcela vira uma conta de
- * ocorrência ÚNICA (tipo 1, 1.342 das contas medidas): número, datas e valores
- * ficam sob o nosso controle, e o espelho traz cada uma como sempre trouxe.
+ * O corpo do POST /contas/pagar (ou /contas/receber) de UMA parcela — a forma
+ * de uma conta real que o Bling já aceitou (medida em 22/10/2026), com os
+ * campos opcionais da API v3. ⚠️ Cada parcela vira uma conta de ocorrência
+ * ÚNICA (tipo 1, 1.342 das contas medidas): número, datas e valores ficam sob o
+ * nosso controle, e o espelho traz cada uma como sempre trouxe.
  */
-export function corpoContaPagar(c: ContaPagarNova, i: number, hoje: string): Record<string, unknown> {
+export function corpoContaPagar(c: ContaPagarNova, i: number, hoje: string, tipo: TipoConta = "pagar"): Record<string, unknown> {
   const p = c.parcelas[i];
   const total = c.parcelas.length;
-  const historico = c.historico.trim() + (total > 1 ? ` — parcela ${i + 1}/${total}` : "");
+  const h = (c.historico ?? "").trim();
+  const historico = total > 1 ? (h ? `${h} — parcela ${i + 1}/${total}` : `Parcela ${i + 1}/${total}`) : h;
   return {
     vencimento: p.vencimento,
     valor: Math.round(p.valor * 100) / 100,
     contato: { id: c.contatoId },
+    ...(Number(c.formaPagamentoId) > 0 ? { formaPagamento: { id: Number(c.formaPagamentoId) } } : {}),
     ...(c.portadorId ? { portador: { id: c.portadorId } } : {}),
+    ...(Number(c.categoriaId) > 0 ? { categoria: { id: Number(c.categoriaId) } } : {}),
+    ...(tipo === "receber" && Number(c.vendedorId) > 0 ? { vendedor: { id: Number(c.vendedorId) } } : {}),
     historico,
-    dataEmissao: hoje,
-    competencia: hoje,
+    dataEmissao: c.emissao || hoje,
+    competencia: c.competencia || hoje,
     ...(c.numeroDocumento?.trim() ? { numeroDocumento: c.numeroDocumento.trim() } : {}),
     ocorrencia: { tipo: 1 },
   };
+}
+
+/**
+ * O que o Bling NÃO guardou do que foi mandado: o detalhe é relido depois de
+ * criar, e cada id pedido é conferido. ⚠️ O Bling ignora campo desconhecido
+ * calado — sem esta conferência, uma categoria recusada viraria conta "sem
+ * categoria" sem ninguém saber.
+ */
+export function camposNaoGuardados(corpo: Record<string, unknown>, detalhe: any): string[] {
+  const faltou: string[] = [];
+  const rotulos: Record<string, string> = {
+    formaPagamento: "forma de pagamento", portador: "conta financeira", categoria: "categoria", vendedor: "vendedor",
+  };
+  for (const k of Object.keys(rotulos)) {
+    const pedido = Number((corpo[k] as any)?.id);
+    if (!(pedido > 0)) continue;
+    if (Number(detalhe?.[k]?.id) !== pedido) faltou.push(rotulos[k]);
+  }
+  return faltou;
 }
 
 /**
