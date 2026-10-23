@@ -164,6 +164,7 @@ const porUso = <T extends { nome: string; usos: number }>(a: T, b: T) => b.usos 
 async function cadastros(db: Db, token: string, conta: Conta, tipo: TipoConta) {
   const espelho = ESPELHO[conta][tipo];
   const erros: Record<string, string> = {};
+  const censo: Record<string, unknown> = {};
   const motivo = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
   let formas: { id: number; nome: string; usos: number; juros: number | null; multa: number | null; padrao: boolean }[] = [];
@@ -209,15 +210,25 @@ async function cadastros(db: Db, token: string, conta: Conta, tipo: TipoConta) {
     await dormir(PAUSA_MS);
     try {
       const usos = await usosNoEspelho(db, espelho, "vendedor");
-      vendedores = (await lerPaginas(token, "/vendedores", 5))
+      const crus = await lerPaginas(token, "/vendedores", 5);
+      // ⚠️ O valor de `situacao` do vendedor não está medido: a 1ª versão só
+      // aceitava "A" e a matriz voltou VAZIA, sem erro. Hoje só sai quem o
+      // Bling diz, com todas as letras, que está inativo ou excluído — e o
+      // censo vai junto para o ensaio mostrar o que veio.
+      censo.vendedores = {
+        lidos: crus.length,
+        situacoes: [...new Set(crus.map((v) => String(v?.contato?.situacao ?? v?.situacao ?? "∅")))],
+        chaves: [...new Set(crus.flatMap((v) => Object.keys(v ?? {})))],
+      };
+      vendedores = crus
         .map((v) => ({ id: Number(v.id), nome: String(v?.contato?.nome ?? `Vendedor ${v.id}`), usos: usos.get(Number(v.id)) ?? 0,
-                       ativo: v?.contato?.situacao == null || String(v.contato.situacao) === "A" }))
-        .filter((v) => v.id > 0 && v.ativo)
-        .map(({ ativo: _a, ...v }) => v)
+                       situacao: String(v?.contato?.situacao ?? v?.situacao ?? "").toUpperCase() }))
+        .filter((v) => v.id > 0 && v.situacao !== "I" && v.situacao !== "E")
+        .map(({ situacao: _s, ...v }) => v)
         .sort(porUso);
     } catch (e) { erros.vendedores = motivo(e); }
   }
-  return { formas, categorias, vendedores, erros };
+  return { formas, categorias, vendedores, erros, censo };
 }
 
 async function buscarFornecedores(db: Db, conta: Conta, q: string) {
@@ -267,7 +278,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         const cad = await cadastros(db, token, conta, "receber");
         saida[NOME_EMPRESA[conta]] = {
           formas: cad.formas.slice(0, 15), categorias: cad.categorias.slice(0, 15), total_categorias: cad.categorias.length,
-          vendedores: cad.vendedores.slice(0, 15), erros_cadastros: cad.erros,
+          vendedores: cad.vendedores.slice(0, 15), censo_cadastros: cad.censo, erros_cadastros: cad.erros,
           portadores: o.portadores.slice(0, 20), total_portadores: o.portadores.length,
           erro_portadores: o.erro_portadores, chaves_do_bling: o.chaves_do_bling,
           enviaria: { metodo: "POST", caminho: "/contas/pagar", corpo: corpoContaPagar(exemplo, 0, diaBrasilia(null)), fornecedor: um?.nome },
