@@ -9,7 +9,10 @@ const dlg = (p) => p.locator('[role="dialog"]').last();
 // nova tentativa do React Query (retry automático) trazer as OS.
 const comSchema = async (p) => {
   await p.evaluate(async () => {
-    const m = await import("/docs-prints/mockClient.ts");
+    // A URL pode vir com ?t=… depois de um HMR: usar a que o app carregou.
+    const url = performance.getEntriesByType("resource").map((e) => e.name)
+      .filter((n) => n.includes("/docs-prints/mockClient.ts")).pop() ?? "/docs-prints/mockClient.ts";
+    const m = await import(url);
     if (!m.supabase.schema) m.supabase.schema = () => m.supabase;
   });
   await p.getByText("Transportadora Rio Potengi").first().waitFor({ timeout: 15000 });
