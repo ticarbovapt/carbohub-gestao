@@ -3,7 +3,7 @@ import { Outlet, useNavigate } from "react-router-dom";
 import {
   Globe, Target,
   Store, Building2, LineChart, Trophy, BarChart3, BadgePercent, Tags, MessagesSquare,
-  Boxes, Truck, Map as MapIcon, Megaphone,
+  Boxes, Truck, Map as MapIcon, Megaphone, BookOpen,
 } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -66,6 +66,9 @@ export function Layout() {
     ] },
     { label: "Configurações", items: [
         { to: "/metas/configurar", label: "Configurar Metas", icon: Target },
+    ] },
+    { label: "Ajuda", items: [
+        { to: "/documentacao", label: "Documentação", icon: BookOpen },
     ] },
   ];
 

@@ -5708,6 +5708,22 @@ tela); a área própria é `conversas` (a lista e a conversa aberta). Sem Minha 
 2. Achado, NÃO corrigido: em 1440 px o painel "Respostas rápidas" fica em parte
    atrás da coluna da lista (o print foi feito em 1920).
 
+### Documentação do Admin — `/documentacao` (26/10/2026)
+Mesmo motor, em `apps/admin` (item na seção Ajuda). Áreas próprias: `painelcom`
+(Dashboard Comercial, Dados Comerciais, Aprovações, Tabela de preços) e `paineis`
+(Mapa da Conquista, Portal de Vendas, Licenciados, Placar de Metas, Suprimentos,
+Configurar Metas). `ecommerce.ts`/`esteira.ts` são CÓPIA do Marketing (as mesmas telas).
+Com isso os OITO apps + Academy/Portal/md têm documentação; falta só o Finanças.
+1. ⚠️ O mock ignora `.range()`: `lerTudo`/`lerSemTeto` relê PARA SEMPRE quando a
+   fixture tem ≥ 1.000 linhas (tela presa no esqueleto, sem erro). Fixture < 1.000.
+2. ⚠️ O mapa do Mapa da Conquista lê o IBGE (bloqueado no harness): o shot o
+   intercepta e serve `public/data/brazil-states.geojson`.
+3. Achados, NÃO corrigidos: no Configurar Metas o diálogo abre com Vendedor em
+   branco ao editar e "+ Meta padrão" sem vendedores (`activeMembers` filtra campos
+   que `carbo_team_members` não devolve); o realizado de lá conta `quote` (o Placar
+   não); o rodapé do Placar diz "configuração no Carbo Ops"; Licenciados escreve
+   "Leves E Caminhonetes"; na Aprovações a 1440 px o ✕ de recusar sai cortado.
+
 ### Carbo Pré-Vendas — o OITAVO app (06/10/2026)
 `prevendas.carbohub.com.br`, flag `carbo_prevendas`, cor lima `#65A30D`. É o
 app dos SDRs: qualificam o lead e repassam ao closer (que trabalha no Sales).

@@ -6,6 +6,7 @@ import Login from "./pages/Login";
 import Profile from "./pages/Profile";
 import BugReports from "./pages/BugReports";
 import MinhaEquipe from "./pages/MinhaEquipe";
+import Documentacao from "./pages/Documentacao";
 import EcommerceVendas from "./pages/EcommerceVendas";
 import EcommerceMetas from "./pages/EcommerceMetas";
 import EsteiraOnline from "./pages/EsteiraOnline";
@@ -64,6 +65,7 @@ export default function App() {
         <Route path="/perfil" element={<Profile />} />
         <Route path="/bugs" element={<BugReports />} />
         <Route path="/equipe" element={<MinhaEquipe />} />
+        <Route path="/documentacao" element={<Documentacao />} />
 
         {/* Grupos trazidos do Ops — em organização (conteúdo aos poucos) */}
         <Route path="/ecommerce/vendas-online" element={<EcommerceVendas />} />
