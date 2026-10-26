@@ -3,6 +3,7 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { SalesShell } from "./components/SalesShell";
 import Login from "./pages/Login";
 import Pipelines from "./pages/Pipelines";
+import Documentacao from "./pages/Documentacao";
 import Vender from "./pages/Vender";
 import Chat from "./pages/Chat";
 import PedidosTravada from "./pages/PedidosTravada";
@@ -71,6 +72,7 @@ export default function App() {
         <Route path="/descarbonizacao/agendamentos" element={<Navigate to="/descarbonizacao/os?ver=agenda" replace />} />
         <Route path="/territorio/*" element={<Navigate to="/crm/pipelines" replace />} />
         <Route path="/dashboard-comercial" element={<Navigate to="/crm/pipelines" replace />} />
+        <Route path="/documentacao" element={<Documentacao />} />
         <Route path="/perfil" element={<Profile />} />
         <Route path="/bugs" element={<BugReports />} />
         <Route path="/equipe" element={<MinhaEquipe />} />

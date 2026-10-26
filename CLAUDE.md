@@ -5632,6 +5632,25 @@ docs-prints/                          o gerador (fora do build) — ver o README
    esticados ficavam enormes. Os marcadores ficam na camada do mesmo tamanho
    da imagem — é o que mantém o % certo no celular.
 
+### Documentação do Sales — `/documentacao` (26/10/2026)
+Mesmo molde da do Pré-Vendas (seção acima), com o motor COPIADO para `apps/crm`
+(`pages/Documentacao.tsx`, `components/docs/PrintAnotado.tsx`, `docs/tipos.ts`,
+`docs-prints/`). Item "Documentação" na seção "Ajuda" do menu.
+1. **Uma seção por tela, em `src/docs/secoes/*.ts`**; `conteudo.ts` só junta e
+   ordena pelo menu (`ORDEM`). `comuns.ts` = telas idênticas em vários apps
+   (Vender, Bugs, Perfil): o texto veio do Pré-Vendas — mudou a tela, mude nos dois.
+2. ⚠️ **O harness é por ÁREA**: `fx_<área>.ts` + `shots_<área>.mjs` +
+   `m_<área>.json` (registro em `areas.ts`), para duas áreas serem feitas ao
+   mesmo tempo sem mexer no mesmo arquivo. `gerar.mjs` junta os `m_*.json`.
+   `DOCS_PORT`/`BASE` deixam rodar mais de um vite.
+3. ⚠️ O mock entrega o `SUBSCRIBED` do canal ASSÍNCRONO (síncrono dava TDZ
+   `Cannot access 'ch'` no Sales) e tem `schema()` (a OS lê `licenciados`).
+4. ⚠️ Vite recarregando no meio da captura dá `useAuth deve ser usado dentro de
+   AuthProvider` — não é defeito, refaça o print.
+5. Achados na leitura, NÃO corrigidos (a doc descreve o que a tela faz): o cartão
+   "Sua meta do mês" mostra o % do TIME; o rodapé das Metas diz "status pedido" e
+   a RPC conta só faturado sem serviço; o vendedor cria PDV e não edita.
+
 ### Carbo Pré-Vendas — o OITAVO app (06/10/2026)
 `prevendas.carbohub.com.br`, flag `carbo_prevendas`, cor lima `#65A30D`. É o
 app dos SDRs: qualificam o lead e repassam ao closer (que trabalha no Sales).

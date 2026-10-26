@@ -3,7 +3,7 @@ import { Outlet, useNavigate } from "react-router-dom";
 import {
   KanbanSquare, ClipboardList, TrendingUp, Target,
   Wind, ShoppingCart, ShoppingBag, MessagesSquare, MapPin,
-  CalendarCheck, PackageCheck,
+  CalendarCheck, PackageCheck, BookOpen,
 } from "lucide-react";
 import { ChatBadge, ChatProvider } from "@carbo/chat";
 import { Sidebar, type ShellNavSection, StatusTarja, usePaginaAtual } from "@carbo/shell";
@@ -58,6 +58,9 @@ export function SalesShell() {
     ] },
     { label: "Descarbonização", icon: Wind, items: [
         { to: "/descarbonizacao/os", label: "Ordens de Serviço", icon: ClipboardList },
+    ] },
+    { label: "Ajuda", items: [
+        { to: "/documentacao", label: "Documentação", icon: BookOpen },
     ] },
   ];
 
