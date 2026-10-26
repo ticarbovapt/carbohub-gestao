@@ -15,6 +15,7 @@ import BoardMap from "./pages/BoardMap";
 import WorkspaceCalendar from "./pages/WorkspaceCalendar";
 import WorkspaceTable from "./pages/WorkspaceTable";
 import Profile from "./pages/Profile";
+import Documentacao from "./pages/Documentacao";
 import MinhaEquipe from "./pages/MinhaEquipe";
 import BugReports from "./pages/BugReports";
 import AbrirCartao from "./pages/AbrirCartao";
@@ -49,6 +50,7 @@ export default function App() {
         <Route path="/todos/calendario" element={<WorkspaceCalendar />} />
         <Route path="/todos/tabela" element={<WorkspaceTable />} />
         <Route path="/perfil" element={<Profile />} />
+        <Route path="/documentacao" element={<Documentacao />} />
         <Route path="/equipe" element={<MinhaEquipe />} />
         <Route path="/bugs" element={<BugReports />} />
         <Route path="/ecommerce/vendas-online" element={<EcommerceVendas />} />

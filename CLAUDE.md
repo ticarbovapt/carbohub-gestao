@@ -5667,6 +5667,24 @@ MESMAS telas do Sales, com o texto vindo de lá — mudou a tela, mude nos dois.
    Viagens à vista de qualquer usuário do Ops); o Dashboard de Produção mostra
    `envase`/`rotulagem` sem rótulo, em minúsculo.
 
+### Documentação do Marketing — `/documentacao` (26/10/2026)
+Mesmo motor, em `apps/mkt` (item na seção Ajuda do `Layout.tsx`). 19 seções, 79
+prints. `ecommerce.ts` e `esteira.ts` documentam as telas IDÊNTICAS do Admin (e a
+Esteira/Mensagens do Atendimento): o texto foi escrito para ser copiado para lá.
+Ordem combinada dos próximos (a do seletor de apps): TI, Atendimento, Admin,
+Academy; Finanças por último.
+1. ✅ **Corrigido no caminho: o pino do Mapa do quadro saía QUEBRADO, também em
+   produção** — o Leaflet 1.9 prefixa o caminho detectado pelo CSS ao PNG
+   importado. `delete L.Icon.Default.prototype._getIconUrl` antes do
+   `mergeOptions` (`BoardMap.tsx`). Componente novo com Leaflet: o mesmo par.
+2. ⚠️ O `client.ts` do mkt exporta `SUPABASE_URL`/`SUPABASE_PUBLISHABLE_KEY`, e o
+   mock do harness também precisa exportá-las.
+3. Achados na leitura, NÃO corrigidos: a home do Marketing ainda é a tela
+   provisória ("Estamos montando…", dois atalhos); Campanhas é "Em construção";
+   na Esteira, "Últimos envios" não tem ícone para lido/entregue/falhou, a
+   Régua de recompra mostra os números do quadro de entrega no topo, e o
+   contador "N/6 ligadas" soma recompra e carrinho mas divide por 6.
+
 ### Carbo Pré-Vendas — o OITAVO app (06/10/2026)
 `prevendas.carbohub.com.br`, flag `carbo_prevendas`, cor lima `#65A30D`. É o
 app dos SDRs: qualificam o lead e repassam ao closer (que trabalha no Sales).

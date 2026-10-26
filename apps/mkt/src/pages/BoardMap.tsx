@@ -15,6 +15,9 @@ import { getAccent } from "@/lib/mktTheme";
 
 // Fix clássico do ícone default do Leaflet com bundlers (Vite): aponta os PNGs
 // importados em vez de caminhos relativos quebrados.
+// ⚠️ Sem o `delete`, o Leaflet 1.9 prefixa o caminho detectado pelo CSS ao
+// endereço importado e o pino sai com a imagem quebrada (caminho duplicado).
+delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: unknown })._getIconUrl;
 L.Icon.Default.mergeOptions({ iconUrl: markerIcon, iconRetinaUrl: markerIcon2x, shadowUrl: markerShadow });
 
 // Ajusta o zoom pra caber todos os pontos.

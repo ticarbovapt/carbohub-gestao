@@ -1,6 +1,6 @@
 import { useMemo, useState, useRef } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
-import { Home as HomeIcon, MessagesSquare, Megaphone, Trello, Globe, Truck, Target } from "lucide-react";
+import { Home as HomeIcon, MessagesSquare, Megaphone, Trello, Globe, Truck, Target, BookOpen } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAccessPing } from "@/hooks/useAccessPing";
@@ -58,6 +58,9 @@ export function Layout() {
         { to: "/ecommerce/esteira", label: "Esteira do On-line", icon: Truck },
         { to: "/ecommerce/metas", label: "Acompanhamento de Metas", icon: Target },
         { to: "/ecommerce/anuncios", label: "Anúncios da Meta", icon: Megaphone },
+    ] },
+    { label: "Ajuda", items: [
+        { to: "/documentacao", label: "Documentação", icon: BookOpen },
     ] },
   ];
 
