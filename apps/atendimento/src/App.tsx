@@ -5,6 +5,7 @@ import Login from "./pages/Login";
 import Home from "./pages/Home";
 import BugReports from "./pages/BugReports";
 import Profile from "./pages/Profile";
+import Documentacao from "./pages/Documentacao";
 import Vender from "./pages/Vender";
 import Chat from "./pages/Chat";
 import Conversas from "./pages/Conversas";
@@ -44,6 +45,7 @@ export default function App() {
         <Route path="/ecommerce/esteira" element={<EsteiraOnline />} />
         <Route path="/ecommerce/mensagens" element={<MensagensCliente />} />
         <Route path="/perfil" element={<Profile />} />
+        <Route path="/documentacao" element={<Documentacao />} />
         {/* Rota inexistente: diz que não existe, em vez de cair na home calado. */}
         <Route path="*" element={<PaginaNaoEncontrada />} />
       </Route>

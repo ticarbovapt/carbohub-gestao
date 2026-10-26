@@ -1,6 +1,6 @@
 import { useMemo, useState, useRef } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
-import { MessagesSquare, LayoutDashboard, MessageCircle, PackageSearch, Send } from "lucide-react";
+import { MessagesSquare, LayoutDashboard, MessageCircle, PackageSearch, Send, BookOpen } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAccessPing } from "@/hooks/useAccessPing";
@@ -61,6 +61,9 @@ export function Layout() {
         { to: "/conversas", label: "Conversas", icon: MessageCircle },
         { to: "/ecommerce/esteira", label: "Esteira do On-line", icon: PackageSearch },
         { to: "/ecommerce/mensagens", label: "Mensagens ao Cliente", icon: Send },
+    ] },
+    { label: "Ajuda", items: [
+        { to: "/documentacao", label: "Documentação", icon: BookOpen },
     ] },
   ];
 

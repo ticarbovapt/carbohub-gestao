@@ -5698,6 +5698,16 @@ harness: demandas (Visão geral + quadro), sistema (Status + Academy), usuarios
    todo print. `profiles`/`carbo_bug_reports` idem (usuarios, demandas).
 3. Sem print de "Conta criada!" (o mock devolve null nas edge functions).
 
+### Documentação do Atendimento — `/documentacao` (26/10/2026)
+Mesmo motor, em `apps/atendimento` (item na seção Ajuda). 11 seções, 44 prints.
+`esteira.ts`/`fx_esteira.ts`/`shots_esteira.mjs` são CÓPIA do Marketing (a mesma
+tela); a área própria é `conversas` (a lista e a conversa aberta). Sem Minha Equipe
+(o app não tem a tela).
+1. ⚠️ O campo de data do "Agendar" só sai em pt-BR com `LANG=pt_BR.UTF-8
+   LANGUAGE=pt_BR` na captura; sem isso o Chromium mostra `10/26/2026 PM`.
+2. Achado, NÃO corrigido: em 1440 px o painel "Respostas rápidas" fica em parte
+   atrás da coluna da lista (o print foi feito em 1920).
+
 ### Carbo Pré-Vendas — o OITAVO app (06/10/2026)
 `prevendas.carbohub.com.br`, flag `carbo_prevendas`, cor lima `#65A30D`. É o
 app dos SDRs: qualificam o lead e repassam ao closer (que trabalha no Sales).
