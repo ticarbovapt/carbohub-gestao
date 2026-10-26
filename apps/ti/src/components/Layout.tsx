@@ -2,7 +2,7 @@ import { useMemo, useState, useRef } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import {
   LifeBuoy, MessagesSquare, ShoppingCart, Bug, Gauge, Users as UsersIcon, LayoutDashboard, Megaphone,
-  GraduationCap, ListTree, BellRing, ShieldCheck, Activity,
+  GraduationCap, ListTree, BellRing, ShieldCheck, Activity, BookOpen,
 } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -69,6 +69,9 @@ export function Layout() {
     { label: "Ferramentas", items: [
         { to: "/vender", label: "Vender", icon: ShoppingCart },
         { to: "/equipe", label: "Minha equipe", icon: UsersIcon },
+    ] },
+    { label: "Ajuda", items: [
+        { to: "/documentacao", label: "Documentação", icon: BookOpen },
     ] },
   ];
 

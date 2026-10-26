@@ -5685,6 +5685,19 @@ Academy; Finanças por último.
    Régua de recompra mostra os números do quadro de entrega no topo, e o
    contador "N/6 ligadas" soma recompra e carrinho mas divide por 6.
 
+### Documentação do TI — `/documentacao` (26/10/2026)
+Mesmo motor, em `apps/ti` (item na seção Ajuda do `Layout.tsx`). Áreas do
+harness: demandas (Visão geral + quadro), sistema (Status + Academy), usuarios
+(Usuários, Estrutura, Quem recebe a venda), auditoria (Central, Acompanhamento,
+Último acesso, Adoção do Chat). `comuns.ts`/`comercial.ts` são os do Sales/Ops/Mkt.
+1. ⚠️ Usuários, Estrutura, Status e Academy NÃO mudam para gestor; Auditoria,
+   Acompanhamento e Último acesso só RESPONDEM a gestor (o banco recusa o resto) —
+   por isso os prints dessas três são todos do gestor.
+2. ⚠️ `carbo_status_aviso` e `academy_acessos_fila` respondem por ROTA no harness:
+   fora de `/status` e `/academy` voltam vazias, senão a tarja e o selo aparecem em
+   todo print. `profiles`/`carbo_bug_reports` idem (usuarios, demandas).
+3. Sem print de "Conta criada!" (o mock devolve null nas edge functions).
+
 ### Carbo Pré-Vendas — o OITAVO app (06/10/2026)
 `prevendas.carbohub.com.br`, flag `carbo_prevendas`, cor lima `#65A30D`. É o
 app dos SDRs: qualificam o lead e repassam ao closer (que trabalha no Sales).

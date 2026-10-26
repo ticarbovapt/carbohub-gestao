@@ -19,6 +19,7 @@ import AvisoVendaOnline from "./pages/AvisoVendaOnline";
 import Auditoria from "./pages/Auditoria";
 import Acompanhamento from "./pages/Acompanhamento";
 import UltimoAcesso from "./pages/UltimoAcesso";
+import Documentacao from "./pages/Documentacao";
 import { isCarbohubDomain, goToHubLogin } from "@/lib/sso";
 import { PaginaNaoEncontrada } from "@carbo/shell";
 
@@ -53,6 +54,7 @@ export default function App() {
         <Route path="/ultimo-acesso" element={<UltimoAcesso />} />
         <Route path="/perfil" element={<Profile />} />
         <Route path="/equipe" element={<MinhaEquipe />} />
+        <Route path="/documentacao" element={<Documentacao />} />
         {/* Rota inexistente: diz que não existe, em vez de cair na home calado. */}
         <Route path="*" element={<PaginaNaoEncontrada />} />
       </Route>
