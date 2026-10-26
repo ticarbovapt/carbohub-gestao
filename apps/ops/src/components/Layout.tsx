@@ -1,6 +1,6 @@
 import { useMemo, useState, useRef } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
-import { MessagesSquare } from "lucide-react";
+import { BookOpen, MessagesSquare } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { Sidebar, type ShellNavSection, StatusTarja, usePaginaAtual } from "@carbo/shell";
 import logoCarbo from "@/assets/logo-carbo.png";
@@ -60,6 +60,7 @@ export function Layout() {
     { label: "Suprimentos", items: ["/suprimentos", "/suprimentos/vendedores", "/compras"].map(it) },
     { label: "Logística", items: ["/logistica", "/logistica/pos-venda", "/logistica/recorrencias", "/logistica/viagens"].map(it) },
     { label: "Operação de Campo", items: ["/campo/os", "/campo/alertas"].map(it) },
+    { label: "Ajuda", items: [{ to: "/documentacao", label: "Documentação", icon: BookOpen }] },
   ];
 
   // Mobile: abre a gaveta. Desktop: recolhe/expande a sidebar (rail).

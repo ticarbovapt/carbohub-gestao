@@ -5651,6 +5651,22 @@ Mesmo molde da do Pré-Vendas (seção acima), com o motor COPIADO para `apps/cr
    "Sua meta do mês" mostra o % do TIME; o rodapé das Metas diz "status pedido" e
    a RPC conta só faturado sem serviço; o vendedor cria PDV e não edita.
 
+### Documentação do Ops — `/documentacao` (26/10/2026)
+Mesmo motor do Sales, copiado para `apps/ops` (item "Documentação" na seção Ajuda
+do `Layout.tsx`). 20 seções, 88 prints. `comuns.ts` (Vender, Bugs, Perfil),
+`campo.ts` (Ordens de Serviço) e `comercial.ts` (Minha Equipe, Chat) são as
+MESMAS telas do Sales, com o texto vindo de lá — mudou a tela, mude nos dois.
+1. ⚠️ **Fixture de tabela que várias áreas leem responde por ROTA** (`porRota` em
+   `fx_logistica.ts`, `daProducao` em `fx_suprimentos.ts`): `warehouse_stock`,
+   `carboze_orders`, `production_orders`… Sem isso a área que vem por último em
+   `areas.ts` atropela as outras (a Produção mostrava "falta insumo" em tudo).
+2. ⚠️ O mock ignora `.not()`/`.or()`: o print do Rastreio data entregues e
+   cancelados com mais de 30 dias para não saírem em dobro.
+3. Achados na leitura, NÃO corrigidos: Produção, Suprimentos e Logística não
+   mudam para gestor (`canManage` fixo `true` na Produção; Aprovar/Reprovar das
+   Viagens à vista de qualquer usuário do Ops); o Dashboard de Produção mostra
+   `envase`/`rotulagem` sem rótulo, em minúsculo.
+
 ### Carbo Pré-Vendas — o OITAVO app (06/10/2026)
 `prevendas.carbohub.com.br`, flag `carbo_prevendas`, cor lima `#65A30D`. É o
 app dos SDRs: qualificam o lead e repassam ao closer (que trabalha no Sales).

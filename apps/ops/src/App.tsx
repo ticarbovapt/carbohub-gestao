@@ -4,6 +4,7 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Layout } from "./components/Layout";
 import Home from "./pages/Home";
 import Profile from "./pages/Profile";
+import Documentacao from "./pages/Documentacao";
 import BugReports from "./pages/BugReports";
 import MinhaEquipe from "./pages/MinhaEquipe";
 import EmBreve from "./pages/EmBreve";
@@ -47,6 +48,7 @@ export default function App() {
       <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route path="/" element={<Home />} />
         <Route path="/perfil" element={<Profile />} />
+        <Route path="/documentacao" element={<Documentacao />} />
         <Route path="/bugs" element={<BugReports />} />
         <Route path="/equipe" element={<MinhaEquipe />} />
         <Route path="/vender" element={<Vender />} />
