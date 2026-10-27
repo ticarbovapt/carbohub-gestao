@@ -1603,9 +1603,14 @@ export default function Vender() {
                 {semPreco && (
                   <p className="flex items-start gap-1.5 text-xs text-destructive">
                     <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-px" />
-                    Este produto ainda não tem preço na tabela. Peça à gestão para cadastrar em
-                    <b className="mx-1">Admin › Comercial › Tabela de preços</b> — o valor não é
-                    digitado aqui.
+                    {gestor ? (
+                      <span>Este produto ainda não tem preço na tabela. Digite o valor no campo
+                        de preço ou cadastre em <b>Admin › Comercial › Tabela de preços</b>.</span>
+                    ) : (
+                      <span>Este produto ainda não tem preço na tabela. Peça à gestão para cadastrar em
+                        <b className="mx-1">Admin › Comercial › Tabela de preços</b> — o valor não é
+                        digitado aqui.</span>
+                    )}
                   </p>
                 )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_90px_120px_auto] gap-3 items-end">
@@ -1720,21 +1725,66 @@ export default function Vender() {
                   </div>
                   <div className="space-y-1.5">
                     <Label>Preço Unit. (R$)</Label>
-                    {/* Somente leitura: o preço é o da tabela mantida pela
-                        gestão. Deixar editável reabriria a porta para o mesmo
-                        produto sair por valores diferentes em cada pedido. */}
-                    <Input
-                      readOnly tabIndex={-1}
-                      className={`cursor-default ${r.productId && !r.unitPrice ? "border-destructive/60 text-destructive" : "bg-muted/40"}`}
-                      value={
-                        !r.productId ? ""
-                        : r.unitPrice ? brl(r.unitPrice)
-                        : "sem preço"
+                    {(() => {
+                      const tabela = produtos.find((x) => x.id === r.productId)?.sale_price ?? null;
+                      const alterado = !!r.productId && tabela != null && Math.abs(r.unitPrice - tabela) > 0.004;
+                      // GESTOR pode digitar o preço; o colaborador continua com
+                      // o da tabela. Nasce com o valor da tabela (onProduct) e
+                      // a regra de preço não muda: é um passo a mais, só do
+                      // gestor. ⚠️ Bonificação fica travada — o preço dela
+                      // ESPELHA o do pai e a linha sai a 100% de desconto.
+                      if (gestor && r.productId && !ehBonificacao(r.productId)) {
+                        return (
+                          <>
+                            <Input
+                              inputMode="decimal"
+                              className={alterado ? "border-amber-500/70" : undefined}
+                              value={r.unitPriceStr ?? (r.unitPrice ? String(r.unitPrice).replace(".", ",") : "")}
+                              onChange={(e) => {
+                                const txt = e.target.value.replace(/[^\d,.]/g, "");
+                                // Com vírgula, o ponto é milhar ("1.234,56"); sem vírgula,
+                                // o ponto é o decimal ("13.50") — senão viraria 1350.
+                                const n = Number(txt.includes(",") ? txt.replace(/\./g, "").replace(",", ".") : txt);
+                                updateRow(r.id, { unitPriceStr: txt, unitPrice: Number.isFinite(n) ? Math.round(n * 100) / 100 : 0 });
+                              }}
+                              onBlur={() => updateRow(r.id, { unitPriceStr: r.unitPrice ? r.unitPrice.toFixed(2).replace(".", ",") : "" })}
+                              title="Gestor: o preço vem da tabela e pode ser alterado aqui."
+                              placeholder="0,00" />
+                            {alterado && (
+                              <p className="text-[11px] text-amber-600 dark:text-amber-400 leading-tight">
+                                Tabela {brl(tabela!)} ·{" "}
+                                <button type="button" className="underline"
+                                  onClick={() => updateRow(r.id, { unitPrice: tabela!, unitPriceStr: tabela!.toFixed(2).replace(".", ",") })}>
+                                  voltar
+                                </button>
+                              </p>
+                            )}
+                          </>
+                        );
                       }
-                      title={r.productId && !r.unitPrice
-                        ? "Produto sem preço definido — a gestão precisa cadastrar em Admin › Tabela de preços."
-                        : "Preço definido pela gestão em Admin › Tabela de preços."}
-                      placeholder="—" />
+                      return (
+                        <>
+                          {/* Somente leitura: o preço é o da tabela mantida pela
+                              gestão. Deixar editável reabriria a porta para o mesmo
+                              produto sair por valores diferentes em cada pedido. */}
+                          <Input
+                            readOnly tabIndex={-1}
+                            className={`cursor-default ${r.productId && !r.unitPrice ? "border-destructive/60 text-destructive" : "bg-muted/40"}`}
+                            value={
+                              !r.productId ? ""
+                              : r.unitPrice ? brl(r.unitPrice)
+                              : "sem preço"
+                            }
+                            title={r.productId && !r.unitPrice
+                              ? "Produto sem preço definido — a gestão precisa cadastrar em Admin › Tabela de preços."
+                              : "Preço definido pela gestão em Admin › Tabela de preços."}
+                            placeholder="—" />
+                          {alterado && (
+                            <p className="text-[11px] text-muted-foreground leading-tight">Preço definido pela gestão</p>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                   <div className="flex items-center justify-between sm:justify-end gap-3 sm:pb-2">
                     <div className="text-right">

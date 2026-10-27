@@ -234,6 +234,23 @@ supabase/migrations/20261019000000_faixa_de_preco_por_tipo_de_cliente.sql
    cadastro do cliente. Enquanto não existe, a mitigação é o hint aparecer na
    tela DEPOIS do clique ("Preço de Microdistribuidor — compra em volume…").
 
+### `/vender`: GESTOR pode digitar o preço unitário (27/10/2026)
+Pedido do dono do processo: o preço continua vindo da TABELA (padrão, PDV,
+micro…), mas o gestor pode alterá-lo à mão na linha; o colaborador não. Só
+TELA — a regra de preço não mudou, nenhuma coluna nem RPC nova.
+1. Gestor = `isGestor` do `AuthContext` (o mesmo do "Responsável pela venda").
+   A linha nasce com o preço da tabela (`onProduct`); mudou, o campo fica âmbar
+   com "Tabela R$ X · voltar". Trocar de produto volta ao preço da tabela.
+2. ⚠️ **Bonificação continua travada**: o preço do gêmeo espelha o do pai e a
+   linha sai a 100% — editar mudaria o "tamanho do brinde" no PDF.
+3. ⚠️ O preço digitado é o `unit_price` do item: vai assim para o PDF e para a
+   NF (é o valor CHEIO na nota, como a faixa — não é desconto). Colaborador que
+   reabre o orçamento vê o valor travado com "Preço definido pela gestão".
+4. ⚠️ Preço reduzido à mão NÃO passa pela alçada de desconto (a alçada olha o
+   desconto da LINHA, não a diferença para a tabela). Se precisar, a trava é
+   comparar com `sale_price` no `erroDeModo`/alçada.
+5. Vírgula = decimal ("13,50", "1.234,56"); só ponto também é decimal ("13.50").
+
 ### Quem APARECE no dropdown do /vender — `aparece_no_vender`
 Medido em 29/09/2026: **11 produtos reais e 11 gêmeos de bonificação = 22
 linhas**, mais as faixas. Metade da lista é gêmeo, e gêmeo é usado numa venda a
