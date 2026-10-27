@@ -55,8 +55,52 @@ function RestrictedNotice() {
 }
 
 // ── KPI card ──────────────────────────────────────────────────────────────────
-function KpiCard({ title, value, sub, Icon, accent, iconBg }: {
+/**
+ * A quebra venda × frete dentro do card.
+ *
+ * ⚠️ Fica ABAIXO do número grande, não no lugar dele. O `total` continua sendo
+ * o principal porque é o bruto do pedido/NF — é ele que concilia com o Bling e
+ * com as metas. O que faltava era dizer quanto desse bruto é produto e quanto
+ * é o frete que o cliente pagou: no on-line de out/2026, R$ 24k dos R$ 210k.
+ *
+ * A barra usa a cor do próprio card para a venda e um cinza neutro para o
+ * frete — frete não é conquista comercial, não deve disputar atenção.
+ */
+function QuebraVendaFrete({ venda, frete, barra }: { venda: number; frete: number; barra: string }) {
+  const total = venda + frete;
+  if (total <= 0) return null;
+  const pctFrete = (frete / total) * 100;
+
+  // Sem frete não há o que quebrar — a linha sairia como "Frete R$ 0 (0%)",
+  // ruído puro nos canais que não cobram entrega.
+  if (frete <= 0) {
+    return (
+      <p className="mt-1 text-[11px] text-board-muted">
+        Venda {fmtK(venda)} · <span className="opacity-70">sem frete</span>
+      </p>
+    );
+  }
+
+  return (
+    <div className="mt-1.5">
+      <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-board-muted/20" role="presentation">
+        <div className={barra} style={{ width: `${100 - pctFrete}%` }} />
+        <div className="bg-board-muted/50" style={{ width: `${pctFrete}%` }} />
+      </div>
+      <p
+        className="mt-1 text-[11px] text-board-muted"
+        title={`Venda ${venda.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} · Frete ${frete.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`}
+      >
+        Venda {fmtK(venda)} · Frete {fmtK(frete)} ({pctFrete.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}%)
+      </p>
+    </div>
+  );
+}
+
+function KpiCard({ title, value, sub, Icon, accent, iconBg, quebra }: {
   title: string; value: string; sub?: string; Icon: React.ElementType; accent: string; iconBg: string;
+  /** Barra venda/frete, entre o número e o subtítulo. */
+  quebra?: React.ReactNode;
 }) {
   const len = value.length;
   // No celular os cards vão DOIS por linha: o número desce um degrau até `sm`.
@@ -67,6 +111,7 @@ function KpiCard({ title, value, sub, Icon, accent, iconBg }: {
         <div className="min-w-0 flex-1">
           <p className="text-xs font-medium text-board-muted truncate">{title}</p>
           <p className={`mt-1.5 font-bold text-board-text leading-tight break-words ${valSize}`}>{value}</p>
+          {quebra}
           {sub && <p className="mt-1 text-xs text-board-muted leading-snug line-clamp-3 sm:line-clamp-2" title={sub}>{sub}</p>}
         </div>
         <div className={`flex h-7 w-7 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-lg ${iconBg}`}><Icon className="h-4 w-4 sm:h-4.5 sm:w-4.5" /></div>
@@ -465,16 +510,21 @@ export default function DashboardComercial() {
             medição que provou isso está no `useServicosNfse`. */}
         <div className="grid gap-2 sm:gap-3 grid-cols-2 lg:grid-cols-4">
           <KpiCard title="CarboZé on-line" value={fmtK(data?.totalOnline ?? 0)}
+                   quebra={<QuebraVendaFrete venda={data?.vendaOnline ?? 0} frete={data?.freteOnline ?? 0} barra="bg-blue-500" />}
                    sub={`${data?.qtdOnline ?? 0} pedidos · marketplaces e loja própria`}
                    Icon={Globe} accent="border-l-blue-500" iconBg="bg-blue-500/10 text-blue-500" />
           <KpiCard title="Comercial Expansão" value={fmtK(data?.totalNaoOnline ?? 0)}
+                   quebra={<QuebraVendaFrete venda={data?.vendaNaoOnline ?? 0} frete={data?.freteNaoOnline ?? 0} barra="bg-green-500" />}
                    sub={`${data?.qtdNaoOnline ?? 0} pedidos · venda direta e revenda`}
                    Icon={ShoppingCart} accent="border-l-green-500" iconBg="bg-green-500/10 text-green-600" />
           <KpiCard title="CarboVAPT" value={fmtK(servicos?.descarbonizacao ?? 0)}
                    sub={`${servicos?.notasDescarbonizacao ?? 0} notas de serviço${servicos?.outros ? ` · +${fmtK(servicos.outros)} em outros serviços` : ""}`}
                    Icon={Wrench} accent="border-l-cyan-500" iconBg="bg-cyan-500/10 text-cyan-500" />
+          {/* ⚠️ CarboVAPT entra INTEIRO como venda: é serviço, não tem frete.
+              Por isso só o produto contribui para a parcela de frete aqui. */}
           <KpiCard title="Faturamento total"
                    value={fmtK((data?.totalBRL ?? 0) + (servicos?.total ?? 0))}
+                   quebra={<QuebraVendaFrete venda={(data?.vendaBRL ?? 0) + (servicos?.total ?? 0)} frete={data?.freteBRL ?? 0} barra="bg-amber-400" />}
                    sub={`${(data?.totalVendas ?? 0) + (servicos?.notas ?? 0)} vendas · produto + serviço`}
                    Icon={DollarSign} accent="border-l-amber-400" iconBg="bg-amber-400/10 text-amber-500" />
         </div>
@@ -521,7 +571,17 @@ export default function DashboardComercial() {
           {/* ⚠️ O ticket GERAL não é a média das três médias — é o total
               dividido pelo total. Média de médias daria peso igual a um canal
               de 320 notas e a outro de 1.100 pedidos. */}
+          {/* ⚠️ O ticket de cima é o de SEMPRE (sobre o bruto) e não muda — é
+              o que compara com o histórico. O "de venda" é o mesmo cálculo sem
+              o frete no numerador: no on-line de out/2026 dá ~R$ 113 contra
+              R$ 127, e a diferença é exatamente o frete que o ticket vinha
+              contando como receita de produto. */}
           <KpiCard title="Ticket Médio" value={fmtK(ticketGeral)}
+                   quebra={(data?.freteBRL ?? 0) > 0 ? (
+                     <p className="mt-1 text-[11px] text-board-muted">
+                       ticket de venda {fmtK(data?.ticketVenda ?? 0)} <span className="opacity-70">(sem frete)</span>
+                     </p>
+                   ) : undefined}
                    sub={`on-line ${fmtK(data?.ticketOnline ?? 0)} · Comercial Expansão ${fmtK(data?.ticketNaoOnline ?? 0)} · CarboVAPT ${fmtK(servicos?.ticketMedio ?? 0)}`}
                    Icon={TrendingUp} accent="border-l-violet-400" iconBg="bg-violet-400/10 text-violet-500" />
         </div>

@@ -77,6 +77,21 @@ export interface ComercialData {
   qtdNaoOnline: number;
   ticketOnline: number;
   ticketNaoOnline: number;
+  // ── A quebra do bruto: quanto é produto, quanto é frete ───────────────
+  // ⚠️ Acréscimo, não substituição. `totalOnline`/`totalNaoOnline`/`totalBRL`
+  // continuam sendo o bruto e seguem alimentando metas, Crescimento Anual e
+  // Vendas por Canal com os MESMOS números de antes.
+  // Invariante: venda + frete = total, em cada canal e no agregado.
+  vendaOnline: number;
+  freteOnline: number;
+  vendaNaoOnline: number;
+  freteNaoOnline: number;
+  vendaBRL: number;
+  freteBRL: number;
+  /** Ticket médio sem o frete no numerador. */
+  ticketVendaOnline: number;
+  ticketVendaNaoOnline: number;
+  ticketVenda: number;
   // ⚠️ Chaveado por DOCUMENTO, não por nome. É o que permite juntar a
   // recorrência desta base com a da NFS-e sem misturar empresas diferentes —
   // a mesma lição do cadastro de PDV, onde "Postos RCM (Afogados)" e "Posto RF
@@ -106,7 +121,43 @@ interface CarbozeOrderRow {
   segmento: string | null;
   conta_metrica: boolean | null;
   data_efetiva: string | null;
+  // ── A quebra venda × frete ────────────────────────────────────────────
+  // As duas integrações do Bling gravam `shipping_cost = 0` em TODOS os
+  // pedidos on-line: o frete cobrado do cliente fica embutido em `total` e
+  // `subtotal` guarda só o produto. Sem separar, o card lê frete como receita
+  // — R$ 210k onde a venda de produto é R$ 186k (01→27/10/2026).
+  subtotal: number | null;
+  discount: number | null;
+  shipping_cost: number | null;
 }
+
+/**
+ * O FRETE de um pedido. A fórmula vive em UM lugar só.
+ *
+ * `shipping_cost` quando a integração gravou (134 linhas na base hoje); senão
+ * o fallback `total − subtotal + desconto`, nunca negativo.
+ *
+ * ⚠️ É a MESMA conta da migração 20261135, que acrescenta `valor_frete` e
+ * `valor_venda` à `carbo_vendas_metrica`. Ela está aqui, e não na view,
+ * porque a migração ainda NÃO foi aplicada em produção — e pedir à view uma
+ * coluna que não existe devolve **400**, derrubando a tela inteira em vez de
+ * degradar (é exatamente o que já aconteceu com `customer_doc`; ver a nota no
+ * bloco de consulta abaixo).
+ *
+ * Quando a migração entrar: trocar as três colunas cruas do `select` por
+ * `valor_venda, valor_frete` e apagar estas duas funções. Até lá a fórmula
+ * existe uma vez só — duas cópias seria o começo da próxima história de
+ * "14 definições de venda que conta em 26 lugares".
+ */
+const freteDoPedido = (r: CarbozeOrderRow): number => {
+  const envio = Number(r.shipping_cost) || 0;
+  if (envio > 0) return envio;
+  return Math.max((Number(r.total) || 0) - (Number(r.subtotal) || 0) + (Number(r.discount) || 0), 0);
+};
+
+/** Venda = total − frete. Por construção, venda + frete = total SEMPRE. */
+const vendaDoPedido = (r: CarbozeOrderRow): number =>
+  (Number(r.total) || 0) - freteDoPedido(r);
 
 export interface ComercialFilters { from?: string; to?: string; segmento?: string }
 
@@ -154,7 +205,7 @@ export function useDashComercial(vendedorId: string | null = null, months = 12, 
       const rows = await lerTudo<CarbozeOrderRow>((de, ate) =>
         supabase
           .from("carbo_vendas_metrica" as never)
-          .select("id, total, status, created_at, customer_name, vendedor_id, segmento, conta_metrica, data_efetiva")
+          .select("id, total, status, created_at, customer_name, vendedor_id, segmento, conta_metrica, data_efetiva, subtotal, discount, shipping_cost")
           .order("data_efetiva", { ascending: false })
           .order("id", { ascending: false })
           .range(de, ate) as never,
@@ -265,6 +316,29 @@ export function useDashComercial(vendedorId: string | null = null, months = 12, 
       const totalNaoOnline = totalBRL - totalOnline;
       const qtdOnline = pedidos.filter((v) => v.segmento === "online").length;
       const qtdNaoOnline = pedidos.length - qtdOnline;
+
+      // ── Venda × frete, por canal ────────────────────────────────────────
+      // ⚠️ `total` NÃO muda: segue sendo o bruto, e é ele que alimenta metas,
+      // Crescimento Anual, Evolução Mensal e Vendas por Canal. Estas somas são
+      // ACRÉSCIMO — a quebra de quanto do bruto é produto e quanto é frete.
+      const onlineRows = pedidos.filter((v) => v.segmento === "online");
+      const naoOnlineRows = pedidos.filter((v) => v.segmento !== "online");
+      const soma = (lista: CarbozeOrderRow[], f: (r: CarbozeOrderRow) => number) =>
+        lista.reduce((s, r) => s + f(r), 0);
+
+      const vendaOnline = soma(onlineRows, vendaDoPedido);
+      const freteOnline = soma(onlineRows, freteDoPedido);
+      const vendaNaoOnline = soma(naoOnlineRows, vendaDoPedido);
+      const freteNaoOnline = soma(naoOnlineRows, freteDoPedido);
+      const vendaBRL = vendaOnline + vendaNaoOnline;
+      const freteBRL = freteOnline + freteNaoOnline;
+
+      // Ticket de VENDA: o ticket médio de sempre tira o frete do numerador.
+      // No on-line de out/2026 dá ~R$ 112,79 contra R$ 127,17 do atual — a
+      // diferença é exatamente o frete que o ticket vinha cobrando de receita.
+      const ticketVendaOnline = qtdOnline > 0 ? vendaOnline / qtdOnline : 0;
+      const ticketVendaNaoOnline = qtdNaoOnline > 0 ? vendaNaoOnline / qtdNaoOnline : 0;
+      const ticketVenda = pedidos.length > 0 ? vendaBRL / pedidos.length : 0;
       const totalVendas = pedidos.length;
       let maiorVenda = 0, maiorCliente = "—";
       const byCliente = new Map<string, number>();
@@ -324,6 +398,8 @@ export function useDashComercial(vendedorId: string | null = null, months = 12, 
 
       return {
         totalBRL, totalOnline, totalNaoOnline, qtdOnline, qtdNaoOnline,
+        vendaOnline, freteOnline, vendaNaoOnline, freteNaoOnline, vendaBRL, freteBRL,
+        ticketVendaOnline, ticketVendaNaoOnline, ticketVenda,
         ticketOnline, ticketNaoOnline, porCliente, totalVendas, ticketMedio, maiorVenda, maiorCliente, topCliente, topQtd,
         monthly, annualGrowth, kpis, growth,
       };
