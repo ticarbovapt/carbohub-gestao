@@ -1,6 +1,6 @@
 import { useMemo, useState, useRef } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
-import { MessagesSquare } from "lucide-react";
+import { MessagesSquare, BookOpen } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAccessPing } from "@/hooks/useAccessPing";
@@ -72,6 +72,9 @@ export function Layout() {
     // que é quem monta os grupos. Rota nova entra nos dois, na MESMA tarefa —
     // a `/integracoes/nfse` nasceu só no primeiro e não apareceu para ninguém.
     { label: "Configurações", items: [item("/funcionarios"), item("/integracoes/bling"), item("/integracoes/bling2"), item("/integracoes/nfse")] },
+    { label: "Ajuda", items: [
+        { to: "/documentacao", label: "Documentação", icon: BookOpen },
+    ] },
   ];
 
   // Mobile: abre a gaveta. Desktop: recolhe/expande a sidebar (rail).

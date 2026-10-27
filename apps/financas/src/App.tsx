@@ -21,6 +21,7 @@ import BugReports from "./pages/BugReports";
 import Vender from "./pages/Vender";
 import Comissionamento from "./pages/Comissionamento";
 import Funcionarios from "./pages/Funcionarios";
+import Documentacao from "./pages/Documentacao";
 import { PaginaNaoEncontrada } from "@carbo/shell";
 
 // ⚠️ `<Navigate>` DESCARTA a query — e é a query que carrega filtro e período
@@ -91,6 +92,7 @@ export default function App() {
         <Route path="/equipe" element={<MinhaEquipe />} />
         <Route path="/bugs" element={<BugReports />} />
         <Route path="/vender" element={<Vender />} />
+        <Route path="/documentacao" element={<Documentacao />} />
         {/* Rota inexistente: diz que não existe, em vez de cair na home calado. */}
         <Route path="*" element={<PaginaNaoEncontrada />} />
       </Route>

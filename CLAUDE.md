@@ -5741,6 +5741,30 @@ Com isso os OITO apps + Academy/Portal/md têm documentação; falta só o Finan
    não); o rodapé do Placar diz "configuração no Carbo Ops"; Licenciados escreve
    "Leves E Caminhonetes"; na Aprovações a 1440 px o ✕ de recusar sai cortado.
 
+### Documentação do Finanças — `/documentacao` (27/10/2026)
+Mesmo motor, em `apps/financas` (item na seção Ajuda). 29 seções, 105 prints.
+Áreas do harness: contas (pagar, receber, conta nova no Bling, baixa,
+assinaturas, fluxo, painel, cadastros), vendasfin (faturamento, criar no Bling,
+NFS-e, comissão, pedidos), compras (compras e suprimentos) e config
+(Funcionários, Bling 1/2, NFS-e Nacional). Com isso os OITO apps têm documentação.
+1. **"Bling desconectou? Como conectar de novo"** (`bling-conexao`, pedido do dono
+   do processo para o time não depender dele): conferir a empresa no Bling antes,
+   o passo a passo com print de cada estado (`?mock=desconectado|expirado|falhou`
+   no harness) e os erros do retorno. Tela de integração mudou ⇒ refaça os prints.
+2. **"Conta nova no Bling"** (`nova-conta`) e **"Criar o pedido e a NF no Bling"**
+   (`criar-no-bling`) explicam campo a campo, com "Antes de salvar/confirmar,
+   confira" no fim. ⚠️ Tom neutro: o checklist diz o que conferir, nunca que
+   alguém costuma errar (pedido do dono do processo).
+3. O `mockClient.ts` daqui responde `functions.invoke` por `FIXTURES["fn:<nome>"]`
+   e aplica `.lt`/`.gt` — copie para os outros harnesses se precisar.
+4. Achados, NÃO corrigidos: o "Renovar" do Bling 1/2 (`bling-auth`/`bling2-auth`)
+   desativa a conexão ao falhar SEM a trava `.eq("refresh_token", …)` — clique
+   durante uma renovação automática derruba a conexão recém-renovada; conectar o
+   Bling 1 não exige gestor; Suprimentos deixa qualquer um ajustar estoque (clique
+   na barra do hub) e editar o mínimo; NF de compra abre com 1 parcela mesmo com
+   prazo 30/60/90 da OC; Movimentações mostram o produto pelo id; NFS-e Nacional
+   corta a coluna Arquivos a 1440 px; meses partidos no calendário de aniversários.
+
 ### Carbo Pré-Vendas — o OITAVO app (06/10/2026)
 `prevendas.carbohub.com.br`, flag `carbo_prevendas`, cor lima `#65A30D`. É o
 app dos SDRs: qualificam o lead e repassam ao closer (que trabalha no Sales).

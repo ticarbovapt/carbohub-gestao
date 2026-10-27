@@ -246,16 +246,17 @@ export const SECOES: Secao[] = [
     titulo: "Vender (orçamento e venda)",
     rota: "/vender",
     resumo:
-      "A tela onde nasce o orçamento e a venda. Abre pelo + do topo, pelo atalho Vender da Visão geral, ou pelo card (Montar orçamento), que já traz o cliente preenchido. Os preços vêm da tabela da gestão — ninguém digita preço aqui.",
+      "A tela onde nasce o orçamento e a venda. Abre pelo + do topo, pelo atalho Vender da Visão geral, ou pelo card (Montar orçamento), que já traz o cliente preenchido. Os preços vêm da tabela da gestão; só o gestor pode trocar o preço de uma linha.",
     regras: {
       colaborador: [
         "A venda fica no seu nome: você é o vendedor e a comissão é sua.",
-        "Preço e desconto são os mesmos para todos — o preço vem da tabela e o desconto pode pedir aprovação, conforme a faixa.",
+        "O preço vem da tabela e não se edita; o desconto pode pedir aprovação, conforme a faixa.",
         "Pronta entrega sai da SUA caixa de estoque, quando você tem uma.",
       ],
       gestor: [
         "Tem o quadro “Responsável pela venda”: lança a venda em nome de outra pessoa, e a comissão vai para quem foi escolhido.",
         "Em pronta entrega, o estoque que conta é o da pessoa escolhida.",
+        "Pode digitar o preço unitário de uma linha (o campo fica âmbar e mostra o preço da tabela, com “voltar”). Bonificação continua travada.",
       ],
     },
     blocos: [
@@ -296,7 +297,7 @@ export const SECOES: Secao[] = [
         itens: [
           { n: 1, titulo: "Adicionar Item", texto: "Uma linha nova para outro produto." },
           { n: 2, titulo: "Produto", texto: "Escolha o produto e o preço dele (veja abaixo). O campo mostra o nome completo do que foi escolhido." },
-          { n: 3, titulo: "Quantidade", texto: "Quantas unidades. O preço unitário vem da tabela e não se edita; o total da linha é calculado." },
+          { n: 3, titulo: "Quantidade", texto: "Quantas unidades. O preço unitário vem da tabela e o total da linha é calculado. Só o gestor pode alterar o preço; se ele alterou, quem reabre vê “Preço definido pela gestão”." },
           { n: 4, titulo: "Faixa de preço", texto: "Depois de escolher, a linha confirma qual preço está sendo usado (ex.: Preço de PDV)." },
           { n: 5, titulo: "Desconto", texto: "Em % ou em R$, por linha." },
           { n: 6, titulo: "Bonificação", texto: "O produto de bonificação sai a R$ 0,00 nesta venda e na nota — o desconto de 100% já vem travado." },
