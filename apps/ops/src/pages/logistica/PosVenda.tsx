@@ -654,18 +654,39 @@ export default function PosVenda() {
                     isOver ? "border-carbo-green bg-carbo-green/5" : "border-border bg-board-surface/40"
                   }`}
                 >
-                  <div className="px-3 py-2.5 border-b border-border flex items-center justify-between gap-2 shrink-0">
+                  {/* ⚠️ O somatório fica no CABEÇALHO da coluna, com o
+                      contador, porque é a pergunta que a coluna responde:
+                      "quanto está parado nesta etapa?". A contagem sozinha não
+                      distingue uma coluna com 17 pedidos de R$ 96 de outra com
+                      3 de R$ 15 mil — e é a segunda que trava caixa.
+
+                      Em REAIS CHEIOS, sem abreviar para "R$ 39k": este número
+                      é conferido contra o Bling e contra a fila do faturamento,
+                      e arredondar o que vai ser conciliado gera discussão sobre
+                      diferença que não existe. */}
+                  <div className="px-3 py-2 border-b border-border flex items-start justify-between gap-2 shrink-0">
                     <span className="flex items-center gap-2 text-sm font-semibold min-w-0">
                       <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: stage.color }} />
                       <span className="truncate">{stage.label}</span>
                     </span>
-                    <span className="flex items-center gap-1.5 shrink-0">
-                      {stage.key === "criar_op" && items.some((i) => i.production_done) && (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" title="Produzidos aguardando mover para Em Separação">
-                          🏭 {items.filter((i) => i.production_done).length} pronto{items.filter((i) => i.production_done).length > 1 ? "s" : ""}
+                    <span className="flex flex-col items-end gap-0.5 shrink-0">
+                      <span className="flex items-center gap-1.5">
+                        {stage.key === "criar_op" && items.some((i) => i.production_done) && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" title="Produzidos aguardando mover para Em Separação">
+                            🏭 {items.filter((i) => i.production_done).length} pronto{items.filter((i) => i.production_done).length > 1 ? "s" : ""}
+                          </span>
+                        )}
+                        <span className="text-xs text-muted-foreground tabular-nums">{items.length}</span>
+                      </span>
+                      {items.length > 0 && (
+                        <span
+                          className="text-xs font-semibold tabular-nums leading-none"
+                          style={{ color: stage.color }}
+                          title={`${items.length} pedido(s) nesta etapa`}
+                        >
+                          {brl(items.reduce((s, o) => s + (Number(o.total) || 0), 0))}
                         </span>
                       )}
-                      <span className="text-xs text-muted-foreground tabular-nums">{items.length}</span>
                     </span>
                   </div>
                   <div className="p-2 space-y-2 overflow-y-auto overscroll-contain flex-1 min-h-0">

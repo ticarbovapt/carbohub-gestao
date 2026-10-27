@@ -122,42 +122,23 @@ interface CarbozeOrderRow {
   conta_metrica: boolean | null;
   data_efetiva: string | null;
   // ── A quebra venda × frete ────────────────────────────────────────────
+  //
   // As duas integrações do Bling gravam `shipping_cost = 0` em TODOS os
   // pedidos on-line: o frete cobrado do cliente fica embutido em `total` e
   // `subtotal` guarda só o produto. Sem separar, o card lê frete como receita
   // — R$ 210k onde a venda de produto é R$ 186k (01→27/10/2026).
-  subtotal: number | null;
-  discount: number | null;
-  shipping_cost: number | null;
+  //
+  // ⚠️ A conta mora na VIEW (migração 20261135), não aqui. `valor_frete` usa
+  // `shipping_cost` quando existe e cai em `total − subtotal + desconto` como
+  // fallback; `valor_venda` é `total − valor_frete`. Somam `total` sempre.
+  //
+  // Houve uma versão disto calculada no TypeScript, enquanto a migração
+  // esperava aprovação. Foi removida assim que a view ganhou as colunas: duas
+  // cópias da mesma fórmula é como nasce a próxima história de "14 definições
+  // de venda que conta em 26 lugares".
+  valor_venda: number | null;
+  valor_frete: number | null;
 }
-
-/**
- * O FRETE de um pedido. A fórmula vive em UM lugar só.
- *
- * `shipping_cost` quando a integração gravou (134 linhas na base hoje); senão
- * o fallback `total − subtotal + desconto`, nunca negativo.
- *
- * ⚠️ É a MESMA conta da migração 20261135, que acrescenta `valor_frete` e
- * `valor_venda` à `carbo_vendas_metrica`. Ela está aqui, e não na view,
- * porque a migração ainda NÃO foi aplicada em produção — e pedir à view uma
- * coluna que não existe devolve **400**, derrubando a tela inteira em vez de
- * degradar (é exatamente o que já aconteceu com `customer_doc`; ver a nota no
- * bloco de consulta abaixo).
- *
- * Quando a migração entrar: trocar as três colunas cruas do `select` por
- * `valor_venda, valor_frete` e apagar estas duas funções. Até lá a fórmula
- * existe uma vez só — duas cópias seria o começo da próxima história de
- * "14 definições de venda que conta em 26 lugares".
- */
-const freteDoPedido = (r: CarbozeOrderRow): number => {
-  const envio = Number(r.shipping_cost) || 0;
-  if (envio > 0) return envio;
-  return Math.max((Number(r.total) || 0) - (Number(r.subtotal) || 0) + (Number(r.discount) || 0), 0);
-};
-
-/** Venda = total − frete. Por construção, venda + frete = total SEMPRE. */
-const vendaDoPedido = (r: CarbozeOrderRow): number =>
-  (Number(r.total) || 0) - freteDoPedido(r);
 
 export interface ComercialFilters { from?: string; to?: string; segmento?: string }
 
@@ -205,7 +186,7 @@ export function useDashComercial(vendedorId: string | null = null, months = 12, 
       const rows = await lerTudo<CarbozeOrderRow>((de, ate) =>
         supabase
           .from("carbo_vendas_metrica" as never)
-          .select("id, total, status, created_at, customer_name, vendedor_id, segmento, conta_metrica, data_efetiva, subtotal, discount, shipping_cost")
+          .select("id, total, status, created_at, customer_name, vendedor_id, segmento, conta_metrica, data_efetiva, valor_venda, valor_frete")
           .order("data_efetiva", { ascending: false })
           .order("id", { ascending: false })
           .range(de, ate) as never,
@@ -325,11 +306,13 @@ export function useDashComercial(vendedorId: string | null = null, months = 12, 
       const naoOnlineRows = pedidos.filter((v) => v.segmento !== "online");
       const soma = (lista: CarbozeOrderRow[], f: (r: CarbozeOrderRow) => number) =>
         lista.reduce((s, r) => s + f(r), 0);
+      const venda = (r: CarbozeOrderRow) => Number(r.valor_venda) || 0;
+      const frete = (r: CarbozeOrderRow) => Number(r.valor_frete) || 0;
 
-      const vendaOnline = soma(onlineRows, vendaDoPedido);
-      const freteOnline = soma(onlineRows, freteDoPedido);
-      const vendaNaoOnline = soma(naoOnlineRows, vendaDoPedido);
-      const freteNaoOnline = soma(naoOnlineRows, freteDoPedido);
+      const vendaOnline = soma(onlineRows, venda);
+      const freteOnline = soma(onlineRows, frete);
+      const vendaNaoOnline = soma(naoOnlineRows, venda);
+      const freteNaoOnline = soma(naoOnlineRows, frete);
       const vendaBRL = vendaOnline + vendaNaoOnline;
       const freteBRL = freteOnline + freteNaoOnline;
 
