@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { LifeBuoy, Search, Hand, Plus, X, Inbox, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+import { QuadroRolavel } from "@carbo/shell";
 import { Input } from "@/components/ui/input";
 import {
   Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue,
@@ -279,7 +280,7 @@ export default function Demandas() {
       )}
 
       {/* Quadro */}
-      <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden p-4 snap-x snap-mandatory scroll-pl-4 sm:snap-none">
+      <QuadroRolavel className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden p-4 snap-x snap-mandatory scroll-pl-4 sm:snap-none">
         {isLoading ? (
           <div className="flex gap-4">
             {Array.from({ length: 6 }).map((_, i) => (
@@ -301,7 +302,7 @@ export default function Demandas() {
             onAssumir={(d) => assumir.mutate(d.id)}
             onFiltrarSemDono={() => setFPessoa(SEM_RESPONSAVEL)} />
         )}
-      </div>
+      </QuadroRolavel>
 
       {detailLive && <DemandaModal demanda={detailLive} onClose={() => setDetail(null)} />}
       <NovaDemandaDialog open={novaAberta} onClose={() => setNovaAberta(false)} />

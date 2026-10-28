@@ -6,6 +6,7 @@ import {
   Settings2, Link2, BellRing, BellOff, Repeat2, ShoppingBag, Mail, Timer, ChevronsLeftRight, ChevronsRightLeft,
 } from "lucide-react";
 import { toast } from "sonner";
+import { QuadroRolavel } from "@carbo/shell";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Button } from "@/components/ui/button";
@@ -1974,7 +1975,7 @@ export default function EsteiraOnline() {
       {/* ── Quadro da recuperação de carrinho ───────────────────────────── */}
       {pipeline === "carrinho" ? (
         <>
-          <div className="flex min-h-0 flex-1 items-start gap-3 overflow-x-auto overscroll-x-contain pb-2 snap-x snap-mandatory sm:snap-none">
+          <QuadroRolavel className="flex min-h-0 flex-1 items-start gap-3 overflow-x-auto overscroll-x-contain pb-2 snap-x snap-mandatory sm:snap-none">
             {COLUNAS_CARRINHO.map((col) => {
               const cards = porColunaCarrinho.get(col.key) ?? [];
               const valor = cards.reduce((s, r) => s + (r.total || 0), 0);
@@ -2019,7 +2020,7 @@ export default function EsteiraOnline() {
                 <CardCarrinho row={r} cor={col.color}
                               erro={col.key === "erro_envio" ? enviosCarrinho?.get(r.checkout_id) : undefined} />
               )} />
-          </div>
+          </QuadroRolavel>
 
           <p className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground">
             <ShoppingBag className="h-3 w-3 shrink-0" />
@@ -2034,7 +2035,7 @@ export default function EsteiraOnline() {
         </>
       ) : pipeline === "recompra" ? (
         <>
-          <div className="flex min-h-0 flex-1 items-start gap-3 overflow-x-auto overscroll-x-contain pb-2 snap-x snap-mandatory sm:snap-none">
+          <QuadroRolavel className="flex min-h-0 flex-1 items-start gap-3 overflow-x-auto overscroll-x-contain pb-2 snap-x snap-mandatory sm:snap-none">
             {COLUNAS_RECOMPRA.map((col) => {
               const cards = porColunaRecompra.get(col.key) ?? [];
               const valor = cards.reduce((s, r) => s + (r.total || 0), 0);
@@ -2084,7 +2085,7 @@ export default function EsteiraOnline() {
                 <CardRecompra row={r} cor={col.color}
                               erro={col.key === "erro_envio" ? enviosRecompra?.get(r.bling_id) : undefined} />
               )} />
-          </div>
+          </QuadroRolavel>
 
           {/* ⚠️ O histórico fica fechado e fora do quadro de propósito. São
               pedidos entregues ANTES da régua existir, com data ESTIMADA — e
@@ -2159,7 +2160,7 @@ export default function EsteiraOnline() {
            `items-start` + `max-h-full`: a coluna ABRAÇA o conteúdo e só cresce
            até o limite da tela — "Confirmado" com um card não vira uma caixa
            de 700px quase vazia. */
-        <div className="flex min-h-0 flex-1 items-start gap-3 overflow-x-auto overscroll-x-contain pb-2 snap-x snap-mandatory sm:snap-none">
+        <QuadroRolavel className="flex min-h-0 flex-1 items-start gap-3 overflow-x-auto overscroll-x-contain pb-2 snap-x snap-mandatory sm:snap-none">
           {/* "Pago" só existe quando tem alguém dentro.
               As cinco colunas seguintes têm largura MEDIDA (240–400px) para
               caber sem rolagem de 1366 a 2560. Uma sexta fixa quebraria essa
@@ -2237,7 +2238,7 @@ export default function EsteiraOnline() {
               </div>
             );
           })}
-        </div>
+        </QuadroRolavel>
       )}
 
       {/* ⚠️ Estes dois blocos são da esteira de ENTREGA. Ficavam fora do

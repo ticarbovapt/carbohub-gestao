@@ -38,7 +38,7 @@ import { emptyCriteria, criteriaActive, contarFiltros, matchCard, type SearchCri
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { confirmar, pedirTexto } from "@carbo/shell";
+import { QuadroRolavel, confirmar, pedirTexto } from "@carbo/shell";
 import { useModelos, useModeloMutations, type Modelo } from "@/hooks/useModelos";
 
 const fmtDue = (iso: string) => {
@@ -788,7 +788,7 @@ export default function Board() {
         onCampos={() => setFieldsOpen(true)} onArquivados={() => setArquivadosAberto(true)} />
 
       {/* Colunas */}
-      <div className="flex-1 overflow-x-auto overflow-y-hidden p-4 md:p-6 max-sm:snap-x max-sm:snap-mandatory max-sm:scroll-px-4">
+      <QuadroRolavel className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden p-4 md:p-6 max-sm:snap-x max-sm:snap-mandatory max-sm:scroll-px-4">
         <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragEnd={onDragEnd}>
           <div className="flex gap-4 h-full items-start">
             <SortableContext items={lists.map((l) => l.id)} strategy={horizontalListSortingStrategy}>
@@ -827,7 +827,7 @@ export default function Board() {
             </div>
           </div>
 
-          <DragOverlay>
+          <DragOverlay className="pointer-events-none">
             {activeCard ? (
               <div className="mkt-card mkt-card-overlay w-72 cursor-grabbing">
                 <CardFace card={activeCard} labels={labels} />
@@ -835,7 +835,7 @@ export default function Board() {
             ) : null}
           </DragOverlay>
         </DndContext>
-      </div>
+      </QuadroRolavel>
 
       {rapida && (() => {
         const c = data.cards.find((x) => x.id === rapida.id);

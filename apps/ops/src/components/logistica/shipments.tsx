@@ -1,4 +1,5 @@
 import { Clock, Truck, CheckCircle2, AlertTriangle } from "lucide-react";
+import { QuadroRolavel } from "@carbo/shell";
 
 // Componentes compartilhados da Logística (types/shipment + LogisticsKanban/KPIs).
 
@@ -23,7 +24,7 @@ export interface Shipment {
 
 export function ShipmentsKanban({ shipments, onView }: { shipments: Shipment[]; onView?: (s: Shipment) => void }) {
   return (
-    <div className="flex gap-3 overflow-x-auto pb-3 snap-x snap-mandatory sm:snap-none">
+    <QuadroRolavel envolve="relative" className="flex gap-3 overflow-x-auto pb-3 snap-x snap-mandatory sm:snap-none">
       {KANBAN_COLUMNS.map((status) => {
         const cfg = SHIPMENT_STATUS_CONFIG[status];
         const items = shipments.filter((s) => s.status === status);
@@ -50,7 +51,7 @@ export function ShipmentsKanban({ shipments, onView }: { shipments: Shipment[]; 
           </div>
         );
       })}
-    </div>
+    </QuadroRolavel>
   );
 }
 

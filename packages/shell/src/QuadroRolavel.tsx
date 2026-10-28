@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight, Move } from "lucide-react";
 
-// O quadro que rola para o lado. Três jeitos de andar, além da barra de baixo:
+// O quadro (kanban) que rola para o lado — o MESMO em todos os quadros dos oito
+// apps (pedido do dono do processo, 28/10/2026: "padronizar, todos sem
+// exceção"). Quadro novo: embrulhe o contêiner que rola com ele. Três jeitos de
+// andar, além da barra de baixo:
 //
 //   1. SETAS nas bordas: passar o mouse rola (acelerando), clicar pula ~uma
 //      tela. Só aparecem do lado para onde ainda há o que ver, e só com mouse
@@ -11,16 +14,37 @@ import { ChevronLeft, ChevronRight, Move } from "lucide-react";
 //      quadro. Aqui o movimento lateral rola o QUADRO e o vertical, a coluna em
 //      que se clicou. Segurando, para ao soltar; clique rápido fixa até o
 //      próximo clique (como o do navegador). Esc também para.
-//   3. ARRASTAR o espaço vazio (fora de card) com o botão esquerdo.
+//   3. ARRASTAR com o botão esquerdo o que não é card arrastável nem controle.
+//      Se o arraste começou num card só clicável, o clique de soltar é
+//      engolido — senão o card abriria ao fim de cada pan.
 //
-// ⚠️ Arrastar CARD continua sendo do dnd-kit: o pan ignora o que estiver dentro
-// de `[data-card]`. E as setas recebem o ponteiro durante o arraste (o
-// DragOverlay é `pointer-events-none`), então levar o card até a borda rola o
-// quadro na mesma velocidade.
+// ⚠️ Arrastar CARD continua sendo do dnd-kit: o pan ignora card arrastável
+// (`aria-roledescription` do dnd-kit, `draggable`, ou `[data-card]` para quem
+// quiser marcar à mão). As setas recebem o ponteiro durante o arraste se o
+// DragOverlay for `pointer-events-none`, e levar o card até a borda rola o
+// quadro. ⚠️ A coluna rolada pelo botão do meio é a primeira com rolagem
+// vertical acima do clique (`[data-coluna-rola]` força uma).
 
-const NAO_ARRASTA = "[data-card], button, a, input, textarea, select, [role='combobox'], [role='button']";
+const NAO_ARRASTA =
+  "[data-card], [aria-roledescription], [draggable='true'], button, a, input, textarea, select, label, " +
+  "[role='combobox'], [role='button'], [role='checkbox'], [role='switch'], [contenteditable='true']";
 
-export function QuadroRolavel({ className, children }: { className: string; children: ReactNode }) {
+function colunaQueRola(alvo: HTMLElement, quadro: HTMLElement): HTMLElement | null {
+  const marcada = alvo.closest<HTMLElement>("[data-coluna-rola]");
+  if (marcada && quadro.contains(marcada)) return marcada;
+  for (let el: HTMLElement | null = alvo; el && el !== quadro; el = el.parentElement) {
+    const oy = getComputedStyle(el).overflowY;
+    if ((oy === "auto" || oy === "scroll") && el.scrollHeight > el.clientHeight + 1) return el;
+  }
+  return null;
+}
+
+export function QuadroRolavel({ className, children, envolve }: {
+  className: string;
+  children: ReactNode;
+  /** Classes do envoltório (posicionado). Padrão: ocupa a altura que sobra. */
+  envolve?: string;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const [lados, setLados] = useState({ esq: false, dir: false });
   const [ponto, setPonto] = useState<{ x: number; y: number } | null>(null);
@@ -77,7 +101,7 @@ export function QuadroRolavel({ className, children }: { className: string; chil
     const el = ref.current;
     if (!el) return;
     e.preventDefault(); // sem isto o navegador abre a "bolinha" dele por cima
-    const coluna = (e.target as HTMLElement).closest<HTMLElement>("[data-coluna-rola]");
+    const coluna = colunaQueRola(e.target as HTMLElement, el);
     const a = { ox: e.clientX, oy: e.clientY, mx: e.clientX, my: e.clientY, moveu: false, t0: performance.now() };
     setPonto({ x: e.clientX, y: e.clientY });
     document.body.style.cursor = "all-scroll";
@@ -143,6 +167,11 @@ export function QuadroRolavel({ className, children }: { className: string; chil
       el.scrollLeft = s0 - dx;
     };
     const fim = () => {
+      if (ativo) {
+        const engole = (ev: MouseEvent) => { ev.preventDefault(); ev.stopPropagation(); };
+        window.addEventListener("click", engole, { capture: true, once: true });
+        setTimeout(() => window.removeEventListener("click", engole, true), 0);
+      }
       window.removeEventListener("pointermove", mover);
       window.removeEventListener("pointerup", fim);
       window.removeEventListener("pointercancel", fim);
@@ -155,7 +184,7 @@ export function QuadroRolavel({ className, children }: { className: string; chil
   };
 
   return (
-    <div className="relative flex-1 min-h-0 flex flex-col">
+    <div className={envolve ?? "relative flex-1 min-h-0 flex flex-col"}>
       <div
         ref={ref}
         className={className}

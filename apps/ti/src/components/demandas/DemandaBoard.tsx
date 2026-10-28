@@ -1,14 +1,22 @@
 import { useMemo, useState } from "react";
 import {
-  DndContext, DragOverlay, PointerSensor, TouchSensor, KeyboardSensor, closestCorners,
+  DndContext, DragOverlay, PointerSensor, TouchSensor, KeyboardSensor, closestCorners, pointerWithin,
   useSensor, useSensors, useDraggable, useDroppable,
-  type DragEndEvent, type DragStartEvent,
+  type DragEndEvent, type DragStartEvent, type CollisionDetection,
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { BugReport, BugStatus } from "@/hooks/useBugReports";
 import { STAGES, prioOf, agingOf, stageDays } from "@/lib/demandas";
 import { DemandaCardFace, type CardCounts } from "./DemandaCard";
+
+// A coluna é o alvo de quem está EMBAIXO do ponteiro (padrão dos quadros):
+// `closestCorners` sozinho media cantos de colunas altas e às vezes escolhia a
+// vizinha. Ele fica de reserva para o vão entre colunas.
+const colunaSobOPonteiro: CollisionDetection = (args) => {
+  const sob = pointerWithin(args);
+  return sob.length ? sob : closestCorners(args);
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Quadro de demandas — fluidez do quadro do Marketing (PointerSensor 5px,
@@ -127,7 +135,7 @@ export function DemandaBoard({
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCorners}
+      collisionDetection={colunaSobOPonteiro}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
       onDragCancel={() => setActive(null)}
@@ -212,7 +220,7 @@ export function DemandaBoard({
         })}
       </div>
 
-      <DragOverlay dropAnimation={null}>
+      <DragOverlay dropAnimation={null} className="pointer-events-none">
         {active ? (
           <div className="ti-card ti-card-overlay ti-card-prio w-80 cursor-grabbing pointer-events-none"
             style={{ ["--ti-prio" as string]: prioOf(active.priority).hex }}>

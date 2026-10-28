@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { ShoppingBag, Loader2, Calendar, Eye, MapPin, Phone, Mail, Package, User, Users, FileText, CreditCard, Truck, Boxes, Weight } from "lucide-react";
+import { QuadroRolavel } from "@carbo/shell";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -82,7 +83,7 @@ export default function PosVenda() {
               : "Nenhum pedido manual em acompanhamento."}
           </p>
         ) : (
-          <div className="flex gap-3 overflow-x-auto flex-1 min-h-0 snap-x snap-mandatory sm:snap-none">
+          <QuadroRolavel className="flex gap-3 overflow-x-auto flex-1 min-h-0 snap-x snap-mandatory sm:snap-none">
             {POSVENDA_STAGES.map((stage) => {
               const items = byStage[stage.key] ?? [];
               return (
@@ -123,7 +124,7 @@ export default function PosVenda() {
                 </div>
               );
             })}
-          </div>
+          </QuadroRolavel>
         )}
       </div>
 

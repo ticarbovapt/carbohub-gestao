@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
-  DndContext, PointerSensor, useSensor, useSensors, useDraggable, useDroppable, pointerWithin, rectIntersection, type CollisionDetection,
+  DndContext, PointerSensor, useSensor, useSensors, useDraggable, useDroppable, closestCorners, pointerWithin, type CollisionDetection,
   DragOverlay, type DragStartEvent, type DragEndEvent,
 } from "@dnd-kit/core";
 import { toast } from "sonner";
@@ -17,7 +17,7 @@ import {
   useEstoqueDoPedido, useOpsBySource, fetchNfFiles, type NfFiles,
   POSVENDA_STAGES, type FulfillmentStage, type PosVendaOrder,
 } from "@/hooks/usePosVenda";
-import { QuadroRolavel } from "@/components/logistica/QuadroRolavel";
+import { QuadroRolavel } from "@carbo/shell";
 import { gerarEtiquetaPDF, type EtiquetaData } from "@/lib/etiquetaPdf";
 
 const brl = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
@@ -332,12 +332,12 @@ function DroppableColumn({ id, children }: { id: string; children: (isOver: bool
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-// A coluna é o alvo de quem está EMBAIXO do ponteiro. `closestCorners` media
-// cantos de colunas altas e às vezes escolhia a vizinha; o retângulo fica de
-// reserva para quando o ponteiro está no vão entre duas colunas.
+// A coluna é o alvo de quem está EMBAIXO do ponteiro (padrão dos quadros):
+// `closestCorners` sozinho media cantos de colunas altas e às vezes escolhia a
+// vizinha. Ele fica de reserva para o vão entre colunas.
 const colunaSobOPonteiro: CollisionDetection = (args) => {
   const sob = pointerWithin(args);
-  return sob.length ? sob : rectIntersection(args);
+  return sob.length ? sob : closestCorners(args);
 };
 
 // O CONTEÚDO do card, memorizado. Durante o arraste o dnd-kit re-renderiza

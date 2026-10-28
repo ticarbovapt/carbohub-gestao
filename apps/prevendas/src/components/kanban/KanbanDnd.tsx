@@ -53,7 +53,7 @@ export function DroppableColumn({ id, children }: DroppableColumnProps) {
 
 export function KanbanDragOverlay({ children }: { children: ReactNode | null }) {
   return (
-    <DragOverlay dropAnimation={null}>
+    <DragOverlay dropAnimation={null} className="pointer-events-none">
       {children ? (
         <div className="rotate-2 opacity-90 shadow-xl scale-105 cursor-grabbing pointer-events-none">
           {children}

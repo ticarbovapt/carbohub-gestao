@@ -1,4 +1,5 @@
 import { CalendarDays } from "lucide-react";
+import { QuadroRolavel } from "@carbo/shell";
 import { cn } from "@/lib/utils";
 import { STAGES, TIPO_TONE, brl, dt, type OSView, type StageMeta } from "./osView";
 
@@ -18,7 +19,7 @@ export function OSKanban({ items }: { items: OSView[] }) {
   const hoje = hojeLocal();
 
   return (
-    <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 lg:grid lg:grid-cols-3 lg:gap-4 lg:overflow-visible lg:pb-0">
+    <QuadroRolavel envolve="relative" className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 lg:grid lg:grid-cols-3 lg:gap-4 lg:overflow-visible lg:pb-0">
       {STAGES.map((stage) => (
         <Coluna
           key={stage.id}
@@ -27,7 +28,7 @@ export function OSKanban({ items }: { items: OSView[] }) {
           items={items.filter((o) => o.stage === stage.id).sort(porData)}
         />
       ))}
-    </div>
+    </QuadroRolavel>
   );
 }
 

@@ -1,11 +1,20 @@
 import { useState, useEffect, useMemo } from "react";
-import { DndContext, DragEndEvent, DragStartEvent, MouseSensor, TouchSensor, useSensor, useSensors, closestCorners } from "@dnd-kit/core";
+import { DndContext, DragEndEvent, DragStartEvent, MouseSensor, TouchSensor, useSensor, useSensors, closestCorners, pointerWithin, type CollisionDetection } from "@dnd-kit/core";
+import { QuadroRolavel } from "@carbo/shell";
 import { Badge } from "@/components/ui/badge";
 import { Plus } from "lucide-react";
 import { LeadCard, type LeadOwner } from "./LeadCard";
 import type { CRMLead, FunnelType, StageConfig } from "@/types/crm";
 import { getStagesForFunnel } from "@/types/crm";
 import { DraggableCard, DroppableColumn, KanbanDragOverlay } from "@/components/kanban/KanbanDnd";
+
+// A coluna é o alvo de quem está EMBAIXO do ponteiro (padrão dos quadros):
+// `closestCorners` sozinho media cantos de colunas altas e às vezes escolhia a
+// vizinha. Ele fica de reserva para o vão entre colunas.
+const colunaSobOPonteiro: CollisionDetection = (args) => {
+  const sob = pointerWithin(args);
+  return sob.length ? sob : closestCorners(args);
+};
 
 interface KanbanBoardProps {
   leads: CRMLead[];
@@ -74,13 +83,13 @@ export function KanbanBoard({ leads, funnelType, onAdvance, onMarkLost, onLeadCl
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCorners}
+      collisionDetection={colunaSobOPonteiro}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
       onDragCancel={() => setActiveId(null)}
       autoScroll={{ threshold: { x: 0.2, y: 0.2 }, acceleration: 18 }}
     >
-      <div className="flex gap-3 overflow-x-auto overflow-y-hidden pb-4">
+      <QuadroRolavel envolve="relative" className="flex gap-3 overflow-x-auto overflow-y-hidden pb-4">
         {stages.map((stage) => (
           <KanbanColumn
             key={stage.id}
@@ -94,7 +103,7 @@ export function KanbanBoard({ leads, funnelType, onAdvance, onMarkLost, onLeadCl
             ownersById={ownersById}
           />
         ))}
-      </div>
+      </QuadroRolavel>
 
       <KanbanDragOverlay>
         {activeLead ? (

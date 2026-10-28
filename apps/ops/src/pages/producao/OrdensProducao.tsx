@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { useParamUrl } from "@carbo/shell";
+import { QuadroRolavel, useParamUrl } from "@carbo/shell";
 import {
-  DndContext, PointerSensor, useSensor, useSensors, useDraggable, useDroppable, closestCorners,
+  DndContext, PointerSensor, useSensor, useSensors, useDraggable, useDroppable, closestCorners, pointerWithin, type CollisionDetection,
   DragOverlay, type DragStartEvent, type DragEndEvent,
 } from "@dnd-kit/core";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
@@ -26,6 +26,14 @@ import { DeleteConfirmDialog } from "@/components/producao/DeleteConfirmDialog";
 import { MoveOPDialog } from "@/components/producao/MoveOPDialog";
 import { toast } from "sonner";
 import { useProductionOrders, useProductionOrderMutations, useProductionRealtime, useLastOpMoves, type OpRow, type OpStatus as OpStatusT , useParcelasAgendadas } from "@/hooks/useProductionOrders";
+
+// A coluna é o alvo de quem está EMBAIXO do ponteiro (padrão dos quadros):
+// `closestCorners` sozinho media cantos de colunas altas e às vezes escolhia a
+// vizinha. Ele fica de reserva para o vão entre colunas.
+const colunaSobOPonteiro: CollisionDetection = (args) => {
+  const sob = pointerWithin(args);
+  return sob.length ? sob : closestCorners(args);
+};
 
 // Wrappers dnd-kit por render-prop — mantêm o JSX do card/coluna inline e só
 // injetam os handlers de arraste (a lógica de etapa/estoque fica no componente).
@@ -456,8 +464,8 @@ export default function OrdensProducao() {
         {isLoading ? (
           <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</div>
         ) : viewMode === "kanban" ? (
-          <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragId(null)}>
-          <div className="flex gap-3 overflow-x-auto overflow-y-hidden h-[60vh] md:h-[70vh] pb-3 snap-x snap-mandatory md:snap-none">
+          <DndContext sensors={sensors} collisionDetection={colunaSobOPonteiro} autoScroll={{ threshold: { x: 0.08, y: 0.15 }, acceleration: 12 }} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragId(null)}>
+          <QuadroRolavel envolve="relative" className="flex gap-3 overflow-x-auto overflow-y-hidden h-[60vh] md:h-[70vh] pb-3 snap-x snap-mandatory md:snap-none">
             {/* Recorrência: demanda já vendida, ainda não devida. Coluna de LEITURA —
                 não recebe arrasto porque estas parcelas não são OP ainda. A OP
                 nasce quando o mês chega e a parcela vira pedido. */}
@@ -644,8 +652,8 @@ export default function OrdensProducao() {
                 </DroppableColumn>
               );
             })}
-          </div>
-          <DragOverlay>
+          </QuadroRolavel>
+          <DragOverlay className="pointer-events-none">
             {activeOp ? (
               <div className="rounded-xl border border-primary/50 bg-card p-3 shadow-lg w-[280px] pointer-events-none">
                 <div className="flex items-center justify-between gap-2">

@@ -39,3 +39,4 @@ export {
 // Identidade CarboVAPT do PDF — import dinâmico: o base64 vira um pedaço à
 // parte e só é baixado por quem gera a proposta.
 export const carregarMarcaCarbovapt = () => import("./carbovaptMarca");
+export { QuadroRolavel } from "./QuadroRolavel";

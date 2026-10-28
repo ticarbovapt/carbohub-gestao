@@ -3198,20 +3198,44 @@ verdade = `apps/crm`**; editou lá, copie. A antiga lia `crm_os`, que estava vaz
    carregou" teria a cara de "tudo certo".
    ⚠️ A data da OS é `timestamptz`: dia por hora LOCAL, nunca `toISOString()`.
 
-### Ops: o quadro do Rastreio anda para os lados (28/10/2026)
-Queixa do dono do processo: arrastar card "travado" e rolar para o lado difícil
-(a "bolinha" do botão do meio não andava em cima de coluna). Em
-`apps/ops/src/pages/logistica/PosVenda.tsx` + `components/logistica/QuadroRolavel.tsx`:
-1. **Setas nas bordas** (passar o mouse rola acelerando, clicar pula ~uma tela;
-   só com mouse e só do lado que tem mais), **botão do meio próprio** (lado =
-   quadro, vertical = a coluna clicada; clique rápido fixa) e **arrastar o
-   vazio**. ⚠️ O pan ignora `[data-card]`: card continua sendo do dnd-kit.
-2. ⚠️ **A etapa muda NO SOLTAR** (`onMutate` otimista no
-   `useUpdateFulfillmentStage`); antes o card voltava à origem até gravar,
-   deduzir e reler tudo. Os portões (estoque, NF, volumes) seguem ANTES, no
-   `requestStage`. Erro ⇒ volta e avisa.
-3. Conteúdo do card é `memo` (`CorpoDoCard`) e o alvo é a coluna sob o
-   ponteiro (`pointerWithin`), não `closestCorners`.
+### Quadros (kanban): UM jeito de andar e de arrastar, em todos (28/10/2026)
+Queixa do dono do processo no Rastreio do Ops (arrastar "travado", rolar para o
+lado difícil — a "bolinha" do botão do meio não andava em cima de coluna), e o
+pedido seguinte: *"verifique todos os kanbans… padronizar, todos sem exceção"*.
+
+`QuadroRolavel` mora no **`packages/shell`** (cópia ÚNICA) e embrulha o
+contêiner que rola de TODO quadro dos oito apps:
+
+```
+ops    Rastreio (logistica/PosVenda) · Ordens de Produção · Logística (shipments) · OS (os/OSKanban)
+crm    Pipelines (crm/KanbanBoard) · Acompanhamento do Rastreio (PosVenda) · OS (os/OSKanban)
+prevendas  Pipeline (crm/KanbanBoard)          ti   Demandas (Demandas + DemandaBoard)
+mkt    Quadros (Board)                          admin·mkt·atendimento  Esteira do On-line (3 pipelines)
+```
+
+1. **Setas nas bordas** (passar o mouse rola acelerando, clicar pula ~uma
+   tela; só com mouse e só do lado que tem mais), **botão do meio próprio**
+   (lado = quadro, vertical = a coluna clicada; clique rápido fixa até o
+   próximo clique; Esc para) e **arrastar o que não é card/controle**.
+   ⚠️ O pan ignora card arrastável (`aria-roledescription` do dnd-kit,
+   `draggable`, `[data-card]`) e controles; se começou num card só clicável,
+   o clique de soltar é engolido.
+2. **Padrão do dnd-kit**: alvo = a coluna sob o ponteiro (`pointerWithin`,
+   com `closestCorners` de reserva — `colunaSobOPonteiro`, repetido em cada
+   quadro porque o shell não depende do dnd-kit) e `DragOverlay` com
+   `pointer-events-none` (senão as setas não recebem o ponteiro durante o
+   arraste). ⚠️ O Board do Marketing fica com `closestCorners`: é SORTABLE
+   (reordena cards dentro da lista), e lá ele é o certo.
+3. ⚠️ **A etapa muda NO SOLTAR.** O Rastreio do Ops esperava gravar, deduzir e
+   reler tudo com o card de volta na origem; hoje é `onMutate` otimista no
+   `useUpdateFulfillmentStage`, e os portões (estoque, NF, volumes) seguem
+   ANTES, no `requestStage`. Pipelines e Demandas já eram otimistas; OP abre
+   confirmação (não muda antes dela, de propósito).
+4. Quadro NOVO: embrulhe com `QuadroRolavel` (`envolve="relative"` quando o
+   quadro não ocupa a altura que sobra) e siga o item 2. Quadro que só rola em
+   tela pequena (OS: grade no `lg:`) não mostra seta onde não há o que rolar.
+5. Fora deste repo: o mesmo componente foi COPIADO para o Portal de
+   Licenciados (quadro de OS) e o md (funil de leads), que não usam o shell.
 
 ### Admin: Visão Geral e Estratégico SAÍRAM (20/10/2026)
 `/dashboards/comercial` e `/dashboards/estrategico` foram apagados, por decisão do
