@@ -3234,8 +3234,15 @@ mkt    Quadros (Board)                          admin·mkt·atendimento  Esteira
 4. Quadro NOVO: embrulhe com `QuadroRolavel` (`envolve="relative"` quando o
    quadro não ocupa a altura que sobra) e siga o item 2. Quadro que só rola em
    tela pequena (OS: grade no `lg:`) não mostra seta onde não há o que rolar.
-5. Fora deste repo: o mesmo componente foi COPIADO para o Portal de
-   Licenciados (quadro de OS) e o md (funil de leads), que não usam o shell.
+5. Fora deste repo: CÓPIA IDÊNTICA no md (`carbohub-produtos`,
+   `apps/micro/src/shared/ui/QuadroRolavel.tsx`, funil de leads) — o md não
+   usa o shell; mudou um, copie o outro. O quadro de OS do Portal de
+   Licenciados é grade que QUEBRA LINHA (não rola de lado, sem arraste) e
+   ficou como está. ⚠️ Tipos ESTRUTURAIS no componente (`style: object`,
+   `rolaRef` sem `Ref` do React): os apps têm cópias próprias de
+   `@types/react`, e o tipo nominal falha no app.
+6. ⚠️ A RAIZ (controle, congelada) tem quatro quadros (`CRMKanbanBoard`,
+   `LogisticsKanban`, `OSKanbanBoard`, `OPKanbanBoard`) e NÃO foi tocada.
 
 ### Admin: Visão Geral e Estratégico SAÍRAM (20/10/2026)
 `/dashboards/comercial` e `/dashboards/estrategico` foram apagados, por decisão do
