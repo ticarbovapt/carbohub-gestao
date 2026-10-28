@@ -64,7 +64,9 @@ export const SYSTEMS: SystemOption[] = [
   { iface: "carbo_atendimento", label: "Carbo Atendimento", hint: "Atendimento ao cliente — conversas do WhatsApp e pós-venda (atendimento.carbohub.com.br)" },
   { iface: "carbo_prevendas",   label: "Carbo Pré-Vendas",  hint: "Pré-venda — os SDRs qualificam o lead e repassam ao closer (prevendas.carbohub.com.br)" },
   { iface: "carbo_admin",       label: "Carbo Admin",       hint: "Identidades e acessos — marcar aqui LIBERA a entrada no Admin" },
-];
+// ORDEM ALFABÉTICA pelo nome (dono do processo, 28/10/2026) — calculada, para
+// sistema novo entrar no lugar certo onde quer que seja escrito acima.
+].sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
 
 export const DEFAULT_INTERFACES = ["carbo_ops"];
 

@@ -193,7 +193,10 @@ export function buildSwitcherApps(profile: SwitcherProfile | null | undefined, c
   const registry: EcoApp[] = [...HUB_APPS, ADMIN_APP, ACADEMY_APP];
   const list: SwitcherApp[] = registry
     .filter((a) => wanted.has(a.key))
-    .map((a) => ({ ...a, current: a.key === currentKey }));
+    .map((a) => ({ ...a, current: a.key === currentKey }))
+    // ORDEM ALFABÉTICA pelo nome (dono do processo, 28/10/2026), calculada e
+    // não escrita: app novo entra no lugar certo sem ninguém lembrar.
+    .sort((x, y) => x.name.localeCompare(y.name, "pt-BR"));
 
   return [{ ...HUB_HOME }, ...list];
 }
