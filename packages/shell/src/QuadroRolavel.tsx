@@ -24,6 +24,12 @@ import { ChevronLeft, ChevronRight, Move } from "lucide-react";
 // DragOverlay for `pointer-events-none`, e levar o card até a borda rola o
 // quadro. ⚠️ A coluna rolada pelo botão do meio é a primeira com rolagem
 // vertical acima do clique (`[data-coluna-rola]` força uma).
+// ⚠️ Quadro com arraste NATIVO do navegador (HTML5 `draggable`, o md) não
+// dispara pointer events durante o arraste — por isso as setas também andam
+// com `dragenter`/`dragleave`.
+//
+// ⚠️ Arquivo IDÊNTICO no `packages/shell` (carbohub-gestao) e no
+// `apps/micro/src/shared/ui` (carbohub-produtos). Mudou um, copie o outro.
 
 const NAO_ARRASTA =
   "[data-card], [aria-roledescription], [draggable='true'], button, a, input, textarea, select, label, " +
@@ -39,13 +45,25 @@ function colunaQueRola(alvo: HTMLElement, quadro: HTMLElement): HTMLElement | nu
   return null;
 }
 
-export function QuadroRolavel({ className, children, envolve }: {
+export function QuadroRolavel({ className, children, envolve, rolaRef, onScroll, style }: {
   className: string;
   children: ReactNode;
   /** Classes do envoltório (posicionado). Padrão: ocupa a altura que sobra. */
   envolve?: string;
+  // ⚠️ Tipos ESTRUTURAIS, não os do React: os apps têm cópias próprias de
+  // `@types/react` e `CSSProperties`/`Ref` nominais falham no app (o mesmo
+  // caso do `SupabaseLite` da tarja).
+  /** O contêiner que rola, para quem precisa dele (ir até uma coluna etc.). */
+  rolaRef?: ((el: HTMLDivElement | null) => void) | { current: HTMLDivElement | null } | null;
+  onScroll?: () => void;
+  style?: object;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLDivElement | null>(null);
+  const prender = useCallback((el: HTMLDivElement | null) => {
+    ref.current = el;
+    if (typeof rolaRef === "function") rolaRef(el);
+    else if (rolaRef) rolaRef.current = el;
+  }, [rolaRef]);
   const [lados, setLados] = useState({ esq: false, dir: false });
   const [ponto, setPonto] = useState<{ x: number; y: number } | null>(null);
 
@@ -74,7 +92,11 @@ export function QuadroRolavel({ className, children, envolve }: {
     if (laco.current != null) cancelAnimationFrame(laco.current);
     laco.current = null;
   }, []);
-  useEffect(() => parar, [parar]);
+  useEffect(() => {
+    // Arraste nativo que termina em cima da seta não dispara `dragleave`.
+    window.addEventListener("dragend", parar);
+    return () => { window.removeEventListener("dragend", parar); parar(); };
+  }, [parar]);
 
   const rolarContinuo = (sentido: 1 | -1) => {
     parar();
@@ -186,8 +208,10 @@ export function QuadroRolavel({ className, children, envolve }: {
   return (
     <div className={envolve ?? "relative flex-1 min-h-0 flex flex-col"}>
       <div
-        ref={ref}
+        ref={prender}
         className={className}
+        style={style as never}
+        onScroll={onScroll}
         onMouseDown={(e) => { if (e.button === 1) iniciarAuto(e); }}
         onPointerDown={iniciarPan}
       >
@@ -223,6 +247,9 @@ function Seta({ lado, visivel, onEntra, onSai, onClique }: {
       aria-label={esq ? "Rolar para a esquerda" : "Rolar para a direita"}
       onPointerEnter={(e) => { if (e.pointerType === "mouse") onEntra(); }}
       onPointerLeave={onSai}
+      onDragEnter={onEntra}
+      onDragLeave={onSai}
+      onDrop={onSai}
       onClick={onClique}
       className={`group absolute inset-y-0 z-20 w-11 hidden [@media(hover:hover)]:flex items-center transition-opacity duration-200 ${
         esq ? "left-0 justify-start pl-1 bg-gradient-to-r rounded-l-2xl" : "right-0 justify-end pr-1 bg-gradient-to-l rounded-r-2xl"
