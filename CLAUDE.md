@@ -3198,6 +3198,21 @@ verdade = `apps/crm`**; editou lá, copie. A antiga lia `crm_os`, que estava vaz
    carregou" teria a cara de "tudo certo".
    ⚠️ A data da OS é `timestamptz`: dia por hora LOCAL, nunca `toISOString()`.
 
+### Ops: o quadro do Rastreio anda para os lados (28/10/2026)
+Queixa do dono do processo: arrastar card "travado" e rolar para o lado difícil
+(a "bolinha" do botão do meio não andava em cima de coluna). Em
+`apps/ops/src/pages/logistica/PosVenda.tsx` + `components/logistica/QuadroRolavel.tsx`:
+1. **Setas nas bordas** (passar o mouse rola acelerando, clicar pula ~uma tela;
+   só com mouse e só do lado que tem mais), **botão do meio próprio** (lado =
+   quadro, vertical = a coluna clicada; clique rápido fixa) e **arrastar o
+   vazio**. ⚠️ O pan ignora `[data-card]`: card continua sendo do dnd-kit.
+2. ⚠️ **A etapa muda NO SOLTAR** (`onMutate` otimista no
+   `useUpdateFulfillmentStage`); antes o card voltava à origem até gravar,
+   deduzir e reler tudo. Os portões (estoque, NF, volumes) seguem ANTES, no
+   `requestStage`. Erro ⇒ volta e avisa.
+3. Conteúdo do card é `memo` (`CorpoDoCard`) e o alvo é a coluna sob o
+   ponteiro (`pointerWithin`), não `closestCorners`.
+
 ### Admin: Visão Geral e Estratégico SAÍRAM (20/10/2026)
 `/dashboards/comercial` e `/dashboards/estrategico` foram apagados, por decisão do
 dono do processo: o Dashboard Comercial (`/comercial/dashboard`) cobre os dois,

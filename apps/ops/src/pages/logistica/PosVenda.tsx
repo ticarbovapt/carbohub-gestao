@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
-  DndContext, PointerSensor, useSensor, useSensors, useDraggable, useDroppable, closestCorners,
+  DndContext, PointerSensor, useSensor, useSensors, useDraggable, useDroppable, pointerWithin, rectIntersection, type CollisionDetection,
   DragOverlay, type DragStartEvent, type DragEndEvent,
 } from "@dnd-kit/core";
 import { toast } from "sonner";
@@ -17,6 +17,7 @@ import {
   useEstoqueDoPedido, useOpsBySource, fetchNfFiles, type NfFiles,
   POSVENDA_STAGES, type FulfillmentStage, type PosVendaOrder,
 } from "@/hooks/usePosVenda";
+import { QuadroRolavel } from "@/components/logistica/QuadroRolavel";
 import { gerarEtiquetaPDF, type EtiquetaData } from "@/lib/etiquetaPdf";
 
 const brl = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
@@ -331,6 +332,154 @@ function DroppableColumn({ id, children }: { id: string; children: (isOver: bool
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
+// A coluna é o alvo de quem está EMBAIXO do ponteiro. `closestCorners` media
+// cantos de colunas altas e às vezes escolhia a vizinha; o retângulo fica de
+// reserva para quando o ponteiro está no vão entre duas colunas.
+const colunaSobOPonteiro: CollisionDetection = (args) => {
+  const sob = pointerWithin(args);
+  return sob.length ? sob : rectIntersection(args);
+};
+
+// O CONTEÚDO do card, memorizado. Durante o arraste o dnd-kit re-renderiza
+// todo card arrastável a cada coluna sobrevoada; com dezenas de cards (cada um
+// com o seu Select) isso travava o movimento. Memorizado, o que re-renderiza é
+// só a casca (`DraggableCard`), e o conteúdo fica como estava.
+const CorpoDoCard = memo(function CorpoDoCard({ o, op, onStage, onEtiqueta }: {
+  o: PosVendaOrder;
+  op: { done: number; total: number; sector: string } | undefined;
+  onStage: (o: PosVendaOrder, stage: FulfillmentStage) => void;
+  onEtiqueta: (o: PosVendaOrder) => void;
+}) {
+  return (
+    <>
+      {/* Recorrência primeiro: o mês devido é a informação que
+          define este card — sem ela, três parcelas do mesmo
+          cliente ficam indistinguíveis. */}
+      {o.recurrence_total && (
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[11px] font-bold uppercase tracking-wide text-violet-400">
+            {o.scheduled_month ? fmtMes(o.scheduled_month) : "recorrência"}
+          </span>
+          <span className="text-[11px] tabular-nums text-muted-foreground">
+            {o.recurrence_index}/{o.recurrence_total}
+          </span>
+        </div>
+      )}
+      <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-0.5">
+        <span className="font-semibold text-[15px] leading-snug line-clamp-2 min-w-[9rem] flex-1">{o.customer_name}</span>
+        <span className="text-sm font-semibold tabular-nums shrink-0 ml-auto">{brl(Number(o.total))}</span>
+      </div>
+      {/* O QUE é o pedido. Antes o card só dizia quem e quanto —
+          a Separação tinha de abrir o detalhe para saber o item. */}
+      {itensBonificados(o.items).length > 0 && (
+        <div className="rounded-md border border-amber-400/50 bg-amber-50 dark:bg-amber-950/30 px-2 py-1">
+          <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-300 flex items-center gap-1">
+            <Gift className="h-3 w-3 shrink-0" /> Caixa separada de bonificação
+          </p>
+          {itensBonificados(o.items).map((b, n) => (
+            <p key={n} className="text-[11px] text-amber-700/90 dark:text-amber-300/90 truncate">
+              {b.nome} × {b.qtd}
+            </p>
+          ))}
+        </div>
+      )}
+      {/* ⚠️ VERMELHO, não âmbar: o de cima é procedimento
+          ("embale separado"), este é documento fiscal
+          faltando numa carga que pode já estar na rua. */}
+      {faltaNotaDeVenda(o) && (
+        <div className="rounded-md border border-red-400/60 bg-red-50 dark:bg-red-950/30 px-2 py-1">
+          <p className="text-[11px] font-semibold text-red-700 dark:text-red-300 flex items-center gap-1">
+            <FileWarning className="h-3 w-3 shrink-0" /> Só a NF de bonificação está vinculada
+          </p>
+          <p className="text-[11px] text-red-700/90 dark:text-red-300/90">
+            Falta a NF de venda — não despache sem ela.
+          </p>
+        </div>
+      )}
+      {resumoItens(o.items) && (
+        <p className="text-xs text-foreground/80 leading-snug line-clamp-2">{resumoItens(o.items)}</p>
+      )}
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs text-muted-foreground font-mono">{o.order_number || "—"}</p>
+        {o.status !== "agendado" && o.agreed_delivery_date && (
+          <span className={`text-[11px] tabular-nums font-medium ${prazoCor(o.agreed_delivery_date)}`}>
+            {prazoTexto(o.agreed_delivery_date)}
+          </span>
+        )}
+      </div>
+      {o.fulfillment_stage === "criar_op" && (
+        o.production_done ? (
+          <CarboBadge variant="success" className="gap-1">✅ Produzido — mover p/ Em Separação</CarboBadge>
+        ) : op ? (
+          <CarboBadge variant="default" className="gap-1">
+            🏭 {op.done}/{op.total} produzidas · {op.sector}
+          </CarboBadge>
+        ) : (
+          <CarboBadge variant="warning" className="gap-1">⚠️ Sem OP — recriar (mover p/ Pedido Recebido e voltar)</CarboBadge>
+        )
+      )}
+      {/* ⚠️ A nota de VENDA tem de ESTAR FALTANDO para o selo
+          dizer que falta. Sem essa condição ele afirmava
+          "aguardando NF" com o chip "NF 000303" renderizado
+          logo abaixo, na mesma pilha — relatado pelo dono do
+          processo em 01/10/2026, nos 9 cards da Brisanet.
+
+          O selo lia a ETAPA e o chip lia o FATO, e quando os
+          dois discordam quem está errado é quem não olhou o
+          fato. A etapa travada é problema à parte (há
+          `update` de destravamento para ela); um selo que
+          mente não se conserta destravando — ele volta a
+          mentir no próximo pedido que ficar preso. */}
+      {o.fulfillment_stage === "gerar_nf"
+        && !notaDoPedido(o, "venda").id && (
+        <CarboBadge variant="warning" className="gap-1">🧾 Liberado no Faturamento — aguardando NF</CarboBadge>
+      )}
+      {/* ⚠️ SEM condição de etapa. A nota passa a acompanhar o
+          card até o fim: é depois da entrega que o cliente liga
+          pedindo a DANFE, e quem atende tinha de ir ao
+          Faturamento procurar. A cor acompanha a etapa — verde em
+          "NF Finalizada", azul daí em diante — porque ali ela é
+          a conquista da etapa, e depois é referência. */}
+      <ChipsDaNota o={o}
+        variant={o.fulfillment_stage === "nf_finalizada" ? "success" : "info"} />
+      {o.fulfillment_stage === "emitir_etiqueta" && (
+        <div onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+          <Button size="sm" variant="outline" className="w-full h-9 text-xs gap-1.5"
+            onClick={() => onEtiqueta(o)}>
+            <Tag className="h-3.5 w-3.5" /> Emitir etiqueta
+          </Button>
+        </div>
+      )}
+      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+        {o.vendedor_name && <VendedorTag name={o.vendedor_name} avatar={o.vendedor_avatar} />}
+        <span className="flex items-center gap-1 shrink-0"><Calendar className="h-3.5 w-3.5" /> {fmtDate(o.created_at)}</span>
+      </div>
+      {/* Parcela agendada não muda de etapa à mão: ela entra na
+          fila sozinha quando o mês chega. Botão aqui só
+          convidaria a puxar produção de dezembro em agosto. */}
+      {o.status === "agendado" ? (
+        <p className="text-[11px] text-muted-foreground leading-snug pt-0.5 border-t border-dashed border-border">
+          Entra na fila em {o.scheduled_month ? fmtMes(o.scheduled_month) : "seu mês"} · editável até faturar
+        </p>
+      ) : (
+      <div onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+        <Select
+          value={o.fulfillment_stage}
+          onValueChange={(v) => onStage(o, v as FulfillmentStage)}
+        >
+          <SelectTrigger className="h-9 text-xs mt-0.5"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {POSVENDA_STAGES.map((s) => (
+              <SelectItem key={s.key} value={s.key} className="text-xs">{s.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      )}
+    </>
+  );
+});
+
 export default function PosVenda() {
   // Janela dos FINALIZADOS (entregue/cancelado). Ativos sempre carregam 100%.
   const [terminalDays, setTerminalDays] = useState<number | "all">(30);
@@ -607,6 +756,10 @@ export default function PosVenda() {
     const cur = orders.find((o) => o.id === String(e.active.id));
     if (cur) requestStage(cur, String(e.over.id) as FulfillmentStage);
   };
+  // Estável para o `CorpoDoCard` memorizado não re-renderizar a cada render.
+  const requestStageRef = useRef(requestStage);
+  requestStageRef.current = requestStage;
+  const onStage = useCallback((o: PosVendaOrder, stage: FulfillmentStage) => requestStageRef.current(o, stage), []);
   const activeOrder = dragId ? orders.find((o) => o.id === dragId) ?? null : null;
 
   return (
@@ -641,8 +794,8 @@ export default function PosVenda() {
             <Loader2 className="h-5 w-5 animate-spin" /> Carregando…
           </div>
         ) : (
-          <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragId(null)}>
-          <div className="flex flex-row gap-3 overflow-x-auto overflow-y-hidden flex-1 min-h-0 snap-x snap-mandatory scroll-px-4 md:snap-none md:scroll-px-0 -mx-4 px-4 md:mx-0 md:px-0">
+          <DndContext sensors={sensors} collisionDetection={colunaSobOPonteiro} autoScroll={{ threshold: { x: 0.08, y: 0.15 }, acceleration: 12 }} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragId(null)}>
+          <QuadroRolavel className="flex flex-row gap-3 overflow-x-auto overflow-y-hidden flex-1 min-h-0 snap-x snap-mandatory scroll-px-4 md:snap-none md:scroll-px-0 -mx-4 px-4 md:mx-0 md:px-0">
             {POSVENDA_STAGES.map((stage) => {
               const items = byStage[stage.key] ?? [];
               return (
@@ -689,7 +842,7 @@ export default function PosVenda() {
                       )}
                     </span>
                   </div>
-                  <div className="p-2 space-y-2 overflow-y-auto overscroll-contain flex-1 min-h-0">
+                  <div data-coluna-rola className="p-2 space-y-2 overflow-y-auto overscroll-contain flex-1 min-h-0">
                     {items.length === 0 ? (
                       <p className="text-xs text-muted-foreground/60 text-center py-6">Vazio</p>
                     ) : (
@@ -700,135 +853,13 @@ export default function PosVenda() {
                           ref={drag.setNodeRef}
                           {...drag.attributes}
                           {...drag.listeners}
+                          data-card
                           onClick={() => setDetail(o)}
                           className={`rounded-xl border border-border bg-card p-4 space-y-3 cursor-pointer hover:border-carbo-green/40 transition ${
                             drag.isDragging ? "opacity-50" : ""
                           }`}
                         >
-                          {/* Recorrência primeiro: o mês devido é a informação que
-                              define este card — sem ela, três parcelas do mesmo
-                              cliente ficam indistinguíveis. */}
-                          {o.recurrence_total && (
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-[11px] font-bold uppercase tracking-wide text-violet-400">
-                                {o.scheduled_month ? fmtMes(o.scheduled_month) : "recorrência"}
-                              </span>
-                              <span className="text-[11px] tabular-nums text-muted-foreground">
-                                {o.recurrence_index}/{o.recurrence_total}
-                              </span>
-                            </div>
-                          )}
-                          <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-0.5">
-                            <span className="font-semibold text-[15px] leading-snug line-clamp-2 min-w-[9rem] flex-1">{o.customer_name}</span>
-                            <span className="text-sm font-semibold tabular-nums shrink-0 ml-auto">{brl(Number(o.total))}</span>
-                          </div>
-                          {/* O QUE é o pedido. Antes o card só dizia quem e quanto —
-                              a Separação tinha de abrir o detalhe para saber o item. */}
-                          {itensBonificados(o.items).length > 0 && (
-                            <div className="rounded-md border border-amber-400/50 bg-amber-50 dark:bg-amber-950/30 px-2 py-1">
-                              <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-300 flex items-center gap-1">
-                                <Gift className="h-3 w-3 shrink-0" /> Caixa separada de bonificação
-                              </p>
-                              {itensBonificados(o.items).map((b, n) => (
-                                <p key={n} className="text-[11px] text-amber-700/90 dark:text-amber-300/90 truncate">
-                                  {b.nome} × {b.qtd}
-                                </p>
-                              ))}
-                            </div>
-                          )}
-                          {/* ⚠️ VERMELHO, não âmbar: o de cima é procedimento
-                              ("embale separado"), este é documento fiscal
-                              faltando numa carga que pode já estar na rua. */}
-                          {faltaNotaDeVenda(o) && (
-                            <div className="rounded-md border border-red-400/60 bg-red-50 dark:bg-red-950/30 px-2 py-1">
-                              <p className="text-[11px] font-semibold text-red-700 dark:text-red-300 flex items-center gap-1">
-                                <FileWarning className="h-3 w-3 shrink-0" /> Só a NF de bonificação está vinculada
-                              </p>
-                              <p className="text-[11px] text-red-700/90 dark:text-red-300/90">
-                                Falta a NF de venda — não despache sem ela.
-                              </p>
-                            </div>
-                          )}
-                          {resumoItens(o.items) && (
-                            <p className="text-xs text-foreground/80 leading-snug line-clamp-2">{resumoItens(o.items)}</p>
-                          )}
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="text-xs text-muted-foreground font-mono">{o.order_number || "—"}</p>
-                            {o.status !== "agendado" && o.agreed_delivery_date && (
-                              <span className={`text-[11px] tabular-nums font-medium ${prazoCor(o.agreed_delivery_date)}`}>
-                                {prazoTexto(o.agreed_delivery_date)}
-                              </span>
-                            )}
-                          </div>
-                          {o.fulfillment_stage === "criar_op" && (
-                            o.production_done ? (
-                              <CarboBadge variant="success" className="gap-1">✅ Produzido — mover p/ Em Separação</CarboBadge>
-                            ) : opByOrder[o.id] ? (
-                              <CarboBadge variant="default" className="gap-1">
-                                🏭 {opByOrder[o.id].done}/{opByOrder[o.id].total} produzidas · {opByOrder[o.id].sector}
-                              </CarboBadge>
-                            ) : (
-                              <CarboBadge variant="warning" className="gap-1">⚠️ Sem OP — recriar (mover p/ Pedido Recebido e voltar)</CarboBadge>
-                            )
-                          )}
-                          {/* ⚠️ A nota de VENDA tem de ESTAR FALTANDO para o selo
-                              dizer que falta. Sem essa condição ele afirmava
-                              "aguardando NF" com o chip "NF 000303" renderizado
-                              logo abaixo, na mesma pilha — relatado pelo dono do
-                              processo em 01/10/2026, nos 9 cards da Brisanet.
-
-                              O selo lia a ETAPA e o chip lia o FATO, e quando os
-                              dois discordam quem está errado é quem não olhou o
-                              fato. A etapa travada é problema à parte (há
-                              `update` de destravamento para ela); um selo que
-                              mente não se conserta destravando — ele volta a
-                              mentir no próximo pedido que ficar preso. */}
-                          {o.fulfillment_stage === "gerar_nf"
-                            && !notaDoPedido(o, "venda").id && (
-                            <CarboBadge variant="warning" className="gap-1">🧾 Liberado no Faturamento — aguardando NF</CarboBadge>
-                          )}
-                          {/* ⚠️ SEM condição de etapa. A nota passa a acompanhar o
-                              card até o fim: é depois da entrega que o cliente liga
-                              pedindo a DANFE, e quem atende tinha de ir ao
-                              Faturamento procurar. A cor acompanha a etapa — verde em
-                              "NF Finalizada", azul daí em diante — porque ali ela é
-                              a conquista da etapa, e depois é referência. */}
-                          <ChipsDaNota o={o}
-                            variant={o.fulfillment_stage === "nf_finalizada" ? "success" : "info"} />
-                          {o.fulfillment_stage === "emitir_etiqueta" && (
-                            <div onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-                              <Button size="sm" variant="outline" className="w-full h-9 text-xs gap-1.5"
-                                onClick={() => setEtiquetaOrder(o)}>
-                                <Tag className="h-3.5 w-3.5" /> Emitir etiqueta
-                              </Button>
-                            </div>
-                          )}
-                          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                            {o.vendedor_name && <VendedorTag name={o.vendedor_name} avatar={o.vendedor_avatar} />}
-                            <span className="flex items-center gap-1 shrink-0"><Calendar className="h-3.5 w-3.5" /> {fmtDate(o.created_at)}</span>
-                          </div>
-                          {/* Parcela agendada não muda de etapa à mão: ela entra na
-                              fila sozinha quando o mês chega. Botão aqui só
-                              convidaria a puxar produção de dezembro em agosto. */}
-                          {o.status === "agendado" ? (
-                            <p className="text-[11px] text-muted-foreground leading-snug pt-0.5 border-t border-dashed border-border">
-                              Entra na fila em {o.scheduled_month ? fmtMes(o.scheduled_month) : "seu mês"} · editável até faturar
-                            </p>
-                          ) : (
-                          <div onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-                            <Select
-                              value={o.fulfillment_stage}
-                              onValueChange={(v) => requestStage(o, v as FulfillmentStage)}
-                            >
-                              <SelectTrigger className="h-9 text-xs mt-0.5"><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                {POSVENDA_STAGES.map((s) => (
-                                  <SelectItem key={s.key} value={s.key} className="text-xs">{s.label}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          )}
+                          <CorpoDoCard o={o} op={opByOrder[o.id]} onStage={onStage} onEtiqueta={setEtiquetaOrder} />
                         </div>
                         )}
                         </DraggableCard>
@@ -840,8 +871,8 @@ export default function PosVenda() {
                 </DroppableColumn>
               );
             })}
-          </div>
-          <DragOverlay>
+          </QuadroRolavel>
+          <DragOverlay className="pointer-events-none">
             {activeOrder ? (
               <div className="rounded-xl border border-carbo-green/50 bg-card p-4 shadow-lg w-[260px] pointer-events-none">
                 <div className="flex items-start justify-between gap-2">
@@ -856,7 +887,7 @@ export default function PosVenda() {
         )}
 
         <p className="text-xs text-muted-foreground">
-          <strong>Arraste</strong> o card entre as colunas ou use o seletor para mudar a etapa. <strong>Clique</strong> no card para ver os detalhes.
+          <strong>Arraste</strong> o card entre as colunas ou use o seletor para mudar a etapa. <strong>Clique</strong> no card para ver os detalhes. Para andar para os lados: passe o mouse nas setas das bordas, arraste o espaço vazio ou use o botão do meio do mouse.
         </p>
       </div>
 

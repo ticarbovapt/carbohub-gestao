@@ -603,6 +603,22 @@ export function useUpdateFulfillmentStage() {
       }
       return { stage, opCreated, opError, deductedLines, restoredLines, shipmentCreated, shipmentFailed };
     },
+    // O card muda de coluna NO CLIQUE/soltar. Antes ele voltava para a coluna
+    // de origem e só pulava depois da gravação + dedução/estorno + releitura
+    // do quadro inteiro — o arraste parecia "travado". ⚠️ Os portões (estoque,
+    // NF, volumes) continuam ANTES daqui, no `requestStage`: só chega a esta
+    // mutação o que já foi confirmado. Errou no banco ⇒ volta e avisa.
+    onMutate: async ({ id, stage }) => {
+      await qc.cancelQueries({ queryKey: ["ops", "pos-venda"] });
+      const antes = qc.getQueriesData<PosVendaData>({ queryKey: ["ops", "pos-venda"] });
+      qc.setQueriesData<PosVendaData>({ queryKey: ["ops", "pos-venda"] }, (d) =>
+        d ? { ...d, orders: d.orders.map((o) => (o.id === id ? { ...o, fulfillment_stage: stage } : o)) } : d);
+      return { antes };
+    },
+    onSettled: (_res, err, _vars, ctx) => {
+      if (err && ctx?.antes) for (const [chave, dado] of ctx.antes) qc.setQueryData(chave, dado);
+      if (err) qc.invalidateQueries({ queryKey: ["ops", "pos-venda"] });
+    },
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ["ops", "pos-venda"] });
       qc.invalidateQueries({ queryKey: ["ops", "production-orders"] });
