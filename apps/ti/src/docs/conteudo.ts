@@ -24,7 +24,7 @@ const TODAS = [...SECOES_BASE, ...SECOES_DEMANDAS, ...SECOES_SISTEMA, ...SECOES_
 /** A ordem do índice: a do menu. Seção que não estiver aqui vai para o fim. */
 const ORDEM = ["comece", "inicio", "navegacao", "demandas", "chat",
   "bugs", "status", "academy",
-  "usuarios", "estrutura", "avisos-venda",
+  "usuarios", "estrutura", "notificacoes",
   "auditoria", "acompanhamento", "ultimo-acesso", "chat-adocao",
   "vender", "equipe", "perfil"];
 const pos = (id: string) => (ORDEM.indexOf(id) === -1 ? ORDEM.length : ORDEM.indexOf(id));

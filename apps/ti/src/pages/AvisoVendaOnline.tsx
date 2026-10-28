@@ -45,7 +45,9 @@ type Ver = "recebem" | "heads" | "todos";
 const dataCurta = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" }) : null;
 
-export default function AvisoVendaOnline() {
+// `embutido`: a lista mora na aba "Vendas online" da tela Notificações, sem
+// o próprio título.
+export default function AvisoVendaOnline({ embutido = false }: { embutido?: boolean }) {
   const qc = useQueryClient();
   const { data: labels } = useOrgLabels();
   const [busca, setBusca] = useParamUrl("busca", "", { replace: true });
@@ -114,8 +116,8 @@ export default function AvisoVendaOnline() {
   ];
 
   return (
-    <main className="mx-auto max-w-4xl px-4 sm:px-6 py-8 space-y-6">
-      <div>
+    <main className={embutido ? "space-y-6" : "mx-auto max-w-4xl px-4 sm:px-6 py-8 space-y-6"}>
+      {!embutido && <div>
         <h1 className="flex items-center gap-2 text-2xl font-bold">
           <BellRing className="h-6 w-6 text-primary" /> Quem recebe a venda on-line
         </h1>
@@ -124,7 +126,7 @@ export default function AvisoVendaOnline() {
           A marca <span className="font-medium">Head</span> ajuda a escolher — ninguém é ligado sozinho.
           A venda interna (feita pelo /vender) continua avisando o time como antes.
         </p>
-      </div>
+      </div>}
 
       {!isLoading && !error && contagem.recebem === 0 && (
         <div className="flex gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">

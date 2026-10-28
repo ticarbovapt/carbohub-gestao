@@ -58,7 +58,7 @@ export function Layout() {
     { label: "Usuários e acessos", items: [
         { to: "/usuarios", label: "Usuários", icon: UsersIcon },
         { to: "/estrutura", label: "Departamentos e funções", icon: ListTree },
-        { to: "/ecommerce/avisos-de-venda", label: "Quem recebe a venda", icon: BellRing },
+        { to: "/notificacoes", label: "Notificações", icon: BellRing },
     ] },
     { label: "Auditoria", items: [
         { to: "/auditoria", label: "Central de Auditoria", icon: ShieldCheck },

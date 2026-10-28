@@ -15,7 +15,7 @@ import AcademyAcessos from "./pages/AcademyAcessos";
 // Vindas do Carbo Admin (20/10/2026) — as MESMAS telas, byte a byte.
 import Users from "./pages/Users";
 import Structure from "./pages/Structure";
-import AvisoVendaOnline from "./pages/AvisoVendaOnline";
+import Notificacoes from "./pages/Notificacoes";
 import Auditoria from "./pages/Auditoria";
 import Acompanhamento from "./pages/Acompanhamento";
 import UltimoAcesso from "./pages/UltimoAcesso";
@@ -48,7 +48,11 @@ export default function App() {
         <Route path="/academy/acessos" element={<AcademyAcessos />} />
         <Route path="/usuarios" element={<Users />} />
         <Route path="/estrutura" element={<Structure />} />
-        <Route path="/ecommerce/avisos-de-venda" element={<AvisoVendaOnline />} />
+        <Route path="/notificacoes" element={<Notificacoes />} />
+        {/* "Quem recebe a venda" virou a aba Vendas online de Notificações
+            (28/10/2026). O endereço antigo (e o redirecionamento do Admin)
+            continua chegando lá. */}
+        <Route path="/ecommerce/avisos-de-venda" element={<Navigate to="/notificacoes?aba=venda_online" replace />} />
         <Route path="/auditoria" element={<Auditoria />} />
         <Route path="/acompanhamento" element={<Acompanhamento />} />
         <Route path="/ultimo-acesso" element={<UltimoAcesso />} />

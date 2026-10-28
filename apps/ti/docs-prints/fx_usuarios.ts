@@ -1,6 +1,6 @@
 // Fixtures da área "usuarios" (ver areas.ts): Usuários (/usuarios),
-// Departamentos e funções (/estrutura) e Quem recebe a venda
-// (/ecommerce/avisos-de-venda). Tudo FICTÍCIO — nenhuma pessoa é real.
+// Departamentos e funções (/estrutura) e Notificações (/notificacoes, com a
+// aba Vendas online). Tudo FICTÍCIO — nenhuma pessoa é real.
 //
 // ⚠️ `profiles`, `carbo_departments` e `carbo_functions` são lidas por TODAS as
 // telas (barra do topo, chat, AuthContext). Respondem por ROTA: nas nossas
@@ -11,7 +11,7 @@ import { PAPEL, U, EU } from "./pessoas";
 void PAPEL;
 
 const rota = () => { try { return location.pathname; } catch { return ""; } };
-const NOSSAS = ["/usuarios", "/estrutura", "/ecommerce/avisos-de-venda"];
+const NOSSAS = ["/usuarios", "/estrutura", "/ecommerce/avisos-de-venda", "/notificacoes"];
 const naNossa = () => NOSSAS.some((r) => rota().startsWith(r));
 const porRota = (meu: () => unknown, base: () => unknown) => () => (naNossa() ? meu() : base());
 
@@ -108,6 +108,54 @@ const listaAviso = () => {
   ];
 };
 
+// ── Notificações (a mesma forma do `carbo_notif_painel`) ────────────────────
+const ABAS = [
+  ["venda_interna", "Vendas internas", "O \"🎉 Nova venda!\" de cada venda feita pelo /vender.", "app", ["carbo_crm", "carbo_admin"]],
+  ["venda_online", "Vendas online", "A venda do e-commerce (som, toast, sininho e celular). Só recebe quem for ligado à mão.", "lista", []],
+  ["ecommerce", "E-commerce e Esteira", "Resumo diário dos pedidos parados na Esteira, etiqueta morta e canal de e-commerce desconectado.", "app", ["carbo_admin", "carbo_mkt", "carbo_atendimento"]],
+  ["atendimento", "Mensagem de cliente", "Cliente respondeu no WhatsApp. A lista é a da tela Conversas, no Atendimento.", "lista", []],
+  ["marketing", "Quadros do Marketing", "Menção, prazo, lembrete, cartão seguido e quadro compartilhado.", "app", ["carbo_mkt"]],
+  ["financas", "Finanças e Compras", "Requisição de compra esperando aprovação e ordem de compra nova.", "app", ["carbo_financas"]],
+  ["estoque", "Estoque e Operação", "Estoque baixo na caixa de vendedor e nas máquinas.", "app", ["carbo_ops"]],
+  ["ti", "TI e Academy", "Chamado novo, chamado atribuído e pedido de acesso a curso do Academy.", "app", ["carbo_ti"]],
+  ["chat", "Carbo Chat", "Mensagem e lembrete de comunicado do chat.", "pessoal", []],
+  ["pessoal", "Avisos para você", "Avisos dirigidos à pessoa: menção, o próprio chamado, a NF cancelada da própria venda, curso liberado.", "pessoal", []],
+].map(([aba, rotulo, descricao, modo, apps], i) => ({ aba, rotulo, descricao, modo, apps, ordem: (i + 1) * 10 }));
+const T = (aba: string, tipo: string, rotulo: string, linhas_30d: number, pessoas_30d: number, referencia = "") =>
+  ({ aba, tipo, referencia, rotulo, descricao: "", linhas_30d, pessoas_30d });
+const painel = () => ({
+  filtro_ativo: true,
+  abas: ABAS,
+  tipos: [
+    T("venda_interna", "ecommerce_sale", "Nova venda", 2310, 33, "carboze_order"),
+    T("venda_online", "ecommerce_sale", "Venda on-line", 8420, 4, "ecommerce_order"),
+    T("ecommerce", "esteira_parado_resumo", "Pedidos parados", 990, 33),
+    T("ecommerce", "esteira_etiqueta_morta", "Etiqueta morta", 132, 33),
+    T("ecommerce", "ecommerce_disconnected", "E-commerce caído", 12, 6),
+    T("marketing", "mkt_mencao", "Menção no quadro", 84, 9),
+    T("marketing", "mkt_prazo", "Prazo e lembrete", 311, 11),
+    T("marketing", "mkt_quadro", "Quadro compartilhado", 9, 5),
+    T("marketing", "mkt_seguindo", "Cartão seguido", 57, 4),
+    T("financas", "finance_rc_pendente", "Requisição a aprovar", 46, 7),
+    T("financas", "finance_oc_nova", "Ordem de compra nova", 38, 7),
+    T("estoque", "estoque_vendedor_baixo", "Caixa de vendedor baixa", 64, 8),
+    T("ti", "bug_report", "Chamado novo", 120, 5),
+    T("ti", "academy_acesso", "Pedido de acesso ao Academy", 14, 3),
+    T("chat", "chat_message", "Mensagem no chat", 4120, 31),
+    T("pessoal", "mention", "Menção", 22, 12),
+    T("pessoal", "bug_resolved", "Seu chamado resolvido", 41, 17),
+  ],
+  sem_aba: [{ tipo: "cobranca_atrasada", referencia: "", linhas_30d: 66, pessoas_30d: 33 }],
+  pessoas: meusProfiles().map((p) => ({
+    id: p.id, nome: p.full_name, avatar_url: p.avatar_url, departamento: p.department, funcao: p.funcao,
+    departamento_2: p.secondary_department ?? null, funcao_2: p.secondary_funcao ?? null, apps: p.allowed_interfaces ?? [],
+  })),
+  escolhas: [
+    { user_id: ID.helena, aba: "marketing", recebe: false, definido_em: dias(2), definido_por_nome: "Marina Alves" },
+    { user_id: ID.diego, aba: "marketing", recebe: true, definido_em: dias(1), definido_por_nome: "Marina Alves" },
+  ],
+});
+
 export const FX: Record<string, unknown> = {
   profiles: porRota(meusProfiles, baseProfiles),
   carbo_departments: porRota(() => departamentos, () => baseDepartments),
@@ -117,4 +165,6 @@ export const FX: Record<string, unknown> = {
 export const RPC_FX: Record<string, unknown> = {
   carbo_aviso_venda_online_lista: listaAviso,
   carbo_aviso_venda_online_definir: null,
+  carbo_notif_painel: painel,
+  carbo_notif_definir: null,
 };

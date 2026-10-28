@@ -112,15 +112,24 @@ export const SHOTS = [
     [7, (p) => p.locator("main section").nth(1).locator("div.border-t")],
   ] },
 
-  // ── Quem recebe a venda on-line ──
-  { chave: "avisos-venda", papel: "gestor", url: "/ecommerce/avisos-de-venda?ver=todos", viewport: { width: 1440, height: 1050 },
+  // ── Notificações ──
+  { chave: "notif-abas", papel: "gestor", url: "/notificacoes?aba=marketing", viewport: { width: 1440, height: 1500 },
     clip: (p) => p.locator("main main"),
     marcas: [
+    [1, (p) => p.getByRole("button", { name: "Quadros do Marketing" }).locator("..")],
+    [2, (p) => p.locator("main main ul")],
+    [3, (p) => p.getByText(/Padrão: recebe quem tem/)],
+    [4, (p) => p.getByRole("button", { name: /^Todo o time/ }).locator("..")],
+    [5, (p) => p.getByText(/Desligado à mão por/)],
+    [6, (p) => p.getByRole("button", { name: "Padrão" }).first()],
+    [7, (p) => p.getByRole("switch").first()],
+  ] },
+  { chave: "notif-venda-online", papel: "gestor", url: "/notificacoes?aba=venda_online", viewport: { width: 1440, height: 1100 },
+    clip: (p) => p.locator("main main main"),
+    marcas: [
     [1, (p) => p.getByRole("button", { name: /^Recebem/ }).locator("..")],
-    [2, sel('input[placeholder="Buscar por nome..."]')],
-    [3, (p) => p.locator("main label").filter({ hasText: "Helena Duarte" }).getByText("Head", { exact: true })],
-    [4, (p) => p.locator("main label").filter({ hasText: "Helena Duarte" }).getByText(/Ligado por/)],
-    [5, (p) => p.locator("main label").filter({ hasText: "Helena Duarte" }).getByRole("switch")],
-    [6, (p) => p.locator("main label").filter({ hasText: "Carla Mendes" }).getByText(/Desligado por/)],
+    [2, (p) => p.locator("main label").filter({ hasText: "Helena Duarte" }).getByText("Head", { exact: true })],
+    [3, (p) => p.locator("main label").filter({ hasText: "Helena Duarte" }).getByText(/Ligado por/)],
+    [4, (p) => p.locator("main label").filter({ hasText: "Helena Duarte" }).getByRole("switch")],
   ] },
 ];

@@ -729,8 +729,8 @@ Quem decide o que é venda nova é o **banco**, e só ele:
    ali era o time interno inteiro (`notify_time_interno`); com 500+ vendas por
    semana o dono do processo pediu: *"ninguém vai ser ligado a não ser
    manualmente"*. O gatilho chama `notify_venda_online`, que lê
-   `carbo_aviso_venda_online`; a tela é **TI → Usuários e acessos → Quem recebe a
-   venda** (`/ecommerce/avisos-de-venda`, RPCs `carbo_aviso_venda_online_lista`
+   `carbo_aviso_venda_online`; a tela é **TI → Usuários e acessos → Notificações, aba Vendas
+   online** (`/notificacoes?aba=venda_online`; o endereço antigo leva lá; RPCs `carbo_aviso_venda_online_lista`
    / `_definir`, flag do Admin).
    ⚠️ **"Head" é a AJUDA para escolher, nunca a regra**: a tela marca
    head/CEO/command (a lista do `GESTOR_FUNCOES`), e ser head não liga
@@ -779,6 +779,44 @@ Quem decide o que é venda nova é o **banco**, e só ele:
    ⚠️ O Comparativo (`useDashEcommerce`) conta compra pela MESMA chave
    (`chavePedido()`), e o status do pedido é o da linha mais avançada — upsell
    cancelado numa compra paga não vira "1 cancelado".
+
+### Notificações: QUEM RECEBE O QUÊ, por aba e por app (28/10/2026)
+Pedido do dono do processo: o sininho enchia de aviso que não era da pessoa e a
+notificação real sumia. **TI → Notificações** (`/notificacoes`, ex-"Quem recebe a
+venda") tem uma aba por assunto e um interruptor por pessoa. Regra de partida:
+**quem tem o APP que gera o aviso recebe**.
+
+```
+carbo_notif_abas        as abas (CADASTRO): modo app | lista | pessoal + flags
+carbo_notif_tipos       (tipo, reference_type) → aba (CADASTRO)
+carbo_notif_escolha     o interruptor por pessoa e aba (sem linha = padrão)
+carbo_notif_config      o interruptor GERAL do filtro (nasceu DESLIGADO)
+trg_notificacao_filtro  BEFORE INSERT em notifications — devolve NULL e a linha não nasce
+carbo_notif_painel() / carbo_notif_definir()   a tela (TI ou Admin)
+supabase/migrations/20261136000000_notificacoes_por_aba_e_por_app.sql
+```
+
+1. ⚠️ **UM porteiro, não ~25 geradores mexidos.** Ele só TIRA (é um E sobre quem
+   o gerador escolheu) — sininho, som, toast e celular mudam juntos porque a
+   linha nem nasce (o push é por comando, com tabela de transição).
+2. ⚠️ **Tipo NÃO cadastrado PASSA** e aparece na aba "Sem aba" da tela, com o
+   volume. Gerador novo de notificação: cadastre o tipo em `carbo_notif_tipos`
+   na MESMA migração, senão ele vai para todos e cai na lista de trabalho.
+3. ⚠️ **Erro dentro do porteiro deixa passar** (`exception → new`): aviso
+   perdido por defeito do filtro não volta mais.
+4. ⚠️ **`ecommerce_sale` serve a DUAS coisas**: venda interna
+   (`reference_type = carboze_order`) e on-line (`ecommerce_order`). Por isso a
+   chave é (tipo, referência), e a referência exata vence a vazia.
+5. **Modo `lista`** = o gerador já escolhe (venda online →
+   `carbo_aviso_venda_online`; mensagem de cliente → `carbo_wa_notificados`): o
+   porteiro não mexe, e a aba edita aquela lista (a venda online embute a tela
+   antiga, `AvisoVendaOnline embutido`). **Modo `pessoal`** (menção, o próprio
+   chamado, NF cancelada da própria venda, chat): padrão recebe.
+6. ⚠️ **Padrão é a FLAG, não o perfil**: head/CEO sem a flag do app não recebe
+   por padrão — liga-se à mão. `has_role admin` também não conta aqui (receberia
+   tudo).
+7. ⚠️ Voltar o interruptor ao valor do padrão APAGA a escolha (a pessoa volta a
+   seguir o app); "Padrão" faz o mesmo.
 
 ### Unidades: são DUAS perguntas, e trocá-las erra nos dois sentidos
 O kit não tem "um" número de unidades. Tem dois, e eles divergem:

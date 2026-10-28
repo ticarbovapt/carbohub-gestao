@@ -149,16 +149,16 @@ export const SECOES_USUARIOS: Secao[] = [
     ],
   },
 
-  // ── Quem recebe a venda on-line ─────────────────────────────────────────────
+  // ── Notificações ───────────────────────────────────────────────────────────
   {
-    id: "avisos-venda",
-    titulo: "Quem recebe a venda on-line",
-    rota: "/ecommerce/avisos-de-venda",
+    id: "notificacoes",
+    titulo: "Notificações",
+    rota: "/notificacoes",
     resumo:
-      "O aviso de venda do e-commerce (sininho, som, mensagem na tela e celular) vai só para quem estiver ligado aqui. Ninguém é ligado sozinho: nem ser head liga alguém. A venda interna, feita pelo Vender, não passa por aqui — ela continua avisando o time.",
+      "Quem recebe cada tipo de aviso no sininho, no som, na mensagem da tela e no celular. Uma aba por assunto — vendas internas, vendas online, e-commerce, marketing, finanças, estoque, TI, chat e os avisos pessoais. Por padrão recebe quem tem o app que gera o aviso; o interruptor liga ou desliga cada pessoa.",
     regras: {
       colaborador: [
-        "A tela é a mesma para todo o time do TI: quem tem o Carbo TI (ou o Carbo Admin) liberado liga e desliga qualquer pessoa.",
+        "A tela é a mesma para todo o time do TI: quem tem o Carbo TI (ou o Carbo Admin) liga e desliga qualquer pessoa, em qualquer aba.",
         "Cada mudança fica registrada com quem fez e quando.",
       ],
       gestor: [
@@ -167,16 +167,35 @@ export const SECOES_USUARIOS: Secao[] = [
     },
     blocos: [
       {
-        print: { chave: "avisos-venda", legenda: "A aba Todo o time, com quem recebe e quem não recebe." },
+        print: { chave: "notif-abas", legenda: "A aba Quadros do Marketing, com o time inteiro." },
         itens: [
-          { n: 1, titulo: "Recebem / Heads / Todo o time", texto: "Recebem: quem está ligado agora (a tela abre aqui). Heads: os heads e a diretoria, para ajudar a escolher. Todo o time: todo mundo do time interno." },
-          { n: 2, titulo: "Buscar", texto: "Procura pelo nome." },
-          { n: 3, titulo: "Selo Head", texto: "Só uma ajuda para escolher. Ser head não liga ninguém." },
-          { n: 4, titulo: "Ligado por… em…", texto: "Quem ligou a pessoa e em que dia." },
-          { n: 5, titulo: "Interruptor", texto: "Liga ou desliga na hora. Se o banco recusar, ele volta sozinho para como estava e aparece o motivo." },
-          { n: 6, titulo: "Desligado por… em…", texto: "Para quem já recebeu e foi desligado: quem desligou e quando." },
-          { titulo: "Ninguém ligado", texto: "Se ninguém estiver ligado, aparece um aviso amarelo no topo: nesse caso nenhuma venda on-line avisa ninguém." },
+          { n: 1, titulo: "Abas", texto: "Uma por assunto. A aba “Sem aba”, em laranja, só aparece quando chega um tipo de aviso que ainda não foi classificado: ele vai para todo mundo como antes, até o TI colocá-lo numa aba." },
+          { n: 2, titulo: "O que a aba avisa", texto: "Cada tipo de aviso da aba, com quantas notificações saíram nos últimos 30 dias." },
+          { n: 3, titulo: "Padrão", texto: "Quem recebe sem ninguém mexer: quem tem o app da aba (ex.: Carbo Marketing). Nos avisos pessoais e no Carbo Chat, o padrão é todo mundo." },
+          { n: 4, titulo: "Todo o time / Recebem / Não recebem", texto: "Filtra a lista. O número ao lado é quantas pessoas estão em cada grupo." },
+          { n: 5, titulo: "Ligado / desligado à mão", texto: "Quando alguém mudou a pessoa, a linha diz quem mudou e quando; senão, diz se ela segue o padrão (tem ou não tem o app)." },
+          { n: 6, titulo: "Padrão", texto: "Desfaz a escolha manual: a pessoa volta a seguir o app. Mudar o interruptor para o mesmo valor do padrão faz o mesmo." },
+          { n: 7, titulo: "Interruptor", texto: "Liga ou desliga na hora. Se o banco recusar, ele volta sozinho para como estava e aparece o motivo." },
         ],
+      },
+      {
+        titulo: "Vendas online",
+        print: { chave: "notif-venda-online", legenda: "A aba Vendas online: só recebe quem foi ligado à mão." },
+        itens: [
+          { n: 1, titulo: "Recebem / Heads / Todo o time", texto: "Recebem: quem está ligado agora. Heads: os heads e a diretoria, para ajudar a escolher. Todo o time: todo mundo do time interno." },
+          { n: 2, titulo: "Selo Head", texto: "Só uma ajuda para escolher. Ser head não liga ninguém." },
+          { n: 3, titulo: "Ligado por… em…", texto: "Quem ligou a pessoa e em que dia." },
+          { n: 4, titulo: "Interruptor", texto: "Liga ou desliga na hora." },
+          { titulo: "Ninguém ligado", texto: "Se ninguém estiver ligado, aparece um aviso amarelo: nesse caso nenhuma venda on-line avisa ninguém." },
+        ],
+      },
+      {
+        titulo: "Mensagem de cliente",
+        texto: "Quem recebe o aviso de cliente que respondeu no WhatsApp é escolhido na tela Conversas, no Carbo Atendimento. A aba mostra o link.",
+      },
+      {
+        titulo: "Faixa amarela no topo",
+        texto: "“O filtro ainda não está valendo” quer dizer que os avisos ainda chegam como antes. As escolhas feitas na tela ficam salvas e passam a valer quando o TI ligar o filtro.",
       },
     ],
   },
