@@ -149,7 +149,7 @@ export const SECOES_VENDAS: Secao[] = [
           { titulo: "5. Confira itens, pagamento, observação e avisos", texto: "Veja os itens abaixo." },
           { titulo: "6. Confirme", texto: "“Confirmar e criar no Bling” cria o pedido de venda no Bling e abre o Bling numa nova guia, na lista de pedidos de venda." },
           { titulo: "7. Emita a NF-e no Bling", texto: "No Bling, o pedido recém-criado está no topo da lista. Abra, confira e gere/emita a nota fiscal por lá, mantendo o número V… na observação: é ele que liga a nota ao pedido." },
-          { titulo: "8. A nota volta sozinha", texto: "A sincronização traz a nota e a liga ao pedido pelo V… da observação. O pedido passa para a aba “Do Bling” com o número da NF e o botão Baixar, e o card do Rastreio avança para “NF Finalizada”. Se a nota não casar, ela aparece em Vincular NFs." },
+          { titulo: "8. A nota volta sozinha", texto: "A sincronização traz a nota e a liga ao pedido pelo V… da observação. O pedido passa para a aba “Do Bling” com o número da NF e o botão Baixar, e o card do Rastreio avança para “Emitir Etiqueta”. Se a nota não casar, ela aparece em Vincular NFs." },
         ],
       },
       {

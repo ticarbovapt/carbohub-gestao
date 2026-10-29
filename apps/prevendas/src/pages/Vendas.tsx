@@ -51,13 +51,14 @@ type BadgeVariant = "success" | "warning" | "destructive" | "secondary" | "defau
 const STAGE_LABEL: Record<string, string> = {
   nova_venda: "Nova Venda", separacao_pendente: "Pedido Recebido", criar_op: "Criar OP",
   separando: "Em Separação", separado: "Separado", gerar_nf: "Gerar NF",
-  nf_finalizada: "NF Finalizada", emitir_etiqueta: "Emitir Etiqueta",
+  // nf_finalizada deixou de ser coluna (29/10/2026): o card dela está em "Emitir Etiqueta".
+  nf_finalizada: "Emitir Etiqueta", emitir_etiqueta: "Emitir Etiqueta", etiqueta_emitida: "Aguardando despacho",
   em_transporte: "Em Transporte", entregue: "Entregue", cancelado: "Cancelado",
 };
 const STAGE_VARIANT: Record<string, BadgeVariant> = {
   nova_venda: "secondary", separacao_pendente: "secondary", criar_op: "warning",
   separando: "warning", separado: "warning", gerar_nf: "warning",
-  nf_finalizada: "warning", emitir_etiqueta: "warning", em_transporte: "default",
+  nf_finalizada: "warning", emitir_etiqueta: "warning", etiqueta_emitida: "warning", em_transporte: "default",
   entregue: "success", cancelado: "destructive",
 };
 /**

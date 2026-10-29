@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useStock } from "@/hooks/useStock";
 import { HUBS } from "@/components/estoque/stockData";
-import { usePosVendaOrders, POSVENDA_STAGES } from "@/hooks/usePosVenda";
+import { usePosVendaOrders, POSVENDA_STAGES, colunaDaEtapa } from "@/hooks/usePosVenda";
 import { useProductionOrders } from "@/hooks/useProductionOrders";
 import { useProducibility } from "@/hooks/useProducibility";
 import { useOS, useVendasSemOS } from "@/hooks/useOS";
@@ -81,7 +81,7 @@ const ha = (d: number) => (d === 0 ? "hoje" : d === 1 ? "há 1 dia" : `há ${d} 
 
 const TERMINAL = new Set(["entregue", "cancelado"]);
 const PARADO_DIAS = 3;
-const stageLabel = (k: string) => POSVENDA_STAGES.find((s) => s.key === k)?.label ?? k;
+const stageLabel = (k: string) => POSVENDA_STAGES.find((s) => s.key === colunaDaEtapa(k))?.label ?? k;
 const POR_GRUPO = 6;
 
 export default function Alertas() {

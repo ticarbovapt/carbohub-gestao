@@ -74,7 +74,7 @@ export const pedidosFat = [
     delivery_address: "Av. Salgado Filho, 3100 - Lagoa Nova", delivery_city: "Natal", delivery_state: "RN", delivery_zip: "59075-000",
     items: [servico("Descarbonização CarboVAPT - Leves e caminhonetes", 4, 700)], subtotal: 2800, total: 2800,
     vendedor_id: U.colab.id, vendedor_name: U.colab.full_name },
-  { ...base, id: "f8", order_number: "V2026100049", created_at: dia(MES, 7), sale_date: `${MES}-07`, fulfillment_stage: "nf_finalizada", status: "invoiced",
+  { ...base, id: "f8", order_number: "V2026100049", created_at: dia(MES, 7), sale_date: `${MES}-07`, fulfillment_stage: "emitir_etiqueta", status: "invoiced",
     customer_name: "Posto Ponta Negra", cnpj: "18.765.432/0001-77", customer_phone: "(84) 98800-1122",
     delivery_address: "Av. Eng. Roberto Freire, 1800", delivery_city: "Natal", delivery_state: "RN", delivery_zip: "59090-000",
     items: [item("CarboZé Sachê 10ml", "CARB-SACH-10ML", 300, 4.9)], subtotal: 1470, total: 1470,

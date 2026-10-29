@@ -96,7 +96,7 @@ export const SHOTS = [
       [2, (p) => p.locator("main div.rounded-xl.bg-card.p-4").filter({ hasText: "V2026080064" }).first().getByText(/Entra na fila em/)],
     ] },
   { chave: "rastreio-nf", papel: "colaborador", url: "/logistica/pos-venda", viewport: { width: 1600, height: 800 },
-    antes: ver(col("NF Finalizada")), clip: (p) => [col("Gerar Nota Fiscal")(p), col("NF Finalizada")(p)], pad: 10, marcas: [
+    antes: ver(col("Etiqueta emitida")), clip: (p) => [col("Gerar Nota Fiscal")(p), col("Emitir Etiqueta")(p), col("Etiqueta emitida")(p)], pad: 10, marcas: [
       [1, (p) => col("Gerar Nota Fiscal")(p).getByText(/aguardando NF/)],
       [2, (p) => pv("Posto Ponta Negra")(p).getByText(/NF 000512/)],
       [3, (p) => pv("V2026070045")(p).getByText(/NF 000517/)],

@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase as db } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { lerSemTeto } from "@carbo/shell";
-import { POSVENDA_STAGES, type FulfillmentStage } from "@/hooks/usePosVenda";
+import { POSVENDA_STAGES, colunaDaEtapa, type FulfillmentStage } from "@/hooks/usePosVenda";
 
 /**
  * Contratos de recorrência, agrupados.
@@ -174,6 +174,6 @@ export function useCancelarParcela() {
 
 /** Rótulo da etapa. Mesma lista do quadro (packages/posvenda). */
 export const stageLabel = (k: FulfillmentStage | string): string =>
-  POSVENDA_STAGES.find((s) => s.key === k)?.label ?? String(k);
+  POSVENDA_STAGES.find((s) => s.key === colunaDaEtapa(k))?.label ?? String(k);
 
 export { temNota };

@@ -7,13 +7,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { useAuth } from "@/contexts/AuthContext";
 import { useVendedoresDir } from "@/hooks/useVendas";
-import { usePosVendaOrders, POSVENDA_STAGES, type FulfillmentStage, type PosVendaOrder } from "@/hooks/usePosVenda";
+import { usePosVendaOrders, POSVENDA_STAGES, colunaDaEtapa, type FulfillmentStage, type PosVendaOrder } from "@/hooks/usePosVenda";
 
 const brl = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
 const fmtDate = (s: string) => new Date(s).toLocaleDateString("pt-BR");
 // Data-only (yyyy-mm-dd) sem shift de fuso.
 const fmtDay = (s: string | null) => (s ? new Date(s + "T00:00:00").toLocaleDateString("pt-BR") : "—");
-const stageLabel = (k: FulfillmentStage) => POSVENDA_STAGES.find((s) => s.key === k)?.label ?? k;
+const stageLabel = (k: FulfillmentStage) => POSVENDA_STAGES.find((s) => s.key === colunaDaEtapa(k))?.label ?? k;
 // Mesma formatação do Ops: o vendedor confere o documento contra o pedido.
 const fmtDoc = (v: string | null) => {
   const d = (v ?? "").replace(/\D/g, "");
@@ -34,7 +34,9 @@ export default function PosVenda() {
   const byStage = useMemo(() => {
     const map: Record<string, PosVendaOrder[]> = {};
     for (const s of POSVENDA_STAGES) map[s.key] = [];
-    for (const o of orders) (map[o.fulfillment_stage] ??= []).push(o);
+    // `colunaDaEtapa`: etapa que deixou de ser coluna (nf_finalizada) não pode
+    // sumir do quadro — ela aparece na coluna que a substituiu.
+    for (const o of orders) (map[colunaDaEtapa(o.fulfillment_stage)] ??= []).push(o);
     return map;
   }, [orders]);
 
@@ -89,9 +91,12 @@ export default function PosVenda() {
               return (
                 <div key={stage.key} className="flex-1 min-w-[85vw] sm:min-w-[230px] snap-start h-full rounded-2xl border border-border bg-board-surface/40 flex flex-col">
                   <div className="px-3 py-2.5 border-b border-border flex items-center justify-between shrink-0">
-                    <span className="flex items-center gap-2 text-sm font-semibold">
-                      <span className="h-2.5 w-2.5 rounded-full" style={{ background: stage.color }} />
-                      {stage.label}
+                    <span className="flex flex-col min-w-0">
+                      <span className="flex items-center gap-2 text-sm font-semibold">
+                        <span className="h-2.5 w-2.5 rounded-full" style={{ background: stage.color }} />
+                        {stage.label}
+                      </span>
+                      {stage.sub && <span className="pl-[18px] text-[11px] text-muted-foreground">{stage.sub}</span>}
                     </span>
                     <span className="text-xs text-muted-foreground tabular-nums">{items.length}</span>
                   </div>

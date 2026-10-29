@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import type { Shipment, ShipmentStatus } from "@/components/logistica/shipments";
 
 // Etapas do pedido em que a NF já está resolvida (portão fiscal).
-const NF_OK_STAGES = ["nf_finalizada", "em_transporte", "entregue"];
+const NF_OK_STAGES = ["nf_finalizada", "emitir_etiqueta", "etiqueta_emitida", "em_transporte", "entregue"];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Remessas (ops_shipments) — tabela interna do Carbo Ops. RLS: authenticated.

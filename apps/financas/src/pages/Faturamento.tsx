@@ -93,12 +93,13 @@ const isBlingDupOfSystem = (o: FaturamentoOrder) =>
 // mas o botão fica travado mostrando em que etapa do pós-venda ele está.
 const STAGE_ORDER = [
   "nova_venda", "separacao_pendente", "criar_op", "separando", "separado",
-  "gerar_nf", "nf_finalizada", "em_transporte", "entregue",
+  "gerar_nf", "nf_finalizada", "emitir_etiqueta", "etiqueta_emitida", "em_transporte", "entregue",
 ];
 const STAGE_LABELS: Record<string, string> = {
   nova_venda: "Nova Venda", separacao_pendente: "Pedido Recebido", criar_op: "Criar OP",
   separando: "Em Separação", separado: "Separado", gerar_nf: "Gerar NF",
-  nf_finalizada: "NF Finalizada", em_transporte: "Em Transporte", entregue: "Entregue",
+  nf_finalizada: "Emitir Etiqueta", emitir_etiqueta: "Emitir Etiqueta",
+  etiqueta_emitida: "Aguardando despacho", em_transporte: "Em Transporte", entregue: "Entregue",
   cancelado: "Cancelado",
 };
 const stageLabel = (s: string | null) => (s && STAGE_LABELS[s]) || "Pós-venda";

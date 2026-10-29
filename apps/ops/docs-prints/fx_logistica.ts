@@ -98,7 +98,7 @@ const recorrencias: Ped[] = [
   // Construtora Atlântico — trimestral, 4 parcelas: a deste mês já tem NF (travada).
   parcela("rg2", 1, 4, "trimestral", -3, { ...atlantico, order_number: "V2026070044", fulfillment_stage: "entregue", status: "delivered",
     invoice_number: "000301", bling_nf_id: 301, created_at: atras(110), updated_at: atras(85), ppf_date: dia(-90), ppe_date: dia(-88) }),
-  parcela("rg2", 2, 4, "trimestral", 0, { ...atlantico, id: "rc-atl2", order_number: "V2026070045", fulfillment_stage: "nf_finalizada", status: "invoiced",
+  parcela("rg2", 2, 4, "trimestral", 0, { ...atlantico, id: "rc-atl2", order_number: "V2026070045", fulfillment_stage: "etiqueta_emitida", status: "invoiced",
     invoice_number: "000517", bling_nf_id: 517, created_at: atras(110), stage_changed_at: atras(1), ppf_date: dia(-6), ppe_date: dia(-4) }),
   parcela("rg2", 3, 4, "trimestral", 3, { ...atlantico, order_number: "V2026070046", fulfillment_stage: "agendado", status: "agendado",
     created_at: atras(110), stage_changed_at: atras(1), ppf_date: dia(84), ppe_date: dia(86) }),
@@ -154,7 +154,7 @@ const avulsos: Ped[] = [
     payment_terms: "Boleto 28/56 dias", shipment_volumes: 3, shipment_weight_kg: 18.4, shipment_carrier: "Jadlog",
     shipment_quote_value: 186.4, agreed_delivery_date: dia(2), ppf_date: dia(-4), ppe_date: dia(0),
     notes: "Receber no posto da matriz, falar com o Sr. Joaquim." }),
-  ped({ id: "pv-ponta", order_number: "V2026100049", created_at: atras(10), stage_changed_at: atras(1), fulfillment_stage: "nf_finalizada", status: "invoiced",
+  ped({ id: "pv-ponta", order_number: "V2026100049", created_at: atras(10), stage_changed_at: atras(1), fulfillment_stage: "emitir_etiqueta", status: "invoiced",
     customer_name: "Posto Ponta Negra", cnpj: "69012345000166", customer_phone: "(84) 99100-2030",
     delivery_address: "Av. Engenheiro Roberto Freire, 8790", delivery_city: "Natal", delivery_state: "RN", delivery_zip: "59090-000",
     items: [item("CarboZé 100ml", "CZ100", "p1", 100, 15.6)], invoice_number: "000512", bling_nf_id: 512,

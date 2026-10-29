@@ -22,6 +22,16 @@ pedido parado numa etapa ausente **sumia do quadro** em vez de aparecer numa
 coluna vazia. Etapa nova entra aqui **e** no CHECK de `fulfillment_stage` em
 `carboze_orders` (migração), nesta ordem.
 
+⚠️ **Desde 29/10/2026 não existe a coluna "NF Finalizada"** (dono do processo):
+a NF vinculada leva o card DIRETO a "Emitir Etiqueta" (gatilho
+`carboze_orders_nf_autostage`), e gerar o PDF da etiqueta o move para
+`etiqueta_emitida` ("Etiqueta emitida · aguardando despacho"). `nf_finalizada`
+continua no CHECK e no tipo: o gatilho converte quem ainda a gravar, e
+`colunaDaEtapa()` (`ETAPA_ANTIGA`) põe o card legado na coluna que a
+substituiu — front no ar antes do SQL não esconde pedido. Etapa que deixar de
+ser coluna entra em `ETAPA_ANTIGA`, nunca é só apagada da lista
+(`20261137000000_rastreio_nf_vai_direto_para_etiqueta.sql`).
+
 ### `packages/demandas` — tipos de demanda do TI
 Fonte ÚNICA de `KINDS`. O `BugButton.tsx` existe nos **seis** apps (arquivos byte
 a byte idênticos) e o quadro do TI é o sétimo consumidor — sete cópias divergem, e

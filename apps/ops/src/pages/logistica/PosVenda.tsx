@@ -15,7 +15,7 @@ import { CarboBadge } from "@/components/ui/carbo-badge";
 import {
   usePosVendaOrders, usePosVendaRealtime, useUpdateFulfillmentStage, useUpdateShipmentInfo,
   useEstoqueDoPedido, useOpsBySource, fetchNfFiles, type NfFiles,
-  POSVENDA_STAGES, type FulfillmentStage, type PosVendaOrder,
+  POSVENDA_STAGES, colunaDaEtapa, type FulfillmentStage, type PosVendaOrder,
 } from "@/hooks/usePosVenda";
 import { QuadroRolavel } from "@carbo/shell";
 import { gerarEtiquetaPDF, type EtiquetaData } from "@/lib/etiquetaPdf";
@@ -31,7 +31,7 @@ const fmtDoc = (v: string | null) => {
   if (d.length === 11) return d.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, "$1.$2.$3-$4");
   return v?.trim() || "—";
 };
-const stageLabel = (k: FulfillmentStage) => POSVENDA_STAGES.find((s) => s.key === k)?.label ?? k;
+const stageLabel = (k: FulfillmentStage) => POSVENDA_STAGES.find((s) => s.key === colunaDaEtapa(k))?.label ?? k;
 // Normaliza volumes (≥1) e peso (aceita vírgula) dos campos de expedição.
 const parseVolumes = (v: string): number => { const n = Math.round(Number(v.trim())); return v.trim() !== "" && Number.isFinite(n) && n > 0 ? n : 1; };
 const parsePesoKg = (p: string): number | null => { const s = p.trim().replace(",", "."); if (s === "") return null; const n = Number(s); return Number.isFinite(n) && n >= 0 ? n : null; };
@@ -439,14 +439,19 @@ const CorpoDoCard = memo(function CorpoDoCard({ o, op, onStage, onEtiqueta }: {
           pedindo a DANFE, e quem atende tinha de ir ao
           Faturamento procurar. A cor acompanha a etapa — verde em
           "NF Finalizada", azul daí em diante — porque ali ela é
-          a conquista da etapa, e depois é referência. */}
+          a conquista da etapa, e depois é referência.
+          Desde 29/10/2026 "NF Finalizada" não existe: a nota traz o card
+          direto para "Emitir Etiqueta", e é ali que ela fica verde. */}
       <ChipsDaNota o={o}
-        variant={o.fulfillment_stage === "nf_finalizada" ? "success" : "info"} />
-      {o.fulfillment_stage === "emitir_etiqueta" && (
+        variant={colunaDaEtapa(o.fulfillment_stage) === "emitir_etiqueta" ? "success" : "info"} />
+      {(colunaDaEtapa(o.fulfillment_stage) === "emitir_etiqueta" || o.fulfillment_stage === "etiqueta_emitida") && (
         <div onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-          <Button size="sm" variant="outline" className="w-full h-9 text-xs gap-1.5"
+          {/* Em "Etiqueta emitida" o botão continua, para REIMPRIMIR: caixa
+              rasgada, volume a mais, impressora que travou. */}
+          <Button size="sm" variant={o.fulfillment_stage === "etiqueta_emitida" ? "ghost" : "outline"}
+            className="w-full h-9 text-xs gap-1.5"
             onClick={() => onEtiqueta(o)}>
-            <Tag className="h-3.5 w-3.5" /> Emitir etiqueta
+            <Tag className="h-3.5 w-3.5" /> {o.fulfillment_stage === "etiqueta_emitida" ? "Reimprimir etiqueta" : "Emitir etiqueta"}
           </Button>
         </div>
       )}
@@ -464,7 +469,7 @@ const CorpoDoCard = memo(function CorpoDoCard({ o, op, onStage, onEtiqueta }: {
       ) : (
       <div onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
         <Select
-          value={o.fulfillment_stage}
+          value={colunaDaEtapa(o.fulfillment_stage)}
           onValueChange={(v) => onStage(o, v as FulfillmentStage)}
         >
           <SelectTrigger className="h-9 text-xs mt-0.5"><SelectValue /></SelectTrigger>
@@ -603,7 +608,9 @@ export default function PosVenda() {
   const etqTotalVolumes = etiquetaOrder?.shipment_volumes && etiquetaOrder.shipment_volumes > 0 ? etiquetaOrder.shipment_volumes : 1;
 
   // Gera a etiqueta usando os dados JÁ salvos no card (sem editar aqui).
-  // moveToTransporte=true → depois move o card p/ Em Transporte (respeita portão NF).
+  // Gerou o PDF ⇒ o card vai para "Etiqueta emitida · aguardando despacho";
+  // moveToTransporte=true ⇒ direto para Em Transporte. Os dois respeitam o
+  // portão da NF. Reimpressão (já em "Etiqueta emitida") não move nada.
   async function emitirEtiqueta(order: PosVendaOrder, moveToTransporte: boolean) {
     setGerando(true);
     try {
@@ -629,6 +636,8 @@ export default function PosVenda() {
       await gerarEtiquetaPDF(payload);
       if (moveToTransporte) {
         requestStage(order, "em_transporte");
+      } else if (colunaDaEtapa(order.fulfillment_stage) === "emitir_etiqueta") {
+        requestStage(order, "etiqueta_emitida");
       }
       setEtiquetaOrder(null);
     } finally {
@@ -669,7 +678,9 @@ export default function PosVenda() {
   const byStage = useMemo(() => {
     const map: Record<string, PosVendaOrder[]> = {};
     for (const s of POSVENDA_STAGES) map[s.key] = [];
-    for (const o of orders) (map[o.fulfillment_stage] ??= []).push(o);
+    // `colunaDaEtapa`: etapa que deixou de ser coluna (nf_finalizada) não pode
+    // sumir do quadro — ela aparece na coluna que a substituiu.
+    for (const o of orders) (map[colunaDaEtapa(o.fulfillment_stage)] ??= []).push(o);
     return map;
   }, [orders]);
 
@@ -678,7 +689,8 @@ export default function PosVenda() {
   // "Separado" é o ponto em que o estoque é REALMENTE deduzido — por isso também
   // passa pelo portão (B10: mover direto pra Separado não pode pular a conferência).
   // Portão fiscal: não deixa o pedido ir pra Transporte/Entregue sem NF emitida.
-  // Considera "com NF" quem já tem bling_nf_id/nº ou já passou de "NF Finalizada".
+  // Considera "com NF" quem já tem bling_nf_id/nº ou já chegou a "Emitir Etiqueta"
+  // (a etapa em que a NF vinculada põe o card).
   const STAGE_ORDER = POSVENDA_STAGES.map((s) => s.key);
   const hasNF = (o: PosVendaOrder) =>
     // ⚠️ `notaDoPedido` e não `o.bling_nf_id`: o portão fiscal recusava mover
@@ -686,13 +698,13 @@ export default function PosVenda() {
     // sobre um pedido que já tinha nota. A trava estava certa; ela é que não
     // enxergava a segunda conta.
     !!notaDoPedido(o, "venda").id || !!notaDoPedido(o, "venda").numero ||
-    STAGE_ORDER.indexOf(o.fulfillment_stage) >= STAGE_ORDER.indexOf("nf_finalizada");
+    STAGE_ORDER.indexOf(colunaDaEtapa(o.fulfillment_stage)) >= STAGE_ORDER.indexOf("emitir_etiqueta");
 
   function requestStage(order: PosVendaOrder, stage: FulfillmentStage) {
-    if (order.fulfillment_stage === stage) return;
-    if ((stage === "emitir_etiqueta" || stage === "em_transporte" || stage === "entregue") && !hasNF(order)) {
+    if (colunaDaEtapa(order.fulfillment_stage) === stage) return;
+    if ((stage === "emitir_etiqueta" || stage === "etiqueta_emitida" || stage === "em_transporte" || stage === "entregue") && !hasNF(order)) {
       toast.error("Emita a NF antes de gerar etiqueta/enviar", {
-        description: "Este pedido ainda não tem nota fiscal finalizada. A etiqueta mostra o nº da NF — passe por “Gerar Nota Fiscal” → “NF Finalizada” antes de emitir a etiqueta ou mover para Transporte/Entrega.",
+        description: "Este pedido ainda não tem nota fiscal. A etiqueta mostra o nº da NF — quando a nota é vinculada em “Gerar Nota Fiscal”, o card vai sozinho para “Emitir Etiqueta”.",
       });
       return;
     }
@@ -818,9 +830,12 @@ export default function PosVenda() {
                       e arredondar o que vai ser conciliado gera discussão sobre
                       diferença que não existe. */}
                   <div className="px-3 py-2 border-b border-border flex items-start justify-between gap-2 shrink-0">
-                    <span className="flex items-center gap-2 text-sm font-semibold min-w-0">
-                      <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: stage.color }} />
-                      <span className="truncate">{stage.label}</span>
+                    <span className="flex flex-col min-w-0">
+                      <span className="flex items-center gap-2 text-sm font-semibold min-w-0">
+                        <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: stage.color }} />
+                        <span className="truncate">{stage.label}</span>
+                      </span>
+                      {stage.sub && <span className="pl-[18px] text-[11px] text-muted-foreground truncate">{stage.sub}</span>}
                     </span>
                     <span className="flex flex-col items-end gap-0.5 shrink-0">
                       <span className="flex items-center gap-1.5">
@@ -1089,6 +1104,11 @@ export default function PosVenda() {
                 <p className="col-span-3 text-[11px] text-muted-foreground pt-1">
                   Serão gerada(s) <strong>{etqTotalVolumes}</strong> etiqueta(s) (uma por volume). Para alterar, use “Editar” no detalhe do pedido.
                 </p>
+                {colunaDaEtapa(etiquetaOrder.fulfillment_stage) === "emitir_etiqueta" && (
+                  <p className="col-span-3 text-[11px] text-muted-foreground">
+                    Ao gerar, o card vai para <strong>Etiqueta emitida · aguardando despacho</strong>.
+                  </p>
+                )}
               </div>
 
               <div className="flex flex-col gap-2 pt-1">

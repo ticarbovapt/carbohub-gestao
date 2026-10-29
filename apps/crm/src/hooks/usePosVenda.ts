@@ -20,7 +20,7 @@ const db = supabase as unknown as { from: (t: string) => any };
 
 // Etapas: fonte única em @carbo/posvenda, compartilhada com o Ops. Reexporta
 // para as telas seguirem importando daqui e nada mais precisar mudar.
-export { POSVENDA_STAGES, stageLabel, stageIndex } from "@carbo/posvenda";
+export { POSVENDA_STAGES, stageLabel, stageIndex, colunaDaEtapa } from "@carbo/posvenda";
 export type { FulfillmentStage, PosVendaStage } from "@carbo/posvenda";
 import type { FulfillmentStage } from "@carbo/posvenda";
 

@@ -18,7 +18,7 @@ const db = supabase as unknown as {
 // Etapas: fonte única em @carbo/posvenda, compartilhada com o Sales. Este app
 // CONTROLA as etapas; o Sales só acompanha. Etapa nova entra lá, e o CHECK de
 // fulfillment_stage em carboze_orders tem que aceitar antes.
-export { POSVENDA_STAGES, stageIndex } from "@carbo/posvenda";
+export { POSVENDA_STAGES, stageIndex, stageLabel, colunaDaEtapa } from "@carbo/posvenda";
 export type { FulfillmentStage, PosVendaStage } from "@carbo/posvenda";
 import { POSVENDA_STAGES } from "@carbo/posvenda";
 import type { FulfillmentStage } from "@carbo/posvenda";
