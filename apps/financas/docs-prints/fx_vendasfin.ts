@@ -90,7 +90,9 @@ export const pedidosFat = [
   // Aba "NF Online": marketplace.
   { ...base, id: "o1", order_number: "BLING2-512", created_at: dia(MES, 20), sale_date: `${MES}-20`, fulfillment_stage: null, external_ref: "bling2-512", bling_conta: 2, segmento: "online",
     customer_name: "Juliana Ferreira (Mercado Livre)", cnpj: "123.456.789-09", items: [item("CarboZé Kit 5 Frascos 100ml", "124", 1, 149.5)], subtotal: 149.5, total: 149.5,
-    bling2_nf_id: 5530, invoice_number: "000091", nf_valida: true, nf_situacao: "Autorizada", vendedor_id: null, vendedor_name: null },
+    // ⚠️ Como em produção: a ponte do Bling 2 NÃO grava a nota no pedido — ela
+    // vem de bling2_orders.nf_bling_id → bling2_nfe (useNotasDosPedidos).
+    vendedor_id: null, vendedor_name: null },
 ];
 
 // ── Bling: pré-visualização do "Criar no Bling" (bling-sync dry_run) ─────────
@@ -233,6 +235,11 @@ export const FX: Record<string, unknown> = {
   carboze_orders_secure: porRota(() => ordersSecure),
   bling_nfe: porRota(() => (location.pathname.startsWith("/comissionamento") ? nfsComissao : notas)),
   carbo_nf_filial_sem_pedido: porRota(() => notasFilial),
+  bling2_orders: porRota(() => [{ bling_id: 512, nf_bling_id: 5530 }]),
+  bling2_nfe: porRota(() => [
+    { bling_id: 5512, numero: "000087", serie: "1", situacao: "Emitida DANFE", pdf_url: "https://exemplo.invalid/danfe-87.pdf", xml_url: null },
+    { bling_id: 5530, numero: "000091", serie: "2", situacao: "Emitida DANFE", pdf_url: "https://exemplo.invalid/danfe-91.pdf", xml_url: null },
+  ]),
   carbo_nfse_emissoes: porRota(() => Object.values(emissoes).flat()),
   carbo_config_fiscal: porRota(() => [{ chave: "bling1_natureza_bonificacao_id", valor: "15108700019" }, { chave: "bling2_natureza_bonificacao_id", valor: null }]),
   commission_statements: porRota(() => statements),

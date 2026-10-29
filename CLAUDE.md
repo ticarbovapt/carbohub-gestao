@@ -3392,6 +3392,20 @@ botão "Nova Requisição" em todas. Hoje cada área tem rota e item de menu:
    ⚠️ `Suprimentos.tsx` ainda monta Recebimento e NF de compra como abas próprias
    (segunda cópia da mesma tela) — virar link para `/compras/...` é o próximo passo.
 
+### Faturamento: a nota de TODO pedido, com a SÉRIE (29/10/2026)
+Pedido do dono do processo: a aba NF Online dizia "Sem NF" para venda com nota,
+e o número sozinho não identifica a nota (*"a 450 pode ser da série 1, da 2 ou
+da 10"*). `hooks/useNotasDosPedidos.ts` resolve, para os pedidos da PÁGINA, a
+nota de venda nas DUAS contas — colunas do pedido (`bling_nf_id`/`bling2_nf_id`),
+pedido importado da filial (`external_ref 'bling2-<id>'` → `bling2_orders.nf_bling_id`)
+e importado da matriz (`bling_nfe.order_id`) — com número, SÉRIE, situação e links.
+1. ⚠️ **A ponte do Bling 2 NUNCA grava a nota no pedido** (`20260861`): ler só as
+   colunas de `carboze_orders` é o que fazia a aba on-line inteira dizer "Sem NF".
+2. ⚠️ **Baixar respeita a CONTA** (`BaixarNFButton conta=`): a busca ao vivo
+   (`nfe_links` do `bling-sync`) só conhece a matriz; a filial abre o link do
+   espelho `bling2_nfe` e, sem ele, DIZ que ainda não tem arquivo.
+3. ML Full fatura no próprio ML: sem nota no Bling, continua "Sem NF" — é o dado.
+
 ### Contas a receber NASCE da NF — e o banco dá baixa por IDENTIDADE (21/10/2026)
 Decisão do dono do processo: *"quando é faturado (emitido a NF) já gera o contas
 a receber … de acordo com o prazo/parcelas … e pronto para quando o banco mandar

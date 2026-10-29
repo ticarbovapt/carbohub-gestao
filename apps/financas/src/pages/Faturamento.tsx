@@ -27,6 +27,7 @@ import { useNfseDosPedidos, nfseValida } from "@/hooks/useNfseEmissao";
 import { NfseEmitirDialog } from "@/components/faturamento/NfseEmitirDialog";
 import { BlingConfirmDialog } from "@/components/faturamento/BlingConfirmDialog";
 import { BaixarNFButton } from "@/components/faturamento/BaixarNFButton";
+import { useNotasDosPedidos, notaInvalida } from "@/hooks/useNotasDosPedidos";
 import { VincularNFsTab } from "@/components/faturamento/VincularNFsTab";
 import { VincularNFsFilialTab } from "@/components/faturamento/VincularNFsFilialTab";
 import { TodasNFsTab } from "@/components/faturamento/TodasNFsTab";
@@ -203,6 +204,10 @@ export default function Faturamento() {
   const blingPag = paginate(bling, pagina);
   const onlinePag = paginate(online, pagina);
   const setPSist = setPagina, setPBling = setPagina, setPOnline = setPagina;
+  // A nota de cada pedido da página, das DUAS contas (número, série, links).
+  const { data: notas } = useNotasDosPedidos(
+    activeTab === "bling" ? blingPag.slice : activeTab === "online" ? onlinePag.slice : sistPag.slice,
+  );
   // Nova busca/mês/aba → volta pra página 1.
   function resetPages() { setPagina(1); }
 
@@ -248,6 +253,7 @@ export default function Faturamento() {
             const nfseTeste = servico ? (nfsePorPedido?.[o.id] ?? []).find((e) => e.ambiente === 2 && e.status === "autorizada") : null;
             const nfsePendente = servico ? (nfsePorPedido?.[o.id] ?? []).find((e) => e.status === "indeterminado") : null;
             const hasNF = servico ? !!nfse : !faltaAlgumaNF(o);
+            const nota = servico ? undefined : notas?.[o.id];
             const colSpan = showAction ? 7 : 6;
             // Financeiro defensivo: pedidos antigos podem não ter subtotal/discount.
             const itemsBruto = o.items.reduce((s, it) => s + num(it.quantity) * num(it.unit_price), 0);
@@ -285,20 +291,30 @@ export default function Faturamento() {
                           {nfseTeste && <CarboBadge size="sm" variant="outline" title="Emitida no ambiente de teste — não vale como nota">teste ok</CarboBadge>}
                         </div>
                       )
-                    ) : hasNF ? (
+                    ) : (hasNF || (nota && !showAction)) ? (
                       <div className="flex items-center gap-2">
                         {/* A cor vem da SITUAÇÃO da nota, não do fato de existir
                             uma. Antes era `variant="success"` fixo: nota
-                            cancelada aparecia verde, igual a faturamento bom. */}
+                            cancelada aparecia verde, igual a faturamento bom.
+                            ⚠️ A SÉRIE vai junto do número (pedido do dono do
+                            processo, 29/10/2026): a 450 da série 1 e a 450 da
+                            série 2 são notas diferentes. */}
                         <CarboBadge
-                          variant={o.nf_valida ? "success" : "destructive"}
-                          className="gap-1"
-                          title={o.nf_situacao ?? undefined}
+                          variant={(nota ? !notaInvalida(nota) && (o.bling_nf_id || o.bling2_nf_id ? o.nf_valida : true) : o.nf_valida) ? "success" : "destructive"}
+                          className="gap-1 whitespace-nowrap"
+                          title={[nota?.conta === 2 ? "Filial (Bling 2)" : nota ? "Matriz (Bling 1)" : null, nota?.situacao ?? o.nf_situacao].filter(Boolean).join(" · ") || undefined}
                         >
-                          <FileText className="h-3 w-3" /> NF {o.invoice_number || o.bling_nf_id}
-                          {!o.nf_valida && o.nf_situacao ? ` · ${o.nf_situacao}` : ""}
+                          <FileText className="h-3 w-3" /> NF {nota?.numero || o.invoice_number || o.bling_nf_id}
+                          {nota?.serie ? <span className="font-normal opacity-80">· série {nota.serie}</span> : null}
+                          {!o.nf_valida && o.nf_situacao && !nota ? ` · ${o.nf_situacao}` : ""}
                         </CarboBadge>
-                        <BaixarNFButton blingNfId={o.bling_nf_id as number} label="Baixar" />
+                        <BaixarNFButton
+                          blingNfId={nota?.blingId ?? (o.bling_nf_id as number)}
+                          conta={nota?.conta ?? 1}
+                          pdfUrl={nota?.pdf_url}
+                          xmlUrl={nota?.xml_url}
+                          label="Baixar"
+                        />
                       </div>
                     ) : (
                       <CarboBadge variant="warning">Sem NF</CarboBadge>
@@ -365,10 +381,12 @@ export default function Faturamento() {
                       </div>
 
                       {/* NF */}
-                      {(o.invoice_number || o.bling_nf_id) && (
+                      {(nota || o.invoice_number || o.bling_nf_id) && (
                         <div className="text-xs">
                           <span className="text-muted-foreground">Nota Fiscal: </span>
-                          <span className="font-medium">{o.invoice_number || `#${o.bling_nf_id}`}</span>
+                          <span className="font-medium">{nota?.numero || o.invoice_number || `#${o.bling_nf_id}`}</span>
+                          {nota?.serie && <span className="text-muted-foreground"> · série {nota.serie}</span>}
+                          {nota && <span className="text-muted-foreground"> · {nota.conta === 2 ? "filial (Bling 2)" : "matriz (Bling 1)"}</span>}
                           {!o.nf_valida && o.nf_situacao && (
                             <span className="ml-1.5 font-semibold text-destructive">{o.nf_situacao}</span>
                           )}
