@@ -476,7 +476,12 @@ export default function Vender() {
       total: round2(Math.max(0, bruto - desc)),
       percentAgregado: bruto > 0 ? round2((desc / bruto) * 100) : 0,
     };
-  }, [rows]);
+    // ⚠️ `produtos` na lista: `ehBonificacao` lê o catálogo. Só com `rows`,
+    // reabrir uma venda calculava o total ANTES de o catálogo chegar (o brinde
+    // contava cheio) e não recalculava depois — salvar gravava o brinde no
+    // total com desconto 0, enquanto as linhas saíam certas (V2026100075,
+    // +R$ 192,00).
+  }, [rows, produtos]);
   const discTier = useMemo(() => resolveTier(percentAgregado, discountCfg), [percentAgregado, discountCfg]);
 
   // Totais dos itens de SERVIÇO (preço fixo por modalidade). Separado da alçada de produto.
