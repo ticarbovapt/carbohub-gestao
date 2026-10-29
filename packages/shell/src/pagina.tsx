@@ -12,6 +12,7 @@ import type { ShellNavItem, ShellNavSection } from "./types";
 const TITULOS_COMUNS: Record<string, string> = {
   "/vender": "Nova venda",
   "/perfil": "Meu perfil",
+  "/chamados": "Chamados",
   "/bugs": "Chamados",
   "/equipe": "Minha equipe",
   "/chat": "Carbo Chat",

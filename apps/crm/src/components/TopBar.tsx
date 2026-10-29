@@ -123,7 +123,7 @@ export function TopBar({ appName, appKey, onMenu }: { appName: string; appKey: s
                 <Link to="/equipe"><Users className="h-4 w-4 mr-2" /> Minha equipe</Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
-                <Link to="/bugs"><Bug className="h-4 w-4 mr-2" /> Bugs e sugestões</Link>
+                <Link to="/chamados"><Bug className="h-4 w-4 mr-2" /> Bugs e sugestões</Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={signOut} className="text-destructive focus:text-destructive">

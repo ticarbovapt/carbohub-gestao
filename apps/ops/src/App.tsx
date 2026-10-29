@@ -24,7 +24,7 @@ import ViagensLog from "./pages/logistica/Viagens";
 import OrdensServico from "./pages/campo/OrdensServico";
 import Alertas from "./pages/campo/Alertas";
 import { OPS_ALL_ITEMS } from "@/lib/opsNav";
-import { PaginaNaoEncontrada } from "@carbo/shell";
+import { PaginaNaoEncontrada, IrPara } from "@carbo/shell";
 
 /**
  * A Esteira do On-line (e as Mensagens ao cliente, que só se chegava por ela)
@@ -49,7 +49,8 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/perfil" element={<Profile />} />
         <Route path="/documentacao" element={<Documentacao />} />
-        <Route path="/bugs" element={<BugReports />} />
+        <Route path="/chamados" element={<BugReports />} />
+        <Route path="/bugs" element={<IrPara para="/chamados" />} />
         <Route path="/equipe" element={<MinhaEquipe />} />
         <Route path="/vender" element={<Vender />} />
         <Route path="/chat" element={<Chat />} />

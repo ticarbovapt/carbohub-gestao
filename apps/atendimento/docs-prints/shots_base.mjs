@@ -115,14 +115,14 @@ SHOTS.push(
     [5, (p) => dlg(p).getByText(/Anexar print/).first()],
     [6, (p) => dlg(p).getByRole("button", { name: "Enviar" })],
   ] },
-  { chave: "bugs", papel: "colaborador", url: "/bugs",
+  { chave: "bugs", papel: "colaborador", url: "/chamados",
     antes: async (p) => { await p.getByRole("button", { name: /^Todos/ }).click(); },
     marcas: [
     [1, (p) => p.getByRole("button", { name: /^Bugs/ }).locator("..")],
     [2, (p) => p.getByRole("button", { name: /Em andamento/ }).locator("..")],
     [3, (p) => p.getByText("Conversa não abria pelo link do pedido").locator("xpath=ancestor::*[contains(@class,'rounded')][1]")],
   ] },
-  { chave: "bugs-gestor", papel: "gestor", url: "/bugs",
+  { chave: "bugs-gestor", papel: "gestor", url: "/chamados",
     antes: async (p) => { await p.getByRole("button", { name: /Sugestões/ }).click(); await p.getByText("Mostrar a cidade do cliente na conversa").click(); },
     clip: (p) => p.locator('[role="dialog"]').last(), marcas: [
     [1, (p) => dlg(p).locator("textarea")],

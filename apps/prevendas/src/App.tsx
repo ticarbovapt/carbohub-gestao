@@ -12,7 +12,7 @@ import Resultados from "./pages/Resultados";
 import Atendimento from "./pages/Atendimento";
 import Documentacao from "./pages/Documentacao";
 import { isCarbohubDomain, goToHubLogin } from "@/lib/sso";
-import { PaginaNaoEncontrada } from "@carbo/shell";
+import { PaginaNaoEncontrada, IrPara } from "@carbo/shell";
 
 // Login é ÚNICO no Hub: /login direto em produção é redirecionado pra lá.
 // Em dev/preview (fora do domínio) mostra o login local standalone.
@@ -30,7 +30,8 @@ export default function App() {
       <Route path="/login" element={<LoginRoute />} />
       <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route path="/" element={<Home />} />
-        <Route path="/bugs" element={<BugReports />} />
+        <Route path="/chamados" element={<BugReports />} />
+        <Route path="/bugs" element={<IrPara para="/chamados" />} />
         <Route path="/vender" element={<Vender />} />
         {/* Sem Carbo Chat neste app: aviso de chat do sininho cai aqui e volta à home. */}
         <Route path="/chat" element={<Navigate to="/" replace />} />

@@ -486,7 +486,7 @@ export const SECOES: Secao[] = [
   {
     id: "bugs",
     titulo: "Bugs e sugestões",
-    rota: "/bugs",
+    rota: "/chamados",
     resumo: "O canal com o TI: algo errado, uma ideia, equipamento, acesso ou dúvida. Abre pela baratinha do topo, de qualquer tela — a tela e o seu usuário já vão junto.",
     regras: {
       colaborador: ["Você reporta e acompanha. Vê a resposta do TI quando houver."],

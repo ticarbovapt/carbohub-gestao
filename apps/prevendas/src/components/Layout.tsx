@@ -36,7 +36,7 @@ export function Layout() {
   // MESMOS botões em todos os apps do hub. Repetir na sidebar cria dois caminhos
   // para a mesma ação: quem aprende por um lugar não reconhece o outro, e o dia
   // em que um deles mudar de comportamento a divergência não dá erro nenhum.
-  // As ROTAS continuam existindo (`/vender`, `/bugs`) — o que sai é o atalho
+  // As ROTAS continuam existindo (`/vender`, `/chamados`) — o que sai é o atalho
   // duplicado.
   const sections: ShellNavSection[] = [
     { items: [

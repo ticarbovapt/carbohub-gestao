@@ -302,7 +302,7 @@ export function BugButton() {
                 ))}
               </div>
               <Link
-                to="/bugs"
+                to="/chamados"
                 onClick={() => setOpen(false)}
                 className="w-full px-4 py-2.5 border-t text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors flex items-center justify-center gap-1"
               >
@@ -341,7 +341,7 @@ export function BugButton() {
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" asChild>
-                  <Link to="/bugs" onClick={() => setDialogOpen(false)}>Acompanhar</Link>
+                  <Link to="/chamados" onClick={() => setDialogOpen(false)}>Acompanhar</Link>
                 </Button>
                 <Button size="sm" onClick={() => setEnviado(false)}>Reportar outro</Button>
               </div>

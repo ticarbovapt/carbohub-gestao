@@ -22,7 +22,7 @@ type Atalho = { to: string; label: string; hint: string; icon: LucideIcon };
 const ATALHOS: Atalho[] = [
   { to: "/chat", label: "Carbo Chat", hint: "Falar com o time, ao vivo", icon: MessagesSquare },
   { to: "/vender", label: "Vender", hint: "Registrar uma venda ou orçamento", icon: ShoppingCart },
-  { to: "/bugs", label: "Bugs e sugestões", hint: "O que você reportou ao TI", icon: Bug },
+  { to: "/chamados", label: "Bugs e sugestões", hint: "O que você reportou ao TI", icon: Bug },
   { to: "/perfil", label: "Meu perfil", hint: "Foto, dados e departamento", icon: UserCircle },
 ];
 

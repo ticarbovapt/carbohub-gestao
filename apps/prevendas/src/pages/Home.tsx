@@ -27,7 +27,7 @@ const ATALHOS: Atalho[] = [
   { to: "/resultados", label: "Resultados", hint: "Repassados, fechados e conversão", icon: BarChart3 },
   { to: "/atendimento", label: "Atendimento", hint: "As conversas com os postos no WhatsApp", icon: MessagesSquare },
   { to: "/vender", label: "Vender", hint: "Registrar uma venda ou orçamento", icon: ShoppingCart },
-  { to: "/bugs", label: "Bugs e sugestões", hint: "O que você reportou ao TI", icon: Bug },
+  { to: "/chamados", label: "Bugs e sugestões", hint: "O que você reportou ao TI", icon: Bug },
   { to: "/perfil", label: "Meu perfil", hint: "Foto, dados e departamento", icon: UserCircle },
   { to: "/documentacao", label: "Documentação", hint: "Como usar o sistema, tela a tela", icon: BookOpen },
 ];

@@ -22,14 +22,11 @@ import Vender from "./pages/Vender";
 import Comissionamento from "./pages/Comissionamento";
 import Funcionarios from "./pages/Funcionarios";
 import Documentacao from "./pages/Documentacao";
-import { PaginaNaoEncontrada } from "@carbo/shell";
+import { PaginaNaoEncontrada, IrPara } from "@carbo/shell";
 
 // ⚠️ `<Navigate>` DESCARTA a query — e é a query que carrega filtro e período
 // (`?status=atrasado`). O redirecionamento copia `search` e `hash`.
-function IrPara({ to }: { to: string }) {
-  const { search, hash } = useLocation();
-  return <Navigate to={`${to}${search}${hash}`} replace />;
-}
+// (usa o `IrPara` do @carbo/shell, o mesmo dos outros apps)
 
 // Abas antigas de /compras → o endereço novo de cada uma, direto (sem cadeia
 // de dois saltos). As quatro etapas de compra continuam em /compras/<etapa>.
@@ -47,8 +44,8 @@ const ETAPAS_COMPRA = ["requisicoes", "ordens", "recebimento", "notas"];
 function ComprasOuAntiga() {
   const { pathname } = useLocation();
   const tab = pathname.split("/")[2] ?? "";
-  if (ABA_ANTIGA[tab]) return <IrPara to={ABA_ANTIGA[tab]} />;
-  if (!ETAPAS_COMPRA.includes(tab)) return <IrPara to="/compras/requisicoes" />;
+  if (ABA_ANTIGA[tab]) return <IrPara para={ABA_ANTIGA[tab]} />;
+  if (!ETAPAS_COMPRA.includes(tab)) return <IrPara para="/compras/requisicoes" />;
   return <Compras />;
 }
 
@@ -62,7 +59,7 @@ export default function App() {
         <Route path="/chat" element={<Chat />} />
         {/* Compras = só o fluxo de compra. As outras dez abas do antigo
             "Financeiro & Suprimentos" ganharam rota própria (21/10/2026). */}
-        <Route path="/compras" element={<IrPara to="/compras/requisicoes" />} />
+        <Route path="/compras" element={<IrPara para="/compras/requisicoes" />} />
         <Route path="/compras/:tab" element={<ComprasOuAntiga />} />
         <Route path="/pagar" element={<ContasPagar />} />
         <Route path="/pagar/assinaturas" element={<Assinaturas />} />
@@ -72,9 +69,9 @@ export default function App() {
         <Route path="/cadastros/formas-pagamento" element={<FormasPagamento />} />
         <Route path="/painel-financeiro" element={<PainelFinanceiro />} />
         {/* Endereços aposentados — favorito e link mandado a alguém continuam abrindo. */}
-        <Route path="/financeiro" element={<IrPara to="/" />} />
-        <Route path="/recebiveis" element={<IrPara to="/receber" />} />
-        <Route path="/dashboard-financeiro" element={<IrPara to="/painel-financeiro" />} />
+        <Route path="/financeiro" element={<IrPara para="/" />} />
+        <Route path="/recebiveis" element={<IrPara para="/receber" />} />
+        <Route path="/dashboard-financeiro" element={<IrPara para="/painel-financeiro" />} />
         <Route path="/suprimentos" element={<Suprimentos />} />
         <Route path="/pedidos" element={<Orders />} />
         <Route path="/faturamento" element={<Faturamento />} />
@@ -90,7 +87,8 @@ export default function App() {
         <Route path="/integracoes/nfse" element={<NfseNacional />} />
         <Route path="/perfil" element={<Profile />} />
         <Route path="/equipe" element={<MinhaEquipe />} />
-        <Route path="/bugs" element={<BugReports />} />
+        <Route path="/chamados" element={<BugReports />} />
+        <Route path="/bugs" element={<IrPara para="/chamados" />} />
         <Route path="/vender" element={<Vender />} />
         <Route path="/documentacao" element={<Documentacao />} />
         {/* Rota inexistente: diz que não existe, em vez de cair na home calado. */}

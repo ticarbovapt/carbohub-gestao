@@ -26,7 +26,7 @@ import Suprimentos from "./pages/Suprimentos";
 import Chat from "./pages/Chat";
 import CallTest from "./pages/CallTest";
 import { isCarbohubDomain, goToHubLogin } from "@/lib/sso";
-import { PaginaNaoEncontrada } from "@carbo/shell";
+import { PaginaNaoEncontrada, IrPara } from "@carbo/shell";
 
 // Usuários, Departamentos e funções, Quem recebe a venda e a Auditoria moram no
 // Carbo TI desde 20/10/2026 (as mesmas telas). O endereço antigo leva para lá,
@@ -63,7 +63,8 @@ export default function App() {
         <Route path="/usuarios" element={<IrParaTi para="/usuarios" />} />
         <Route path="/estrutura" element={<IrParaTi para="/estrutura" />} />
         <Route path="/perfil" element={<Profile />} />
-        <Route path="/bugs" element={<BugReports />} />
+        <Route path="/chamados" element={<BugReports />} />
+        <Route path="/bugs" element={<IrPara para="/chamados" />} />
         <Route path="/equipe" element={<MinhaEquipe />} />
         <Route path="/documentacao" element={<Documentacao />} />
 

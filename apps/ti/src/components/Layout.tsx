@@ -48,7 +48,7 @@ export function Layout() {
         { to: "/chat", label: "Carbo Chat", icon: MessagesSquare, badge: <ChatBadge /> },
     ] },
     { label: "TI", items: [
-        { to: "/bugs", label: "Bugs e sugestões", icon: Bug },
+        { to: "/chamados", label: "Bugs e sugestões", icon: Bug },
         { to: "/status", label: "Avisos de status", icon: Megaphone },
         { to: "/academy/acessos", label: "Carbo Academy — acessos", icon: GraduationCap, badge: <AcademyBadge /> },
     ] },

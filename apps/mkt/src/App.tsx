@@ -26,7 +26,7 @@ import EcommerceMetas from "./pages/EcommerceMetas";
 import EsteiraOnline from "./pages/EsteiraOnline";
 import MensagensCliente from "./pages/MensagensCliente";
 import EcommerceAtribuicao from "./pages/EcommerceAtribuicao";
-import { PaginaNaoEncontrada } from "@carbo/shell";
+import { PaginaNaoEncontrada, IrPara } from "@carbo/shell";
 
 // Carbo Marketing — app novo do ecossistema. Login único pelo Hub; acesso
 // liberado pelo Admin via allowed_interfaces (carbo_mkt). Esqueleto inicial:
@@ -52,7 +52,8 @@ export default function App() {
         <Route path="/perfil" element={<Profile />} />
         <Route path="/documentacao" element={<Documentacao />} />
         <Route path="/equipe" element={<MinhaEquipe />} />
-        <Route path="/bugs" element={<BugReports />} />
+        <Route path="/chamados" element={<BugReports />} />
+        <Route path="/bugs" element={<IrPara para="/chamados" />} />
         <Route path="/ecommerce/vendas-online" element={<EcommerceVendas />} />
         <Route path="/ecommerce/metas" element={<EcommerceMetas />} />
         <Route path="/ecommerce/esteira" element={<EsteiraOnline />} />

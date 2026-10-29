@@ -15,6 +15,7 @@ export { cn } from "./cn";
 export { lerSemTeto, lerPorIdsSemTeto, fetchQueAcusaTeto, TETO_POSTGREST } from "./leitura";
 export { usePaginaAtual, PaginaNaoEncontrada, tituloDaRota } from "./pagina";
 export { useParamUrl } from "./urlState";
+export { IrPara } from "./redireciona";
 export { useVoltarFecha, FecharComVoltar } from "./voltarFecha";
 export { confirmar, pedirTexto } from "./confirmar";
 export {
