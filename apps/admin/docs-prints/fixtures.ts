@@ -23,8 +23,8 @@ export const FIXTURES: Record<string, unknown> = {
     { id: "n3", user_id: EU.id, type: "bug_fixed", title: "Bug corrigido", body: "O filtro de mês voltou a valer depois do F5.", is_read: true, reference_type: "bug", reference_id: "b1", created_at: min(60 * 26) },
   ],
   carbo_bug_reports: [
-    { id: "b1", app: "admin", kind: "bug", title: "Filtro de mês do Dashboard voltava para hoje", description: "Escolhendo setembro e apertando F5, a tela voltava ao mês atual.", status: "resolved", reporter_id: EU.id, reporter_name: EU.full_name, created_at: min(60 * 30), updated_at: min(60 * 26), archived_at: null, admin_notes: "Corrigido na versão de hoje.", url: "/comercial/dashboard", severity: null, reach: null },
-    { id: "b2", app: "admin", kind: "sugestao", title: "Exportar o Dashboard Comercial em planilha", description: "Ajudaria a fechar o mês com o financeiro.", status: "open", reporter_id: EU.id, reporter_name: EU.full_name, created_at: min(60 * 5), updated_at: min(60 * 5), archived_at: null, admin_notes: null, url: "/comercial/dashboard", severity: null, reach: "meu_time" },
+    { id: "b1", app: "admin", kind: "bug", title: "Filtro de mês do Dashboard voltava para hoje", description: "Escolhendo setembro e apertando F5, a tela voltava ao mês atual.", status: "resolved", reporter_id: EU.id, reporter_name: EU.full_name, created_at: min(60 * 30), updated_at: min(60 * 26), archived_at: null, admin_notes: "Corrigido na versão de hoje.", url: "/painel-comercial", severity: null, reach: null },
+    { id: "b2", app: "admin", kind: "sugestao", title: "Exportar o Dashboard Comercial em planilha", description: "Ajudaria a fechar o mês com o financeiro.", status: "open", reporter_id: EU.id, reporter_name: EU.full_name, created_at: min(60 * 5), updated_at: min(60 * 5), archived_at: null, admin_notes: null, url: "/painel-comercial", severity: null, reach: "meu_time" },
   ],
   mrp_products: produtos,
   carbo_faixa_preco: faixas,

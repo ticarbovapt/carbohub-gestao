@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
+import { useParamUrl } from "@carbo/shell";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePickerInput } from "@/components/ui/date-picker-input";
 import { Badge } from "@/components/ui/badge";
@@ -872,15 +873,37 @@ function PlatformView({ platform, period, custom }: { platform: EcommercePlatfor
 // Comparativo
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** Os canais marcados no Comparativo e no Histórico, na URL (`?canais=a,b`).
+ *  ⚠️ Ausente = TODOS, e "todos" não é escrito: assim canal NOVO entra marcado
+ *  também em link antigo, em vez de o link congelar a lista do dia em que foi
+ *  copiado. Id desconhecido (canal desligado) sai calado; sobrando nenhum, volta
+ *  a todos — comparativo vazio seria beco sem saída.
+ *  `replace`, como o resto desta tela (ver `gravar` na página). */
+function useCanaisUrl(): [EcommercePlatform[], (f: (prev: EcommercePlatform[]) => EcommercePlatform[]) => void] {
+  const todos = ACTIVE_PLATFORMS.map((p) => p.id);
+  const [v, setV] = useParamUrl("canais", "", { replace: true });
+  const lidos = v.split(",").filter((x) => todos.includes(x as EcommercePlatform)) as EcommercePlatform[];
+  const selected = lidos.length ? lidos : todos;
+  const set = (f: (prev: EcommercePlatform[]) => EcommercePlatform[]) => {
+    const n = f(selected);
+    setV(n.length === todos.length ? null : n.join(","));
+  };
+  return [selected, set];
+}
+
+const METRICA_NA_URL = { revenue: "receita", orders: "pedidos", units: "unidades" } as const;
+
 function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?: EcommerceCustom }) {
   // ⚠️ Abre com TODAS marcadas e DERIVADO de `ACTIVE_PLATFORMS`, não com uma
   // lista escrita à mão. A lista antiga era `["mercadolivre","amazon","nuvemshop"]`
   // fixa: canal novo nascia desmarcado e ninguém percebia que faltava — foi
   // assim com a Shopee e teria sido de novo com a PayT.
-  const [selected, setSelected] = useState<EcommercePlatform[]>(
-    () => ACTIVE_PLATFORMS.map((p) => p.id),
-  );
-  const [metric, setMetric] = useState<"orders" | "units" | "revenue">("revenue");
+  const [selected, setSelected] = useCanaisUrl();
+  // Métrica do gráfico na URL (`?metrica=pedidos`; ausente = receita).
+  const [metricaUrl, setMetricaUrl] = useParamUrl("metrica", "receita", { replace: true });
+  const metric: "orders" | "units" | "revenue" =
+    (Object.keys(METRICA_NA_URL) as (keyof typeof METRICA_NA_URL)[]).find((k) => METRICA_NA_URL[k] === metricaUrl) ?? "revenue";
+  const setMetric = (m: "orders" | "units" | "revenue") => setMetricaUrl(METRICA_NA_URL[m]);
 
   // ⚠️ Sem fallback silencioso. Antes, com menos de 2 marcadas, a tela trocava a
   // seleção por `["mercadolivre","amazon"]` por baixo do pano — mostrava dados
@@ -1322,11 +1345,14 @@ function HistoricoMensalView() {
   })();
 
   // Mesma decisão do Comparativo: abre com todas e derivado da lista ativa.
-  const [selected, setSelected]   = useState<EcommercePlatform[]>(
-    () => ACTIVE_PLATFORMS.map((p) => p.id),
-  );
-  const [fromMonth, setFromMonth] = useState(def3ago);
-  const [toMonth,   setToMonth]   = useState(curMonthStr);
+  const [selected, setSelected]   = useCanaisUrl();
+  // Meses na URL (`?inicio=AAAA-MM&fim=AAAA-MM`): F5 e link mantêm o intervalo.
+  // Ausente = os últimos 3 meses contados de HOJE (o padrão anda com o tempo).
+  const MES = /^\d{4}-\d{2}$/;
+  const [inicioUrl, setFromMonth] = useParamUrl("inicio", def3ago, { replace: true });
+  const [fimUrl, setToMonth]      = useParamUrl("fim", curMonthStr, { replace: true });
+  const fromMonth = MES.test(inicioUrl) ? inicioUrl : def3ago;
+  const toMonth   = MES.test(fimUrl) ? fimUrl : curMonthStr;
 
   const { data, isLoading } = useEcommerceHistoricoMensal(selected, fromMonth, toMonth);
 
@@ -1839,8 +1865,18 @@ function lerAba(p: URLSearchParams): ActiveView {
     ?? "mercadolivre";
 }
 
+// O período na URL fala português (`?periodo=ontem`, `?periodo=intervalo`); o
+// valor interno continua o do hook. ⚠️ O valor ANTIGO (`today`, `month`,
+// `custom`…) continua sendo LIDO: está em link já mandado e em favorito.
+const PERIODO_NA_URL: Record<EcommercePeriod, string> = {
+  today: "hoje", yesterday: "ontem", "7d": "7d", "30d": "30d",
+  month: "este-mes", mes: "mes", custom: "intervalo",
+};
+
 function lerPeriodo(p: URLSearchParams): EcommercePeriod {
   const v = p.get(PARAM_PERIODO);
+  const novo = (Object.keys(PERIODO_NA_URL) as EcommercePeriod[]).find((k) => PERIODO_NA_URL[k] === v);
+  if (novo) return novo;
   return PERIOD_OPTIONS.some((o) => o.value === v) ? (v as EcommercePeriod) : "7d";
 }
 
@@ -1874,18 +1910,52 @@ function normalizarCustom(periodo: EcommercePeriod, c: EcommerceCustom): Ecommer
 export default function EcommerceVendas() {
   const [params, setParams] = useSearchParams();
 
-  // Estado inicial LIDO DA URL (com as reservas descritas acima). Só a leitura
-  // inicial usa `params`: daqui em diante o estado manda e a URL o espelha.
-  const [period, setPeriod] = useState<EcommercePeriod>(() => lerPeriodo(params));
-  // Período personalizado. Fica fora do `period` de propósito: trocar para
-  // "Hoje" e voltar para "Por período" preserva as datas escolhidas.
-  const [custom, setCustom] = useState<EcommerceCustom>(
-    () => normalizarCustom(lerPeriodo(params), {
-      from: params.get(PARAM_DE) || undefined,
-      to:   params.get(PARAM_ATE) || undefined,
-    }),
+  // ⚠️ A URL MANDA, e o estado sai dela a cada render (não é lido uma vez e
+  // espelhado depois). Antes, `period`/`custom`/`active` eram `useState`
+  // copiados da URL no primeiro render: o Voltar trocava o endereço e a tela
+  // continuava no período velho, e o padrão ia escrito em todo link.
+  const period = lerPeriodo(params);
+  const pDe = params.get(PARAM_DE) || undefined;
+  const pAte = params.get(PARAM_ATE) || undefined;
+  // Período personalizado. ⚠️ UMA função decide o que "datas escolhidas"
+  // significa em cada modo — a mesma da troca de período. Duas regras
+  // divergiriam, e o link abriria diferente do que a tela mostrava.
+  const custom = useMemo<EcommerceCustom>(
+    () => normalizarCustom(period, { from: pDe, to: pAte }),
+    [period, pDe, pAte],
   );
-  const [active, setActive] = useState<ActiveView>(() => lerAba(params));
+  const active = lerAba(params);
+
+  /** Uma gravação só, partindo da URL ATUAL do navegador (ver `useParamUrl` no
+   *  shell). ⚠️ `replace`: trocar de período não empilha entrada no histórico —
+   *  sem isso, o "voltar" percorreria cada clique de filtro antes de sair da
+   *  tela, o mesmo incômodo que a Esteira já evita. */
+  const gravar = (mexe: (n: URLSearchParams) => void) => {
+    const n = new URLSearchParams(window.location.search);
+    mexe(n);
+    setParams(n, { replace: true });
+  };
+  /** Grava período + datas. `de` serve aos DOIS modos (intervalo livre e âncora
+   *  do mês); `ate` só existe no intervalo livre — em "mês fechado" ele é
+   *  derivado, e deixá-lo na URL criaria um segundo lugar dizendo qual é o fim.
+   *  O padrão (7 dias) não vai para a URL. */
+  const gravarPeriodo = (p: EcommercePeriod, c: EcommerceCustom) => gravar((n) => {
+    if (p === "7d") n.delete(PARAM_PERIODO); else n.set(PARAM_PERIODO, PERIODO_NA_URL[p]);
+    const comDatas = p === "mes" || p === "custom";
+    if (comDatas && c.from) n.set(PARAM_DE, c.from); else n.delete(PARAM_DE);
+    if (p === "custom" && c.to) n.set(PARAM_ATE, c.to); else n.delete(PARAM_ATE);
+  });
+  const setPeriod = (p: EcommercePeriod) => gravarPeriodo(p, normalizarCustom(p, custom));
+  const setCustom = (f: EcommerceCustom | ((c: EcommerceCustom) => EcommerceCustom)) =>
+    gravarPeriodo(period, typeof f === "function" ? f(custom) : f);
+
+  // Link limpo (menu lateral) ganha a aba ESCRITA no endereço, para o "copiar
+  // link" de quem chegou assim levar a aba que ele está vendo — a reserva do
+  // `localStorage` é de cada um e não viaja no link.
+  useEffect(() => {
+    if (!params.get(PARAM_ABA)) gravar((n) => n.set(PARAM_ABA, active));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // No celular a faixa de plataformas rola de lado: a aba escolhida (vinda da
   // URL, por exemplo) tem de aparecer na faixa, senão parece que nenhuma está
@@ -1898,29 +1968,8 @@ export default function EcommerceVendas() {
     faixa.scrollLeft = Math.max(0, botao.offsetLeft - faixa.offsetLeft - 12);
   }, [active]);
 
-  // ⚠️ `replace: true`: trocar de período não empilha entrada no histórico.
-  // Sem isso, o "voltar" do navegador percorreria cada clique de filtro antes
-  // de sair da tela — o mesmo incômodo que a Esteira já evita.
-  // As deps são só o ESTADO; `setParams` é estável e `params` fica de fora de
-  // propósito, senão o efeito se realimentaria.
-  useEffect(() => {
-    setParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.set(PARAM_ABA, active);
-      next.set(PARAM_PERIODO, period);
-      // `de` serve aos DOIS modos: intervalo livre e âncora do mês.
-      if (custom.from) next.set(PARAM_DE, custom.from); else next.delete(PARAM_DE);
-      // `ate` só existe no intervalo livre — em "mês fechado" ele é derivado, e
-      // deixá-lo na URL criaria um segundo lugar dizendo qual é o fim.
-      if (period === "custom" && custom.to) next.set(PARAM_ATE, custom.to);
-      else next.delete(PARAM_ATE);
-      return next;
-    }, { replace: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, period, custom.from, custom.to]);
-
   const handleSetActive = (v: ActiveView) => {
-    setActive(v);
+    gravar((n) => n.set(PARAM_ABA, v));
     // Reserva para quando o link vier limpo (menu lateral, favorito antigo).
     localStorage.setItem(TAB_KEY, v);
   };
@@ -1947,15 +1996,7 @@ export default function EcommerceVendas() {
                   Histórico. */}
               <Select
                 value={period}
-                onValueChange={(v) => {
-                  const p = v as EcommercePeriod;
-                  setPeriod(p);
-                  // ⚠️ UMA função decide o que "datas escolhidas" significa em
-                  // cada modo — a mesma que lê a URL. Duas regras aqui e lá
-                  // divergiriam, e o sintoma seria o link abrir diferente do
-                  // que a tela mostrava quando foi copiado.
-                  setCustom((c) => normalizarCustom(p, c));
-                }}
+                onValueChange={(v) => setPeriod(v as EcommercePeriod)}
               >
                 <SelectTrigger className="h-9 w-48">
                   <SelectValue />

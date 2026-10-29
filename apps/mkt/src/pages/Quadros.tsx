@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Trello, Plus, X, Filter, Bookmark, Trash2, Clock, CalendarClock, Table2, Search, LayoutGrid } from "lucide-react";
+import { useFiltroUrl } from "@/lib/estadoNaUrl";
 import { useBoards, useBoardMutations, useAllCards } from "@/hooks/useBoards";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { useSavedSearches, useSavedSearchMutations } from "@/hooks/useSavedSearches";
-import { emptyCriteria, criteriaActive, matchCard, type SearchCriteria } from "@/lib/mktFilter";
+import { emptyCriteria, criteriaActive, matchCard } from "@/lib/mktFilter";
 import { FilterControls } from "@/components/board/FilterControls";
 import { getAccent, ACCENT_SWATCHES } from "@/lib/mktTheme";
 import { Button } from "@/components/ui/button";
@@ -29,7 +30,8 @@ export default function Quadros() {
   const [bg, setBg] = useState("blue");
 
   // Busca entre quadros
-  const [criteria, setCriteria] = useState<SearchCriteria>(emptyCriteria());
+  // A busca entre quadros mora na URL (`lib/estadoNaUrl.ts`): F5 e link mantêm.
+  const [criteria, setCriteria] = useFiltroUrl();
   const active = criteriaActive(criteria);
   const { data: allCards = [] } = useAllCards(active);
   const results = active ? allCards.filter((c) => matchCard(c, criteria)) : [];
@@ -60,10 +62,10 @@ export default function Quadros() {
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground mr-1">Ver todos os quadros</span>
         <Button asChild size="sm" variant="outline" className="h-8 text-xs gap-1.5">
-          <Link to="/todos/calendario"><CalendarClock className="h-3.5 w-3.5 text-accent" /> Calendário geral</Link>
+          <Link to="/calendario-geral"><CalendarClock className="h-3.5 w-3.5 text-accent" /> Calendário geral</Link>
         </Button>
         <Button asChild size="sm" variant="outline" className="h-8 text-xs gap-1.5">
-          <Link to="/todos/tabela"><Table2 className="h-3.5 w-3.5 text-accent" /> Tabela geral</Link>
+          <Link to="/tabela-geral"><Table2 className="h-3.5 w-3.5 text-accent" /> Tabela geral</Link>
         </Button>
         <ImportarTrello
           pessoas={team.map((m) => ({ id: m.id, full_name: m.full_name }))}
@@ -189,7 +191,7 @@ export default function Quadros() {
             ) : (
               <div className="divide-y divide-border max-h-72 overflow-y-auto">
                 {results.map((c) => (
-                  <Link key={c.id} to={`/quadros/${c.board_id}?card=${c.id}`}
+                  <Link key={c.id} to={`/quadros/${c.board_id}?cartao=${c.id}`}
                     className="w-full text-left py-2.5 px-2 flex items-center justify-between gap-2 hover:bg-muted/50 rounded-md transition">
                     <div className="min-w-0">
                       <p className="text-sm text-foreground truncate">{c.title}</p>

@@ -9,7 +9,9 @@ import { CarboKPI } from "@/components/ui/carbo-kpi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
 import { fmtBRL, fmtBRLc, delta } from "@/lib/dash-format";
-import { PeriodPicker, presetRange, rangeLabel, type PeriodRange } from "@/components/ui/PeriodPicker";
+import { PeriodPicker, rangeLabel } from "@/components/ui/PeriodPicker";
+import { useParamUrl } from "@carbo/shell";
+import { usePeriodoUrl } from "@/hooks/usePeriodoUrl";
 import {
   useFranqueadosKpis, useFranqueadosKpisPrev,
   useFranqueadosRanking, useFranqueadosPorte, useFranqueadosRecentServices,
@@ -86,8 +88,9 @@ type Granularidade = "dia" | "mes";
 export default function DashboardsFranqueados() {
   const { canAdmin } = useAuth();
 
-  // Filtro de período — governa TODOS os blocos da tela, sem exceção.
-  const [range, setRange] = useState<PeriodRange>(() => presetRange("month"));
+  // Filtro de período — governa TODOS os blocos da tela, sem exceção. Mora na
+  // URL (`?periodo=` ou `?de=&ate=`): F5 e link mantêm o recorte.
+  const [range, setRange] = usePeriodoUrl();
 
   const kpisQ = useFranqueadosKpis(range);
   const prevQ = useFranqueadosKpisPrev(range);
@@ -129,8 +132,15 @@ export default function DashboardsFranqueados() {
     const ms = new Date(`${range.to}T23:59:59`).getTime() - new Date(`${range.from}T00:00:00`).getTime();
     return Math.max(1, Math.round(ms / 86400000));
   }, [range]);
-  const [metrica, setMetrica] = useState<Metrica>("receita");
-  const [granul, setGranul] = useState<Granularidade | null>(null);
+  // Métrica e granularidade do gráfico na URL (`?metrica=servicos`, `?agrupar=`).
+  // ⚠️ `agrupar` AUSENTE é "automático pelo tamanho do período", não "dia":
+  // gravar o automático congelaria a escolha quando o período mudasse.
+  const [metricaUrl, setMetricaUrl] = useParamUrl("metrica", "receita");
+  const metrica: Metrica = metricaUrl === "servicos" ? "servicos" : "receita";
+  const setMetrica = (m: Metrica) => setMetricaUrl(m);
+  const [granulUrl, setGranulUrl] = useParamUrl("agrupar", "");
+  const granul: Granularidade | null = granulUrl === "dia" || granulUrl === "mes" ? granulUrl : null;
+  const setGranul = (g: Granularidade) => setGranulUrl(g);
   const granularidade: Granularidade = granul ?? (spanDias > 62 ? "mes" : "dia");
 
   const serie = useMemo(() => {

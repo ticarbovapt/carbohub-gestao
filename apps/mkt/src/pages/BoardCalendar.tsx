@@ -1,4 +1,5 @@
 import { useCartaoDaUrl } from "@/lib/cartaoNaUrl";
+import { useCalendarioUrl } from "@/lib/estadoNaUrl";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, ChevronLeft, ChevronRight, CalendarClock } from "lucide-react";
@@ -16,9 +17,9 @@ export default function BoardCalendar() {
   useBoardLive(boardId ?? null);
   const m = useBoardMutations(boardId);
 
-  const [ref, setRef] = useState<Date>(() => new Date());
-  const [mode, setMode] = useState<"month" | "week">("month");
-  const [colorBy, setColorBy] = useState<"label" | "list">("list");
+  // Dia, visão e cor na URL (`?data=&ver=semana&cor=etiqueta`): F5 e link
+  // abrem o mesmo mês. Ver `lib/estadoNaUrl.ts`.
+  const { ref, setRef, mode, setMode, colorBy, setColorBy } = useCalendarioUrl(["label", "list"] as const, "list");
   const [openCardId, setOpenCardId] = useState<string | null>(null);
 
   useCartaoDaUrl((cid) => setOpenCardId(cid));

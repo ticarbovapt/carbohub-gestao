@@ -18,7 +18,7 @@ export default function AbrirCartao() {
     if (!cardId) return;
     (supabase as any).from("mkt_cards").select("board_id").eq("id", cardId).maybeSingle()
       .then((r: { data: { board_id: string } | null }) => {
-        if (r.data?.board_id) setDestino(`/quadros/${r.data.board_id}?card=${cardId}${comentario ? `&comentario=${encodeURIComponent(comentario)}` : ""}`);
+        if (r.data?.board_id) setDestino(`/quadros/${r.data.board_id}?cartao=${cardId}${comentario ? `&comentario=${encodeURIComponent(comentario)}` : ""}`);
         else setErro(true);
       });
   }, [cardId]);

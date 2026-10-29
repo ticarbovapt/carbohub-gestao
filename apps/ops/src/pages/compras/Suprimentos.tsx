@@ -641,7 +641,7 @@ export default function Suprimentos() {
                                  Esteira; ao mudar um, confira o outro.
                                  A Esteira saiu do Ops (20/10/2026): o link vai
                                  à do Admin. */
-                              href={`https://admin.carbohub.com.br/ecommerce/esteira?card=${m.ecomBlingId}`}
+                              href={`https://admin.carbohub.com.br/ecommerce/esteira?pedido=${m.ecomBlingId}`}
                               className={`${classe} bg-carbo-blue/10 text-carbo-blue hover:bg-carbo-blue/20`}
                               title={`Abrir na Esteira do On-line · ${m.refExterna}`}
                             >

@@ -70,7 +70,7 @@ export function Anexos({ cardId, boardId, anexos, anexoInicial, onAdicionarLink,
   const registrar = async (type: string, data: Record<string, unknown>) => {
     await db.from("mkt_activity").insert({ board_id: boardId, card_id: cardId, user_id: await meuId(), type, data });
   };
-  const linkDe = (a: Attachment) => `${window.location.origin}/quadros/${boardId}?card=${cardId}&anexo=${a.id}`;
+  const linkDe = (a: Attachment) => `${window.location.origin}/quadros/${boardId}?cartao=${cardId}&anexo=${a.id}`;
 
   // Capas: UMA chamada para todas as URLs assinadas da lista.
   const chavesCapa = arquivos.map((a) => a.poster_path).filter(Boolean) as string[];
@@ -84,7 +84,7 @@ export function Anexos({ cardId, boardId, anexos, anexoInicial, onAdicionarLink,
     });
   }, [chavesCapa.join("|")]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Link copiado de um arquivo (`?card=…&anexo=…`) abre direto nele.
+  // Link copiado de um arquivo (`?cartao=…&anexo=…`) abre direto nele.
   const jaAbriuInicial = useRef(false);
   useEffect(() => {
     if (!anexoInicial || jaAbriuInicial.current) return;

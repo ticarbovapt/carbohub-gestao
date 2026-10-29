@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
+import { useParamUrl } from "@carbo/shell";
 import { motion } from "framer-motion";
 import {
   Boxes, AlertTriangle, PackageSearch, ShieldAlert, ArrowLeftRight, TrendingUp,
@@ -119,7 +120,10 @@ const ABC_COLORS: Record<string, string> = { A: "#22c55e", B: "#3b82f6", C: "#94
 export default function Suprimentos() {
   const { canAdmin } = useAuth();
   const { data, isLoading, error } = useSuprimentosCockpit();
-  const [fluxoPeriodo, setFluxoPeriodo] = useState<30 | 90>(30);
+  // Janela do fluxo na URL (`?fluxo=90`): F5 e link mantêm a escolha.
+  const [fluxoUrl, setFluxoUrl] = useParamUrl("fluxo", "30");
+  const fluxoPeriodo: 30 | 90 = fluxoUrl === "90" ? 90 : 30;
+  const setFluxoPeriodo = (p: 30 | 90) => setFluxoUrl(String(p));
 
   const fluxoFiltrado = useMemo(() => {
     if (!data) return [];

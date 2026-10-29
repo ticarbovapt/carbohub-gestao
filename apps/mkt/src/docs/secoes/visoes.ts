@@ -101,7 +101,7 @@ export const SECOES_VISOES: Secao[] = [
   {
     id: "todos",
     titulo: "Todos os quadros",
-    rota: "/todos/calendario",
+    rota: "/calendario-geral",
     resumo:
       "O Calendário e a Tabela com os cartões de TODOS os quadros juntos. Serve para ver a semana do time inteiro, sem abrir quadro por quadro.",
     regras: {

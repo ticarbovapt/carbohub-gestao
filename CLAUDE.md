@@ -1728,11 +1728,12 @@ Sem o apelido, esse botão levava para a **home** do Ops. O redirecionamento
 copia o `search` de propósito: `<Navigate>` descarta a query, e é o `?card=` que
 abre o pedido.
 
-⚠️ **O parâmetro que abre o card chama-se `card`**, e só ele: a Esteira lê
-`params.get("card")` e IGNORA qualquer outro nome. Um link com `?pedido=` abre a
-tela com o card fechado e não dá erro — foi assim que o chip novo de
-Movimentações (`Suprimentos.tsx` do Ops) nasceu quebrado. O nome é o mesmo que o
-botão "Copiar link" da Esteira gera; mudou um, confira o outro.
+⚠️ **O parâmetro que abre o card chama-se `pedido`** desde 29/10/2026 (era
+`card`, que a Esteira CONTINUA lendo — link antigo abre). Um nome que a tela não
+lê abre o card fechado e não dá erro — foi assim que o chip de Movimentações
+(`Suprimentos.tsx` do Ops) nasceu quebrado uma vez. O nome é o mesmo que o
+botão "Copiar link" da Esteira gera; mudou um, confira o outro. A régua
+escolhida é `?quadro=` (antes `?pipeline=`, também lido).
 
 ⚠️ **Conversas do WhatsApp mudou de casa** (28/08/2026): saiu do `admin` e do
 `ops`, existe SÓ em `apps/atendimento` (`/conversas`). Não é mais arquivo
@@ -3144,6 +3145,31 @@ flag e abrem SEM checar fora de `*.carbohub.com.br`; o Sales aceita flag de
 portal — o BLOCO E da `20261074` lista quem perderia o app ao fechar.
 `bling-auth`/`bling2-auth` aceitam qualquer logado; `evolution-instancia` não
 confere quem chama. Senha de reset ainda é fixa (`Carbo@2026`).
+
+### Slugs: em português e IGUAIS ao nome do menu (29/10/2026)
+Pedido do dono do processo: *"slugs sempre em português… precisa se comunicar
+com o nome da barra… rastreio de venda ta como logistica/posvenda não faz
+sentido"*. Os oito apps foram revisados de uma vez (`/rastreio`, `/funis`,
+`/os`, `/painel-comercial`, `/dados-comerciais`, `/aprovacoes`,
+`/tabela-de-precos`, `/chamados`, `/departamentos`, `/fornecedores`…).
+Ficam em inglês, por decisão: `chat`, `ecommerce`, `login`; e siglas/marcas
+(`mrp`, `os`, `rtm`, `pdvs`, `academy`, `bling`, `nfse`).
+1. ⚠️ **Endereço antigo NUNCA some**: vira `<Route path="<antigo>"
+   element={<IrPara para="<novo>" />} />` (`packages/shell/src/redireciona.tsx`,
+   leva query e hash e troca `:params`). Favorito, link do chat, do sininho e
+   do celular continuam abrindo. Redirecionamento aponta DIRETO ao destino
+   final, sem cadeia.
+2. ⚠️ **Retorno de OAuth não muda** (`/integracoes/bling/callback`,
+   `/bling2/callback`): está cadastrado no Bling.
+3. **Estado da tela mora na URL** (`useParamUrl`): aba, página (`pagina`),
+   período (`periodo`, `de`, `ate`, `mes`), filtros, busca (`replace`),
+   ordem e o item aberto (`pedido`, `pdv`, `lead`, `demanda`…). Chaves em
+   PORTUGUÊS; a chave antiga em inglês continua LIDA (`tab`, `card`, `q`…).
+   Tela nova nasce assim — F5 e link compartilhado têm de devolver a mesma tela.
+4. ⚠️ Rota nova ou renomeada: o nome sai do MENU, curto, sem prefixo que não
+   diz nada. Mudou rota, mude junto: menu (Ops e Finanças têm DOIS lugares),
+   cards da home, `rota:` da Documentação, `url:` dos `docs-prints`, e quem
+   linka de fora (`carbo-push`, `NotificationBell`, Hub).
 
 ### Regras anti-confusão (OBRIGATÓRIAS)
 1. **Todo pedido nomeia o alvo.** "no CRM" → `apps/crm`; "no controle"/"atual" → raiz (`src/`).

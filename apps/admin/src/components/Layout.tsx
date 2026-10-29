@@ -46,17 +46,17 @@ export function Layout() {
         { to: "/chat", label: "Carbo Chat", icon: MessagesSquare, badge: <ChatBadge /> },
     ] },
     { label: "Comercial", items: [
-        { to: "/comercial/dashboard", label: "Dashboard Comercial", icon: LineChart },
-        { to: "/comercial/dados", label: "Dados Comerciais (fonte)", icon: Store },
-        { to: "/comercial/descontos", label: "Aprovações", icon: BadgePercent },
-        { to: "/comercial/precos", label: "Tabela de preços", icon: Tags },
+        { to: "/painel-comercial", label: "Dashboard Comercial", icon: LineChart },
+        { to: "/dados-comerciais", label: "Dados Comerciais (fonte)", icon: Store },
+        { to: "/aprovacoes", label: "Aprovações", icon: BadgePercent },
+        { to: "/tabela-de-precos", label: "Tabela de preços", icon: Tags },
     ] },
     { label: "Dashboards", items: [
-        { to: "/dashboards/mapa-conquista", label: "Mapa da Conquista", icon: MapIcon },
-        { to: "/dashboards/lojas", label: "Portal de Vendas", icon: Store },
-        { to: "/dashboards/franqueados", label: "Licenciados", icon: Building2 },
-        { to: "/dashboards/metas", label: "Metas (Placar)", icon: Trophy },
-        { to: "/dashboards/suprimentos", label: "Suprimentos", icon: Boxes },
+        { to: "/mapa-da-conquista", label: "Mapa da Conquista", icon: MapIcon },
+        { to: "/portal-de-vendas", label: "Portal de Vendas", icon: Store },
+        { to: "/licenciados", label: "Licenciados", icon: Building2 },
+        { to: "/placar-de-metas", label: "Metas (Placar)", icon: Trophy },
+        { to: "/suprimentos", label: "Suprimentos", icon: Boxes },
     ] },
     { label: "E-commerce", items: [
         { to: "/ecommerce/vendas-online", label: "Vendas Online", icon: Globe },
@@ -65,7 +65,7 @@ export function Layout() {
         { to: "/ecommerce/anuncios", label: "Anúncios da Meta", icon: Megaphone },
     ] },
     { label: "Configurações", items: [
-        { to: "/metas/configurar", label: "Configurar Metas", icon: Target },
+        { to: "/configurar-metas", label: "Configurar Metas", icon: Target },
     ] },
     { label: "Ajuda", items: [
         { to: "/documentacao", label: "Documentação", icon: BookOpen },

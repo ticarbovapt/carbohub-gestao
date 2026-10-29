@@ -1,4 +1,6 @@
 import { useCartaoDaUrl } from "@/lib/cartaoNaUrl";
+import { useOrdemTabelaUrl } from "@/lib/estadoNaUrl";
+import { useParamUrl } from "@carbo/shell";
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, Table2, ArrowUp, ArrowDown, Maximize2, SearchX } from "lucide-react";
@@ -29,10 +31,12 @@ export default function BoardTable() {
   const m = useBoardMutations(boardId);
   const fm = useCustomFieldMutations(boardId ?? null);
 
-  const [sort, setSort] = useState<{ key: string; dir: SortDir }>({ key: "title", dir: "asc" });
-  const [text, setText] = useState("");
-  const [labelId, setLabelId] = useState("");
-  const [memberId, setMemberId] = useState("");
+  // Ordem, busca e filtros na URL (`?ordem=-entrega&busca=&etiqueta=&membro=`):
+  // F5 e link abrem a mesma tabela.
+  const [sort, setSort] = useOrdemTabelaUrl();
+  const [text, setText] = useParamUrl("busca", "", { replace: true });
+  const [labelId, setLabelId] = useParamUrl("etiqueta", "");
+  const [memberId, setMemberId] = useParamUrl("membro", "");
   const [openCardId, setOpenCardId] = useState<string | null>(null);
   useCartaoDaUrl((cid) => setOpenCardId(cid));
 

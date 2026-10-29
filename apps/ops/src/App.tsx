@@ -30,7 +30,7 @@ import { PaginaNaoEncontrada, IrPara } from "@carbo/shell";
  * A Esteira do On-line (e as Mensagens ao cliente, que só se chegava por ela)
  * SAIU do Ops em 20/10/2026, por decisão do dono do processo — ela continua no
  * Admin, no Atendimento e no Marketing. Os endereços antigos daqui levam à do
- * Admin, com a query INTACTA: é o `?card=` que abre o pedido, e link colado no
+ * Admin, com a query INTACTA: é o `?pedido=` (antes `?card=`, ainda lido) que abre o pedido, e link colado no
  * chat ou o chip de Movimentações do Suprimentos continuam chegando ao card.
  */
 const ADMIN = "https://admin.carbohub.com.br";

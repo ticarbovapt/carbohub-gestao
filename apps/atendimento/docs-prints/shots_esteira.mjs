@@ -60,7 +60,7 @@ export const SHOTS = [
     [6, (p) => card("Juliana Prado")(p).getByText(/sem NF/)],
   ] },
   // O card aberto
-  { chave: "esteira-detalhe", papel: "colaborador", url: "/ecommerce/esteira?card=9007", viewport: { width: 1440, height: 1500 },
+  { chave: "esteira-detalhe", papel: "colaborador", url: "/ecommerce/esteira?pedido=9007", viewport: { width: 1440, height: 1500 },
     clip: (p) => dlg(p), pad: 0, marcas: [
     [1, (p) => dlg(p).locator("h2").first()],
     [2, (p) => dlg(p).locator("div.text-right").first()],
@@ -76,7 +76,7 @@ export const SHOTS = [
     [12, bloco("Entrega")],
     [13, bloco("Itens")],
   ] },
-  { chave: "esteira-telefone", papel: "colaborador", url: "/ecommerce/esteira?card=9004", viewport: { width: 1440, height: 1300 },
+  { chave: "esteira-telefone", papel: "colaborador", url: "/ecommerce/esteira?pedido=9004", viewport: { width: 1440, height: 1300 },
     clip: (p) => [dlg(p).locator("div.border-red-500\\/40").first(), bloco("Avisos ao cliente")(p)], pad: 12, marcas: [
     [1, (p) => dlg(p).locator("div.border-red-500\\/40").first()],
     [2, (p) => bloco("Avisos ao cliente")(p).getByText(/131026/)],
@@ -89,7 +89,7 @@ export const SHOTS = [
     [2, (p) => p.locator("main div.border-red-500\\/40 li").first()],
   ] },
   // ── Régua de recompra ──
-  { chave: "esteira-recompra", papel: "colaborador", url: "/ecommerce/esteira?pipeline=recompra", viewport: LARGO, marcas: [
+  { chave: "esteira-recompra", papel: "colaborador", url: "/ecommerce/esteira?quadro=recompra", viewport: LARGO, marcas: [
     [1, combo(0)],
     [2, (p) => p.locator("main").getByText(/oferta \d+ dias após a entrega/)],
     [3, col("Entregue")],
@@ -102,7 +102,7 @@ export const SHOTS = [
     [10, (p) => p.locator('main button[title^="Não contatar"]')],
     [11, (p) => p.locator("summary").filter({ hasText: /entregues antes da régua/ })],
   ] },
-  { chave: "esteira-recolhidas", papel: "colaborador", url: "/ecommerce/esteira?pipeline=recompra", viewport: { width: 2700, height: 1000 },
+  { chave: "esteira-recolhidas", papel: "colaborador", url: "/ecommerce/esteira?quadro=recompra", viewport: { width: 2700, height: 1000 },
     antes: async (p) => {
       await p.locator('main button[title^="Erro ao enviar"]').click();
       await p.locator('main button[title^="Sem telefone"]').click();
@@ -115,7 +115,7 @@ export const SHOTS = [
     [4, (p) => p.locator('main button[title^="Não contatar"]')],
   ] },
   // ── Recuperação de carrinho ──
-  { chave: "esteira-carrinho", papel: "colaborador", url: "/ecommerce/esteira?pipeline=carrinho", viewport: { width: 2500, height: 1000 }, marcas: [
+  { chave: "esteira-carrinho", papel: "colaborador", url: "/ecommerce/esteira?quadro=carrinho", viewport: { width: 2500, height: 1000 }, marcas: [
     [1, (p) => p.locator("main").getByText("em perseguição", { exact: true }).locator("..").locator("..")],
     [2, (p) => p.locator("main").getByText(/1ª \d+ min após o abandono/)],
     [3, col("Abandonado")],
@@ -127,7 +127,7 @@ export const SHOTS = [
     [9, col("Perdido")],
     [10, (p) => p.locator('main button[title^="Sem telefone"]')],
   ] },
-  { chave: "esteira-carrinho-card", papel: "colaborador", url: "/ecommerce/esteira?pipeline=carrinho", viewport: LARGO, pad: 10,
+  { chave: "esteira-carrinho-card", papel: "colaborador", url: "/ecommerce/esteira?quadro=carrinho", viewport: LARGO, pad: 10,
     clip: (p) => [col("Abandonado")(p), col("Respondeu")(p)], marcas: [
     [1, (p) => card("Paula Guedes")(p).getByText(/CarboZé 100ml/)],
     [2, (p) => card("Paula Guedes")(p).getByText(/Nuvemshop · há/)],

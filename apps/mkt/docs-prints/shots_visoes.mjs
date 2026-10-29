@@ -15,7 +15,7 @@ export const SHOTS = [
     [5, (p) => p.locator(".rounded-\\[var\\(--radius\\)\\].cursor-pointer").filter({ hasText: "Artigo blog" }).first()],
     [6, (p) => p.getByText(/^Sem data \(/).locator("..")],
   ] },
-  { chave: "visao-timeline", papel: "colaborador", url: `${Q}/timeline`, viewport: { width: 1440, height: 760 },
+  { chave: "visao-timeline", papel: "colaborador", url: `${Q}/linha-do-tempo`, viewport: { width: 1440, height: 760 },
     antes: async (p) => { await p.getByRole("button", { name: "dia", exact: true }).click(); },
     marcas: [
     [1, seg("Por membro")],
@@ -33,7 +33,7 @@ export const SHOTS = [
     [6, (p) => p.locator("tbody tr").first().locator('input[type="date"]').nth(1)],
     [7, (p) => p.locator("thead th").filter({ hasText: "Formato" })],
   ] },
-  { chave: "visao-dashboard", papel: "colaborador", url: `${Q}/dashboard`, viewport: { width: 1440, height: 1000 }, marcas: [
+  { chave: "visao-dashboard", papel: "colaborador", url: `${Q}/painel`, viewport: { width: 1440, height: 1000 }, marcas: [
     [1, (p) => p.getByText("Cartões", { exact: true }).first().locator("xpath=ancestor::div[contains(@class,'border-l-[3px]')][1]")],
     [2, (p) => p.getByText("Taxa de conclusão", { exact: true }).locator("xpath=ancestor::div[contains(@class,'border-l-[3px]')][1]")],
     [3, (p) => p.getByText("Atrasados", { exact: true }).first().locator("xpath=ancestor::div[contains(@class,'border-l-[3px]')][1]")],
@@ -48,13 +48,13 @@ export const SHOTS = [
     [2, (p) => p.locator(".leaflet-marker-icon").first()],
     [3, (p) => p.locator(".leaflet-popup-content")],
   ] },
-  { chave: "todos-calendario", papel: "colaborador", url: "/todos/calendario", marcas: [
+  { chave: "todos-calendario", papel: "colaborador", url: "/calendario-geral", marcas: [
     [1, (p) => p.locator(".mkt-segmented").filter({ hasText: "Tabela" }).first()],
     [2, seg("Cor: quadro")],
     [3, (p) => p.locator("svg.lucide-layout-grid").first().locator("..")],
     [4, (p) => p.locator(".cursor-pointer").filter({ hasText: "Feira de transportes" }).first()],
   ] },
-  { chave: "todos-tabela", papel: "colaborador", url: "/todos/tabela", marcas: [
+  { chave: "todos-tabela", papel: "colaborador", url: "/tabela-geral", marcas: [
     [1, (p) => p.locator(".mkt-segmented").filter({ hasText: "Calendário" }).first()],
     [2, (p) => p.locator("select").filter({ hasText: "Quadro: todos" })],
     [3, (p) => p.locator("tbody tr").first().locator("td").nth(2)],

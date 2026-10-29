@@ -5,6 +5,7 @@ import {
   ArrowLeft, Lock,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useParamUrl } from "@carbo/shell";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
@@ -323,7 +324,11 @@ export default function MensagensCliente() {
   /* Grupo selecionado. A recompra não é a sétima etapa da entrega — é outra
      conversa, de outro número — e empilhá-la no fim da mesma lista fazia
      parecer continuação do mesmo fluxo. */
-  const [grupo, setGrupo] = useState<GrupoMsg>("entrega");
+  /* Na URL (`?aba=recompra`): F5 e link voltam ao mesmo grupo. "entrega" é o
+     padrão e não vai para o endereço. */
+  const [abaUrl, setAbaUrl] = useParamUrl("aba", "entrega");
+  const grupo: GrupoMsg = GRUPOS.some((g) => g.id === abaUrl) ? (abaUrl as GrupoMsg) : "entrega";
+  const setGrupo = (g: GrupoMsg) => setAbaUrl(g);
   const doGrupo = (templates ?? []).filter((t) => GRUPO_DA_ETAPA[t.etapa] === grupo);
   const ligadasNoGrupo = doGrupo.filter((t) => t.ativo).length;
 

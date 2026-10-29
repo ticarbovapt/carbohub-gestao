@@ -21,7 +21,7 @@ export const SECOES_PAINELCOM: Secao[] = [
   {
     id: "dashboard-comercial",
     titulo: "Dashboard Comercial",
-    rota: "/comercial/dashboard",
+    rota: "/painel-comercial",
     resumo:
       "O painel de vendas do Grupo Carbo: quanto foi faturado, por onde (on-line, Comercial Expansão e CarboVAPT), como o mês está contra o anterior, as metas por canal e as unidades vendidas por produto. É a tela que abre quando você entra no Admin.",
     regras: {
@@ -126,7 +126,7 @@ export const SECOES_PAINELCOM: Secao[] = [
   {
     id: "dados-comerciais",
     titulo: "Dados Comerciais (fonte)",
-    rota: "/comercial/dados",
+    rota: "/dados-comerciais",
     resumo:
       "As linhas que formam o Dashboard Comercial: cada pedido, cada nota de serviço e cada cliente, com o motivo de ter entrado ou não na conta. É aqui que se confere um número, classifica o canal de um pedido e cria follow-up para um cliente.",
     regras: {
@@ -225,7 +225,7 @@ export const SECOES_PAINELCOM: Secao[] = [
   {
     id: "aprovacoes",
     titulo: "Aprovações de desconto e fabricação",
-    rota: "/comercial/descontos",
+    rota: "/aprovacoes",
     resumo:
       "Onde o gestor decide o que precisa de aval: descontos acima do limite do vendedor e vendas com prazo de entrega curto demais para fabricar. Também é onde se configuram as regras (a alçada de desconto e os prazos de fabricação).",
     regras: {
@@ -316,7 +316,7 @@ export const SECOES_PAINELCOM: Secao[] = [
   {
     id: "precos",
     titulo: "Tabela de preços",
-    rota: "/comercial/precos",
+    rota: "/tabela-de-precos",
     resumo:
       "O preço de cada produto final e das faixas por tipo de cliente (PDV e Microdistribuidor). O Vender usa estes valores: o vendedor não digita preço. Aqui também se escolhe o que aparece na lista de produtos do Vender.",
     regras: {

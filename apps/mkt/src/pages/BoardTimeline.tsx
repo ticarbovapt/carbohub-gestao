@@ -1,4 +1,5 @@
 import { useCartaoDaUrl } from "@/lib/cartaoNaUrl";
+import { useParamUrl } from "@carbo/shell";
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
@@ -83,8 +84,13 @@ export default function BoardTimeline() {
   const team = pessoasDoQuadro(data, timeDept);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
-  const [zoom, setZoom] = useState<"dia" | "semana" | "mes">("semana");
-  const [groupBy, setGroupBy] = useState<"list" | "member">("list");
+  // Zoom e agrupamento na URL (`?zoom=dia&agrupar=membro`): F5 e link mantêm.
+  const [zoomUrl, setZoomUrl] = useParamUrl("zoom", "semana");
+  const zoom: "dia" | "semana" | "mes" = zoomUrl === "dia" || zoomUrl === "mes" ? zoomUrl : "semana";
+  const setZoom = (z: "dia" | "semana" | "mes") => setZoomUrl(z);
+  const [agruparUrl, setAgruparUrl] = useParamUrl("agrupar", "lista");
+  const groupBy: "list" | "member" = agruparUrl === "membro" ? "member" : "list";
+  const setGroupBy = (g: "list" | "member") => setAgruparUrl(g === "member" ? "membro" : "lista");
   const [openCardId, setOpenCardId] = useState<string | null>(null);
   useCartaoDaUrl((cid) => setOpenCardId(cid));
   const [drag, setDrag] = useState<DragState | null>(null);

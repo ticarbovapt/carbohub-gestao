@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
+import { useParamUrl } from "@carbo/shell";
 import { CarboCard, CarboCardContent, CarboCardHeader, CarboCardTitle } from "@/components/ui/carbo-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -184,6 +185,7 @@ const TOOLTIP_STYLE = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 type ChartTab    = "daily" | "cumulative" | "history";
+const GRAFICO_NA_URL: Record<ChartTab, string> = { daily: "diario", cumulative: "acumulado", history: "historico" };
 type ChartFilter = "all" | MetaPlatform;
 
 // ⚠️ DERIVADA de ALL_PLATFORMS, não escrita à mão.
@@ -352,7 +354,10 @@ const PERIOD_OPTIONS = [
 ];
 
 function HistoryBarChart({ hookPlatform }: { hookPlatform: MetaPlatform }) {
-  const [periodMonths, setPeriodMonths] = useState(12);
+  // Na URL (`?meses=3|6|tudo`; ausente = 12): F5 e link mantêm a janela.
+  const [mesesUrl, setMesesUrl] = useParamUrl("meses", "12");
+  const periodMonths = mesesUrl === "tudo" ? 999 : PERIOD_OPTIONS.some((o) => String(o.value) === mesesUrl) ? Number(mesesUrl) : 12;
+  const setPeriodMonths = (v: number) => setMesesUrl(v === 999 ? "tudo" : String(v));
   const { data: history = [], isLoading } = useMetaMonthlyHistory(hookPlatform);
 
   if (isLoading) return (
@@ -435,8 +440,14 @@ function HistoryBarChart({ hookPlatform }: { hookPlatform: MetaPlatform }) {
 function ChartsSection({ month, totalTarget, platformStats }: {
   month: Date; totalTarget: number; platformStats: PlatformMetaStats[];
 }) {
-  const [filter, setFilter]     = useState<ChartFilter>("all");
-  const [chartTab, setChartTab] = useState<ChartTab>("daily");
+  // Canal e gráfico na URL (`?canal=nuvemshop&grafico=acumulado`): F5 e link
+  // abrem o mesmo recorte. O valor interno é o de sempre; o da URL é em português.
+  const [canalUrl, setCanalUrl] = useParamUrl("canal", "all");
+  const filter: ChartFilter = FILTER_OPTIONS.find((o) => String(o.value) === canalUrl)?.value ?? "all";
+  const setFilter = (v: ChartFilter) => setCanalUrl(String(v));
+  const [graficoUrl, setGraficoUrl] = useParamUrl("grafico", "diario");
+  const chartTab: ChartTab = (Object.keys(GRAFICO_NA_URL) as ChartTab[]).find((k) => GRAFICO_NA_URL[k] === graficoUrl) ?? "daily";
+  const setChartTab = (t: ChartTab) => setGraficoUrl(GRAFICO_NA_URL[t]);
 
   const hookPlatform: MetaPlatform = filter === "all" ? null : filter;
   const activeTarget = filter === "all"
@@ -533,7 +544,13 @@ function ChartsSection({ month, totalTarget, platformStats }: {
 // meta, gravando `platform: null` — justamente o que deixou de existir. Código
 // morto que grava é o que volta a ser ligado por engano seis meses depois.
 export default function EcommerceMetas() {
-  const [month, setMonth]       = useState(() => startOfMonth(new Date()));
+  // Mês na URL (`?mes=AAAA-MM`; ausente = o CORRENTE): F5 e link mantêm o mês.
+  const [mesUrl, setMesUrl] = useParamUrl("mes", format(new Date(), "yyyy-MM"));
+  const month = useMemo(() => {
+    const m = /^(\d{4})-(\d{2})$/.exec(mesUrl);
+    return m ? new Date(Number(m[1]), Number(m[2]) - 1, 1) : startOfMonth(new Date());
+  }, [mesUrl]);
+  const setMonth = (d: Date) => setMesUrl(format(d, "yyyy-MM"));
 
   const { totalStats, platformStats, isLoading } = useMetaStats(month);
 
@@ -605,14 +622,14 @@ export default function EcommerceMetas() {
           {/* Month selector */}
           <div className="flex items-center justify-between sm:justify-start gap-2 bg-muted/40 rounded-lg px-3 py-1.5">
             <Button variant="ghost" size="icon" className="h-9 w-9 sm:h-7 sm:w-7"
-              onClick={() => setMonth((m) => startOfMonth(subMonths(m, 1)))}>
+              onClick={() => setMonth(startOfMonth(subMonths(month, 1)))}>
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <span className="text-sm font-semibold w-36 text-center capitalize">
               {format(month, "MMMM 'de' yyyy", { locale: ptBR })}
             </span>
             <Button variant="ghost" size="icon" className="h-9 w-9 sm:h-7 sm:w-7"
-              onClick={() => setMonth((m) => startOfMonth(addMonths(m, 1)))}
+              onClick={() => setMonth(startOfMonth(addMonths(month, 1)))}
               disabled={isCurrentMonth}>
               <ChevronRight className="h-4 w-4" />
             </Button>

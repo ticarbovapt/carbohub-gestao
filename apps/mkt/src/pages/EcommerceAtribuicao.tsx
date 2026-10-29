@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useParamUrl } from "@carbo/shell";
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
@@ -47,6 +48,10 @@ import {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const PERIODOS: MetaPeriod[] = ["today", "yesterday", "7d", "30d", "month"];
+// O período na URL fala português (`?periodo=ontem`); o valor interno é o do hook.
+const PERIODO_NA_URL: Record<string, string> = {
+  today: "hoje", yesterday: "ontem", "7d": "7d", "30d": "30d", month: "este-mes",
+};
 
 // ── Card de indicador ────────────────────────────────────────────────────────
 
@@ -149,8 +154,12 @@ function Vazio({ icone: Icone, titulo, children }: {
 }
 
 export default function EcommerceAtribuicao() {
-  const [period, setPeriod] = useState<MetaPeriod>("30d");
-  const [actId, setActId] = useState<string>("todas");
+  // Período e conta na URL (`?periodo=7d&conta=act_…`): F5 e link abrem o
+  // mesmo recorte. Ausente = 30 dias, todas as contas.
+  const [periodoUrl, setPeriodoUrl] = useParamUrl("periodo", "30d");
+  const period: MetaPeriod = PERIODOS.find((k) => PERIODO_NA_URL[k] === periodoUrl) ?? "30d";
+  const setPeriod = (v: MetaPeriod) => setPeriodoUrl(PERIODO_NA_URL[v] ?? v);
+  const [actId, setActId] = useParamUrl("conta", "todas");
   const [aberto, setAberto] = useState<Set<string>>(new Set());
   const [verContas, setVerContas] = useState(false);
 

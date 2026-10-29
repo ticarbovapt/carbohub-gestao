@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useParamUrl } from "@carbo/shell";
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList,
@@ -16,7 +16,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useDashComercial } from "@/hooks/useDashComercial";
 import { useComercialCanais, type CanalKey } from "@/hooks/useComercialCanais";
 import { useCanalMetas } from "@/hooks/useCanalMetas";
-import { ComercialFilterBar, EMPTY_FILTERS, type DashFilters } from "@/components/comercial/ComercialFilterBar";
+import { ComercialFilterBar } from "@/components/comercial/ComercialFilterBar";
+import { useFiltrosComerciaisUrl, queryDoRecorte } from "@/hooks/useFiltrosComerciaisUrl";
 import { ComercialTabs } from "@/components/comercial/ComercialTabs";
 import { CanalMetasDialog } from "@/components/comercial/CanalMetasDialog";
 import { format } from "date-fns";
@@ -263,26 +264,12 @@ function SerieMensal({
 export default function DashboardComercial() {
   const { canAdmin } = useAuth();
   // ⚠️ Filtros e modo de clientes na URL (`?de=&ate=&vendedor=&canal=&clientes=`):
-  // F5 e link compartilhado mantêm o recorte, e o Voltar desfaz a troca.
-  // A barra troca VÁRIOS campos num clique só ("Limpar"), então a gravação é UMA
-  // escrita com todos eles: o updater funcional do `setSearchParams` lê os
-  // parâmetros do RENDER, e quatro `useParamUrl` chamados em sequência
-  // apagariam um ao outro.
-  const [params, setParams] = useSearchParams();
-  const pFrom = params.get("de") ?? "", pTo = params.get("ate") ?? "";
-  const pVend = params.get("vendedor") ?? "all", pSeg = params.get("canal") ?? "all";
-  const filters = useMemo<DashFilters>(
-    () => ({ ...EMPTY_FILTERS, from: pFrom, to: pTo, vendedor: pVend, segmento: pSeg }),
-    [pFrom, pTo, pVend, pSeg],
-  );
-  const setFilters = (f: DashFilters) =>
-    setParams((atual) => {
-      const p = new URLSearchParams(atual);
-      const grava = (k: string, v: string, padrao: string) => (v && v !== padrao ? p.set(k, v) : p.delete(k));
-      grava("de", f.from, ""); grava("ate", f.to, "");
-      grava("vendedor", f.vendedor, "all"); grava("canal", f.segmento, "all");
-      return p;
-    });
+  // F5 e link compartilhado mantêm o recorte, e o Voltar desfaz a troca. As
+  // chaves são as MESMAS dos Dados Comerciais (`useFiltrosComerciaisUrl`), então
+  // o seletor Gráficos ↔ Dados e o "Ver pedidos →" levam o recorte junto.
+  const [filters, setFilters] = useFiltrosComerciaisUrl();
+  const { search } = useLocation();
+  const verPedidos = `/dados-comerciais/pedidos${queryDoRecorte(search)}`;
   const [modoUrl, setModoUrl] = useParamUrl("clientes", "acum");
   const modoClientes: "acum" | "ativos" | "novos" =
     modoUrl === "ativos" || modoUrl === "novos" ? modoUrl : "acum";
@@ -628,7 +615,7 @@ export default function DashboardComercial() {
               <h2 className="text-base font-bold text-board-text flex items-center gap-2"><BarChart3 className="h-4 w-4 text-primary" /> Evolução Mensal de Vendas</h2>
               <p className="text-xs text-board-muted mt-0.5">Via Bling · <span className="font-semibold text-board-text">{k?.totalVendas ?? 0} pedidos</span> · <span className="font-semibold text-green-500">{brl(k?.totalBRL ?? 0)} acumulado</span></p>
             </div>
-            <Link to="/comercial/dados/pedidos" className="text-xs font-semibold text-primary hover:underline shrink-0">Ver pedidos →</Link>
+            <Link to={verPedidos} className="text-xs font-semibold text-primary hover:underline shrink-0">Ver pedidos →</Link>
           </div>
           {isLoading ? (
             <div className="flex items-center justify-center h-72"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
@@ -735,7 +722,7 @@ export default function DashboardComercial() {
           <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">
             <div className="border-b border-border px-4 sm:px-6 py-3">
               <h2 className="text-base font-bold text-board-text flex items-center gap-2"><BarChart3 className="h-4 w-4 text-blue-400" /> Vendas por Canal</h2>
-              <p className="text-xs text-board-muted mt-0.5">Consumo · Revenda · On-line · CarboVAPT (NFS-e) · classifique cada pedido em <Link to="/comercial/dados/pedidos" className="font-semibold text-primary hover:underline">Pedidos</Link></p>
+              <p className="text-xs text-board-muted mt-0.5">Consumo · Revenda · On-line · CarboVAPT (NFS-e) · classifique cada pedido em <Link to={verPedidos} className="font-semibold text-primary hover:underline">Pedidos</Link></p>
             </div>
             {/* ⚠️ LINHAS, não azulejos 2×3. Cinco canais em duas colunas davam
                 três fileiras com a última pela metade — altura de painel de
@@ -984,7 +971,7 @@ export default function DashboardComercial() {
 
         {/* 9. Footer */}
         <div className="flex items-center justify-end gap-4 pb-1">
-          <Link to="/comercial/dados/pedidos" className="text-xs text-board-muted hover:text-primary transition-colors flex items-center gap-1">Ver pedidos detalhados →</Link>
+          <Link to={verPedidos} className="text-xs text-board-muted hover:text-primary transition-colors flex items-center gap-1">Ver pedidos detalhados →</Link>
         </div>
       </div>
 

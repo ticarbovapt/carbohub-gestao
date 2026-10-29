@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { useParamUrl } from "@carbo/shell";
 import {
   Database, AlertTriangle, Search, Download, ShoppingCart, DollarSign, Target, EyeOff,
   Users, Building2, ListOrdered, Globe, FileText, ArrowUp, ArrowDown, ChevronsUpDown, Layers, Loader2, CheckCircle2, UserPlus, Pencil, Wrench,
@@ -16,7 +17,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { useComercialOrders, type ComercialOrderRow } from "@/hooks/useComercialOrders";
-import { ComercialFilterBar, EMPTY_FILTERS, type DashFilters } from "@/components/comercial/ComercialFilterBar";
+import { ComercialFilterBar } from "@/components/comercial/ComercialFilterBar";
+import { useFiltrosComerciaisUrl } from "@/hooks/useFiltrosComerciaisUrl";
 import { ComercialTabs } from "@/components/comercial/ComercialTabs";
 import { useFollowupLeadStatus, useCreateFollowupLead } from "@/hooks/useFollowupLead";
 import { useVendedoresDir } from "@/hooks/useVendedoresDir";
@@ -54,11 +56,34 @@ interface RowVM {
   orders: ComercialOrderRow[];
   subCnpjs: ClienteAgg[];       // no modo agrupado, os CNPJs dentro do grupo
 }
-type SortCol = "cnpj" | "nome" | "canal" | "vendedor" | "pedidos" | "total" | "primeira" | "ultima";
+const COLS_CLIENTES = ["cnpj", "nome", "canal", "vendedor", "pedidos", "total", "primeira", "ultima"] as const;
+type SortCol = (typeof COLS_CLIENTES)[number];
 // Colunas da aba Pedidos.
-type PedCol = "pedido" | "data" | "cliente" | "vendedor" | "canal" | "status" | "total" | "conta" | "origem";
+const COLS_PEDIDOS = ["pedido", "data", "cliente", "vendedor", "canal", "status", "total", "conta", "origem"] as const;
+type PedCol = (typeof COLS_PEDIDOS)[number];
 // Colunas da aba Descarbonização. São as da NOTA — não há vendedor nem origem.
-type ServCol = "nota" | "data" | "cliente" | "codigo" | "valor" | "situacao";
+const COLS_SERVICOS = ["nota", "data", "cliente", "codigo", "valor", "situacao"] as const;
+type ServCol = (typeof COLS_SERVICOS)[number];
+
+// ── Ordem da tabela na URL (`?ordem=total` A→Z/menor primeiro, `?ordem=-total`
+// do maior). UMA chave para as três listas: só uma aparece por vez, e trocar de
+// aba apaga a ordem (`setView`). Coluna que não é desta lista cai no padrão —
+// link antigo ou editado à mão não quebra a tabela. O padrão não vai para a URL.
+type Ordem<C extends string> = { col: C; dir: "asc" | "desc" };
+function useOrdemUrl<C extends string>(
+  cols: readonly C[], padrao: Ordem<C>,
+): [Ordem<C>, (f: Ordem<C> | ((o: Ordem<C>) => Ordem<C>)) => void] {
+  const [v, setV] = useParamUrl("ordem", "");
+  const desc = v.startsWith("-");
+  const col = (desc ? v.slice(1) : v) as C;
+  const atual: Ordem<C> = (cols as readonly string[]).includes(col)
+    ? { col, dir: desc ? "desc" : "asc" } : padrao;
+  const set = (f: Ordem<C> | ((o: Ordem<C>) => Ordem<C>)) => {
+    const n = typeof f === "function" ? f(atual) : f;
+    setV(n.col === padrao.col && n.dir === padrao.dir ? null : `${n.dir === "desc" ? "-" : ""}${n.col}`);
+  };
+  return [atual, set];
+}
 
 const CANAL_LABEL: Record<string, string> = { consumo: "Consumo (B2B)", revenda: "Revenda (PDV)", online: "On-line" };
 // Status do pedido em português — os valores crus do banco (quote, pending…)
@@ -164,11 +189,17 @@ function FollowupCell({ row, pending, onCreate }: {
 
 export default function ComercialDados() {
   const { canAdmin } = useAuth();
-  const [filters, setFilters] = useState<DashFilters>(EMPTY_FILTERS);
-  const [busca, setBusca] = useState("");
-  const [statusFiltro, setStatusFiltro] = useState("all");
-  const [soMetricas, setSoMetricas] = useState(false);
-  // A aba vive na URL: /comercial/dados/pedidos, /pedidos-online, /clientes e
+  // Recorte, busca, status, "só os que contam", agrupamento e ordem na URL
+  // (`?de=&ate=&vendedor=&canal=&busca=&status=&contam=1&agrupar=nome&ordem=-total`):
+  // F5 e link compartilhado abrem a MESMA lista. As chaves do recorte são as do
+  // Painel Comercial — o seletor Gráficos ↔ Dados leva o recorte junto.
+  const [filters, setFilters] = useFiltrosComerciaisUrl();
+  const [busca, setBusca] = useParamUrl("busca", "", { replace: true });
+  const [statusFiltro, setStatusFiltro] = useParamUrl("status", "all");
+  const [contamUrl, setContamUrl] = useParamUrl("contam", "");
+  const soMetricas = contamUrl === "1";
+  const setSoMetricas = (f: (v: boolean) => boolean) => setContamUrl(f(soMetricas) ? "1" : null);
+  // A aba vive na URL: /dados-comerciais/pedidos, /pedidos-online, /clientes e
   // /clientes-online. Assim o link é compartilhável, o F5 volta na mesma aba e
   // o voltar do navegador funciona. Aba inválida cai em "pedidos".
   //
@@ -182,10 +213,18 @@ export default function ComercialDados() {
   // na gestão de marketplace.
   const { aba } = useParams<{ aba?: string }>();
   const navigate = useNavigate();
+  const { search } = useLocation();
   const ABAS = ["pedidos", "pedidos-online", "descarbonizacao", "clientes", "clientes-online"] as const;
   type Aba = (typeof ABAS)[number];
   const view: Aba = (ABAS as readonly string[]).includes(aba ?? "") ? (aba as Aba) : "pedidos";
-  const setView = (v: Aba) => navigate(`/comercial/dados/${v}`);
+  // Trocar de aba leva o recorte e a busca junto (a query), menos a ORDEM: cada
+  // lista tem as suas colunas, e a ordem de uma não é pergunta da outra.
+  const setView = (v: Aba) => {
+    const p = new URLSearchParams(window.location.search);
+    p.delete("ordem");
+    const q = p.toString();
+    navigate(`/dados-comerciais/${v}${q ? `?${q}` : ""}`);
+  };
   // Duas perguntas separadas: QUAL lista mostrar e QUAL recorte de canal.
   // ⚠️ A descarbonização é uma TERCEIRA lista, não um recorte de canal das
   // outras duas: a linha dela é uma NFS-e, não um pedido de `carboze_orders`.
@@ -196,16 +235,19 @@ export default function ComercialDados() {
     view === "descarbonizacao" ? "servicos" : view.startsWith("clientes") ? "clientes" : "pedidos";
   const canal: "interno" | "online" = view.endsWith("-online") ? "online" : "interno";
 
-  // /comercial/dados sem aba, ou com aba inválida, vira a canônica. `replace`
-  // para não empilhar no histórico — senão o voltar ficaria preso aqui.
+  // /dados-comerciais sem aba, ou com aba inválida, vira a canônica. `replace`
+  // para não empilhar no histórico — senão o voltar ficaria preso aqui. A query
+  // vai junto: é ela que traz o recorte de quem mandou o link.
   useEffect(() => {
-    if (aba !== view) navigate(`/comercial/dados/${view}`, { replace: true });
-  }, [aba, view, navigate]);
-  const [agrupado, setAgrupado] = useState(false);
+    if (aba !== view) navigate(`/dados-comerciais/${view}${search}`, { replace: true });
+  }, [aba, view, navigate, search]);
+  const [agruparUrl, setAgruparUrl] = useParamUrl("agrupar", "");
+  const agrupado = agruparUrl === "nome";
+  const setAgrupado = (f: (v: boolean) => boolean) => setAgruparUrl(f(agrupado) ? "nome" : null);
   const [detail, setDetail] = useState<RowVM | null>(null);
-  const [sort, setSort] = useState<{ col: SortCol; dir: "asc" | "desc" }>({ col: "ultima", dir: "desc" });
+  const [sort, setSort] = useOrdemUrl<SortCol>(COLS_CLIENTES, { col: "ultima", dir: "desc" });
   // Aba Pedidos: começa pelo mais recente, que é como a tela já vinha.
-  const [pedSort, setPedSort] = useState<{ col: PedCol; dir: "asc" | "desc" }>({ col: "data", dir: "desc" });
+  const [pedSort, setPedSort] = useOrdemUrl<PedCol>(COLS_PEDIDOS, { col: "data", dir: "desc" });
 
   // Follow-up (funil f10) — criação a partir da linha de cliente.
   const createFollowup = useCreateFollowupLead();
@@ -337,7 +379,7 @@ export default function ComercialDados() {
   // descarbonização" — que é uma afirmação sobre o negócio, não sobre o dado.
   const { data: servicos, isLoading: loadingServicos, error: errServicos } =
     useServicosNfse({ from: filters.from, to: filters.to });
-  const [servSort, setServSort] = useState<{ col: ServCol; dir: "asc" | "desc" }>({ col: "data", dir: "desc" });
+  const [servSort, setServSort] = useOrdemUrl<ServCol>(COLS_SERVICOS, { col: "data", dir: "desc" });
   const toggleServSort = (col: ServCol) =>
     setServSort((s) => (s.col === col
       ? { col, dir: s.dir === "asc" ? "desc" : "asc" }

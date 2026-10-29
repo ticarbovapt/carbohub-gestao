@@ -1,4 +1,6 @@
 import { useCartaoDaUrl } from "@/lib/cartaoNaUrl";
+import { useOrdemTabelaUrl } from "@/lib/estadoNaUrl";
+import { useParamUrl } from "@carbo/shell";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, Table2, CalendarClock, ArrowUp, ArrowDown, Maximize2, Search } from "lucide-react";
@@ -25,11 +27,13 @@ export default function WorkspaceTable() {
   const { data: team = [] } = useTeamMembers();
   const m = useBoardMutations();
 
-  const [sort, setSort] = useState<{ key: string; dir: SortDir }>({ key: "title", dir: "asc" });
-  const [text, setText] = useState("");
-  const [labelId, setLabelId] = useState("");
-  const [memberId, setMemberId] = useState("");
-  const [boardId, setBoardId] = useState("");
+  // Ordem, busca e filtros na URL (`?ordem=&busca=&etiqueta=&membro=&quadro=`):
+  // F5 e link abrem a mesma tabela.
+  const [sort, setSort] = useOrdemTabelaUrl();
+  const [text, setText] = useParamUrl("busca", "", { replace: true });
+  const [labelId, setLabelId] = useParamUrl("etiqueta", "");
+  const [memberId, setMemberId] = useParamUrl("membro", "");
+  const [boardId, setBoardId] = useParamUrl("quadro", "");
   const [openCardId, setOpenCardId] = useState<string | null>(null);
   useCartaoDaUrl((cid) => setOpenCardId(cid));
 
@@ -99,7 +103,7 @@ export default function WorkspaceTable() {
         <Link to="/quadros" aria-label="Voltar aos quadros" className="inline-flex p-1.5 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"><ArrowLeft className="h-4 w-4" /></Link>
         <h1 className="mkt-view-title text-lg font-bold text-foreground tracking-tight flex items-center gap-2"><Table2 className="h-5 w-5 text-primary" /> Todos os quadros · Tabela</h1>
         <div className="mkt-segmented flex gap-0.5 bg-muted rounded-md p-0.5">
-          <Link to="/todos/calendario" className="mkt-segmented-item px-2.5 py-1 text-xs font-semibold rounded text-muted-foreground hover:text-foreground inline-flex items-center gap-1"><CalendarClock className="h-3.5 w-3.5" /> Calendário</Link>
+          <Link to="/calendario-geral" className="mkt-segmented-item px-2.5 py-1 text-xs font-semibold rounded text-muted-foreground hover:text-foreground inline-flex items-center gap-1"><CalendarClock className="h-3.5 w-3.5" /> Calendário</Link>
           <button className="mkt-segmented-item is-active px-2.5 py-1 text-xs font-semibold rounded bg-card shadow-[var(--shadow-card)] text-foreground inline-flex items-center gap-1"><Table2 className="h-3.5 w-3.5" /> Tabela</button>
         </div>
         <div className="ml-auto flex items-center gap-2 flex-wrap max-sm:w-full max-sm:grid max-sm:grid-cols-2">

@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route } from "react-router-dom";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Layout } from "./components/Layout";
 import Home from "./pages/Home";
@@ -43,12 +43,14 @@ export default function App() {
         <Route path="/quadros/:boardId" element={<Board />} />
         <Route path="/cartao/:cardId" element={<AbrirCartao />} />
         <Route path="/quadros/:boardId/calendario" element={<BoardCalendar />} />
-        <Route path="/quadros/:boardId/timeline" element={<BoardTimeline />} />
+        <Route path="/quadros/:boardId/linha-do-tempo" element={<BoardTimeline />} />
         <Route path="/quadros/:boardId/tabela" element={<BoardTable />} />
-        <Route path="/quadros/:boardId/dashboard" element={<BoardDashboard />} />
+        <Route path="/quadros/:boardId/painel" element={<BoardDashboard />} />
         <Route path="/quadros/:boardId/mapa" element={<BoardMap />} />
-        <Route path="/todos/calendario" element={<WorkspaceCalendar />} />
-        <Route path="/todos/tabela" element={<WorkspaceTable />} />
+        {/* As visões de TODOS os quadros: o endereço é o nome do botão
+            ("Calendário geral", "Tabela geral"). */}
+        <Route path="/calendario-geral" element={<WorkspaceCalendar />} />
+        <Route path="/tabela-geral" element={<WorkspaceTable />} />
         <Route path="/perfil" element={<Profile />} />
         <Route path="/documentacao" element={<Documentacao />} />
         <Route path="/equipe" element={<MinhaEquipe />} />
@@ -59,6 +61,13 @@ export default function App() {
         <Route path="/ecommerce/esteira" element={<EsteiraOnline />} />
         <Route path="/ecommerce/mensagens" element={<MensagensCliente />} />
         <Route path="/ecommerce/anuncios" element={<EcommerceAtribuicao />} />
+        {/* ⚠️ Endereços ANTIGOS (até 29/10/2026): favorito e link mandado no
+            chat continuam abrindo. `IrPara` leva a query junto — é nela que
+            vem o `?cartao=` (ou o `?card=` de antes) que abre o cartão. */}
+        <Route path="/quadros/:boardId/timeline" element={<IrPara para="/quadros/:boardId/linha-do-tempo" />} />
+        <Route path="/quadros/:boardId/dashboard" element={<IrPara para="/quadros/:boardId/painel" />} />
+        <Route path="/todos/calendario" element={<IrPara para="/calendario-geral" />} />
+        <Route path="/todos/tabela" element={<IrPara para="/tabela-geral" />} />
         {/* Rota inexistente: diz que não existe, em vez de cair na home calado. */}
         <Route path="*" element={<PaginaNaoEncontrada />} />
       </Route>

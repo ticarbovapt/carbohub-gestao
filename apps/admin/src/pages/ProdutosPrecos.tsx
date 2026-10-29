@@ -1,4 +1,5 @@
 import { Fragment, useMemo, useState } from "react";
+import { useParamUrl } from "@carbo/shell";
 import { Tags, AlertTriangle, Search, Check, Plus, Eye, EyeOff, Gift } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
@@ -133,7 +134,9 @@ export default function ProdutosPrecos() {
   const { canAdmin } = useAuth();
   const { data: produtos = [], isLoading } = useFinalProducts();
   const { data: faixas = [] } = useFaixasPreco();
-  const [q, setQ] = useState("");
+  // Busca na URL (`?busca=`), com `replace`: uma entrada no histórico por letra
+  // faria o Voltar apagar a busca caractere a caractere.
+  const [q, setQ] = useParamUrl("busca", "", { replace: true });
 
   /**
    * A lista vira GRUPOS: o produto real e, logo abaixo, as faixas dele.

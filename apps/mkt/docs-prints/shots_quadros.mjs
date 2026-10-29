@@ -161,7 +161,7 @@ export const SHOTS = [
     ] },
 
   // ── O cartão aberto ──
-  { chave: "cartao", papel: "colaborador", url: Q + "?card=c-motorista", viewport: { width: 1440, height: 1250 },
+  { chave: "cartao", papel: "colaborador", url: Q + "?cartao=c-motorista", viewport: { width: 1440, height: 1250 },
     antes: async (p) => { await abrirCartao(p); await btn("Mostrar detalhes")(p).click(); await p.waitForTimeout(500); },
     clip: (p) => [dlg(p).locator("button[data-capa-botao]").first().locator(".."), esq(p).getByText("Descrição", { exact: true }).locator("../.."), dlg(p).getByText("criou este cartão").locator("..")], pad: 0, marcas: [
       [1, (p) => dlg(p).locator("button[data-capa-botao]").first()],
@@ -188,7 +188,7 @@ export const SHOTS = [
       [22, (p) => dlg(p).locator("#comentario-co2 div.mt-1.flex").first()],
       [23, (p) => dlg(p).getByText("substituiu um arquivo").locator("..")],
     ] },
-  { chave: "cartao-conteudo", papel: "colaborador", url: Q + "?card=c-motorista", viewport: MUITO_ALTO,
+  { chave: "cartao-conteudo", papel: "colaborador", url: Q + "?cartao=c-motorista", viewport: MUITO_ALTO,
     antes: async (p) => { await abrirCartao(p); await p.getByText("Aprovação da Marina").hover(); },
     clip: (p) => [esq(p).getByText("Campos personalizados"), esq(p).locator("details").first()], pad: 16, marcas: [
       [1, (p) => esq(p).getByText("Campos personalizados").locator("../..")],
@@ -203,7 +203,7 @@ export const SHOTS = [
       [10, btn(/Adicionar item/)],
       [11, (p) => esq(p).locator("details summary").first()],
     ] },
-  { chave: "cartao-anexo-menu", papel: "colaborador", url: Q + "?card=c-motorista", viewport: MUITO_ALTO,
+  { chave: "cartao-anexo-menu", papel: "colaborador", url: Q + "?cartao=c-motorista", viewport: MUITO_ALTO,
     antes: async (p) => { await abrirCartao(p); await esq(p).locator('button[title="Ações"]').first().click(); await p.waitForTimeout(300); },
     clip: (p) => [esq(p).getByText("Anexos", { exact: true }), p.locator('[role="menu"]')], pad: 12, marcas: [
       [1, (p) => p.getByRole("menuitem", { name: /Substituir/ })],
@@ -211,7 +211,7 @@ export const SHOTS = [
       [3, (p) => p.getByRole("menuitem", { name: /Baixar/ })],
       [4, (p) => p.getByRole("menuitem", { name: /Excluir/ })],
     ] },
-  { chave: "cartao-visualizador", papel: "colaborador", url: Q + "?card=c-motorista", viewport: { width: 1440, height: 900 },
+  { chave: "cartao-visualizador", papel: "colaborador", url: Q + "?cartao=c-motorista", viewport: { width: 1440, height: 900 },
     antes: async (p) => { await abrirCartao(p); await esq(p).getByRole("button", { name: /arte-dia-do-motorista/ }).last().click(); await p.waitForTimeout(800);
       await p.locator('label[title="Versões deste arquivo"] select').selectOption({ index: 1 }); await p.waitForTimeout(500); },
     clip: (p) => [p.locator('label[title="Versões deste arquivo"]').locator(".."), p.getByRole("button", { name: /Voltar para a atual/ }).locator("..")], pad: 0, marcas: [
@@ -222,7 +222,7 @@ export const SHOTS = [
       [5, (p) => p.getByRole("button", { name: /Restaurar esta versão/ })],
       [6, (p) => p.getByRole("button", { name: /Voltar para a atual/ })],
     ] },
-  { chave: "cartao-datas", papel: "colaborador", url: Q + "?card=c-motorista", viewport: { width: 1440, height: 1300 },
+  { chave: "cartao-datas", papel: "colaborador", url: Q + "?cartao=c-motorista", viewport: { width: 1440, height: 1300 },
     antes: async (p) => { await abrirCartao(p); await esq(p).getByRole("button", { name: "Datas", exact: true }).click(); await p.waitForTimeout(300); },
     clip: (p) => esq(p).locator("div.absolute.z-20").first(), pad: 6, marcas: [
       [1, (p) => esq(p).locator("div.absolute.z-20 table, div.absolute.z-20 [role=grid]").first()],
@@ -233,7 +233,7 @@ export const SHOTS = [
       [6, (p) => esq(p).locator("div.absolute.z-20").getByRole("button", { name: "Salvar", exact: true })],
       [7, (p) => esq(p).locator("div.absolute.z-20").getByRole("button", { name: "Remover", exact: true })],
     ] },
-  { chave: "cartao-etiquetas", papel: "colaborador", url: Q + "?card=c-motorista", viewport: { width: 1440, height: 1100 },
+  { chave: "cartao-etiquetas", papel: "colaborador", url: Q + "?cartao=c-motorista", viewport: { width: 1440, height: 1100 },
     antes: async (p) => { await abrirCartao(p); await esq(p).getByRole("button", { name: "Etiquetas", exact: true }).first().click(); await p.waitForTimeout(300); },
     clip: (p) => esq(p).locator("div.absolute.z-20").first(), pad: 6, marcas: [
       [1, (p) => esq(p).locator("div.absolute.z-20 input[type=checkbox]").first()],
@@ -241,7 +241,7 @@ export const SHOTS = [
       [3, (p) => esq(p).locator('div.absolute.z-20 button[title="Excluir etiqueta"]').first()],
       [4, (p) => p.getByText("Criar etiqueta").locator("..")],
     ] },
-  { chave: "cartao-capa", papel: "colaborador", url: Q + "?card=c-motorista", viewport: { width: 1440, height: 1100 },
+  { chave: "cartao-capa", papel: "colaborador", url: Q + "?cartao=c-motorista", viewport: { width: 1440, height: 1100 },
     antes: async (p) => { await abrirCartao(p); await dlg(p).locator("button[data-capa-botao]").first().click(); await p.waitForTimeout(300); },
     clip: (p) => p.getByText("Tamanho", { exact: true }).locator("xpath=ancestor::div[contains(@class,'absolute')][1]"), pad: 6, marcas: [
       [1, (p) => p.getByText("Tamanho", { exact: true }).locator("..")],
@@ -250,7 +250,7 @@ export const SHOTS = [
       [4, (p) => p.getByText("Tamanho", { exact: true }).locator("xpath=ancestor::div[contains(@class,'absolute')][1]").getByText("Anexos", { exact: true }).locator("..")],
       [5, btn(/Carregar uma imagem de capa/)],
     ] },
-  { chave: "cartao-comentar", papel: "colaborador", url: Q + "?card=c-motorista", viewport: { width: 1440, height: 1100 },
+  { chave: "cartao-comentar", papel: "colaborador", url: Q + "?cartao=c-motorista", viewport: { width: 1440, height: 1100 },
     antes: async (p) => { await abrirCartao(p); const t = dlg(p).locator('textarea[placeholder^="Escrever um comentário"]');
       await t.click(); await t.pressSequentially("Arte final aprovada. **Agendado** para quinta, 10h.", { delay: 5 }); await p.waitForTimeout(400); },
     clip: (p) => [dlg(p).getByText("Comentários e atividade"), dlg(p).locator('button[title="Negrito"]').locator("..")], pad: 14, marcas: [
@@ -259,14 +259,14 @@ export const SHOTS = [
       [3, (p) => dlg(p).getByRole("button", { name: "Salvar", exact: true }).last()],
       [4, (p) => dlg(p).getByRole("button", { name: "Cancelar", exact: true }).last()],
     ] },
-  { chave: "cartao-mencao", papel: "colaborador", url: Q + "?card=c-motorista", viewport: { width: 1440, height: 1100 },
+  { chave: "cartao-mencao", papel: "colaborador", url: Q + "?cartao=c-motorista", viewport: { width: 1440, height: 1100 },
     antes: async (p) => { await abrirCartao(p); const t = dlg(p).locator('textarea[placeholder^="Escrever um comentário"]');
       await t.click(); await t.pressSequentially("Pode aprovar? @Ma", { delay: 5 }); await p.waitForTimeout(400); },
     clip: (p) => [dlg(p).locator('textarea[placeholder^="Escrever um comentário"]'), p.getByText("Mencionar — a pessoa é avisada no sininho").locator("..")], pad: 14, marcas: [
       [1, (p) => dlg(p).locator('textarea[placeholder^="Escrever um comentário"]')],
       [2, (p) => p.getByText("Mencionar — a pessoa é avisada no sininho").locator("..").getByRole("button").first()],
     ] },
-  { chave: "cartao-editor", papel: "colaborador", url: Q + "?card=c-motorista", viewport: { width: 1440, height: 1250 },
+  { chave: "cartao-editor", papel: "colaborador", url: Q + "?cartao=c-motorista", viewport: { width: 1440, height: 1250 },
     antes: async (p) => { await abrirCartao(p); await esq(p).getByRole("button", { name: "Editar", exact: true }).click(); await p.waitForTimeout(800); },
     clip: (p) => [esq(p).getByText("Descrição", { exact: true }), esq(p).locator('button[title="Editar como Markdown"]'), esq(p).locator('[contenteditable="true"]').first(), esq(p).getByRole("button", { name: "Descartar alterações" })], pad: 14, marcas: [
       [1, (p) => esq(p).locator('button[title="Estilo do texto"]').locator("..")],
@@ -275,7 +275,7 @@ export const SHOTS = [
       [4, (p) => esq(p).getByRole("button", { name: "Salvar", exact: true })],
       [5, btn("Descartar alterações")],
     ] },
-  { chave: "cartao-mover", papel: "colaborador", url: Q + "?card=c-motorista", viewport: { width: 1440, height: 900 },
+  { chave: "cartao-mover", papel: "colaborador", url: Q + "?cartao=c-motorista", viewport: { width: 1440, height: 900 },
     antes: async (p) => { await abrirCartao(p); await esq(p).getByRole("button", { name: "Copiar", exact: true }).click(); await p.waitForTimeout(500); },
     clip: (p) => dlg(p), pad: 0, marcas: [
       [1, (p) => dlg(p).getByText("Título", { exact: true }).locator("..")],

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Store, DollarSign, ShoppingCart, Boxes, AlertTriangle, TrendingUp } from "lucide-react";
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList,
@@ -6,7 +6,8 @@ import {
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboKPI } from "@/components/ui/carbo-kpi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PeriodPicker, presetRange, rangeLabel, type PeriodRange } from "@/components/ui/PeriodPicker";
+import { PeriodPicker, rangeLabel } from "@/components/ui/PeriodPicker";
+import { usePeriodoUrl } from "@/hooks/usePeriodoUrl";
 import { useAuth } from "@/contexts/AuthContext";
 import { fmtBRL, fmtBRLc, delta } from "@/lib/dash-format";
 import { useLojasKpis, useLojasKpisPrev, useLojasTimeseries } from "@/hooks/useDashLojas";
@@ -59,7 +60,8 @@ function AccessNotice() {
 
 export default function DashboardsLojas() {
   const { canAdmin } = useAuth();
-  const [range, setRange] = useState<PeriodRange>(() => presetRange("month"));
+  // Período na URL (`?periodo=` ou `?de=&ate=`): F5 e link mantêm o recorte.
+  const [range, setRange] = usePeriodoUrl();
 
   const { data: kpis, isLoading: kLoad } = useLojasKpis(range);
   const { data: kpisPrev } = useLojasKpisPrev(range);

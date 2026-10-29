@@ -1,4 +1,5 @@
 import { useCartaoDaUrl } from "@/lib/cartaoNaUrl";
+import { useCalendarioUrl } from "@/lib/estadoNaUrl";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, ChevronLeft, ChevronRight, CalendarClock, Table2, LayoutGrid } from "lucide-react";
@@ -17,9 +18,9 @@ export default function WorkspaceCalendar() {
   useWorkspaceLive(wsId);
   const m = useBoardMutations();
 
-  const [ref, setRef] = useState<Date>(() => new Date());
-  const [mode, setMode] = useState<"month" | "week">("month");
-  const [colorBy, setColorBy] = useState<"label" | "board">("board");
+  // Dia, visão e cor na URL (`?data=&ver=semana&cor=etiqueta`): F5 e link
+  // abrem o mesmo mês. Ver `lib/estadoNaUrl.ts`.
+  const { ref, setRef, mode, setMode, colorBy, setColorBy } = useCalendarioUrl(["label", "board"] as const, "board");
   const [openCardId, setOpenCardId] = useState<string | null>(null);
   useCartaoDaUrl((cid) => setOpenCardId(cid));
 
@@ -73,7 +74,7 @@ export default function WorkspaceCalendar() {
         {/* alternar entre as views gerais */}
         <div className="mkt-segmented ml-1">
           <button className="mkt-segmented-item is-active"><CalendarClock className="h-3.5 w-3.5" /> Calendário</button>
-          <Link to="/todos/tabela" className="mkt-segmented-item"><Table2 className="h-3.5 w-3.5" /> Tabela</Link>
+          <Link to="/tabela-geral" className="mkt-segmented-item"><Table2 className="h-3.5 w-3.5" /> Tabela</Link>
         </div>
 
         <div className="ml-auto flex items-center gap-2 flex-wrap">

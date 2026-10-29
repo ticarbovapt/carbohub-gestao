@@ -26,7 +26,7 @@ const contasNaFuncao = async (p) => {
 
 export const SHOTS = [
   // ── Vendas Online: a aba de um canal ──
-  { chave: "ecom-canal", papel: "colaborador", url: `${VO}?aba=mercadolivre&periodo=month`, viewport: ALTO,
+  { chave: "ecom-canal", papel: "colaborador", url: `${VO}?aba=mercadolivre&periodo=este-mes`, viewport: ALTO,
     clip: (p) => p.locator("main > div").first(), espera: 1500, marcas: [
     [1, (p) => p.locator("main button[role=combobox]").first()],
     [2, (p) => p.getByRole("button", { name: /ML LogHouse/ }).locator("..")],
@@ -43,7 +43,7 @@ export const SHOTS = [
     [13, (p) => p.getByText("Evolução de Vendas").locator("xpath=ancestor::div[contains(@class,'rounded-2xl')][1]")],
     [14, (p) => p.getByText("Produtos Vendidos").locator("xpath=ancestor::div[contains(@class,'rounded-2xl')][1]")],
   ] },
-  { chave: "ecom-periodo", papel: "colaborador", url: `${VO}?aba=mercadolivre&periodo=month`,
+  { chave: "ecom-periodo", papel: "colaborador", url: `${VO}?aba=mercadolivre&periodo=este-mes`,
     antes: async (p) => { await p.waitForTimeout(800); await p.locator("main button[role=combobox]").first().click(); await p.waitForTimeout(500); },
     clip: (p) => [p.locator("[role=listbox]"), p.locator("main button[role=combobox]").first()], pad: 10, marcas: [
     [1, (p) => p.getByRole("option", { name: "Hoje" })],
@@ -56,7 +56,7 @@ export const SHOTS = [
     [1, (p) => p.locator("main button[role=combobox]").first()],
     [2, (p) => p.locator("main button[role=combobox]").nth(1)],
   ] },
-  { chave: "ecom-comissao", papel: "colaborador", url: `${VO}?aba=mercadolivre&periodo=month`,
+  { chave: "ecom-comissao", papel: "colaborador", url: `${VO}?aba=mercadolivre&periodo=este-mes`,
     antes: async (p) => { await p.waitForTimeout(800); await p.getByText("Comissão da Plataforma").click(); await p.waitForTimeout(800); },
     clip: dlg, pad: 4, marcas: [
     [1, (p) => dlg(p).locator("div.grid-cols-3")],
@@ -75,7 +75,7 @@ export const SHOTS = [
     [4, (p) => p.locator("main td").getByText("×5", { exact: true })],
   ] },
   // ── Vendas Online: Comparativo e Histórico ──
-  { chave: "ecom-comparativo", papel: "colaborador", url: `${VO}?aba=comparativo&periodo=month`, viewport: ALTO, espera: 1500,
+  { chave: "ecom-comparativo", papel: "colaborador", url: `${VO}?aba=comparativo&periodo=este-mes`, viewport: ALTO, espera: 1500,
     clip: (p) => p.locator("main > div").first(), marcas: [
     [1, (p) => p.locator("main").getByRole("button", { name: /Nuvemshop/ }).nth(1).locator("..")],
     [2, metrica("Vendas")],

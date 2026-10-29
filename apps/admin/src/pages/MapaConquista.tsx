@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo } from "react";
+import { useParamUrl } from "@carbo/shell";
 import { MapContainer, GeoJSON, useMap } from "react-leaflet";
 import type { Layer, LeafletMouseEvent, PathOptions } from "leaflet";
 import L from "leaflet";
@@ -151,10 +152,20 @@ function Enquadrar({ geo, chave }: { geo: unknown; chave: string }) {
 }
 
 export default function MapaConquista() {
-  const [uf, setUf] = useState<string | null>(null);
-  const [granularidade, setGranularidade] = useState<Granularidade>("estado");
-  const [filtro, setFiltro] = useState<FiltroPresenca>("todos");
-  const [periodo, setPeriodo] = useState("mes");
+  // Recorte na URL (`?uf=RN&nivel=municipio&presenca=pdv&periodo=90d&tela=cheia`):
+  // F5 e link abrem o MESMO mapa — inclusive a TV, que volta em tela cheia.
+  // Valor desconhecido cai no padrão (link digitado à mão não quebra a tela).
+  const [ufUrl, setUfUrl] = useParamUrl("uf", "");
+  const uf: string | null = /^[A-Z]{2}$/.test(ufUrl) ? ufUrl : null;
+  const setUf = (v: string | null) => setUfUrl(v);
+  const [nivelUrl, setNivelUrl] = useParamUrl("nivel", "estado");
+  const granularidade: Granularidade = nivelUrl === "municipio" ? "municipio" : "estado";
+  const setGranularidade = (g: Granularidade) => setNivelUrl(g);
+  const [presencaUrl, setPresencaUrl] = useParamUrl("presenca", "todos");
+  const filtro: FiltroPresenca = FILTROS.some((f) => f.id === presencaUrl) ? (presencaUrl as FiltroPresenca) : "todos";
+  const setFiltro = (f: FiltroPresenca) => setPresencaUrl(f);
+  const [periodoUrl, setPeriodo] = useParamUrl("periodo", "mes");
+  const periodo = PERIODOS.some((p) => p.id === periodoUrl) ? periodoUrl : "mes";
   /* Mapa em tela cheia.
    *
    * ⚠️ A ÚNICA alavanca do tamanho do Brasil é a ALTURA. O Brasil é quase
@@ -165,7 +176,8 @@ export default function MapaConquista() {
    * Daí este modo: some com título, placares e barra lateral e devolve ~200px
    * ao mapa — cerca de um terço a mais de Brasil. É também o formato para
    * deixar a tela numa TV, que era a intenção original desta página. */
-  const [telaCheia, setTelaCheia] = useState(false);
+  const [telaUrl, setTelaUrl] = useParamUrl("tela", "");
+  const telaCheia = telaUrl === "cheia";
 
   const infoPeriodo = PERIODOS.find((p) => p.id === periodo) ?? PERIODOS[0];
   // Comparação em string ISO: `primeira_venda` é 'YYYY-MM-DD', e nesse formato
@@ -402,7 +414,7 @@ export default function MapaConquista() {
             deixaria o mapa contando outra coisa — que era exatamente o problema
             de "30 dias" pintando o mapa enquanto o painel dizia "do mês". */}
         <Button size="sm" variant={telaCheia ? "default" : "outline"}
-                className="gap-1.5" onClick={() => setTelaCheia((v) => !v)}>
+                className="gap-1.5" onClick={() => setTelaUrl(telaCheia ? null : "cheia")}>
           {telaCheia ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           {telaCheia ? "Sair da tela cheia" : "Tela cheia"}
         </Button>

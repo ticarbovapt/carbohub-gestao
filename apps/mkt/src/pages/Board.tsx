@@ -1,4 +1,5 @@
 import { useCartaoDaUrl } from "@/lib/cartaoNaUrl";
+import { useFiltroUrl } from "@/lib/estadoNaUrl";
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
@@ -547,8 +548,9 @@ export default function Board() {
   const [addingList, setAddingList] = useState(false);
   const [newList, setNewList] = useState("");
 
-  // Filtro do quadro + buscas salvas (escopo do quadro).
-  const [criteria, setCriteria] = useState<SearchCriteria>(emptyCriteria());
+  // Filtro do quadro + buscas salvas (escopo do quadro). O filtro mora na URL
+  // (`lib/estadoNaUrl.ts`): F5 e link mandado a alguém abrem o quadro filtrado.
+  const [criteria, setCriteria] = useFiltroUrl();
   const [filterOpen, setFilterOpen] = useState(false);
   const filterActive = criteriaActive(criteria);
   const { user } = useAuth();
@@ -600,7 +602,7 @@ export default function Board() {
     return n;
   });
 
-  // `?card=` (F5, busca entre quadros, link) abre o cartão; `&anexo=` (link de
+  // `?cartao=` (F5, busca entre quadros, link) abre o cartão; `&anexo=` (link de
   // um arquivo) abre o cartão JÁ no arquivo.
   useCartaoDaUrl((cid, aid) => { setOpenCardId(cid); setAnexoInicial(aid); });
 

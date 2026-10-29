@@ -90,7 +90,7 @@ export const SECOES_ESTEIRA: Secao[] = [
       {
         titulo: "O card aberto",
         texto:
-          "O pedido aberto fica no endereço da página (…/esteira?card=número). Se você colar um link de pedido que está fora do período escolhido, a tela avisa em laranja: amplie as datas no filtro para encontrá-lo.",
+          "O pedido aberto fica no endereço da página (…/esteira?pedido=número). Se você colar um link de pedido que está fora do período escolhido, a tela avisa em laranja: amplie as datas no filtro para encontrá-lo.",
         print: { chave: "esteira-detalhe", legenda: "Um pedido em trânsito, aberto." },
         itens: [
           { n: 1, titulo: "Cliente, canal e etapa", texto: "Quem comprou, por onde e em que coluna o pedido está. “Atrasado” aparece aqui também." },

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useParamUrl } from "@carbo/shell";
 import { format, startOfMonth, addMonths, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
@@ -85,8 +86,17 @@ function EcoTargetDialog({ open, onClose, month, platform, currentTarget }: {
 type Tab = "vendedores" | "ecommerce";
 
 export default function MetaConfigPage() {
-  const [tab, setTab]       = useState<Tab>("vendedores");
-  const [month, setMonth]   = useState(() => startOfMonth(new Date()));
+  // Aba e mês na URL (`?aba=ecommerce`, `?mes=AAAA-MM`): F5 e link abrem no
+  // mesmo lugar. Mês ausente = o CORRENTE.
+  const [abaUrl, setAbaUrl] = useParamUrl("aba", "vendedores");
+  const tab: Tab = abaUrl === "ecommerce" ? "ecommerce" : "vendedores";
+  const setTab = (t: Tab) => setAbaUrl(t);
+  const [mesUrl, setMesUrl] = useParamUrl("mes", format(new Date(), "yyyy-MM"));
+  const month = useMemo(() => {
+    const m = /^(\d{4})-(\d{2})$/.exec(mesUrl);
+    return m ? new Date(Number(m[1]), Number(m[2]) - 1, 1) : startOfMonth(new Date());
+  }, [mesUrl]);
+  const setMonth = (d: Date) => setMesUrl(format(d, "yyyy-MM"));
   const [dialogOpen, setDialog] = useState(false);
   const [editTarget, setEdit]   = useState<SalesTargetWithProgress | null>(null);
   const [ecoDialog, setEcoDialog] = useState<{ platform: MetaPlatform; target: number } | null>(null);
@@ -246,7 +256,7 @@ export default function MetaConfigPage() {
         <div className="flex items-center gap-1 bg-muted/40 rounded-lg px-2 py-1.5 w-fit">
           <Button variant="ghost" size="icon" className="h-7 w-7"
             aria-label="Mês anterior"
-            onClick={() => setMonth(m => startOfMonth(subMonths(m, 1)))}>
+            onClick={() => setMonth(startOfMonth(subMonths(month, 1)))}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <span className="text-sm font-semibold w-32 text-center capitalize">
@@ -254,7 +264,7 @@ export default function MetaConfigPage() {
           </span>
           <Button variant="ghost" size="icon" className="h-7 w-7"
             aria-label="Próximo mês"
-            onClick={() => setMonth(m => startOfMonth(addMonths(m, 1)))}
+            onClick={() => setMonth(startOfMonth(addMonths(month, 1)))}
             disabled={isCurrentMonth}>
             <ChevronRight className="h-4 w-4" />
           </Button>

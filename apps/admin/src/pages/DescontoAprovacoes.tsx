@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useParamUrl } from "@carbo/shell";
 import {
   BadgePercent, AlertTriangle, CheckCircle2, XCircle, Clock, Plus, Trash2, Save, Factory, CalendarClock,
 } from "lucide-react";
@@ -48,9 +49,21 @@ function RestrictedNotice() {
   );
 }
 
+// O filtro da fila mora na URL (`?status=aprovados`), em português; o valor
+// interno continua o da RPC. Ausente = pendentes, que é como a tela abre.
+type FiltroStatus = "pending" | "approved" | "rejected" | "all";
+const STATUS_NA_URL: Record<FiltroStatus, string> = {
+  pending: "pendentes", approved: "aprovados", rejected: "recusados", all: "todos",
+};
+function useFiltroStatusUrl(): [FiltroStatus, (f: FiltroStatus) => void] {
+  const [v, setV] = useParamUrl("status", "pendentes");
+  const filtro = ((Object.keys(STATUS_NA_URL) as FiltroStatus[]).find((k) => STATUS_NA_URL[k] === v)) ?? "pending";
+  return [filtro, (f) => setV(STATUS_NA_URL[f])];
+}
+
 // ── Fila de aprovações ────────────────────────────────────────────────────────
 function Fila() {
-  const [filter, setFilter] = useState<"pending" | "approved" | "rejected" | "all">("pending");
+  const [filter, setFilter] = useFiltroStatusUrl();
   const { data: rows = [], isLoading } = useDiscountApprovals(filter);
   const decide = useDecideDiscount();
   const [detail, setDetail] = useState<DiscountApproval | null>(null);
@@ -278,7 +291,7 @@ function Config() {
 
 // ── Fila de aprovações de FABRICAÇÃO ──────────────────────────────────────────
 function FilaFabricacao() {
-  const [filter, setFilter] = useState<"pending" | "approved" | "rejected" | "all">("pending");
+  const [filter, setFilter] = useFiltroStatusUrl();
   const { data: rows = [], isLoading } = useProductionApprovals(filter);
   const decide = useDecideProduction();
   const [detail, setDetail] = useState<ProductionApproval | null>(null);
@@ -458,8 +471,16 @@ function ConfigFabricacao() {
 
 export default function Aprovacoes() {
   const { canAdmin } = useAuth();
-  const [section, setSection] = useState<"desconto" | "fabricacao">("desconto");
-  const [tab, setTab] = useState<"fila" | "config">("fila");
+  // Seção e aba na URL (`?aba=fabricacao`, `?ver=configuracao`): F5 e link
+  // voltam ao mesmo lugar. Trocar de seção volta à Fila e zera o filtro de
+  // status — cada fila tem o seu, e "recusados" de uma não é pergunta da outra.
+  const [abaUrl, setAbaUrl] = useParamUrl("aba", "desconto");
+  const section: "desconto" | "fabricacao" = abaUrl === "fabricacao" ? "fabricacao" : "desconto";
+  const [, setStatusUrl] = useParamUrl("status", "pendentes");
+  const setSection = (k: "desconto" | "fabricacao") => { setAbaUrl(k); setStatusUrl(null); };
+  const [verUrl, setVerUrl] = useParamUrl("ver", "fila");
+  const tab: "fila" | "config" = verUrl === "configuracao" ? "config" : "fila";
+  const setTab = (k: "fila" | "config") => setVerUrl(k === "config" ? "configuracao" : "fila");
 
   if (!canAdmin) {
     return <main className="mx-auto max-w-6xl px-4 sm:px-6 py-8"><RestrictedNotice /></main>;

@@ -1,6 +1,6 @@
 // Fixtures da área "visoes" (ver areas.ts): as visões de um quadro
 // (Calendário, Timeline, Tabela, Dashboard, Mapa), as visões entre quadros
-// (/todos/calendario, /todos/tabela) e Campanhas. Tudo FICTÍCIO.
+// (/calendario-geral, /tabela-geral) e Campanhas. Tudo FICTÍCIO.
 //
 // ⚠️ As tabelas `mkt_*` também são da área "quadros" (fx_quadros). Para não
 // atropelar os prints de lá, cada tabela daqui só responde com os dados desta
@@ -10,7 +10,7 @@ import * as quadros from "./fx_quadros";
 void PAPEL; void EU;
 
 const rota = () => { try { return location.pathname; } catch { return ""; } };
-const NOSSA = /^\/quadros\/[^/]+\/(calendario|timeline|tabela|dashboard|mapa)|^\/todos\/|^\/campanhas/;
+const NOSSA = /^\/quadros\/[^/]+\/(calendario|linha-do-tempo|tabela|painel|mapa)|^\/(calendario|tabela)-geral|^\/campanhas/;
 const naNossa = () => NOSSA.test(rota());
 const resolve = (v: unknown, args?: unknown) => (typeof v === "function" ? (v as (a?: unknown) => unknown)(args) : v);
 const outra = (q: { FX?: Record<string, unknown>; RPC_FX?: Record<string, unknown> }) => q;

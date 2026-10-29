@@ -1,5 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { useParamUrl } from "@carbo/shell";
 import {
   MessagesSquare, Send, Loader2, AlertTriangle, Clock, ArrowLeft, Lock, Paperclip,
   Image as ImageIcon, Video, Mic, FileText, MapPin, User,
@@ -208,6 +209,8 @@ const soDigitos = (s: string) => s.replace(/\D/g, "");
  * some até da aba que promete mostrar tudo.
  */
 type FiltroConversa = "pendentes" | "minhas" | "sem_dono" | "aberta" | "todas";
+// Na URL a aba vai com hífen (`sem-dono`), como as rotas.
+const abaNaUrl = (f: FiltroConversa) => f.replace("_", "-");
 const FILTROS: { id: FiltroConversa; rotulo: string }[] = [
   { id: "pendentes", rotulo: "Não respondidas" },
   { id: "minhas", rotulo: "Minhas" },
@@ -3360,8 +3363,12 @@ export default function Conversas() {
      do hook (quem espera resposta primeiro) e não é tocada aqui: reordenar na
      tela criaria uma segunda regra de prioridade competindo com a do
      `agruparConversas`. E `atual` sai da lista COMPLETA — filtrar não pode
-     fechar a conversa que já está aberta na direita. */
-  const [busca, setBusca] = useState("");
+     fechar a conversa que já está aberta na direita.
+     Busca, aba e filtros moram na URL (`?busca=&aba=&responsavel=&etiqueta=
+     &etapa=&status=&ordem=antigas`), com `replace` como a conversa aberta: F5
+     não devolve a caixa ao padrão e dá para mandar "olha as sem responsável" a
+     alguém. O padrão de cada um não vai para o endereço. */
+  const [busca, setBusca] = useParamUrl("busca", "", { replace: true });
   /* ⚠️ O card do pedido mora AQUI, e não dentro de cada chip: a conversa e o
      painel do contato mostram o mesmo pedido, e dois estados locais abririam
      duas janelas sobre ele. Nulo = fechado, e ele NÃO entra na URL — a URL
@@ -3379,9 +3386,37 @@ export default function Conversas() {
      TRABALHO, e o contador ao lado de cada aba diz o que há nas outras.
      `null` = ninguém escolheu ainda; quem escolhe a primeira vez é o efeito
      abaixo, uma vez só. */
-  const [filtro, setFiltro] = useState<FiltroConversa | null>(null);
+  /* ⚠️ A aba ESCOLHIDA vai para a URL (`?aba=sem-dono`); a DECIDIDA pelo
+     efeito abaixo não — ela é a abertura da tela, e escrevê-la faria o link de
+     quem abriu sem escolher congelar "Pendentes" para quem recebe. Aba na URL
+     dispensa a decisão: quem mandou o link escolheu. */
+  const [abaUrl, setAbaUrl] = useParamUrl("aba", "", { replace: true });
+  const filtroDaUrl = FILTROS.find((f) => abaNaUrl(f.id) === abaUrl)?.id ?? null;
+  const [filtroAuto, setFiltroAuto] = useState<FiltroConversa | null>(null);
+  const filtro = filtroDaUrl ?? filtroAuto;
+  const setFiltro = (f: FiltroConversa) => setAbaUrl(abaNaUrl(f));
   const abaDecidida = useRef(false);
-  const [filtros, setFiltros] = useState<TipoFiltros>(FILTROS_VAZIOS);
+  // ⚠️ As dependências são os VALORES, nunca o `params` inteiro: abrir uma
+  // conversa (`?de=`) troca o objeto e recriaria os filtros — e o "Mostrar
+  // mais" da lista, que zera quando os filtros mudam, voltaria aos 100.
+  const pResp = params.get("responsavel") || null, pTag = params.get("etiqueta") || null;
+  const pEtapa = params.get("etapa") || null, pStatus = params.get("status") || null;
+  const pOrdem = params.get("ordem");
+  const filtros = useMemo<TipoFiltros>(() => ({
+    responsavel: pResp, tag: pTag, etapa: pEtapa,
+    status: pStatus as TipoFiltros["status"],
+    ordem: pOrdem === "antigas" ? "antigas" : "recentes",
+  }), [pResp, pTag, pEtapa, pStatus, pOrdem]);
+  const setFiltros = (f: TipoFiltros | ((atual: TipoFiltros) => TipoFiltros)) => {
+    const n = typeof f === "function" ? f(filtros) : f;
+    // Parte da URL ATUAL (não do render): "Limpar" troca cinco chaves de uma vez.
+    const p = new URLSearchParams(window.location.search);
+    const grava = (k: string, v: string | null) => (v ? p.set(k, v) : p.delete(k));
+    grava("responsavel", n.responsavel); grava("etiqueta", n.tag);
+    grava("etapa", n.etapa); grava("status", n.status);
+    grava("ordem", n.ordem === "antigas" ? "antigas" : null);
+    setParams(p, { replace: true });
+  };
   const [painelFiltros, setPainelFiltros] = useState(false);
   const [verQuemRecebe, setVerQuemRecebe] = useState(false);
   const { data: notificaveis } = useNotificaveis();
@@ -3403,7 +3438,8 @@ export default function Conversas() {
   useEffect(() => {
     if (abaDecidida.current || isLoading || lista.length === 0) return;
     abaDecidida.current = true;
-    setFiltro(contagens.pendentes > 0 ? "pendentes" : "todas");
+    if (filtroDaUrl) return;
+    setFiltroAuto(contagens.pendentes > 0 ? "pendentes" : "todas");
   }, [isLoading, lista.length, contagens.pendentes]);
 
   /* Antes de a decisão acontecer a tela mostra TODAS — nunca uma aba que pode

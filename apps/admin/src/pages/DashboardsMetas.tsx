@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
+import { useParamUrl } from "@carbo/shell";
 import { format, startOfMonth, addMonths, subMonths, getDaysInMonth, getDate } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
@@ -44,6 +45,11 @@ function commercialWeekStartOf(d: Date): Date {
   n.setHours(0, 0, 0, 0);
   return n;
 }
+// Data LOCAL em texto (nunca `toISOString`, que é UTC e vira o dia seguinte à noite).
+function isoDia(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function isoMes(d: Date): string { return isoDia(d).slice(0, 7); }
 function fmtBRL(v: number) { return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 0, maximumFractionDigits: 0 }); }
 function fmtPct(v: number) { return `${v.toFixed(1)}%`; }
 
@@ -214,9 +220,28 @@ function WeeklyPanel({ entries, elapsedDays, canSeeValues }: {
 // ── Página ───────────────────────────────────────────────────────────────
 export default function DashboardsMetas() {
   const { canAdmin } = useAuth();
-  const [month, setMonth] = useState(() => startOfMonth(new Date()));
-  const [periodView, setPeriodView] = useState<PeriodView>("mensal");
-  const [weekStart, setWeekStart] = useState(() => commercialWeekStartOf(new Date()));
+  // Visão, mês e semana na URL (`?ver=semanal`, `?mes=AAAA-MM`, `?semana=AAAA-MM-DD`):
+  // F5 e link abrem no mesmo placar. Ausente = o mês/semana CORRENTE — o link
+  // sem parâmetro continua dizendo "agora", não o dia em que foi copiado.
+  const [verUrl, setVerUrl] = useParamUrl("ver", "mensal");
+  const periodView: PeriodView = verUrl === "semanal" ? "semanal" : "mensal";
+  const setPeriodView = (v: PeriodView) => setVerUrl(v);
+  const mesAtual = isoMes(new Date());
+  const [mesUrl, setMesUrl] = useParamUrl("mes", mesAtual);
+  const month = useMemo(() => {
+    const m = /^(\d{4})-(\d{2})$/.exec(mesUrl);
+    return m ? new Date(Number(m[1]), Number(m[2]) - 1, 1) : startOfMonth(new Date());
+  }, [mesUrl]);
+  const setMonth = (d: Date) => setMesUrl(isoMes(d));
+  const semanaAtual = isoDia(commercialWeekStartOf(new Date()));
+  const [semanaUrl, setSemanaUrl] = useParamUrl("semana", semanaAtual);
+  const weekStart = useMemo(() => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(semanaUrl);
+    // A data da URL é normalizada para a sexta da semana dela: link editado à
+    // mão com outro dia não pode virar uma "semana" que começa na terça.
+    return commercialWeekStartOf(m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date());
+  }, [semanaUrl]);
+  const setWeekStart = (d: Date) => setSemanaUrl(isoDia(d));
 
   // No Admin, o gestor (canAdmin) enxerga os valores em R$.
   const canSeeValues = canAdmin;
@@ -308,19 +333,19 @@ export default function DashboardsMetas() {
 
           {periodView === "mensal" && (
             <div className="flex items-center gap-1 bg-muted/40 rounded-lg px-2 py-1.5">
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setMonth((m) => startOfMonth(subMonths(m, 1)))}><ChevronLeft className="h-4 w-4" /></Button>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setMonth(startOfMonth(subMonths(month, 1)))}><ChevronLeft className="h-4 w-4" /></Button>
               <span className="text-sm font-semibold w-32 text-center capitalize">{format(month, "MMM 'de' yyyy", { locale: ptBR })}</span>
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setMonth((m) => startOfMonth(addMonths(m, 1)))} disabled={isCurrentMonth}><ChevronRight className="h-4 w-4" /></Button>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setMonth(startOfMonth(addMonths(month, 1)))} disabled={isCurrentMonth}><ChevronRight className="h-4 w-4" /></Button>
             </div>
           )}
 
           {periodView === "semanal" && (
             <div className="flex items-center gap-1 bg-muted/40 rounded-lg px-2 py-1.5">
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setWeekStart((w) => { const n = new Date(w); n.setDate(w.getDate() - 7); return n; })}><ChevronLeft className="h-4 w-4" /></Button>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { const n = new Date(weekStart); n.setDate(weekStart.getDate() - 7); setWeekStart(n); }}><ChevronLeft className="h-4 w-4" /></Button>
               <span className="text-sm font-semibold w-40 text-center">
                 {format(weekStart, "dd/MM", { locale: ptBR })} — {format(new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 6), "dd/MM", { locale: ptBR })}
               </span>
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setWeekStart((w) => { const n = new Date(w); n.setDate(w.getDate() + 7); return n; })} disabled={isCurrentWeek}><ChevronRight className="h-4 w-4" /></Button>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { const n = new Date(weekStart); n.setDate(weekStart.getDate() + 7); setWeekStart(n); }} disabled={isCurrentWeek}><ChevronRight className="h-4 w-4" /></Button>
             </div>
           )}
         </div>

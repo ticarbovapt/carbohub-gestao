@@ -6,7 +6,7 @@ import {
   Settings2, Link2, BellRing, BellOff, Repeat2, ShoppingBag, Mail, Timer, ChevronsLeftRight, ChevronsRightLeft,
 } from "lucide-react";
 import { toast } from "sonner";
-import { QuadroRolavel } from "@carbo/shell";
+import { QuadroRolavel, useParamUrl } from "@carbo/shell";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Button } from "@/components/ui/button";
@@ -982,7 +982,7 @@ export function Detalhe({ row, rastreio, avisos, templates, onClose }: {
                 existe no app dela. */}
             <Button size="sm" variant="outline" className="h-8 gap-1.5"
                     onClick={() => copiar(
-                      `${window.location.origin}${window.location.pathname}?card=${row.bling_id}`,
+                      `${window.location.origin}${window.location.pathname}?pedido=${row.bling_id}`,
                       "Link do pedido",
                     )}>
               <Link2 className="h-3.5 w-3.5" /> Copiar link
@@ -1436,7 +1436,7 @@ export default function EsteiraOnline() {
    * precisava disso não tinha saída dentro da tela.
    *
    * Os atalhos continuam porque são o uso comum e um clique bate dois campos
-   * de data. `periodo = 'custom'` revela as duas datas — que já são a verdade
+   * de data. `periodo = 'intervalo'` revela as duas datas — que já são a verdade
    * usada na consulta nos dois casos, então não existe "modo" nenhum por baixo:
    * o atalho apenas PREENCHE as datas. Um caminho só, sem estado paralelo para
    * divergir. */
@@ -1460,27 +1460,60 @@ export default function EsteiraOnline() {
    * dividir a largura faria os três ficarem apertados para servir a perguntas
    * que ninguém faz ao mesmo tempo. */
   type Pipeline = "entrega" | "recompra" | "carrinho";
-  const [filtroAviso, setFiltroAviso] = useState("all");
-  const [periodo, setPeriodo] = useState("30");
-  const [de, setDe]   = useState(() => menosDias(30));
-  const [ate, setAte] = useState(hojeISO);
-
-  const trocarPeriodo = (v: string) => {
-    setPeriodo(v);
-    if (v !== "custom") {
-      setDe(menosDias(Number(v)));
-      setAte(hojeISO);
-    }
+  /* ── O estado da tela mora na URL ──────────────────────────────────────
+   *
+   *   ?quadro=recompra|carrinho        o quadro (ausente = da venda à entrega)
+   *   ?pedido=<bling_id>               o pedido aberto
+   *   ?busca= &canal= &aviso= &atencao=1
+   *   ?periodo=7|90|180|365|intervalo  (ausente = 30 dias) · ?de= &ate= no intervalo
+   *
+   * F5 e link mandado no chat abrem a MESMA tela — antes busca, canal, período
+   * e filtros eram `useState` e o F5 devolvia tudo ao padrão. O padrão de cada
+   * um NÃO vai para a URL: o endereço limpo continua sendo o da esteira de
+   * sempre. Valor desconhecido cai no padrão: link velho ou digitado errado
+   * abre a tela, não uma tela em branco.
+   *
+   * ⚠️ Os nomes antigos continuam sendo LIDOS: `?card=` (o pedido) e
+   * `?pipeline=` (o quadro) estão em links já mandados, no "Copiar link" de
+   * ontem e no chip de Movimentações do Ops. Quem grava escreve o nome novo e
+   * apaga o velho, para os dois nunca discordarem no mesmo endereço.
+   */
+  const [params, setParams] = useSearchParams();
+  const gravar = (mexe: (n: URLSearchParams) => void, replace = false) => {
+    // Parte da URL ATUAL do navegador (não do `prev` do roteador, que é o do
+    // último render) — ver `useParamUrl` no shell.
+    const n = new URLSearchParams(window.location.search);
+    mexe(n);
+    setParams(n, { replace });
   };
-  const [busca, setBusca] = useState("");
-  const [canal, setCanal] = useState("all");
+  const PERIODOS = ["7", "30", "90", "180", "365", "intervalo"];
+  const periodo = PERIODOS.includes(params.get("periodo") ?? "") ? params.get("periodo")! : "30";
+  const DIA = /^\d{4}-\d{2}-\d{2}$/;
+  const deUrl = params.get("de") ?? "", ateUrl = params.get("ate") ?? "";
+  const de  = periodo === "intervalo" ? (DIA.test(deUrl) ? deUrl : menosDias(30)) : menosDias(Number(periodo));
+  const ate = periodo === "intervalo" && DIA.test(ateUrl) ? ateUrl : hojeISO;
+  const trocarPeriodo = (v: string) => gravar((n) => {
+    if (v === "30") n.delete("periodo"); else n.set("periodo", v);
+    // Ao abrir "Escolher datas…" os campos nascem com o intervalo que a tela
+    // JÁ mostrava (o atalho de antes), não vazios.
+    if (v === "intervalo") { n.set("de", de); n.set("ate", ate); }
+    else { n.delete("de"); n.delete("ate"); }
+  }, true);
+  const setDe  = (v: string) => gravar((n) => { if (v) n.set("de", v); }, true);
+  const setAte = (v: string) => gravar((n) => { if (v) n.set("ate", v); }, true);
+  // ⚠️ Tudo com `replace`, como o quadro e o pedido aberto: o Voltar sai da
+  // tela em vez de desfazer filtro por filtro (decisão desta tela, a mesma das
+  // Vendas Online).
+  const [busca, setBusca] = useParamUrl("busca", "", { replace: true });
+  const [canal, setCanal] = useParamUrl("canal", "all", { replace: true });
+  const [filtroAviso, setFiltroAviso] = useParamUrl("aviso", "all", { replace: true });
   /* ── O card tem endereço ──────────────────────────────────────────────
    *
    * Antes, o detalhe era estado da memória: quem abria um pedido e queria
    * mostrar para outra pessoa tinha de explicar o caminho ("abre a esteira,
    * filtra por fulano, clica no card"). Não dava para colar num chat.
    *
-   * Agora o pedido aberto mora na URL (`?card=<bling_id>`), então a barra de
+   * Agora o pedido aberto mora na URL (`?pedido=<bling_id>`), então a barra de
    * endereço já É o link — e o botão "Copiar link" existe só para poupar o
    * Ctrl+L. Abrir e fechar usam `replace`, senão cada card visitado vira uma
    * parada no botão "voltar" do navegador.
@@ -1488,28 +1521,25 @@ export default function EsteiraOnline() {
    * ⚠️ O parâmetro é acrescentado ao que já existe, nunca substitui: a tela
    * de mensagens manda `?voltar=` e apagá-lo quebraria a volta.
    */
-  const [params, setParams] = useSearchParams();
-  const cardParam = params.get("card");
+  const cardParam = params.get("pedido") ?? params.get("card");
 
-  /* ⚠️ A pipeline mora na URL (`?pipeline=recompra`), não num `useState`: com
+  /* ⚠️ O quadro mora na URL (`?quadro=recompra`), não num `useState`: com
    * estado, todo F5 devolvia "Da venda à entrega" e não dava para mandar o link
-   * da régua de recompra para ninguém. Mesma regra do `?card=` e do período do
-   * e-commerce. "entrega" é o padrão e por isso NÃO vai para a URL — o endereço
-   * de sempre continua sendo o da esteira de entrega.
-   * Valor desconhecido cai no padrão: link velho ou digitado errado abre a tela,
-   * não uma tela em branco. */
+   * da régua de recompra para ninguém. "entrega" é o padrão e por isso NÃO vai
+   * para a URL — o endereço de sempre continua sendo o da esteira de entrega. */
   const PIPELINES: Pipeline[] = ["entrega", "recompra", "carrinho"];
-  const pipelineDaUrl = params.get("pipeline") as Pipeline | null;
+  const pipelineDaUrl = (params.get("quadro") ?? params.get("pipeline")) as Pipeline | null;
   const pipeline: Pipeline = pipelineDaUrl && PIPELINES.includes(pipelineDaUrl) ? pipelineDaUrl : "entrega";
   const setPipeline = (v: Pipeline) =>
-    setParams((p) => {
-      const n = new URLSearchParams(p);
-      if (v === "entrega") n.delete("pipeline"); else n.set("pipeline", v);
+    gravar((n) => {
+      n.delete("pipeline");
+      if (v === "entrega") n.delete("quadro"); else n.set("quadro", v);
       // O card aberto é da esteira de entrega; trocar de quadro o fecha.
-      n.delete("card");
-      return n;
-    }, { replace: true });
-  const [soProblemas, setSoProblemas] = useState(false);
+      n.delete("pedido"); n.delete("card");
+    }, true);
+  const [atencaoUrl, setAtencaoUrl] = useParamUrl("atencao", "", { replace: true });
+  const soProblemas = atencaoUrl === "1";
+  const setSoProblemas = (f: (v: boolean) => boolean) => setAtencaoUrl(f(soProblemas) ? "1" : null);
   // ⚠️ O caminho da Esteira difere entre os apps (/ecommerce/esteira no admin,
   // /logistica/esteira no Ops) e este arquivo é byte a byte idêntico nos dois.
   // Mandar o caminho ATUAL na URL faz o botão "voltar" da outra tela acertar
@@ -1552,14 +1582,12 @@ export default function EsteiraOnline() {
     return sinalDoAviso(avisos?.get(`${r.bling_id}:${etapa}`), ativo, temFone);
   };
 
-  const abrirCard = (r: EsteiraRow | null) => {
-    setParams((p) => {
-      const n = new URLSearchParams(p);
-      if (r) n.set("card", String(r.bling_id));
-      else n.delete("card");
-      return n;
-    }, { replace: true });
-  };
+  const abrirCard = (r: EsteiraRow | null) =>
+    gravar((n) => {
+      n.delete("card");
+      if (r) n.set("pedido", String(r.bling_id));
+      else n.delete("pedido");
+    }, true);
 
   // O card aberto sai dos dados, não de um estado paralelo — assim o link
   // colado por outra pessoa abre o mesmo card, e o refetch de 2 min não
@@ -1892,10 +1920,10 @@ export default function EsteiraOnline() {
             <SelectItem value="90">90 dias</SelectItem>
             <SelectItem value="180">6 meses</SelectItem>
             <SelectItem value="365">12 meses</SelectItem>
-            <SelectItem value="custom">Escolher datas…</SelectItem>
+            <SelectItem value="intervalo">Escolher datas…</SelectItem>
           </SelectContent>
         </Select>
-        {periodo === "custom" && (
+        {periodo === "intervalo" && (
           <div className="flex items-center gap-1.5">
             <DatePickerInput value={de} onChange={setDe} clearable={false}
                              disableFuture className="h-9 w-36" />

@@ -41,7 +41,7 @@ export interface ServicoMes {
   notas: number;
 }
 
-// Uma NFS-e como LINHA, para a tela de fonte (`/comercial/dados`).
+// Uma NFS-e como LINHA, para a tela de fonte (`/dados-comerciais`).
 // ⚠️ Os campos são os da NOTA, não os de um pedido. Não existe `vendedor_id`,
 // `segmento` nem `conta_metrica` aqui — inventá-los para caber na tabela de
 // pedidos criaria um pedido que não existe em `carboze_orders`, e a ação em

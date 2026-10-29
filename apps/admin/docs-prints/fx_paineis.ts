@@ -18,7 +18,7 @@ void EU;
 
 const OUTRAS = [comercial, ecommerce, esteira, painelcom] as { FX?: Record<string, unknown> }[];
 const rota = () => { try { return location.pathname; } catch { return ""; } };
-const NOSSAS = ["/dashboards/mapa-conquista", "/dashboards/lojas", "/dashboards/franqueados", "/dashboards/metas", "/dashboards/suprimentos", "/metas/configurar"];
+const NOSSAS = ["/mapa-da-conquista", "/portal-de-vendas", "/licenciados", "/placar-de-metas", "/suprimentos", "/configurar-metas"];
 const naNossa = () => NOSSAS.some((r) => rota().startsWith(r));
 const resolve = (v: unknown) => (typeof v === "function" ? (v as () => unknown)() : v);
 const porRota = (chave: string, meu: () => unknown, padrao: () => unknown = () => []) => () => {
@@ -247,7 +247,7 @@ export const FX: Record<string, unknown> = {
   stock_transfers: porRota("stock_transfers", supTransf),
   mrp_bom: porRota("mrp_bom", supBom),
   suprimentos_snapshots: supSnap,
-  mrp_products: porRota("mrp_products", () => (rota().startsWith("/dashboards/suprimentos") ? supProdutos() : produtos), () => produtos),
+  mrp_products: porRota("mrp_products", () => (rota().startsWith("/suprimentos") ? supProdutos() : produtos), () => produtos),
   sales_targets: porRota("sales_targets", metasMes),
   sales_target_defaults: porRota("sales_target_defaults", metasDefault),
   canal_metas: porRota("canal_metas", canalMetas),

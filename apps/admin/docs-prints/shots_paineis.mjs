@@ -51,7 +51,7 @@ const placar = (t) => (p) => p.locator("main div.rounded-lg, main div.rounded-xl
 
 export const SHOTS = [
   // ── Mapa da Conquista ──
-  { chave: "mapa-conquista", papel: "gestor", url: "/dashboards/mapa-conquista", antes: ibge, espera: 1200, marcas: [
+  { chave: "mapa-conquista", papel: "gestor", url: "/mapa-da-conquista", antes: ibge, espera: 1200, marcas: [
     [1, placar("Cidades")],
     [2, placar("Estados")],
     [3, placar("Novas")],
@@ -66,14 +66,14 @@ export const SHOTS = [
     [12, (p) => p.locator("main div.rounded-lg, main div.rounded-xl").filter({ has: p.getByText(/Conquistas ·/) }).last()],
     [13, (p) => p.locator("main div.rounded-lg, main div.rounded-xl").filter({ has: p.getByText("Cidades por estado", { exact: true }) }).last()],
   ] },
-  { chave: "mapa-nao-localizadas", papel: "gestor", url: "/dashboards/mapa-conquista", viewport: ALTO(1300), antes: ibge,
+  { chave: "mapa-nao-localizadas", papel: "gestor", url: "/mapa-da-conquista", viewport: ALTO(1300), antes: ibge,
     clip: (p) => p.locator("main div.rounded-lg, main div.rounded-xl").filter({ has: p.getByText(/não localizada/) }).last(), marcas: [
     [1, txt("não localizada(s) na lista do IBGE")],
     [2, (p) => p.locator("main div.rounded-lg, main div.rounded-xl").filter({ has: p.getByText(/não localizada/) }).last().locator("div.flex-wrap")],
   ] },
 
   // ── Portal de Vendas ──
-  { chave: "painel-lojas", papel: "gestor", url: "/dashboards/lojas", viewport: ALTO(1100), marcas: [
+  { chave: "painel-lojas", papel: "gestor", url: "/portal-de-vendas", viewport: ALTO(1100), marcas: [
     [1, (p) => p.getByRole("button", { name: /7 dias/ }).locator("..")],
     [2, cartao("Receita")],
     [3, cartao("Vendas")],
@@ -85,12 +85,12 @@ export const SHOTS = [
     [9, (p) => p.locator("main div.rounded-2xl").filter({ hasText: "Total Faturado no Período" }).last()],
     [10, (p) => p.locator("main div.rounded-2xl").filter({ hasText: "Unidades Vendidas no Período" }).last()],
   ] },
-  { chave: "painel-lojas-colab", papel: "colaborador", url: "/dashboards/lojas", viewport: ALTO(600), marcas: [
+  { chave: "painel-lojas-colab", papel: "colaborador", url: "/portal-de-vendas", viewport: ALTO(600), marcas: [
     [1, txt("Sem dados do Portal de Vendas")],
   ] },
 
   // ── Licenciados ──
-  { chave: "painel-licenciados", papel: "gestor", url: "/dashboards/franqueados", viewport: ALTO(1500), marcas: [
+  { chave: "painel-licenciados", papel: "gestor", url: "/licenciados", viewport: ALTO(1500), marcas: [
     [1, (p) => p.getByRole("button", { name: /7 dias/ }).locator("..")],
     [2, cartao("Receita no período")],
     [3, cartao("Serviços no período")],
@@ -102,7 +102,7 @@ export const SHOTS = [
     [9, (p) => p.locator("main div.rounded-2xl").filter({ hasText: "Serviços por Categoria" }).last()],
     [10, (p) => p.locator("main div.rounded-2xl").filter({ has: p.getByRole("heading", { name: "Últimos serviços" }) }).last()],
   ] },
-  { chave: "painel-licenciados-lojas", papel: "gestor", url: "/dashboards/franqueados", viewport: ALTO(2500),
+  { chave: "painel-licenciados-lojas", papel: "gestor", url: "/licenciados", viewport: ALTO(2500),
     antes: async (p) => { await btn(/Mostrar mais/)(p).click(); await p.waitForTimeout(500); },
     clip: (p) => p.locator("main div.rounded-2xl").filter({ has: p.getByRole("heading", { name: "Lojas ativas" }) }).last(), marcas: [
     [1, (p) => p.locator("main div.rounded-2xl").filter({ has: p.getByRole("heading", { name: "Lojas ativas" }) }).last().locator("span.text-xs").first()],
@@ -111,7 +111,7 @@ export const SHOTS = [
   ] },
 
   // ── Metas (Placar) ──
-  { chave: "placar-metas", papel: "gestor", url: "/dashboards/metas", viewport: ALTO(1400), marcas: [
+  { chave: "placar-metas", papel: "gestor", url: "/placar-de-metas", viewport: ALTO(1400), marcas: [
     [1, (p) => btn("Mensal")(p).locator("..")],
     [2, (p) => p.locator("main span.capitalize").first().locator("..")],
     [3, txt("Esperado hoje")],
@@ -123,7 +123,7 @@ export const SHOTS = [
     [9, (p) => p.locator("main div.border-l-2").filter({ hasText: "Rafael Costa" }).getByText(/Faltam/).locator("..")],
     [10, (p) => p.locator("main div.border-l-2").filter({ hasText: "Rafael Costa" }).getByText(/vs mês ant/)],
   ] },
-  { chave: "placar-semanal", papel: "gestor", url: "/dashboards/metas", viewport: ALTO(900),
+  { chave: "placar-semanal", papel: "gestor", url: "/placar-de-metas", viewport: ALTO(900),
     antes: async (p) => { await btn("Semanal")(p).click(); await p.waitForTimeout(800); }, marcas: [
     [1, (p) => btn("Semanal")(p).locator("..")],
     [2, (p) => p.locator("main span.w-40").first().locator("..")],
@@ -132,7 +132,7 @@ export const SHOTS = [
   ] },
 
   // ── Suprimentos ──
-  { chave: "suprimentos-topo", papel: "gestor", url: "/dashboards/suprimentos", viewport: ALTO(1500), espera: 1500,
+  { chave: "suprimentos-topo", papel: "gestor", url: "/suprimentos", viewport: ALTO(1500), espera: 1500,
     clip: (p) => [p.locator("main div.space-y-6 > *").first(), p.locator("main div.rounded-2xl").filter({ hasText: "Excesso de Estoque" }).last()], marcas: [
     [1, (p) => p.locator("main div.border-l-4").filter({ hasText: "Capital em estoque" })],
     [2, (p) => p.locator("main div.border-l-4").filter({ hasText: "Giro anualizado" })],
@@ -143,13 +143,13 @@ export const SHOTS = [
     [7, (p) => p.locator("main div.rounded-2xl").filter({ hasText: "Produtos Parados" }).last()],
     [8, (p) => p.locator("main div.rounded-2xl").filter({ hasText: "Excesso de Estoque" }).last()],
   ] },
-  { chave: "suprimentos-meio", papel: "gestor", url: "/dashboards/suprimentos", viewport: ALTO(3200), espera: 1500,
+  { chave: "suprimentos-meio", papel: "gestor", url: "/suprimentos", viewport: ALTO(3200), espera: 1500,
     clip: (p) => [p.locator("main div.rounded-2xl").filter({ hasText: "Concentração (ABC)" }).last(), p.locator("main div.rounded-2xl").filter({ hasText: "Custo de Fabricação" }).last()], marcas: [
     [1, (p) => p.locator("main div.rounded-2xl").filter({ hasText: "Concentração (ABC)" }).last()],
     [2, (p) => p.locator("main div.rounded-2xl").filter({ hasText: "Top 10 Produtos por Valor" }).last()],
     [3, (p) => p.locator("main div.rounded-2xl").filter({ hasText: "Custo de Fabricação" }).last()],
   ] },
-  { chave: "suprimentos-fim", papel: "gestor", url: "/dashboards/suprimentos", viewport: ALTO(3600), espera: 1500,
+  { chave: "suprimentos-fim", papel: "gestor", url: "/suprimentos", viewport: ALTO(3600), espera: 1500,
     clip: (p) => [p.locator("main div.rounded-2xl").filter({ hasText: "Fluxo de Caixa em Estoque" }).last(), p.locator("main div.rounded-2xl").filter({ hasText: "Custos a Cadastrar" }).last()], marcas: [
     [1, (p) => p.locator("main div.rounded-2xl").filter({ hasText: "Fluxo de Caixa em Estoque" }).last()],
     [2, (p) => btn("30d")(p).locator("..")],
@@ -159,7 +159,7 @@ export const SHOTS = [
   ] },
 
   // ── Configurar Metas ──
-  { chave: "metas-config", papel: "gestor", url: "/metas/configurar", viewport: ALTO(1050), marcas: [
+  { chave: "metas-config", papel: "gestor", url: "/configurar-metas", viewport: ALTO(1050), marcas: [
     [1, (p) => btn("Vendedores")(p).locator("..")],
     [2, (p) => p.getByRole("button", { name: "Mês anterior" }).locator("..")],
     [3, (p) => p.locator("main div.rounded-xl, main div.rounded-lg").filter({ has: p.getByText(/^Meta geral de/) }).last()],
@@ -171,7 +171,7 @@ export const SHOTS = [
     [9, (p) => p.getByRole("button", { name: /Meta deste mês/ }).first()],
     [10, btn(/Voltar ao padrão/)],
   ] },
-  { chave: "metas-distribuir", papel: "gestor", url: "/metas/configurar", viewport: ALTO(1300),
+  { chave: "metas-distribuir", papel: "gestor", url: "/configurar-metas", viewport: ALTO(1300),
     antes: async (p) => { await btn(/Ajustar distribuição/)(p).click(); await p.waitForTimeout(600); },
     clip: (p) => p.locator("main div.rounded-xl, main div.rounded-lg").filter({ has: p.getByText(/^Meta geral de/) }).last(), marcas: [
     [1, (p) => p.getByText("Valor da meta geral").locator("..")],
@@ -182,7 +182,7 @@ export const SHOTS = [
     [6, (p) => p.getByRole("button", { name: /^(Travar|Destravar)$/ }).first()],
     [7, btn(/Salvar distribuição/)],
   ] },
-  { chave: "metas-dialogo", papel: "gestor", url: "/metas/configurar", viewport: ALTO(900),
+  { chave: "metas-dialogo", papel: "gestor", url: "/configurar-metas", viewport: ALTO(900),
     antes: async (p) => { await p.getByRole("button", { name: /Meta deste mês/ }).first().click(); await p.waitForTimeout(700); },
     clip: (p) => dlg(p), marcas: [
     [1, (p) => dlg(p).locator("h2")],
@@ -190,7 +190,7 @@ export const SHOTS = [
     [3, (p) => dlg(p).locator("input")],
     [4, (p) => dlg(p).getByRole("button", { name: "Salvar" })],
   ] },
-  { chave: "metas-ecommerce", papel: "gestor", url: "/metas/configurar", viewport: ALTO(1700),
+  { chave: "metas-ecommerce", papel: "gestor", url: "/configurar-metas", viewport: ALTO(1700),
     antes: async (p) => { await btn("E-commerce")(p).click(); await p.waitForTimeout(1200); }, marcas: [
     [1, (p) => btn("E-commerce")(p)],
     [2, (p) => p.locator("main div.rounded-xl, main div.rounded-lg").filter({ has: p.getByText(/^Meta geral de/) }).last()],

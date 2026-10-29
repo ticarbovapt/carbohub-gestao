@@ -21,7 +21,7 @@ const cartaoTabela = (p) => p.locator("main table").first().locator("xpath=ances
 const ALTO = { width: 1440, height: 5600 };
 const MEDIO = { width: 1440, height: 1600 };
 const LARGO = { width: 1680, height: 1600 };
-const D = "/comercial/dashboard";
+const D = "/painel-comercial";
 const abrirLinha = (n, c = 1) => async (p) => { await p.locator("tbody tr").nth(n).locator("td").nth(c).click(); await p.waitForTimeout(600); };
 const clicar = (...ts) => async (p) => { for (const t of ts) { await p.getByRole("button", { name: t }).first().click(); await p.waitForTimeout(500); } };
 
@@ -29,7 +29,7 @@ export const SHOTS = [
   // ── Dashboard Comercial ──
   { chave: "pc-dash-topo", papel: "gestor", url: D, viewport: ALTO, espera: 1500,
     clip: (p) => [cab(p), mom("CarboVAPT")(p), largura(p)], marcas: [
-    [1, (p) => p.locator('main a[href="/comercial/dados"]').locator("..")],
+    [1, (p) => p.locator('main a[href="/dados-comerciais"]').locator("..")],
     [2, (p) => p.locator("main input[type=date]").first().locator("..")],
     [3, (p) => p.locator("main button[role=combobox]").nth(0)],
     [4, (p) => p.locator("main button[role=combobox]").nth(1)],
@@ -87,9 +87,9 @@ export const SHOTS = [
   ] },
 
   // ── Dados Comerciais (fonte) ──
-  { chave: "pc-dados-pedidos", papel: "gestor", url: "/comercial/dados/pedidos", viewport: LARGO, espera: 1200,
+  { chave: "pc-dados-pedidos", papel: "gestor", url: "/dados-comerciais/pedidos", viewport: LARGO, espera: 1200,
     clip: (p) => [cab(p), linha(6)(p), largura(p)], marcas: [
-    [1, (p) => p.locator('main a[href="/comercial/dashboard"]').locator("..")],
+    [1, (p) => p.locator('main a[href="/painel-comercial"]').locator("..")],
     [2, tile("Pedidos internos (contam)")],
     [3, tile("Excluídos das métricas")],
     [4, (p) => p.getByRole("button", { name: "Pedidos internos" }).locator("..")],
@@ -105,7 +105,7 @@ export const SHOTS = [
     [14, (p) => p.locator("tbody td").filter({ hasText: /^(Bling|Manual)$/ }).first()],
     [15, sel('button[title="Editar canal e origem"]')],
   ] },
-  { chave: "pc-dados-massa", papel: "gestor", url: "/comercial/dados/pedidos", viewport: LARGO, espera: 1200,
+  { chave: "pc-dados-massa", papel: "gestor", url: "/dados-comerciais/pedidos", viewport: LARGO, espera: 1200,
     antes: async (p) => { for (const i of [0, 1, 2]) await p.locator("tbody input[type=checkbox]").nth(i).check(); await topo(p); },
     clip: (p) => [sel('main input[placeholder="Buscar cliente ou nº do pedido…"]')(p), linha(3)(p), largura(p)], marcas: [
     [1, (p) => p.getByText(/pedidos selecionados/)],
@@ -114,14 +114,14 @@ export const SHOTS = [
     [4, btn("Limpar seleção")],
     [5, (p) => p.locator("tbody input[type=checkbox]").nth(0)],
   ] },
-  { chave: "pc-dados-editar", papel: "gestor", url: "/comercial/dados/pedidos", viewport: LARGO, espera: 1200,
+  { chave: "pc-dados-editar", papel: "gestor", url: "/dados-comerciais/pedidos", viewport: LARGO, espera: 1200,
     antes: async (p) => { await p.locator('button[title="Editar canal e origem"]').nth(5).click(); await p.waitForTimeout(500); },
     clip: (p) => dlg(p), marcas: [
     [1, (p) => dlg(p).getByRole("combobox").nth(0)],
     [2, (p) => dlg(p).getByRole("combobox").nth(1)],
     [3, (p) => dlg(p).getByRole("button", { name: "Salvar" })],
   ] },
-  { chave: "pc-dados-descarb", papel: "gestor", url: "/comercial/dados/descarbonizacao", viewport: LARGO, espera: 1200,
+  { chave: "pc-dados-descarb", papel: "gestor", url: "/dados-comerciais/descarbonizacao", viewport: LARGO, espera: 1200,
     clip: (p) => [cab(p), linha(7)(p), largura(p)], marcas: [
     [1, (p) => p.getByRole("button", { name: "Descarbonização" })],
     [2, tile("Notas de serviço (válidas)")],
@@ -131,7 +131,7 @@ export const SHOTS = [
     [6, (p) => p.locator("tbody").getByText("Cancelada", { exact: true }).first()],
     [7, (p) => p.locator("tbody").getByText("Não conta", { exact: true }).first()],
   ] },
-  { chave: "pc-dados-clientes", papel: "gestor", url: "/comercial/dados/clientes", viewport: LARGO, espera: 1500,
+  { chave: "pc-dados-clientes", papel: "gestor", url: "/dados-comerciais/clientes", viewport: LARGO, espera: 1500,
     clip: (p) => [cab(p), p.locator("tbody tr").last(), largura(p)], marcas: [
     [1, (p) => p.getByRole("button", { name: "Clientes internos" })],
     [2, btn(/Agrupar nomes iguais/)],
@@ -141,7 +141,7 @@ export const SHOTS = [
     [6, (p) => p.locator("tbody").getByRole("button", { name: /Criar follow-up/ }).first()],
     [7, celula(0, 1)],
   ] },
-  { chave: "pc-dados-cliente", papel: "gestor", url: "/comercial/dados/clientes", viewport: LARGO, espera: 1500,
+  { chave: "pc-dados-cliente", papel: "gestor", url: "/dados-comerciais/clientes", viewport: LARGO, espera: 1500,
     antes: abrirLinha(0), clip: (p) => dlg(p), marcas: [
     [1, (p) => dlg(p).getByRole("heading").first()],
     [2, (p) => dlg(p).locator("div.grid").first()],
@@ -150,7 +150,7 @@ export const SHOTS = [
   ] },
 
   // ── Aprovações ──
-  { chave: "pc-desc-fila", papel: "gestor", url: "/comercial/descontos", viewport: { width: 1440, height: 900 },
+  { chave: "pc-desc-fila", papel: "gestor", url: "/aprovacoes", viewport: { width: 1440, height: 900 },
     clip: (p) => [cab(p), cartaoTabela(p), p.getByRole("button", { name: "Fabricação" })], marcas: [
     [1, (p) => p.getByRole("button", { name: "Desconto" }).locator("..")],
     [2, (p) => p.getByRole("button", { name: "Fila" }).locator("..")],
@@ -160,12 +160,12 @@ export const SHOTS = [
     [6, (p) => linha(0)(p).locator("button").nth(0)],
     [7, celula(0, 1)],
   ] },
-  { chave: "pc-desc-todos", papel: "gestor", url: "/comercial/descontos", viewport: { width: 1440, height: 900 },
+  { chave: "pc-desc-todos", papel: "gestor", url: "/aprovacoes", viewport: { width: 1440, height: 900 },
     antes: clicar("Todos"), clip: (p) => [p.getByRole("button", { name: "Pendentes" }), p.locator("tbody tr").last()], marcas: [
     [1, (p) => p.locator("tbody td").filter({ hasText: "por Marina" }).first()],
     [2, (p) => p.locator("tbody td").filter({ hasText: "Auto-aprovado" }).first()],
   ] },
-  { chave: "pc-desc-detalhe", papel: "gestor", url: "/comercial/descontos", viewport: { width: 1440, height: 900 },
+  { chave: "pc-desc-detalhe", papel: "gestor", url: "/aprovacoes", viewport: { width: 1440, height: 900 },
     antes: abrirLinha(0), clip: (p) => dlg(p), marcas: [
     [1, (p) => dlg(p).getByText("Alçada exigida")],
     [2, (p) => dlg(p).getByText(/^Motivo:/).locator("..")],
@@ -173,7 +173,7 @@ export const SHOTS = [
     [4, (p) => dlg(p).getByRole("button", { name: /Recusar/ })],
     [5, (p) => dlg(p).getByRole("button", { name: /Aprovar/ })],
   ] },
-  { chave: "pc-desc-config", papel: "gestor", url: "/comercial/descontos", viewport: { width: 1440, height: 900 },
+  { chave: "pc-desc-config", papel: "gestor", url: "/aprovacoes", viewport: { width: 1440, height: 900 },
     antes: clicar("Configuração da alçada"), pad: 40, clip: (p) => [cab(p), btn(/Salvar configuração/)(p), p.getByRole("button", { name: "Fabricação" })], marcas: [
     [1, (p) => p.locator("main button[role=switch]").first()],
     [2, (p) => p.locator("main div.rounded-lg.border").filter({ hasText: "De (%)" }).first()],
@@ -182,7 +182,7 @@ export const SHOTS = [
     [5, (p) => p.locator("main div.rounded-lg.border").filter({ hasText: "De (%)" }).first().locator("button").last()],
     [6, btn(/Salvar configuração/)],
   ] },
-  { chave: "pc-fab-fila", papel: "gestor", url: "/comercial/descontos", viewport: { width: 1440, height: 900 },
+  { chave: "pc-fab-fila", papel: "gestor", url: "/aprovacoes", viewport: { width: 1440, height: 900 },
     antes: clicar("Fabricação"), clip: (p) => [cab(p), cartaoTabela(p), p.getByRole("button", { name: "Fabricação" })], marcas: [
     [1, (p) => p.getByRole("button", { name: "Fabricação" }).locator("..")],
     [2, (p) => p.getByRole("button", { name: "Abaixo do mínimo" })],
@@ -191,7 +191,7 @@ export const SHOTS = [
     [5, celula(0, 6)],
     [6, (p) => linha(0)(p).locator("button").nth(0)],
   ] },
-  { chave: "pc-fab-config", papel: "gestor", url: "/comercial/descontos", viewport: { width: 1440, height: 900 },
+  { chave: "pc-fab-config", papel: "gestor", url: "/aprovacoes", viewport: { width: 1440, height: 900 },
     antes: clicar("Fabricação", "Regras de prazo"), pad: 40, clip: (p) => [cab(p), btn(/Salvar configuração/)(p), p.getByRole("button", { name: "Fabricação" })], marcas: [
     [1, (p) => p.locator("main button[role=switch]").first()],
     [2, (p) => p.locator("main input[type=number]").nth(0)],
@@ -200,7 +200,7 @@ export const SHOTS = [
   ] },
 
   // ── Tabela de preços ──
-  { chave: "pc-precos", papel: "gestor", url: "/comercial/precos", viewport: MEDIO,
+  { chave: "pc-precos", papel: "gestor", url: "/tabela-de-precos", viewport: MEDIO,
     clip: (p) => [cab(p), cartaoTabela(p), p.getByText(/linha\(s\) no dropdown/)], marcas: [
     [1, sel('main input[placeholder="Buscar produto ou código…"]')],
     [2, (p) => p.getByText(/linha\(s\) no dropdown/)],

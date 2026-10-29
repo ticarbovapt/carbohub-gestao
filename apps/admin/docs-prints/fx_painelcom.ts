@@ -17,7 +17,8 @@ void EU;
 
 const OUTRAS = [comercial, ecommerce, esteira] as { FX?: Record<string, unknown> }[];
 const rota = () => { try { return location.pathname; } catch { return ""; } };
-const naNossa = () => rota().startsWith("/comercial/");
+const NOSSAS = ["/painel-comercial", "/dados-comerciais", "/aprovacoes", "/tabela-de-precos"];
+const naNossa = () => NOSSAS.some((r) => rota().startsWith(r));
 const em = (r: string) => rota().startsWith(r);
 const resolve = (v: unknown) => (typeof v === "function" ? (v as () => unknown)() : v);
 const porRota = (chave: string, meu: () => unknown, padrao: () => unknown = () => []) => () => {
@@ -207,7 +208,7 @@ function gerarOnline() {
 }
 const ONLINE = gerarOnline();
 
-// ── Aprovações (carboze_orders na rota /comercial/descontos) ─────────────────
+// ── Aprovações (carboze_orders na rota /aprovacoes) ─────────────────
 const A = { production_approval_status: "auto_approved", agreed_delivery_date: null, ppf_date: null, ppe_date: null, delivery_lead_business_days: null, delivery_below_minimum: false, production_approver_id: null, production_approver_notes: null, production_approved_at: null };
 const D = { discount_percent: 2, discount_reason: null, discount_approval_status: "auto_approved", discount_approval_tier: "auto", discount_approver_id: null, discount_approver_notes: null, discount_approved_at: null };
 const ped = (o: Record<string, unknown>) => {
@@ -253,7 +254,7 @@ const METAS_VENDEDOR = Array.from({ length: 12 }, (_, i) =>
 
 // ── Carboze_orders: por rota ────────────────────────────────────────────────
 const carbozeOrders = () => {
-  if (em("/comercial/descontos")) return APROVACOES;
+  if (em("/aprovacoes")) return APROVACOES;
   if (naNossa()) return PEDIDOS.map((p) => ({ id: p.id, customer_doc: p.cnpj }));
   for (const a of [...OUTRAS].reverse()) if (a.FX && "carboze_orders" in a.FX) return resolve(a.FX.carboze_orders);
   return [...pedidosEdit, ...vendas(PAPEL)];

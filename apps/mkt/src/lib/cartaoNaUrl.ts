@@ -2,9 +2,13 @@ import { useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// O cartão aberto mora no endereço (`?card=`), para F5 e link reabrirem nele.
+// O cartão aberto mora no endereço (`?cartao=`), para F5 e link reabrirem nele.
 //
-// ⚠️ O `?card=` vai SÓ na entrada do histórico que o PRÓPRIO cartão cria
+// ⚠️ O nome era `?card=` até 29/10/2026 (pedido do dono do processo: endereço
+// em português). O antigo continua sendo LIDO — está em link de anexo já
+// copiado e em favorito —, e quem grava escreve o novo e apaga o velho.
+//
+// ⚠️ O `?cartao=` vai SÓ na entrada do histórico que o PRÓPRIO cartão cria
 // (`FecharComVoltar`, dentro do diálogo), nunca na da página por baixo. Assim
 // fechar — pelo X ou pelo Voltar — volta a uma entrada SEM o parâmetro, e um F5
 // depois de fechar não reabre nada. Se o parâmetro fosse para a entrada da
@@ -26,24 +30,25 @@ export function pegarComentarioPendente(): string | null {
 export function useCartaoDaUrl(abrir: (cardId: string, anexoId: string | null) => void) {
   const [params, setParams] = useSearchParams();
   useEffect(() => {
-    const card = params.get("card");
+    const card = params.get("cartao") ?? params.get("card");
     if (!card) return;
     comentarioPendente = params.get("comentario");
     abrir(card, params.get("anexo"));
     const p = new URLSearchParams(window.location.search);
-    p.delete("card"); p.delete("anexo"); p.delete("comentario");
+    p.delete("cartao"); p.delete("card"); p.delete("anexo"); p.delete("comentario");
     setParams(p, { replace: true });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
-/** No CARTÃO: grava `?card=` na entrada do histórico que o diálogo acabou de criar. */
+/** No CARTÃO: grava `?cartao=` na entrada do histórico que o diálogo acabou de criar. */
 export function useCartaoNoEndereco(cardId: string) {
   useEffect(() => {
     // Depois do `pushState` do FecharComVoltar (efeito do filho, mesmo commit).
     const t = window.setTimeout(() => {
       const u = new URL(window.location.href);
-      if (u.searchParams.get("card") === cardId) return;
-      u.searchParams.set("card", cardId);
+      if (u.searchParams.get("cartao") === cardId) return;
+      u.searchParams.delete("card");
+      u.searchParams.set("cartao", cardId);
       u.searchParams.delete("anexo");
       window.history.replaceState(window.history.state, "", u.toString());
     }, 0);

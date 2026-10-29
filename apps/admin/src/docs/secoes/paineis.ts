@@ -15,7 +15,7 @@ export const SECOES_PAINEIS: Secao[] = [
   {
     id: "mapa-conquista",
     titulo: "Mapa da Conquista",
-    rota: "/dashboards/mapa-conquista",
+    rota: "/mapa-da-conquista",
     resumo:
       "Onde a Carbo já chegou. Cada estado (e, ao abrir um estado, cada município) acende quando tem presença: uma venda, um ponto de venda ou um licenciado. O mapa responde “chegamos ou não” — para saber quanto vendemos, use o Dashboard Comercial. " + SO_LEITURA,
     regras: {
@@ -62,7 +62,7 @@ export const SECOES_PAINEIS: Secao[] = [
   {
     id: "painel-lojas",
     titulo: "Portal de Vendas (painel)",
-    rota: "/dashboards/lojas",
+    rota: "/portal-de-vendas",
     resumo:
       "O consolidado das lojas que usam o Portal de Vendas (o balcão do CarboZé nos postos): quanto a rede vendeu, quantas unidades e quantas lojas estão ativas no período. " + SO_LEITURA,
     regras: {
@@ -106,7 +106,7 @@ export const SECOES_PAINEIS: Secao[] = [
   {
     id: "painel-licenciados",
     titulo: "Licenciados (painel)",
-    rota: "/dashboards/franqueados",
+    rota: "/licenciados",
     resumo:
       "O consolidado da rede de descarbonização CarboVAPT: quanto os licenciados faturaram, quantos serviços fizeram, quem mais fez e quais lojas não registraram nada no período. " + SO_LEITURA,
     regras: {
@@ -153,7 +153,7 @@ export const SECOES_PAINEIS: Secao[] = [
   {
     id: "painel-metas",
     titulo: "Metas (Placar)",
-    rota: "/dashboards/metas",
+    rota: "/placar-de-metas",
     resumo:
       "O placar dos vendedores: quanto cada um já vendeu da meta do mês, quem está no ritmo e quem está atrás. É o mesmo placar do Carbo Sales, com os valores em reais. " + SO_LEITURA + " As metas se definem em Configurar Metas.",
     regras: {
@@ -201,7 +201,7 @@ export const SECOES_PAINEIS: Secao[] = [
   {
     id: "painel-suprimentos",
     titulo: "Suprimentos (painel)",
-    rota: "/dashboards/suprimentos",
+    rota: "/suprimentos",
     resumo:
       "A visão da diretoria sobre o estoque do Hub Natal: quanto dinheiro está parado em estoque, quanto tempo ele dura, o que corre risco de faltar e quanto custa fabricar cada produto. Hoje a tela olha só o Hub Natal; os CDs de São Paulo são acompanhados no Ops. " + SO_LEITURA + " Registrar remessa, ajustar estoque ou mudar mínimo é no Carbo Ops.",
     regras: {
@@ -257,7 +257,7 @@ export const SECOES_PAINEIS: Secao[] = [
   {
     id: "configurar-metas",
     titulo: "Configurar Metas",
-    rota: "/metas/configurar",
+    rota: "/configurar-metas",
     resumo:
       "Onde se definem as metas de faturamento do mês: a meta de cada vendedor e a meta de cada canal do e-commerce. É daqui que saem os números do Placar de Metas, do Carbo Sales e do Acompanhamento de Metas do e-commerce.",
     regras: {
