@@ -9,6 +9,7 @@ import { CarboSkeleton } from "@/components/ui/CarboSkeleton";
 import { BaixarNFButton } from "./BaixarNFButton";
 import { Pager, useUrlPage, paginate } from "./Pager";
 import { useAllNFes } from "@/hooks/useNfeLinking";
+import { serieDaNota } from "@/hooks/useNotasDosPedidos";
 
 const fmtBRL = (v: number | null) => (v ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -73,7 +74,7 @@ export function TodasNFsTab() {
                 // sem ler cada célula.
                 <CarboTableRow key={n.id} className={morta ? "opacity-55" : undefined}>
                   <CarboTableCell>
-                    <CarboBadge variant="secondary" className={`gap-1 ${morta ? "line-through" : ""}`}><FileText className="h-3 w-3" /> {n.numero || n.bling_id}{n.serie ? `/${n.serie}` : ""}</CarboBadge>
+                    <CarboBadge variant="secondary" className={`gap-1 ${morta ? "line-through" : ""}`}><FileText className="h-3 w-3" /> {n.numero || n.bling_id}{serieDaNota(n.serie, n.chave_acesso) ? ` · série ${serieDaNota(n.serie, n.chave_acesso)}` : ""}</CarboBadge>
                   </CarboTableCell>
                   <CarboTableCell className="max-w-[240px] truncate">{n.contato_nome || "—"}</CarboTableCell>
                   <CarboTableCell>

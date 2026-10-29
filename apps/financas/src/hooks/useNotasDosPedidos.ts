@@ -32,13 +32,25 @@ export interface NotaDoPedido {
 }
 
 const db = supabase as unknown as { from: (t: string) => any };
-const COLS = "bling_id, numero, serie, situacao, pdf_url, xml_url";
+const COLS = "bling_id, numero, serie, situacao, pdf_url, xml_url, chave_acesso";
+
+/**
+ * A SÉRIE da nota. ⚠️ A coluna `serie` dos espelhos vem VAZIA do sync do Bling
+ * (medido em produção, 29/10/2026), então quem responde é a CHAVE DE ACESSO:
+ * 44 dígitos, a série nas posições 23–25 (`55 001 000000232` → série 1). É
+ * identidade da nota, não palpite. Sem coluna e sem chave, `null` — nunca "1".
+ */
+export function serieDaNota(serie: unknown, chave: unknown): string | null {
+  if (serie != null && String(serie).trim() !== "") return String(serie).trim();
+  const d = String(chave ?? "").replace(/\D/g, "");
+  return d.length === 44 ? String(Number(d.slice(22, 25))) : null;
+}
 
 const nota = (conta: 1 | 2, r: any): NotaDoPedido => ({
   conta,
   blingId: Number(r.bling_id),
   numero: r.numero ?? null,
-  serie: r.serie != null && String(r.serie) !== "" ? String(r.serie) : null,
+  serie: serieDaNota(r.serie, r.chave_acesso),
   situacao: r.situacao != null ? String(r.situacao) : null,
   pdf_url: r.pdf_url ?? null,
   xml_url: r.xml_url ?? null,

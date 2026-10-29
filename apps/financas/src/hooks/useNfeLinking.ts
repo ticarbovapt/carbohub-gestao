@@ -198,6 +198,7 @@ export interface AllNFe {
   order_id: string | null;
   /** Situação no Bling. Nula quando o sync ainda não trouxe. */
   situacao: string | null;
+  chave_acesso: string | null;
 }
 
 /** TODAS as NFs do Bling (vinculadas ou não) — pra localizar e baixar qualquer uma. */
@@ -208,7 +209,7 @@ export function useAllNFes(search = "") {
     queryFn: async (): Promise<AllNFe[]> => {
       let rows = await lerSemTeto<AllNFe>(() => supabase
         .from("bling_nfe")
-        .select("id, bling_id, numero, serie, contato_nome, valor_total, data_emissao, match_status, matched_order_number, order_id, situacao")
+        .select("id, bling_id, numero, serie, contato_nome, valor_total, data_emissao, match_status, matched_order_number, order_id, situacao, chave_acesso")
         .order("data_emissao", { ascending: false })
         .order("id"));
       const q = search.trim().toLowerCase();
