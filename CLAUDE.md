@@ -4010,6 +4010,20 @@ aquela lista significa por causa de um caso vizinho. A view expõe `nf_invalida`
 como **coluna booleana própria**, calculada fora do CASE e imune à ordem; é por
 ela que se filtra. Caso novo no CASE ⇒ confira quem filtra por string.
 
+### ⚠️ O pedido de BRINDE que criamos no Bling voltava como VENDA (29/10/2026)
+A emissão cria DOIS pedidos na matriz (venda + remessa de bonificação) e grava o
+id do segundo em `bling_pedido_bonificacao_id`. A ponte do `bling-sync`
+(`bridgeOrdersToCarbohub`) importava esse segundo como `BLING-<n>` próprio,
+"entregue", e ele contava no faturamento sem nota — medido: **20 pedidos,
+R$ 2.132,80, de ago/26 a out/26** (sete deles a R$ 0,00, só inflando a
+contagem). As notas sempre estiveram certas no V….
+1. A ponte agora PULA o `bling_id` que for `bling_pedido_bonificacao_id` de
+   algum pedido (leitura separada; falhou, a ponte segue como era).
+2. Os 20 ganharam `excluir_metricas = true` (`20261138`): saem do
+   faturamento/comissão e FICAM na lista. ⚠️ `conta_metrica` NÃO olha
+   `excluir_metricas` — quem soma filtra `conta_metrica and not excluir_metricas`.
+3. A filial (`bling2_pedido_bonificacao_id`) foi medida junto: zero casos.
+
 ### ⚠️ O Bling NÃO devolve a observação que mandamos — e isso quebrou as DUAS notas
 Medido em 22/09/2026, investigando por que a logística não conseguia imprimir a
 nota de remessa no Rastreio.
