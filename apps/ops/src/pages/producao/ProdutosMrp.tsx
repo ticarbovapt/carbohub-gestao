@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useParamUrl } from "@carbo/shell";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboButton } from "@/components/ui/carbo-button";
 import { CarboCard } from "@/components/ui/carbo-card";
@@ -60,9 +61,14 @@ function StockRiskBadge({ p }: { p: MrpProduct }) {
 
 export default function ProdutosMrp() {
   const canEdit = true;
-  const [view, setView] = useState<"produtos" | "bom">("produtos");
-  const [search, setSearch] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("all");
+  // Visão, busca e categoria na URL (`?ver=bom&busca=&categoria=`), como nas
+  // outras abas do MRP (SKUs, Lotes): F5 e link mantêm o recorte. "bom" é a
+  // sigla da lista de materiais, que é como a tela a chama.
+  const [verUrl, setVerUrl] = useParamUrl("ver", "produtos");
+  const view: "produtos" | "bom" = verUrl === "bom" ? "bom" : "produtos";
+  const setView = (v: "produtos" | "bom") => setVerUrl(v);
+  const [search, setSearch] = useParamUrl("busca", "", { replace: true });
+  const [categoryFilter, setCategoryFilter] = useParamUrl("categoria", "all");
   const [createOpen, setCreateOpen] = useState(false);
   const [editProduct, setEditProduct] = useState<MrpProduct | null>(null);
   const [bomProduct, setBomProduct] = useState<MrpProduct | null>(null);

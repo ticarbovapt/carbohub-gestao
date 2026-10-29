@@ -79,7 +79,7 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
   // link do funil errado abriria a aba errada antes de achar o card.
   const [linkCopiado, setLinkCopiado] = useState(false);
   const copiarLink = async () => {
-    const url = `${window.location.origin}/crm/pipelines?funil=${lead.funnel_type}&lead=${lead.id}`;
+    const url = `${window.location.origin}/funis?funil=${lead.funnel_type}&lead=${lead.id}`;
     try {
       await navigator.clipboard.writeText(url);
       setLinkCopiado(true);

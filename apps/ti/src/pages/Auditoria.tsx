@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
+import { useParamUrl } from "@carbo/shell";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -62,12 +63,21 @@ const CAT_COLOR: Record<string, string> = {
 };
 
 const CATEGORIES = Array.from(new Set(SOURCES.map((s) => s.category)));
+const slugCat = (c: string) => c.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 const PAGE = 100;
 
 export default function Auditoria() {
-  const [search, setSearch] = useState("");
-  const [debounced, setDebounced] = useState("");
-  const [activeSources, setActiveSources] = useState<string[]>([]); // vazio = todas
+  // Busca e categorias na URL (`?busca=&categorias=vendas,producao`): F5 e
+  // link mandado a alguém abrem o MESMO recorte do feed. A categoria vai como
+  // slug sem acento (o rótulo "Produção" viraria `Produ%C3%A7%C3%A3o`); a
+  // lista de FONTES é derivada dela, como sempre foi — o clique é por
+  // categoria. Slug desconhecido (link velho) é ignorado, nunca vira filtro.
+  const [search, setSearch] = useParamUrl("busca", "", { replace: true });
+  const [debounced, setDebounced] = useState(() => search.trim());
+  const [catsUrl, setCatsUrl] = useParamUrl("categorias", "");
+  const catsAtivas = catsUrl.split(",").filter(Boolean);
+  const activeSources = SOURCES.filter((s) => catsAtivas.includes(slugCat(s.category))).map((s) => s.id); // vazio = todas
+  const setActiveCats = (cats: string[]) => setCatsUrl(cats.map(slugCat).join(","));
 
   // debounce simples da busca
   useEffect(() => {
@@ -101,11 +111,8 @@ export default function Auditoria() {
   const rows = data?.pages.flat() ?? [];
 
   function toggleCategory(cat: string) {
-    const ids = SOURCES.filter((s) => s.category === cat).map((s) => s.id);
-    const allActive = ids.every((id) => activeSources.includes(id));
-    setActiveSources((prev) =>
-      allActive ? prev.filter((id) => !ids.includes(id)) : Array.from(new Set([...prev, ...ids])),
-    );
+    const atuais = CATEGORIES.filter((c) => catsAtivas.includes(slugCat(c)));
+    setActiveCats(atuais.includes(cat) ? atuais.filter((c) => c !== cat) : [...atuais, cat]);
   }
 
   const activeCats = new Set(
@@ -146,7 +153,7 @@ export default function Auditoria() {
         </div>
         <div className="flex flex-wrap gap-1.5">
           <button
-            onClick={() => setActiveSources([])}
+            onClick={() => setActiveCats([])}
             className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
               activeSources.length === 0 ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"
             }`}

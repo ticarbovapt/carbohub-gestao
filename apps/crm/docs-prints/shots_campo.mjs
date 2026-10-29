@@ -40,7 +40,7 @@ const fotoFalsa = async (p) => {
 
 export const SHOTS = [
   // ══ Ordens de Serviço ══════════════════════════════════════════════════════
-  { chave: "os-quadro", papel: "colaborador", url: "/descarbonizacao/os", antes: comSchema, marcas: [
+  { chave: "os-quadro", papel: "colaborador", url: "/os", antes: comSchema, marcas: [
     [1, btn("Nova descarbonização")],
     [2, sel('button[title="Atualizar"]')],
     [3, (p) => p.locator("main div.grid").filter({ hasText: "Em aberto" }).first()],
@@ -50,7 +50,7 @@ export const SHOTS = [
     [7, (p) => p.locator("section").filter({ has: p.locator("h3", { hasText: "Em execução" }) }).first()],
     [8, osCard("Transportadora Rio Potengi")],
   ] },
-  { chave: "os-card", papel: "colaborador", url: "/descarbonizacao/os", antes: comSchema,
+  { chave: "os-card", papel: "colaborador", url: "/os", antes: comSchema,
     clip: osCard("Transportadora Rio Potengi"), pad: 22, marcas: [
       [1, (p) => osCard("Transportadora Rio Potengi")(p).getByText("Transportadora Rio Potengi")],
       [2, (p) => osCard("Transportadora Rio Potengi")(p).getByText("OS-2026-00412")],
@@ -62,7 +62,7 @@ export const SHOTS = [
       [8, (p) => osCard("Transportadora Rio Potengi")(p).getByText("V2026100031")],
       [9, (p) => osCard("Transportadora Rio Potengi")(p).getByText(/R\$\s*7\.000/)],
     ] },
-  { chave: "os-sem-os", papel: "colaborador", url: "/descarbonizacao/os",
+  { chave: "os-sem-os", papel: "colaborador", url: "/os",
     antes: async (p) => { await comSchema(p); await p.getByRole("button", { name: "Ver vendas" }).click(); },
     clip: (p) => p.getByText(/vendas? sem ordem de serviço/).locator("xpath=ancestor::div[contains(@class,'rounded-xl')][1]"), pad: 12,
     marcas: [
@@ -70,7 +70,7 @@ export const SHOTS = [
       [2, (p) => p.getByRole("button", { name: "Abrir OS" })],
       [3, (p) => p.locator("tr").filter({ hasText: "V2026100052" })],
     ] },
-  { chave: "os-lista", papel: "colaborador", url: "/descarbonizacao/os?ver=lista", viewport: { width: 1440, height: 1250 }, antes: comSchema, marcas: [
+  { chave: "os-lista", papel: "colaborador", url: "/os?ver=lista", viewport: { width: 1440, height: 1250 }, antes: comSchema, marcas: [
     [1, (p) => p.getByRole("button", { name: "Lista" }).locator("..")],
     [2, (p) => p.locator("th").filter({ hasText: "Cliente" }).getByRole("button")],
     [3, (p) => p.locator("tr").filter({ hasText: "Transportadora Rio Potengi" }).locator("td").nth(3)],
@@ -78,7 +78,7 @@ export const SHOTS = [
     [5, (p) => p.locator("tr").filter({ hasText: "Juliana Freitas" }).locator("td").nth(5)],
     [6, (p) => p.locator("tr").filter({ hasText: "Marcos Tavares" }).locator("td").nth(7)],
   ] },
-  { chave: "os-agenda", papel: "colaborador", url: "/descarbonizacao/os?ver=agenda", viewport: { width: 1440, height: 1100 }, antes: comSchema, marcas: [
+  { chave: "os-agenda", papel: "colaborador", url: "/os?ver=agenda", viewport: { width: 1440, height: 1100 }, antes: comSchema, marcas: [
     [1, (p) => p.getByRole("button", { name: "Hoje", exact: true })],
     [2, sel('button[aria-label="Próximo mês"]')],
     [3, (p) => p.locator('button[aria-pressed]').filter({ hasText: "Transportadora Rio Potengi" }).first()],
@@ -87,7 +87,7 @@ export const SHOTS = [
     [6, (p) => p.getByRole("button", { name: /sem data/ })],
     [7, (p) => p.locator("aside").filter({ hasText: "Próximos agendamentos" })],
   ] },
-  { chave: "os-nova", papel: "colaborador", url: "/descarbonizacao/os", viewport: { width: 1440, height: 1100 },
+  { chave: "os-nova", papel: "colaborador", url: "/os", viewport: { width: 1440, height: 1100 },
     antes: async (p) => { await comSchema(p); await p.getByRole("button", { name: "Nova descarbonização" }).first().click(); },
     clip: (p) => dlg(p), pad: 10,
     marcas: [
@@ -99,7 +99,7 @@ export const SHOTS = [
       [6, (p) => dlg(p).locator("#sched")],
       [7, (p) => dlg(p).getByRole("button", { name: "Criar OS" })],
     ] },
-  { chave: "os-nova-frota", papel: "colaborador", url: "/descarbonizacao/os", viewport: { width: 1440, height: 1300 },
+  { chave: "os-nova-frota", papel: "colaborador", url: "/os", viewport: { width: 1440, height: 1300 },
     antes: async (p) => {
       await comSchema(p);
       await p.getByRole("button", { name: "Nova descarbonização" }).first().click();
@@ -115,7 +115,7 @@ export const SHOTS = [
     ] },
 
   // ══ Agenda de visitas (RTM) ═══════════════════════════════════════════════
-  { chave: "visitas", papel: "colaborador", url: "/rtm/agenda?v=lista", viewport: { width: 1440, height: 1500 }, marcas: [
+  { chave: "visitas", papel: "colaborador", url: "/rtm/agenda?ver=lista", viewport: { width: 1440, height: 1500 }, marcas: [
     [1, sel('[role="tablist"][aria-label="Visão da agenda"]')],
     [2, (p) => p.getByRole("button", { name: "Agendar", exact: true })],
     [3, sel('main input[type="date"]')],
@@ -128,7 +128,7 @@ export const SHOTS = [
     [10, (p) => p.getByText(/de \d+ feitas/).locator("..")],
     [11, (p) => p.locator("button.sticky").filter({ hasNotText: "Atrasadas" }).first()],
   ] },
-  { chave: "visitas-linha", papel: "colaborador", url: "/rtm/agenda?v=lista", viewport: { width: 1440, height: 1500 },
+  { chave: "visitas-linha", papel: "colaborador", url: "/rtm/agenda?ver=lista", viewport: { width: 1440, height: 1500 },
     clip: (p) => [p.locator("div[class*='rounded']").filter({ hasText: "Auto Posto Cidade Verde" }).filter({ has: p.getByRole("button", { name: "Check-in" }) }).last(),
            p.locator("div[class*='rounded']").filter({ hasText: "Posto Lagoa Nova" }).filter({ has: p.getByRole("link", { name: "Ver" }) }).last()],
     pad: 12, marcas: [
@@ -141,19 +141,19 @@ export const SHOTS = [
       [7, (p) => p.getByText("Fez pedido").first()],
       [8, (p) => p.getByRole("link", { name: "Ver" }).first()],
     ] },
-  { chave: "visitas-mes", papel: "colaborador", url: "/rtm/agenda?v=mes", viewport: { width: 1440, height: 1100 }, marcas: [
+  { chave: "visitas-mes", papel: "colaborador", url: "/rtm/agenda?ver=mes", viewport: { width: 1440, height: 1100 }, marcas: [
     [1, (p) => p.locator("main div.grid").filter({ hasText: "Planejadas no mês" }).first()],
     [2, (p) => p.getByText("Aderência (até hoje)").locator("..")],
     [3, sel('button[aria-label="Próximo mês"]')],
     [4, (p) => p.locator("button[aria-label*='planejadas']").filter({ has: p.locator("span.font-bold") }).first()],
     [5, (p) => p.getByText("não cumprida", { exact: true }).locator("..").locator("..")],
   ] },
-  { chave: "visitas-gestor", papel: "gestor", url: "/rtm/agenda?v=lista", viewport: { width: 1440, height: 1300 }, marcas: [
+  { chave: "visitas-gestor", papel: "gestor", url: "/rtm/agenda?ver=lista", viewport: { width: 1440, height: 1300 }, marcas: [
     [1, (p) => p.getByRole("combobox").filter({ hasText: "Todo o time" })],
     [2, (p) => p.getByText("Ana Souza").first()],
     [3, (p) => p.getByRole("button", { name: /Atrasadas/ })],
   ] },
-  { chave: "visitas-agendar", papel: "gestor", url: "/rtm/agenda?v=lista", viewport: { width: 1440, height: 1100 },
+  { chave: "visitas-agendar", papel: "gestor", url: "/rtm/agenda?ver=lista", viewport: { width: 1440, height: 1100 },
     antes: async (p) => {
       await p.getByRole("button", { name: "Agendar", exact: true }).click();
       await p.waitForTimeout(800);
@@ -168,7 +168,7 @@ export const SHOTS = [
       [5, (p) => dlg(p).locator("textarea")],
       [6, (p) => dlg(p).getByRole("button", { name: "Agendar", exact: true })],
     ] },
-  { chave: "visitas-cancelar", papel: "colaborador", url: "/rtm/agenda?v=lista",
+  { chave: "visitas-cancelar", papel: "colaborador", url: "/rtm/agenda?ver=lista",
     antes: async (p) => {
       await p.getByRole("button", { name: "Não vai acontecer" }).first().click();
       await dlg(p).locator("textarea").fill("Proprietária viajou; pediu para voltar na segunda.");
@@ -178,7 +178,7 @@ export const SHOTS = [
       [1, (p) => dlg(p).locator("textarea")],
       [2, (p) => dlg(p).getByRole("button", { name: "Cancelar visita" })],
     ] },
-  { chave: "visita", papel: "colaborador", url: "/rtm/agenda?v=lista", viewport: { width: 1440, height: 1750 },
+  { chave: "visita", papel: "colaborador", url: "/rtm/agenda?ver=lista", viewport: { width: 1440, height: 1750 },
     antes: async (p) => {
       await p.context().grantPermissions(["geolocation"]);
       await p.context().setGeolocation({ latitude: -5.87, longitude: -35.21, accuracy: 15 });
@@ -211,7 +211,7 @@ export const SHOTS = [
       [8, (p) => p.getByRole("heading", { name: /Próximo passo/ }).locator("..").locator("..")],
       [9, (p) => p.getByRole("button", { name: "Concluir visita" })],
     ] },
-  { chave: "visita-andamento", papel: "colaborador", url: "/rtm/agenda?v=lista",
+  { chave: "visita-andamento", papel: "colaborador", url: "/rtm/agenda?ver=lista",
     antes: async (p) => {
       await p.getByRole("button", { name: "Check-in" }).first().click();
       await p.getByText("Como foi a visita?").waitFor();

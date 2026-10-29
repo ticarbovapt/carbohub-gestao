@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import { useAuth } from "@/contexts/AuthContext";
+import { useParamUrl } from "@carbo/shell";
 import { useAllProfiles } from "@/hooks/useBugReports";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -76,7 +77,11 @@ function useTimeMetrics(dias: number) {
 
 export function RankingTI() {
   const { user } = useAuth();
-  const [dias, setDias] = useState<number>(90);
+  // Período na URL (`?dias=30`): F5 não volta aos 90 dias calado. Valor fora
+  // da lista (link editado à mão) cai no padrão, nunca numa janela inventada.
+  const [diasUrl, setDiasUrl] = useParamUrl("dias", "90");
+  const dias = PERIODOS.some((p) => String(p.dias) === diasUrl) ? Number(diasUrl) : 90;
+  const setDias = (d: number) => setDiasUrl(String(d));
   const [comoOpen, setComoOpen] = useState(false);
   const { data: linhas = [], isLoading } = useRanking(dias);
   const { data: time } = useTimeMetrics(dias);

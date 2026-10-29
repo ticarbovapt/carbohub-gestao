@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useParamUrl } from "@carbo/shell";
 import { CarboCard, CarboCardContent, CarboCardHeader, CarboCardTitle } from "@/components/ui/carbo-card";
 import { CarboButton } from "@/components/ui/carbo-button";
 import { CarboSearchInput } from "@/components/ui/carbo-input";
@@ -42,7 +43,8 @@ export function SkuStockPolicy() {
   const { data: policies = [] } = useSkuWarehousePolicies();
   const { data: deficits = [] } = useInsumoRequirements();
   const upsertPolicy = useUpsertSkuWarehousePolicy();
-  const [search, setSearch] = useState("");
+  // Busca na URL (`?busca=`), como na aba Estoque: F5 não apaga o que foi digitado.
+  const [search, setSearch] = useParamUrl("busca", "", { replace: true });
   const [editDialog, setEditDialog] = useState<{ sku: Sku; warehouse: Warehouse } | null>(null);
   const [editQty, setEditQty] = useState(0);
   const [editDays, setEditDays] = useState(30);

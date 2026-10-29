@@ -56,10 +56,10 @@ export function Layout() {
     // ⚠️ Este é o SEGUNDO lugar do menu do Ops, e esquecê-lo deixa a tela
     // invisível sem erro nenhum. Produtos/SKUs/Lotes/Fornecedores viraram abas
     // dentro de /producao/mrp — uma linha só aqui.
-    { label: "Produção", items: ["/producao/dashboard", "/producao/ordens", "/producao/mrp"].map(it) },
-    { label: "Suprimentos", items: ["/suprimentos", "/suprimentos/vendedores", "/compras"].map(it) },
-    { label: "Logística", items: ["/logistica", "/logistica/pos-venda", "/logistica/recorrencias", "/logistica/viagens"].map(it) },
-    { label: "Operação de Campo", items: ["/campo/os", "/campo/alertas"].map(it) },
+    { label: "Produção", items: ["/producao/painel", "/producao/ordens", "/producao/mrp"].map(it) },
+    { label: "Suprimentos", items: ["/suprimentos", "/suprimentos/vendedores", "/requisicoes"].map(it) },
+    { label: "Logística", items: ["/logistica", "/rastreio", "/recorrencias", "/viagens"].map(it) },
+    { label: "Operação de Campo", items: ["/os", "/alertas"].map(it) },
     { label: "Ajuda", items: [{ to: "/documentacao", label: "Documentação", icon: BookOpen }] },
   ];
 

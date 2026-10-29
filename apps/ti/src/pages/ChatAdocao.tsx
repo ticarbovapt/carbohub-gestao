@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useParamUrl } from "@carbo/shell";
 import {
   ResponsiveContainer, AreaChart, Area, BarChart, Bar, XAxis, YAxis,
   Tooltip, CartesianGrid, Legend,
@@ -56,7 +56,12 @@ function Kpi({ icon: Icon, label, value, sub, tone = "default" }: {
 }
 
 export default function ChatAdocao() {
-  const [inactiveDays, setInactiveDays] = useState(7);
+  // Aba e janela de inatividade na URL (`?aba=inativos&dias=14`): F5 e link
+  // abrem a mesma lista, em vez de voltar a "Instalação & push" / 7 dias.
+  const [aba, setAba] = useParamUrl("aba", "pendencias");
+  const [diasUrl, setDiasUrl] = useParamUrl("dias", "7");
+  const inactiveDays = ["3", "7", "14", "30"].includes(diasUrl) ? Number(diasUrl) : 7;
+  const setInactiveDays = (d: number) => setDiasUrl(String(d));
   const ov = useAdoptionOverview();
   const series = useAdoptionSeries(30);
   const byDept = useVolumeByDepartment();
@@ -173,7 +178,7 @@ export default function ChatAdocao() {
       <Card>
         <CardHeader className="pb-2"><CardTitle className="text-base">Pendências de onboarding</CardTitle></CardHeader>
         <CardContent className="p-0">
-          <Tabs defaultValue="pendencias">
+          <Tabs value={aba === "inativos" ? "inativos" : "pendencias"} onValueChange={setAba}>
             <TabsList className="mx-4 mt-2">
               <TabsTrigger value="pendencias">Instalação & push</TabsTrigger>
               <TabsTrigger value="inativos">Inativos</TabsTrigger>

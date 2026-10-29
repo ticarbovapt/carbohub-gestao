@@ -121,7 +121,7 @@ export const SECOES_USUARIOS: Secao[] = [
   {
     id: "estrutura",
     titulo: "Departamentos e funções",
-    rota: "/estrutura",
+    rota: "/departamentos",
     resumo:
       "O cadastro dos departamentos da empresa e das funções de cada um. É a função que decide se a pessoa é gestor (vê tudo nos sistemas) ou colaborador (vê só o que é dela).",
     regras: {

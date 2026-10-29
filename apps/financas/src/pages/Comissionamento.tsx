@@ -43,6 +43,11 @@ const monthEnd = () => { const d = new Date(); return iso(new Date(d.getFullYear
  * é como o Comparativo do admin passou a abrir com a aba de uma sessão e o
  * período de outra. A URL é a única fonte.
  */
+/* ⚠️ Toda gravação parte da URL ATUAL do navegador, NUNCA do `prev` do
+ * `setSp`: no React Router 6.30 o `prev` é o do ÚLTIMO RENDER, e duas trocas no
+ * mesmo clique apagavam uma à outra (a regra do `useParamUrl`, no CLAUDE.md). */
+const urlAtual = () => new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+
 const PARAM_ABA = "aba";
 const PARAM_DE = "de";
 const PARAM_ATE = "ate";
@@ -183,13 +188,13 @@ function CalcularTab() {
    * ⚠️ `replace: true`: trocar aba ou data é refinar a pergunta, não navegar.
    * Com `push`, o botão Voltar percorreria cada clique em vez de sair da tela.
    *
-   * ⚠️ E a atualização é FUNCIONAL (`prev => ...`): a aba mora na mesma URL, e
-   * sobrescrever com um objeto novo apagaria `?aba=pagamentos` ao mexer numa
-   * data.
+   * ⚠️ E a atualização parte da URL ATUAL (`urlAtual()`): a aba mora na mesma
+   * URL, e sobrescrever com um objeto novo apagaria `?aba=pagamentos` ao mexer
+   * numa data. Não do `prev`, que é o do último render.
    */
   const setParam = (patch: Record<string, string | null>) => {
-    setSp((prev) => {
-      const next = new URLSearchParams(prev);
+    setSp(() => {
+      const next = urlAtual();
       for (const [k, v] of Object.entries(patch)) {
         if (v === null || v === "") next.delete(k);
         else next.set(k, v);
@@ -513,8 +518,8 @@ function PagamentosTab() {
   const ordem = lerOrdem(sp);
 
   const setParam = (chave: string, valor: string | null) => {
-    setSp((prev) => {
-      const next = new URLSearchParams(prev);
+    setSp(() => {
+      const next = urlAtual();
       if (valor === null || valor === "" || valor === "__all__") next.delete(chave);
       else next.set(chave, valor);
       return next;
@@ -875,8 +880,8 @@ export default function Comissionamento() {
       <Tabs
         value={aba}
         onValueChange={(v) =>
-          setSp((prev) => {
-            const next = new URLSearchParams(prev);
+          setSp(() => {
+            const next = urlAtual();
             next.set(PARAM_ABA, v);
             return next;
           }, { replace: true })

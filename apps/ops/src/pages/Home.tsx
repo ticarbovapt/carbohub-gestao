@@ -122,7 +122,7 @@ export default function Home() {
       txt: `${producao.bloqueadas} ${producao.bloqueadas === 1 ? "OP bloqueada" : "OPs bloqueadas"}`,
       to: "/producao/ordens",
     },
-    campo.atrasadas > 0 && { txt: `${campo.atrasadas} OS com data vencida`, to: "/campo/os" },
+    campo.atrasadas > 0 && { txt: `${campo.atrasadas} OS com data vencida`, to: "/os" },
   ].filter(Boolean) as { txt: string; to: string }[];
 
   return (
@@ -233,7 +233,7 @@ export default function Home() {
 
           {/* ── Operação de campo ────────────────────────────────────── */}
           <Bloco titulo="Operação de campo" icon={Wrench} cor="#a78bfa" estado={campo}
-            to="/campo/os"
+            to="/os"
             vazio={campo.abertas === 0 ? "nenhuma OS em aberto" : undefined}>
             <div className="grid grid-cols-3 gap-2">
               <Num valor={campo.hoje} label="agendadas hoje" alerta={campo.hoje > 0} />

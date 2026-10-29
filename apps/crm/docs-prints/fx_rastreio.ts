@@ -1,5 +1,5 @@
-// Fixtures da área "rastreio" (ver areas.ts): Rastreio de venda (/pos-venda),
-// Meu Estoque (/meu-estoque) e Requisição de Compra (/compras).
+// Fixtures da área "rastreio" (ver areas.ts): Rastreio de venda (/rastreio),
+// Meu Estoque (/meu-estoque) e Requisição de Compra (/requisicoes).
 // Dados FICTÍCIOS — nenhum cliente, pessoa ou pedido real.
 import { PAPEL, U } from "./pessoas";
 import { vendas } from "./fx_vendas";

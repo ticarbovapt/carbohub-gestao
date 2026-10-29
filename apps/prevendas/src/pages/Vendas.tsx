@@ -271,8 +271,14 @@ export default function Vendas() {
   const ocultarBling = true;   // Pré-Vendas: sempre — ver o comentário no lugar da caixinha.
   // Segmentos selecionados. Vazio = todos — e não "nenhum": filtro que começa
   // escondendo tudo faz a tela parecer quebrada no primeiro carregamento.
-  const [segsAtivos, setSegsAtivos] = useState<Set<SegmentoId>>(new Set());
-  const [tiposAtivos, setTiposAtivos] = useState<Set<TipoPedido>>(new Set());
+  // Os dois moram na URL (`?segmento=a,b&tipo=servico`), como o mês e a busca:
+  // o F5 e o link mandado ao colega mostram o MESMO recorte.
+  const [segUrl, setSegUrl] = useParamUrl("segmento");
+  const [tipoUrl, setTipoUrl] = useParamUrl("tipo");
+  const segsAtivos = useMemo(() => new Set((segUrl ? segUrl.split(",") : []) as SegmentoId[]), [segUrl]);
+  const tiposAtivos = useMemo(() => new Set((tipoUrl ? tipoUrl.split(",") : []) as TipoPedido[]), [tipoUrl]);
+  const setSegsAtivos = (n: Set<SegmentoId>) => setSegUrl([...n].join(","));
+  const setTiposAtivos = (n: Set<TipoPedido>) => setTipoUrl([...n].join(","));
 
   const hasCustomRange = !!(customFrom || customTo);
   const clearCustomRange = () => { setCustomFrom(""); setCustomTo(""); };
@@ -519,19 +525,17 @@ export default function Vendas() {
     [porTipoBase, tiposAtivos],
   );
 
-  const alternarSeg = (id: SegmentoId) =>
-    setSegsAtivos((cur) => {
-      const n = new Set(cur);
-      n.has(id) ? n.delete(id) : n.add(id);
-      return n;
-    });
+  const alternarSeg = (id: SegmentoId) => {
+    const n = new Set(segsAtivos);
+    n.has(id) ? n.delete(id) : n.add(id);
+    setSegsAtivos(n);
+  };
 
-  const alternarTipo = (id: TipoPedido) =>
-    setTiposAtivos((cur) => {
-      const n = new Set(cur);
-      n.has(id) ? n.delete(id) : n.add(id);
-      return n;
-    });
+  const alternarTipo = (id: TipoPedido) => {
+    const n = new Set(tiposAtivos);
+    n.has(id) ? n.delete(id) : n.add(id);
+    setTiposAtivos(n);
+  };
 
   const sum = (list: CarbozeVendaRow[]) => list.reduce((s, v) => s + v.total, 0);
 

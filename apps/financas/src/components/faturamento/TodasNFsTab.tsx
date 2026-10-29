@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useParamUrl } from "@carbo/shell";
 import { FileText } from "lucide-react";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
@@ -26,9 +26,12 @@ const fmtDate = (s: string | null) => {
 // Todas as NFs importadas do Bling — vinculadas ou não. Serve pra localizar e
 // baixar QUALQUER nota rapidamente (busca por nº, cliente ou pedido).
 export function TodasNFsTab() {
-  const [search, setSearch] = useState("");
+  // Busca e página na URL (`?nota=&pagina=`): F5 e link mantêm a lista. A chave
+  // é `nota`, não `busca`: a busca de PEDIDOS do Faturamento continua à vista
+  // acima das abas, e as duas caixas mostrando o mesmo texto seriam confusas.
+  const [search, setSearch] = useParamUrl("nota", "", { replace: true });
   const { data: nfes = [], isLoading } = useAllNFes(search);
-  const [page, setPage] = useUrlPage("ptodas");
+  const [page, setPage] = useUrlPage("pagina", "ptodas");
   const pag = paginate(nfes, page);
 
   return (

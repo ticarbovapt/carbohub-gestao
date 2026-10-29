@@ -295,7 +295,7 @@ export const SECOES_SUPRIMENTOS: Secao[] = [
   {
     id: "compras",
     titulo: "Requisição de Compra",
-    rota: "/compras",
+    rota: "/requisicoes",
     resumo:
       "Para pedir uma compra: insumo, embalagem, peça de manutenção, equipamento — ou material de trabalho para você. A requisição vai para a aba Requisições do Carbo Finanças, que aprova, cota, faz a ordem de compra, recebe a nota e paga. Por aqui você abre a requisição e acompanha a situação dela.",
     regras: {

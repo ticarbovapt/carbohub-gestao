@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useParamUrl } from "@carbo/shell";
 import {
   Store, Search, Plus, Pencil, PauseCircle, PlayCircle, XCircle,
   ShoppingCart, AlertTriangle, FileText, Package, ArrowUp, ArrowDown, ChevronsUpDown,
@@ -117,6 +118,7 @@ function MixChips({ mix }: { mix: Partial<Record<PdvProduto, PdvMixItem>> }) {
 }
 
 type PdvCol = "codigo" | "nome" | "cnpj" | "cidade" | "dono" | "mix" | "status" | "pedidos" | "comprado" | "ultima";
+const ORDENAVEIS: PdvCol[] = ["codigo", "nome", "cnpj", "cidade", "dono", "mix", "status", "pedidos", "comprado", "ultima"];
 
 function SortTh({ col, label, sort, onSort, align = "left" }: {
   col: PdvCol; label: string; sort: { col: PdvCol; dir: "asc" | "desc" };
@@ -172,22 +174,34 @@ export default function Pdvs() {
   const { data: vendedores = [] } = usePdvVendedores();
   const [mix, setMix] = useState<Record<PdvProduto, PdvMixItem> | null>(null);
 
-  const [busca, setBusca] = useState("");
-  const [fStatus, setFStatus] = useState<string>("all");
-  const [fUf, setFUf] = useState<string>("all");
-  const [fDono, setFDono] = useState<string>("all");
-  // Começa por nome, que é como a tela já vinha.
-  const [sort, setSort] = useState<{ col: PdvCol; dir: "asc" | "desc" }>({ col: "nome", dir: "asc" });
+  // Busca, filtros, ordem e o PDV aberto moram na URL (`?busca=&status=&uf=
+  // &dono=&ordem=-comprado&pdv=<id>`): F5 e link mandado ao colega mostram a
+  // MESMA lista. Valor padrão não vai para o endereço.
+  const [busca, setBusca] = useParamUrl("busca", "", { replace: true });
+  const [fStatus, setFStatus] = useParamUrl("status", "all");
+  const [fUf, setFUf] = useParamUrl("uf", "all");
+  const [fDono, setFDono] = useParamUrl("dono", "all");
+  // Começa por nome, que é como a tela já vinha. `-` na frente = decrescente.
+  const [ordemUrl, setOrdemUrl] = useParamUrl("ordem", "nome");
+  const sort = useMemo(() => {
+    const col = ordemUrl.replace(/^-/, "") as PdvCol;
+    return { col: ORDENAVEIS.includes(col) ? col : "nome" as PdvCol, dir: (ordemUrl.startsWith("-") ? "desc" : "asc") as "asc" | "desc" };
+  }, [ordemUrl]);
   // Primeiro clique numa coluna nova: texto sobe (A→Z), número e data descem
   // (maior/mais recente primeiro) — é o que se quer ver em "quem comprou mais".
-  const toggleSort = (c: PdvCol) =>
-    setSort((s) => s.col === c
-      ? { col: c, dir: s.dir === "asc" ? "desc" : "asc" }
-      : { col: c, dir: ["pedidos", "comprado", "ultima", "mix"].includes(c) ? "desc" : "asc" });
+  const toggleSort = (c: PdvCol) => {
+    const dir = sort.col === c
+      ? (sort.dir === "asc" ? "desc" : "asc")
+      : (["pedidos", "comprado", "ultima", "mix"].includes(c) ? "desc" : "asc");
+    setOrdemUrl(`${dir === "desc" ? "-" : ""}${c}`);
+  };
 
   const [form, setForm] = useState<PdvInput | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
-  const [detalhe, setDetalhe] = useState<PdvRow | null>(null);
+  // O PDV aberto vira `?pdv=<id>` (push: o Voltar fecha o detalhe).
+  const [pdvUrl, setPdvUrl] = useParamUrl("pdv");
+  const detalhe = useMemo(() => (pdvUrl ? pdvs.find((p) => p.id === pdvUrl) ?? null : null), [pdvUrl, pdvs]);
+  const setDetalhe = (p: PdvRow | null) => setPdvUrl(p?.id ?? null);
 
   const set = (patch: Partial<PdvInput>) => setForm((f) => (f ? { ...f, ...patch } : f));
 

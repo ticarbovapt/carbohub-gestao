@@ -151,7 +151,7 @@ export const SHOTS = [
     [8, (p) => dlg(p).getByText("Contato de emergência (nome)").locator("..")],
     [9, (p) => dlg(p).getByRole("button", { name: "Salvar" })],
   ] },
-  { chave: "func-aniversarios", papel: "gestor", url: "/funcionarios?tab=aniversarios", viewport: { width: 1440, height: 1700 },
+  { chave: "func-aniversarios", papel: "gestor", url: "/funcionarios?aba=aniversarios", viewport: { width: 1440, height: 1700 },
     clip: (p) => p.locator("main div.space-y-6").first(), marcas: [
     [1, (p) => p.getByText("Com data cadastrada").locator("xpath=ancestor::div[contains(@class,'grid')][1]")],
     [2, txt("Aniversário hoje!")],

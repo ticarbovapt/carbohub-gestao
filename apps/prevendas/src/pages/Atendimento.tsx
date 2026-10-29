@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
+import { useParamUrl } from "@carbo/shell";
 import {
   MessagesSquare, AlertTriangle, Search, BellOff, BellRing, ArrowLeft,
   SlidersHorizontal, ChevronDown, SearchX, Clock, CheckCheck, UserCheck, Undo2, Check,
@@ -243,8 +244,12 @@ export default function Atendimento() {
   const [agendadas, setAgendadas] = useState<Agendada[]>([]);
   const [confirmarParar, setConfirmarParar] = useState(false);
   const [semOfertas, setSemOfertas] = useState(false);
-  const [aba, setAba] = useState<Aba>("todas");
-  const [busca, setBusca] = useState("");
+  // Aba e busca na URL (`?aba=pendentes&busca=`), como na tela de Conversas do
+  // Atendimento: o F5 não devolve a caixa para "Todas".
+  const [abaUrl, setAbaUrl] = useParamUrl("aba", "todas");
+  const aba = (ABAS.some((a) => a.id === abaUrl) ? abaUrl : "todas") as Aba;
+  const setAba = (v: Aba) => setAbaUrl(v);
+  const [busca, setBusca] = useParamUrl("busca", "", { replace: true });
   const [painelFiltros, setPainelFiltros] = useState(false);
   const [filtros, setFiltros] = useState<Filtros>(FILTROS_VAZIOS);
   const [recebo, setRecebo] = useState(false);

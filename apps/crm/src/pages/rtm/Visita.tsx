@@ -44,8 +44,11 @@ import { prepararFoto } from "@/lib/rtmFoto";
 
 export default function RtmVisita() {
   const [params] = useSearchParams();
-  const chave = params.get("v");
-  const somenteLeitura = params.get("ver") === "1";
+  // `?visita=<id>` e `&leitura=1` (visita já fechada, só para ler). Até
+  // 29/10/2026 eram `?v=` e `&ver=1` — ainda lidos, porque o link da visita em
+  // andamento pode estar salvo no celular de quem está em campo.
+  const chave = params.get("visita") ?? params.get("v");
+  const somenteLeitura = (params.get("leitura") ?? params.get("ver")) === "1";
 
   if (!chave) return <SemVisita />;
   return somenteLeitura ? <VisitaSalva id={chave} /> : <VisitaEmCampo clientUuid={chave} />;

@@ -1,6 +1,7 @@
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import { format, startOfMonth, addMonths, subMonths, getDaysInMonth, getDate } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useParamUrl } from "@carbo/shell";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Button } from "@/components/ui/button";
@@ -191,10 +192,29 @@ function WeeklyPanel({ entries, elapsedDays, canSeeValues }: {
 
 // ── Página ───────────────────────────────────────────────────────────────
 export default function Metas() {
-  const [month, setMonth] = useState(() => startOfMonth(new Date()));
-  const [teamFilter, setTeamFilter] = useState<TeamFilter>("todos");
-  const [periodView, setPeriodView] = useState<PeriodView>("mensal");
-  const [weekStart, setWeekStart] = useState(() => commercialWeekStartOf(new Date()));
+  // Mês, semana, visão e equipe moram na URL (`?mes=2026-09&ver=semanal&
+  // semana=2026-10-23&equipe=cgc`): F5 e link mandado ao colega mostram o
+  // MESMO recorte. O padrão (mês e semana correntes, mensal, todos) não vai
+  // para o endereço. A semana é o dia LOCAL de início (sexta), nunca
+  // `toISOString()`, que à noite já é o dia seguinte em UTC.
+  const [mesUrl, setMesUrl] = useParamUrl("mes", format(startOfMonth(new Date()), "yyyy-MM"));
+  const month = useMemo(() => {
+    const [a, m] = mesUrl.split("-").map(Number);
+    return a && m ? new Date(a, m - 1, 1) : startOfMonth(new Date());
+  }, [mesUrl]);
+  const setMonth = (f: (m: Date) => Date) => setMesUrl(format(f(month), "yyyy-MM"));
+  const [equipeUrl, setEquipeUrl] = useParamUrl("equipe", "todos");
+  const teamFilter = (["cgc", "expansao"].includes(equipeUrl) ? equipeUrl : "todos") as TeamFilter;
+  const setTeamFilter = (v: TeamFilter) => setEquipeUrl(v);
+  const [verUrl, setVerUrl] = useParamUrl("ver", "mensal");
+  const periodView: PeriodView = verUrl === "semanal" ? "semanal" : "mensal";
+  const setPeriodView = (v: PeriodView) => setVerUrl(v);
+  const [semanaUrl, setSemanaUrl] = useParamUrl("semana", format(commercialWeekStartOf(new Date()), "yyyy-MM-dd"));
+  const weekStart = useMemo(() => {
+    const d = /^\d{4}-\d{2}-\d{2}$/.test(semanaUrl) ? new Date(`${semanaUrl}T00:00:00`) : new Date();
+    return commercialWeekStartOf(Number.isNaN(d.getTime()) ? new Date() : d);
+  }, [semanaUrl]);
+  const setWeekStart = (f: (w: Date) => Date) => setSemanaUrl(format(f(weekStart), "yyyy-MM-dd"));
 
   const { isGestor } = useAuth();
 

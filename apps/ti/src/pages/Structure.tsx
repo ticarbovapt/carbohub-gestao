@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useParamUrl } from "@carbo/shell";
 import { toast } from "sonner";
 import { Loader2, Plus, Trash2, Pencil, Check, X, Building2, ListTree } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -21,7 +22,9 @@ const NivelBadge = ({ level }: { level: "gestor" | "colaborador" }) => (
 
 export default function Structure() {
   const { data: departments = [], isLoading: loadingDepts } = useDepartments();
-  const [selectedDept, setSelectedDept] = useState<string>("");
+  // Departamento escolhido na URL (`?departamento=<chave>`): F5 não fecha o
+  // painel de funções que estava sendo editado.
+  const [selectedDept, setSelectedDept] = useParamUrl("departamento", "");
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 grid grid-cols-1 gap-6 lg:grid-cols-2">

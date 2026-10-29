@@ -74,18 +74,23 @@ const ABAS = [
   { id: "movimentacoes",   label: "Movimentações",       icon: ArrowLeftRight },
   { id: "transito",        label: "Em Trânsito",         icon: Truck,           hubs: ["sp"] },
   { id: "mapeamento",      label: "Mapeamento SKU",      icon: Link2,           hubs: ["sp"] },
-  { id: "vendas-transito", label: "Remessas",            icon: Truck,           hubs: ["spv"] },
+  { id: "remessas",        label: "Remessas",            icon: Truck,           hubs: ["spv"] },
   // ⚠️ Sem `hubs`: envio e recebimento passaram a valer em TODOS os estoques.
   // Enquanto só Natal enviava, restringir a "rn" descrevia a realidade. Agora
   // qualquer estoque envia para qualquer outro, e o CD SP precisa da aba de
   // recebimento para aceitar o que Natal mandou — sem ela o saldo fica preso
   // em trânsito e ninguém sabe onde clicar.
-  { id: "envios-sp",       label: "Envios",              icon: Send },
+  { id: "envios",          label: "Envios",              icon: Send },
   { id: "recebimento",     label: "Recebimento",         icon: ArrowDownToLine },
   { id: "notas",           label: "Notas Fiscais",       icon: FileText,        hubs: ["rn"] },
   { id: "politica",        label: "Política de Estoque", icon: Settings2 },
 ] as const;
 const ABA_PADRAO = ABAS[0].id;
+// Nome antigo da aba → o atual. O segmento é o RÓTULO da aba, em português
+// (29/10/2026): "envios-sp" valia em todos os estoques e "vendas-transito" se
+// chama Remessas na tela. Link velho cai na aba certa e o canonizador troca o
+// endereço; sem este mapa ele cairia em Estoque, calado.
+const ABA_ANTIGA: Record<string, string> = { "envios-sp": "envios", "vendas-transito": "remessas" };
 // Sem `hubs` = vale em todos. "estoque" existe nos quatro, por isso é o refúgio
 // seguro quando a URL pede uma combinação impossível.
 const abaValeNoHub = (abaId: string, hub: HubId) => {
@@ -126,7 +131,8 @@ export default function Suprimentos() {
   // /suprimentos/hub-natal/transito renderizaria um conteúdo cuja aba não está
   // na barra — o pedido some da tela sem erro nenhum, que é o modo de falha
   // que já nos mordeu no pós-venda.
-  const activeTab = abaValeNoHub(aba ?? "", hub) ? (aba as string) : ABA_PADRAO;
+  const abaPedida = ABA_ANTIGA[aba ?? ""] ?? aba ?? "";
+  const activeTab = abaValeNoHub(abaPedida, hub) ? abaPedida : ABA_PADRAO;
   const irPara = (h: HubId, a: string) => navigate(`/suprimentos/${slugOf(h)}/${a}`);
   const setActiveTab = (v: string) => irPara(hub, v);
 
@@ -147,9 +153,15 @@ export default function Suprimentos() {
   const [searchParams, setSearchParams] = useSearchParams();
   const leiaLocal = (k: string) => { try { return localStorage.getItem(k) || ""; } catch { return ""; } };
   // "YYYY-MM" é valor válido (mês específico do seletor), por isso o regex.
-  const periodoValido = (v: string) => ["7d", "30d", "mes", "custom"].includes(v) || /^\d{4}-\d{2}$/.test(v);
-  const pUrl = searchParams.get("periodo") ?? "";
-  const periodo = periodoValido(pUrl) ? pUrl : (periodoValido(leiaLocal("ops_sup_periodo")) ? leiaLocal("ops_sup_periodo") : "7d");
+  const periodoValido = (v: string) => ["7d", "30d", "mes", "intervalo"].includes(v) || /^\d{4}-\d{2}$/.test(v);
+  // ⚠️ "custom" é o nome ANTIGO do intervalo livre (até 29/10/2026, quando o
+  // valor passou a ser português). Link velho e localStorage antigo ainda o
+  // trazem: lido como "intervalo", e o canonizador regrava a URL.
+  const semNomeAntigo = (v: string) => (v === "custom" ? "intervalo" : v);
+  const pUrlCru = searchParams.get("periodo") ?? "";
+  const pUrl = semNomeAntigo(pUrlCru);
+  const pLocal = semNomeAntigo(leiaLocal("ops_sup_periodo"));
+  const periodo = periodoValido(pUrl) ? pUrl : (periodoValido(pLocal) ? pLocal : "7d");
   // ⚠️ Data de período é conferida ANTES de virar `Date`. O campo de data do
   // Chrome deixa digitar ano de 5 dígitos ("20261-10-05"); isso ia para a URL E
   // para o localStorage, `new Date()` devolvia Invalid Date e o `toISOString()`
@@ -186,18 +198,18 @@ export default function Suprimentos() {
     sp.set("periodo", p);
     // `de`/`ate` só existem no modo custom — deixá-los na URL fora dele seria
     // ruído que ninguém lê e que confunde quem tenta editar o endereço à mão.
-    if (p === "custom") { de ? sp.set("de", de) : sp.delete("de"); ate ? sp.set("ate", ate) : sp.delete("ate"); }
+    if (p === "intervalo") { de ? sp.set("de", de) : sp.delete("de"); ate ? sp.set("ate", ate) : sp.delete("ate"); }
     else { sp.delete("de"); sp.delete("ate"); }
     setSearchParams(sp);
     try {
       localStorage.setItem("ops_sup_periodo", p);
-      localStorage.setItem("ops_sup_from", p === "custom" ? de : "");
-      localStorage.setItem("ops_sup_to", p === "custom" ? ate : "");
+      localStorage.setItem("ops_sup_from", p === "intervalo" ? de : "");
+      localStorage.setItem("ops_sup_to", p === "intervalo" ? ate : "");
     } catch { /* ignora */ }
   };
   const setPeriodo = (v: string) => aplicaPeriodo({ periodo: v });
-  const setCustomFrom = (v: string) => aplicaPeriodo({ periodo: "custom", de: v });
-  const setCustomTo = (v: string) => aplicaPeriodo({ periodo: "custom", ate: v });
+  const setCustomFrom = (v: string) => aplicaPeriodo({ periodo: "intervalo", de: v });
+  const setCustomTo = (v: string) => aplicaPeriodo({ periodo: "intervalo", ate: v });
 
   // Canoniza: /suprimentos puro, hub inexistente ou combinação impossível
   // viram o endereço válido. `replace` para não empilhar histórico — senão o
@@ -209,16 +221,16 @@ export default function Suprimentos() {
     }
     // Período ausente ou inválido na URL: grava o efetivo, para que o endereço
     // copiado da barra já leve o filtro junto.
-    if (pUrl !== periodo) {
+    if (pUrlCru !== periodo) {
       const sp = new URLSearchParams(searchParams);
       sp.set("periodo", periodo);
-      if (periodo === "custom") {
+      if (periodo === "intervalo") {
         if (customFrom) sp.set("de", customFrom);
         if (customTo) sp.set("ate", customTo);
       }
       setSearchParams(sp, { replace: true });
     }
-  }, [hubSlug, aba, hub, activeTab, navigate, pUrl, periodo, customFrom, customTo, searchParams, setSearchParams]);
+  }, [hubSlug, aba, hub, activeTab, navigate, pUrlCru, periodo, customFrom, customTo, searchParams, setSearchParams]);
   const [envioOpen, setEnvioOpen] = useState(false);
   const [remessaConfirm, setRemessaConfirm] = useState<{ action: "confirmar" | "estornar"; id: string; produto: string } | null>(null);
 
@@ -233,7 +245,7 @@ export default function Suprimentos() {
     });
   }, []);
   const periodLabel = periodo === "7d" ? "7 dias" : periodo === "30d" ? "30 dias" : periodo === "mes" ? "este mês"
-    : periodo === "custom" ? "período" : (monthOptions.find((m) => m.v === periodo)?.label ?? "período");
+    : periodo === "intervalo" ? "período" : (monthOptions.find((m) => m.v === periodo)?.label ?? "período");
   const isRN = hub === "rn", isSP = hub === "sp", isVendas = hub === "spv", isBling = hub === "bling", isEsc = hub === "esc", isMlFull = hub === "mlfull";
   const stockHub = HUBS.find((h) => h.id === hub) ?? HUBS[0];
 
@@ -270,7 +282,7 @@ export default function Suprimentos() {
     if (periodo === "7d") { const f = new Date(); f.setDate(f.getDate() - 7); return { from: f, to: now }; }
     if (periodo === "30d") { const f = new Date(); f.setDate(f.getDate() - 30); return { from: f, to: now }; }
     if (periodo === "mes") { return { from: new Date(now.getFullYear(), now.getMonth(), 1), to: now }; }
-    if (periodo === "custom") {
+    if (periodo === "intervalo") {
       const f = customFrom ? new Date(customFrom + "T00:00:00") : new Date(0);
       const t = customTo ? new Date(customTo + "T23:59:59") : now;
       // Se o usuário inverter (de > até), troca em vez de mostrar vazio.
@@ -435,7 +447,7 @@ export default function Suprimentos() {
                   que o controle já era este. Controle que governa duas coisas
                   e anuncia uma só é controle que ninguém usa para a segunda. */}
               <span className="text-xs text-muted-foreground">Período (KPIs e movimentações):</span>
-              {periodo === "custom" && (
+              {periodo === "intervalo" && (
                 <div className="flex items-center gap-1.5">
                   <Input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className="h-7 w-[140px] text-xs" />
                   <span className="text-xs text-muted-foreground">até</span>
@@ -448,7 +460,7 @@ export default function Suprimentos() {
                   <SelectGroup>
                     <SelectLabel>Rápido</SelectLabel>
                     {PERIODOS.map((p) => <SelectItem key={p.v} value={p.v}>{p.label}</SelectItem>)}
-                    <SelectItem value="custom">Personalizado…</SelectItem>
+                    <SelectItem value="intervalo">Personalizado…</SelectItem>
                   </SelectGroup>
                   <SelectGroup>
                     <SelectLabel>Por mês</SelectLabel>
@@ -670,7 +682,7 @@ export default function Suprimentos() {
           </TabsContent>
 
           {/* Remessas — CD SP Vendas */}
-          <TabsContent value="vendas-transito" className="mt-4 space-y-4">
+          <TabsContent value="remessas" className="mt-4 space-y-4">
             {remessasVendas.length === 0 ? (
               <CarboCard><CarboCardContent className="py-12 text-center"><Users className="h-12 w-12 mx-auto mb-3 text-muted-foreground/30" /><p className="text-muted-foreground font-medium">Nenhuma remessa registrada</p></CarboCardContent></CarboCard>
             ) : (
@@ -689,7 +701,7 @@ export default function Suprimentos() {
               "confirmar chegada" na tela de quem enviou é como o saldo entra
               numa prateleira que ninguém conferiu. O estorno continua sendo de
               quem enviou, porque é ele que descobre que a carga não saiu. */}
-          <TabsContent value="envios-sp" className="mt-4 space-y-4">
+          <TabsContent value="envios" className="mt-4 space-y-4">
             {enviosDaqui.length === 0 ? <CarboEmptyState title="Nenhum envio registrado" description='Use "Registrar Envio" no topo da tela.' /> : (
             <>
             <div className="flex items-center gap-5 px-1 flex-wrap text-sm">

@@ -147,6 +147,8 @@ export default function Home() {
   const reabertas = useMemo(() => all.filter((d) => (d.reopen_count ?? 0) > 0).length, [all]);
 
   const irParaDemandas = () => navigate("/demandas");
+  // A linha de uma demanda abre ELA no quadro (`?demanda=<id>`), não o quadro inteiro.
+  const abrirDemanda = (id: string) => navigate(`/demandas?demanda=${encodeURIComponent(id)}`);
   const primeiroNome = (profile?.full_name ?? "").split(" ")[0];
 
   if (isLoading) {
@@ -179,7 +181,7 @@ export default function Home() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <CarboKPI title="Na fila (não resolvidas)" value={kpis.fila} icon={Clock} iconColor="warning" onClick={irParaDemandas} />
           <CarboKPI title="Em andamento" value={kpis.andamento} icon={Loader2} iconColor="blue" onClick={irParaDemandas} />
-          <CarboKPI title="Sem responsável" value={kpis.semDono} icon={UserX} iconColor={kpis.semDono > 0 ? "destructive" : "muted"} onClick={irParaDemandas} />
+          <CarboKPI title="Sem responsável" value={kpis.semDono} icon={UserX} iconColor={kpis.semDono > 0 ? "destructive" : "muted"} onClick={() => navigate("/demandas?pessoa=resp:__sem__")} />
           <CarboKPI title="Críticas abertas" value={kpis.criticas} icon={AlertTriangle} iconColor={kpis.criticas > 0 ? "destructive" : "muted"} onClick={irParaDemandas} />
         </div>
 
@@ -215,21 +217,21 @@ export default function Home() {
           <Bloco title="Minhas demandas" icon={Hand} hint="Atribuídas a você e ainda não entregues">
             {minhas.length === 0
               ? <CarboEmptyState icon={CheckCircle2} title="Nada na sua fila" description="Você não tem demandas em aberto." />
-              : <div className="space-y-0.5">{minhas.slice(0, 6).map((d) => <DemandaLine key={d.id} d={d} onClick={irParaDemandas} />)}</div>}
+              : <div className="space-y-0.5">{minhas.slice(0, 6).map((d) => <DemandaLine key={d.id} d={d} onClick={() => abrirDemanda(d.id)} />)}</div>}
           </Bloco>
 
           <Bloco title="Sem responsável" icon={UserX} hint="Precisam de alguém pra assumir"
             action={semDono.length > 0 ? <span className="text-xs font-semibold text-destructive shrink-0">{semDono.length}</span> : undefined}>
             {semDono.length === 0
               ? <CarboEmptyState icon={CheckCircle2} title="Tudo com dono" description="Nenhuma demanda órfã." />
-              : <div className="space-y-0.5">{semDono.slice(0, 6).map((d) => <DemandaLine key={d.id} d={d} onClick={irParaDemandas} />)}</div>}
+              : <div className="space-y-0.5">{semDono.slice(0, 6).map((d) => <DemandaLine key={d.id} d={d} onClick={() => abrirDemanda(d.id)} />)}</div>}
           </Bloco>
 
           <Bloco title="Paradas há mais de 7 dias" icon={AlertTriangle} hint="Sem movimentação — risco de esquecer"
             action={paradas.length > 0 ? <span className="text-xs font-semibold text-amber-500 shrink-0">{paradas.length}</span> : undefined}>
             {paradas.length === 0
               ? <CarboEmptyState icon={CheckCircle2} title="Nada parado" description="Tudo teve movimentação recente." />
-              : <div className="space-y-0.5">{paradas.slice(0, 6).map((d) => <DemandaLine key={d.id} d={d} onClick={irParaDemandas} />)}</div>}
+              : <div className="space-y-0.5">{paradas.slice(0, 6).map((d) => <DemandaLine key={d.id} d={d} onClick={() => abrirDemanda(d.id)} />)}</div>}
           </Bloco>
         </div>
 
@@ -299,7 +301,7 @@ export default function Home() {
             : (
               <div className="space-y-0.5">
                 {recentes.map((d) => (
-                  <button key={d.id} onClick={irParaDemandas}
+                  <button key={d.id} onClick={() => abrirDemanda(d.id)}
                     className="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-muted/60 transition-colors">
                     <span className={`h-2 w-2 rounded-full shrink-0 ${prioOf(d.priority).dot}`} />
                     <span className="flex-1 min-w-0">

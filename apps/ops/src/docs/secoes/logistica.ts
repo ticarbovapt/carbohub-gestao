@@ -9,7 +9,7 @@ export const SECOES_LOGISTICA: Secao[] = [
   {
     id: "rastreio",
     titulo: "Rastreio de venda",
-    rota: "/logistica/pos-venda",
+    rota: "/rastreio",
     resumo:
       "O caminho de cada venda depois de fechada, da Nova Venda até a entrega, num quadro por etapa. Quem move o pedido de uma etapa para a outra é Operações, aqui no Carbo Ops — o vendedor só acompanha o mesmo quadro no Carbo Sales. Cada mudança aparece na hora na tela de todos.",
     regras: {
@@ -202,7 +202,7 @@ export const SECOES_LOGISTICA: Secao[] = [
   {
     id: "recorrencias",
     titulo: "Vendas de Recorrência",
-    rota: "/logistica/recorrencias",
+    rota: "/recorrencias",
     resumo:
       "As entregas de cada mês dos contratos de recorrência (mensal, trimestral, semestral). Cada parcela é um pedido próprio, que entra no Rastreio de venda quando o mês dela chega — aqui você vê o mês inteiro de uma vez, com os prazos de produção e de envio.",
     regras: {
@@ -326,7 +326,7 @@ export const SECOES_LOGISTICA: Secao[] = [
   {
     id: "viagens",
     titulo: "Viagens & PC",
-    rota: "/logistica/viagens",
+    rota: "/viagens",
     resumo:
       "Pedido, aprovação e prestação de contas (PC) das viagens a trabalho: quem vai viajar solicita, a viagem é aprovada ou reprovada, e depois da viagem se informa o quanto foi gasto.",
     regras: {
@@ -383,7 +383,7 @@ export const SECOES_LOGISTICA: Secao[] = [
   {
     id: "alertas",
     titulo: "Alertas Operacionais",
-    rota: "/campo/alertas",
+    rota: "/alertas",
     resumo:
       "Tudo o que precisa de ação agora, de todas as áreas do Ops, numa lista só: estoque baixo, pedidos parados, produção atrasada e ordens de serviço vencidas. Os alertas nascem dos dados e somem sozinhos quando a pendência é resolvida — não há o que marcar como lido.",
     regras: {

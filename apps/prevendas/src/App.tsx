@@ -35,10 +35,13 @@ export default function App() {
         <Route path="/vender" element={<Vender />} />
         {/* Sem Carbo Chat neste app: aviso de chat do sininho cai aqui e volta à home. */}
         <Route path="/chat" element={<Navigate to="/" replace />} />
-        {/* O MESMO caminho do Sales (`/crm/pipelines`), de propósito: o link de
-            card (`?lead=<id>`) é montado igual nos dois apps, e caminho
-            diferente cairia no catch-all — a home no lugar do card, sem erro. */}
-        <Route path="/crm/pipelines" element={<Pipelines />} />
+        {/* O MESMO caminho do Sales (`/funis`), de propósito: o link de card
+            (`?funil=…&lead=<id>`) é montado igual nos dois apps, e caminho
+            diferente cairia no catch-all — a home no lugar do card, sem erro.
+            O endereço antigo (`/crm/pipelines`, até 29/10/2026) continua
+            abrindo, com a query: link de card colado no chat leva ao card. */}
+        <Route path="/funis" element={<Pipelines />} />
+        <Route path="/crm/pipelines" element={<IrPara para="/funis" />} />
         <Route path="/vendas" element={<Vendas />} />
         <Route path="/resultados" element={<Resultados />} />
         <Route path="/atendimento" element={<Atendimento />} />

@@ -1,7 +1,7 @@
 import type { Secao } from "../tipos";
 
-// Rastreio de venda (/pos-venda), Meu Estoque (/meu-estoque) e Requisição de
-// Compra (/compras) do Carbo Sales. As três são de ACOMPANHAR: quem move a
+// Rastreio de venda (/rastreio), Meu Estoque (/meu-estoque) e Requisição de
+// Compra (/requisicoes) do Carbo Sales. As três são de ACOMPANHAR: quem move a
 // etapa do pedido e quem corrige o saldo da caixa é o time de Operações (Ops);
 // quem aprova a compra é o Financeiro (Finanças).
 
@@ -10,7 +10,7 @@ export const SECOES_RASTREIO: Secao[] = [
   {
     id: "rastreio",
     titulo: "Rastreio de venda",
-    rota: "/pos-venda",
+    rota: "/rastreio",
     resumo:
       "O caminho de cada pedido depois da venda, da separação até a entrega, num quadro por etapa. Aqui você só acompanha: quem muda a etapa é o time de Operações, no Carbo Ops. Use a tela para responder ao cliente “onde está o meu pedido?” sem precisar perguntar a ninguém.",
     regras: {
@@ -163,7 +163,7 @@ export const SECOES_RASTREIO: Secao[] = [
   {
     id: "compras",
     titulo: "Requisição de Compra",
-    rota: "/compras",
+    rota: "/requisicoes",
     resumo:
       "Para pedir material de trabalho para você mesmo — fone, mochila, material de escritório, um programa. A solicitação vai para o Financeiro, no Carbo Finanças, que aprova e faz a compra. Insumo do setor (o que é da operação, não seu) é pedido no Carbo Ops.",
     regras: {

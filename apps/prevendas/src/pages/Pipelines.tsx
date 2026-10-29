@@ -176,8 +176,12 @@ export default function Pipelines() {
   const funil = (funilParam === "todos" || (funilParam && FUNNEL_IDS.includes(funilParam))
     ? funilParam
     : FUNIL_PADRAO) as FunnelType | "todos";
+  // ⚠️ Parte de `window.location.search`, não do `prev`: no RR 6.30 o `prev`
+  // é o do último render, e duas gravações no mesmo clique se apagariam (ver
+  // `useParamUrl`). Push: o Voltar desfaz a troca de funil.
   const setFunil = (v: string) => {
-    setSearchParams((prev) => { prev.set("funil", v); return prev; }, { replace: true });
+    const n = new URLSearchParams(window.location.search); n.set("funil", v);
+    setSearchParams(n);
   };
 
   // Busca, etapa, vendedor, situação e modo de exibição moram na URL — F5 e
@@ -213,11 +217,13 @@ export default function Pipelines() {
   // que qualquer pessoa espera depois de abrir uma coisa.
   const abrirCard = (lead: CRMLead) => {
     setDrawerLead(lead);
-    setSearchParams((sp) => { const n = new URLSearchParams(sp); n.set("lead", lead.id); return n; });
+    const n = new URLSearchParams(window.location.search); n.set("lead", lead.id);
+    setSearchParams(n);
   };
   const fecharCard = () => {
     setDrawerLead(null);
-    setSearchParams((sp) => { const n = new URLSearchParams(sp); n.delete("lead"); return n; }, { replace: true });
+    const n = new URLSearchParams(window.location.search); n.delete("lead");
+    setSearchParams(n, { replace: true });
   };
   // Link direto (ou Voltar/Avançar do navegador) → abre o card que a URL pede.
   useEffect(() => {
@@ -225,8 +231,11 @@ export default function Pipelines() {
     if (drawerLead?.id === leadParam) return;
     if (leadDoLink.data?.lead) setDrawerLead(leadDoLink.data.lead);
   }, [leadParam, leadDoLink.data]); // eslint-disable-line react-hooks/exhaustive-deps
-  const [viewModeUrl, setViewMode] = useParamUrl("ver", "kanban");
-  const viewMode = (viewModeUrl === "list" ? "list" : "kanban") as "kanban" | "list";
+  // `?ver=lista` (o quadro é o padrão e não vai para a URL). "list" é o valor
+  // ANTIGO, em inglês (até 29/10/2026): link velho continua abrindo a lista.
+  const [viewModeUrl, setViewModeUrl] = useParamUrl("ver", "quadro");
+  const viewMode = (viewModeUrl === "lista" || viewModeUrl === "list" ? "list" : "kanban") as "kanban" | "list";
+  const setViewMode = (v: "kanban" | "list") => setViewModeUrl(v === "list" ? "lista" : "quadro");
   const [vendedorFilter, setVendedorFilter] = useParamUrl("vendedor", "all");
   // Chips de situação. Respondem "o que exige a MINHA atenção agora?", que é
   // uma pergunta diferente de "em que etapa está?" — por isso filtro, e não
@@ -236,24 +245,27 @@ export default function Pipelines() {
   const situacao = situacaoUrl as Situacao;
   // Segmento: multi-seleção. O vendedor que só cuida de PDV volta ao CRM já no
   // mundo dele — é o que faz a fusão das pipelines não parecer perda de foco.
+  // Na URL como `?segmento=a,b` (até 29/10/2026 era `?seg=`, ainda lido). O
+  // localStorage só dá o valor INICIAL quando o link não diz nada.
   const SEG_KEY = "crm:segmentos";
   const [segFilter, setSegFilter] = useState<string[]>(() => {
-    const fromUrl = searchParams.get("seg");
+    const fromUrl = searchParams.get("segmento") ?? searchParams.get("seg");
     if (fromUrl) return fromUrl.split(",").filter(Boolean);
     try { return JSON.parse(localStorage.getItem(SEG_KEY) || "[]") as string[]; } catch { return []; }
   });
   const toggleSeg = (id: string) => setSegFilter((prev) => {
     const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
     try { localStorage.setItem(SEG_KEY, JSON.stringify(next)); } catch { /* ok */ }
-    const sp = new URLSearchParams(searchParams);
-    next.length ? sp.set("seg", next.join(",")) : sp.delete("seg");
+    const sp = new URLSearchParams(window.location.search);
+    sp.delete("seg");
+    next.length ? sp.set("segmento", next.join(",")) : sp.delete("segmento");
     setSearchParams(sp, { replace: true });
     return next;
   });
   const limparSeg = () => {
     setSegFilter([]);
     try { localStorage.setItem(SEG_KEY, "[]"); } catch { /* ok */ }
-    const sp = new URLSearchParams(searchParams); sp.delete("seg");
+    const sp = new URLSearchParams(window.location.search); sp.delete("seg"); sp.delete("segmento");
     setSearchParams(sp, { replace: true });
   };
   const { isGestor, user } = useAuth();

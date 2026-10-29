@@ -7,7 +7,7 @@ const sec = (p, t) => dlg(p).locator("div.rounded-lg.border").filter({ has: p.lo
 
 export const SHOTS = [
   // ── Navegação e Visão geral ──
-  { chave: "inicio", papel: "colaborador", url: "/crm/pipelines", marcas: [
+  { chave: "inicio", papel: "colaborador", url: "/funis", marcas: [
     [1, sel('aside a[title="Carbo Sales"]')],
     [2, sel('aside nav')],
     [3, sel('aside a[href="/documentacao"]')],
@@ -18,10 +18,10 @@ export const SHOTS = [
     [8, sel('button[title="Reportar bug ou sugestão"]')],
     [9, sel('button[title="Modo escuro"]')],
     [10, (p) => p.locator("header button").filter({ hasText: "Rafael Costa" })],
-    [11, sel('aside a[href="/crm/pipelines"]')],
+    [11, sel('aside a[href="/funis"]')],
   ] },
   // ── Pipeline ──
-  { chave: "pipeline", papel: "colaborador", url: "/crm/pipelines", espera: 1300, marcas: [
+  { chave: "pipeline", papel: "colaborador", url: "/funis", espera: 1300, marcas: [
     [1, btn("Novo Lead")],
     [2, (p) => p.locator("main div.grid").filter({ hasText: "Total Leads" }).first()],
     [3, (p) => p.getByRole("button", { name: /Outbound/ }).locator("..")],
@@ -32,12 +32,12 @@ export const SHOTS = [
     [8, (p) => p.locator('button[title="Adicionar lead aqui"]')],
     [9, card("Posto Ponta Negra")],
   ] },
-  { chave: "pipeline-gestor", papel: "gestor", url: "/crm/pipelines", espera: 1300, marcas: [
+  { chave: "pipeline-gestor", papel: "gestor", url: "/funis", espera: 1300, marcas: [
     [1, (p) => p.getByRole("combobox").filter({ hasText: "Todos os vendedores" })],
     [2, (p) => p.getByRole("button", { name: /Outbound/ }).locator("..")],
     [3, card("Posto Serra Verde")],
   ] },
-  { chave: "card", papel: "colaborador", url: "/crm/pipelines", clip: card("Auto Posto Planalto"), pad: 22, marcas: [
+  { chave: "card", papel: "colaborador", url: "/funis", clip: card("Auto Posto Planalto"), pad: 22, marcas: [
     [1, (p) => card("Auto Posto Planalto")(p).locator("span.rounded-full").first()],
     [2, (p) => card("Auto Posto Planalto")(p).getByText("Auto Posto Planalto")],
     [3, (p) => card("Auto Posto Planalto")(p).locator('a[title="Abrir no WhatsApp"]')],
@@ -48,13 +48,13 @@ export const SHOTS = [
     [8, (p) => card("Auto Posto Planalto")(p).getByRole("button", { name: /Avançar/ })],
     [9, (p) => card("Auto Posto Planalto")(p).getByRole("button", { name: "Perdido" })],
   ] },
-  { chave: "descarte", papel: "colaborador", url: "/crm/pipelines",
+  { chave: "descarte", papel: "colaborador", url: "/funis",
     antes: async (p) => { await card("Posto Avenida Norte")(p).getByRole("button", { name: "Perdido" }).click(); },
     marcas: [
       [1, (p) => dlg(p).getByRole("combobox")],
       [2, (p) => dlg(p).getByRole("button", { name: /Confirmar perda/ })],
     ] },
-  { chave: "novo-lead", papel: "colaborador", url: "/crm/pipelines", viewport: { width: 1440, height: 1250 },
+  { chave: "novo-lead", papel: "colaborador", url: "/funis", viewport: { width: 1440, height: 1250 },
     antes: async (p) => { await p.getByRole("button", { name: "Novo Lead" }).click(); },
     clip: (p) => p.locator("div.fixed form, div.fixed > div").filter({ hasText: "Novo lead" }).last(), pad: 6,
     marcas: [
@@ -65,7 +65,7 @@ export const SHOTS = [
       [5, (p) => p.getByRole("button", { name: /Dados de faturamento/ })],
       [6, (p) => p.getByRole("button", { name: "Criar lead" })],
     ] },
-  { chave: "card-aberto", papel: "colaborador", url: "/crm/pipelines?funil=f13&lead=c4", marcas: [
+  { chave: "card-aberto", papel: "colaborador", url: "/funis?funil=f13&lead=c4", marcas: [
     [1, (p) => dlg(p).locator('button[title="A Contatar"]').locator("..")],
     [2, (p) => dlg(p).locator('button[title="Copiar link deste card"]')],
     [3, (p) => dlg(p).locator('button[title="Arquivar lead"]')],
@@ -78,14 +78,14 @@ export const SHOTS = [
     [10, (p) => dlg(p).getByRole("button", { name: /Avançar/ }).last()],
     [11, (p) => dlg(p).getByRole("button", { name: "Perdido" }).last()],
   ] },
-  { chave: "card-aberto-2", papel: "colaborador", url: "/crm/pipelines?funil=f13&lead=c4",
+  { chave: "card-aberto-2", papel: "colaborador", url: "/funis?funil=f13&lead=c4",
     antes: async (p) => { await sec(p, "Responsável").scrollIntoViewIfNeeded(); },
     marcas: [
       [1, (p) => sec(p, "Cliente / Contato")],
       [2, (p) => sec(p, "Dados de faturamento")],
       [3, (p) => sec(p, "Responsável")],
     ] },
-  { chave: "card-aberto-gestor", papel: "gestor", url: "/crm/pipelines?funil=f13&lead=c4",
+  { chave: "card-aberto-gestor", papel: "gestor", url: "/funis?funil=f13&lead=c4",
     antes: async (p) => { await sec(p, "Responsável").scrollIntoViewIfNeeded(); },
     marcas: [
       [1, (p) => dlg(p).getByRole("combobox").filter({ hasText: /Transferir/ })],
@@ -211,7 +211,7 @@ SHOTS.push(
     [4, (p) => p.getByText(/Notas internas/).first()],
   ] },
   // Bugs e sugestões
-  { chave: "bug-dialogo", papel: "colaborador", url: "/crm/pipelines", viewport: { width: 1440, height: 1500 },
+  { chave: "bug-dialogo", papel: "colaborador", url: "/funis", viewport: { width: 1440, height: 1500 },
     antes: async (p) => { await p.locator('button[title="Reportar bug ou sugestão"]').click(); await p.getByRole("button", { name: "Reportar", exact: true }).last().click(); },
     clip: (p) => p.locator('[role="dialog"]').last(), marcas: [
     [1, (p) => dlg(p).getByRole("button", { name: /Sugestão/ }).locator("..")],
@@ -236,7 +236,7 @@ SHOTS.push(
     [3, (p) => dlg(p).getByRole("button", { name: /Marcar como/ })],
   ] },
   // Notificações e Perfil
-  { chave: "notificacoes", papel: "colaborador", url: "/crm/pipelines",
+  { chave: "notificacoes", papel: "colaborador", url: "/funis",
     antes: async (p) => { await p.locator('button[title="Notificações"]').click(); },
     clip: (p) => [p.locator('[role="dialog"], [data-radix-popper-content-wrapper]').last(), p.locator('button[title="Notificações"]')], marcas: [
     [1, (p) => p.getByRole("tab", { name: /Não lidas/ }).locator("..")],

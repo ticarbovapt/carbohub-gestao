@@ -17,7 +17,7 @@ import {
   useEstoqueDoPedido, useOpsBySource, fetchNfFiles, type NfFiles,
   POSVENDA_STAGES, colunaDaEtapa, type FulfillmentStage, type PosVendaOrder,
 } from "@/hooks/usePosVenda";
-import { QuadroRolavel } from "@carbo/shell";
+import { QuadroRolavel, useParamUrl } from "@carbo/shell";
 import { gerarEtiquetaPDF, type EtiquetaData } from "@/lib/etiquetaPdf";
 
 const brl = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
@@ -487,7 +487,12 @@ const CorpoDoCard = memo(function CorpoDoCard({ o, op, onStage, onEtiqueta }: {
 
 export default function PosVenda() {
   // Janela dos FINALIZADOS (entregue/cancelado). Ativos sempre carregam 100%.
-  const [terminalDays, setTerminalDays] = useState<number | "all">(30);
+  // Na URL (`?finalizados=90` ou `=tudo`), para o F5 não voltar aos 30 dias
+  // de quem tinha aberto o histórico inteiro. 30 é o padrão e não aparece.
+  const [finalizadosUrl, setFinalizadosUrl] = useParamUrl("finalizados", "30");
+  const terminalDays: number | "all" = finalizadosUrl === "tudo" ? "all"
+    : (Number(finalizadosUrl) > 0 ? Number(finalizadosUrl) : 30);
+  const setTerminalDays = (v: number | "all") => setFinalizadosUrl(v === "all" ? "tudo" : String(v));
   const { data, isLoading } = usePosVendaOrders(terminalDays);
   usePosVendaRealtime(); // move card → reflete na tela de todos ao vivo
   const orders = data?.orders ?? [];
@@ -496,7 +501,27 @@ export default function PosVenda() {
   const updateShipInfo = useUpdateShipmentInfo();
   const [dragId, setDragId] = useState<string | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
-  const [detail, setDetail] = useState<PosVendaOrder | null>(null);
+  const [detail, setDetailState] = useState<PosVendaOrder | null>(null);
+  // O pedido aberto vira `?pedido=<id>`: o endereço da barra abre o MESMO
+  // detalhe no F5 e no colega que recebe o link, e o Voltar o fecha. O estado
+  // local continua guardando o objeto (a edição de expedição o atualiza na
+  // hora); a URL guarda só QUAL pedido.
+  // Abrir grava com push (o Voltar fecha); fechar pelo X grava com replace,
+  // senão o Voltar seguinte reabriria o pedido que a pessoa acabou de fechar.
+  const [pedidoUrl, setPedidoUrl] = useParamUrl("pedido");
+  const [, tirarPedidoUrl] = useParamUrl("pedido", "", { replace: true });
+  const setDetail = (v: PosVendaOrder | null | ((d: PosVendaOrder | null) => PosVendaOrder | null)) => {
+    const novo = typeof v === "function" ? v(detail) : v;
+    setDetailState(novo);
+    if ((novo?.id ?? "") === pedidoUrl) return;
+    if (novo) setPedidoUrl(novo.id); else tirarPedidoUrl(null);
+  };
+  useEffect(() => {
+    if (!pedidoUrl) { if (detail) setDetailState(null); return; }
+    if (detail?.id === pedidoUrl) return;
+    const achado = orders.find((o) => o.id === pedidoUrl);
+    if (achado) setDetailState(achado);
+  }, [pedidoUrl, orders]); // eslint-disable-line react-hooks/exhaustive-deps
   // Edição RÁPIDA de expedição no detalhe — só operacional (volumes/peso/
   // transportadora). Fiscal (CNPJ/IE/pagamento/faturamento) NÃO é editável aqui.
   const [editShip, setEditShip] = useState(false);

@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 //
 // "Nova Descarbonização" saiu daqui: criar OS é fluxo da área, não ação
 // universal de topo. O dialog continua onde ele faz sentido — em
-// /descarbonizacao/os.
+// /os (Ordens de Serviço).
 export function QuickAddMenu() {
   const [open, setOpen] = useState(false);
 

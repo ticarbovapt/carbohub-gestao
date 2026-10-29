@@ -99,7 +99,7 @@ export const SHOTS = [
   ] },
 
   // ── Departamentos e funções ──
-  { chave: "estrutura", papel: "gestor", url: "/estrutura", viewport: { width: 1440, height: 1050 },
+  { chave: "estrutura", papel: "gestor", url: "/departamentos", viewport: { width: 1440, height: 1050 },
     clip: (p) => [p.locator("main section").first(), p.locator("main section").nth(1)],
     antes: async (p) => { await p.locator("main").getByText("Comercial", { exact: true }).click(); await p.waitForTimeout(500); },
     marcas: [

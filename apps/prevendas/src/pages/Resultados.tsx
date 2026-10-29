@@ -1,7 +1,8 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { addMonths, format, startOfMonth, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useParamUrl } from "@carbo/shell";
 import {
   BarChart3, Send, CheckCircle2, Percent, TrendingUp, Timer, ChevronLeft, ChevronRight,
 } from "lucide-react";
@@ -97,8 +98,16 @@ const th = "px-3 py-2.5 sm:px-5 text-[11px] font-medium uppercase tracking-wide 
 export default function Resultados() {
   const navigate = useNavigate();
   const { user, isGestor } = useAuth();
-  const [mes, setMes] = useState(() => startOfMonth(new Date()));
-  const [sdrSel, setSdrSel] = useState("todos");
+  // Mês e SDR moram na URL (`?mes=2026-09&sdr=<id>`): o F5 não volta ao mês
+  // corrente no meio da conversa sobre setembro, e o link mostra o mesmo
+  // recorte a quem o recebe. Mês corrente e "todos" não vão para o endereço.
+  const [mesUrl, setMesUrl] = useParamUrl("mes", format(startOfMonth(new Date()), "yyyy-MM"));
+  const mes = useMemo(() => {
+    const [a, m] = mesUrl.split("-").map(Number);
+    return a && m ? new Date(a, m - 1, 1) : startOfMonth(new Date());
+  }, [mesUrl]);
+  const setMes = (f: (m: Date) => Date) => setMesUrl(format(f(mes), "yyyy-MM"));
+  const [sdrSel, setSdrSel] = useParamUrl("sdr", "todos");
 
   const repassesQ = useRepasses(mes, user?.id);
   const leadsQ = useLeadsSdr(mes, user?.id);
@@ -314,13 +323,13 @@ export default function Resultados() {
                     const cor = etapa?.color ?? "#94A3B8";
                     return (
                       <tr key={x.lead_id}
-                        onClick={() => navigate(`/crm/pipelines?funil=f15&lead=${x.lead_id}`)}
+                        onClick={() => navigate(`/funis?funil=f15&lead=${x.lead_id}`)}
                         className="cursor-pointer border-b last:border-0 hover:bg-muted/40">
                         <td className="max-w-[180px] truncate sm:max-w-[260px] px-3 py-3 sm:px-5 font-medium">
                           {/* Link de verdade no nome: Ctrl/meio-clique abre o card em
                               outra aba. O stopPropagation evita que a linha navegue
                               junto na aba atual. */}
-                          <Link to={`/crm/pipelines?funil=f15&lead=${x.lead_id}`}
+                          <Link to={`/funis?funil=f15&lead=${x.lead_id}`}
                             onClick={(e) => e.stopPropagation()} className="hover:underline">
                             {x.cliente}
                           </Link>

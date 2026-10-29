@@ -1,5 +1,5 @@
 // Fixtures da área "usuarios" (ver areas.ts): Usuários (/usuarios),
-// Departamentos e funções (/estrutura) e Notificações (/notificacoes, com a
+// Departamentos e funções (/departamentos) e Notificações (/notificacoes, com a
 // aba Vendas online). Tudo FICTÍCIO — nenhuma pessoa é real.
 //
 // ⚠️ `profiles`, `carbo_departments` e `carbo_functions` são lidas por TODAS as
@@ -11,7 +11,7 @@ import { PAPEL, U, EU } from "./pessoas";
 void PAPEL;
 
 const rota = () => { try { return location.pathname; } catch { return ""; } };
-const NOSSAS = ["/usuarios", "/estrutura", "/ecommerce/avisos-de-venda", "/notificacoes"];
+const NOSSAS = ["/usuarios", "/departamentos", "/ecommerce/avisos-de-venda", "/notificacoes"];
 const naNossa = () => NOSSAS.some((r) => rota().startsWith(r));
 const porRota = (meu: () => unknown, base: () => unknown) => () => (naNossa() ? meu() : base());
 

@@ -18,7 +18,7 @@ export default function DashboardProducao() {
   return (
     <div className="p-4 md:p-6">
       <div className="space-y-8 max-w-[1500px] mx-auto">
-        <CarboPageHeader title="Dashboard — Produção" description="Ordens de Produção e checklists operacionais" icon={Factory} />
+        <CarboPageHeader title="Painel de Produção" description="Ordens de Produção e checklists operacionais" icon={Factory} />
 
         {isLoading || !data ? (
           <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</div>

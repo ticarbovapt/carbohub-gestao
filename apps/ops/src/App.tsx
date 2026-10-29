@@ -55,9 +55,18 @@ export default function App() {
         <Route path="/vender" element={<Vender />} />
         <Route path="/chat" element={<Chat />} />
 
+        {/* ⚠️ Slugs em português e IGUAIS ao nome do menu (dono do processo,
+            29/10/2026: "'Rastreio de venda' está como /logistica/pos-venda, não
+            faz sentido"). O prefixo da área só fica onde ele separa duas telas
+            (`/producao/ordens` × `/os`); o resto é o nome da tela, curto.
+            Todo endereço antigo vira `IrPara`, que leva a query e o hash —
+            favorito, link colado no chat e o `?pedido=` do Rastreio continuam
+            abrindo. `/login` não muda (é do Hub). */}
+
         {/* Produção */}
         <Route path="/producao/ordens" element={<OrdensProducao />} />
-        <Route path="/producao/dashboard" element={<DashboardProducao />} />
+        <Route path="/producao/painel" element={<DashboardProducao />} />
+        <Route path="/producao/dashboard" element={<IrPara para="/producao/painel" />} />
         {/* MRP: Produtos, SKUs, Lotes e Fornecedores viraram abas da mesma
             tela. A aba é segmento da URL, como em /logistica/:aba. */}
         <Route path="/producao/mrp/:aba" element={<Mrp />} />
@@ -65,16 +74,16 @@ export default function App() {
         {/* ⚠️ Os caminhos antigos NÃO somem: viram redirect. Eles estão em
             favorito, em link colado no chat e em conversa antiga — e uma
             reorganização de menu que quebra endereço que já circulou custa
-            mais do que a reorganização vale. `replace` para o voltar do
-            navegador não cair de novo no redirect. */}
-        <Route path="/producao/produtos"     element={<Navigate to="/producao/mrp/produtos"     replace />} />
-        <Route path="/producao/skus"         element={<Navigate to="/producao/mrp/skus"         replace />} />
-        <Route path="/producao/lotes"        element={<Navigate to="/producao/mrp/lotes"        replace />} />
-        <Route path="/producao/fornecedores" element={<Navigate to="/producao/mrp/fornecedores" replace />} />
+            mais do que a reorganização vale. */}
+        <Route path="/producao/produtos"     element={<IrPara para="/producao/mrp/produtos" />} />
+        <Route path="/producao/skus"         element={<IrPara para="/producao/mrp/skus" />} />
+        <Route path="/producao/lotes"        element={<IrPara para="/producao/mrp/lotes" />} />
+        <Route path="/producao/fornecedores" element={<IrPara para="/producao/mrp/fornecedores" />} />
 
 
         {/* Compras & Suprimentos */}
-        <Route path="/compras" element={<RequisicaoCompra />} />
+        <Route path="/requisicoes" element={<RequisicaoCompra />} />
+        <Route path="/compras" element={<IrPara para="/requisicoes" />} />
         {/* Duas rotas para o mesmo componente: a estática mantém vivo todo
             link antigo para /suprimentos (sidebar, Home) e o efeito
             canonizador da tela redireciona para o endereço completo. Mesmo
@@ -89,25 +98,33 @@ export default function App() {
 
 
         {/* Logística */}
-        <Route path="/logistica/pos-venda" element={<PosVenda />} />
-        <Route path="/logistica/recorrencias" element={<Recorrencias />} />
+        <Route path="/rastreio" element={<PosVenda />} />
+        <Route path="/recorrencias" element={<Recorrencias />} />
+        <Route path="/viagens" element={<ViagensLog />} />
+        {/* Endereços antigos. ⚠️ Estáticos, então ganham do `/logistica/:aba`
+            no ranking do react-router — sem eles "pos-venda" viraria uma aba
+            inválida da Logística e cairia em Frete, calado. */}
+        <Route path="/logistica/pos-venda" element={<IrPara para="/rastreio" />} />
+        <Route path="/logistica/recorrencias" element={<IrPara para="/recorrencias" />} />
+        <Route path="/logistica/viagens" element={<IrPara para="/viagens" />} />
         <Route path="/logistica/esteira" element={<ParaAdmin destino="/ecommerce/esteira" />} />
         <Route path="/ecommerce/esteira" element={<ParaAdmin destino="/ecommerce/esteira" />} />
         <Route path="/ecommerce/mensagens" element={<ParaAdmin destino="/ecommerce/mensagens" />} />
         <Route path="/logistica" element={<Logistica />} />
-        {/* A aba vira segmento da URL. As rotas estáticas acima (/pos-venda,
-            /viagens) ganham desta no ranking do react-router, então não há
-            risco de /logistica/viagens cair aqui. */}
+        {/* A aba (frete · gestao · estrategico) vira segmento da URL. */}
         <Route path="/logistica/:aba" element={<Logistica />} />
-        <Route path="/logistica/viagens" element={<ViagensLog />} />
 
-        {/* Operação de Campo */}
-        <Route path="/campo/os" element={<OrdensServico />} />
+        {/* Operação de Campo. ⚠️ `/os` é o MESMO caminho do Sales: a tela de OS
+            é byte a byte a mesma nos dois apps. */}
+        <Route path="/os" element={<OrdensServico />} />
+        <Route path="/alertas" element={<Alertas />} />
+        <Route path="/campo/os" element={<IrPara para="/os" />} />
+        <Route path="/campo/alertas" element={<IrPara para="/alertas" />} />
         {/* Agendamentos virou a visão Agenda da própria tela de OS, como no
-            Sales; Máquinas saiu (decisão do dono do processo, 20/10/2026). */}
-        <Route path="/campo/agendamentos" element={<Navigate to="/campo/os?ver=agenda" replace />} />
-        <Route path="/campo/maquinas" element={<Navigate to="/campo/os" replace />} />
-        <Route path="/campo/alertas" element={<Alertas />} />
+            Sales; Máquinas saiu (decisão do dono do processo, 20/10/2026).
+            `Navigate`, e não `IrPara`, onde o destino já traz a própria query. */}
+        <Route path="/campo/agendamentos" element={<Navigate to="/os?ver=agenda" replace />} />
+        <Route path="/campo/maquinas" element={<IrPara para="/os" />} />
 
         {/* Demais áreas: placeholder até o port (telas com ready=false) */}
         {OPS_ALL_ITEMS.filter((i) => !i.ready).map((i) => (

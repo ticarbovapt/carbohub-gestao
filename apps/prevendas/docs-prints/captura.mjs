@@ -10,7 +10,7 @@ const { chromium } = await import(process.env.PW ?? "playwright");
 const OUT = process.env.OUT ?? path.join(AQUI, "../public/docs"), MARC = process.env.MARC ?? path.join(AQUI, "marcadores.json");
 const CHROME = process.env.CHROME ?? "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
 const SO = (process.env.SO ?? "").split(",").filter(Boolean);
-const BASE = "http://localhost:8099";
+const BASE = process.env.BASE ?? "http://localhost:8099";
 const marc = fs.existsSync(MARC) ? JSON.parse(fs.readFileSync(MARC, "utf8")) : {};
 const { SHOTS } = await import("./shots.mjs");
 

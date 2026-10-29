@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useParamUrl } from "@carbo/shell";
 import { Users, Pencil, CheckCircle2, AlertCircle, UserPlus, Link2, Cake } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
@@ -169,18 +169,21 @@ function EditDialog({
 
 export default function Funcionarios() {
   const { gestor } = useAuth();
-  // Aba ativa persistida na URL (?tab=…), pra não voltar pra "equipe" a cada F5.
-  const [searchParams, setSearchParams] = useSearchParams();
+  // Aba, setor e busca na URL (`?aba=aniversarios&setor=&busca=`), pra não
+  // voltar pra "equipe" a cada F5. A aba era `?tab=`: o nome antigo continua
+  // sendo LIDO (link salvo) e sai da URL na primeira troca. O setter parte da
+  // URL atual (`useParamUrl`), nunca do `prev` do roteador — ver CLAUDE.md.
   const VALID_TABS = ["equipe", "aniversarios"];
-  const rawTab = searchParams.get("tab") || "equipe";
+  const [abaUrl, setAbaUrl] = useParamUrl("aba", "");
+  const [tabAntiga, setTabAntiga] = useParamUrl("tab", "");
+  const rawTab = abaUrl || tabAntiga || "equipe";
   const activeTab = VALID_TABS.includes(rawTab) ? rawTab : "equipe";
-  const setActiveTab = (v: string) =>
-    setSearchParams((prev) => { prev.set("tab", v); return prev; }, { replace: true });
+  const setActiveTab = (v: string) => { setAbaUrl(v === "equipe" ? null : v); setTabAntiga(null); };
   const { rows, unlinkedProfiles, isLoading } = useEmployeesFinance();
   const { data: labels } = useOrgLabels();
   const deptLabel = labels?.deptLabel ?? {};
-  const [search, setSearch] = useState("");
-  const [setor, setSetor] = useState("__all__");
+  const [search, setSearch] = useParamUrl("busca", "", { replace: true });
+  const [setor, setSetor] = useParamUrl("setor", "__all__");
   const [editing, setEditing] = useState<{ initial: EmployeeFinance; title: string; allowLink: boolean } | null>(null);
 
   // Setores presentes na lista (pra montar o filtro), com rótulo legível.

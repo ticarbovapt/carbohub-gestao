@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useParamUrl } from "@carbo/shell";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { Button } from "@/components/ui/button";
@@ -65,7 +66,10 @@ export default function EstoqueVendedores() {
     { caixa: CaixaVendedor; item: CaixaVendedor["itens"][number] } | null
   >(null);
   const [abertos, setAbertos] = useState<Record<string, boolean>>({});
-  const [soComSaldo, setSoComSaldo] = useState(true);
+  // "Só com saldo" na URL (`?saldo=todos` quando desligado), como no Meu
+  // Estoque do Sales: o F5 não religa o filtro no meio da conferência.
+  const [saldoUrl, setSaldoUrl] = useParamUrl("saldo", "com");
+  const soComSaldo = saldoUrl !== "todos";
 
   const lista = caixas ?? [];
   const totalGeral = lista.reduce((s, c) => s + c.total_unidades, 0);
@@ -81,7 +85,7 @@ export default function EstoqueVendedores() {
           />
           <div className="flex items-center gap-2">
             <Button size="sm" variant={soComSaldo ? "default" : "outline"}
-              onClick={() => setSoComSaldo((v) => !v)}>
+              onClick={() => setSaldoUrl(soComSaldo ? "todos" : null)}>
               {soComSaldo ? "Só o que tem saldo" : "Mostrando tudo"}
             </Button>
           </div>

@@ -155,19 +155,26 @@ export default function OrdensProducao() {
   const [dragId, setDragId] = useState<string | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   // Abre no Kanban por padrão e LEMBRA a última escolha (persiste no F5).
-  const [viewMode, setViewMode] = useState<"list" | "kanban">(() => {
-    const saved = typeof localStorage !== "undefined" ? localStorage.getItem("ops:op-view") : null;
+  // ⚠️ A URL (`?ver=quadro|lista`) vence a preferência: o link "filtrar por
+  // esta etapa" troca para a lista, e quem o recebe tem de ver a LISTA, não o
+  // que o navegador dele lembrava. Sem `ver`, vale o localStorage (preferência).
+  const [verUrl, setVerUrl] = useParamUrl("ver");
+  const [viewPref] = useState<"list" | "kanban">(() => {
+    let saved: string | null = null;
+    try { saved = localStorage.getItem("ops:op-view"); } catch { /* ignora */ }
     if (saved === "list" || saved === "kanban") return saved;
     // Sem preferência salva: no mobile, Lista (evita rolagem horizontal de 8 colunas).
     const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
     return isMobile ? "list" : "kanban";
   });
-  useEffect(() => {
-    try { localStorage.setItem("ops:op-view", viewMode); } catch { /* ignora */ }
-  }, [viewMode]);
+  const viewMode: "list" | "kanban" = verUrl === "lista" ? "list" : verUrl === "quadro" ? "kanban" : viewPref;
+  const setViewMode = (v: "list" | "kanban") => {
+    setVerUrl(v === "list" ? "lista" : "quadro");
+    try { localStorage.setItem("ops:op-view", v); } catch { /* ignora */ }
+  };
   // ⚠️ Busca e filtros na URL (`?busca=&status=&prioridade=&criticos=1`): F5 e
   // link mantêm a lista, e o Voltar desfaz a troca de filtro. A busca grava com
-  // `replace`. A visão (lista/kanban) continua no localStorage: é preferência.
+  // `replace`. A visão (lista/quadro) vai junto quando escolhida — ver acima.
   const [searchQuery, setSearchQuery] = useParamUrl("busca", "", { replace: true });
   const [statusFilter, setStatusFilter] = useParamUrl("status", "all");
   const [priorityFilter, setPriorityFilter] = useParamUrl("prioridade", "all");

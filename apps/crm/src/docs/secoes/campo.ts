@@ -8,7 +8,7 @@ export const SECOES_CAMPO: Secao[] = [
   {
     id: "os",
     titulo: "Ordens de Serviço",
-    rota: "/descarbonizacao/os",
+    rota: "/os",
     resumo:
       "Aqui você acompanha as ordens de serviço (OS) da descarbonização CarboVAPT. A OS é o pedido de execução que vai para o portal dos licenciados: o Sales cria e acompanha, e quem executa registra cada veículo pelo Carbox. A tela tem três visões da mesma lista — Quadro, Lista e Agenda — e muda sozinha quando uma OS anda lá no portal.",
     regras: {

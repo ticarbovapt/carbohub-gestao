@@ -20,6 +20,7 @@ import {
 import { useVendedoresDir } from "@/hooks/useVendedoresDir";
 import { LeadPainel } from "@/components/comercial/LeadPainel";
 import { funilNome, etapaNome } from "@/lib/funis";
+import { useParamUrl } from "@carbo/shell";
 
 const PERIODOS = [
   { dias: 7, label: "7 dias" },
@@ -36,12 +37,18 @@ const brDate = (s: string) => {
 };
 
 export default function Acompanhamento() {
-  const [dias, setDias] = useState(30);
-  const [vendedor, setVendedor] = useState<string>("");
+  // Período, vendedor e o card aberto na URL (`?dias=7&vendedor=<id>&lead=<id>`):
+  // F5 e link mandado ao gestor abrem a MESMA leitura, com o card aberto.
+  // Período fora da lista (link editado) cai no padrão de 30 dias.
+  const [diasUrl, setDiasUrl] = useParamUrl("dias", "30");
+  const dias = PERIODOS.some((p) => String(p.dias) === diasUrl) ? Number(diasUrl) : 30;
+  const setDias = (d: number) => setDiasUrl(String(d));
+  const [vendedor, setVendedor] = useParamUrl("vendedor", "");
   const [slaAberto, setSlaAberto] = useState(false);
   // Card aberto no painel espelhado. Fica DENTRO do Admin, ao vivo: o gestor lê
   // o negócio inteiro e comenta sem trocar de sistema.
-  const [painelId, setPainelId] = useState<string | null>(null);
+  const [painelUrl, setPainelId] = useParamUrl("lead", "");
+  const painelId = painelUrl || null;
 
   const { desde, ate } = useMemo(() => {
     const hoje = new Date();

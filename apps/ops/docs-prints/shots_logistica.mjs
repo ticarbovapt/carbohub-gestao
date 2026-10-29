@@ -55,7 +55,7 @@ const grupo = (t) => (p) => p.locator("main section").filter({ has: p.locator("h
 
 export const SHOTS = [
   // ══ Rastreio de venda ══════════════════════════════════════════════════════
-  { chave: "rastreio", papel: "colaborador", url: "/logistica/pos-venda", viewport: QUADRO, espera: 1200, marcas: [
+  { chave: "rastreio", papel: "colaborador", url: "/rastreio", viewport: QUADRO, espera: 1200, marcas: [
     [1, (p) => p.locator("main h1").first()],
     [2, (p) => p.getByRole("combobox").filter({ hasText: "Últimos 30 dias" })],
     [3, btn(/finalizados? ocultos?/)],
@@ -65,7 +65,7 @@ export const SHOTS = [
     [7, (p) => pv("Posto Lagoa Azul")(p).getByRole("combobox")],
     [8, (p) => p.getByText(/o card entre as colunas/).first()],
   ] },
-  { chave: "rastreio-card", papel: "colaborador", url: "/logistica/pos-venda", viewport: QUADRO,
+  { chave: "rastreio-card", papel: "colaborador", url: "/rastreio", viewport: QUADRO,
     antes: ver(pv("Posto Beira Rio")), clip: pv("Posto Beira Rio"), pad: 22, marcas: [
       [1, (p) => pv("Posto Beira Rio")(p).locator("span.font-semibold").first()],
       [2, (p) => pv("Posto Beira Rio")(p).locator("span.tabular-nums").first()],
@@ -79,29 +79,29 @@ export const SHOTS = [
       [10, (p) => pv("Posto Beira Rio")(p).getByText("Rafael Costa").locator("../..")],
       [11, (p) => pv("Posto Beira Rio")(p).getByRole("combobox")],
     ] },
-  { chave: "rastreio-sem-nf", papel: "colaborador", url: "/logistica/pos-venda", viewport: QUADRO,
+  { chave: "rastreio-sem-nf", papel: "colaborador", url: "/rastreio", viewport: QUADRO,
     antes: ver(pv("Distribuidora Agreste")), clip: pv("Distribuidora Agreste"), pad: 22, marcas: [
       [1, (p) => pv("Distribuidora Agreste")(p).getByText("Só a NF de bonificação está vinculada").locator("..")],
       [2, (p) => pv("Distribuidora Agreste")(p).getByText(/NF bonif/)],
     ] },
-  { chave: "rastreio-op", papel: "colaborador", url: "/logistica/pos-venda", viewport: QUADRO,
+  { chave: "rastreio-op", papel: "colaborador", url: "/rastreio", viewport: QUADRO,
     antes: ver(col("Criar Ordem de Produção")), clip: col("Criar Ordem de Produção"), pad: 10, marcas: [
       [1, (p) => col("Criar Ordem de Produção")(p).getByText(/pronto/).first()],
       [2, (p) => col("Criar Ordem de Produção")(p).getByText(/produzidas ·/)],
       [3, (p) => col("Criar Ordem de Produção")(p).getByText(/Produzido — mover/)],
     ] },
-  { chave: "rastreio-agendado", papel: "colaborador", url: "/logistica/pos-venda", viewport: QUADRO,
+  { chave: "rastreio-agendado", papel: "colaborador", url: "/rastreio", viewport: QUADRO,
     clip: (p) => p.locator("main div.rounded-xl.bg-card.p-4").filter({ hasText: "V2026080064" }).first(), pad: 22, marcas: [
       [1, (p) => p.locator("main div.rounded-xl.bg-card.p-4").filter({ hasText: "V2026080064" }).first().locator("div").first()],
       [2, (p) => p.locator("main div.rounded-xl.bg-card.p-4").filter({ hasText: "V2026080064" }).first().getByText(/Entra na fila em/)],
     ] },
-  { chave: "rastreio-nf", papel: "colaborador", url: "/logistica/pos-venda", viewport: { width: 1600, height: 800 },
+  { chave: "rastreio-nf", papel: "colaborador", url: "/rastreio", viewport: { width: 1600, height: 800 },
     antes: ver(col("Etiqueta emitida")), clip: (p) => [col("Gerar Nota Fiscal")(p), col("Emitir Etiqueta")(p), col("Etiqueta emitida")(p)], pad: 10, marcas: [
       [1, (p) => col("Gerar Nota Fiscal")(p).getByText(/aguardando NF/)],
       [2, (p) => pv("Posto Ponta Negra")(p).getByText(/NF 000512/)],
       [3, (p) => pv("V2026070045")(p).getByText(/NF 000517/)],
     ] },
-  { chave: "rastreio-estoque", papel: "colaborador", url: "/logistica/pos-venda", viewport: ALTO,
+  { chave: "rastreio-estoque", papel: "colaborador", url: "/rastreio", viewport: ALTO,
     antes: etapa("Posto Lagoa Azul", "Em Separação"), clip: dlg, pad: 8, marcas: [
       [1, (p) => dlg(p).locator("h2")],
       [2, (p) => dlg(p).getByText("Pedido", { exact: true }).locator("..")],
@@ -109,13 +109,13 @@ export const SHOTS = [
       [4, (p) => dlg(p).getByText("Sobra", { exact: true }).locator("..")],
       [5, (p) => dlg(p).getByRole("button", { name: /Confirmar → Em Separação/ })],
     ] },
-  { chave: "rastreio-sem-estoque", papel: "colaborador", url: "/logistica/pos-venda", viewport: ALTO,
+  { chave: "rastreio-sem-estoque", papel: "colaborador", url: "/rastreio", viewport: ALTO,
     antes: etapa("Auto Posto Mirante", "Em Separação"), clip: dlg, pad: 8, marcas: [
       [1, (p) => dlg(p).locator("h2")],
       [2, (p) => dlg(p).getByText("CarboZé 100ml").first().locator("../..")],
       [3, (p) => dlg(p).getByRole("button", { name: /produzir/ })],
     ] },
-  { chave: "rastreio-separado", papel: "colaborador", url: "/logistica/pos-venda", viewport: ALTO,
+  { chave: "rastreio-separado", papel: "colaborador", url: "/rastreio", viewport: ALTO,
     antes: async (p) => {
       await etapa("Comercial Serra Verde", "Separado")(p);
       await dlg(p).getByRole("button", { name: /Confirmar → Separado/ }).click();
@@ -126,14 +126,14 @@ export const SHOTS = [
       [3, (p) => dlg(p).locator('input[placeholder="ex.: 12,5"]')],
       [4, (p) => dlg(p).getByRole("button", { name: /Confirmar → Separado/ })],
     ] },
-  { chave: "rastreio-frete", papel: "colaborador", url: "/logistica/pos-venda", viewport: ALTO,
+  { chave: "rastreio-frete", papel: "colaborador", url: "/rastreio", viewport: ALTO,
     antes: etapa("Posto Vale do Açu", "Gerar Nota Fiscal"), clip: dlg, pad: 8, marcas: [
       [1, (p) => dlg(p).getByText(/volume\(s\)/).locator("..")],
       [2, (p) => dlg(p).locator('input[placeholder="Nome da transportadora"]')],
       [3, (p) => dlg(p).locator('input[placeholder="ex.: 180,00"]')],
       [4, (p) => dlg(p).getByRole("button", { name: /Confirmar → Gerar Nota Fiscal/ })],
     ] },
-  { chave: "rastreio-etiqueta", papel: "colaborador", url: "/logistica/pos-venda", viewport: ALTO,
+  { chave: "rastreio-etiqueta", papel: "colaborador", url: "/rastreio", viewport: ALTO,
     antes: async (p) => {
       await ver(pv("Posto Beira Rio"))(p);
       await pv("Posto Beira Rio")(p).getByRole("button", { name: /Emitir etiqueta/ }).click();
@@ -146,7 +146,7 @@ export const SHOTS = [
       [5, btn(/Gerar PDF \(10×15\)/)],
       [6, btn(/Gerar e enviar → Em Transporte/)],
     ] },
-  { chave: "rastreio-detalhe", papel: "colaborador", url: "/logistica/pos-venda", viewport: { width: 1440, height: 1500 },
+  { chave: "rastreio-detalhe", papel: "colaborador", url: "/rastreio", viewport: { width: 1440, height: 1500 },
     antes: async (p) => { await ver(pv("Posto Beira Rio"))(p); await pv("Posto Beira Rio")(p).locator("p.font-mono").click(); await p.waitForTimeout(1000); },
     clip: dlg, pad: 8, marcas: [
       [1, (p) => dlg(p).locator("h2")],
@@ -164,7 +164,7 @@ export const SHOTS = [
     ] },
 
   // ══ Vendas de Recorrência ══════════════════════════════════════════════════
-  { chave: "recorrencias", papel: "colaborador", url: "/logistica/recorrencias", viewport: { width: 1440, height: 820 }, espera: 900, marcas: [
+  { chave: "recorrencias", papel: "colaborador", url: "/recorrencias", viewport: { width: 1440, height: 820 }, espera: 900, marcas: [
     [1, (p) => p.locator("main div.rounded-xl.border.bg-card").first()],
     [2, (p) => p.locator("main div.rounded-xl.border.bg-card").first().locator("p").first().locator("..")],
     [3, btn("Hoje")],
@@ -178,7 +178,7 @@ export const SHOTS = [
     [11, (p) => p.locator("tbody tr").filter({ hasText: "Rede Litoral" }).locator('button[title="Cancelar"]')],
     [12, (p) => p.locator("tbody tr").filter({ hasText: "Rede Litoral" }).locator('button[title="Excluir"]')],
   ] },
-  { chave: "recorrencias-cancelar", papel: "colaborador", url: "/logistica/recorrencias", viewport: { width: 1440, height: 820 },
+  { chave: "recorrencias-cancelar", papel: "colaborador", url: "/recorrencias", viewport: { width: 1440, height: 820 },
     antes: async (p) => { await p.locator("tbody tr").filter({ hasText: "Rede Litoral" }).locator('button[title="Cancelar"]').click(); await p.waitForTimeout(600); },
     clip: alerta, pad: 8, marcas: [
       [1, (p) => alerta(p).getByText(/Sai do faturamento/)],
@@ -232,7 +232,7 @@ export const SHOTS = [
     ] },
 
   // ══ Viagens & PC ═══════════════════════════════════════════════════════════
-  { chave: "viagens", papel: "colaborador", url: "/logistica/viagens", viewport: { width: 1440, height: 760 }, espera: 800, marcas: [
+  { chave: "viagens", papel: "colaborador", url: "/viagens", viewport: { width: 1440, height: 760 }, espera: 800, marcas: [
     [1, btn(/Nova Solicitação/)],
     [2, (p) => p.getByRole("tablist")],
     [3, (p) => linha("Mossoró")(p).locator("td").first()],
@@ -243,7 +243,7 @@ export const SHOTS = [
     [8, (p) => linha("Mossoró")(p).locator('button[title="Reprovar"]')],
     [9, (p) => linha("Campina Grande")(p).locator('button[title="Prestar contas"]')],
   ] },
-  { chave: "viagens-nova", papel: "colaborador", url: "/logistica/viagens", viewport: { width: 1440, height: 1000 },
+  { chave: "viagens-nova", papel: "colaborador", url: "/viagens", viewport: { width: 1440, height: 1000 },
     antes: async (p) => { await btn(/Nova Solicitação/)(p).click(); await p.waitForTimeout(700); },
     clip: dlg, pad: 8, marcas: [
       [1, (p) => dlg(p).getByText("Solicitante", { exact: true }).locator("..")],
@@ -254,7 +254,7 @@ export const SHOTS = [
       [6, (p) => dlg(p).locator("textarea")],
       [7, (p) => dlg(p).getByRole("button", { name: "Enviar Solicitação" })],
     ] },
-  { chave: "viagens-pc", papel: "colaborador", url: "/logistica/viagens", viewport: { width: 1440, height: 900 },
+  { chave: "viagens-pc", papel: "colaborador", url: "/viagens", viewport: { width: 1440, height: 900 },
     antes: async (p) => { await linha("Campina Grande")(p).locator('button[title="Prestar contas"]').click(); await p.waitForTimeout(700); },
     clip: dlg, pad: 8, marcas: [
       [1, (p) => dlg(p).locator('input[type="number"]')],
@@ -264,7 +264,7 @@ export const SHOTS = [
     ] },
 
   // ══ Alertas Operacionais ═══════════════════════════════════════════════════
-  { chave: "alertas", papel: "colaborador", url: "/campo/alertas", viewport: { width: 1440, height: 1500 }, espera: 1500, marcas: [
+  { chave: "alertas", papel: "colaborador", url: "/alertas", viewport: { width: 1440, height: 1500 }, espera: 1500, marcas: [
     [1, (p) => p.locator("main h1").locator("..")],
     [2, btn(/Atualizar/)],
     [3, area("Estoque")],
@@ -276,7 +276,7 @@ export const SHOTS = [
     [9, (p) => grupo("Estoque")(p).locator("li").first().getByRole("link", { name: /Ver estoque/ })],
     [10, (p) => grupo("Pedidos")(p)],
   ] },
-  { chave: "alertas-filtro", papel: "colaborador", url: "/campo/alertas?area=pedidos", viewport: { width: 1440, height: 1100 }, espera: 1500, marcas: [
+  { chave: "alertas-filtro", papel: "colaborador", url: "/alertas?area=pedidos", viewport: { width: 1440, height: 1100 }, espera: 1500, marcas: [
     [1, area("Pedidos")],
     [2, btn(/Limpar/)],
     [3, (p) => grupo("Pedidos")(p).locator("li").filter({ hasText: "Produzido" }).first()],

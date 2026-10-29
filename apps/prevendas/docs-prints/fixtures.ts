@@ -22,8 +22,8 @@ export const FIXTURES: Record<string, unknown> = {
     { id: "n3", user_id: EU.id, type: "bug_fixed", title: "Bug corrigido", body: "O filtro do pipeline voltou a funcionar.", is_read: true, reference_type: "bug", reference_id: "b1", created_at: min(60 * 26) },
   ],
   carbo_bug_reports: [
-    { id: "b1", app: "prevendas", kind: "bug", title: "Filtro do pipeline não aplicava a etapa", description: "Ao escolher a etapa, a lista continuava igual.", status: "resolved", reporter_id: EU.id, reporter_name: EU.full_name, created_at: min(60 * 30), updated_at: min(60 * 26), archived_at: null, admin_notes: "Corrigido na versão de hoje.", url: "/crm/pipelines", severity: null, reach: null },
-    { id: "b2", app: "prevendas", kind: "sugestao", title: "Mostrar a cidade do posto no card", description: "Ajudaria a planejar as ligações por região.", status: "open", reporter_id: EU.id, reporter_name: EU.full_name, created_at: min(60 * 5), updated_at: min(60 * 5), archived_at: null, admin_notes: null, url: "/crm/pipelines", severity: null, reach: "meu_time" },
+    { id: "b1", app: "prevendas", kind: "bug", title: "Filtro do pipeline não aplicava a etapa", description: "Ao escolher a etapa, a lista continuava igual.", status: "resolved", reporter_id: EU.id, reporter_name: EU.full_name, created_at: min(60 * 30), updated_at: min(60 * 26), archived_at: null, admin_notes: "Corrigido na versão de hoje.", url: "/funis", severity: null, reach: null },
+    { id: "b2", app: "prevendas", kind: "sugestao", title: "Mostrar a cidade do posto no card", description: "Ajudaria a planejar as ligações por região.", status: "open", reporter_id: EU.id, reporter_name: EU.full_name, created_at: min(60 * 5), updated_at: min(60 * 5), archived_at: null, admin_notes: null, url: "/funis", severity: null, reach: "meu_time" },
   ],
   mrp_products: produtos,
   carbo_faixa_preco: faixas,

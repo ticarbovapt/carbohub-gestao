@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { LifeBuoy, Search, Hand, Plus, X, Inbox, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { QuadroRolavel } from "@carbo/shell";
+import { QuadroRolavel, useParamUrl } from "@carbo/shell";
 import { Input } from "@/components/ui/input";
 import {
   Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue,
@@ -53,16 +53,23 @@ export default function Demandas() {
   // Foto do responsável no cartão (resolvida pelo diretório).
   const avatarOf = (id: string | null) => (id ? dir.find((x) => x.id === id)?.avatar_url : null);
 
-  const [q, setQ] = useState("");
-  const [fKind, setFKind] = useState("all");
-  const [fApp, setFApp] = useState("all");
-  const [fPrio, setFPrio] = useState("all");
+  // Filtros na URL (`?busca=&tipo=&app=&prioridade=&pessoa=`): F5 e link
+  // mandado no chat ("olha as demandas sem dono do Sales") abrem o MESMO
+  // quadro. A busca grava com `replace` — uma entrada no histórico por letra
+  // faria o Voltar apagar a busca caractere a caractere.
+  const [q, setQ] = useParamUrl("busca", "", { replace: true });
+  const [fKind, setFKind] = useParamUrl("tipo", "all");
+  const [fApp, setFApp] = useParamUrl("app", "all");
+  const [fPrio, setFPrio] = useParamUrl("prioridade", "all");
   // "Minhas" NÃO é um estado separado: é um atalho que preenche este mesmo
   // seletor com o usuário logado como responsável. Dois estados no mesmo eixo
   // (pessoa) se contradiziam — "Minhas" ligado + "Solic.: Marcio" devolvia um
   // quadro vazio sem o usuário entender por quê.
-  const [fPessoa, setFPessoa] = useState(PESSOA_TODAS);
-  const [detail, setDetail] = useState<BugReport | null>(null);
+  const [fPessoa, setFPessoa] = useParamUrl("pessoa", PESSOA_TODAS);
+  // A demanda aberta também mora na URL (`?demanda=<id>`): o link copiado abre
+  // o card, e o F5 não o fecha. Guarda só o id — o objeto vem da lista viva.
+  const [detailId, setDetailId] = useParamUrl("demanda", "");
+  const setDetail = (d: BugReport | null) => setDetailId(d?.id ?? null);
   const [novaAberta, setNovaAberta] = useState(false);
 
   const apps = useMemo(() => Array.from(new Set(all.map((b) => b.app).filter(Boolean))).sort(), [all]);
@@ -123,8 +130,9 @@ export default function Demandas() {
 
   // Mantém o modal em sincronia com o dado recarregado. Se a demanda sumiu
   // (arquivada por outra pessoa), fecha em vez de operar sobre um fantasma.
-  const detailLive = detail ? all.find((d) => d.id === detail.id) ?? null : null;
-  useEffect(() => { if (detail && !isLoading && !detailLive) setDetail(null); }, [detail, detailLive, isLoading]);
+  const detailLive = detailId ? all.find((d) => d.id === detailId) ?? null : null;
+  // Id que não existe mais (arquivada, ou link velho) sai da URL.
+  useEffect(() => { if (detailId && !isLoading && !detailLive) setDetailId(null); }, [detailId, detailLive, isLoading, setDetailId]);
 
   // Mover card = mudar etapa.
   //  • cache otimista pra não "voltar" no meio do gesto;

@@ -1,6 +1,6 @@
 // Fixtures da área "suprimentos" (ver areas.ts):
 // /suprimentos (estoque por hub, movimentações, envios, recebimento, mapa de
-// SKU, ML Full, política), /suprimentos/vendedores e /compras.
+// SKU, ML Full, política), /suprimentos/vendedores e /requisicoes.
 // Dados FICTÍCIOS — nenhum cliente, pessoa, pedido ou anúncio real.
 import { PAPEL, U, EU } from "./pessoas";
 import * as producao from "./fx_producao";

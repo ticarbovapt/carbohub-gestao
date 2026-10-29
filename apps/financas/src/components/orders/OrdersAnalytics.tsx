@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo } from "react";
+import { useParamUrl } from "@carbo/shell";
 import { CarboCard, CarboCardContent, CarboCardHeader, CarboCardTitle } from "@/components/ui/carbo-card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -52,10 +53,33 @@ function getLinhaFromOrder(order: CarbozeOrder): string {
 }
 
 export function OrdersAnalytics({ orders, isLoading }: OrdersAnalyticsProps) {
-  const [monthOffset, setMonthOffset] = useState(0); // 0 = current month, -1 = last month, etc.
-  const [showAllMonths, setShowAllMonths] = useState(false);
-  const [productFilter, setProductFilter] = useState<ProductFilter>("all");
-  const [vendedorFilter, setVendedorFilter] = useState("all");
+  // Mês, produto e vendedor na URL (`?mes=AAAA-MM` ou `?mes=todos`,
+  // `?produto=&vendedor=`): F5 e link mantêm o relatório. O mês é gravado
+  // ABSOLUTO, nunca como deslocamento: "-1" num link de ontem significaria
+  // outro mês amanhã. Sem `mes`, é o mês corrente. `produto` e `vendedor` são
+  // as MESMAS chaves da aba Pedidos — o mesmo recorte nas duas visões.
+  const [mesUrl, setMesUrl] = useParamUrl("mes", "");
+  const showAllMonths = mesUrl === "todos";
+  const monthOffset = useMemo(() => {
+    const m = /^(\d{4})-(\d{2})$/.exec(mesUrl);
+    if (!m) return 0;
+    const hoje = new Date();
+    const off = (Number(m[1]) - hoje.getFullYear()) * 12 + (Number(m[2]) - 1 - hoje.getMonth());
+    return Math.min(0, off); // mês futuro não tem pedido: volta ao corrente
+  }, [mesUrl]);
+  const setMonthOffset = (f: (p: number) => number) => {
+    const off = f(monthOffset);
+    if (off >= 0) return setMesUrl(null);
+    const d = new Date();
+    d.setDate(1);
+    d.setMonth(d.getMonth() + off);
+    setMesUrl(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  };
+  // "Todos os meses" liga/desliga; desligar volta ao mês corrente.
+  const setShowAllMonths = (v: boolean) => { if (v) setMesUrl("todos"); else if (showAllMonths) setMesUrl(null); };
+  const [produtoUrl, setProductFilter] = useParamUrl("produto", "all");
+  const productFilter = (PRODUCT_FILTERS.some((f) => f.key === produtoUrl) ? produtoUrl : "all") as ProductFilter;
+  const [vendedorFilter, setVendedorFilter] = useParamUrl("vendedor", "all");
 
   // Current month based on offset
   const currentMonth = useMemo(() => {

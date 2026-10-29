@@ -71,7 +71,7 @@ export function LeadPainel({ leadId, onClose }: { leadId: string; onClose: () =>
           </div>
           <div className="flex shrink-0 items-center gap-1">
             <a
-              href={`${CRM_URL}/crm/pipelines?funil=${lead?.funnel_type ?? "f13"}&lead=${leadId}`}
+              href={`${CRM_URL}/funis?funil=${lead?.funnel_type ?? "f13"}&lead=${leadId}`}
               target="_blank" rel="noopener noreferrer"
               className="rounded p-1.5 text-muted-foreground hover:text-foreground"
               title="Abrir no CRM"

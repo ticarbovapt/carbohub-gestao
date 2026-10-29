@@ -41,7 +41,7 @@ export function Layout() {
   const sections: ShellNavSection[] = [
     { items: [
         { to: "/", label: "Visão geral", icon: LayoutDashboard, end: true },
-        { to: "/crm/pipelines", label: "Pipeline", icon: KanbanSquare },
+        { to: "/funis", label: "Funis", icon: KanbanSquare },
         { to: "/vendas", label: "Vendas", icon: ShoppingBag },
         { to: "/resultados", label: "Resultados", icon: BarChart3 },
         { to: "/atendimento", label: "Atendimento", icon: MessagesSquare },

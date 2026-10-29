@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
+import { useParamUrl } from "@carbo/shell";
 import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type OSView, TIPO_TONE, brl, dt, parseData, stageMeta } from "./osView";
@@ -92,13 +93,23 @@ function Cabecalho({
 }
 
 export function OSLista({ items }: { items: OSView[] }) {
-  const [ordem, setOrdem] = useState<Ordem>({ campo: "agendamento", asc: true });
+  // Ordem na URL (`?ordem=cliente`, `-` na frente = decrescente), em
+  // português: `stage` vira `etapa`. A data crescente é o padrão e não aparece.
+  const [ordemUrl, setOrdemUrl] = useParamUrl("ordem", "agendamento");
+  const ordem: Ordem = useMemo(() => {
+    const asc = !ordemUrl.startsWith("-");
+    const nome = ordemUrl.replace(/^-/, "");
+    const campo: Campo = nome === "cliente" ? "cliente" : nome === "etapa" ? "stage" : "agendamento";
+    return { campo, asc };
+  }, [ordemUrl]);
+  const setOrdem = (o: Ordem) =>
+    setOrdemUrl(`${o.asc ? "" : "-"}${o.campo === "stage" ? "etapa" : o.campo}`);
   const hoje = hojeISO();
 
   const linhas = useMemo(() => [...items].sort((a, b) => comparar(a, b, ordem)), [items, ordem]);
 
   const ordenar = (campo: Campo) =>
-    setOrdem((o) => (o.campo === campo ? { campo, asc: !o.asc } : { campo, asc: true }));
+    setOrdem(ordem.campo === campo ? { campo, asc: !ordem.asc } : { campo, asc: true });
 
   if (items.length === 0) {
     return (

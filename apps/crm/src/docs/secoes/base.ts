@@ -46,13 +46,13 @@ export const SECOES_BASE: Secao[] = [
   {
     id: "navegacao",
     titulo: "Navegação",
-    resumo: "A barra lateral leva às telas do sistema; a barra de cima tem os atalhos que existem em todos os sistemas do Grupo Carbo. Ao entrar, o Sales abre no Pipeline.",
+    resumo: "A barra lateral leva às telas do sistema; a barra de cima tem os atalhos que existem em todos os sistemas do Grupo Carbo. Ao entrar, o Sales abre nos Funis.",
     blocos: [
       {
         print: { chave: "inicio", legenda: "O Carbo Sales, com a barra lateral e a barra de cima." },
         itens: [
           { n: 1, titulo: "Logo", texto: "Volta para o Hub (carbohub.com.br). Com o botão do meio do mouse, abre em outra guia." },
-          { n: 2, titulo: "Menu", texto: "Carbo Chat; Comercial (Pipelines, Vendas, Metas, Pontos de Venda, Agenda de visitas); Pedidos (Rastreio de venda, Meu Estoque, Requisição de Compra); Descarbonização (Ordens de Serviço). A tela em que você está fica destacada." },
+          { n: 2, titulo: "Menu", texto: "Carbo Chat; Comercial (Funis, Vendas, Metas, Pontos de Venda, Agenda de visitas); Pedidos (Rastreio de venda, Meu Estoque, Requisição de Compra); Descarbonização (Ordens de Serviço). A tela em que você está fica destacada." },
           { n: 3, titulo: "Documentação", texto: "Esta página." },
           { n: 4, titulo: "Recolher menu", texto: "Deixa a barra lateral só com os ícones, para sobrar espaço para o quadro. No celular o menu abre pelo botão ☰ do topo." },
           { n: 5, titulo: "Trocar de sistema", texto: "Lista os sistemas liberados para você e o Início (o Hub)." },
@@ -61,7 +61,7 @@ export const SECOES_BASE: Secao[] = [
           { n: 8, titulo: "Reportar bug ou sugestão", texto: "Abre o pedido ao TI. Veja a seção “Bugs e sugestões”." },
           { n: 9, titulo: "Tema claro / escuro", texto: "Troca as cores. A escolha vale para todos os sistemas do Grupo Carbo." },
           { n: 10, titulo: "Sua conta", texto: "Seu nome e função. O menu tem Meu Perfil, Minha Equipe, Bugs e sugestões e Sair." },
-          { n: 11, titulo: "Pipelines", texto: "A tela inicial do Sales." },
+          { n: 11, titulo: "Funis", texto: "A tela inicial do Sales." },
         ],
       },
       {
@@ -89,8 +89,8 @@ export const SECOES_BASE: Secao[] = [
   // ── Pipeline ────────────────────────────────────────────────────────────────
   {
     id: "pipeline",
-    titulo: "Pipeline",
-    rota: "/crm/pipelines",
+    titulo: "Funis",
+    rota: "/funis",
     resumo:
       "O quadro dos leads. Cada coluna é uma etapa e cada card é um cliente em potencial. São quatro pipelines: Comercial Expansão (PDVs, frotistas, licenciados e contas com motores), Outbound (o SDR prospectando), Inbound (o closer, que recebe o que o SDR qualificou e os leads de anúncio) e Follow up (recompra da base de clientes).",
     regras: {

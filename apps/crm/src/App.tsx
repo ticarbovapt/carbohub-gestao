@@ -37,14 +37,19 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<LoginRoute />} />
       <Route element={<ProtectedRoute><SalesShell /></ProtectedRoute>}>
-        {/* Landing = Funil de Vendas (pipeline única ativa) */}
-        <Route path="/" element={<Navigate to="/crm/pipelines" replace />} />
-        <Route path="/crm/pipelines" element={<Pipelines />} />
-        {/* /funis, /comercial e /territorio/* SAÍRAM (20/10/2026, decisão do dono
-            do processo). O endereço antigo cai na home, nunca no "não encontrada". */}
-        <Route path="/funis" element={<Navigate to="/crm/pipelines" replace />} />
-        {/* compat: rotas antigas por funil → pipelines com filtro */}
-        <Route path="/crm/:funnelType" element={<Navigate to="/crm/pipelines" replace />} />
+        {/* Slugs em português e IGUAIS ao nome do menu (dono do processo,
+            29/10/2026): "Funis" é /funis, "Rastreio de venda" é /rastreio,
+            "Ordens de Serviço" é /os. Todo endereço antigo continua abrindo
+            pelo `IrPara`, que leva a query junto — é ela que carrega o
+            `?funil=&lead=` do card e os filtros da tela. */}
+        <Route path="/" element={<Navigate to="/funis" replace />} />
+        <Route path="/funis" element={<Pipelines />} />
+        <Route path="/crm/pipelines" element={<IrPara para="/funis" />} />
+        {/* compat: rotas antigas por funil (/crm/f1…) → a tela dos funis.
+            ⚠️ Fica DEPOIS de /crm/pipelines só por leitura: o react-router
+            ranqueia o segmento estático acima do `:funnelType` de qualquer
+            jeito. */}
+        <Route path="/crm/:funnelType" element={<IrPara para="/funis" />} />
         <Route path="/vender" element={<Vender />} />
         <Route path="/chat" element={<Chat />} />
         {/* ⚠️ /pedidos TRAVADA por enquanto. A rota continua existindo, e de
@@ -53,11 +58,12 @@ export default function App() {
             errou o endereço e procurar de novo. O componente Pedidos segue no
             repositório — é destravar aqui quando for a hora. */}
         <Route path="/pedidos" element={<PedidosTravada />} />
-        <Route path="/compras" element={<RequisicaoCompra />} />
-        <Route path="/pos-venda" element={<PosVenda />} />
+        <Route path="/requisicoes" element={<RequisicaoCompra />} />
+        <Route path="/compras" element={<IrPara para="/requisicoes" />} />
+        <Route path="/rastreio" element={<PosVenda />} />
+        <Route path="/pos-venda" element={<IrPara para="/rastreio" />} />
         <Route path="/vendas" element={<Vendas />} />
         <Route path="/metas" element={<Metas />} />
-        <Route path="/comercial" element={<Navigate to="/crm/pipelines" replace />} />
         <Route path="/pdvs" element={<Pdvs />} />
         <Route path="/meu-estoque" element={<MeuEstoque />} />
 
@@ -66,12 +72,21 @@ export default function App() {
             no que ele está fazendo, sem passar pela lista. */}
         <Route path="/rtm/agenda" element={<RtmAgenda />} />
         <Route path="/rtm/visita" element={<RtmVisita />} />
-        {/* Descarbonização — acompanhamento (pra onde o "+ Nova Descarbonização" leva) */}
-        <Route path="/descarbonizacao/os" element={<DescOrdensServico />} />
-        {/* A agenda virou uma visão da tela de OS (20/10/2026). */}
-        <Route path="/descarbonizacao/agendamentos" element={<Navigate to="/descarbonizacao/os?ver=agenda" replace />} />
-        <Route path="/territorio/*" element={<Navigate to="/crm/pipelines" replace />} />
-        <Route path="/dashboard-comercial" element={<Navigate to="/crm/pipelines" replace />} />
+        {/* Ordens de Serviço da descarbonização (pra onde o "+ Nova
+            Descarbonização" leva). ⚠️ O MESMO caminho do Ops (`/os`): a tela é
+            byte a byte a mesma nos dois apps. */}
+        <Route path="/os" element={<DescOrdensServico />} />
+        <Route path="/descarbonizacao/os" element={<IrPara para="/os" />} />
+        {/* A agenda virou uma visão da tela de OS (20/10/2026). `Navigate`, e
+            não `IrPara`, porque o destino já traz a própria query. */}
+        <Route path="/descarbonizacao/agendamentos" element={<Navigate to="/os?ver=agenda" replace />} />
+        {/* /comercial, /territorio/* e /dashboard-comercial SAÍRAM (20/10/2026,
+            decisão do dono do processo). O endereço antigo cai nos funis, nunca
+            no "não encontrada". (/funis também era uma tela que saiu — hoje é o
+            endereço da tela dos funis.) */}
+        <Route path="/comercial" element={<Navigate to="/funis" replace />} />
+        <Route path="/territorio/*" element={<Navigate to="/funis" replace />} />
+        <Route path="/dashboard-comercial" element={<Navigate to="/funis" replace />} />
         <Route path="/documentacao" element={<Documentacao />} />
         <Route path="/perfil" element={<Profile />} />
         <Route path="/chamados" element={<BugReports />} />

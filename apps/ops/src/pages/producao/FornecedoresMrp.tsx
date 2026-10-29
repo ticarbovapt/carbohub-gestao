@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useParamUrl } from "@carbo/shell";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboButton } from "@/components/ui/carbo-button";
 import { CarboBadge } from "@/components/ui/carbo-badge";
@@ -15,7 +16,8 @@ const formatCnpj = (v: string) => v.replace(/\D/g, "").replace(/^(\d{2})(\d{3})(
 
 export default function FornecedoresMrp() {
   const canEdit = true;
-  const [search, setSearch] = useState("");
+  // Busca na URL (`?busca=`), como nas outras abas do MRP.
+  const [search, setSearch] = useParamUrl("busca", "", { replace: true });
   const [createOpen, setCreateOpen] = useState(false);
   const [editSupplier, setEditSupplier] = useState<Supplier | null>(null);
 

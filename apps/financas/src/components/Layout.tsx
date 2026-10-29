@@ -66,7 +66,7 @@ export function Layout() {
     ] },
     { label: "Vendas", items: [item("/faturamento"), item("/comissionamento"), item("/pedidos")] },
     { label: "Suprimentos", items: [item("/compras"), item("/suprimentos")] },
-    { label: "Cadastros", items: [item("/cadastros/fornecedores"), item("/cadastros/formas-pagamento")] },
+    { label: "Cadastros", items: [item("/fornecedores"), item("/formas-pagamento")] },
     // ⚠️ O MENU TEM DOIS LUGARES e esquecer este deixa a tela invisível sem erro
     // nenhum: o registro em `lib/financasNav.ts` (ícone e rótulo) E esta lista,
     // que é quem monta os grupos. Rota nova entra nos dois, na MESMA tarefa —

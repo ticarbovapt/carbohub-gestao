@@ -70,7 +70,7 @@ export const SECOES_BASE: Secao[] = [
         print: { chave: "inicio", legenda: "O Carbo Ops, com a barra lateral e a barra de cima." },
         itens: [
           { n: 1, titulo: "Logo", texto: "Volta para o Hub (carbohub.com.br). Com o botão do meio do mouse, abre em outra guia." },
-          { n: 2, titulo: "Menu", texto: "Início e Carbo Chat; Produção (Dashboard, Ordens de Produção, MRP); Suprimentos (Suprimentos, Estoque dos Vendedores, Requisição de Compra); Logística (Logística, Rastreio de venda, Vendas de Recorrência, Viagens & PC); Operação de Campo (OS Descarbonização, Alertas Operacionais). A tela em que você está fica destacada." },
+          { n: 2, titulo: "Menu", texto: "Início e Carbo Chat; Produção (Painel de Produção, Ordens de Produção, MRP); Suprimentos (Suprimentos, Estoque dos Vendedores, Requisição de Compra); Logística (Logística, Rastreio de venda, Vendas de Recorrência, Viagens & PC); Operação de Campo (OS Descarbonização, Alertas Operacionais). A tela em que você está fica destacada." },
           { n: 3, titulo: "Documentação", texto: "Esta página." },
           { n: 4, titulo: "Recolher menu", texto: "Deixa a barra lateral só com os ícones. No celular o menu abre pelo botão ☰ do topo." },
           { n: 5, titulo: "Trocar de sistema", texto: "Lista os sistemas liberados para você e o Início (o Hub)." },

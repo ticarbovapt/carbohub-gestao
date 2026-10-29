@@ -34,8 +34,8 @@ const ABA_ANTIGA: Record<string, string> = {
   pagar: "/pagar",
   recebiveis: "/receber",
   fluxo: "/fluxo-caixa",
-  fornecedores: "/cadastros/fornecedores",
-  cartoes: "/cadastros/formas-pagamento",
+  fornecedores: "/fornecedores",
+  cartoes: "/formas-pagamento",
   assinaturas: "/pagar/assinaturas",
   dashboard: "/painel-financeiro",
 };
@@ -65,13 +65,18 @@ export default function App() {
         <Route path="/pagar/assinaturas" element={<Assinaturas />} />
         <Route path="/receber" element={<Recebiveis />} />
         <Route path="/fluxo-caixa" element={<FluxoCaixa />} />
-        <Route path="/cadastros/fornecedores" element={<Fornecedores />} />
-        <Route path="/cadastros/formas-pagamento" element={<FormasPagamento />} />
+        {/* Slug = nome do menu (29/10/2026): o prefixo `/cadastros` era o nome do
+            GRUPO do menu e não distinguia nada. Os antigos redirecionam abaixo. */}
+        <Route path="/fornecedores" element={<Fornecedores />} />
+        <Route path="/formas-pagamento" element={<FormasPagamento />} />
         <Route path="/painel-financeiro" element={<PainelFinanceiro />} />
         {/* Endereços aposentados — favorito e link mandado a alguém continuam abrindo. */}
         <Route path="/financeiro" element={<IrPara para="/" />} />
         <Route path="/recebiveis" element={<IrPara para="/receber" />} />
         <Route path="/dashboard-financeiro" element={<IrPara para="/painel-financeiro" />} />
+        <Route path="/cadastros/fornecedores" element={<IrPara para="/fornecedores" />} />
+        <Route path="/cadastros/formas-pagamento" element={<IrPara para="/formas-pagamento" />} />
+        <Route path="/cadastros" element={<IrPara para="/fornecedores" />} />
         <Route path="/suprimentos" element={<Suprimentos />} />
         <Route path="/pedidos" element={<Orders />} />
         <Route path="/faturamento" element={<Faturamento />} />

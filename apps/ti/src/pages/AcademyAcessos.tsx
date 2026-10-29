@@ -40,7 +40,13 @@ const quando = (iso: string | null) =>
 export default function AcademyAcessos() {
   const { data: pedidos = [], isLoading, error } = useAcademyAcessos();
   const [aba, setAba] = useParamUrl("status", "pendente");
-  const [busca, setBusca] = useParamUrl("q", "", { replace: true });
+  // A busca era `?q=`; virou `?busca=` (chave em português, como nas outras
+  // telas). Link antigo continua valendo: `q` é lido como reserva e sai da URL
+  // na primeira digitação, senão apagar a busca a traria de volta.
+  const [buscaUrl, setBuscaUrl] = useParamUrl("busca", "", { replace: true });
+  const [qAntigo, setQAntigo] = useParamUrl("q", "", { replace: true });
+  const busca = buscaUrl || qAntigo;
+  const setBusca = (v: string | null) => { setBuscaUrl(v); setQAntigo(null); };
 
   const contagem = useMemo(() => {
     const c: Record<string, number> = { todos: pedidos.length };

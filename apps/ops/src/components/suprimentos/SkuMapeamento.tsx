@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useParamUrl } from "@carbo/shell";
 import {
   AlertTriangle, Info, Link2, Pencil, Plus, Save, Trash2, X, ListChecks, Boxes,
 } from "lucide-react";
@@ -69,7 +70,9 @@ export function SkuMapeamento() {
   const alternar = useAlternarMapeamento();
   const apagar = useApagarMapeamento();
 
-  const [aba, setAba] = useState("mapa");
+  // `?lista=sem-mapa` abre direto os SKUs vendidos sem mapa — é o link que se
+  // manda a quem vai cadastrar. (`aba` já é o segmento do caminho da tela.)
+  const [aba, setAba] = useParamUrl("lista", "mapa");
   const [aberto, setAberto] = useState(false);
   const [form, setForm] = useState<Form>(FORM_VAZIO);
 

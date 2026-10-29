@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { lerSemTeto } from "@carbo/shell";
+import { lerSemTeto, useParamUrl } from "@carbo/shell";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCreateStockMovement } from "@/hooks/useStockMovements";
 import { useProductMovements30d } from "@/hooks/useProductMovements30d";
@@ -47,8 +47,9 @@ function getCoverageStatus(days: number | null): CoverageStatus {
 }
 
 export function StockOverview() {
-  const [search, setSearch] = useState("");
-  const [selectedWarehouse, setSelectedWarehouse] = useState<string>("all");
+  // Busca e hub na URL (`?busca=&hub=`): F5 e link mantêm o recorte da grade.
+  const [search, setSearch] = useParamUrl("busca", "", { replace: true });
+  const [selectedWarehouse, setSelectedWarehouse] = useParamUrl("hub", "all");
   const [editing, setEditing] = useState<EditingProduct | null>(null);
   const [editHubId, setEditHubId] = useState<string>("");
   const [newQty, setNewQty] = useState("");

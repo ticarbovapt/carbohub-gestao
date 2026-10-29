@@ -57,7 +57,7 @@ export function Layout() {
     // antigos para cá.
     { label: "Usuários e acessos", items: [
         { to: "/usuarios", label: "Usuários", icon: UsersIcon },
-        { to: "/estrutura", label: "Departamentos e funções", icon: ListTree },
+        { to: "/departamentos", label: "Departamentos e funções", icon: ListTree },
         { to: "/notificacoes", label: "Notificações", icon: BellRing },
     ] },
     { label: "Auditoria", items: [

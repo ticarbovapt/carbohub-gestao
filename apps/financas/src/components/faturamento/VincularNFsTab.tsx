@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useParamUrl } from "@carbo/shell";
 import { Link2, FileText, Search, Loader2 } from "lucide-react";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboButton } from "@/components/ui/carbo-button";
@@ -110,10 +111,13 @@ function LinkDialog({ nfe, onClose }: { nfe: OrphanNFe | null; onClose: () => vo
 }
 
 export function VincularNFsTab() {
-  const [search, setSearch] = useState("");
+  // Busca e página na URL (`?nota=&pagina=`): F5 e link mantêm a lista. A chave
+  // é `nota`, não `busca`: a busca de PEDIDOS do Faturamento continua à vista
+  // acima das abas, e as duas caixas mostrando o mesmo texto seriam confusas.
+  const [search, setSearch] = useParamUrl("nota", "", { replace: true });
   const { data: orphans = [], isLoading } = useOrphanNFes(search);
   const [linking, setLinking] = useState<OrphanNFe | null>(null);
-  const [page, setPage] = useUrlPage("pvinc");
+  const [page, setPage] = useUrlPage("pagina", "pvinc");
   const pag = paginate(orphans, page);
 
   return (

@@ -99,7 +99,7 @@ export const SHOTS = [
     [2, (p) => p.locator('[role="listbox"] [role="group"]').nth(1)],
     [3, (p) => p.locator('[role="listbox"] [role="group"]').nth(2)],
   ] },
-  { chave: "sup-envios", papel: "colaborador", url: `${SUP}/hub-natal/envios-sp`, viewport: ALTO,
+  { chave: "sup-envios", papel: "colaborador", url: `${SUP}/hub-natal/envios`, viewport: ALTO,
     clip: (p) => [p.locator('[role="tablist"]').first(), cardTr("Não saiu")(p)], marcas: [
     [1, txt("estornados")],
     [2, (p) => cardTr("CD SP Vendas")(p).getByText("para", { exact: false }).first()],
@@ -240,7 +240,7 @@ export const SHOTS = [
   ] },
 
   // ── Requisição de Compra ──
-  { chave: "compras-nova", papel: "colaborador", url: "/compras", viewport: { width: 1440, height: 1500 }, espera: 900,
+  { chave: "compras-nova", papel: "colaborador", url: "/requisicoes", viewport: { width: 1440, height: 1500 }, espera: 900,
     antes: async (p) => {
       const card = p.locator("main").getByText("Nova Requisição").locator("xpath=ancestor::div[contains(@class,'rounded')][last()]");
       await card.getByRole("combobox").nth(1).click(); await p.getByRole("option", { name: /Reposição — estoque de segurança/ }).click();
@@ -270,7 +270,7 @@ export const SHOTS = [
     [15, btn("Salvar rascunho")],
     [16, btn("Enviar para aprovação")],
   ] },
-  { chave: "compras-em-nome", papel: "colaborador", url: "/compras", espera: 900,
+  { chave: "compras-em-nome", papel: "colaborador", url: "/requisicoes", espera: 900,
     antes: async (p) => {
       await p.getByRole("combobox").first().click(); await p.getByRole("option", { name: "Ana Souza" }).click(); await p.waitForTimeout(300);
     },
@@ -278,13 +278,13 @@ export const SHOTS = [
     [1, (p) => p.getByRole("combobox").first()],
     [2, txt("A RC sai como")],
   ] },
-  { chave: "compras-individual", papel: "colaborador", url: "/compras", espera: 900,
+  { chave: "compras-individual", papel: "colaborador", url: "/requisicoes", espera: 900,
     antes: async (p) => { await p.getByRole("button", { name: /Compra individual/ }).click(); await p.waitForTimeout(300); },
     clip: (p) => [p.getByRole("button", { name: /Compra do setor/ }), p.locator('input[placeholder="Cole o link do produto, se tiver"]')], marcas: [
     [1, (p) => p.getByText("Categoria *").locator("..")],
     [2, sel('input[placeholder="Cole o link do produto, se tiver"]')],
   ] },
-  { chave: "compras-lista", papel: "colaborador", url: "/compras", viewport: { width: 1440, height: 2000 }, espera: 900,
+  { chave: "compras-lista", papel: "colaborador", url: "/requisicoes", viewport: { width: 1440, height: 2000 }, espera: 900,
     clip: (p) => p.getByText("Requisições que eu abri").locator("xpath=ancestor::div[contains(@class,'rounded')][last()]"), marcas: [
     [1, (p) => p.locator("main table thead th").nth(0)],
     [2, (p) => p.locator("main table thead th").nth(1)],

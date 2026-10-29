@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useParamUrl } from "@carbo/shell";
 import { FileText, Search, Loader2, Gift, ExternalLink, AlertTriangle, ArrowUp, ArrowDown } from "lucide-react";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboButton } from "@/components/ui/carbo-button";
@@ -289,13 +290,28 @@ function DialogoFilial({ nfe, onClose }: { nfe: NfeFilialSemPedido | null; onClo
 }
 
 export function VincularNFsFilialTab() {
-  const [search, setSearch] = useState("");
+  // Busca e página na URL (`?nota=&pagina=`): F5 e link mantêm a lista. A chave
+  // é `nota`, não `busca`: a busca de PEDIDOS do Faturamento continua à vista
+  // acima das abas, e as duas caixas mostrando o mesmo texto seriam confusas.
+  const [search, setSearch] = useParamUrl("nota", "", { replace: true });
   const { data: notas = [], isLoading, error } = useNfesFilialSemPedido(search);
   const [vinculando, setVinculando] = useState<NfeFilialSemPedido | null>(null);
-  const [page, setPage] = useUrlPage("pfilial");
+  const [page, setPage] = useUrlPage("pagina", "pfilial");
   /* O padrão continua sendo a emissão mais recente — é a ordem em que a
      consulta já vem, e trocar o padrão mudaria a tela de quem não pediu nada. */
-  const [ordem, setOrdem] = useState<{ col: Coluna; dir: Direcao }>({ col: "emissao", dir: "desc" });
+  // Na URL (`?ordem=valor` / `?ordem=-valor`, o MESMO formato do `useOrdemUrl`
+  // das contas): F5 não desfaz a ordenação. Coluna desconhecida → o padrão.
+  const COLUNAS: Coluna[] = ["nf", "cliente", "emissao", "rodape", "valor"];
+  const [ordemUrl, setOrdemUrl] = useParamUrl("ordem", "-emissao");
+  const ordem = useMemo<{ col: Coluna; dir: Direcao }>(() => {
+    const col = ordemUrl.replace(/^-/, "") as Coluna;
+    return COLUNAS.includes(col) ? { col, dir: ordemUrl.startsWith("-") ? "desc" : "asc" } : { col: "emissao", dir: "desc" };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ordemUrl]);
+  const setOrdem = (f: (o: { col: Coluna; dir: Direcao }) => { col: Coluna; dir: Direcao }) => {
+    const n = f(ordem);
+    setOrdemUrl(`${n.dir === "desc" ? "-" : ""}${n.col}`);
+  };
 
   /* ⚠️ Clicar numa coluna VOLTA para a página 1. Sem isso, quem está na página
      3 reordena e continua na 3 — de uma lista inteiramente diferente —, e a

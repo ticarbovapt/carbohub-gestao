@@ -9,6 +9,10 @@ import {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Estrutura de navegação do Carbo Ops — caminhos pt-BR padronizados.
+// ⚠️ O caminho é o NOME do item, curto ("Rastreio de venda" → /rastreio,
+// desde 29/10/2026). Renomeou aqui, renomeie também a lista de grupos do
+// `components/Layout.tsx` (é ela que monta o menu) e ponha o endereço antigo
+// como `IrPara` no App.tsx.
 // Cada área é autossuficiente e tem seu próprio dashboard (sem "Dash" genérico).
 // `ready` marca telas já portadas; as demais mostram placeholder "em breve".
 // As telas serão portadas 1:1 do Carbo Controle, por etapas.
@@ -45,7 +49,7 @@ export const OPS_GROUPS: OpsNavGroup[] = [
     label: "Produção",
     items: [
       { path: "/producao/ordens", label: "Ordens de Produção", icon: Factory, from: "/production-orders", ready: true },
-      { path: "/producao/dashboard", label: "Dashboard de Produção", icon: BarChart3, from: "/dashboards/producao", ready: true },
+      { path: "/producao/painel", label: "Painel de Produção", icon: BarChart3, from: "/dashboards/producao", ready: true },
       // ⚠️ UMA entrada para as quatro telas de cadastro (Produtos, SKUs, Lotes,
       // Fornecedores). Elas viraram abas dentro de `/producao/mrp/:aba` — as
       // telas não mudaram, só deixaram de ocupar quatro linhas da sidebar para
@@ -72,23 +76,23 @@ export const OPS_GROUPS: OpsNavGroup[] = [
     label: "Compras",
     items: [
       // Só a Requisição de Compra fica no Ops; o resto do fluxo está no Finanças.
-      { path: "/compras", label: "Requisição de Compra", icon: ShoppingCart, from: "/purchasing", ready: true },
+      { path: "/requisicoes", label: "Requisição de Compra", icon: ShoppingCart, from: "/purchasing", ready: true },
     ],
   },
   {
     label: "Logística",
     items: [
-      { path: "/logistica/pos-venda", label: "Rastreio de venda", icon: ShoppingBag, from: "carboze_orders", ready: true },
-      { path: "/logistica/recorrencias", label: "Vendas de Recorrência", icon: Repeat, from: "carboze_orders", ready: true },
+      { path: "/rastreio", label: "Rastreio de venda", icon: ShoppingBag, from: "carboze_orders", ready: true },
+      { path: "/recorrencias", label: "Vendas de Recorrência", icon: Repeat, from: "carboze_orders", ready: true },
       { path: "/logistica", label: "Logística", icon: Truck, from: "/logistics", ready: true, end: true },
-      { path: "/logistica/viagens", label: "Viagens & PC", icon: Plane, from: "/viagens", ready: true },
+      { path: "/viagens", label: "Viagens & PC", icon: Plane, from: "/viagens", ready: true },
     ],
   },
   {
     label: "Operação de Campo",
     items: [
-      { path: "/campo/os", label: "OS Descarbonização", icon: ClipboardList, from: "/os", ready: true },
-      { path: "/campo/alertas", label: "Alertas Operacionais", icon: Bell, from: "/ops/alerts", ready: true },
+      { path: "/os", label: "OS Descarbonização", icon: ClipboardList, from: "/os", ready: true },
+      { path: "/alertas", label: "Alertas Operacionais", icon: Bell, from: "/ops/alerts", ready: true },
     ],
   },
 ];

@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ShoppingBag, Loader2, Calendar, Eye, MapPin, Phone, Mail, Package, User, Users, FileText, CreditCard, Truck, Boxes, Weight } from "lucide-react";
-import { QuadroRolavel } from "@carbo/shell";
+import { QuadroRolavel, useParamUrl } from "@carbo/shell";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -24,12 +24,29 @@ const fmtDoc = (v: string | null) => {
 
 export default function PosVenda() {
   const { user, isGestor } = useAuth();
-  const [vendedorFilter, setVendedorFilter] = useState("__all__");
+  // Vendedor e pedido aberto moram na URL (`?vendedor=<id>&pedido=<id>`): o F5
+  // e o link mandado ao colega abrem o MESMO recorte e o MESMO detalhe.
+  const [vendedorFilter, setVendedorFilter] = useParamUrl("vendedor", "__all__");
   const { data: orders = [], isLoading } = usePosVendaOrders({
     isGestor, userId: user?.id, vendedorFilter,
   });
   const { data: dir = [] } = useVendedoresDir();
-  const [detail, setDetail] = useState<PosVendaOrder | null>(null);
+  const [detail, setDetailState] = useState<PosVendaOrder | null>(null);
+  // Abrir grava com push (o Voltar fecha); fechar pelo X grava com replace,
+  // senão o Voltar seguinte reabriria o pedido que a pessoa acabou de fechar.
+  const [pedidoUrl, setPedidoUrl] = useParamUrl("pedido");
+  const [, tirarPedidoUrl] = useParamUrl("pedido", "", { replace: true });
+  const setDetail = (novo: PosVendaOrder | null) => {
+    setDetailState(novo);
+    if ((novo?.id ?? "") === pedidoUrl) return;
+    if (novo) setPedidoUrl(novo.id); else tirarPedidoUrl(null);
+  };
+  useEffect(() => {
+    if (!pedidoUrl) { if (detail) setDetailState(null); return; }
+    if (detail?.id === pedidoUrl) return;
+    const achado = orders.find((o) => o.id === pedidoUrl);
+    if (achado) setDetailState(achado);
+  }, [pedidoUrl, orders]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const byStage = useMemo(() => {
     const map: Record<string, PosVendaOrder[]> = {};

@@ -16,7 +16,7 @@ import * as suprimentos from "./fx_suprimentos";
 
 const OUTRAS = [campo, comercial, producao, suprimentos] as { FX?: Record<string, unknown> }[];
 const rota = () => { try { return location.pathname; } catch { return ""; } };
-const NOSSAS = ["/logistica", "/campo/alertas"];
+const NOSSAS = ["/logistica", "/rastreio", "/recorrencias", "/viagens", "/alertas"];
 const naNossa = () => NOSSAS.some((r) => rota().startsWith(r));
 const resolve = (v: unknown) => (typeof v === "function" ? (v as () => unknown)() : v);
 /** Nas nossas rotas, `meu()`; fora delas, o da outra área (ou o padrão). */

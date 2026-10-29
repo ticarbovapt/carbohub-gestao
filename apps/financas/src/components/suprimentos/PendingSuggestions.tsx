@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useParamUrl } from "@carbo/shell";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -47,7 +48,11 @@ interface OpSuggestion {
 }
 
 export function PendingSuggestions({ canApprove }: { canApprove: boolean }) {
-  const [tab, setTab] = useState("transfers");
+  // Aba na URL (`?sugestoes=producao`; o padrão, transferências, não é escrito).
+  // Os valores internos continuam os de antes — só o que vai na URL é português.
+  const [sugUrl, setSugUrl] = useParamUrl("sugestoes", "transferencias");
+  const tab = sugUrl === "producao" ? "ops" : "transfers";
+  const setTab = (v: string) => setSugUrl(v === "ops" ? "producao" : null);
   const [selectedTransfers, setSelectedTransfers] = useState<Set<string>>(new Set());
   const [selectedOps, setSelectedOps] = useState<Set<string>>(new Set());
   const [editingItem, setEditingItem] = useState<{ id: string; qty: number; type: "transfer" | "op" } | null>(null);

@@ -364,7 +364,7 @@ export const SECOES_CONTAS: Secao[] = [
   {
     id: "fornecedores",
     titulo: "Fornecedores",
-    rota: "/cadastros/fornecedores",
+    rota: "/fornecedores",
     resumo:
       "O cadastro de fornecedores das compras (requisições, cotações e ordens de compra). Ele não é o cadastro de contatos do Bling: a conta nova lançada no Bling busca o fornecedor no Bling.",
     regras: {
@@ -400,7 +400,7 @@ export const SECOES_CONTAS: Secao[] = [
   {
     id: "formas-pagamento",
     titulo: "Formas de pagamento",
-    rota: "/cadastros/formas-pagamento",
+    rota: "/formas-pagamento",
     resumo:
       "Os cartões e meios de pagamento usados nas compras e nas assinaturas. É um cadastro do Finanças — diferente da “forma de pagamento” do Bling, que aparece na conta nova lançada no Bling.",
     regras: {

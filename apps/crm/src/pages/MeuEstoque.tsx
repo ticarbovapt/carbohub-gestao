@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
+import { useParamUrl } from "@carbo/shell";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { Button } from "@/components/ui/button";
@@ -30,7 +31,12 @@ import { useVendedoresDir } from "@/hooks/useVendas";
 export default function MeuEstoque() {
   const { profile, isGestor } = useAuth();
   // Gestor pode olhar a caixa de outro; vendedor vê só a dele (a RLS confirma).
-  const [alvo, setAlvo] = useState<string>(() => profile?.id ?? "");
+  // A caixa espiada mora na URL (`?vendedor=<id>`): o F5 não devolve a gestão à
+  // própria caixa no meio da conferência. A caixa de quem está logado é o
+  // padrão e não vai para o endereço.
+  const [vendedorUrl, setVendedorUrl] = useParamUrl("vendedor");
+  const alvo = vendedorUrl || profile?.id || "";
+  const setAlvo = (v: string) => setVendedorUrl(v === profile?.id ? null : v);
   const { data: vendedores } = useVendedoresDir();
   const { data: estoque, isLoading } = useMeuEstoque(alvo || profile?.id);
   const { data: aCaminho } = useACaminho(alvo || profile?.id);
@@ -41,8 +47,10 @@ export default function MeuEstoque() {
   // é onde a decisão dela fica registrada como dela.
   const souODono = !alvo || alvo === profile?.id;
   const { data: saindo } = useSaindoDaMinhaCaixa(alvo || profile?.id);
-  const [busca, setBusca] = useState("");
-  const [soComSaldo, setSoComSaldo] = useState(true);
+  // Busca e "só com saldo" também na URL (`?busca=&saldo=todos`).
+  const [busca, setBusca] = useParamUrl("busca", "", { replace: true });
+  const [saldoUrl, setSaldoUrl] = useParamUrl("saldo", "com");
+  const soComSaldo = saldoUrl !== "todos";
 
   const itens = useMemo(() => {
     let l = estoque?.itens ?? [];
@@ -196,7 +204,7 @@ export default function MeuEstoque() {
                   value={busca} onChange={(e) => setBusca(e.target.value)} />
               </div>
               <Button size="sm" variant={soComSaldo ? "default" : "outline"} className="h-9"
-                onClick={() => setSoComSaldo((v) => !v)}>
+                onClick={() => setSaldoUrl(soComSaldo ? "todos" : null)}>
                 {soComSaldo ? "Só o que tenho" : "Tudo"}
               </Button>
             </div>

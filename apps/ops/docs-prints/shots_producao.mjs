@@ -31,7 +31,7 @@ const moverPara = (num, coluna) => async (p) => {
 
 export const SHOTS = [
   // ══ Dashboard de Produção ═══════════════════════════════════════════════════
-  { chave: "prod-dashboard", papel: "colaborador", url: "/producao/dashboard", viewport: { width: 1440, height: 1220 }, marcas: [
+  { chave: "prod-dashboard", papel: "colaborador", url: "/producao/painel", viewport: { width: 1440, height: 1220 }, marcas: [
     [1, (p) => p.locator("main").getByText("OP Ativas", { exact: true }).locator("xpath=ancestor::div[contains(@class,'rounded')][1]")],
     [2, (p) => p.locator("main").getByText("OPs Concluídas", { exact: true }).locator("xpath=ancestor::div[contains(@class,'rounded')][1]")],
     [3, (p) => p.locator("main").getByText("Taxa de Conclusão", { exact: true }).locator("xpath=ancestor::div[contains(@class,'rounded')][1]")],

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useParamUrl } from "@carbo/shell";
 import { ArrowDownToLine, ArrowUpFromLine, Plus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
@@ -17,7 +18,8 @@ import { ptBR } from "date-fns/locale";
 
 export function StockMovementsList() {
   const { gestor } = useAuth();
-  const [tipoFilter, setTipoFilter] = useState("all");
+  // Filtro na URL (`?tipo=entrada|saida`): F5 e link mantêm a lista filtrada.
+  const [tipoFilter, setTipoFilter] = useParamUrl("tipo", "all");
   const [showCreate, setShowCreate] = useState(false);
   const [productId, setProductId] = useState("");
   const [tipo, setTipo] = useState<"entrada" | "saida">("entrada");

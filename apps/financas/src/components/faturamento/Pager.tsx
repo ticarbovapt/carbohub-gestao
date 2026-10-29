@@ -7,10 +7,15 @@ import { CarboButton } from "@/components/ui/carbo-button";
 // — cada linha com botão de baixar NF — deixava a tela lenta).
 export const PAGE_SIZE = 20;
 
-/** Página atual lida/gravada na URL (?<key>=…). Persiste no F5. */
-export function useUrlPage(key: string): [number, (p: number) => void] {
+/** Página atual lida/gravada na URL (?<key>=…). Persiste no F5.
+ *
+ *  `antiga`: o nome que a chave tinha antes (as listas usavam `?psist=`,
+ *  `?porders=`… e hoje é `?pagina=`, 29/10/2026). Link salvo com o nome antigo
+ *  continua abrindo na página certa, e a chave antiga sai da URL na primeira
+ *  troca de página — senão voltar à 1 a ressuscitaria. */
+export function useUrlPage(key: string, antiga?: string): [number, (p: number) => void] {
   const [params, setParams] = useSearchParams();
-  const raw = parseInt(params.get(key) || "1", 10);
+  const raw = parseInt(params.get(key) || (antiga ? params.get(antiga) : null) || "1", 10);
   const page = Number.isFinite(raw) && raw > 0 ? raw : 1;
   // ⚠️ Parte de `window.location.search`, NUNCA do `prev` do setParams: no RR
   // 6.30 o `prev` é o da URL do último render. A busca grava `?busca=` e chama
@@ -19,6 +24,7 @@ export function useUrlPage(key: string): [number, (p: number) => void] {
   // continuava no mês. Mesma regra do `useParamUrl` do `packages/shell`.
   const setPage = (p: number) => {
     const atual = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+    if (antiga) atual.delete(antiga);
     if (p <= 1) atual.delete(key);
     else atual.set(key, String(p));
     setParams(atual, { replace: true });

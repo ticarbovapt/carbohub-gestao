@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useParamUrl } from "@carbo/shell";
 import { Package, ArrowDownToLine, ArrowUpFromLine, BarChart3, AlertTriangle, Layers, History, Lightbulb, Shield } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
@@ -17,8 +16,15 @@ import { SkuStockPolicy } from "@/components/suprimentos/SkuStockPolicy";
 
 export default function Suprimentos() {
   // ⚠️ Aba na URL (`?aba=`): F5 e link mantêm a aba, e o Voltar desfaz a troca.
-  const [activeTab, setActiveTab] = useParamUrl("aba", "estoque");
-  const [planningMode, setPlanningMode] = useState(false);
+  const [activeTab, setAba] = useParamUrl("aba", "estoque");
+  // As abas Estoque e Política dividem `?busca=`: trocar de aba a limpa, senão
+  // a busca de uma filtraria, calada, a lista da outra.
+  const [, setBusca] = useParamUrl("busca", "", { replace: true });
+  const setActiveTab = (v: string) => { setAba(v); setBusca(null); };
+  // Modo Planejamento na URL (`?planejamento=sim`): F5 não o desliga.
+  const [planejamentoUrl, setPlanejamentoUrl] = useParamUrl("planejamento", "");
+  const planningMode = planejamentoUrl === "sim";
+  const setPlanningMode = (v: boolean) => setPlanejamentoUrl(v ? "sim" : null);
   const { data: kpis } = useSuprimentosKPIs();
   const { gestor } = useAuth();
 

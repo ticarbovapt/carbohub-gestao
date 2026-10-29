@@ -22,7 +22,7 @@ type Atalho = { to: string; label: string; hint: string; icon: LucideIcon };
 // Só o que EXISTE hoje. As telas de pré-vendas entram aqui quando existirem —
 // card apontando para tela vazia é pior que card ausente.
 const ATALHOS: Atalho[] = [
-  { to: "/crm/pipelines", label: "Pipeline", hint: "Os leads em cada etapa, do contato ao closer", icon: KanbanSquare },
+  { to: "/funis", label: "Funis", hint: "Os leads em cada etapa, do contato ao closer", icon: KanbanSquare },
   { to: "/vendas", label: "Vendas", hint: "O que o closer fechou a partir do SDR", icon: ShoppingBag },
   { to: "/resultados", label: "Resultados", hint: "Repassados, fechados e conversão", icon: BarChart3 },
   { to: "/atendimento", label: "Atendimento", hint: "As conversas com os postos no WhatsApp", icon: MessagesSquare },

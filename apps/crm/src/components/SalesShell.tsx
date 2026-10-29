@@ -38,12 +38,16 @@ export function SalesShell() {
   const navigate = useNavigate();
 
   // Navegação padronizada: topo = item principal + Carbo Chat; depois seções por domínio.
+  // ⚠️ O caminho de cada item é o NOME dele em português, curto ("Funis" →
+  // /funis, "Rastreio de venda" → /rastreio): quem lê a barra de endereço tem
+  // de reconhecer a tela que está no menu. Renomeou um, renomeie o outro — e o
+  // endereço antigo vira `IrPara` no App.tsx.
   const sections: ShellNavSection[] = [
     { items: [
         { to: "/chat", label: "Carbo Chat", icon: MessagesSquare, badge: <ChatBadge /> },
     ] },
     { label: "Comercial", items: [
-        { to: "/crm/pipelines", label: "Pipelines", icon: KanbanSquare },
+        { to: "/funis", label: "Funis", icon: KanbanSquare },
         { to: "/vendas", label: "Vendas", icon: TrendingUp },
         { to: "/metas", label: "Metas de Vendedores", icon: Target },
         { to: "/pdvs", label: "Pontos de Venda", icon: MapPin },
@@ -52,12 +56,12 @@ export function SalesShell() {
     { label: "Pedidos", items: [
         // "meus pedidos" mentia para o gestor, que vê o quadro inteiro. O que a
         // tela é para os dois é rastreio — quem é dono de quê já aparece no card.
-        { to: "/pos-venda", label: "Rastreio de venda", icon: ShoppingBag },
+        { to: "/rastreio", label: "Rastreio de venda", icon: ShoppingBag },
         { to: "/meu-estoque", label: "Meu Estoque", icon: PackageCheck },
-        { to: "/compras", label: "Requisição de Compra", icon: ShoppingCart },
+        { to: "/requisicoes", label: "Requisição de Compra", icon: ShoppingCart },
     ] },
     { label: "Descarbonização", icon: Wind, items: [
-        { to: "/descarbonizacao/os", label: "Ordens de Serviço", icon: ClipboardList },
+        { to: "/os", label: "Ordens de Serviço", icon: ClipboardList },
     ] },
     { label: "Ajuda", items: [
         { to: "/documentacao", label: "Documentação", icon: BookOpen },

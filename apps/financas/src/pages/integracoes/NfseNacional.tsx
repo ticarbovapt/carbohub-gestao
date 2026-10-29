@@ -76,15 +76,34 @@ const TAMANHOS = [25, 50, 100, 200];
 // que mantém o link curto sem transformar um valor legítimo em "apagar".
 const PADRAO: Record<string, string> = {
   papel: "emitida",
-  sit: "todas",
+  situacao: "todas",
   ano: "todos",
   mes: "todos",
-  q: "",
-  ord: "data",
-  dir: "desc",
-  tam: "50",
-  pg: "1",
+  busca: "",
+  ordem: "data",
+  direcao: "desc",
+  tamanho: "50",
+  pagina: "1",
 };
+
+// As chaves eram abreviadas (`?sit=&q=&ord=&dir=&tam=&pg=`); desde 29/10/2026
+// são por extenso, como nas outras telas. Link salvo com o nome antigo continua
+// abrindo a mesma lista: ele é LIDO como reserva e migrado na primeira troca.
+const CHAVE_ANTIGA: Record<string, string> = {
+  situacao: "sit", busca: "q", ordem: "ord", direcao: "dir", tamanho: "tam", pagina: "pg",
+};
+
+/** Parâmetros da URL ATUAL (nunca o `prev` do roteador — ver `useParamUrl`),
+ *  com as chaves antigas já trocadas pelas novas. */
+function paramsAtuais(): URLSearchParams {
+  const p = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+  for (const [nova, antiga] of Object.entries(CHAVE_ANTIGA)) {
+    const v = p.get(antiga);
+    p.delete(antiga);
+    if (v != null && !p.has(nova)) p.set(nova, v);
+  }
+  return p;
+}
 
 // A contraparte é a OUTRA ponta: numa nota emitida é o tomador, numa recebida é
 // o prestador. Coluna fixa repetiria "CARBO SOLUCOES LTDA" em metade da tela.
@@ -204,16 +223,17 @@ export default function NfseNacional() {
   const [params, setParams] = useSearchParams();
   const papel = (params.get("papel") as Papel) || "emitida";
   const ano = params.get("ano") || "todos";
-  const situacao = (params.get("sit") as Situacao) || "todas";
+  const ler = (k: string) => params.get(k) ?? (CHAVE_ANTIGA[k] ? params.get(CHAVE_ANTIGA[k]) : null);
+  const situacao = (ler("situacao") as Situacao) || "todas";
   const mes = params.get("mes") || "todos";
-  const busca = params.get("q") || "";
-  const ordem = (params.get("ord") as Ordem) || "data";
-  const dir = params.get("dir") === "asc" ? "asc" : "desc";
-  const tamanho = Number(params.get("tam")) || 50;
-  const pagina = Math.max(1, Number(params.get("pg")) || 1);
+  const busca = ler("busca") || "";
+  const ordem = (ler("ordem") as Ordem) || "data";
+  const dir = ler("direcao") === "asc" ? "asc" : "desc";
+  const tamanho = Number(ler("tamanho")) || 50;
+  const pagina = Math.max(1, Number(ler("pagina")) || 1);
 
   const troca = (chave: string, valor: string) => {
-    const p = new URLSearchParams(params);
+    const p = paramsAtuais();
     // ⚠️ O que sai da URL é o valor IGUAL AO PADRÃO DAQUELE parâmetro — nunca
     // o texto "todas"/"todos".
     //
@@ -231,16 +251,16 @@ export default function NfseNacional() {
     // ⚠️ Filtrar SEMPRE volta para a página 1. Sem isso, quem está na página 7
     // e troca o ano cai numa lista de 2 páginas e vê a tela VAZIA — e lê isso
     // como "não tem nota nesse ano", que é a conclusão errada.
-    if (chave !== "pg") p.delete("pg");
+    if (chave !== "pagina") p.delete("pagina");
     setParams(p, { replace: true });
   };
 
   // Clicar no cabeçalho: primeira vez ordena, segunda inverte.
   const ordenar = (col: Ordem) => {
-    const p = new URLSearchParams(params);
-    if (ordem === col) p.set("dir", dir === "asc" ? "desc" : "asc");
-    else { p.set("ord", col); p.set("dir", col === "valor" || col === "data" ? "desc" : "asc"); }
-    p.delete("pg");
+    const p = paramsAtuais();
+    if (ordem === col) p.set("direcao", dir === "asc" ? "desc" : "asc");
+    else { p.set("ordem", col); p.set("direcao", col === "valor" || col === "data" ? "desc" : "asc"); }
+    p.delete("pagina");
     setParams(p, { replace: true });
   };
 
@@ -433,7 +453,7 @@ export default function NfseNacional() {
           </TabsList>
         </Tabs>
 
-        <Tabs value={situacao} onValueChange={(v) => troca("sit", v)} className="min-w-0 max-w-full">
+        <Tabs value={situacao} onValueChange={(v) => troca("situacao", v)} className="min-w-0 max-w-full">
           <TabsList className="max-w-full justify-start overflow-x-auto">
             <TabsTrigger value="todas">Todas</TabsTrigger>
             <TabsTrigger value="validas">Só válidas</TabsTrigger>
@@ -467,7 +487,7 @@ export default function NfseNacional() {
           <CarboSearchInput
             placeholder="Nº, CNPJ, nome, descrição ou chave…"
             value={busca}
-            onChange={(e) => troca("q", e.target.value)}
+            onChange={(e) => troca("busca", e.target.value)}
           />
         </div>
       </div>
@@ -631,21 +651,21 @@ export default function NfseNacional() {
             <select
               className="h-8 rounded-md border border-border bg-background px-2 text-xs"
               value={tamanho}
-              onChange={(e) => troca("tam", e.target.value)}
+              onChange={(e) => troca("tamanho", e.target.value)}
             >
               {TAMANHOS.map((t) => <option key={t} value={t}>{t} por página</option>)}
             </select>
           </div>
           <div className="flex items-center gap-2">
             <CarboButton size="sm" variant="outline" disabled={pgSegura <= 1}
-                         onClick={() => troca("pg", String(pgSegura - 1))}>
+                         onClick={() => troca("pagina", String(pgSegura - 1))}>
               <ChevronLeft className="h-4 w-4" /> Anterior
             </CarboButton>
             <span className="text-xs text-muted-foreground whitespace-nowrap">
               Página {pgSegura} de {paginas}
             </span>
             <CarboButton size="sm" variant="outline" disabled={pgSegura >= paginas}
-                         onClick={() => troca("pg", String(pgSegura + 1))}>
+                         onClick={() => troca("pagina", String(pgSegura + 1))}>
               Próxima <ChevronRight className="h-4 w-4" />
             </CarboButton>
           </div>

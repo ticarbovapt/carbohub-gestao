@@ -137,7 +137,7 @@ export default function Alertas() {
             (min > 0 ? ` · mínimo ${min.toLocaleString("pt-BR")}` : ""),
           prioridade,
           action: { label: "Ver estoque", to: `/suprimentos/${hub.slug}/estoque` },
-          action2: { label: "Requisitar", icon: ShoppingCart, go: () => navigate("/compras", { state: { prefill: {
+          action2: { label: "Requisitar", icon: ShoppingCart, go: () => navigate("/requisicoes", { state: { prefill: {
             descricao: p.name, quantidade: sugerido, unidade: p.stock_unit,
             motivo: qty <= 0 ? "ruptura" : "reposicao_safety", priority: qty <= 0 ? "critica" : "normal",
           } } }) },
@@ -152,7 +152,7 @@ export default function Alertas() {
       // "parado há X" conta da troca de etapa (coluna própria, não poluída).
       const dias = diasDesde(o.stage_changed_at ?? o.updated_at ?? o.created_at);
       const titulo = `${o.customer_name} · ${o.order_number}`;
-      const rastreio = { label: "Abrir rastreio", to: "/logistica/pos-venda" };
+      const rastreio = { label: "Abrir rastreio", to: "/rastreio" };
       if (stg === "criar_op" && o.production_done) {
         out.push({ id: `prod-${o.id}`, area: "pedidos", tipo: "Produzido", titulo, dias,
           detalhe: `Produção concluída, falta mover para Em Separação · ${ha(dias)}`,
@@ -218,7 +218,7 @@ export default function Alertas() {
         titulo: `${v.customer_name ?? "Cliente"}${v.order_number ? ` · ${v.order_number}` : ""}`,
         detalhe: `Venda${v.sale_date ? ` de ${dataCurta(v.sale_date)}` : ""} sem ordem de serviço` +
           (v.vendedor_name ? ` · ${v.vendedor_name}` : ""),
-        prioridade: "critical", action: { label: "Abrir OS", to: "/campo/os" } });
+        prioridade: "critical", action: { label: "Abrir OS", to: "/os" } });
     }
     for (const os of osQ.data ?? []) {
       if (os.stage !== "nova" && os.stage !== "em_execucao") continue;
@@ -233,7 +233,7 @@ export default function Alertas() {
           ? `Agendada para ${dataCurta(dia)} e ainda ${os.stage === "nova" ? "não iniciada" : "em execução"}${veiculos}`
           : `Agendada para hoje${veiculos}`,
         prioridade: atrasada ? (dias >= 3 ? "critical" : "high") : "medium",
-        action: { label: "Abrir OS", to: atrasada ? "/campo/os" : "/campo/os?ver=agenda" } });
+        action: { label: "Abrir OS", to: atrasada ? "/os" : "/os?ver=agenda" } });
     }
 
     const peso = (p: Prioridade) => PRIO_ORDEM.indexOf(p);

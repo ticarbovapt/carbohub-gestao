@@ -1,5 +1,4 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
 import { useParamUrl } from "@carbo/shell";
 import {
   Receipt, FileText, ChevronLeft, ChevronRight, CheckCircle2, DollarSign, Store, Building2, Lock, Link2, Files, Package, Gift, Globe,
@@ -113,7 +112,7 @@ const nfUnlocked = (o: FaturamentoOrder) => {
 
 export default function Faturamento() {
   const [naturezaOpen, setNaturezaOpen] = useState(false);
-  // ⚠️ Mês e busca moram na URL (`?mes=AAAA-MM&busca=`), junto da aba (`?tab=`):
+  // ⚠️ Mês e busca moram na URL (`?mes=AAAA-MM&busca=`), junto da aba (`?aba=`):
   // F5 e link compartilhado mantêm a tela, e o Voltar desfaz a troca de mês. A
   // busca grava com `replace` para não criar uma entrada por letra digitada.
   const hoje = new Date();
@@ -128,29 +127,43 @@ export default function Faturamento() {
     setMesUrl(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
   };
   const [search, setSearch] = useParamUrl("busca", "", { replace: true });
-  // Aba ativa persistida na URL (?tab=…), pra não voltar pro "sistema" a cada F5.
-  const [searchParams, setSearchParams] = useSearchParams();
+  // Aba ativa persistida na URL (`?aba=…`), pra não voltar pro "sistema" a cada F5.
   // ⚠️ ABA NOVA ENTRA AQUI TAMBÉM — são DOIS lugares, e esquecer o segundo não
-  // dá erro nenhum. O `<TabsTrigger>` renderiza, o clique grava `?tab=…`, e
+  // dá erro nenhum. O `<TabsTrigger>` renderiza, o clique grava `?aba=…`, e
   // esta lista devolve a aba para "sistema" calado: o botão parece morto.
   // Aconteceu no mesmo dia em que a aba da filial foi criada.
   //
   // O fallback existe para link antigo com aba que não existe mais, e por isso
   // fica — mas é ele que transforma "esqueci de registrar" em "o botão não
   // funciona", que é o sintoma mais difícil de ligar à causa.
-  const VALID_TABS = ["sistema", "bling", "online", "vincular", "vincular_filial", "todas"];
-  const rawTab = searchParams.get("tab") || "sistema";
+  //
+  // A chave era `?tab=` e a aba da filial era `vincular_filial` (29/10/2026:
+  // `?aba=` e `vincular-filial`). Os dois nomes antigos continuam sendo LIDOS —
+  // link salvo abre a aba certa — e `tab` sai da URL na primeira troca.
+  const VALID_TABS = ["sistema", "bling", "online", "vincular", "vincular-filial", "todas"];
+  const [abaUrl, setAbaUrl] = useParamUrl("aba", "");
+  const [tabAntiga, setTabAntiga] = useParamUrl("tab", "");
+  const rawTab = (abaUrl || tabAntiga || "sistema").replace("vincular_filial", "vincular-filial");
   const activeTab = VALID_TABS.includes(rawTab) ? rawTab : "sistema";
-  // ⚠️ Da URL ATUAL, não do `prev` (o do último render no RR 6.30) — ver `useUrlPage`.
+  // Cada aba tem a SUA lista, mas só uma aparece por vez: elas dividem a mesma
+  // `?pagina=` e a mesma busca de nota (`?nota=`), que por isso zeram na troca —
+  // a página 4 do "sistema" não pode virar, calada, a página 4 de "Todas as NFs".
+  const [, setBuscaNota] = useParamUrl("nota", "", { replace: true });
+  const [, setOrdemNota] = useParamUrl("ordem", "");
   const setActiveTab = (v: string) => {
-    const atual = new URLSearchParams(window.location.search);
-    atual.set("tab", v);
-    setSearchParams(atual);
+    setAbaUrl(v === "sistema" ? null : v);
+    setTabAntiga(null);
+    setBuscaNota(null);
+    setOrdemNota(null);
+    resetPages();
   };
   // Padrão: mostra TODOS os pedidos do mês (com e sem NF) — é uma tela de
   // rastreabilidade/faturamento. Desligar "Mostrar já faturados" filtra para
   // ver só os pendentes (sem NF vinculada).
-  const [showAll, setShowAll] = useState(true);
+  // Na URL também (`?faturados=nao`): é filtro, e o F5 não pode religá-lo calado.
+  const [faturadosUrl, setFaturadosUrl] = useParamUrl("faturados", "sim");
+  const showAll = faturadosUrl !== "nao";
+  const setShowAll = (v: boolean) => { setFaturadosUrl(v ? null : "nao"); resetPages(); };
   // Linha expandida (detalhe do pedido para conferência). Clicar na linha alterna.
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -181,15 +194,17 @@ export default function Faturamento() {
   );
   const soma = (rows: FaturamentoOrder[]) => rows.reduce((s, o) => s + Number(o.total || 0), 0);
 
-  // Paginação (20/pág) das abas sistema e Bling — página na URL (persiste no F5).
-  const [pSist, setPSist] = useUrlPage("psist");
-  const [pBling, setPBling] = useUrlPage("pbling");
-  const [pOnline, setPOnline] = useUrlPage("ponline");
-  const sistPag = paginate(sistema, pSist);
-  const blingPag = paginate(bling, pBling);
-  const onlinePag = paginate(online, pOnline);
-  // Nova busca/mês → volta pra página 1 das listas paginadas.
-  const resetPages = () => { setPSist(1); setPBling(1); setPOnline(1); };
+  // Paginação (20/pág) das abas sistema, Bling e online — página na URL
+  // (`?pagina=`, persiste no F5). Uma chave só: só uma aba aparece por vez, e a
+  // troca de aba volta à 1. Os nomes antigos (`?psist=`…) ainda são lidos.
+  const abaPag = activeTab === "bling" ? "pbling" : activeTab === "online" ? "ponline" : "psist";
+  const [pagina, setPagina] = useUrlPage("pagina", abaPag);
+  const sistPag = paginate(sistema, pagina);
+  const blingPag = paginate(bling, pagina);
+  const onlinePag = paginate(online, pagina);
+  const setPSist = setPagina, setPBling = setPagina, setPOnline = setPagina;
+  // Nova busca/mês/aba → volta pra página 1.
+  function resetPages() { setPagina(1); }
 
   const changeMonth = (delta: number) => {
     resetPages();
@@ -564,7 +579,7 @@ export default function Faturamento() {
                 significa nada na outra, e uma lista só faria alguém vincular a
                 nota da empresa errada ao pedido — sem erro nenhum, porque os
                 dois números existem. */}
-            <TabsTrigger value="vincular_filial" className="gap-2"><Link2 className="h-4 w-4" /> Vincular NFs (filial)</TabsTrigger>
+            <TabsTrigger value="vincular-filial" className="gap-2"><Link2 className="h-4 w-4" /> Vincular NFs (filial)</TabsTrigger>
             <TabsTrigger value="todas" className="gap-2"><Files className="h-4 w-4" /> Todas as NFs</TabsTrigger>
           </TabsList>
 
@@ -610,7 +625,7 @@ export default function Faturamento() {
             <VincularNFsTab />
           </TabsContent>
 
-          <TabsContent value="vincular_filial" className="mt-4">
+          <TabsContent value="vincular-filial" className="mt-4">
             <VincularNFsFilialTab />
             <p className="mt-3 text-xs text-muted-foreground">
               A nota da <strong>filial SP</strong> casa sozinha por dois caminhos: o

@@ -76,9 +76,11 @@ export default function RtmAgenda() {
   const { user, isGestor } = useAuth();
   const [params, setParams] = useSearchParams();
 
-  const [dia, setDia] = useState(() => params.get("d") || diaLocal());
+  // Dia, visão e vendedor moram na URL (`?ver=mes&dia=2026-10-29&vendedor=<id>`).
+  // Até 29/10/2026 eram `?v=` e `?d=` — ainda lidos, para link antigo abrir.
+  const [dia, setDia] = useState(() => params.get("dia") || params.get("d") || diaLocal());
   const [visao, setVisao] = useState<Visao>(() => {
-    const daUrl = params.get("v");
+    const daUrl = params.get("ver") ?? params.get("v");
     if (daUrl === "mes" || daUrl === "lista") return daUrl;
     // ⚠️ O localStorage só SEMEIA o valor inicial, e vem dentro de try/catch:
     // aba anônima e alguns WebViews lançam no acesso, e a tela não pode cair
@@ -88,7 +90,9 @@ export default function RtmAgenda() {
   });
 
   // Gestor começa vendo o time inteiro; vendedor só se vê (e a RLS confirma).
-  const [vendedor, setVendedor] = useState<string>(() => (isGestor ? "todos" : (user?.id ?? "")));
+  // O gestor que escolheu um vendedor volta a ele no F5 (`?vendedor=<id>`).
+  const [vendedor, setVendedor] = useState<string>(() =>
+    (isGestor ? (params.get("vendedor") || "todos") : (user?.id ?? "")));
 
   // ⚠️ O inicializador do useState roda UMA vez, e o AuthContext pode não ter
   // resolvido ainda. Sem esta correção o gestor ficava preso em `user?.id ?? ""`
@@ -96,7 +100,7 @@ export default function RtmAgenda() {
   // a tela dizia "Sua agenda". Mostrava o time inteiro chamando de "sua".
   useEffect(() => {
     if (vendedor) return;
-    if (isGestor) setVendedor("todos");
+    if (isGestor) setVendedor(params.get("vendedor") || "todos");
     else if (user?.id) setVendedor(user.id);
   }, [isGestor, user?.id, vendedor]);
   const [novoOpen, setNovoOpen] = useState(false);
@@ -116,8 +120,14 @@ export default function RtmAgenda() {
     try { localStorage.setItem(CHAVE_VISAO, visao); } catch { /* sem persistência, tudo bem */ }
     // A URL é a fonte da verdade: o "voltar" do celular desfaz a navegação do
     // calendário para o dia, e dá para mandar um link que abre o mesmo lugar.
-    setParams({ v: visao, d: dia }, { replace: true });
-  }, [visao, dia]);
+    // Parte da URL ATUAL (não do `params` do render) e só mexe nas chaves
+    // dela — o resto da query sobrevive.
+    const p = new URLSearchParams(window.location.search);
+    p.delete("v"); p.delete("d");
+    p.set("ver", visao); p.set("dia", dia);
+    if (isGestor && vendedor && vendedor !== "todos") p.set("vendedor", vendedor); else p.delete("vendedor");
+    setParams(p, { replace: true });
+  }, [visao, dia, vendedor, isGestor]);
 
   // ── Janelas. Declaradas ANTES dos memos que as usam (TDZ: o callback de
   //    useMemo roda durante o render, e isso já derrubou o /vender). ─────────
@@ -187,7 +197,7 @@ export default function RtmAgenda() {
       toast.error("Você tem uma visita em aberto. Finalize antes de iniciar outra.");
       // ⚠️ COM o `?v=`: sem ele a tela caía em "Nenhuma visita selecionada",
       // com um botão para voltar à agenda de onde a pessoa acabou de sair.
-      navigate(`/rtm/visita?v=${emAndamento.client_uuid}`);
+      navigate(`/rtm/visita?visita=${emAndamento.client_uuid}`);
       return;
     }
     setIniciando(l.planejada_id);
@@ -206,7 +216,7 @@ export default function RtmAgenda() {
         geo: null,
       });
       toast.success(`Check-in em ${l.pdv_nome}.`);
-      navigate(`/rtm/visita?v=${v.client_uuid}`);
+      navigate(`/rtm/visita?visita=${v.client_uuid}`);
       // Segue tentando o GPS em segundo plano, sem segurar ninguém.
       void pegarLocal().then((geo) => { if (geo) void rtmCompletarLocal(v.client_uuid, geo); });
     } catch (e) {
@@ -283,7 +293,7 @@ export default function RtmAgenda() {
             única coisa que importa nessa hora. */}
         {emAndamento && (
           <Link
-            to={`/rtm/visita?v=${emAndamento.client_uuid}`}
+            to={`/rtm/visita?visita=${emAndamento.client_uuid}`}
             className="sticky top-0 z-30 w-full flex items-center gap-3 rounded-lg border-2
                        border-blue-400 bg-blue-50 dark:bg-blue-950/40 px-3 py-2.5 text-left shadow-sm"
           >
@@ -444,7 +454,7 @@ export default function RtmAgenda() {
                       <LinhaAgenda l={l} podeIniciar meu={l.vendedor_id === user?.id}
                         iniciando={iniciando === l.planejada_id}
                         onIniciar={() => iniciar(l)}
-                        abrirEm={`/rtm/visita?v=${l.visita_id}&ver=1`} />
+                        abrirEm={`/rtm/visita?visita=${l.visita_id}&leitura=1`} />
                     </div>
                   ))}
                 </section>
@@ -486,7 +496,7 @@ export default function RtmAgenda() {
                     meu={l.vendedor_id === user?.id}
                     iniciando={iniciando === l.planejada_id}
                     onIniciar={() => iniciar(l)}
-                    abrirEm={`/rtm/visita?v=${l.visita_id}&ver=1`}
+                    abrirEm={`/rtm/visita?visita=${l.visita_id}&leitura=1`}
                     onCancelar={() => setCancelando(l)} />
                 ))}
               </section>
@@ -528,7 +538,7 @@ export default function RtmAgenda() {
                     <LinhaAgenda key={l.planejada_id} l={l} podeIniciar={false}
                       meu={l.vendedor_id === user?.id} iniciando={false}
                       onIniciar={() => {}}
-                      abrirEm={`/rtm/visita?v=${l.visita_id}&ver=1`}
+                      abrirEm={`/rtm/visita?visita=${l.visita_id}&leitura=1`}
                       onCancelar={() => setCancelando(l)} />
                   ))}
                 </section>

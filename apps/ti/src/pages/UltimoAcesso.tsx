@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useParamUrl } from "@carbo/shell";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
@@ -85,10 +85,12 @@ const th = "px-4 py-3 text-left font-semibold text-muted-foreground uppercase te
 
 // ── Internos (com Último sistema) ────────────────────────────────────────────
 function InternalSection({ rows }: { rows: LoginRow[] }) {
-  const [filterDept, setFilterDept] = useState("all");
-  const [filterApp, setFilterApp] = useState("all");
-  const [filterStatus, setFilterStatus] = useState("all");
-  const [search, setSearch] = useState("");
+  // Filtros na URL (`?busca=&departamento=&sistema=&situacao=`): F5 e link
+  // ("quem do Ops não entra há 30 dias") abrem a MESMA lista.
+  const [filterDept, setFilterDept] = useParamUrl("departamento", "all");
+  const [filterApp, setFilterApp] = useParamUrl("sistema", "all");
+  const [filterStatus, setFilterStatus] = useParamUrl("situacao", "all");
+  const [search, setSearch] = useParamUrl("busca", "", { replace: true });
 
   const departments = [...new Set(rows.map((r) => r.department).filter(Boolean))] as string[];
   const apps = [...new Set(rows.map((r) => r.last_app).filter(Boolean))] as string[];
@@ -97,7 +99,7 @@ function InternalSection({ rows }: { rows: LoginRow[] }) {
     if (filterDept !== "all" && r.department !== filterDept) return false;
     if (filterApp !== "all" && r.last_app !== filterApp) return false;
     if (filterStatus !== "all") {
-      const map: Record<string, string> = { today: "Hoje", week: "Últimos 7 dias", over7: "+7 dias", over30: "+30 dias", never: "Nunca acessou" };
+      const map: Record<string, string> = { hoje: "Hoje", semana: "Últimos 7 dias", mais7: "+7 dias", mais30: "+30 dias", nunca: "Nunca acessou" };
       if (getActivityStatus(r.last_login_at).label !== map[filterStatus]) return false;
     }
     if (search && !r.full_name?.toLowerCase().includes(search.toLowerCase())) return false;
@@ -129,11 +131,11 @@ function InternalSection({ rows }: { rows: LoginRow[] }) {
           <SelectTrigger className="w-44"><SelectValue placeholder="Status" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos status</SelectItem>
-            <SelectItem value="today">🟢 Hoje</SelectItem>
-            <SelectItem value="week">🟡 Últimos 7 dias</SelectItem>
-            <SelectItem value="over7">🔴 +7 dias</SelectItem>
-            <SelectItem value="over30">⚫ +30 dias</SelectItem>
-            <SelectItem value="never">⚫ Nunca acessou</SelectItem>
+            <SelectItem value="hoje">🟢 Hoje</SelectItem>
+            <SelectItem value="semana">🟡 Últimos 7 dias</SelectItem>
+            <SelectItem value="mais7">🔴 +7 dias</SelectItem>
+            <SelectItem value="mais30">⚫ +30 dias</SelectItem>
+            <SelectItem value="nunca">⚫ Nunca acessou</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -182,8 +184,8 @@ function InternalSection({ rows }: { rows: LoginRow[] }) {
 
 // ── Licenciados ──────────────────────────────────────────────────────────────
 function LicenseesSection({ rows }: { rows: LoginRow[] }) {
-  const [filterRegion, setFilterRegion] = useState("all");
-  const [search, setSearch] = useState("");
+  const [filterRegion, setFilterRegion] = useParamUrl("regiao", "all");
+  const [search, setSearch] = useParamUrl("busca", "", { replace: true });
   const regions = [...new Set(rows.map((r) => r.region).filter(Boolean))] as string[];
   const filtered = rows.filter((r) => {
     if (filterRegion !== "all" && r.region !== filterRegion) return false;
@@ -236,8 +238,8 @@ function LicenseesSection({ rows }: { rows: LoginRow[] }) {
 
 // ── Lojas (PDV), dividido por loja/região ────────────────────────────────────
 function LojasSection({ rows }: { rows: LoginRow[] }) {
-  const [filterRegion, setFilterRegion] = useState("all");
-  const [search, setSearch] = useState("");
+  const [filterRegion, setFilterRegion] = useParamUrl("regiao", "all");
+  const [search, setSearch] = useParamUrl("busca", "", { replace: true });
   const regions = [...new Set(rows.map((r) => r.region).filter(Boolean))] as string[];
   const filtered = rows.filter((r) => {
     if (filterRegion !== "all" && r.region !== filterRegion) return false;
@@ -289,6 +291,19 @@ function LojasSection({ rows }: { rows: LoginRow[] }) {
 }
 
 export default function UltimoAcesso() {
+  // Aba na URL (`?aba=lojas`). Os filtros das três abas dividem as MESMAS
+  // chaves (`busca`, `regiao`…), então trocar de aba os limpa — a busca por
+  // "Maria" nos internos não pode virar, calada, a busca dos licenciados.
+  const [abaUrl, setAba] = useParamUrl("aba", "internos");
+  const aba = ["internos", "licenciados", "lojas"].includes(abaUrl) ? abaUrl : "internos";
+  const [, setBusca] = useParamUrl("busca", "", { replace: true });
+  const [, setRegiao] = useParamUrl("regiao", "all");
+  const [, setDepto] = useParamUrl("departamento", "all");
+  const [, setSistema] = useParamUrl("sistema", "all");
+  const [, setSituacao] = useParamUrl("situacao", "all");
+  const trocarAba = (v: string) => {
+    setAba(v); setBusca(null); setRegiao(null); setDepto(null); setSistema(null); setSituacao(null);
+  };
   const { data: rows, isLoading, error } = useQuery({
     queryKey: ["ultimo-acesso"],
     queryFn: async () => {
@@ -331,16 +346,16 @@ export default function UltimoAcesso() {
             </div>
           </div>
 
-          <Tabs defaultValue="internal">
+          <Tabs value={aba} onValueChange={trocarAba}>
             <TabsList>
-              <TabsTrigger value="internal" className="gap-2"><Building2 className="h-4 w-4" /> Internos</TabsTrigger>
-              <TabsTrigger value="licensees" className="gap-2"><Users className="h-4 w-4" /> Licenciados</TabsTrigger>
+              <TabsTrigger value="internos" className="gap-2"><Building2 className="h-4 w-4" /> Internos</TabsTrigger>
+              <TabsTrigger value="licenciados" className="gap-2"><Users className="h-4 w-4" /> Licenciados</TabsTrigger>
               <TabsTrigger value="lojas" className="gap-2"><Store className="h-4 w-4" /> Lojas</TabsTrigger>
             </TabsList>
-            <TabsContent value="internal" className="mt-4">
+            <TabsContent value="internos" className="mt-4">
               {isLoading ? <div className="rounded-xl border border-border overflow-hidden"><table className="w-full"><tbody><SkeletonRows cols={6} /></tbody></table></div> : <InternalSection rows={internal} />}
             </TabsContent>
-            <TabsContent value="licensees" className="mt-4">
+            <TabsContent value="licenciados" className="mt-4">
               {isLoading ? <div className="rounded-xl border border-border overflow-hidden"><table className="w-full"><tbody><SkeletonRows cols={5} /></tbody></table></div> : <LicenseesSection rows={licensees} />}
             </TabsContent>
             <TabsContent value="lojas" className="mt-4">

@@ -23,7 +23,7 @@ export const FIXTURES: Record<string, unknown> = {
     { id: "n3", user_id: EU.id, type: "bug_fixed", title: "Bug corrigido", body: "O filtro do Rastreio voltou a funcionar.", is_read: true, reference_type: "bug", reference_id: "b1", created_at: min(60 * 26) },
   ],
   carbo_bug_reports: [
-    { id: "b1", app: "ops", kind: "bug", title: "Filtro do Rastreio não aplicava a etapa", description: "Ao escolher a etapa, a lista continuava igual.", status: "resolved", reporter_id: EU.id, reporter_name: EU.full_name, created_at: min(60 * 30), updated_at: min(60 * 26), archived_at: null, admin_notes: "Corrigido na versão de hoje.", url: "/logistica/pos-venda", severity: null, reach: null },
+    { id: "b1", app: "ops", kind: "bug", title: "Filtro do Rastreio não aplicava a etapa", description: "Ao escolher a etapa, a lista continuava igual.", status: "resolved", reporter_id: EU.id, reporter_name: EU.full_name, created_at: min(60 * 30), updated_at: min(60 * 26), archived_at: null, admin_notes: "Corrigido na versão de hoje.", url: "/rastreio", severity: null, reach: null },
     { id: "b2", app: "ops", kind: "sugestao", title: "Mostrar o lote na ordem de produção", description: "Ajudaria a conferir antes de liberar.", status: "open", reporter_id: EU.id, reporter_name: EU.full_name, created_at: min(60 * 5), updated_at: min(60 * 5), archived_at: null, admin_notes: null, url: "/producao/ordens", severity: null, reach: "meu_time" },
   ],
   mrp_products: produtos,

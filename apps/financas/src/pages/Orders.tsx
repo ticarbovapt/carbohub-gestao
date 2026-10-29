@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import { Pager, useUrlPage, paginate } from "@/components/faturamento/Pager";
+import { useParamUrl } from "@carbo/shell";
 import * as XLSX from "xlsx";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboButton } from "@/components/ui/carbo-button";
@@ -74,15 +75,23 @@ const STATUS_ICONS: Record<OrderStatus, React.ComponentType<{ className?: string
 export default function Orders() {
   const navigate = useNavigate();
   const { gestor } = useAuth();
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<OrderStatus | "all">("all");
-  const [typeFilter, setTypeFilter] = useState<"all" | "spot" | "recorrente">("all");
-  const [productFilter, setProductFilter] = useState<string>("all");
-  const [vendedorFilter, setVendedorFilter] = useState<string>("all");
-  const [clienteFilter, setClienteFilter] = useState<string>("all");
-  const [dateFrom, setDateFrom] = useState<string>("");
-  const [dateTo, setDateTo]     = useState<string>("");
-  const [activeTab, setActiveTab] = useState<"list" | "analytics">("list");
+  // Filtros, período e aba na URL (`?busca=&status=&tipo=&produto=&vendedor=
+  // &cliente=&de=&ate=&aba=relatorios`): F5 e link mandado a alguém abrem a
+  // MESMA lista. Antes era `useState` puro e o F5 zerava tudo. `produto` e
+  // `vendedor` valem também na aba Relatórios — é o mesmo recorte.
+  const [searchQuery, setSearchQuery] = useParamUrl("busca", "", { replace: true });
+  const [statusUrl, setStatusFilter] = useParamUrl("status", "all");
+  const statusFilter = statusUrl as OrderStatus | "all";
+  const [tipoUrl, setTypeFilter] = useParamUrl("tipo", "all");
+  const typeFilter = (tipoUrl === "spot" || tipoUrl === "recorrente" ? tipoUrl : "all") as "all" | "spot" | "recorrente";
+  const [productFilter, setProductFilter] = useParamUrl("produto", "all");
+  const [vendedorFilter, setVendedorFilter] = useParamUrl("vendedor", "all");
+  const [clienteFilter, setClienteFilter] = useParamUrl("cliente", "all");
+  const [dateFrom, setDateFrom] = useParamUrl("de", "");
+  const [dateTo, setDateTo]     = useParamUrl("ate", "");
+  const [abaUrl, setAbaUrl] = useParamUrl("aba", "pedidos");
+  const activeTab: "list" | "analytics" = abaUrl === "relatorios" ? "analytics" : "list";
+  const setActiveTab = (v: "list" | "analytics") => setAbaUrl(v === "analytics" ? "relatorios" : null);
   const tableRef = useRef<HTMLDivElement>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<CarbozeOrder | null>(null);
@@ -142,9 +151,10 @@ export default function Orders() {
     });
   }, [orders, searchQuery, statusFilter, typeFilter, productFilter, vendedorFilter, clienteFilter, dateFrom, dateTo]);
 
-  // Paginação 20/pág — página na URL (?porders=), persiste no F5. Ao mudar um
-  // filtro/busca volta pra página 1 (o guard do 1º render preserva a página no F5).
-  const [ordersPage, setOrdersPage] = useUrlPage("porders");
+  // Paginação 20/pág — página na URL (`?pagina=`; o nome antigo `?porders=`
+  // ainda é lido), persiste no F5. Ao mudar um filtro/busca volta pra página 1
+  // (o guard do 1º render preserva a página no F5).
+  const [ordersPage, setOrdersPage] = useUrlPage("pagina", "porders");
   const ordersPag = paginate(filteredOrders, ordersPage);
   const didMountPage = useRef(false);
   useEffect(() => {

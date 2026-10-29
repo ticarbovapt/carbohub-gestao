@@ -1,6 +1,6 @@
 import type { Secao } from "../tipos";
 
-// Produção: Dashboard de Produção, Ordens de Produção e MRP (Produtos, SKUs,
+// Produção: Painel de Produção, Ordens de Produção e MRP (Produtos, SKUs,
 // Lotes e Fornecedores). ⚠️ O `n` de cada item é o marcador do print
 // (docs-prints/shots_producao.mjs).
 //
@@ -11,11 +11,11 @@ import type { Secao } from "../tipos";
 const IGUAL = "Vê e faz o mesmo que o colaborador: esta tela ainda não muda para o gestor.";
 
 export const SECOES_PRODUCAO: Secao[] = [
-  // ── Dashboard de Produção ───────────────────────────────────────────────────
+  // ── Painel de Produção ───────────────────────────────────────────────────
   {
     id: "producao-dashboard",
-    titulo: "Dashboard de Produção",
-    rota: "/producao/dashboard",
+    titulo: "Painel de Produção",
+    rota: "/producao/painel",
     resumo:
       "Um resumo da fábrica em uma tela: quantas ordens de produção (OP) estão andando, quantas terminaram, como vão os checklists da operação e o que foi criado e concluído na última semana. É só para olhar — para mexer numa OP, use Ordens de Produção.",
     regras: {
@@ -24,7 +24,7 @@ export const SECOES_PRODUCAO: Secao[] = [
     },
     blocos: [
       {
-        print: { chave: "prod-dashboard", legenda: "Dashboard de Produção." },
+        print: { chave: "prod-dashboard", legenda: "Painel de Produção." },
         itens: [
           { n: 1, titulo: "OP Ativas", texto: "Ordens que ainda não foram concluídas nem canceladas. Embaixo, quantas já foram concluídas do total de OPs." },
           { n: 2, titulo: "OPs Concluídas", texto: "Ordens que já terminaram (confirmadas ou concluídas)." },

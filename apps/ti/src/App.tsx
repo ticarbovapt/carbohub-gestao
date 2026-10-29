@@ -48,7 +48,11 @@ export default function App() {
         <Route path="/chat/adocao" element={<ChatAdocao />} />
         <Route path="/academy/acessos" element={<AcademyAcessos />} />
         <Route path="/usuarios" element={<Users />} />
-        <Route path="/estrutura" element={<Structure />} />
+        {/* Slug = nome do menu ("Departamentos e funções", 29/10/2026). O
+            endereço antigo continua abrindo — o Admin ainda redireciona para
+            ti…/estrutura. */}
+        <Route path="/departamentos" element={<Structure />} />
+        <Route path="/estrutura" element={<IrPara para="/departamentos" />} />
         <Route path="/notificacoes" element={<Notificacoes />} />
         {/* "Quem recebe a venda" virou a aba Vendas online de Notificações
             (28/10/2026). O endereço antigo (e o redirecionamento do Admin)

@@ -49,7 +49,7 @@ export const SHOTS = [
     [7, (p) => p.locator("tbody tr").nth(1).getByText(/Nº pedido de compra/).locator("..")],
     [8, (p) => p.locator("tbody tr").nth(1).getByText("Observações", { exact: true }).locator("..")],
   ] },
-  { chave: "fat-bling", papel: "colaborador", url: F + "?tab=bling", viewport: MEDIO, espera: 1200,
+  { chave: "fat-bling", papel: "colaborador", url: F + "?aba=bling", viewport: MEDIO, espera: 1200,
     clip: (p) => [p.getByRole("tablist").first(), cartao(p), p.getByText(/Pedidos criados/).first()], marcas: [
     [1, tab(/Do Bling/)],
     [2, cel("V2026100080", 5)],
@@ -57,7 +57,7 @@ export const SHOTS = [
     [4, cel("BLING-6120", 5)],
     [5, tab(/NF Online/)],
   ] },
-  { chave: "fat-vincular", papel: "colaborador", url: F + "?tab=vincular", viewport: ALTO, espera: 1500,
+  { chave: "fat-vincular", papel: "colaborador", url: F + "?aba=vincular", viewport: ALTO, espera: 1500,
     antes: clicar(btn(/Sugestões de vínculo/)),
     clip: (p) => [p.getByRole("tablist").first(), cartao(p)], marcas: [
     [1, btn(/Sugestões de vínculo/)],
@@ -68,7 +68,7 @@ export const SHOTS = [
     [6, naLinha("000434", "Baixar")],
     [7, naLinha("000434", /Vincular/)],
   ] },
-  { chave: "fat-vincular-dialogo", papel: "colaborador", url: F + "?tab=vincular", viewport: ALTO, espera: 1500,
+  { chave: "fat-vincular-dialogo", papel: "colaborador", url: F + "?aba=vincular", viewport: ALTO, espera: 1500,
     antes: clicar(naLinha("000434", /Vincular/)),
     clip: (p) => dlg(p), marcas: [
     [1, (p) => dlg(p).locator("h2")],
@@ -76,14 +76,14 @@ export const SHOTS = [
     [3, (p) => dlg(p).getByText(/valor (bate|difere)/).first()],
     [4, (p) => dlg(p).getByRole("button", { name: /Vincular/ }).first()],
   ] },
-  { chave: "fat-filial", papel: "colaborador", url: F + "?tab=vincular_filial", viewport: ALTO, espera: 1500,
+  { chave: "fat-filial", papel: "colaborador", url: F + "?aba=vincular-filial", viewport: ALTO, espera: 1500,
     clip: (p) => [p.getByRole("tablist").first(), cartao(p), p.getByText(/casa sozinha por dois caminhos/).first()], marcas: [
     [1, (p) => p.getByText(/já trazem o número do pedido no rodapé/).first().locator("..")],
     [2, (p) => p.getByText(/ainda\s+estão sem a natureza/).first().locator("..")],
     [3, cel("000094", 3)],
     [4, (p) => linha("000094")(p).getByRole("button", { name: /Vincular/ })],
   ] },
-  { chave: "fat-filial-dialogo", papel: "colaborador", url: F + "?tab=vincular_filial", viewport: ALTO, espera: 1500,
+  { chave: "fat-filial-dialogo", papel: "colaborador", url: F + "?aba=vincular-filial", viewport: ALTO, espera: 1500,
     antes: async (p) => { await linha("000094")(p).getByRole("button", { name: /Vincular/ }).click(); await p.waitForTimeout(900); await dlg(p).getByText("Remessa de bonificação", { exact: true }).click(); await p.waitForTimeout(400); },
     clip: (p) => dlg(p), marcas: [
     [1, (p) => dlg(p).locator("p.font-mono").first()],
@@ -92,7 +92,7 @@ export const SHOTS = [
     [4, (p) => dlg(p).locator("input").first()],
     [5, (p) => dlg(p).locator("button.font-mono, button:has(span.font-mono)").first()],
   ] },
-  { chave: "fat-todas", papel: "colaborador", url: F + "?tab=todas", viewport: MEDIO, espera: 1500,
+  { chave: "fat-todas", papel: "colaborador", url: F + "?aba=todas", viewport: MEDIO, espera: 1500,
     clip: (p) => [cartao(p), p.getByText("Todas as notas fiscais")], marcas: [
     [1, sel('main input[placeholder^="Buscar por nº da NF"]')],
     [2, cel("000418", 2)],

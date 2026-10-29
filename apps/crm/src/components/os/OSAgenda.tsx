@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
+import { useParamUrl } from "@carbo/shell";
 import { CalendarClock, CalendarX2, Car, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { brl, parseData, stageMeta, TIPO_TONE, type OSView } from "./osView";
@@ -29,8 +30,21 @@ type Painel = { modo: "proximos" } | { modo: "dia"; chave: string } | { modo: "s
 export function OSAgenda({ items }: { items: OSView[] }) {
   const hoje = new Date();
   const chaveHoje = chaveDe(hoje);
-  const [mes, setMes] = useState(() => new Date(hoje.getFullYear(), hoje.getMonth(), 1));
-  const [painel, setPainel] = useState<Painel>({ modo: "proximos" });
+  // Mês e dia aberto moram na URL (`?mes=2026-11&dia=2026-11-04`, ou
+  // `dia=sem-data`): F5 e link mandado ao colega abrem a MESMA agenda. O mês
+  // corrente e o painel "próximos" são o padrão e não vão para o endereço.
+  const mesHoje = chaveDe(hoje).slice(0, 7);
+  const [mesUrl, setMesUrl] = useParamUrl("mes", mesHoje);
+  const mes = useMemo(() => {
+    const [a, m] = mesUrl.split("-").map(Number);
+    return a && m ? new Date(a, m - 1, 1) : new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  }, [mesUrl]); // eslint-disable-line react-hooks/exhaustive-deps
+  const setMes = (d: Date) => setMesUrl(chaveDe(d).slice(0, 7));
+  const [diaUrl, setDiaUrl] = useParamUrl("dia");
+  const painel: Painel = diaUrl === "sem-data" ? { modo: "semData" }
+    : /^\d{4}-\d{2}-\d{2}$/.test(diaUrl) ? { modo: "dia", chave: diaUrl }
+    : { modo: "proximos" };
+  const setPainel = (p: Painel) => setDiaUrl(p.modo === "dia" ? p.chave : p.modo === "semData" ? "sem-data" : null);
 
   const { porDia, semData } = useMemo(() => {
     const porDia = new Map<string, OSView[]>();
@@ -76,13 +90,13 @@ export function OSAgenda({ items }: { items: OSView[] }) {
     return lista.slice(0, 8);
   }, [porDia, chaveHoje]);
 
-  const irPara = (delta: number) => setMes((m) => new Date(m.getFullYear(), m.getMonth() + delta, 1));
+  const irPara = (delta: number) => setMes(new Date(mes.getFullYear(), mes.getMonth() + delta, 1));
   const irHoje = () => {
     setMes(new Date(hoje.getFullYear(), hoje.getMonth(), 1));
     setPainel({ modo: "dia", chave: chaveHoje });
   };
   const clicarDia = (k: string) =>
-    setPainel((p) => (p.modo === "dia" && p.chave === k ? { modo: "proximos" } : { modo: "dia", chave: k }));
+    setPainel(painel.modo === "dia" && painel.chave === k ? { modo: "proximos" } : { modo: "dia", chave: k });
 
   const noMesAtual = mes.getFullYear() === hoje.getFullYear() && mes.getMonth() === hoje.getMonth();
   const tituloMes = maiuscula(mes.toLocaleDateString("pt-BR", { month: "long" }));
@@ -201,7 +215,7 @@ export function OSAgenda({ items }: { items: OSView[] }) {
             </span>
             {semData.length > 0 && (
               <button type="button"
-                onClick={() => setPainel((p) => (p.modo === "semData" ? { modo: "proximos" } : { modo: "semData" }))}
+                onClick={() => setPainel(painel.modo === "semData" ? { modo: "proximos" } : { modo: "semData" })}
                 className={cn(
                   "rounded-md border px-2 py-0.5 font-medium tabular-nums transition-colors hover:bg-background hover:text-foreground",
                   painel.modo === "semData" ? "border-primary/50 bg-background text-foreground" : "bg-transparent",

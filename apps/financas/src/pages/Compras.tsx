@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 // Até 21/10/2026 esta página era "Financeiro & Suprimentos", com onze abas
 // (contas a pagar, a receber, fluxo de caixa, cadastros e painel junto), cinco
 // cartões e o botão "Nova Requisição" em todas elas. Cada área ganhou rota
-// própria (/pagar, /receber, /fluxo-caixa, /cadastros/*, /painel-financeiro);
+// própria (/pagar, /receber, /fluxo-caixa, /fornecedores, /formas-pagamento, /painel-financeiro);
 // os endereços antigos /compras/<aba> redirecionam (App.tsx).
 //
 // ⚠️ As abas são <Link>, não `onClick` + navigate: só link de verdade abre em

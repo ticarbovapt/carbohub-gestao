@@ -241,14 +241,14 @@ export const SHOTS = [
   ] },
 
   // ── Cadastros ──
-  { chave: "fornec-lista", papel: "gestor", url: "/cadastros/fornecedores",
+  { chave: "fornec-lista", papel: "gestor", url: "/fornecedores",
     clip: (p) => [p.locator("main h1").first(), p.locator("main table").first()], marcas: [
     [1, sel('main input[placeholder^="Buscar por nome"]')],
     [2, btn("Novo fornecedor")],
     [3, (p) => linha("Papelaria Central")(p).getByText("Inativo")],
     [4, (p) => linha("Gráfica Norte")(p).locator("td").last()],
   ] },
-  { chave: "fornec-form", papel: "gestor", url: "/cadastros/fornecedores", viewport: { width: 1440, height: 1100 },
+  { chave: "fornec-form", papel: "gestor", url: "/fornecedores", viewport: { width: 1440, height: 1100 },
     antes: async (p) => { await p.getByRole("button", { name: "Novo fornecedor" }).click(); await esperar(p, 700); },
     clip: (p) => dlg(p), pad: 4, marcas: [
     [1, campo("Nome")],
@@ -257,14 +257,14 @@ export const SHOTS = [
     [4, campo("Categoria")],
     [5, campo("Observações")],
   ] },
-  { chave: "formas-lista", papel: "gestor", url: "/cadastros/formas-pagamento",
+  { chave: "formas-lista", papel: "gestor", url: "/formas-pagamento",
     clip: (p) => [p.locator("main h1").first(), p.locator("main table").first()], marcas: [
     [1, (p) => p.locator("main").getByText(/4 últimos dígitos/).first()],
     [2, btn("Nova forma de pagamento")],
     [3, (p) => linha("Cartão antigo")(p).getByText("Inativo")],
     [4, (p) => linha("Bradesco PJ")(p).locator("td").last()],
   ] },
-  { chave: "formas-form", papel: "gestor", url: "/cadastros/formas-pagamento", viewport: { width: 1440, height: 1100 },
+  { chave: "formas-form", papel: "gestor", url: "/formas-pagamento", viewport: { width: 1440, height: 1100 },
     antes: async (p) => { await p.getByRole("button", { name: "Nova forma de pagamento" }).click(); await esperar(p, 700); },
     clip: (p) => dlg(p), pad: 4, marcas: [
     [1, campo("Apelido")],
