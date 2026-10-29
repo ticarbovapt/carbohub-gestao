@@ -3925,6 +3925,14 @@ confira se algum identificador usado no corpo é um `const` declarado depois.
 `ehBonificacao` fica logo após `useProdutos()` por esse motivo, e
 `faltaNaCaixa` fica depois de `validItems`.
 
+⚠️ **E a lista de dependências do `useMemo` tem de incluir o que a função
+chamada LÊ** (29/10/2026). O memo do total dependia só de `rows`, mas
+`ehBonificacao` lê `produtos`: ao reabrir uma venda, o total era calculado
+antes de o catálogo chegar (brinde contado cheio) e nunca refeito. Salvar
+gravava desconto 0 e total com o brinde, enquanto as LINHAS (montadas na hora
+do submit) saíam certas — `V2026100075`, +R$ 192,00, corrigido à mão. A
+consulta que acusa o defeito: `total` ≠ soma de `items[].total`.
+
 ### ⚠️ Nota de BONIFICAÇÃO não é faturamento — e a marca `-BON` não alcança tudo
 Medido em 21/09/2026: **4 pedidos, R$ 5.523,00** somando dentro do faturamento
 desde 06/11/2025. Sobre os R$ 899.540,38 que contavam, é **0,61%** — pequeno o
