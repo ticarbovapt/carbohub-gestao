@@ -2138,9 +2138,27 @@ async function bridgeOrdersToCarbohub(
   const skuMap = new Map((skus || []).map((s: any) => [s.code, s]));
   let totalSynced = 0, totalFailed = 0;
 
+  // ── Pedido de REMESSA DE BONIFICAÇÃO que NÓS criamos no Bling ─────────────
+  // A emissão cria dois pedidos na matriz — o da venda e o do brinde — e grava
+  // o id do segundo em `bling_pedido_bonificacao_id` da venda V…. Esta ponte
+  // não sabia disso e importava o do brinde como venda NOVA (`BLING-966`,
+  // R$ 130, "entregue"), que contava no faturamento sem nota de venda.
+  // Medido em 29/10/2026: BLING-966 e BLING-977, brindes de V2026100041 e
+  // V2026100076. O brinde é parte da venda V…, não pedido próprio.
+  // ⚠️ Consulta SEPARADA e tolerante: se falhar, a ponte segue como era.
+  const pedidosDeBrinde = new Set<string>();
+  try {
+    const rows = await lerSemTeto<any>(() => supabaseAdmin.from("carboze_orders")
+      .select("id, bling_pedido_bonificacao_id").not("bling_pedido_bonificacao_id", "is", null).order("id"));
+    for (const r of rows ?? []) pedidosDeBrinde.add(String(r.bling_pedido_bonificacao_id));
+  } catch (e) {
+    console.warn("[bling-bridge] não li os pedidos de bonificação:", (e as Error)?.message ?? e);
+  }
+
   for (const bo of blingOrders) {
     try {
       const externalRef = `bling-${bo.bling_id}`;
+      if (pedidosDeBrinde.has(String(bo.bling_id))) continue;
       const items: any[] = Array.isArray(bo.items) ? bo.items : [];
 
       // Detect primary linha and sku_id from first product item
