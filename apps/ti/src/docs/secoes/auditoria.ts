@@ -144,15 +144,14 @@ export const SECOES_AUDITORIA: Secao[] = [
       {
         print: { chave: "ultimo-acesso", legenda: "Último acesso, na aba do time interno.", papel: "gestor" },
         itens: [
-          { n: 1, titulo: "Totais", texto: "Quantas pessoas há em cada grupo: internos, licenciados e lojas." },
-          { n: 2, titulo: "Abas", texto: "Troca entre Internos, Licenciados e Lojas." },
+          { n: 1, titulo: "Abas", texto: "Internos, Licenciados, Lojas e Bloqueados, com quantas pessoas há em cada uma." },
+          { n: 2, titulo: "Faixas", texto: "Quantas pessoas entraram hoje ou ontem, há 2 a 3 dias, 4 a 7, mais de 7, ou nunca. Clique numa faixa para ver só ela; clique de novo para voltar a todas." },
           { n: 3, titulo: "Buscar", texto: "Procura pelo nome." },
           { n: 4, titulo: "Departamento", texto: "Mostra só um departamento." },
           { n: 5, titulo: "Sistema", texto: "Mostra só quem entrou por último num sistema (Sales, Ops, TI…)." },
-          { n: 6, titulo: "Status", texto: "Filtra pela cor: hoje ou ontem, 2 a 3 dias, 4 a 7 dias, mais de 7 dias, ou nunca acessou." },
-          { n: 7, titulo: "Último sistema", texto: "Por qual sistema a pessoa entrou da última vez. O horário ao lado é o desse acesso." },
-          { n: 8, titulo: "Status", texto: "Quantos dias desde o último acesso (Hoje, Ontem, 5 dias…), contados no calendário. A cor diz a faixa: verde hoje ou ontem · amarelo 2 a 3 dias · laranja 4 a 7 · vermelho mais de 7 · cinza nunca acessou." },
-          { n: 9, titulo: "Quantos", texto: "Quantas pessoas a lista mostra com os filtros de agora." },
+          { n: 6, titulo: "Último sistema", texto: "Por qual sistema a pessoa entrou da última vez." },
+          { n: 7, titulo: "Último acesso", texto: "Quantos dias desde o último acesso (Hoje, Ontem, 5 dias…), contados no calendário, com a data embaixo. A cor é a da faixa. Clique no título da coluna para ver primeiro quem está há mais tempo sem entrar." },
+          { titulo: "Páginas", texto: "Mostra 15 por vez, com as páginas no rodapé da lista. As setas e os números trocam de página." },
           { titulo: "Atualização", texto: "A tela se atualiza sozinha a cada minuto." },
         ],
       },
@@ -171,7 +170,7 @@ export const SECOES_AUDITORIA: Secao[] = [
         itens: [
           { n: 1, titulo: "Rede", texto: "Mostra só as lojas de uma rede." },
           { n: 2, titulo: "Última reposição", texto: "Quando a loja recebeu reposição de estoque pela última vez." },
-          { n: 3, titulo: "Status", texto: "A mesma régua do time interno: os dias desde o último acesso, com a cor da faixa." },
+          { n: 3, titulo: "Último acesso", texto: "A mesma régua do time interno: os dias desde o último acesso, com a cor da faixa. As faixas no topo também filtram." },
         ],
       },
       {

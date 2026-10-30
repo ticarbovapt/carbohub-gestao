@@ -8,7 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Users, Store, Building2, Search, Clock, Activity, Ban, ChevronDown, ChevronRight, ShieldCheck, AlertTriangle } from "lucide-react";
+import { Users, Store, Building2, Search, Clock, Activity, Ban, ChevronDown, ChevronRight, ChevronLeft, ShieldCheck, AlertTriangle, ArrowUpDown } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Fragment, useEffect, useState } from "react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -116,99 +117,210 @@ function SkeletonRows({ cols }: { cols: number }) {
 }
 const th = "px-4 py-3 text-left font-semibold text-muted-foreground uppercase text-xs tracking-wide";
 
+// ── Peças comuns às abas ─────────────────────────────────────────────────────
+// Paginação na TELA (a RPC já traz a lista inteira — dezenas de pessoas): 15
+// por página, `?pagina=` na URL. Trocar filtro volta à página 1.
+const POR_PAGINA = 15;
+function usePaginado<T>(itens: T[]) {
+  const [p, setP] = useParamUrl("pagina", "1");
+  const total = Math.max(1, Math.ceil(itens.length / POR_PAGINA));
+  const pagina = Math.min(Math.max(1, Number(p) || 1), total);
+  return {
+    pagina, total, n: itens.length,
+    fatia: itens.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA),
+    ir: (k: number) => setP(k <= 1 ? null : String(k)),
+  };
+}
+
+function Rodape({ pg, rotulo }: { pg: ReturnType<typeof usePaginado<unknown>>; rotulo: string }) {
+  const ini = pg.n === 0 ? 0 : (pg.pagina - 1) * POR_PAGINA + 1;
+  const fim = Math.min(pg.pagina * POR_PAGINA, pg.n);
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-2.5 text-xs text-muted-foreground">
+      <span>{pg.n === 0 ? `0 ${rotulo}` : `${ini}–${fim} de ${pg.n} ${rotulo}`}</span>
+      {pg.total > 1 && (
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon" className="h-7 w-7" disabled={pg.pagina === 1} onClick={() => pg.ir(pg.pagina - 1)} aria-label="Página anterior">
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          {Array.from({ length: pg.total }, (_, i) => i + 1).map((k) => (
+            <Button key={k} variant={k === pg.pagina ? "secondary" : "ghost"} size="sm" className="h-7 min-w-7 px-2 tabular-nums" onClick={() => pg.ir(k)}>
+              {k}
+            </Button>
+          ))}
+          <Button variant="ghost" size="icon" className="h-7 w-7" disabled={pg.pagina === pg.total} onClick={() => pg.ir(pg.pagina + 1)} aria-label="Próxima página">
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const iniciais = (nome: string | null) =>
+  (nome ?? "?").split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join("") || "?";
+function Pessoa({ nome, sub }: { nome: string | null; sub?: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-3 min-w-0">
+      <div className="h-8 w-8 shrink-0 rounded-full bg-secondary flex items-center justify-center text-xs font-semibold text-muted-foreground">
+        {iniciais(nome)}
+      </div>
+      <div className="min-w-0">
+        <p className="font-medium truncate">{nome || "—"}</p>
+        {sub && <p className="text-xs text-muted-foreground truncate">{sub}</p>}
+      </div>
+    </div>
+  );
+}
+
+// Recência + data numa célula só: o rótulo colorido em cima, o instante embaixo.
+function CelulaAcesso({ dt }: { dt: string | null }) {
+  return (
+    <div>
+      <StatusRecencia dt={dt} />
+      {dt && <p className="text-xs text-muted-foreground tabular-nums mt-0.5 pl-[18px]">{fmt(dt)}</p>}
+    </div>
+  );
+}
+
+// As faixas viram CARTÕES que também filtram (o clique liga/desliga). Cada
+// número é contado com os OUTROS filtros aplicados e o de situação solto —
+// senão a faixa escolhida contaria só a si mesma.
+function ResumoFaixas({ base, ativa, escolher }: { base: (string | null)[]; ativa: string; escolher: (f: string) => void }) {
+  const cont: Record<Faixa, number> = { verde: 0, amarelo: 0, laranja: 0, vermelho: 0, nunca: 0 };
+  base.forEach((dt) => { cont[getActivityStatus(dt).faixa]++; });
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+      {(Object.keys(FAIXAS) as Faixa[]).map((f) => {
+        const on = ativa === f;
+        return (
+          <button key={f} type="button" onClick={() => escolher(on ? "all" : f)}
+            className={`rounded-xl border bg-card px-3 py-2.5 text-left transition-colors hover:bg-secondary/40 ${on ? "border-foreground/40 ring-1 ring-foreground/20" : "border-border"}`}>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className={`h-2.5 w-2.5 rounded-full ${FAIXAS[f].dot}`} />{FAIXAS[f].filtro}
+            </div>
+            <p className={`mt-1 text-2xl font-bold tabular-nums ${cont[f] ? FAIXAS[f].color : "text-muted-foreground/50"}`}>{cont[f]}</p>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// Ordem: `?ordem=antigos` inverte (quem está há mais tempo sem entrar primeiro).
+// "Nunca acessou" fica sempre no fim — não é o mais antigo, é ausência.
+function useOrdem() {
+  const [o, setO] = useParamUrl("ordem", "recentes");
+  const antigos = o === "antigos";
+  return { antigos, alternar: () => setO(antigos ? null : "antigos") };
+}
+function ordenar<T>(itens: T[], instante: (x: T) => string | null, antigos: boolean) {
+  return [...itens].sort((a, b) => {
+    const x = instante(a), y = instante(b);
+    if (!x && !y) return 0;
+    if (!x) return 1;
+    if (!y) return -1;
+    return antigos ? x.localeCompare(y) : y.localeCompare(x);
+  });
+}
+function ThOrdem({ antigos, alternar, children }: { antigos: boolean; alternar: () => void; children: React.ReactNode }) {
+  return (
+    <th className={th}>
+      <button type="button" onClick={alternar} className="inline-flex items-center gap-1 uppercase hover:text-foreground"
+        title={antigos ? "Mostrando quem está há mais tempo sem entrar primeiro" : "Mostrando os acessos mais recentes primeiro"}>
+        {children} <ArrowUpDown className="h-3.5 w-3.5" />
+        <span className="normal-case font-normal tracking-normal">{antigos ? "· mais antigos" : "· mais recentes"}</span>
+      </button>
+    </th>
+  );
+}
+
+const busca = (nome: string | null, q: string) => !q || (nome ?? "").toLowerCase().includes(q.toLowerCase());
+
 // ── Internos (com Último sistema) ────────────────────────────────────────────
 function InternalSection({ rows }: { rows: LoginRow[] }) {
-  // Filtros na URL (`?busca=&departamento=&sistema=&situacao=`): F5 e link
-  // ("quem do Ops não entra há 30 dias") abrem a MESMA lista.
+  // Filtros na URL (`?busca=&departamento=&sistema=&situacao=&ordem=&pagina=`):
+  // F5 e link ("quem do Ops não entra há 30 dias") abrem a MESMA lista.
   const [filterDept, setFilterDept] = useParamUrl("departamento", "all");
   const [filterApp, setFilterApp] = useParamUrl("sistema", "all");
-  const [filterStatus, setFilterStatus] = useParamUrl("situacao", "all");
+  const [situacaoUrl, setSituacao] = useParamUrl("situacao", "all");
   const [search, setSearch] = useParamUrl("busca", "", { replace: true });
+  const filterStatus = FILTRO_ANTIGO[situacaoUrl] ?? situacaoUrl;
+  const { antigos, alternar } = useOrdem();
 
   const departments = [...new Set(rows.map((r) => r.department).filter(Boolean))] as string[];
   const apps = [...new Set(rows.map((r) => r.last_app).filter(Boolean))] as string[];
 
-  const filtered = rows.filter((r) => {
-    if (filterDept !== "all" && r.department !== filterDept) return false;
-    if (filterApp !== "all" && r.last_app !== filterApp) return false;
-    if (filterStatus !== "all") {
-      const faixa = FILTRO_ANTIGO[filterStatus] ?? filterStatus;
-      if (getActivityStatus(ultimoInstante(r)).faixa !== faixa) return false;
-    }
-    if (search && !r.full_name?.toLowerCase().includes(search.toLowerCase())) return false;
-    return true;
-  });
+  const semSituacao = rows.filter((r) =>
+    (filterDept === "all" || r.department === filterDept) &&
+    (filterApp === "all" || r.last_app === filterApp) &&
+    busca(r.full_name, search));
+  const filtered = ordenar(
+    semSituacao.filter((r) => filterStatus === "all" || getActivityStatus(ultimoInstante(r)).faixa === filterStatus),
+    ultimoInstante, antigos);
+  const pg = usePaginado(filtered);
+  const comPagina1 = <V,>(set: (v: V) => void) => (v: V) => { set(v); pg.ir(1); };
 
   return (
     <div className="space-y-4">
+      <ResumoFaixas base={semSituacao.map(ultimoInstante)} ativa={filterStatus} escolher={comPagina1((f: string) => setSituacao(f === "all" ? null : f))} />
+
       <div className="flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-[160px]">
+        <div className="relative flex-1 min-w-[180px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Buscar por nome..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <Input placeholder="Buscar por nome..." className="pl-9" value={search} onChange={(e) => comPagina1(setSearch)(e.target.value)} />
         </div>
-        <Select value={filterDept} onValueChange={setFilterDept}>
-          <SelectTrigger className="w-44"><SelectValue placeholder="Departamento" /></SelectTrigger>
+        <Select value={filterDept} onValueChange={comPagina1(setFilterDept)}>
+          <SelectTrigger className="w-48"><SelectValue placeholder="Departamento" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos departamentos</SelectItem>
             {departments.map((d) => <SelectItem key={d} value={d}>{pretty(d)}</SelectItem>)}
           </SelectContent>
         </Select>
-        <Select value={filterApp} onValueChange={setFilterApp}>
-          <SelectTrigger className="w-44"><SelectValue placeholder="Sistema" /></SelectTrigger>
+        <Select value={filterApp} onValueChange={comPagina1(setFilterApp)}>
+          <SelectTrigger className="w-48"><SelectValue placeholder="Sistema" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos os sistemas</SelectItem>
             {apps.map((a) => <SelectItem key={a} value={a}>{appLabel(a)}</SelectItem>)}
           </SelectContent>
         </Select>
-        <Select value={FILTRO_ANTIGO[filterStatus] ?? filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-44"><SelectValue placeholder="Status" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos status</SelectItem>
-            {(Object.keys(FAIXAS) as Faixa[]).map((f) => (
-              <SelectItem key={f} value={f}>
-                <span className="inline-flex items-center gap-2"><span className={`h-2.5 w-2.5 rounded-full ${FAIXAS[f].dot}`} />{FAIXAS[f].filtro}</span>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
       </div>
 
-      <div className="rounded-xl border border-border overflow-hidden">
+      <div className="rounded-xl border border-border overflow-hidden bg-card">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[680px] text-sm">
+          <table className="w-full min-w-[620px] text-sm">
             <thead><tr className="border-b border-border bg-secondary/30">
-              <th className={th}>Nome</th><th className={th}>Departamento</th><th className={th}>Função</th>
-              <th className={th}>Último sistema</th><th className={th}>Último acesso</th><th className={th}>Status</th>
+              <th className={th}>Pessoa</th><th className={th}>Função</th>
+              <th className={th}>Último sistema</th>
+              <ThOrdem antigos={antigos} alternar={() => { alternar(); pg.ir(1); }}>Último acesso</ThOrdem>
             </tr></thead>
             <tbody className="divide-y divide-border">
-              {filtered.length === 0 ? <EmptyState label="usuário interno" cols={6} /> : filtered.map((row) => {
-                return (
-                  <tr key={row.user_id} className="hover:bg-secondary/20 transition-colors">
-                    <td className="px-4 py-3 font-medium">{row.full_name || "—"}</td>
-                    <td className="px-4 py-3 text-muted-foreground">
+              {pg.fatia.length === 0 ? <EmptyState label="usuário interno" cols={4} /> : pg.fatia.map((row) => (
+                <tr key={row.user_id} className="hover:bg-secondary/20 transition-colors">
+                  <td className="px-4 py-2.5">
+                    <Pessoa nome={row.full_name} sub={<>
                       {pretty(row.department)}
-                      {row.secondary_department && <span className="text-muted-foreground/60"> + {pretty(row.secondary_department)}</span>}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1">
-                        {row.funcao ? <Badge variant="outline" className="text-xs">{pretty(row.funcao)}</Badge> : <span className="text-muted-foreground">—</span>}
-                        {row.secondary_funcao && <Badge variant="secondary" className="text-xs">{pretty(row.secondary_funcao)}</Badge>}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      {row.last_app
-                        ? <Badge variant="outline" className="text-xs gap-1"><Activity className="h-3 w-3 text-carbo-green" />{appLabel(row.last_app)}</Badge>
-                        : <span className="text-muted-foreground">—</span>}
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground tabular-nums">{fmt(ultimoInstante(row))}</td>
-                    <td className="px-4 py-3"><StatusRecencia dt={ultimoInstante(row)} /></td>
-                  </tr>
-                );
-              })}
+                      {row.secondary_department && <span className="opacity-70"> + {pretty(row.secondary_department)}</span>}
+                    </>} />
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <div className="flex flex-wrap gap-1">
+                      {row.funcao ? <Badge variant="outline" className="text-xs font-normal">{pretty(row.funcao)}</Badge> : <span className="text-muted-foreground">—</span>}
+                      {row.secondary_funcao && <Badge variant="secondary" className="text-xs font-normal">{pretty(row.secondary_funcao)}</Badge>}
+                    </div>
+                  </td>
+                  <td className="px-4 py-2.5">
+                    {row.last_app
+                      ? <span className="inline-flex items-center gap-1.5 text-sm"><Activity className="h-3.5 w-3.5 text-carbo-green" />{appLabel(row.last_app)}</span>
+                      : <span className="text-muted-foreground">—</span>}
+                  </td>
+                  <td className="px-4 py-2.5"><CelulaAcesso dt={ultimoInstante(row)} /></td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
-        <div className="border-t border-border px-4 py-3 text-xs text-muted-foreground">{filtered.length} usuário(s) exibido(s)</div>
+        <Rodape pg={pg} rotulo="usuário(s)" />
       </div>
     </div>
   );
@@ -218,51 +330,51 @@ function InternalSection({ rows }: { rows: LoginRow[] }) {
 function LicenseesSection({ rows }: { rows: LoginRow[] }) {
   const [filterRegion, setFilterRegion] = useParamUrl("regiao", "all");
   const [search, setSearch] = useParamUrl("busca", "", { replace: true });
+  const { antigos, alternar } = useOrdem();
   const regions = [...new Set(rows.map((r) => r.region).filter(Boolean))] as string[];
-  const filtered = rows.filter((r) => {
-    if (filterRegion !== "all" && r.region !== filterRegion) return false;
-    if (search && !r.full_name?.toLowerCase().includes(search.toLowerCase())) return false;
-    return true;
-  });
+  const filtered = ordenar(
+    rows.filter((r) => (filterRegion === "all" || r.region === filterRegion) && busca(r.full_name, search)),
+    (r) => r.last_login_at, antigos);
+  const pg = usePaginado(filtered);
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-[160px]">
+        <div className="relative flex-1 min-w-[180px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Buscar licenciado..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <Input placeholder="Buscar licenciado..." className="pl-9" value={search} onChange={(e) => { setSearch(e.target.value); pg.ir(1); }} />
         </div>
-        <Select value={filterRegion} onValueChange={setFilterRegion}>
-          <SelectTrigger className="w-40"><SelectValue placeholder="Região" /></SelectTrigger>
+        <Select value={filterRegion} onValueChange={(v) => { setFilterRegion(v); pg.ir(1); }}>
+          <SelectTrigger className="w-44"><SelectValue placeholder="Região" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todas regiões</SelectItem>
             {regions.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
-      <div className="rounded-xl border border-border overflow-hidden">
+      <div className="rounded-xl border border-border overflow-hidden bg-card">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[600px] text-sm">
             <thead><tr className="border-b border-border bg-secondary/30">
-              <th className={th}>Licenciado</th><th className={th}>Região</th><th className={th}>Último acesso</th>
+              <th className={th}>Licenciado</th>
+              <ThOrdem antigos={antigos} alternar={() => { alternar(); pg.ir(1); }}>Último acesso</ThOrdem>
               <th className={th}>Pedidos (30d)</th><th className={th}>Status</th>
             </tr></thead>
             <tbody className="divide-y divide-border">
-              {filtered.length === 0 ? <EmptyState label="licenciado" cols={5} /> : filtered.map((row) => {
+              {pg.fatia.length === 0 ? <EmptyState label="licenciado" cols={4} /> : pg.fatia.map((row) => {
                 const st = getLicenseeStatus(row.last_login_at, row.orders_last_30_days);
                 return (
                   <tr key={row.user_id} className="hover:bg-secondary/20 transition-colors">
-                    <td className="px-4 py-3 font-medium">{row.full_name || "—"}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{row.region || "—"}</td>
-                    <td className="px-4 py-3 text-muted-foreground tabular-nums">{fmt(row.last_login_at)}</td>
-                    <td className="px-4 py-3 text-center font-mono">{row.orders_last_30_days}</td>
-                    <td className="px-4 py-3"><Badge variant={st.variant} className="text-xs">{st.label}</Badge></td>
+                    <td className="px-4 py-2.5"><Pessoa nome={row.full_name} sub={row.region || "—"} /></td>
+                    <td className="px-4 py-2.5"><CelulaAcesso dt={row.last_login_at} /></td>
+                    <td className="px-4 py-2.5 font-mono tabular-nums">{row.orders_last_30_days}</td>
+                    <td className="px-4 py-2.5"><Badge variant={st.variant} className="text-xs">{st.label}</Badge></td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
         </div>
-        <div className="border-t border-border px-4 py-3 text-xs text-muted-foreground">{filtered.length} licenciado(s) exibido(s)</div>
+        <Rodape pg={pg} rotulo="licenciado(s)" />
       </div>
     </div>
   );
@@ -271,21 +383,26 @@ function LicenseesSection({ rows }: { rows: LoginRow[] }) {
 // ── Lojas (PDV), dividido por loja/região ────────────────────────────────────
 function LojasSection({ rows }: { rows: LoginRow[] }) {
   const [filterRegion, setFilterRegion] = useParamUrl("regiao", "all");
+  const [situacaoUrl, setSituacao] = useParamUrl("situacao", "all");
   const [search, setSearch] = useParamUrl("busca", "", { replace: true });
+  const filterStatus = FILTRO_ANTIGO[situacaoUrl] ?? situacaoUrl;
+  const { antigos, alternar } = useOrdem();
   const regions = [...new Set(rows.map((r) => r.region).filter(Boolean))] as string[];
-  const filtered = rows.filter((r) => {
-    if (filterRegion !== "all" && r.region !== filterRegion) return false;
-    if (search && !r.full_name?.toLowerCase().includes(search.toLowerCase())) return false;
-    return true;
-  });
+  const semSituacao = rows.filter((r) => (filterRegion === "all" || r.region === filterRegion) && busca(r.full_name, search));
+  const filtered = ordenar(
+    semSituacao.filter((r) => filterStatus === "all" || getActivityStatus(r.last_login_at).faixa === filterStatus),
+    (r) => r.last_login_at, antigos);
+  const pg = usePaginado(filtered);
   return (
     <div className="space-y-4">
+      <ResumoFaixas base={semSituacao.map((r) => r.last_login_at)} ativa={filterStatus}
+        escolher={(f) => { setSituacao(f === "all" ? null : f); pg.ir(1); }} />
       <div className="flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-[160px]">
+        <div className="relative flex-1 min-w-[180px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Buscar loja..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <Input placeholder="Buscar loja..." className="pl-9" value={search} onChange={(e) => { setSearch(e.target.value); pg.ir(1); }} />
         </div>
-        <Select value={filterRegion} onValueChange={setFilterRegion}>
+        <Select value={filterRegion} onValueChange={(v) => { setFilterRegion(v); pg.ir(1); }}>
           <SelectTrigger className="w-48"><SelectValue placeholder="Rede" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todas as redes</SelectItem>
@@ -293,29 +410,26 @@ function LojasSection({ rows }: { rows: LoginRow[] }) {
           </SelectContent>
         </Select>
       </div>
-      <div className="rounded-xl border border-border overflow-hidden">
+      <div className="rounded-xl border border-border overflow-hidden bg-card">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[600px] text-sm">
+          <table className="w-full min-w-[560px] text-sm">
             <thead><tr className="border-b border-border bg-secondary/30">
-              <th className={th}>Loja</th><th className={th}>Rede</th><th className={th}>Último acesso</th>
-              <th className={th}>Última reposição</th><th className={th}>Status</th>
+              <th className={th}>Loja</th>
+              <ThOrdem antigos={antigos} alternar={() => { alternar(); pg.ir(1); }}>Último acesso</ThOrdem>
+              <th className={th}>Última reposição</th>
             </tr></thead>
             <tbody className="divide-y divide-border">
-              {filtered.length === 0 ? <EmptyState label="loja" cols={5} /> : filtered.map((row) => {
-                return (
-                  <tr key={row.user_id} className="hover:bg-secondary/20 transition-colors">
-                    <td className="px-4 py-3 font-medium">{row.full_name || "—"}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{row.region || "—"}</td>
-                    <td className="px-4 py-3 text-muted-foreground tabular-nums">{fmt(row.last_login_at)}</td>
-                    <td className="px-4 py-3 text-muted-foreground tabular-nums">{fmt(row.last_replenishment_at)}</td>
-                    <td className="px-4 py-3"><StatusRecencia dt={row.last_login_at} /></td>
-                  </tr>
-                );
-              })}
+              {pg.fatia.length === 0 ? <EmptyState label="loja" cols={3} /> : pg.fatia.map((row) => (
+                <tr key={row.user_id} className="hover:bg-secondary/20 transition-colors">
+                  <td className="px-4 py-2.5"><Pessoa nome={row.full_name} sub={row.region || "—"} /></td>
+                  <td className="px-4 py-2.5"><CelulaAcesso dt={row.last_login_at} /></td>
+                  <td className="px-4 py-2.5 text-muted-foreground tabular-nums">{fmt(row.last_replenishment_at)}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
-        <div className="border-t border-border px-4 py-3 text-xs text-muted-foreground">{filtered.length} loja(s) exibida(s)</div>
+        <Rodape pg={pg} rotulo="loja(s)" />
       </div>
     </div>
   );
@@ -348,6 +462,8 @@ const navegador = (ua: string | null) => {
 function BloqueadosSection({ rows, error }: { rows: Bloqueado[]; error: unknown }) {
   const [search, setSearch] = useParamUrl("busca", "", { replace: true });
   const [aberto, setAberto] = useState<string | null>(null);
+  const filtered = rows.filter((r) => busca(r.nome, search));
+  const pg = usePaginado(filtered);
   if (error) {
     return (
       <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-6 text-center text-sm text-destructive">
@@ -355,14 +471,13 @@ function BloqueadosSection({ rows, error }: { rows: Bloqueado[]; error: unknown 
       </div>
     );
   }
-  const filtered = rows.filter((r) => !search || (r.nome ?? "").toLowerCase().includes(search.toLowerCase()));
   return (
     <div className="space-y-4">
       <div className="relative max-w-md">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input placeholder="Buscar por nome..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <Input placeholder="Buscar por nome..." className="pl-9" value={search} onChange={(e) => { setSearch(e.target.value); pg.ir(1); }} />
       </div>
-      <div className="rounded-xl border border-border overflow-hidden">
+      <div className="rounded-xl border border-border overflow-hidden bg-card">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[760px] text-sm">
             <thead><tr className="border-b border-border bg-secondary/30">
@@ -370,7 +485,7 @@ function BloqueadosSection({ rows, error }: { rows: Bloqueado[]; error: unknown 
               <th className={th}>Último acesso de verdade</th><th className={th}>Situação</th>
             </tr></thead>
             <tbody className="divide-y divide-border">
-              {filtered.length === 0 ? <EmptyState label="usuário bloqueado" cols={5} /> : filtered.map((r) => {
+              {pg.fatia.length === 0 ? <EmptyState label="usuário bloqueado" cols={5} /> : pg.fatia.map((r) => {
                 const loginDepois = depois(r.ultimo_login, r.bloqueado_em);
                 const appDepois = !loginDepois && depois(r.ultimo_app_em, r.bloqueado_em);
                 const ultimo = [r.ultimo_app_em, r.ultimo_login].filter(Boolean).sort().pop() ?? null;
@@ -379,8 +494,7 @@ function BloqueadosSection({ rows, error }: { rows: Bloqueado[]; error: unknown 
                   <Fragment key={r.user_id}>
                     <tr className="hover:bg-secondary/20 transition-colors">
                       <td className="px-4 py-3">
-                        <p className="font-medium">{r.nome || "—"}</p>
-                        <p className="text-xs text-muted-foreground">{pretty(r.departamento)}{r.funcao ? ` · ${pretty(r.funcao)}` : ""}</p>
+                        <Pessoa nome={r.nome} sub={`${pretty(r.departamento)}${r.funcao ? ` · ${pretty(r.funcao)}` : ""}`} />
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
                         <p className="tabular-nums">{fmt(r.bloqueado_em)}</p>
@@ -440,9 +554,7 @@ function BloqueadosSection({ rows, error }: { rows: Bloqueado[]; error: unknown 
             </tbody>
           </table>
         </div>
-        <div className="border-t border-border px-4 py-3 text-xs text-muted-foreground">
-          {filtered.length} bloqueado(s) · tentativas contam as feitas pelo Hub e pelos apps depois do bloqueio
-        </div>
+        <Rodape pg={pg} rotulo="bloqueado(s) · tentativas feitas pelo Hub e pelos apps depois do bloqueio" />
       </div>
     </div>
   );
@@ -459,8 +571,9 @@ export default function UltimoAcesso() {
   const [, setDepto] = useParamUrl("departamento", "all");
   const [, setSistema] = useParamUrl("sistema", "all");
   const [, setSituacao] = useParamUrl("situacao", "all");
+  const [, setPagina] = useParamUrl("pagina", "1");
   const trocarAba = (v: string) => {
-    setAba(v); setBusca(null); setRegiao(null); setDepto(null); setSistema(null); setSituacao(null);
+    setAba(v); setBusca(null); setRegiao(null); setDepto(null); setSistema(null); setSituacao(null); setPagina(null);
   };
   const { data: rows, isLoading, error } = useQuery({
     queryKey: ["ultimo-acesso"],
@@ -517,7 +630,6 @@ export default function UltimoAcesso() {
     <div className="p-4 md:p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-bold flex items-center gap-2"><Activity className="h-6 w-6 text-carbo-green" /> Último acesso</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Quem acessa (ou não) o ecossistema — e por qual sistema entrou.</p>
       </div>
 
       {error ? (
@@ -526,26 +638,11 @@ export default function UltimoAcesso() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-3 gap-2 sm:gap-4">
-            <div className="rounded-xl border border-border bg-card p-3 sm:p-4 flex flex-col items-start sm:flex-row sm:items-center gap-2 sm:gap-3">
-              <div className="h-10 w-10 rounded-xl bg-blue-500/10 flex items-center justify-center"><Building2 className="h-5 w-5 text-blue-500" /></div>
-              <div><p className="text-2xl font-bold">{isLoading ? "—" : internal.length}</p><p className="text-xs text-muted-foreground">Internos</p></div>
-            </div>
-            <div className="rounded-xl border border-border bg-card p-3 sm:p-4 flex flex-col items-start sm:flex-row sm:items-center gap-2 sm:gap-3">
-              <div className="h-10 w-10 rounded-xl bg-emerald-500/10 flex items-center justify-center"><Users className="h-5 w-5 text-emerald-500" /></div>
-              <div><p className="text-2xl font-bold">{isLoading ? "—" : licensees.length}</p><p className="text-xs text-muted-foreground">Licenciados</p></div>
-            </div>
-            <div className="rounded-xl border border-border bg-card p-3 sm:p-4 flex flex-col items-start sm:flex-row sm:items-center gap-2 sm:gap-3">
-              <div className="h-10 w-10 rounded-xl bg-amber-500/10 flex items-center justify-center"><Store className="h-5 w-5 text-amber-500" /></div>
-              <div><p className="text-2xl font-bold">{isLoading ? "—" : lojas.length}</p><p className="text-xs text-muted-foreground">Lojas</p></div>
-            </div>
-          </div>
-
           <Tabs value={aba} onValueChange={trocarAba}>
-            <TabsList>
-              <TabsTrigger value="internos" className="gap-2"><Building2 className="h-4 w-4" /> Internos</TabsTrigger>
-              <TabsTrigger value="licenciados" className="gap-2"><Users className="h-4 w-4" /> Licenciados</TabsTrigger>
-              <TabsTrigger value="lojas" className="gap-2"><Store className="h-4 w-4" /> Lojas</TabsTrigger>
+            <TabsList className="h-auto flex-wrap justify-start">
+              <TabsTrigger value="internos" className="gap-2"><Building2 className="h-4 w-4" /> Internos {!isLoading && <span className="rounded-full bg-muted px-1.5 text-xs tabular-nums">{internal.length}</span>}</TabsTrigger>
+              <TabsTrigger value="licenciados" className="gap-2"><Users className="h-4 w-4" /> Licenciados {!isLoading && <span className="rounded-full bg-muted px-1.5 text-xs tabular-nums">{licensees.length}</span>}</TabsTrigger>
+              <TabsTrigger value="lojas" className="gap-2"><Store className="h-4 w-4" /> Lojas {!isLoading && <span className="rounded-full bg-muted px-1.5 text-xs tabular-nums">{lojas.length}</span>}</TabsTrigger>
               <TabsTrigger value="bloqueados" className="gap-2">
                 <Ban className="h-4 w-4" /> Bloqueados
                 {bloqueados.length > 0 && <span className="rounded-full bg-muted px-1.5 text-xs tabular-nums">{bloqueados.length}</span>}

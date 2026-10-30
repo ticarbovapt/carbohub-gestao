@@ -85,22 +85,20 @@ export const SHOTS = [
 
   // ── Último acesso ──
   { chave: "ultimo-acesso", papel: "gestor", url: "/ultimo-acesso", marcas: [
-    [1, (p) => main(p).locator("div.grid.grid-cols-3")],
-    [2, (p) => p.getByRole("tablist")],
+    [1, (p) => p.getByRole("tablist")],
+    [2, (p) => main(p).locator("div.grid").first()],
     [3, sel('input[placeholder="Buscar por nome..."]')],
     [4, (p) => main(p).getByRole("combobox").nth(0)],
     [5, (p) => main(p).getByRole("combobox").nth(1)],
-    [6, (p) => main(p).getByRole("combobox").nth(2)],
-    [7, (p) => main(p).locator("tbody tr").first().locator("td").nth(3)],
-    [8, (p) => main(p).locator("tbody tr").first().locator("td").nth(5)],
-    [9, (p) => main(p).getByText(/usuário\(s\) exibido/)],
+    [6, (p) => main(p).locator("tbody tr").first().locator("td").nth(2)],
+    [7, (p) => main(p).locator("thead th").nth(3)],
   ] },
   { chave: "ultimo-acesso-licenciados", papel: "gestor", url: "/ultimo-acesso",
     antes: async (p) => { await tab(/Licenciados/)(p).click(); await p.waitForTimeout(400); },
     clip: (p) => main(p).locator('[role="tabpanel"][data-state="active"]'), pad: 10, marcas: [
     [1, (p) => main(p).getByRole("combobox").first()],
-    [2, (p) => main(p).locator("tbody tr").first().locator("td").nth(3)],
-    [3, (p) => main(p).locator("tbody tr").first().locator("td").nth(4)],
+    [2, (p) => main(p).locator("tbody tr").first().locator("td").nth(2)],
+    [3, (p) => main(p).locator("tbody tr").first().locator("td").nth(3)],
   ] },
   { chave: "ultimo-acesso-bloqueados", papel: "gestor", url: "/ultimo-acesso?aba=bloqueados",
     antes: async (p) => { await main(p).getByRole("button", { name: /tentativas/ }).first().click(); await p.waitForTimeout(300); },
@@ -115,8 +113,8 @@ export const SHOTS = [
     antes: async (p) => { await tab(/Lojas/)(p).click(); await p.waitForTimeout(400); },
     clip: (p) => main(p).locator('[role="tabpanel"][data-state="active"]'), pad: 10, marcas: [
     [1, (p) => main(p).getByRole("combobox").first()],
-    [2, (p) => main(p).locator("tbody tr").first().locator("td").nth(3)],
-    [3, (p) => main(p).locator("tbody tr").first().locator("td").nth(4)],
+    [2, (p) => main(p).locator("tbody tr").first().locator("td").nth(2)],
+    [3, (p) => main(p).locator("tbody tr").first().locator("td").nth(1)],
   ] },
 
   // ── Adoção do Carbo Chat ──
