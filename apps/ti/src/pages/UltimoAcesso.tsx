@@ -1,5 +1,5 @@
 import { useParamUrl } from "@carbo/shell";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Users, Store, Building2, Search, Clock, Activity, Ban, ChevronDown, ChevronRight, ShieldCheck, AlertTriangle } from "lucide-react";
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Último acesso — quem acessa (ou não) o ecossistema, de verdade.
@@ -475,6 +475,19 @@ export default function UltimoAcesso() {
   // Bloqueados: a lista vem da RPC da aba; quem some das outras abas sai da
   // view sobre o Auth (a mesma da tela de Usuários) — assim o front no ar
   // antes do SQL ainda tira o bloqueado das listas.
+  // AO VIVO: tentativa nova de bloqueado, ou bloqueio/desbloqueio feito agora,
+  // relê a aba na hora. O evento só avisa; quem monta a lista é a RPC. O
+  // intervalo de 15 s é a rede de segurança (Realtime fora do ar, aba dormindo).
+  const qc = useQueryClient();
+  useEffect(() => {
+    const reler = () => qc.invalidateQueries({ queryKey: ["ultimo-acesso"] });
+    const canal = supabase
+      .channel("ultimo-acesso-bloqueados")
+      .on("postgres_changes" as never, { event: "INSERT", schema: "public", table: "carbo_login_bloqueado_tentativas" } as never, reler)
+      .on("postgres_changes" as never, { event: "INSERT", schema: "public", table: "carbo_usuario_bloqueio_log" } as never, reler)
+      .subscribe();
+    return () => { void supabase.removeChannel(canal); };
+  }, [qc]);
   const bloqueadosQ = useQuery({
     queryKey: ["ultimo-acesso", "bloqueados"],
     queryFn: async () => {
@@ -482,7 +495,7 @@ export default function UltimoAcesso() {
       if (error) throw error;
       return (data ?? []) as unknown as Bloqueado[];
     },
-    refetchInterval: 60_000,
+    refetchInterval: 15_000,
   });
   const idsBloqueadosQ = useQuery({
     queryKey: ["ultimo-acesso", "ids-bloqueados"],
@@ -491,7 +504,7 @@ export default function UltimoAcesso() {
       if (error) throw error;
       return new Set(((data ?? []) as { user_id: string }[]).map((r) => r.user_id));
     },
-    refetchInterval: 60_000,
+    refetchInterval: 15_000,
   });
   const ids = new Set<string>([...(idsBloqueadosQ.data ?? []), ...(bloqueadosQ.data ?? []).map((b) => b.user_id)]);
   const livres = rows?.filter((r) => !ids.has(r.user_id)) ?? [];

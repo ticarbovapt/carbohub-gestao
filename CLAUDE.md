@@ -720,8 +720,10 @@ apps/*/src/components/BloqueioAoVivo.tsx   o popup — REPLICADO nos SETE
    banido sem gravar nada em `auth.audit_log_entries`, então o Hub e os oito
    `AuthContext` chamam `carbo_registrar_tentativa_bloqueada` ao receber
    "banned" → `carbo_login_bloqueado_tentativas`. ⚠️ A função é de `anon` (não
-   há sessão): só grava se a conta está bloqueada AGORA, não devolve nada e
-   ignora repetição em 30 s. Tentativa por fora das telas (API direta) não
+   há sessão): só grava se a conta está bloqueada AGORA e não devolve nada.
+   CADA Enter conta (`20261145` tirou o "ignora 30 s", que fazia dez tentativas
+   virarem uma); o freio contra enxurrada é teto de 30 por minuto. A aba é AO
+   VIVO (Realtime nesta tabela e no `carbo_usuario_bloqueio_log`, 15 s de rede). Tentativa por fora das telas (API direta) não
    aparece — e é recusada igual. Tela de login nova (portais, raiz) que queira
    entrar na conta: a mesma chamada. ⚠️ Bloqueado SAI das abas Internos/
    Licenciados/Lojas (pela view `carbo_usuarios_bloqueados`).
