@@ -8,7 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Users, Store, Building2, Search, Clock, Activity } from "lucide-react";
+import { Users, Store, Building2, Search, Clock, Activity, Ban, ChevronDown, ChevronRight, ShieldCheck, AlertTriangle } from "lucide-react";
+import { Fragment, useState } from "react";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Último acesso — quem acessa (ou não) o ecossistema, de verdade.
@@ -320,12 +321,139 @@ function LojasSection({ rows }: { rows: LoginRow[] }) {
   );
 }
 
+// ── Bloqueados ───────────────────────────────────────────────────────────────
+// Quem está bloqueado AGORA (auth.users.banned_until — a trava de verdade),
+// desde quando, e o que aconteceu DEPOIS do bloqueio:
+//   • tentativas de login recusadas — o Auth não as registra; as telas de
+//     login (Hub e os oito apps) gravam em carbo_login_bloqueado_tentativas;
+//   • acesso de verdade depois do bloqueio — não deveria existir. Aba que
+//     ficou aberta pode ainda registrar o sistema por até ~1 h (o token vale
+//     até vencer), e isso aparece em âmbar; login depois do bloqueio, em vermelho.
+interface Bloqueado {
+  user_id: string; nome: string | null; email: string | null;
+  departamento: string | null; funcao: string | null;
+  bloqueado_ate: string; bloqueado_em: string | null; bloqueado_por: string | null; motivo: string | null;
+  ultimo_login: string | null; ultimo_app: string | null; ultimo_app_em: string | null;
+  tentativas: number; ultima_tentativa: string | null;
+  lista: { em: string; origem: string | null; user_agent: string | null }[];
+}
+const depois = (a: string | null, b: string | null) => !!a && !!b && new Date(a) > new Date(b);
+const navegador = (ua: string | null) => {
+  if (!ua) return "—";
+  const so = /Android/i.test(ua) ? "Android" : /iPhone|iPad/i.test(ua) ? "iPhone" : /Windows/i.test(ua) ? "Windows" : /Mac OS/i.test(ua) ? "Mac" : /Linux/i.test(ua) ? "Linux" : "";
+  const nav = /Edg\//.test(ua) ? "Edge" : /OPR\//.test(ua) ? "Opera" : /Chrome\//.test(ua) ? "Chrome" : /Firefox\//.test(ua) ? "Firefox" : /Safari\//.test(ua) ? "Safari" : "Navegador";
+  return so ? `${nav} · ${so}` : nav;
+};
+
+function BloqueadosSection({ rows, error }: { rows: Bloqueado[]; error: unknown }) {
+  const [search, setSearch] = useParamUrl("busca", "", { replace: true });
+  const [aberto, setAberto] = useState<string | null>(null);
+  if (error) {
+    return (
+      <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-6 text-center text-sm text-destructive">
+        Não foi possível ler os bloqueados: {(error as Error).message}
+      </div>
+    );
+  }
+  const filtered = rows.filter((r) => !search || (r.nome ?? "").toLowerCase().includes(search.toLowerCase()));
+  return (
+    <div className="space-y-4">
+      <div className="relative max-w-md">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input placeholder="Buscar por nome..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+      </div>
+      <div className="rounded-xl border border-border overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[760px] text-sm">
+            <thead><tr className="border-b border-border bg-secondary/30">
+              <th className={th}>Nome</th><th className={th}>Bloqueado em</th><th className={th}>Tentou entrar depois</th>
+              <th className={th}>Último acesso de verdade</th><th className={th}>Situação</th>
+            </tr></thead>
+            <tbody className="divide-y divide-border">
+              {filtered.length === 0 ? <EmptyState label="usuário bloqueado" cols={5} /> : filtered.map((r) => {
+                const loginDepois = depois(r.ultimo_login, r.bloqueado_em);
+                const appDepois = !loginDepois && depois(r.ultimo_app_em, r.bloqueado_em);
+                const ultimo = [r.ultimo_app_em, r.ultimo_login].filter(Boolean).sort().pop() ?? null;
+                const expandido = aberto === r.user_id;
+                return (
+                  <Fragment key={r.user_id}>
+                    <tr className="hover:bg-secondary/20 transition-colors">
+                      <td className="px-4 py-3">
+                        <p className="font-medium">{r.nome || "—"}</p>
+                        <p className="text-xs text-muted-foreground">{pretty(r.departamento)}{r.funcao ? ` · ${pretty(r.funcao)}` : ""}</p>
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        <p className="tabular-nums">{fmt(r.bloqueado_em)}</p>
+                        {(r.bloqueado_por || r.motivo) && (
+                          <p className="text-xs">{r.bloqueado_por ? `por ${r.bloqueado_por}` : ""}{r.motivo ? ` · ${r.motivo}` : ""}</p>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        {r.tentativas === 0 ? (
+                          <span className="text-muted-foreground">Nenhuma tentativa</span>
+                        ) : (
+                          <button type="button" onClick={() => setAberto(expandido ? null : r.user_id)}
+                            className="inline-flex items-center gap-1.5 text-left font-medium text-amber-600 hover:underline">
+                            {expandido ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                            {r.tentativas} {r.tentativas === 1 ? "tentativa" : "tentativas"}
+                            <span className="font-normal text-muted-foreground">· última {fmt(r.ultima_tentativa)}</span>
+                          </button>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="tabular-nums text-muted-foreground">{fmt(ultimo)}</p>
+                        {r.ultimo_app && <p className="text-xs text-muted-foreground">{appLabel(r.ultimo_app)}</p>}
+                        {loginDepois && <p className="text-xs font-medium text-red-600">Entrou depois do bloqueio</p>}
+                        {appDepois && <p className="text-xs text-amber-600">Aba que ficou aberta, depois do bloqueio</p>}
+                      </td>
+                      <td className="px-4 py-3">
+                        {loginDepois ? (
+                          <span className="inline-flex items-center gap-1.5 text-sm font-medium text-red-600"><AlertTriangle className="h-4 w-4" /> Conferir</span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-600" title={`Bloqueado até ${fmt(r.bloqueado_ate)}`}>
+                            <ShieldCheck className="h-4 w-4" /> Bloqueado
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                    {expandido && (
+                      <tr className="bg-secondary/10">
+                        <td colSpan={5} className="px-4 py-3">
+                          <ul className="space-y-1 text-xs">
+                            {r.lista.map((t, i) => (
+                              <li key={i} className="flex flex-wrap gap-x-4 gap-y-0.5">
+                                <span className="tabular-nums font-medium">{fmt(t.em)}</span>
+                                <span className="text-muted-foreground">{t.origem || "—"}</span>
+                                <span className="text-muted-foreground">{navegador(t.user_agent)}</span>
+                              </li>
+                            ))}
+                          </ul>
+                          {r.tentativas > r.lista.length && (
+                            <p className="mt-1 text-xs text-muted-foreground">Mostrando as {r.lista.length} mais recentes.</p>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div className="border-t border-border px-4 py-3 text-xs text-muted-foreground">
+          {filtered.length} bloqueado(s) · tentativas contam as feitas pelo Hub e pelos apps depois do bloqueio
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function UltimoAcesso() {
   // Aba na URL (`?aba=lojas`). Os filtros das três abas dividem as MESMAS
   // chaves (`busca`, `regiao`…), então trocar de aba os limpa — a busca por
   // "Maria" nos internos não pode virar, calada, a busca dos licenciados.
   const [abaUrl, setAba] = useParamUrl("aba", "internos");
-  const aba = ["internos", "licenciados", "lojas"].includes(abaUrl) ? abaUrl : "internos";
+  const aba = ["internos", "licenciados", "lojas", "bloqueados"].includes(abaUrl) ? abaUrl : "internos";
   const [, setBusca] = useParamUrl("busca", "", { replace: true });
   const [, setRegiao] = useParamUrl("regiao", "all");
   const [, setDepto] = useParamUrl("departamento", "all");
@@ -344,9 +472,33 @@ export default function UltimoAcesso() {
     refetchInterval: 60_000,
   });
 
-  const internal = rows?.filter((r) => r.user_area === "internal") ?? [];
-  const licensees = rows?.filter((r) => r.user_area === "licensee") ?? [];
-  const lojas = rows?.filter((r) => r.user_area === "produtos") ?? [];
+  // Bloqueados: a lista vem da RPC da aba; quem some das outras abas sai da
+  // view sobre o Auth (a mesma da tela de Usuários) — assim o front no ar
+  // antes do SQL ainda tira o bloqueado das listas.
+  const bloqueadosQ = useQuery({
+    queryKey: ["ultimo-acesso", "bloqueados"],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("carbo_bloqueados_acessos" as never);
+      if (error) throw error;
+      return (data ?? []) as unknown as Bloqueado[];
+    },
+    refetchInterval: 60_000,
+  });
+  const idsBloqueadosQ = useQuery({
+    queryKey: ["ultimo-acesso", "ids-bloqueados"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("carbo_usuarios_bloqueados" as never).select("user_id");
+      if (error) throw error;
+      return new Set(((data ?? []) as { user_id: string }[]).map((r) => r.user_id));
+    },
+    refetchInterval: 60_000,
+  });
+  const ids = new Set<string>([...(idsBloqueadosQ.data ?? []), ...(bloqueadosQ.data ?? []).map((b) => b.user_id)]);
+  const livres = rows?.filter((r) => !ids.has(r.user_id)) ?? [];
+  const internal = livres.filter((r) => r.user_area === "internal");
+  const licensees = livres.filter((r) => r.user_area === "licensee");
+  const lojas = livres.filter((r) => r.user_area === "produtos");
+  const bloqueados = bloqueadosQ.data ?? [];
 
   return (
     <div className="p-4 md:p-6 space-y-6">
@@ -381,6 +533,10 @@ export default function UltimoAcesso() {
               <TabsTrigger value="internos" className="gap-2"><Building2 className="h-4 w-4" /> Internos</TabsTrigger>
               <TabsTrigger value="licenciados" className="gap-2"><Users className="h-4 w-4" /> Licenciados</TabsTrigger>
               <TabsTrigger value="lojas" className="gap-2"><Store className="h-4 w-4" /> Lojas</TabsTrigger>
+              <TabsTrigger value="bloqueados" className="gap-2">
+                <Ban className="h-4 w-4" /> Bloqueados
+                {bloqueados.length > 0 && <span className="rounded-full bg-muted px-1.5 text-xs tabular-nums">{bloqueados.length}</span>}
+              </TabsTrigger>
             </TabsList>
             <TabsContent value="internos" className="mt-4">
               {isLoading ? <div className="rounded-xl border border-border overflow-hidden"><table className="w-full"><tbody><SkeletonRows cols={6} /></tbody></table></div> : <InternalSection rows={internal} />}
@@ -390,6 +546,9 @@ export default function UltimoAcesso() {
             </TabsContent>
             <TabsContent value="lojas" className="mt-4">
               {isLoading ? <div className="rounded-xl border border-border overflow-hidden"><table className="w-full"><tbody><SkeletonRows cols={5} /></tbody></table></div> : <LojasSection rows={lojas} />}
+            </TabsContent>
+            <TabsContent value="bloqueados" className="mt-4">
+              {bloqueadosQ.isLoading ? <div className="rounded-xl border border-border overflow-hidden"><table className="w-full"><tbody><SkeletonRows cols={5} /></tbody></table></div> : <BloqueadosSection rows={bloqueados} error={bloqueadosQ.error} />}
             </TabsContent>
           </Tabs>
         </>

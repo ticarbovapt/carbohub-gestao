@@ -715,6 +715,16 @@ apps/*/src/components/BloqueioAoVivo.tsx   o popup — REPLICADO nos SETE
 12. ⚠️ **Os dois PORTAIS ficaram de fora** (outro repo): login deles ainda
    mostraria `User is banned` em inglês, e não têm o popup. A trava vale lá
    igual — o que falta é a tradução e o aviso.
+13. **Tentativa de login do bloqueado é registrada pela TELA** (`20261144`,
+   30/10/2026, aba **Bloqueados** em `ti…/ultimo-acesso`). O GoTrue recusa o
+   banido sem gravar nada em `auth.audit_log_entries`, então o Hub e os oito
+   `AuthContext` chamam `carbo_registrar_tentativa_bloqueada` ao receber
+   "banned" → `carbo_login_bloqueado_tentativas`. ⚠️ A função é de `anon` (não
+   há sessão): só grava se a conta está bloqueada AGORA, não devolve nada e
+   ignora repetição em 30 s. Tentativa por fora das telas (API direta) não
+   aparece — e é recusada igual. Tela de login nova (portais, raiz) que queira
+   entrar na conta: a mesma chamada. ⚠️ Bloqueado SAI das abas Internos/
+   Licenciados/Lojas (pela view `carbo_usuarios_bloqueados`).
 
 ### Notificação de venda online — nos sete
 Venda do e-commerce toca som e mostra toast em QUALQUER app que a pessoa esteja

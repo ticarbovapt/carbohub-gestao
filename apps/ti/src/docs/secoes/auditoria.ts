@@ -174,6 +174,19 @@ export const SECOES_AUDITORIA: Secao[] = [
           { n: 3, titulo: "Status", texto: "A mesma régua do time interno: os dias desde o último acesso, com a cor da faixa." },
         ],
       },
+      {
+        titulo: "Bloqueados",
+        print: { chave: "ultimo-acesso-bloqueados", legenda: "A aba Bloqueados, com as tentativas de uma pessoa abertas.", papel: "gestor" },
+        itens: [
+          { titulo: "Quem aparece", texto: "Só quem está bloqueado agora. Quem foi bloqueado sai das abas Internos, Licenciados e Lojas e passa a aparecer aqui. Desbloqueou, volta para a aba dele." },
+          { n: 1, titulo: "Bloqueado em", texto: "Quando o acesso foi bloqueado, por quem e o motivo (se foi escrito)." },
+          { n: 2, titulo: "Tentou entrar depois", texto: "Quantas vezes a pessoa tentou entrar depois do bloqueio, e a última. O sistema recusou todas — clique para ver cada uma." },
+          { n: 3, titulo: "Cada tentativa", texto: "Data e hora, por onde tentou (o Hub ou o endereço do app) e o aparelho." },
+          { n: 4, titulo: "Último acesso de verdade", texto: "O último acesso que deu certo. Em âmbar: uma aba que já estava aberta registrou o sistema logo depois do bloqueio (ela cai em até 1 hora). Em vermelho: entrou depois do bloqueio — não deveria acontecer, avise o TI." },
+          { n: 5, titulo: "Situação", texto: "“Bloqueado” confirma que o acesso continua travado. “Conferir” aparece quando houve login depois do bloqueio." },
+          { titulo: "O que não aparece", texto: "Tentativas feitas por fora do Hub e dos apps (direto na API) não são registradas — mas são recusadas do mesmo jeito." },
+        ],
+      },
     ],
   },
 

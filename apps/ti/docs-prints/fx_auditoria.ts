@@ -132,6 +132,25 @@ const LOGINS = [
   lg("loj-3", "Posto Avulso Exemplo", "produtos", null, null, null, null, { region: "Sem rede" }),
 ];
 
+// ── Último acesso · Bloqueados (carbo_bloqueados_acessos) ───────────────────
+const UA_CHROME_WIN = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36";
+const UA_ANDROID = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36";
+const BLOQUEADOS = [
+  { user_id: "u-b1", nome: "Lucas Ferreira", email: "lucas@exemplo.com", departamento: "cgc", funcao: "vendedor",
+    bloqueado_ate: min(-60 * 24 * 365 * 50), bloqueado_em: min(60 * 24 * 6), bloqueado_por: U.gestor.full_name, motivo: "Desligado",
+    ultimo_login: min(60 * 24 * 7), ultimo_app: "carbo_crm", ultimo_app_em: min(60 * 24 * 6 + 30),
+    tentativas: 3, ultima_tentativa: min(60 * 20),
+    lista: [
+      { em: min(60 * 20), origem: "carbohub.com.br", user_agent: UA_ANDROID },
+      { em: min(60 * 24 * 2), origem: "sales.carbohub.com.br", user_agent: UA_CHROME_WIN },
+      { em: min(60 * 24 * 2 + 2), origem: "carbohub.com.br", user_agent: UA_CHROME_WIN },
+    ] },
+  { user_id: "u-b2", nome: "Fernanda Lopes", email: "fernanda@exemplo.com", departamento: "ops", funcao: "analista",
+    bloqueado_ate: min(-60 * 24 * 365 * 50), bloqueado_em: min(60 * 24 * 20), bloqueado_por: U.gestor.full_name, motivo: null,
+    ultimo_login: min(60 * 24 * 21), ultimo_app: "carbo_ops_app", ultimo_app_em: min(60 * 24 * 21),
+    tentativas: 0, ultima_tentativa: null, lista: [] },
+];
+
 // ── Adoção do Carbo Chat ────────────────────────────────────────────────────
 const CHAT_SERIE = Array.from({ length: 30 }, (_, i) => {
   const d = 29 - i;
@@ -149,6 +168,7 @@ export const RPC_FX: Record<string, unknown> = {
   crm_acompanhamento_repasses: REPASSES,
   crm_lead_detalhe: LEAD,
   get_last_login_summary: LOGINS,
+  carbo_bloqueados_acessos: BLOQUEADOS,
   chat_adoption_overview: [{ funcionarios: 34, ativos_hoje: 21, ativos_7d: 27, ativos_30d: 29, msgs_hoje: 318, msgs_7d: 1742, msgs_30d: 6905, grupos_ativos: 14, dms_ativas: 63, com_push: 22, sem_push: 12 }],
   chat_active_users_series: CHAT_SERIE,
   chat_volume_by_department: [

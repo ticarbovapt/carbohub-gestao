@@ -110,6 +110,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // mesma. Ausente, cai no texto — nunca fica sem resposta.
     const codigo = (error as { code?: string } | null)?.code ?? "";
     const bloqueado = !!error && /banned/i.test(`${codigo} ${error.message}`);
+    // Bloqueado tentando entrar: o Auth recusa e NÃO registra — quem registra é
+    // a tela, para a aba "Bloqueados" do Último acesso (TI). Best-effort.
+    if (bloqueado) {
+      void supabase
+        .rpc("carbo_registrar_tentativa_bloqueada" as never, {
+          p_login: email, p_origem: window.location.host, p_user_agent: navigator.userAgent,
+        } as never)
+        .then(() => {}, () => {});
+    }
     return {
       error: error
         ? new Error(bloqueado ? "Usuário bloqueado. Contate o suporte." : error.message)
