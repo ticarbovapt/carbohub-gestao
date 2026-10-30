@@ -107,6 +107,25 @@ export interface UnidadesVendidas {
   /** Entregas já programadas para datas futuras — não são buraco. */
   agendadosPedidos: number;
   agendadosValor: number;
+  /**
+   * Os MESMOS itens, quebrados por mês — para quem precisa de série temporal.
+   *
+   * ⚠️ Sai do mesmo laço que produz os totais, de propósito. Um segundo hook
+   * lendo os pedidos de novo para somar por mês seria outra contagem de
+   * venda, e as duas divergiriam no primeiro ajuste de régua.
+   *
+   * A data é a EFETIVA de cada lado: `data_efetiva` na venda da equipe (a
+   * mesma do filtro de período) e `ordered_at` no on-line.
+   */
+  porMes: ItensDoMes[];
+}
+
+export interface ItensDoMes {
+  /** `YYYY-MM`. */
+  mes: string;
+  productId: string | null;
+  /** Itens de catálogo — a unidade que a lista de materiais multiplica. */
+  itens: number;
 }
 
 interface LinhaOnline {
@@ -401,6 +420,16 @@ export function useUnidadesVendidas(filtros: UnidadesFiltro = {}) {
 
       // ── 4. Agrega ─────────────────────────────────────────────────────────
       const acc = new Map<string, ProdutoUnidades>();
+      // Série temporal: `<mes>|<product_id>` → itens de catálogo.
+      const mesal = new Map<string, number>();
+      const somaMes = (data: string | null | undefined, pid: string | null, itens: number) => {
+        const mes = (data ?? "").slice(0, 7);
+        // ⚠️ Sem data não entra na série. Jogar no mês corrente inventaria um
+        // pico que nunca aconteceu — pior que a linha faltar.
+        if (mes.length !== 7 || itens <= 0) return;
+        const k = `${mes}|${pid ?? ""}`;
+        mesal.set(k, (mesal.get(k) ?? 0) + itens);
+      };
       const novo = (key: string, pid: string | null, nome: string, code: string | null, mapeado: boolean): ProdutoUnidades => ({
         key, productId: pid, nome, productCode: code, mapeado,
         onPacks: 0, onUnidades: 0, onItens: 0, onReceita: 0,
@@ -429,7 +458,11 @@ export function useUnidadesVendidas(filtros: UnidadesFiltro = {}) {
         // total menor com cara de completo.
         const prateleira = fatorUnidades(mapaPrateleira, r.platform, r.product_sku);
         if (prateleira === null) linha.onItens = null;
-        else if (linha.onItens !== null) linha.onItens += (Number(r.quantity) || 0) * prateleira;
+        else {
+          const itensDaLinha = (Number(r.quantity) || 0) * prateleira;
+          if (linha.onItens !== null) linha.onItens += itensDaLinha;
+          somaMes(r.ordered_at, pid ?? null, itensDaLinha);
+        }
         linha.onReceita += Number(r.total) || 0;
         acc.set(key, linha);
       }
@@ -468,6 +501,7 @@ export function useUnidadesVendidas(filtros: UnidadesFiltro = {}) {
           if (escQtd.corrigida || escBon.corrigida) linhasCorrigidas++;
           const itens = qtd + bonus;
           linha.eqItens += itens;
+          somaMes(o.data_efetiva, pid, itens);
           linha.eqBonificadas += bonus + (i?.is_bonificacao ? qtd : 0);
           linha.eqReceita += Number(i?.total) || 0;
 
@@ -520,6 +554,12 @@ export function useUnidadesVendidas(filtros: UnidadesFiltro = {}) {
         semNotaValor: Math.round(valorSemNota * 100) / 100,
         agendadosPedidos: agendados.length,
         agendadosValor: Math.round(agendados.reduce((s2, p) => s2 + (Number(p.total) || 0), 0) * 100) / 100,
+        porMes: [...mesal.entries()]
+          .map(([k, itens]) => {
+            const corte = k.indexOf("|");
+            return { mes: k.slice(0, corte), productId: k.slice(corte + 1) || null, itens };
+          })
+          .sort((a, b) => a.mes.localeCompare(b.mes)),
       };
     },
   });

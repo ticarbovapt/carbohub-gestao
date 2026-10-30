@@ -27,25 +27,42 @@ import {
 // prateleira; o fato de não ter sido cobrado é assunto do financeiro, não da
 // produção. (Já vem somada no `eqItens`.)
 //
+// ⚠️ AS LINHAS SÃO AGRUPADAS PELO PRODUTO DE VERDADE. "CarboZé 100ml", o
+// "- Microdistribuidor" e o "- PDV" são o mesmo frasco, e o "KIT 10und sachê"
+// é o mesmo sachê numa caixa de dez. Para a pergunta de produção eles são UM
+// item; em linhas separadas, o produto aparece partido em três e nenhuma das
+// partes responde "quanto deste produto saiu". Quem diz quem é quem é o
+// cadastro (`preco_de` e a BOM de componente único) — ver `resolverBase`.
+//
 // ⚠️ O PERÍODO é de quem chama. A tela pede o histórico inteiro — a pergunta
 // é de produção ("quanto líquido esta operação consome"), não de mês.
 // ═══════════════════════════════════════════════════════════════════════════
 
 export interface LinhaEstabilizador {
-  productId: string;
+  baseId: string;
   nome: string;
   codigo: string | null;
-  /** Itens de catálogo vendidos, os dois canais somados. */
-  itens: number;
-  /** Litros por item, segundo a BOM resolvida. */
-  litrosPorItem: number;
+  /** Unidades do produto-base (o kit de 10 conta como 10 sachês). */
+  unidades: number;
+  /** Litros por UMA unidade do base. */
+  litrosPorUnidade: number;
   litros: number;
+}
+
+export interface MesEstabilizador {
+  /** `YYYY-MM`. */
+  mes: string;
+  litros: number;
+  /** Litros por produto-base naquele mês — a quebra da barra empilhada. */
+  porProduto: Record<string, number>;
 }
 
 export interface ConsumoEstabilizador {
   litros: number;
-  itens: number;
+  unidades: number;
   linhas: LinhaEstabilizador[];
+  /** Série mensal, do mês mais antigo ao mais recente. */
+  meses: MesEstabilizador[];
   /** Produtos vendidos cuja BOM não resolve — a lista de trabalho. */
   semBom: { nome: string; codigo: string | null; itens: number }[];
   /** `true` quando o on-line não converte em itens (SKU sem prateleira). */
@@ -82,10 +99,8 @@ export function useConsumoEstabilizador(filtros: UnidadesFiltro = {}): ConsumoEs
   const unidades = useUnidadesVendidas(filtros);
   const bom = useBomEstabilizador();
 
-  const linhas: LinhaEstabilizador[] = [];
+  const grupos = new Map<string, LinhaEstabilizador>();
   const semBom: ConsumoEstabilizador["semBom"] = [];
-  let litros = 0;
-  let itens = 0;
   let onlineIncompleto = false;
 
   for (const p of unidades.data?.produtos ?? []) {
@@ -94,24 +109,53 @@ export function useConsumoEstabilizador(filtros: UnidadesFiltro = {}): ConsumoEs
     // produto fica DE FORA e a tela diz isso, em vez de somar só a equipe e
     // mostrar um consumo menor com cara de total.
     if (p.onItens === null) onlineIncompleto = true;
-    const qtd = (p.onItens ?? 0) + p.eqItens;
-    if (qtd <= 0) continue;
+    const itens = (p.onItens ?? 0) + p.eqItens;
+    if (itens <= 0) continue;
+
     const litrosPorItem = p.productId ? bom.data?.litrosPorItem.get(p.productId) : undefined;
-    if (litrosPorItem === undefined) {
-      semBom.push({ nome: p.nome, codigo: p.productCode, itens: qtd });
+    const base = p.productId ? bom.data?.base.get(p.productId) : undefined;
+    if (litrosPorItem === undefined || base === undefined) {
+      semBom.push({ nome: p.nome, codigo: p.productCode, itens });
       continue;
     }
-    itens += qtd;
     if (litrosPorItem <= 0) continue;   // resolve, e não leva o insumo
-    const l = qtd * litrosPorItem;
-    litros += l;
-    linhas.push({ productId: p.productId!, nome: p.nome, codigo: p.productCode, itens: qtd, litrosPorItem, litros: l });
+
+    const linha = grupos.get(base.id) ?? {
+      baseId: base.id, nome: base.nome, codigo: base.codigo,
+      unidades: 0,
+      // ⚠️ O "× N ml" do rótulo é o do BASE, não o do item: no grupo do sachê
+      // convivem o avulso (12 ml) e o kit (120 ml), e os dois viram sachês.
+      litrosPorUnidade: bom.data?.litrosPorItem.get(base.id) ?? litrosPorItem,
+      litros: 0,
+    };
+    linha.unidades += itens * base.porItem;
+    linha.litros += itens * litrosPorItem;
+    grupos.set(base.id, linha);
   }
 
+  // ── A série mensal, pelo mesmo caminho ────────────────────────────────────
+  const porMes = new Map<string, MesEstabilizador>();
+  for (const r of unidades.data?.porMes ?? []) {
+    const litrosPorItem = r.productId ? bom.data?.litrosPorItem.get(r.productId) : undefined;
+    const base = r.productId ? bom.data?.base.get(r.productId) : undefined;
+    if (!litrosPorItem || !base) continue;   // já contado no `semBom` acima
+    const m = porMes.get(r.mes) ?? { mes: r.mes, litros: 0, porProduto: {} };
+    const l = r.itens * litrosPorItem;
+    m.litros += l;
+    m.porProduto[base.id] = (m.porProduto[base.id] ?? 0) + l;
+    porMes.set(r.mes, m);
+  }
+
+  const linhas = [...grupos.values()].sort((a, b) => b.litros - a.litros);
+  const arred = (v: number) => Math.round(v * 1000) / 1000;
+
   return {
-    litros: Math.round(litros * 1000) / 1000,
-    itens,
-    linhas: linhas.sort((a, b) => b.litros - a.litros),
+    litros: arred(linhas.reduce((s, l) => s + l.litros, 0)),
+    unidades: linhas.reduce((s, l) => s + l.unidades, 0),
+    linhas: linhas.map((l) => ({ ...l, litros: arred(l.litros) })),
+    meses: [...porMes.values()]
+      .map((m) => ({ ...m, litros: arred(m.litros) }))
+      .sort((a, b) => a.mes.localeCompare(b.mes)),
     semBom: semBom.sort((a, b) => b.itens - a.itens),
     onlineIncompleto,
     carregando: unidades.isLoading || bom.isLoading,

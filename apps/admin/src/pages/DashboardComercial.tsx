@@ -32,6 +32,10 @@ const fmtNum = (v: number) => Math.round(v).toLocaleString("pt-BR");
 const fmtK = (v: number) => (v >= 1_000_000 ? `R$${(v / 1_000_000).toFixed(1)}M` : v >= 1000 ? `R$${(v / 1000).toFixed(0)}k` : brl(v));
 const kAxis = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v));
 const mesLbl = (y: number, m: number) => format(new Date(y, m - 1, 1), "MMM/yy", { locale: ptBR });
+// Paleta da barra empilhada de insumo. Fixa e na ORDEM da lista: a cor de
+// cada produto é a mesma na legenda, na barra e na linha da tabela abaixo —
+// cor que muda entre dois lugares da mesma seção é pior que cor nenhuma.
+const CORES_INSUMO = ["#22d3ee", "#38bdf8", "#34d399", "#a78bfa", "#fbbf24", "#f472b6", "#94a3b8"];
 
 const boxStyle = { background: "#1a2234", border: "1px solid rgba(255,255,255,0.14)", boxShadow: "0 8px 28px rgba(0,0,0,0.45)", borderRadius: 10, padding: "8px 14px", fontSize: 12 } as const;
 const titleStyle = { color: "#fff", fontWeight: 700, marginBottom: 6, fontSize: 13 } as const;
@@ -44,6 +48,24 @@ function DarkTip({ active, payload, label, fmt, unit }: any) {
       {payload.map((p: any, i: number) => (
         <p key={i} style={{ color: p.color }}>{p.name}: {fmt ? fmt(Number(p.value)) : `${Number(p.value)}${unit ?? ""}`}</p>
       ))}
+    </div>
+  );
+}
+
+/** Tooltip do consumo mensal: cada produto e, no fim, o TOTAL do mês.
+ *  ⚠️ O total vai explícito. Numa barra empilhada ele é a altura, e somar
+ *  cinco parcelas de cabeça para saber quanto o mês consumiu é justamente o
+ *  trabalho que o gráfico deveria poupar. */
+function TipLitros({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  const total = payload.reduce((s: number, p: any) => s + (Number(p.value) || 0), 0);
+  return (
+    <div style={boxStyle}>
+      <p style={titleStyle}>{label}</p>
+      {payload.filter((p: any) => Number(p.value) > 0).map((p: any, i: number) => (
+        <p key={i} style={{ color: p.color }}>{p.name}: {fmtL(Number(p.value))}</p>
+      ))}
+      <p style={{ color: "hsl(var(--foreground))", fontWeight: 700, marginTop: 4 }}>Total: {fmtL(total)}</p>
     </div>
   );
 }
@@ -300,6 +322,30 @@ export default function DashboardComercial() {
   // não de recorte comercial; amarrá-la ao filtro do topo faria o número do
   // insumo mudar ao escolher um vendedor.
   const estabilizador = useConsumoEstabilizador();
+  // Mesma régua de largura dos gráficos de venda: no celular o eixo com um
+  // rótulo por mês se atropela, então ele inclina e encolhe.
+  const mobile = useIsMobile();
+  // Série do gráfico: uma linha por mês, uma coluna por produto-base.
+  // ⚠️ Mês SEM consumo precisa existir com zero — o Recharts desenha só o que
+  // recebe, e um buraco no eixo se lê como "não houve venda" quando na
+  // verdade foi o mês que sumiu da lista.
+  const serieEstabilizador = useMemo(() => {
+    const meses = estabilizador.meses;
+    if (meses.length === 0) return [];
+    const chaves = estabilizador.linhas.map((l) => l.baseId);
+    const porMes = new Map(meses.map((m) => [m.mes, m]));
+    const [y0, m0] = meses[0].mes.split("-").map(Number);
+    const [y1, m1] = meses[meses.length - 1].mes.split("-").map(Number);
+    const saida: Record<string, string | number>[] = [];
+    for (let y = y0, m = m0; y < y1 || (y === y1 && m <= m1); m === 12 ? (m = 1, y++) : m++) {
+      const chave = `${y}-${String(m).padStart(2, "0")}`;
+      const dados = porMes.get(chave);
+      const linha: Record<string, string | number> = { mes: chave, label: mesLbl(y, m) };
+      for (const k of chaves) linha[k] = Math.round((dados?.porProduto[k] ?? 0) * 10) / 10;
+      saida.push(linha);
+    }
+    return saida;
+  }, [estabilizador.meses, estabilizador.linhas]);
 
   const canalSeries = useMemo(() => {
     const real = canais?.realByCanal;
@@ -994,7 +1040,7 @@ export default function DashboardComercial() {
                   de propósito, e um total sem data ao lado seria lido como "do
                   recorte atual". */}
               <p className="text-xs text-board-muted mt-0.5">
-                Todo o histórico · {fmtNum(estabilizador.itens)} itens de catálogo · bonificação incluída
+                Todo o histórico · {fmtNum(estabilizador.unidades)} unidades vendidas · bonificação incluída
               </p>
             </div>
             <div className="text-right">
@@ -1009,15 +1055,67 @@ export default function DashboardComercial() {
             </p>
           )}
 
+          {/* ── Consumo × tempo ──────────────────────────────────────────────
+              Barra empilhada por produto: o total do mês responde "quanto
+              comprar", e a composição responde "por causa de quê". Só o total
+              esconderia uma troca de mix que muda o insumo sem mudar a altura
+              da barra. */}
+          {!estabilizador.carregando && estabilizador.meses.length > 0 && (
+            <div className="border-b border-border px-2 sm:px-4 pt-4 pb-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 px-2 pb-2">
+                <p className="text-xs font-semibold text-board-text">Consumo por mês</p>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  {estabilizador.linhas.map((l, i) => (
+                    <span key={l.baseId} className="flex items-center gap-1 text-[10px] text-board-muted">
+                      <span className="h-2 w-2 rounded-sm" style={{ background: CORES_INSUMO[i % CORES_INSUMO.length] }} />
+                      {l.nome}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <ResponsiveContainer width="100%" height={mobile ? 200 : 240}>
+                <ComposedChart data={serieEstabilizador} margin={{ top: 8, right: mobile ? 4 : 10, bottom: 0, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                  {/* `interval={0}`: mês pulado no eixo se lê como mês sem
+                      consumo — o mesmo cuidado do gráfico de vendas acima. */}
+                  <XAxis dataKey="label" tick={{ fontSize: mobile ? 9 : 11, fill: "hsl(var(--muted-foreground))" }}
+                         axisLine={false} tickLine={false} dy={4} interval={0}
+                         angle={mobile ? -45 : 0} textAnchor={mobile ? "end" : "middle"} height={mobile ? 40 : 30} />
+                  <YAxis tick={{ fontSize: mobile ? 10 : 11, fill: "hsl(var(--muted-foreground))" }}
+                         axisLine={false} tickLine={false} width={mobile ? 34 : 44}
+                         tickFormatter={(v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(Math.round(v)))} />
+                  <Tooltip cursor={{ fill: "rgba(148,163,184,0.08)" }} content={<TipLitros />} />
+                  {estabilizador.linhas.map((l, i) => (
+                    <Bar key={l.baseId} dataKey={l.baseId} name={l.nome} stackId="litros"
+                         fill={CORES_INSUMO[i % CORES_INSUMO.length]} maxBarSize={48} isAnimationActive={false}
+                         radius={i === estabilizador.linhas.length - 1 ? [4, 4, 0, 0] : undefined} />
+                  ))}
+                </ComposedChart>
+              </ResponsiveContainer>
+              {/* ⚠️ O mês corrente é PARCIAL, e isso precisa estar escrito: a
+                  última barra sempre parece queda, e sem o aviso ela é lida
+                  como tendência. */}
+              <p className="px-2 pt-1 text-[10px] text-board-muted">
+                Litros por mês, pela data efetiva da venda. A última barra é o mês corrente, ainda em andamento.
+              </p>
+            </div>
+          )}
+
           {!estabilizador.carregando && (
             <div className="divide-y divide-border">
-              {estabilizador.linhas.map((l) => (
-                <div key={l.productId} className="flex items-center justify-between gap-3 px-4 sm:px-6 py-2.5">
-                  <div className="min-w-0">
-                    <p className="text-sm text-board-text truncate">{l.nome}</p>
-                    <p className="text-[11px] text-board-muted">
-                      {l.codigo ?? "—"} · {fmtNum(l.itens)} itens × {(l.litrosPorItem * 1000).toLocaleString("pt-BR", { maximumFractionDigits: 0 })} ml
-                    </p>
+              {estabilizador.linhas.map((l, i) => (
+                <div key={l.baseId} className="flex items-center justify-between gap-3 px-4 sm:px-6 py-2.5">
+                  <div className="min-w-0 flex items-center gap-2.5">
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: CORES_INSUMO[i % CORES_INSUMO.length] }} />
+                    <div className="min-w-0">
+                      <p className="text-sm text-board-text truncate">{l.nome}</p>
+                      {/* ⚠️ "unidades", não "itens": o grupo soma o frasco
+                          avulso com o que veio dentro do kit, e em unidades os
+                          dois são a mesma coisa. */}
+                      <p className="text-[11px] text-board-muted">
+                        {l.codigo ?? "—"} · {fmtNum(l.unidades)} un. × {(l.litrosPorUnidade * 1000).toLocaleString("pt-BR", { maximumFractionDigits: 0 })} ml
+                      </p>
+                    </div>
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-sm font-semibold text-board-text">{fmtL(l.litros)}</p>

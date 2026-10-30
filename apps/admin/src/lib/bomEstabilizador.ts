@@ -56,6 +56,21 @@ export interface ResolucaoBom {
   litrosPorItem: Map<string, number>;
   /** Produtos cuja árvore não resolve (sem BOM, unidade estranha ou ciclo). */
   semBom: Set<string>;
+  /** product_id → o produto DE VERDADE por trás dele (ver `resolverBase`). */
+  base: Map<string, BaseProduto>;
+}
+
+/** O produto real por trás de uma variante ou de um kit. */
+export interface BaseProduto {
+  id: string;
+  nome: string;
+  codigo: string | null;
+  /**
+   * Quantas unidades do BASE valem UM item deste produto.
+   * 1 para variante de preço (o -MD é o mesmo frasco), 10 para o kit de
+   * sachês, 5 para o kit de cinco frascos.
+   */
+  porItem: number;
 }
 
 const num = (v: unknown) => {
@@ -96,7 +111,7 @@ export function resolverEstabilizador(
   );
   const litrosPorItem = new Map<string, number>();
   const semBom = new Set<string>();
-  if (!alvo) return { litrosPorItem, semBom: new Set(produtos.map((p) => p.id)) };
+  if (!alvo) return { litrosPorItem, semBom: new Set(produtos.map((p) => p.id)), base: new Map() };
 
   const filhos = new Map<string, BomRow[]>();
   for (const b of boms ?? []) {
@@ -176,5 +191,76 @@ export function resolverEstabilizador(
     else litrosPorItem.set(p.id, r);
   }
 
-  return { litrosPorItem, semBom };
+  return { litrosPorItem, semBom, base: resolverBase(produtos, filhos) };
+}
+
+/**
+ * O produto DE VERDADE por trás de cada código — e quantas unidades dele cabem
+ * num item.
+ *
+ * "CarboZé 100ml", "CarboZé 100ml - Microdistribuidor" e "CarboZé 100ml - PDV"
+ * são o mesmo frasco; o que muda é para quem se vende. "KIT 10und CARBOZE
+ * SACHÊ" é o mesmo sachê, só que dez numa caixa. Para a pergunta de produção
+ * — quanto líquido saiu, de que produto — esses são UM item na lista, e
+ * mostrá-los em linhas separadas parte o produto em três.
+ *
+ * ⚠️ As duas regras saem do CADASTRO, não de uma lista de sufixos nem de
+ * leitura de nome:
+ *
+ *   1. VARIANTE DE PREÇO — `preco_de` / `bonificacao_de` apontam o pai. É o
+ *      mesmo item físico com outra tabela; vale 1 por 1.
+ *   2. KIT — BOM com UM único componente, e esse componente é Produto Final.
+ *      Aí o produto não é outra coisa: é uma CAIXA daquela coisa, e a
+ *      quantidade da linha é quantas cabem.
+ *
+ * A regra 2 é estreita de propósito. O CZ100 também tem BOM, mas com DOIS
+ * componentes (a embalagem cheia e o rótulo), e o primeiro é Semi-acabado —
+ * ele não é caixa de nada, é o produto. Uma regra do tipo "tem componente
+ * Produto Final" sem o "um único" faria todo produto montado virar alias do
+ * primeiro insumo que tivesse.
+ */
+function resolverBase(
+  produtos: ProdutoBomRow[],
+  filhos: Map<string, BomRow[]>,
+): Map<string, BaseProduto> {
+  const porId = new Map(produtos.map((p) => [p.id, p]));
+  const categoria = new Map(produtos.map((p) => [p.id, (p.category ?? "").trim()]));
+  const saida = new Map<string, BaseProduto>();
+
+  for (const p of produtos) {
+    let atual: ProdutoBomRow = p;
+    let porItem = 1;
+    // ⚠️ Teto de saltos: variante de variante existe, e um `while` sem limite
+    // é um laço infinito esperando um ciclo no cadastro.
+    for (let i = 0; i < 4; i++) {
+      const pai = atual.bonificacao_de ?? atual.preco_de;
+      const paiRow = pai ? porId.get(pai) : undefined;
+      if (paiRow) { atual = paiRow; continue; }
+
+      const linhas = filhos.get(atual.id);
+      if (linhas && linhas.length === 1) {
+        const l = linhas[0];
+        const un = (l.unit ?? "un").trim().toLowerCase();
+        const comp = porId.get(l.insumo_id);
+        const qtd = Number(l.quantity_per_unit);
+        // Só `un`: caixa se conta em peças. Componente medido em ml/L é
+        // conteúdo, não embalagem — é o caso da Boca 28, que leva 100 ml de
+        // líquido e NÃO é uma caixa de líquido.
+        if (comp && categoria.get(comp.id) === "Produto Final"
+            && (un === "un" || un === "") && Number.isFinite(qtd) && qtd > 0) {
+          porItem *= qtd;
+          atual = comp;
+          continue;
+        }
+      }
+      break;
+    }
+    saida.set(p.id, {
+      id: atual.id,
+      nome: atual.name ?? atual.product_code ?? "Produto sem nome",
+      codigo: atual.product_code,
+      porItem,
+    });
+  }
+  return saida;
 }
