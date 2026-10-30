@@ -1,6 +1,6 @@
 import { CalendarDays, User, Tag, X } from "lucide-react";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { PeriodoFiltro } from "@/components/ui/PeriodoFiltro";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useVendedoresDir } from "@/hooks/useVendedoresDir";
 
@@ -22,9 +22,14 @@ export function ComercialFilterBar({ filters, onChange, className = "" }: {
           a partir de `sm` volta a ser a barra corrida de sempre. */}
       <div className="flex flex-wrap sm:flex-nowrap w-full sm:w-auto items-center gap-x-2 gap-y-1">
         <div className="flex w-full sm:w-auto shrink-0 items-center gap-1 text-xs text-muted-foreground font-medium"><CalendarDays className="h-3.5 w-3.5" /> Período:</div>
-        <Input type="date" className="h-9 sm:h-8 min-w-0 flex-1 sm:flex-none sm:w-36 text-xs" title="Data início" value={filters.from} onChange={(e) => set({ from: e.target.value })} />
-        <span className="text-xs text-muted-foreground">até</span>
-        <Input type="date" className="h-9 sm:h-8 min-w-0 flex-1 sm:flex-none sm:w-36 text-xs" title="Data fim" value={filters.to} onChange={(e) => set({ to: e.target.value })} />
+        {/* Atalhos (Hoje · 7 dias · Mês fechado…) no lugar dos dois campos de
+            data crus. ⚠️ O que sai daqui continua sendo o PAR `de`/`ate`: a
+            URL, os "Ver pedidos →" e a tela de Dados Comerciais não mudam. */}
+        <PeriodoFiltro
+          className="w-full sm:w-auto"
+          value={{ from: filters.from, to: filters.to }}
+          onChange={(p) => set({ from: p.from, to: p.to })}
+        />
       </div>
 
       <div className="flex w-full sm:w-auto items-center gap-2 sm:ml-2">

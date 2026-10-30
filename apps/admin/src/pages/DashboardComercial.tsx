@@ -7,9 +7,11 @@ import {
 import {
   TrendingUp, ShoppingCart, DollarSign, Trophy, Repeat2, BarChart3,
   ArrowUpRight, ArrowDownRight, Minus, Loader2, Pencil, AlertTriangle, Globe, Wrench, Package,
+  Droplets,
 } from "lucide-react";
 import { useServicosNfse } from "@/hooks/useServicosNfse";
 import { useUnidadesVendidas } from "@/hooks/useUnidadesVendidas";
+import { useConsumoEstabilizador } from "@/hooks/useConsumoEstabilizador";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { useAuth } from "@/contexts/AuthContext";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -152,6 +154,10 @@ function GrowthSub({ label, pct, value, refLine }: { label: string; pct: number 
 // engana calado, e por isso o rótulo dela vai escrito na tela ("dos packs" /
 // "dos itens"), não só aqui.
 const pctDe = (v: number, total: number) => (total > 0 ? `${((v / total) * 100).toFixed(1)}%` : "—");
+// Volume: litro com uma casa até 1.000 L, inteiro daí para cima — ninguém lê
+// "12.345,7 L", e a casa decimal só importa nos números pequenos.
+const fmtL = (v: number) =>
+  v >= 1000 ? `${Math.round(v).toLocaleString("pt-BR")} L` : `${v.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} L`;
 
 /** Card de produto — o mesmo formato da tela de Vendas Online. */
 function UnidadeCard({ nome, codigo, mapeado, numero, rotulo, detalhe, aviso }: {
@@ -289,6 +295,11 @@ export default function DashboardComercial() {
   const { data: canalMetas } = useCanalMetas(year);
   // Unidades vendidas por produto — o mesmo recorte de período do resto da tela.
   const { data: unidades, error: erroUnidades } = useUnidadesVendidas({ from: filters.from, to: filters.to });
+  // ⚠️ SEM filtro, de propósito — e a tela escreve isso. A pergunta do
+  // estabilizador é de produção ("quanto líquido esta operação já consumiu"),
+  // não de recorte comercial; amarrá-la ao filtro do topo faria o número do
+  // insumo mudar ao escolher um vendedor.
+  const estabilizador = useConsumoEstabilizador();
 
   const canalSeries = useMemo(() => {
     const real = canais?.realByCanal;
@@ -967,6 +978,85 @@ export default function DashboardComercial() {
               )}
             </div>
           </div>
+        </div>
+
+        {/* 8.6 Estabilizador consumido — a venda lida pela LISTA DE MATERIAIS.
+            ⚠️ A conta é por ITEM DE CATÁLOGO, não por pack nem por unidade
+            exibida: a BOM diz "1 CZ100 leva 100 ml", e um pack do SKU 124 são
+            cinco CZ100. É a mesma venda dos cards acima, convertida. */}
+        <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">
+          <div className="border-b border-border px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-base font-bold text-board-text flex items-center gap-2">
+                <Droplets className="h-4 w-4 text-cyan-400" /> Estabilizador consumido
+              </h2>
+              {/* ⚠️ O período vai ESCRITO: este bloco ignora o filtro do topo
+                  de propósito, e um total sem data ao lado seria lido como "do
+                  recorte atual". */}
+              <p className="text-xs text-board-muted mt-0.5">
+                Todo o histórico · {fmtNum(estabilizador.itens)} itens de catálogo · bonificação incluída
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-2xl font-bold text-cyan-400 leading-none">{fmtL(estabilizador.litros)}</p>
+              <p className="text-[11px] text-board-muted mt-1">líquido CARBO (INS-LIQ-CARBO)</p>
+            </div>
+          </div>
+
+          {estabilizador.carregando && (
+            <p className="px-4 sm:px-6 py-6 text-center text-xs text-board-muted">
+              <Loader2 className="h-4 w-4 animate-spin inline mr-1.5" /> Resolvendo a lista de materiais…
+            </p>
+          )}
+
+          {!estabilizador.carregando && (
+            <div className="divide-y divide-border">
+              {estabilizador.linhas.map((l) => (
+                <div key={l.productId} className="flex items-center justify-between gap-3 px-4 sm:px-6 py-2.5">
+                  <div className="min-w-0">
+                    <p className="text-sm text-board-text truncate">{l.nome}</p>
+                    <p className="text-[11px] text-board-muted">
+                      {l.codigo ?? "—"} · {fmtNum(l.itens)} itens × {(l.litrosPorItem * 1000).toLocaleString("pt-BR", { maximumFractionDigits: 0 })} ml
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-semibold text-board-text">{fmtL(l.litros)}</p>
+                    <p className="text-[11px] text-board-muted">{pctDe(l.litros, estabilizador.litros)}</p>
+                  </div>
+                </div>
+              ))}
+              {estabilizador.linhas.length === 0 && (
+                <p className="py-6 text-center text-xs text-board-muted">Nenhum produto com lista de materiais resolvida.</p>
+              )}
+            </div>
+          )}
+
+          {/* ⚠️ O que ficou FORA aparece, e com o tamanho do buraco. Sem esta
+              linha o total pareceria completo, e o cadastro que falta nunca
+              seria feito — é a mesma regra da cobertura logo acima. */}
+          {estabilizador.semBom.length > 0 && (
+            <div className="border-t border-border bg-amber-500/[0.06] px-4 sm:px-6 py-2.5">
+              <p className="text-[11px] text-amber-500">
+                Fora da conta, por falta de lista de materiais cadastrada:{" "}
+                {estabilizador.semBom.map((p) => `${p.nome} (${fmtNum(p.itens)} itens)`).join(" · ")}
+              </p>
+            </div>
+          )}
+          {estabilizador.onlineIncompleto && (
+            <div className="border-t border-border bg-amber-500/[0.06] px-4 sm:px-6 py-2.5">
+              <p className="text-[11px] text-amber-500">
+                Algum SKU on-line está sem <span className="font-semibold">unidades por venda</span> no mapa de SKU —
+                a venda on-line desse produto ficou fora do consumo acima.
+              </p>
+            </div>
+          )}
+          {!!estabilizador.erro && (
+            <div className="border-t border-border px-4 sm:px-6 py-2.5">
+              <p className="text-[11px] text-destructive">
+                Não foi possível calcular: {(estabilizador.erro as { message?: string })?.message ?? "erro desconhecido"}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* 9. Footer */}

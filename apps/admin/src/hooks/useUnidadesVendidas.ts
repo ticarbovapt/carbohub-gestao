@@ -2,7 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { lerTudo } from "@/lib/lerTudo";
 import {
-  COLUNAS_MAPA_SKU, construirMapaUnidades, normalizarSku, unidadesExibidas,
+  COLUNAS_MAPA_SKU, construirMapaUnidades, construirMapaPrateleira, fatorUnidades,
+  normalizarSku, unidadesExibidas,
   type MapaUnidades, type SkuMappingRow,
 } from "@/lib/skuUnidades";
 
@@ -51,6 +52,8 @@ const ehVenda = (s: string | null) => EH_VENDA.has((s ?? "").toLowerCase());
 
 export interface ProdutoUnidades {
   key: string;
+  /** O produto do catálogo, quando a linha resolveu. `null` = não resolveu. */
+  productId: string | null;
   nome: string;
   productCode: string | null;
   /** `false` = a linha do e-commerce não resolve para produto do cadastro. */
@@ -58,6 +61,17 @@ export interface ProdutoUnidades {
   // On-line
   onPacks: number;
   onUnidades: number;
+  /**
+   * Os packs convertidos em ITENS DO CATÁLOGO (`unidades_por_venda`) — a mesma
+   * unidade do `eqItens`, e a única em que os dois canais podem ser somados
+   * para multiplicar por uma lista de materiais.
+   *
+   * ⚠️ `null` quando algum SKU daquele produto não tem a prateleira
+   * cadastrada. Nunca `0` e nunca "igual aos packs": inventar 1 item por pack
+   * faria o kit de sachês valer 1 onde valem 10, e a conta de insumo erraria
+   * para menos sem avisar.
+   */
+  onItens: number | null;
   onReceita: number;
   // Equipe / balcão
   eqItens: number;
@@ -78,6 +92,8 @@ export interface UnidadesVendidas {
   eqUnidades: number | null;
   eqItens: number;
   eqReceita: number;
+  /** Itens de catálogo dos DOIS canais. `null` se o on-line não converter. */
+  onItens: number | null;
   totalUnidades: number | null;
   /** Produtos da equipe sem fator conhecido — a lista de trabalho. */
   semFator: string[];
@@ -280,6 +296,8 @@ export function useUnidadesVendidas(filtros: UnidadesFiltro = {}) {
       const linhasMapa = mapas ?? [];
 
       const mapaUnidades: MapaUnidades = construirMapaUnidades(linhasMapa);
+      // O mesmo cadastro lido na outra direção: itens de prateleira por pack.
+      const mapaPrateleira: MapaUnidades = construirMapaPrateleira(linhasMapa);
 
       // product_id → unidades que UM item do catálogo entrega.
       // `undefined` = nunca visto; `null` = visto e ambíguo.
@@ -383,9 +401,9 @@ export function useUnidadesVendidas(filtros: UnidadesFiltro = {}) {
 
       // ── 4. Agrega ─────────────────────────────────────────────────────────
       const acc = new Map<string, ProdutoUnidades>();
-      const novo = (key: string, nome: string, code: string | null, mapeado: boolean): ProdutoUnidades => ({
-        key, nome, productCode: code, mapeado,
-        onPacks: 0, onUnidades: 0, onReceita: 0,
+      const novo = (key: string, pid: string | null, nome: string, code: string | null, mapeado: boolean): ProdutoUnidades => ({
+        key, productId: pid, nome, productCode: code, mapeado,
+        onPacks: 0, onUnidades: 0, onItens: 0, onReceita: 0,
         eqItens: 0, eqUnidades: 0, eqBonificadas: 0, eqReceita: 0,
         totalUnidades: 0, totalReceita: 0,
       });
@@ -403,9 +421,15 @@ export function useUnidadesVendidas(filtros: UnidadesFiltro = {}) {
         // pelo nome. Empurrá-la para dentro de um produto conhecido esconderia
         // o cadastro que falta.
         const key = pid ? `prod:${pid}` : sku ? `sku:${sku}` : `nome:${r.product_name ?? "?"}`;
-        const linha = acc.get(key) ?? novo(key, ident?.nome ?? r.product_name ?? sku ?? "Produto desconhecido", ident?.code ?? null, !!pid);
+        const linha = acc.get(key) ?? novo(key, pid ?? null, ident?.nome ?? r.product_name ?? sku ?? "Produto desconhecido", ident?.code ?? null, !!pid);
         linha.onPacks += Number(r.quantity) || 0;
         linha.onUnidades += unidadesExibidas(mapaUnidades, r);
+        // ⚠️ Prateleira desconhecida ANULA o produto inteiro, como o fator de
+        // exibição já faz do lado da equipe. Somar só o que se sabe daria um
+        // total menor com cara de completo.
+        const prateleira = fatorUnidades(mapaPrateleira, r.platform, r.product_sku);
+        if (prateleira === null) linha.onItens = null;
+        else if (linha.onItens !== null) linha.onItens += (Number(r.quantity) || 0) * prateleira;
         linha.onReceita += Number(r.total) || 0;
         acc.set(key, linha);
       }
@@ -424,7 +448,7 @@ export function useUnidadesVendidas(filtros: UnidadesFiltro = {}) {
           const ident = pid ? nomePorId.get(pid) : undefined;
           const key = pid ? `prod:${pid}` : `nome:${chaveNome(itemNome(i)) || itemCodigo(i) || "?"}`;
           const linha = acc.get(key) ?? novo(
-            key,
+            key, pid,
             ident?.nome ?? itemNome(i) ?? itemCodigo(i) ?? "Produto sem nome",
             ident?.code ?? itemCodigo(i) ?? null,
             !!pid,
@@ -475,11 +499,15 @@ export function useUnidadesVendidas(filtros: UnidadesFiltro = {}) {
       const algumSemFator = produtos.some((p) => p.eqUnidades === null);
       const eqUnidades = algumSemFator ? null : soma((p) => p.eqUnidades ?? 0);
       const onUnidades = soma((p) => p.onUnidades);
+      // Mesma regra do total de unidades: um produto sem prateleira derruba a
+      // soma, em vez de encolhê-la em silêncio.
+      const onItens = produtos.some((p) => p.onItens === null) ? null : soma((p) => p.onItens ?? 0);
 
       return {
         produtos,
         onUnidades,
         onPacks: soma((p) => p.onPacks),
+        onItens,
         onReceita: Math.round(soma((p) => p.onReceita) * 100) / 100,
         eqUnidades,
         eqItens: soma((p) => p.eqItens),
