@@ -6,7 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { format, differenceInDays, isToday } from "date-fns";
+import { format, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Users, Store, Building2, Search, Clock, Activity } from "lucide-react";
 
@@ -52,14 +52,46 @@ const APP_LABEL: Record<string, string> = {
 const appLabel = (a: string | null) => (a ? APP_LABEL[a] ?? a : null);
 const pretty = (s: string | null) => (s ? s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "—");
 
+// Recência = dias de CALENDÁRIO em Brasília entre hoje e o último acesso
+// ("Ontem" é ontem, mesmo que tenha sido há 3 horas). O rótulo diz os dias
+// exatos; a COR diz a faixa (pedido do dono do processo, 30/10/2026).
+const diaBrasilia = (d: Date) => {
+  const [a, m, dd] = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(d).split("-").map(Number);
+  return Date.UTC(a, m - 1, dd);
+};
+const diasDesde = (dt: string) => Math.max(0, Math.round((diaBrasilia(new Date()) - diaBrasilia(new Date(dt))) / 86_400_000));
+
+type Faixa = "verde" | "amarelo" | "laranja" | "vermelho" | "nunca";
+const FAIXAS: Record<Faixa, { filtro: string; color: string; dot: string }> = {
+  verde:    { filtro: "Hoje ou ontem",     color: "text-emerald-600", dot: "bg-emerald-500" },
+  amarelo:  { filtro: "2 a 3 dias",        color: "text-amber-600",   dot: "bg-amber-400" },
+  laranja:  { filtro: "4 a 7 dias",        color: "text-orange-600",  dot: "bg-orange-500" },
+  vermelho: { filtro: "Mais de 7 dias",    color: "text-red-600",     dot: "bg-red-500" },
+  nunca:    { filtro: "Nunca acessou",     color: "text-muted-foreground", dot: "bg-muted-foreground/40" },
+};
+// Filtros antigos na URL (favorito, link) continuam abrindo algo coerente.
+const FILTRO_ANTIGO: Record<string, Faixa> = { hoje: "verde", semana: "amarelo", mais7: "vermelho", mais30: "vermelho" };
+
 function getActivityStatus(dt: string | null) {
-  if (!dt) return { label: "Nunca acessou", color: "text-muted-foreground", dot: "⚫" };
-  const d = new Date(dt);
-  const days = differenceInDays(new Date(), d);
-  if (isToday(d)) return { label: "Hoje", color: "text-emerald-600", dot: "🟢" };
-  if (days <= 7) return { label: "Últimos 7 dias", color: "text-amber-600", dot: "🟡" };
-  if (days <= 30) return { label: "+7 dias", color: "text-red-500", dot: "🔴" };
-  return { label: "+30 dias", color: "text-muted-foreground", dot: "⚫" };
+  if (!dt) return { faixa: "nunca" as Faixa, label: "Nunca acessou", ...FAIXAS.nunca };
+  const dias = diasDesde(dt);
+  const faixa: Faixa = dias <= 1 ? "verde" : dias <= 3 ? "amarelo" : dias <= 7 ? "laranja" : "vermelho";
+  const label = dias === 0 ? "Hoje" : dias === 1 ? "Ontem" : `${dias} dias`;
+  return { faixa, label, ...FAIXAS[faixa] };
+}
+// O status olha o MESMO instante que a coluna "Último acesso" mostra: o mais
+// recente entre login e abertura de sistema (pelo SSO a pessoa abre o app sem
+// logar de novo, e o status dizia "dias" ao lado de uma data de ontem).
+const ultimoInstante = (r: LoginRow) =>
+  [r.last_app_at, r.last_login_at].filter(Boolean).sort().pop() ?? null;
+
+function StatusRecencia({ dt }: { dt: string | null }) {
+  const s = getActivityStatus(dt);
+  return (
+    <span className={`inline-flex items-center gap-2 text-sm font-medium ${s.color}`}>
+      <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${s.dot}`} />{s.label}
+    </span>
+  );
 }
 function getLicenseeStatus(dt: string | null, orders: number): { label: string; variant: "default" | "secondary" | "destructive" } {
   if (!dt) return { label: "Inativo", variant: "destructive" };
@@ -99,8 +131,8 @@ function InternalSection({ rows }: { rows: LoginRow[] }) {
     if (filterDept !== "all" && r.department !== filterDept) return false;
     if (filterApp !== "all" && r.last_app !== filterApp) return false;
     if (filterStatus !== "all") {
-      const map: Record<string, string> = { hoje: "Hoje", semana: "Últimos 7 dias", mais7: "+7 dias", mais30: "+30 dias", nunca: "Nunca acessou" };
-      if (getActivityStatus(r.last_login_at).label !== map[filterStatus]) return false;
+      const faixa = FILTRO_ANTIGO[filterStatus] ?? filterStatus;
+      if (getActivityStatus(ultimoInstante(r)).faixa !== faixa) return false;
     }
     if (search && !r.full_name?.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
@@ -127,15 +159,15 @@ function InternalSection({ rows }: { rows: LoginRow[] }) {
             {apps.map((a) => <SelectItem key={a} value={a}>{appLabel(a)}</SelectItem>)}
           </SelectContent>
         </Select>
-        <Select value={filterStatus} onValueChange={setFilterStatus}>
+        <Select value={FILTRO_ANTIGO[filterStatus] ?? filterStatus} onValueChange={setFilterStatus}>
           <SelectTrigger className="w-44"><SelectValue placeholder="Status" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos status</SelectItem>
-            <SelectItem value="hoje">🟢 Hoje</SelectItem>
-            <SelectItem value="semana">🟡 Últimos 7 dias</SelectItem>
-            <SelectItem value="mais7">🔴 +7 dias</SelectItem>
-            <SelectItem value="mais30">⚫ +30 dias</SelectItem>
-            <SelectItem value="nunca">⚫ Nunca acessou</SelectItem>
+            {(Object.keys(FAIXAS) as Faixa[]).map((f) => (
+              <SelectItem key={f} value={f}>
+                <span className="inline-flex items-center gap-2"><span className={`h-2.5 w-2.5 rounded-full ${FAIXAS[f].dot}`} />{FAIXAS[f].filtro}</span>
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
@@ -149,7 +181,6 @@ function InternalSection({ rows }: { rows: LoginRow[] }) {
             </tr></thead>
             <tbody className="divide-y divide-border">
               {filtered.length === 0 ? <EmptyState label="usuário interno" cols={6} /> : filtered.map((row) => {
-                const status = getActivityStatus(row.last_login_at);
                 return (
                   <tr key={row.user_id} className="hover:bg-secondary/20 transition-colors">
                     <td className="px-4 py-3 font-medium">{row.full_name || "—"}</td>
@@ -168,8 +199,8 @@ function InternalSection({ rows }: { rows: LoginRow[] }) {
                         ? <Badge variant="outline" className="text-xs gap-1"><Activity className="h-3 w-3 text-carbo-green" />{appLabel(row.last_app)}</Badge>
                         : <span className="text-muted-foreground">—</span>}
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground tabular-nums">{fmt(row.last_app_at ?? row.last_login_at)}</td>
-                    <td className="px-4 py-3"><span className={`text-sm font-medium ${status.color}`}>{status.dot} {status.label}</span></td>
+                    <td className="px-4 py-3 text-muted-foreground tabular-nums">{fmt(ultimoInstante(row))}</td>
+                    <td className="px-4 py-3"><StatusRecencia dt={ultimoInstante(row)} /></td>
                   </tr>
                 );
               })}
@@ -270,14 +301,13 @@ function LojasSection({ rows }: { rows: LoginRow[] }) {
             </tr></thead>
             <tbody className="divide-y divide-border">
               {filtered.length === 0 ? <EmptyState label="loja" cols={5} /> : filtered.map((row) => {
-                const status = getActivityStatus(row.last_login_at);
                 return (
                   <tr key={row.user_id} className="hover:bg-secondary/20 transition-colors">
                     <td className="px-4 py-3 font-medium">{row.full_name || "—"}</td>
                     <td className="px-4 py-3 text-muted-foreground">{row.region || "—"}</td>
                     <td className="px-4 py-3 text-muted-foreground tabular-nums">{fmt(row.last_login_at)}</td>
                     <td className="px-4 py-3 text-muted-foreground tabular-nums">{fmt(row.last_replenishment_at)}</td>
-                    <td className="px-4 py-3"><span className={`text-sm font-medium ${status.color}`}>{status.dot} {status.label}</span></td>
+                    <td className="px-4 py-3"><StatusRecencia dt={row.last_login_at} /></td>
                   </tr>
                 );
               })}
