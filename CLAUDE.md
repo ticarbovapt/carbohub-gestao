@@ -4483,6 +4483,18 @@ Corrigido na `20260982`, com a MESMA regra nas duas funções.
    dono do processo — ver o número não basta, é preciso BAIXAR). O link usa o
    guardado em `bling_nfe` e, faltando, busca ao vivo (`useNfeLinks`).
 
+5. ✅ **A descarbonização comissiona pela NFS-e** (`20261139`, 30/10/2026,
+   pedido do dono do processo). `crm_comissao_descarb_base` é a regra ÚNICA:
+   NFS-e `autorizada` em PRODUÇÃO (`carbo_nfse_emissoes`, a régua de
+   `nfseValida`), sem evento de cancelamento no ADN, pedido válido com
+   vendedor; valor = o da nota, data = a da EMISSÃO (Brasília). O agregado
+   (`crm_comissao_descarb`, mesma assinatura) e o detalhe
+   (`crm_comissao_descarb_detalhe`) leem dela, e o detalhe entra na memória
+   do fechamento junto com as NFs. A tela mostra "N NFS-e" com PDF (o do
+   CarboHub, pela `carbo_nfse_visao` — chega do ADN em até 1 h) e XML (o
+   `nfse_xml` da emissão). ⚠️ Venda de serviço SEM nota saiu da base;
+   fechamento antigo não muda (é congelado).
+
 ⚠️ **PENDÊNCIA MEDIDA, não resolvida: a comissão paga sobre NF CANCELADA.** Ela
 só testa se `bling_nf_id` está preenchido, nunca se a nota vale — enquanto o
 faturamento tem `carbo_vendas_nf_cancelada` justamente para isso. Trocar a base

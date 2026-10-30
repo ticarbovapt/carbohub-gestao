@@ -39,8 +39,10 @@ export function useComissaoAgregado(from: string, to: string, enabled = true) {
   });
 }
 
-/** Total de DESCARBONIZAÇÃO (serviço, sem NF) por vendedor no período. Conta já
- *  na venda — base separada da de produto (RPC crm_comissao_descarb). */
+/** Total de DESCARBONIZAÇÃO por vendedor no período — base separada da de
+ *  produto (RPC crm_comissao_descarb). Desde 30/10/2026 conta só a NFS-e
+ *  AUTORIZADA em produção e não cancelada, pela data de emissão (`20261139`);
+ *  antes contava a linha de serviço já na venda, sem nota. */
 export function useComissaoDescarb(from: string, to: string, enabled = true) {
   return useQuery({
     queryKey: ["comissao_descarb", from, to],
@@ -133,7 +135,14 @@ export function useCreateStatement() {
       const { data: det } = await db.rpc("crm_comissao_detalhe", {
         p_vendedor: s.vendedor_id, p_from: s.period_start, p_to: s.period_end,
       });
-      const items = ((det ?? []) as any[]).map((o) => ({
+      // A descarbonização congela as NFS-e dela junto (mesma tabela: um pedido
+      // é de UM tipo só, produto ou serviço, então não há linha em dobro).
+      const { data: detDesc, error: errDesc } = s.base_descarb > 0
+        ? await db.rpc("crm_comissao_descarb_detalhe", {
+            p_vendedor: s.vendedor_id, p_from: s.period_start, p_to: s.period_end })
+        : { data: [], error: null };
+      if (errDesc) throw errDesc;
+      const items = [...((det ?? []) as any[]), ...((detDesc ?? []) as any[])].map((o) => ({
         statement_id: stmt.id,
         order_id: o.order_id,
         order_number: o.order_number,
@@ -155,7 +164,7 @@ export function useCreateStatement() {
 export interface CommissionRule {
   id: string; vendedor_id: string | null; vendedor_name: string | null;
   rate_pct: number;          // produto faturado (com NF)
-  rate_descarb_pct: number;  // descarbonização (serviço, sem NF)
+  rate_descarb_pct: number;  // descarbonização (NFS-e)
   active: boolean;
 }
 export function useCommissionRules() {
@@ -334,6 +343,107 @@ const ordenarNfs = (xs: NfDaBase[]) => {
     (a.numero ?? "").localeCompare(b.numero ?? "", "pt-BR", { numeric: true }));
 };
 
+// ── NFS-e de descarbonização (Portal Nacional) ──────────────────────────────
+/** Uma NFS-e da base de comissão de descarbonização. */
+export interface NfseDaBase {
+  order_id: string;
+  order_number: string | null;
+  customer_name: string | null;
+  emissao_id: string;
+  numero: string | null;
+  chave_acesso: string | null;
+  valor: number | null;
+  emissao: string | null;
+}
+
+const ordenarNfses = (xs: NfseDaBase[]) => {
+  const unicas = new Map<string, NfseDaBase>();
+  for (const x of xs) if (!unicas.has(x.emissao_id)) unicas.set(x.emissao_id, x);
+  return [...unicas.values()].sort((a, b) =>
+    (a.numero ?? "").localeCompare(b.numero ?? "", "pt-BR", { numeric: true }));
+};
+
+/** order_id → a NFS-e AUTORIZADA em produção dele (a mesma régua do Faturamento). */
+async function nfsesDosPedidos(orderIds: string[]): Promise<Map<string, NfseDaBase>> {
+  const ids = [...new Set(orderIds.filter(Boolean))];
+  const out = new Map<string, NfseDaBase>();
+  if (!ids.length) return out;
+  const pedidos = new Map<string, any>();
+  for (const f of fatias(ids)) {
+    const { data: em, error } = await db.from("carbo_nfse_emissoes")
+      .select("id, order_id, n_nfse, chave_acesso, valor, concluido_em, enviado_em")
+      .in("order_id", f).eq("ambiente", 1).eq("status", "autorizada");
+    if (error) throw error;
+    const comNota = ((em ?? []) as any[]);
+    if (!comNota.length) continue;
+    const { data: ps, error: e2 } = await db.from("carboze_orders")
+      .select("id, order_number, customer_name").in("id", comNota.map((r) => r.order_id));
+    if (e2) throw e2;
+    for (const p of (ps ?? []) as any[]) pedidos.set(p.id, p);
+    for (const r of comNota) {
+      const p = pedidos.get(r.order_id);
+      out.set(r.order_id, {
+        order_id: r.order_id, order_number: p?.order_number ?? null, customer_name: p?.customer_name ?? null,
+        emissao_id: r.id, numero: r.n_nfse ?? null, chave_acesso: r.chave_acesso ?? null,
+        valor: r.valor != null ? Number(r.valor) : null,
+        emissao: (r.concluido_em ?? r.enviado_em ?? "").slice(0, 10) || null,
+      });
+    }
+  }
+  return out;
+}
+
+/** Aba Calcular: as NFS-e de descarbonização de cada vendedor no período — a
+ *  MESMA lista que vira memória ao gerar a comissão (`crm_comissao_descarb_detalhe`). */
+export function useNfsesDaComissao(from: string, to: string, vendedorIds: string[]) {
+  const chave = [...vendedorIds].sort().join(",");
+  return useQuery({
+    queryKey: ["comissao_nfses", from, to, chave],
+    enabled: !!from && !!to && vendedorIds.length > 0,
+    staleTime: 60_000,
+    queryFn: async (): Promise<Map<string, NfseDaBase[]>> => {
+      const porVendedor = new Map<string, NfseDaBase[]>();
+      await Promise.all(vendedorIds.map(async (vid) => {
+        const { data, error } = await db.rpc("crm_comissao_descarb_detalhe", { p_vendedor: vid, p_from: from, p_to: to });
+        if (error) throw error;
+        porVendedor.set(vid, ordenarNfses(((data ?? []) as any[]).map((r) => ({
+          order_id: r.order_id, order_number: r.order_number ?? null, customer_name: r.customer_name ?? null,
+          emissao_id: r.emissao_id, numero: r.n_nfse ?? null, chave_acesso: r.chave_acesso ?? null,
+          valor: r.total != null ? Number(r.total) : null, emissao: r.sale_date ?? null,
+        }))));
+      }));
+      return porVendedor;
+    },
+  });
+}
+
+/** PDF da NFS-e: a representação do CarboHub (`lib/nfsePdf.ts`) a partir do XML
+ *  que o ADN devolveu. ⚠️ A nota chega ao espelho pela ingestão de hora em hora:
+ *  recém-emitida ainda não está lá, e isso é DITO, nunca vira PDF vazio. */
+export async function baixarPdfNfse(chave: string | null) {
+  const d = (chave ?? "").replace(/\D/g, "");
+  if (!d) throw new Error("Esta NFS-e não tem chave de acesso gravada.");
+  const { data, error } = await db.from("carbo_nfse_visao").select("*")
+    .eq("chave_acesso", chave).limit(1);
+  if (error) throw error;
+  const row = (data ?? [])[0];
+  if (!row) throw new Error("A nota ainda não chegou do Portal Nacional (a leitura roda de hora em hora). Use o XML por enquanto.");
+  const { gerarPdfNfse } = await import("@/lib/nfsePdf");
+  gerarPdfNfse(row);
+}
+
+/** XML oficial devolvido pelo SEFIN na emissão (`carbo_nfse_emissoes.nfse_xml`). */
+export async function baixarXmlEmissaoNfse(emissaoId: string, numero: string | null) {
+  const { data, error } = await db.from("carbo_nfse_emissoes").select("nfse_xml").eq("id", emissaoId).maybeSingle();
+  if (error) throw error;
+  if (!data?.nfse_xml) throw new Error("Esta NFS-e não tem XML guardado.");
+  const url = URL.createObjectURL(new Blob([data.nfse_xml], { type: "application/xml" }));
+  const a = document.createElement("a");
+  a.href = url; a.download = `NFSe-${numero ?? emissaoId}.xml`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
 /** Aba Calcular: as NFs de cada vendedor no período — a MESMA lista que vira
  *  memória de cálculo ao gerar a comissão (`crm_comissao_detalhe`). */
 export function useNfsDaComissao(from: string, to: string, vendedorIds: string[]) {
@@ -372,15 +482,23 @@ export function useNfsDosFechamentos(statementIds: string[]) {
       const itens = await lerPorIdsSemTeto<{ statement_id: string; order_id: string }>(statementIds, (f) =>
         db.from("commission_statement_items")
           .select("statement_id, order_id").in("statement_id", f).order("id"));
-      const porPedido = await nfsDosPedidos(itens.map((i) => i.order_id));
+      const [porPedido, nfsePorPedido] = await Promise.all([
+        nfsDosPedidos(itens.map((i) => i.order_id)),
+        nfsesDosPedidos(itens.map((i) => i.order_id)),
+      ]);
       const juntas = new Map<string, NfDaBase[]>();
+      const juntasNfse = new Map<string, NfseDaBase[]>();
       for (const i of itens) {
         const n = porPedido.get(i.order_id);
         if (n) (juntas.get(i.statement_id) ?? juntas.set(i.statement_id, []).get(i.statement_id)!).push(n);
+        const ns = nfsePorPedido.get(i.order_id);
+        if (ns) (juntasNfse.get(i.statement_id) ?? juntasNfse.set(i.statement_id, []).get(i.statement_id)!).push(ns);
       }
       const porFechamento = new Map<string, NfDaBase[]>();
       for (const [k, v] of juntas) porFechamento.set(k, ordenarNfs(v));
-      return { porFechamento, porPedido };
+      const nfsePorFechamento = new Map<string, NfseDaBase[]>();
+      for (const [k, v] of juntasNfse) nfsePorFechamento.set(k, ordenarNfses(v));
+      return { porFechamento, porPedido, nfsePorFechamento, nfsePorPedido };
     },
   });
 }

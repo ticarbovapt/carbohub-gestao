@@ -25,6 +25,7 @@ import {
   useCommissionRules, useUpsertCommissionRule, useStatementItems, useStatementPayments,
   type CommissionStatement,
   useNfsDaComissao, useNfsDosFechamentos, type NfDaBase,
+  useNfsesDaComissao, baixarPdfNfse, baixarXmlEmissaoNfse, type NfseDaBase,
 } from "@/hooks/useComissao";
 
 const brl = (v: number) => (v ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -229,7 +230,7 @@ function CalcularTab() {
   const rateDescFor = (vid: string) =>
     regras.find((r) => r.vendedor_id === vid)?.rate_descarb_pct ?? defaultRateDesc;
 
-  // Une produto (com NF) + descarbonização (sem NF) por vendedor. Ambos entram
+  // Une produto (NF do Bling) + descarbonização (NFS-e) por vendedor. Ambos entram
   // na base de comissão; a descarbonização aparece em coluna própria.
   const merged = useMemo(() => {
     const map = new Map<string, { vendedor_id: string; vendedor_name: string | null; prod: number; prodQtd: number; descarb: number; descarbQtd: number }>();
@@ -262,6 +263,8 @@ function CalcularTab() {
   const vendedores = useMemo(() => merged.map((a) => ({ id: a.vendedor_id, name: a.vendedor_name || "—" })), [merged]);
   const comNf = useMemo(() => merged.filter((a) => a.prodQtd > 0).map((a) => a.vendedor_id), [merged]);
   const { data: nfsPorVendedor, isLoading: loadingNfs } = useNfsDaComissao(from, to, comNf);
+  const comNfse = useMemo(() => merged.filter((a) => a.descarbQtd > 0).map((a) => a.vendedor_id), [merged]);
+  const { data: nfsesPorVendedor, isLoading: loadingNfses } = useNfsesDaComissao(from, to, comNfse);
   const rows = vendFilter === "__all__" ? merged : merged.filter((a) => a.vendedor_id === vendFilter);
   const totalBase = rows.reduce((s, r) => s + r.prod + r.descarb, 0);
   const totalDescarb = rows.reduce((s, r) => s + r.descarb, 0);
@@ -305,7 +308,7 @@ function CalcularTab() {
         <CarboCardContent className="pt-6">
           <p className="text-xs text-muted-foreground mb-3">
             Duas bases, <strong>dois percentuais</strong>: produto entra quando a <strong>NF é emitida</strong>;
-            descarbonização entra <strong>já no momento da venda</strong> (não gera NF) e comissiona com o seu próprio %.
+            descarbonização entra quando a <strong>NFS-e é autorizada</strong> no Portal Nacional e comissiona com o seu próprio %.
             Digite os percentuais e clique em <strong>Gerar comissão</strong> — ela vai pra aba Pagamentos.
           </p>
           {isLoading || loadingDescarb ? (
@@ -318,7 +321,7 @@ function CalcularTab() {
                 <CarboTableRow>
                   <CarboTableHead>Vendedor</CarboTableHead>
                   <CarboTableHead className="text-right">Vendas faturadas</CarboTableHead>
-                  <CarboTableHead className="text-right">Descarbonização<span className="text-[10px] font-normal text-muted-foreground"> (sem NF)</span></CarboTableHead>
+                  <CarboTableHead className="text-right">Descarbonização<span className="text-[10px] font-normal text-muted-foreground"> (NFS-e)</span></CarboTableHead>
                   <CarboTableHead className="w-24 text-center">% NF</CarboTableHead>
                   <CarboTableHead className="w-24 text-center">% descarb.</CarboTableHead>
                   <CarboTableHead className="text-right">Comissão</CarboTableHead>
@@ -347,7 +350,8 @@ function CalcularTab() {
                         {r.descarb > 0 ? (
                           <>
                             <span className="text-carbo-green font-medium">{brl(r.descarb)}</span>
-                            <span className="block text-[11px] text-muted-foreground">{r.descarbQtd} serviço(s)</span>
+                            <BotaoNfses titulo={r.vendedor_name || "vendedor"} qtd={r.descarbQtd}
+                              nfses={nfsesPorVendedor?.get(r.vendedor_id)} carregando={loadingNfses} />
                           </>
                         ) : <span className="text-muted-foreground">—</span>}
                       </CarboTableCell>
@@ -646,6 +650,10 @@ function PagamentosTab() {
                         )}
                         <BotaoNfs titulo={`${s.vendedor_name || "vendedor"} · ${fmtDate(s.period_start)} – ${fmtDate(s.period_end)}`}
                           nfs={nfsFech?.porFechamento.get(s.id)} carregando={loadingNfsFech} />
+                        {Number(s.base_descarb) > 0 && (
+                          <BotaoNfses titulo={`${s.vendedor_name || "vendedor"} · ${fmtDate(s.period_start)} – ${fmtDate(s.period_end)}`}
+                            nfses={nfsFech?.nfsePorFechamento.get(s.id)} carregando={loadingNfsFech} />
+                        )}
                       </CarboTableCell>
                       <CarboTableCell className="text-center">
                         {Number(s.rate_pct)}%
@@ -714,6 +722,71 @@ function BotaoNfs({ titulo, nfs, carregando, qtd }: {
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+/** Botão "N NFS-e" da descarbonização — o mesmo desenho do "N NF(s)" do produto. */
+function BotaoNfses({ titulo, nfses, carregando, qtd }: {
+  titulo: string; nfses?: NfseDaBase[]; carregando?: boolean; qtd?: number;
+}) {
+  const [aberto, setAberto] = useState(false);
+  const n = nfses?.length ?? qtd ?? 0;
+  if (!carregando && n === 0) return null;
+  return (
+    <>
+      <button type="button" onClick={() => setAberto(true)} disabled={carregando && !nfses}
+        className="mt-1 inline-flex min-h-8 sm:min-h-0 items-center gap-1 rounded-md border border-border bg-background px-2.5 sm:px-2 py-1 sm:py-0.5 text-xs sm:text-[11px] font-medium text-muted-foreground hover:text-foreground hover:border-foreground/30 disabled:opacity-60">
+        <FileText className="h-3 w-3" />
+        {carregando && !nfses ? "carregando NFS-e…" : `${n} NFS-e`}
+      </button>
+      <Dialog open={aberto} onOpenChange={setAberto}>
+        <DialogContent className="sm:max-w-2xl max-h-[90dvh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>NFS-e de descarbonização — {titulo}</DialogTitle>
+            <DialogDescription>As notas de serviço autorizadas no Portal Nacional que formam a base. Baixe o PDF ou o XML de cada uma.</DialogDescription>
+          </DialogHeader>
+          <div className="rounded-lg border divide-y text-sm">
+            {(nfses ?? []).map((nf) => <LinhaNfse key={nf.emissao_id} nf={nf} />)}
+          </div>
+          <DialogFooter><CarboButton variant="outline" onClick={() => setAberto(false)}>Fechar</CarboButton></DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+function LinhaNfse({ nf }: { nf: NfseDaBase }) {
+  const [qual, setQual] = useState<"pdf" | "xml" | null>(null);
+  const abrir = async (tipo: "pdf" | "xml") => {
+    setQual(tipo);
+    try {
+      if (tipo === "pdf") await baixarPdfNfse(nf.chave_acesso);
+      else await baixarXmlEmissaoNfse(nf.emissao_id, nf.numero);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally { setQual(null); }
+  };
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+      <div className="min-w-0 flex-1">
+        <p className="font-medium">NFS-e {nf.numero ?? "—"}</p>
+        <p className="truncate text-[11px] text-muted-foreground">
+          {nf.order_number ?? "—"} · {nf.customer_name ?? "—"}
+          {nf.emissao ? ` · ${fmtDate(nf.emissao)}` : ""}
+        </p>
+      </div>
+      <div className="flex items-center gap-2">
+        {nf.valor != null && <span className="tabular-nums text-xs">{brl(nf.valor)}</span>}
+        <CarboButton size="sm" variant="outline" onClick={() => abrir("pdf")} disabled={qual !== null}>
+          {qual === "pdf" ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Download className="h-3.5 w-3.5 mr-1" />}
+          PDF
+        </CarboButton>
+        <CarboButton size="sm" variant="outline" onClick={() => abrir("xml")} disabled={qual !== null}>
+          {qual === "xml" ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Download className="h-3.5 w-3.5 mr-1" />}
+          XML
+        </CarboButton>
+      </div>
+    </div>
   );
 }
 
@@ -792,7 +865,7 @@ function MemoriaDialog({ st, onClose }: { st: CommissionStatement | null; onClos
           {Number(st.base_descarb) > 0 && (
             <div className="flex items-center justify-between px-3 py-2">
               <span className="text-muted-foreground">
-                Descarbonização (sem NF) · {Number(st.rate_descarb_pct)}%
+                Descarbonização (NFS-e) · {Number(st.rate_descarb_pct)}%
               </span>
               <span className="tabular-nums">
                 {brl(st.base_descarb)} → <strong>{brl(st.amount_descarb)}</strong>
@@ -836,6 +909,11 @@ function MemoriaDialog({ st, onClose }: { st: CommissionStatement | null; onClos
                           NF {nfsMem.porPedido.get(i.order_id)!.numero}
                         </span>
                       )}
+                      {i.order_id && nfsMem?.nfsePorPedido.get(i.order_id)?.numero && (
+                        <span className="ml-2 rounded border border-border bg-muted/40 px-1 text-[11px] text-muted-foreground">
+                          NFS-e {nfsMem.nfsePorPedido.get(i.order_id)!.numero}
+                        </span>
+                      )}
                     </p>
                     <p className="text-[11px] text-muted-foreground truncate">{i.customer_name || "—"}{i.sale_date ? ` · ${fmtDate(i.sale_date)}` : ""}</p>
                   </div>
@@ -847,8 +925,8 @@ function MemoriaDialog({ st, onClose }: { st: CommissionStatement | null; onClos
               </div>
               {Number(st.base_descarb) > 0 && (
                 <p className="text-[11px] text-muted-foreground pt-1">
-                  A lista acima cobre só a parte faturada. A descarbonização não gera NF —
-                  o valor dela está na composição no topo.
+                  Fechamento gerado antes de 30/10/2026 não lista a descarbonização: ela
+                  contava na venda, sem nota — o valor está na composição no topo.
                 </p>
               )}
             </div>

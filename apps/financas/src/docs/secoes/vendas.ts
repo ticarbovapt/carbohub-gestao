@@ -302,7 +302,7 @@ export const SECOES_VENDAS: Secao[] = [
     rota: "/comissionamento",
     papel: "gestor",
     resumo:
-      "Calcula a comissão de cada vendedor no período e controla os pagamentos. Duas bases, cada uma com o seu percentual: produto entra quando a NF é emitida; descarbonização (CarboVAPT) entra no momento da venda.",
+      "Calcula a comissão de cada vendedor no período e controla os pagamentos. Duas bases, cada uma com o seu percentual: produto entra quando a NF é emitida; descarbonização (CarboVAPT) entra quando a NFS-e é autorizada no Portal Nacional.",
     regras: {
       colaborador: ["A tela não abre: aparece “Acesso restrito”."],
       gestor: ["Calcula, gera as comissões, define os percentuais e registra os pagamentos."],
@@ -320,7 +320,7 @@ export const SECOES_VENDAS: Secao[] = [
           { n: 6, titulo: "Regras de %", texto: "Os percentuais padrão e por vendedor. Veja abaixo." },
           { n: 7, titulo: "N NF(s)", texto: "As notas que formam a base de produto do vendedor, com DANFE e XML de cada uma." },
           { n: 8, titulo: "Vendas faturadas", texto: "Base de produto: vendas com NF emitida no período." },
-          { n: 9, titulo: "Descarbonização", texto: "Base de serviço: vendas CarboVAPT do período, com a quantidade de serviços." },
+          { n: 9, titulo: "Descarbonização", texto: "Base de serviço: NFS-e de descarbonização autorizadas no período (nota cancelada no portal sai). O botão “N NFS-e” lista as notas, com PDF e XML de cada uma." },
           { n: 10, titulo: "% NF e % descarb.", texto: "Vêm das regras e podem ser ajustados na linha antes de gerar." },
           { n: 11, titulo: "Comissão", texto: "Base × percentual, com a conta aberta embaixo quando há as duas bases." },
           { n: 12, titulo: "Gerar comissão", texto: "Grava a comissão do vendedor naquele período, com a lista das notas (memória de cálculo). Ela vai para a aba Pagamentos." },
@@ -372,7 +372,7 @@ export const SECOES_VENDAS: Secao[] = [
         itens: [
           { n: 1, titulo: "Composição", texto: "Cada base com o seu percentual e o valor da comissão." },
           { n: 2, titulo: "Pedidos e notas", texto: "Os pedidos faturados que entraram, com o número da NF." },
-          { n: 3, titulo: "Total", texto: "Quantidade de notas e a soma. A descarbonização não gera NF e aparece só na composição." },
+          { n: 3, titulo: "Total", texto: "Quantidade de notas (NF e NFS-e) e a soma. Fechamento gerado antes de 30/10/2026 não lista a descarbonização: ela aparece só na composição." },
         ],
       },
       {
