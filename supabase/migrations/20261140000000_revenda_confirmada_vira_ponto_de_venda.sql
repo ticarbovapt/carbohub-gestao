@@ -74,7 +74,15 @@ begin
   end if;
 
   v_doc := regexp_replace(coalesce(NEW.cnpj, ''), '\D', '', 'g');
-  if length(v_doc) not in (11, 14) then return NEW; end if;
+  -- ⚠️ SÓ CNPJ. Pessoa física comprando é CONSUMO, não ponto de venda.
+  --
+  -- Aceitar CPF (11) parecia inofensivo e não era: o `carbo_set_segmento_pdv`
+  -- classifica por histórico UNÂNIME do documento, e para CPF basta uma compra
+  -- num pedido marcado como revenda para o documento inteiro virar revenda.
+  -- O dry-run do backfill pegou três assim — um deles era o CPF do PRÓPRIO
+  -- VENDEDOR, que teria virado um "ponto de venda" dentro do número de
+  -- cobertura que a diretoria lê.
+  if length(v_doc) <> 14 then return NEW; end if;
 
   -- Já existe PDV com este documento? Não cria segundo.
   if exists (

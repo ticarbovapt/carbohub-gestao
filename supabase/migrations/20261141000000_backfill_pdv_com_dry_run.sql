@@ -44,7 +44,11 @@ select distinct on (regexp_replace(coalesce(o.cnpj, ''), '\D', '', 'g'))
 from public.carboze_orders o
 where o.segmento = 'revenda'
   and o.status not in ('quote', 'cancelled')
-  and length(regexp_replace(coalesce(o.cnpj, ''), '\D', '', 'g')) in (11, 14)
+  -- ⚠️ SÓ CNPJ (14). Mesma razão do gatilho: CPF classificado como revenda
+  -- pela inferência é pessoa física, não ponto de venda. As duas portas de
+  -- entrada do cadastro têm de concordar — se a view oferecer o que o gatilho
+  -- recusa, o dry-run passa a prometer o que o fluxo normal nunca faria.
+  and length(regexp_replace(coalesce(o.cnpj, ''), '\D', '', 'g')) = 14
   and nullif(btrim(coalesce(o.legal_name, o.customer_name, '')), '') is not null
   and not exists (
     select 1 from public.pdvs p
