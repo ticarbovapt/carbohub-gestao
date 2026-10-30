@@ -95,7 +95,18 @@ begin
     owner_seller_id, owner_seller_name, opened_at,
     notes, created_by
   ) values (
-    generate_pdv_code(), v_nome,
+    -- ⚠️ NULL, não `generate_pdv_code()`.
+    --
+    -- Aquilo é função de TRIGGER (retorna `trigger` e preenche `NEW.pdv_code`),
+    -- não escalar: chamá-la aqui lança "trigger functions can only be called as
+    -- triggers". E como o bloco abaixo captura tudo e vira `raise warning`, a
+    -- falha não derrubava o pedido — ela simplesmente NÃO criava o PDV, calada.
+    -- Foi assim que a primeira versão desta função passou despercebida.
+    --
+    -- Quem preenche é o `set_pdv_code`, BEFORE INSERT em `pdvs`, com
+    -- `WHEN (new.pdv_code IS NULL OR new.pdv_code = '')`. BEFORE roda antes da
+    -- checagem de NOT NULL, então mandar NULL é o caminho correto.
+    null, v_nome,
     NEW.cnpj, NEW.legal_name, 'active',
     NEW.customer_name, NEW.customer_phone, NEW.customer_email,
     NEW.delivery_address, NEW.delivery_city, NEW.delivery_state, NEW.delivery_zip,
