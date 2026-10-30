@@ -538,7 +538,7 @@ export const SECOES: Secao[] = [
         itens: [
           { n: 1, titulo: "Alterar foto", texto: "Escolha uma imagem e ajuste o recorte." },
           { n: 2, titulo: "Seus dados", texto: "Nome, e-mail, departamento e função." },
-          { n: 3, titulo: "Outras mudanças", texto: "Para mudar nome, função ou acesso, peça ao seu gestor. A senha se troca pelo Hub (Esqueci minha senha)." },
+          { titulo: "Outras mudanças", texto: "Para mudar nome, função ou acesso, peça ao seu gestor. A senha se troca pelo Hub (Esqueci minha senha)." },
         ],
       },
     ],

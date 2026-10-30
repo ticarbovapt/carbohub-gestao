@@ -115,7 +115,7 @@ export const SHOTS = [
   { chave: "conta-parcelas", papel: "colaborador", url: "/pagar", viewport: ALTO, antes: preencher("pagar", { parcelas: 3 }),
     clip: (p) => [dlg(p).getByText("Ocorrência").first(), dlg(p).getByRole("button", { name: /Salvar 3 parcelas/ })], marcas: [
     [1, campo("Parcelas")],
-    [2, (p) => dlg(p).getByText(/Parcelada: 3 contas/)],
+    [2, (p) => dlg(p).getByText("3 parcelas mensais", { exact: true })],
     [3, (p) => dlg(p).getByText("1/3").locator("..")],
     [4, (p) => dlg(p).getByText(/Soma das parcelas/)],
     [5, (p) => dlg(p).getByRole("button", { name: "Salvar e dar baixa" })],
@@ -147,8 +147,7 @@ export const SHOTS = [
     [7, (p) => dlg(p).getByText("Valor pago").locator("..").locator("..")],
     [8, (p) => dlg(p).locator("textarea").locator("..")],
     [9, (p) => dlg(p).getByText(/Quita o título|Baixa parcial/)],
-    [10, (p) => dlg(p).getByText(/A baixa vai para o Bling/)],
-    [11, (p) => dlg(p).getByRole("button", { name: /Confirmar pagamento/ })],
+    [10, (p) => dlg(p).getByRole("button", { name: /Confirmar pagamento/ })],
   ] },
   { chave: "baixa-receber", papel: "colaborador", url: "/receber", viewport: { width: 1440, height: 1200 },
     antes: async (p) => {
@@ -243,7 +242,7 @@ export const SHOTS = [
   // ── Cadastros ──
   { chave: "fornec-lista", papel: "gestor", url: "/fornecedores",
     clip: (p) => [p.locator("main h1").first(), p.locator("main table").first()], marcas: [
-    [1, sel('main input[placeholder^="Buscar por nome"]')],
+    [1, sel('main input[placeholder="Buscar nome, CNPJ ou cidade…"]')],
     [2, btn("Novo fornecedor")],
     [3, (p) => linha("Papelaria Central")(p).getByText("Inativo")],
     [4, (p) => linha("Gráfica Norte")(p).locator("td").last()],
@@ -259,7 +258,7 @@ export const SHOTS = [
   ] },
   { chave: "formas-lista", papel: "gestor", url: "/formas-pagamento",
     clip: (p) => [p.locator("main h1").first(), p.locator("main table").first()], marcas: [
-    [1, (p) => p.locator("main").getByText(/4 últimos dígitos/).first()],
+    [1, (p) => p.locator("main td").filter({ hasText: /••\d{4}/ }).first()],
     [2, btn("Nova forma de pagamento")],
     [3, (p) => linha("Cartão antigo")(p).getByText("Inativo")],
     [4, (p) => linha("Bradesco PJ")(p).locator("td").last()],

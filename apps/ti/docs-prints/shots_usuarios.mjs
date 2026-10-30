@@ -42,13 +42,12 @@ export const SHOTS = [
     clip: (p) => p.locator('[role="dialog"]'), pad: 0, marcas: [
     [1, (p) => p.locator('[role="dialog"] input').first()],
     [2, (p) => p.locator('[role="dialog"] div.grid.grid-cols-2').first()],
-    [3, (p) => p.locator('[role="dialog"]').getByText("vê só o próprio.").locator("..")],
+    [3, (p) => p.locator('[role="dialog"] p.text-xs span.rounded-full').first()],
     [4, (p) => p.locator('[role="dialog"] div.grid.grid-cols-2').nth(1)],
     [5, sel('[role="dialog"] input[placeholder="Principais atividades"]')],
     [6, (p) => p.locator('[role="dialog"] select').nth(4)],
     [7, (p) => p.locator('[role="dialog"]').getByText("Sistemas liberados *").locator("..").locator("div.grid")],
     [8, (p) => p.locator('[role="dialog"]').getByRole("button", { name: "Criar usuário" })],
-    [9, (p) => p.locator('[role="dialog"]').getByText(/Username gerado automaticamente/)],
   ] },
   { chave: "usuarios-cartao", papel: "gestor", url: "/usuarios", viewport: { width: 1440, height: 1100 },
     antes: abrir("Carla Mendes"), clip: (p) => modal(p), pad: 0, marcas: [
@@ -67,7 +66,7 @@ export const SHOTS = [
   ] },
   { chave: "usuarios-editar", papel: "gestor", url: "/usuarios", viewport: ALTO,
     antes: editar("Carla Mendes"), clip: (p) => modal(p), pad: 0, marcas: [
-    [1, (p) => modal(p).getByText(/o username não muda/)],
+    [1, (p) => modal(p).locator("p > span.font-mono.break-all").first()],
     [2, (p) => modal(p).locator("input").first()],
     [3, (p) => modal(p).locator("div.grid.grid-cols-2").first()],
     [4, (p) => modal(p).locator("div.grid.grid-cols-2").nth(1)],
@@ -87,7 +86,7 @@ export const SHOTS = [
     },
     clip: (p) => modal(p).locator("div.border-amber-500\\/30"), marcas: [
     [1, (p) => modal(p).getByText(/deixa\s+de entrar em/).locator("..")],
-    [2, (p) => modal(p).getByText(/continua até 1 h/)],
+    [2, (p) => modal(p).getByText(/continuam por até 1 h/)],
     [3, sel('input[placeholder^="Motivo"]')],
     [4, (p) => modal(p).locator("div.border-amber-500\\/30").getByRole("button", { name: "Bloquear acesso" })],
   ] },

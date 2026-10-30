@@ -35,7 +35,6 @@ export const SECOES_LOGISTICA: Secao[] = [
           { n: 5, titulo: "Quantidade", texto: "Quantos pedidos estão naquela etapa agora." },
           { n: 6, titulo: "Card do pedido", texto: "Um pedido. Clique para abrir os detalhes; arraste para outra coluna para mudar a etapa." },
           { n: 7, titulo: "Seletor de etapa", texto: "Outra forma de mudar a etapa, sem arrastar: escolha a nova etapa na lista. Arrastar e escolher passam pelas mesmas conferências (veja “Mudando de etapa”)." },
-          { n: 8, titulo: "Dica", texto: "Lembra os dois jeitos de mover e que o clique abre os detalhes." },
         ],
       },
       {

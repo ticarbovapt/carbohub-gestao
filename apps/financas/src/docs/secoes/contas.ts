@@ -199,8 +199,8 @@ export const SECOES_CONTAS: Secao[] = [
           { n: 7, titulo: "Valor pago", texto: "Calculado sozinho: o que está em aberto + juros + multa − desconto (− tarifa, no recebimento). Pode ser digitado; aí aparece “usar R$ …” para voltar ao calculado." },
           { n: 8, titulo: "Histórico", texto: "O texto da baixa no Bling. Vem com o histórico do título; complete com o que ajuda a achar a baixa depois (ex.: “Ref. ao pedido 219 | pix”). Até 2.000 caracteres. Em branco, vai “Baixa pelo CarboHub Finanças” com o seu nome." },
           { n: 9, titulo: "Quita ou parcial", texto: "Verde “Quita o título”; âmbar “Baixa parcial — ficam R$ … em aberto”; vermelho quando algo não fecha (por exemplo, valor maior que o saldo: a diferença entra como juros ou multa)." },
-          { n: 10, titulo: "Para onde vai", texto: "“A baixa vai para o Bling na hora, na conta escolhida”, ou “A baixa vale só aqui” quando o envio ao Bling não está ligado." },
-          { n: 11, titulo: "Confirmar pagamento", texto: "Só acende quando a conta fecha. No recebimento, “Confirmar recebimento”." },
+          { n: 10, titulo: "Confirmar pagamento", texto: "Só acende quando a conta fecha. No recebimento, “Confirmar recebimento”." },
+          { titulo: "Para onde vai", texto: "Com o envio ao Bling ligado, a baixa vai para o Bling na hora, na conta escolhida; desligado, ela vale só aqui." },
         ],
       },
       {
@@ -411,7 +411,7 @@ export const SECOES_CONTAS: Secao[] = [
       {
         print: { chave: "formas-lista", legenda: "A lista de formas de pagamento." },
         itens: [
-          { n: 1, titulo: "Só os 4 últimos dígitos", texto: "Por segurança, o sistema guarda só a bandeira e os 4 últimos dígitos do cartão — nunca o número completo." },
+          { n: 1, titulo: "Só os 4 últimos dígitos", texto: "Na coluna Identificação. Por segurança, o sistema guarda só a bandeira e os 4 últimos dígitos do cartão — nunca o número completo." },
           { n: 2, titulo: "Nova forma de pagamento", texto: "Abre o cadastro.", papel: "gestor" },
           { n: 3, titulo: "Inativo", texto: "Cartão cancelado: sai das listas de escolha, fica no histórico." },
           { n: 4, titulo: "Ações", texto: "Editar, inativar (ou ativar) e excluir.", papel: "gestor" },

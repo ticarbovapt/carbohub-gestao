@@ -117,7 +117,6 @@ export const SHOTS = [
     [2, (p) => conversa(p).getByText(/Agendada para/).locator("..")],
     [3, (p) => conversa(p).locator('input[type="datetime-local"]')],
     [4, btn(/Confirmar/)],
-    [5, (p) => conversa(p).getByText(/quando a janela fecha/)],
   ] },
   // ── Recado interno ──
   { chave: "conversa-recado", papel: "colaborador", url: `/conversas?de=${LUANA}`, viewport: TELA, pad: 6,

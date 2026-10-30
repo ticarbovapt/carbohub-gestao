@@ -60,13 +60,13 @@ export const SHOTS = [
       [1, (p) => p.locator("div.fixed").getByRole("combobox").first()],
       [2, sel('input[placeholder="Nome do contato ou empresa"]')],
       [3, sel('input[placeholder="(00) 00000-0000"]')],
-      [4, (p) => p.getByText("Qualificação (o que o closer precisa saber)")],
+      [4, (p) => p.locator("div.fixed").getByText("Qualificação", { exact: true })],
       [5, (p) => p.getByRole("button", { name: /Mais detalhes/ })],
       [6, (p) => p.getByRole("button", { name: "Criar lead" })],
     ] },
   { chave: "card-aberto", papel: "colaborador", url: "/funis?funil=f14&lead=f14b", marcas: [
     [1, (p) => dlg(p).locator('button[title="Prospecção"]').locator("..")],
-    [2, (p) => dlg(p).locator('button[title="Copiar link deste card"]')],
+    [2, (p) => dlg(p).locator('button[title="Copiar link"]')],
     [3, (p) => dlg(p).locator('button[title="Arquivar lead"]')],
     [4, (p) => dlg(p).getByRole("button", { name: "Marcar como aguardando" }).locator("..")],
     [5, (p) => sec(p, "Sobre o negócio")],
@@ -190,7 +190,7 @@ SHOTS.push(
     [1, (p) => p.getByRole("button").filter({ has: p.locator("svg.lucide-chevron-left") }).first().locator("..")],
     [2, (p) => p.getByText("Período:").locator("..")],
     [3, (p) => p.getByText("Total vendido").locator("xpath=ancestor::div[contains(@class,'grid')][1]")],
-    [4, (p) => p.getByPlaceholder(/Cliente, cidade, CNPJ/)],
+    [4, (p) => p.getByPlaceholder(/Buscar cliente, CNPJ, pedido/)],
     [5, (p) => p.locator("thead th").filter({ hasText: /^Status$/i })],
     [6, (p) => p.locator("thead th").filter({ hasText: /^SDR$/i })],
     [7, (p) => p.getByRole("button", { name: /Editar \/ Converter/ })],
@@ -277,6 +277,5 @@ SHOTS.push(
   { chave: "perfil", papel: "colaborador", url: "/perfil", marcas: [
     [1, btn(/Alterar foto/)],
     [2, (p) => p.getByText("Nome completo").locator("xpath=ancestor::div[contains(@class,'rounded')][1]")],
-    [3, (p) => p.getByText(/Para alterar outras informações/)],
   ] },
 );

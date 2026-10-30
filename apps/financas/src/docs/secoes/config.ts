@@ -99,7 +99,7 @@ export const SECOES_CONFIG: Secao[] = [
         print: { chave: "blingcon-b2", legenda: "O Bling 2 desconectado." },
         itens: [
           { n: 1, titulo: "Conectar ao Bling 2", texto: "Só funciona para gestor. Para o colaborador, o clique avisa “Só gestor pode conectar uma integração” — chame um gestor do Financeiro." },
-          { n: 2, titulo: "Não mexe no Bling 1", texto: "Conectar, renovar ou desconectar aqui não interfere na matriz." },
+          { titulo: "Não mexe no Bling 1", texto: "Conectar, renovar ou desconectar aqui não interfere na matriz." },
         ],
       },
       {
@@ -164,8 +164,8 @@ export const SECOES_CONFIG: Secao[] = [
           { n: 4, titulo: "Pedidos", texto: "Os pedidos de venda lidos do Bling." },
           { n: 5, titulo: "Sincronizar Tudo", texto: "Busca de uma vez produtos, estoque, contatos, pedidos, vendedores, notas fiscais, contas a pagar e pedidos de compra. Pode levar alguns minutos; espere a mensagem no canto da tela. Se alguma parte falhar, a mensagem diz qual e o histórico mostra o motivo." },
           { n: 6, titulo: "Importar Pedidos Bling → CarboHub", texto: "Leva os pedidos lidos para a tela de Pedidos de Venda. Rode depois do Sincronizar Tudo. Repetir não duplica: só atualiza o que mudou." },
-          { n: 7, titulo: "Como funciona", texto: "O resumo da importação: produto casa pelo código (SKU), licenciado pelo nome, e a situação do Bling vira a etapa do pedido aqui." },
-          { n: 8, titulo: "Histórico de Sincronização", texto: "Uma linha por tipo, com a rodada mais recente: ✓ verde deu certo, ✕ vermelho falhou (com o motivo embaixo), o círculo girando ainda está rodando. O horário à direita diz quando foi." },
+          { n: 7, titulo: "Histórico de Sincronização", texto: "Uma linha por tipo, com a rodada mais recente: ✓ verde deu certo, ✕ vermelho falhou (com o motivo embaixo), o círculo girando ainda está rodando. O horário à direita diz quando foi." },
+          { titulo: "Como funciona a importação", texto: "O produto casa pelo código (SKU), o licenciado pelo nome, e a situação do Bling vira a etapa do pedido aqui." },
         ],
       },
       {
@@ -192,12 +192,12 @@ export const SECOES_CONFIG: Secao[] = [
         titulo: "A tela",
         print: { chave: "bling2-tela", legenda: "A integração da filial, conectada." },
         itens: [
-          { n: 1, titulo: "Não cruza com o Bling 1", texto: "O aviso do topo: os dados da filial ficam à parte e mexer aqui não altera a integração da matriz." },
-          { n: 2, titulo: "A conexão", texto: "O nome da conta conectada e o selo. Para reconectar, veja “Bling desconectou? Como conectar de novo”." },
-          { n: 3, titulo: "Os cartões", texto: "Um por tipo de dado — produtos, variações, contatos, vendedores, pedidos de venda, notas fiscais, contas a pagar, contas a receber e pedidos de compra —, com a quantidade espelhada e o “Sincronizar” de cada um." },
-          { n: 4, titulo: "Sincronizar tudo", texto: "Busca todos os tipos de uma vez. Espere a mensagem no canto da tela." },
-          { n: 5, titulo: "Buscar itens dos pedidos", texto: "Os itens de cada pedido são lidos um a um, até 200 por vez. Depois de uma carga grande, repita até a contagem parar de subir. No dia a dia o sistema faz isso sozinho." },
-          { n: 6, titulo: "Histórico de sincronização", texto: "A rodada mais recente de cada tipo. Os pedidos e as notas recentes rodam de minuto em minuto, então o horário delas deve estar sempre perto de agora." },
+          { n: 1, titulo: "A conexão", texto: "O nome da conta conectada e o selo. Para reconectar, veja “Bling desconectou? Como conectar de novo”." },
+          { n: 2, titulo: "Os cartões", texto: "Um por tipo de dado — produtos, variações, contatos, vendedores, pedidos de venda, notas fiscais, contas a pagar, contas a receber e pedidos de compra —, com a quantidade espelhada e o “Sincronizar” de cada um." },
+          { n: 3, titulo: "Sincronizar tudo", texto: "Busca todos os tipos de uma vez. Espere a mensagem no canto da tela." },
+          { n: 4, titulo: "Buscar itens dos pedidos", texto: "Os itens de cada pedido são lidos um a um, até 200 por vez. Depois de uma carga grande, repita até a contagem parar de subir. No dia a dia o sistema faz isso sozinho." },
+          { n: 5, titulo: "Histórico de sincronização", texto: "A rodada mais recente de cada tipo. Os pedidos e as notas recentes rodam de minuto em minuto, então o horário delas deve estar sempre perto de agora." },
+          { titulo: "Não cruza com o Bling 1", texto: "Os dados da filial ficam à parte: mexer aqui não altera a integração da matriz." },
         ],
       },
     ],

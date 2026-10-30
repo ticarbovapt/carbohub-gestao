@@ -278,13 +278,13 @@ export const SECOES_ECOMMERCE: Secao[] = [
           { n: 2, titulo: "Cartões", texto: "ROAS, investimento, compras e CPA de cada gênero (ou das principais plataformas, na aba Posicionamento)." },
           { n: 3, titulo: "Tabela", texto: "Um segmento por linha, com a barra do investimento para comparar o tamanho de cada um." },
           { n: 4, titulo: "ROAS mulheres · homens", texto: "O retorno de cada gênero dentro da faixa de idade." },
-          { n: 5, titulo: "A soma não fecha", texto: "A Meta estima parte das compras por segmento, então a soma dos segmentos pode não bater com o total da página. Use para comparar segmentos entre si." },
+          { titulo: "A soma não fecha", texto: "A Meta estima parte das compras por segmento, então a soma dos segmentos pode não bater com o total da página. Use para comparar segmentos entre si." },
         ],
       },
       {
         print: { chave: "anuncios-posicao", legenda: "A aba Posicionamento." },
         itens: [
-          { n: 1, titulo: "Investimento pequeno demais", texto: "Segmento que gastou quase nada aparece com o ROAS em cinza e esse aviso: com poucos reais, uma única compra dá um ROAS enorme que não quer dizer nada." },
+          { n: 1, titulo: "Investimento pequeno demais", texto: "Segmento que gastou quase nada aparece com o ROAS em cinza e a nota “investimento irrisório”: com poucos reais, uma única compra dá um ROAS enorme que não quer dizer nada." },
         ],
       },
       {

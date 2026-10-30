@@ -29,8 +29,8 @@ export const SHOTS = [
     [3, (p) => p.locator("main a").filter({ hasText: "A receber vencido" })],
     [4, (p) => p.locator("main a").filter({ hasText: "Previsto (8 sem.)" })],
     [5, (p) => p.locator("main a").filter({ hasText: "RCs a aprovar" })],
-    [6, (p) => p.locator("main a").filter({ hasText: "Requisição, ordem de compra" })],
-    [7, (p) => p.locator("main a").filter({ hasText: "Aging, previsão" })],
+    [6, (p) => p.locator("main a").filter({ has: p.locator("p", { hasText: /^Compras$/ }) })],
+    [7, (p) => p.locator("main a").filter({ has: p.locator("p", { hasText: /^Painel financeiro$/ }) })],
   ] },
 ];
 
@@ -150,6 +150,5 @@ SHOTS.push(
   { chave: "perfil", papel: "colaborador", url: "/perfil", marcas: [
     [1, btn(/Alterar foto/)],
     [2, (p) => p.getByText("Nome completo").locator("xpath=ancestor::div[contains(@class,'rounded')][1]")],
-    [3, (p) => p.getByText(/Para alterar outras informações/)],
   ] },
 );

@@ -64,14 +64,13 @@ export const SHOTS = [
   { chave: "blingcon-desconectar", papel: "gestor", url: "/integracoes/bling",
     antes: async (p) => { await btn("Desconectar")(p).click(); await p.waitForTimeout(700); },
     clip: (p) => dlg(p), marcas: [
-    [1, (p) => dlg(p).getByText(/TODO o ecossistema/)],
+    [1, (p) => dlg(p).getByText(/de todo o ecossistema/)],
     [2, (p) => dlg(p).getByRole("button", { name: "Cancelar" })],
     [3, (p) => dlg(p).getByRole("button", { name: "Desconectar" })],
   ] },
   { chave: "blingcon-b2", papel: "gestor", url: "/integracoes/bling2?mock=desconectado",
-    clip: (p) => [cartao("Esta integração não cruza com a Bling principal")(p), cartao("Bling — segunda conta")(p)], marcas: [
+    clip: (p) => cartao("Bling — segunda conta")(p), marcas: [
     [1, btn("Conectar ao Bling 2")],
-    [2, txt("Esta integração não cruza com a Bling principal")],
   ] },
 
   // ── Bling 1 — a tela inteira ──
@@ -83,19 +82,17 @@ export const SHOTS = [
     [4, cartao("Pedidos")],
     [5, btn("Sincronizar Tudo")],
     [6, btn(/Importar Pedidos Bling/)],
-    [7, cartao("Como funciona a importação de pedidos")],
-    [8, cartao("Histórico de Sincronização")],
+    [7, cartao("Histórico de Sincronização")],
   ] },
 
   // ── Bling 2 — a tela inteira ──
   { chave: "bling2-tela", papel: "gestor", url: "/integracoes/bling2", viewport: { width: 1440, height: 2300 },
     clip: (p) => [titulo(p), cartao("Histórico de sincronização")(p)], marcas: [
-    [1, cartao("Esta integração não cruza com a Bling principal")],
-    [2, cartao("Carbo Filial SP")],
-    [3, cartao("Pedidos de venda")],
-    [4, btn("Sincronizar tudo")],
-    [5, btn("Buscar itens dos pedidos")],
-    [6, cartao("Histórico de sincronização")],
+    [1, cartao("Carbo Filial SP")],
+    [2, cartao("Pedidos de venda")],
+    [3, btn("Sincronizar tudo")],
+    [4, btn("Buscar itens dos pedidos")],
+    [5, cartao("Histórico de sincronização")],
   ] },
 
   // ── NFS-e Nacional ──

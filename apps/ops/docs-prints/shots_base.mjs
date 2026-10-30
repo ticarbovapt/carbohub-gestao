@@ -149,6 +149,5 @@ SHOTS.push(
   { chave: "perfil", papel: "colaborador", url: "/perfil", marcas: [
     [1, btn(/Alterar foto/)],
     [2, (p) => p.getByText("Nome completo").locator("xpath=ancestor::div[contains(@class,'rounded')][1]")],
-    [3, (p) => p.getByText(/Para alterar outras informações/)],
   ] },
 );

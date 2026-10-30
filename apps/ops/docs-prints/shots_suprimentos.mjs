@@ -19,7 +19,7 @@ export const SHOTS = [
     clip: (p) => [p.locator("main h1").first(), btn(/Hub Natal/)(p).locator(".."), cardProd("CarboZé 1 Litro")(p)], marcas: [
     [1, (p) => btn(/Hub Natal/)(p).locator("..")],
     [2, btn(/Registrar Envio/)],
-    [3, (p) => p.getByText("Período (KPIs e movimentações):").locator("..")],
+    [3, (p) => p.getByText("Período:", { exact: true }).locator("..")],
     [4, (p) => p.getByText("Total Produtos").locator("xpath=ancestor::div[contains(@class,'grid')][1]")],
     [5, sel('[role="tablist"]')],
     [6, sel('input[placeholder="Buscar produto..."]')],
@@ -80,14 +80,13 @@ export const SHOTS = [
       await dlg(p).locator('input[placeholder="NF, remessa..."]').fill("NF 001245");
     },
     clip: (p) => dlg(p), marcas: [
-    [1, (p) => dlg(p).getByText("Origem — sai daqui").locator("..")],
+    [1, (p) => dlg(p).getByText("Origem", { exact: true }).locator("..")],
     [2, (p) => dlg(p).getByText("Destino", { exact: true }).locator("..")],
     [3, (p) => dlg(p).getByText("Produto", { exact: true }).locator("..")],
     [4, (p) => dlg(p).getByText("Quantidade", { exact: true }).locator("..")],
     [5, (p) => dlg(p).locator('input[placeholder="NF, remessa..."]')],
     [6, (p) => dlg(p).getByRole("button", { name: /Adicionar outro envio/ })],
-    [7, dtxt("fica em trânsito")],
-    [8, (p) => dlg(p).getByRole("button", { name: /Registrar Envio/ })],
+    [7, (p) => dlg(p).getByRole("button", { name: /Registrar Envio/ })],
   ] },
   { chave: "sup-envio-destinos", papel: "colaborador", url: `${SUP}/hub-natal/estoque`, viewport: { width: 1440, height: 1100 },
     antes: async (p) => {

@@ -63,7 +63,6 @@ export const SHOTS = [
     [5, (p) => col("Nova Venda")(p).locator("div.border-b span.tabular-nums").first()],
     [6, pv("Posto Lagoa Azul")],
     [7, (p) => pv("Posto Lagoa Azul")(p).getByRole("combobox")],
-    [8, (p) => p.getByText(/o card entre as colunas/).first()],
   ] },
   { chave: "rastreio-card", papel: "colaborador", url: "/rastreio", viewport: QUADRO,
     antes: ver(pv("Posto Beira Rio")), clip: pv("Posto Beira Rio"), pad: 22, marcas: [
@@ -121,7 +120,7 @@ export const SHOTS = [
       await dlg(p).getByRole("button", { name: /Confirmar → Separado/ }).click();
       await p.waitForTimeout(900);
     }, clip: dlg, pad: 8, marcas: [
-      [1, (p) => dlg(p).getByText(/Conte as caixas/)],
+      [1, (p) => dlg(p).getByText(/deduzido do HUB-RN/)],
       [2, (p) => dlg(p).locator('input[type="number"]')],
       [3, (p) => dlg(p).locator('input[placeholder="ex.: 12,5"]')],
       [4, (p) => dlg(p).getByRole("button", { name: /Confirmar → Separado/ })],

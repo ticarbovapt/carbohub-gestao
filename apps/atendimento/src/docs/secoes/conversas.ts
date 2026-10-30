@@ -166,7 +166,7 @@ export const SECOES_CONVERSAS: Secao[] = [
           { n: 2, titulo: "Mensagem agendada", texto: "Fica visível até sair, com o dia e a hora. “Cancelar” desiste do envio. Se o envio falhar, a faixa fica vermelha com “Não foi enviada” e o motivo." },
           { n: 3, titulo: "Enviar em", texto: "O dia e a hora do envio. O sistema sugere daqui a uma hora (ou o fim da janela, se faltar menos)." },
           { n: 4, titulo: "Confirmar", texto: "Agenda a mensagem e limpa o campo." },
-          { n: 5, titulo: "Limite", texto: "O último horário possível: depois disso a janela fecha e o WhatsApp recusaria a mensagem." },
+          { titulo: "Limite", texto: "O campo não aceita horário depois do fim da janela de 24 h: depois disso o WhatsApp recusaria a mensagem." },
         ],
       },
       {

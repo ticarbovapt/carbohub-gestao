@@ -321,6 +321,7 @@ export const MARCADORES: Record<string, Record<number, Caixa>> = {
   },
   "usuarios-bloquear": {
     1: { x: 5.51, y: 12.47, w: 88.98, h: 18.48 },
+    2: { x: 5.51, y: 35.57, w: 88.98, h: 7.62 },
     3: { x: 5.51, y: 47.81, w: 88.98, h: 18.48 },
     4: { x: 51.02, y: 70.9, w: 43.47, h: 16.63 },
   },
@@ -335,6 +336,7 @@ export const MARCADORES: Record<string, Record<number, Caixa>> = {
   "usuarios-criar": {
     1: { x: 5.58, y: 7.85, w: 89.06, h: 3.08 },
     2: { x: 5.58, y: 11.85, w: 89.06, h: 5.38 },
+    3: { x: 5.58, y: 18.15, w: 18.59, h: 1.54 },
     4: { x: 5.58, y: 20.62, w: 89.06, h: 5.38 },
     5: { x: 5.58, y: 29.23, w: 89.06, h: 3.08 },
     6: { x: 5.58, y: 35.54, w: 89.06, h: 3.08 },
@@ -346,6 +348,7 @@ export const MARCADORES: Record<string, Record<number, Caixa>> = {
     2: { x: 5.51, y: 55, w: 88.98, h: 25.71 },
   },
   "usuarios-editar": {
+    1: { x: 10.35, y: 5.11, w: 9.84, h: 1.34 },
     2: { x: 4.88, y: 10.66, w: 90.23, h: 3.58 },
     3: { x: 4.88, y: 15.32, w: 90.23, h: 6.27 },
     4: { x: 4.88, y: 22.67, w: 90.23, h: 6.27 },

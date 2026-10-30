@@ -153,7 +153,7 @@ export const SHOTS = [
     [12, (p) => p.getByText("Investindo e sem venda").locator("xpath=ancestor::div[contains(@class,'rounded')][1]")],
     [13, (p) => p.getByText("Quem compra, e onde").locator("xpath=ancestor::div[contains(@class,'rounded')][1]")],
     [14, (p) => p.locator("main main").getByText("Campanhas", { exact: true }).locator("xpath=ancestor::div[contains(@class,'rounded')][1]")],
-    [15, (p) => p.getByText(/são a atribuição da própria Meta/).locator("..").locator("..")],
+    [15, (p) => p.getByText(/são a atribuição da Meta/).locator("..").locator("..")],
   ] },
   { chave: "anuncios-campanhas", papel: "colaborador", url: "/ecommerce/anuncios", viewport: { width: 1440, height: 4200 }, espera: 1500,
     antes: async (p) => {
@@ -175,12 +175,11 @@ export const SHOTS = [
     [2, (p) => p.getByText("Homens", { exact: true }).locator("..")],
     [3, (p) => p.locator("[role=tabpanel] table").first()],
     [4, (p) => p.locator("[role=tabpanel] th").filter({ hasText: "ROAS mulheres" })],
-    [5, (p) => p.getByText(/A Meta estima parte das compras/)],
   ] },
   { chave: "anuncios-posicao", papel: "colaborador", url: "/ecommerce/anuncios", viewport: { width: 1440, height: 4200 }, espera: 1500,
     antes: async (p) => { await p.waitForTimeout(800); await p.getByRole("tab", { name: "Posicionamento" }).click(); await p.waitForTimeout(400); },
     clip: (p) => p.getByText("Quem compra, e onde").locator("xpath=ancestor::div[contains(@class,'rounded')][1]"), marcas: [
-    [1, (p) => p.getByText("investimento pequeno demais para comparar").locator("..")],
+    [1, (p) => p.locator("[role=tabpanel]").getByText("investimento irrisório").first().locator("..")],
   ] },
   { chave: "anuncios-contas", papel: "colaborador", url: "/ecommerce/anuncios",
     antes: async (p) => { await p.waitForTimeout(800); await contasNaFuncao(p); await p.getByRole("button", { name: "Contas" }).click(); await p.waitForTimeout(1200); },

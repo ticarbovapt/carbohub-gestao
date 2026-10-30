@@ -163,7 +163,7 @@ export const SHOTS = [
     marcas: [
       [1, (p) => dlg(p).locator('input[type="date"]')],
       [2, (p) => dlg(p).getByRole("combobox")],
-      [3, (p) => dlg(p).locator('input[placeholder^="Buscar por nome"]')],
+      [3, (p) => dlg(p).locator('input[placeholder="Buscar PDV…"]')],
       [4, (p) => dlg(p).locator("div.max-h-52 button").nth(1)],
       [5, (p) => dlg(p).locator("textarea")],
       [6, (p) => dlg(p).getByRole("button", { name: "Agendar", exact: true })],

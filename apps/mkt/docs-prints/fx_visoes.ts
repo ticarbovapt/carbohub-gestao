@@ -7,6 +7,7 @@
 // área NAS ROTAS desta área; fora delas, devolve o que fx_quadros declarar.
 import { PAPEL, U, EU } from "./pessoas";
 import * as quadros from "./fx_quadros";
+import * as comercial from "./fx_comercial";
 void PAPEL; void EU;
 
 const rota = () => { try { return location.pathname; } catch { return ""; } };
@@ -141,5 +142,10 @@ export const FX: Record<string, unknown> = {
   mkt_card_field_values: porRota("mkt_card_field_values", () => field_values),
 };
 export const RPC_FX: Record<string, unknown> = {
-  carbo_team_members: rpcPorRota("carbo_team_members", () => Object.values(U)),
+  // /equipe (Minha Equipe) é da área "comercial": lá a lista tem quem está sem
+  // e-mail, que é o que o print daquela tela mostra.
+  carbo_team_members: (args: unknown) =>
+    rota() === "/equipe"
+      ? resolve((outra(comercial).RPC_FX ?? {}).carbo_team_members, args)
+      : rpcPorRota("carbo_team_members", () => Object.values(U))(args),
 };

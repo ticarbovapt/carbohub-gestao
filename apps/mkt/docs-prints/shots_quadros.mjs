@@ -146,7 +146,7 @@ export const SHOTS = [
   { chave: "quadro-compartilhar", papel: "colaborador", url: Q, viewport: { width: 1440, height: 920 },
     antes: async (p) => { await p.getByRole("button", { name: /Compartilhar/ }).click(); await p.waitForTimeout(500); },
     clip: (p) => dlg(p), pad: 0, marcas: [
-      [1, (p) => p.locator('input[placeholder="Adicionar pessoa do time pelo nome…"]')],
+      [1, (p) => p.locator('input[placeholder="Adicionar pessoa…"]')],
       [2, (p) => dlg(p).locator("select").first()],
       [3, (p) => dlg(p).locator('button[title="Tirar do quadro"]').first()],
       [4, (p) => dlg(p).getByText("Já estão nos cartões deste quadro").locator("..")],
@@ -216,7 +216,7 @@ export const SHOTS = [
       await p.locator('label[title="Versões deste arquivo"] select').selectOption({ index: 1 }); await p.waitForTimeout(500); },
     clip: (p) => [p.locator('label[title="Versões deste arquivo"]').locator(".."), p.getByRole("button", { name: /Voltar para a atual/ }).locator("..")], pad: 0, marcas: [
       [1, (p) => p.locator('label[title="Versões deste arquivo"]')],
-      [2, sel('button[title="Comparar lado a lado com a atual"]')],
+      [2, sel('button[title="Comparar com a atual"]')],
       [3, sel('button[title="Copiar link"]')],
       [4, sel('button[title^="Baixar"]')],
       [5, (p) => p.getByRole("button", { name: /Restaurar esta versão/ })],

@@ -50,13 +50,13 @@ export const SECOES_USUARIOS: Secao[] = [
         itens: [
           { n: 1, titulo: "Nome completo", texto: "Obrigatório. É o nome que aparece em todos os sistemas." },
           { n: 2, titulo: "Departamento e Função", texto: "O departamento é obrigatório. A lista de funções muda conforme o departamento escolhido." },
-          { n: 3, titulo: "O que a função dá", texto: "Logo abaixo aparece se a função é de Gestor (vê tudo do sistema) ou de Colaborador (vê só o que é dele)." },
+          { n: 3, titulo: "O que a função dá", texto: "Logo abaixo, um selo diz se a função é de Gestor (vê tudo do sistema) ou de Colaborador (vê só o que é dele)." },
           { n: 4, titulo: "2º departamento e 2ª função", texto: "Opcional, para quem acumula dois papéis. O sistema sempre usa o maior dos dois: se um deles é de gestor, a pessoa é gestor." },
           { n: 5, titulo: "Escopo / Responsabilidades", texto: "Texto livre com as principais atividades da pessoa." },
           { n: 6, titulo: "Superior direto", texto: "O chefe imediato. É ele que monta a árvore de “Minha equipe”." },
           { n: 7, titulo: "Sistemas liberados", texto: "Uma caixinha por sistema. Marcar libera a entrada naquele sistema e o azulejo dele aparece no Hub; desmarcar tira. Pelo menos um é obrigatório — o Carbo Controle já vem marcado. A caixinha Carbo Admin libera de fato a entrada no Admin." },
           { n: 8, titulo: "Criar usuário", texto: "Fica liberado quando nome, departamento e pelo menos um sistema estão preenchidos." },
-          { n: 9, titulo: "Usuário e senha", texto: "O usuário de entrada é gerado sozinho com a sigla do departamento (ex.: COM0008) e a senha inicial é Carbo@2026. Ao criar, aparece a janela “Conta criada!” com os dois e botões para copiar — passe para a pessoa. No 1º acesso ela troca a senha e informa o e-mail de verdade." },
+          { titulo: "Usuário e senha", texto: "O usuário de entrada é gerado sozinho com a sigla do departamento (ex.: COM0008) e a senha inicial é Carbo@2026. Ao criar, aparece a janela “Conta criada!” com os dois e botões para copiar — passe para a pessoa. No 1º acesso ela troca a senha e informa o e-mail de verdade." },
         ],
       },
       {
@@ -83,7 +83,7 @@ export const SECOES_USUARIOS: Secao[] = [
         titulo: "Editar um usuário",
         print: { chave: "usuarios-editar", legenda: "Formulário de edição." },
         itens: [
-          { n: 1, titulo: "Usuário de entrada", texto: "Não muda nunca, mesmo trocando o departamento." },
+          { n: 1, titulo: "Usuário de entrada", texto: "Fica embaixo do título. Não muda nunca, mesmo trocando o departamento." },
           { n: 2, titulo: "Nome completo", texto: "Corrige o nome em todos os sistemas." },
           { n: 3, titulo: "Departamento e Função", texto: "Trocar a função pode transformar a pessoa em gestor (ou tirar isso dela) em todos os sistemas." },
           { n: 4, titulo: "2º departamento e 2ª função", texto: "Para tirar, volte para “— Nenhum —”." },

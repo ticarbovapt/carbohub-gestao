@@ -101,8 +101,8 @@ export const SECOES_SUPRIMENTOS: Secao[] = [
           { n: 4, titulo: "Quantidade", texto: "Quanto sai. O sistema recusa se a origem não tiver saldo suficiente." },
           { n: 5, titulo: "Obs.", texto: "NF, número da remessa. Aparece no cartão do envio." },
           { n: 6, titulo: "Adicionar outro envio", texto: "Mais uma linha, com outro destino ou outro produto, saindo da mesma origem." },
-          { n: 7, titulo: "O que vai acontecer", texto: "Resume, antes do clique, de onde o saldo sai e que ele fica em trânsito até o aceite." },
-          { n: 8, titulo: "Registrar Envio", texto: "Grava os envios e debita a origem." },
+          { n: 7, titulo: "Registrar Envio", texto: "Grava os envios e debita a origem." },
+          { titulo: "O que vai acontecer", texto: "O saldo sai da origem na hora do registro e fica em trânsito até o destino aceitar." },
         ],
       },
       {

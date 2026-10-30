@@ -67,7 +67,7 @@ export const SHOTS = [
     ] },
   { chave: "card-aberto", papel: "colaborador", url: "/funis?funil=f13&lead=c4", marcas: [
     [1, (p) => dlg(p).locator('button[title="A Contatar"]').locator("..")],
-    [2, (p) => dlg(p).locator('button[title="Copiar link deste card"]')],
+    [2, (p) => dlg(p).locator('button[title="Copiar link"]')],
     [3, (p) => dlg(p).locator('button[title="Arquivar lead"]')],
     [4, (p) => dlg(p).getByRole("button", { name: "Marcar como aguardando" }).locator("..")],
     [5, (p) => sec(p, "Sobre o negócio")],
@@ -178,7 +178,7 @@ SHOTS.push(
     [1, (p) => p.getByRole("button").filter({ has: p.locator("svg.lucide-chevron-left") }).first().locator("..")],
     [2, (p) => p.getByText("Período:").locator("..")],
     [3, (p) => p.getByText("Total vendido").locator("xpath=ancestor::div[contains(@class,'grid')][1]")],
-    [4, (p) => p.getByPlaceholder(/Cliente, cidade, CNPJ/)],
+    [4, (p) => p.getByPlaceholder(/Buscar cliente, CNPJ, pedido/)],
     [5, (p) => p.locator("thead th").filter({ hasText: /^Status$/i })],
     [6, (p) => p.getByText("Unidade de negócio:").locator("..").locator("..")],
     [7, (p) => p.getByRole("button", { name: /Editar \/ Converter/ })],
@@ -246,6 +246,5 @@ SHOTS.push(
   { chave: "perfil", papel: "colaborador", url: "/perfil", marcas: [
     [1, btn(/Alterar foto/)],
     [2, (p) => p.getByText("Nome completo").locator("xpath=ancestor::div[contains(@class,'rounded')][1]")],
-    [3, (p) => p.getByText(/Para alterar outras informações/)],
   ] },
 );

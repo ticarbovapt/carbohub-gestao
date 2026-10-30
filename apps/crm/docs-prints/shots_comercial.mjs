@@ -39,7 +39,7 @@ export const SHOTS = [
   { chave: "pdvs", papel: "colaborador", url: "/pdvs", viewport: LARGO, marcas: [
     [1, btn("Novo PDV")],
     [2, (p) => p.getByRole("button", { name: /Ativos/ }).locator("..")],
-    [3, sel('input[placeholder^="Nome, razão social"]')],
+    [3, sel('input[placeholder="Buscar PDV…"]')],
     [4, (p) => p.getByRole("combobox").filter({ hasText: /UF/ })],
     [5, (p) => p.getByRole("combobox").filter({ hasText: "Todos os donos" })],
     [6, (p) => p.getByText(/já compraram/)],
