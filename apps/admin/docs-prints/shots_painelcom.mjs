@@ -201,9 +201,9 @@ export const SHOTS = [
 
   // ── Tabela de preços ──
   { chave: "pc-precos", papel: "gestor", url: "/tabela-de-precos", viewport: MEDIO,
-    clip: (p) => [cab(p), cartaoTabela(p), p.getByText(/linha\(s\) no dropdown/)], marcas: [
+    clip: (p) => [cab(p), cartaoTabela(p), p.locator("main p").filter({ hasText: /no \/vender/ }).first()], marcas: [
     [1, sel('main input[placeholder="Buscar produto ou código…"]')],
-    [2, (p) => p.getByText(/linha\(s\) no dropdown/)],
+    [2, (p) => p.locator("main p").filter({ hasText: /no \/vender/ }).first()],
     [3, celula(0, 0)],
     [4, (p) => p.locator("tbody span", { hasText: /^PDV$/ }).first()],
     [5, (p) => p.getByText("sem preço — não aparece para venda").first()],

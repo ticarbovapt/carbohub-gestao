@@ -262,9 +262,9 @@ export const SHOTS = [
   { chave: "cartao-mencao", papel: "colaborador", url: Q + "?cartao=c-motorista", viewport: { width: 1440, height: 1100 },
     antes: async (p) => { await abrirCartao(p); const t = dlg(p).locator('textarea[placeholder^="Escrever um comentário"]');
       await t.click(); await t.pressSequentially("Pode aprovar? @Ma", { delay: 5 }); await p.waitForTimeout(400); },
-    clip: (p) => [dlg(p).locator('textarea[placeholder^="Escrever um comentário"]'), p.getByText("Mencionar — a pessoa é avisada no sininho").locator("..")], pad: 14, marcas: [
+    clip: (p) => [dlg(p).locator('textarea[placeholder^="Escrever um comentário"]'), p.getByText("Mencionar", { exact: true }).locator("..")], pad: 14, marcas: [
       [1, (p) => dlg(p).locator('textarea[placeholder^="Escrever um comentário"]')],
-      [2, (p) => p.getByText("Mencionar — a pessoa é avisada no sininho").locator("..").getByRole("button").first()],
+      [2, (p) => p.getByText("Mencionar", { exact: true }).locator("..").getByRole("button").first()],
     ] },
   { chave: "cartao-editor", papel: "colaborador", url: Q + "?cartao=c-motorista", viewport: { width: 1440, height: 1250 },
     antes: async (p) => { await abrirCartao(p); await esq(p).getByRole("button", { name: "Editar", exact: true }).click(); await p.waitForTimeout(800); },

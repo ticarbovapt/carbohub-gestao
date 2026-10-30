@@ -50,7 +50,7 @@ export const SHOTS = [
     [8, (p) => p.locator("tbody tr").nth(1).getByText("Observações", { exact: true }).locator("..")],
   ] },
   { chave: "fat-bling", papel: "colaborador", url: F + "?aba=bling", viewport: MEDIO, espera: 1200,
-    clip: (p) => [p.getByRole("tablist").first(), cartao(p), p.getByText(/Pedidos criados/).first()], marcas: [
+    clip: (p) => [p.getByRole("tablist").first(), cartao(p)], marcas: [
     [1, tab(/Do Bling/)],
     [2, cel("V2026100080", 5)],
     [3, cel("V2026100049", 5)],
@@ -77,9 +77,9 @@ export const SHOTS = [
     [4, (p) => dlg(p).getByRole("button", { name: /Vincular/ }).first()],
   ] },
   { chave: "fat-filial", papel: "colaborador", url: F + "?aba=vincular-filial", viewport: ALTO, espera: 1500,
-    clip: (p) => [p.getByRole("tablist").first(), cartao(p), p.getByText(/casa sozinha por dois caminhos/).first()], marcas: [
-    [1, (p) => p.getByText(/já trazem o número do pedido no rodapé/).first().locator("..")],
-    [2, (p) => p.getByText(/ainda\s+estão sem a natureza/).first().locator("..")],
+    clip: (p) => [p.getByRole("tablist").first(), cartao(p)], marcas: [
+    [1, (p) => p.getByText(/vinculam sozinhas/).first().locator("..")],
+    [2, (p) => p.getByText(/mas sem natureza/).first().locator("..")],
     [3, cel("000094", 3)],
     [4, (p) => linha("000094")(p).getByRole("button", { name: /Vincular/ })],
   ] },

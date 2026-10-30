@@ -235,8 +235,8 @@ export const SHOTS = [
     [12, (p) => p.locator("main").getByText("Próximas renovações (60 dias)").first()],
   ] },
   { chave: "painelfin-colab", papel: "colaborador", url: "/painel-financeiro",
-    clip: (p) => [p.locator("main h1").first(), p.locator("main").getByText(/só para gestores/)], marcas: [
-    [1, (p) => p.locator("main").getByText(/só para gestores/)],
+    clip: (p) => [p.locator("main h1").first(), p.locator("main").getByText(/restrito a gestores/)], marcas: [
+    [1, (p) => p.locator("main").getByText(/restrito a gestores/)],
   ] },
 
   // ── Cadastros ──

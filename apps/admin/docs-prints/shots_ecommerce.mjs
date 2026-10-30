@@ -66,7 +66,7 @@ export const SHOTS = [
     [5, (p) => dlg(p).getByText("atual", { exact: true })],
   ] },
   { chave: "ecom-shopee", papel: "colaborador", url: `${VO}?aba=shopee&periodo=30d`, viewport: ALTO, espera: 1500,
-    clip: (p) => [p.locator("main").getByText("Dados de vendas externos — período selecionado").locator("xpath=ancestor::div[contains(@class,'rounded-2xl')][1]"),
+    clip: (p) => [p.locator("main").getByText(/Sem sincronizar há/).locator("xpath=ancestor::div[contains(@class,'rounded-2xl')][1]"),
                   p.getByText("Produtos Vendidos").locator("xpath=ancestor::div[contains(@class,'rounded-2xl')][1]")],
     marcas: [
     [1, (p) => p.locator("main").getByText(/Sem sincronizar há/)],

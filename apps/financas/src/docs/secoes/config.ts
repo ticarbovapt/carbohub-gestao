@@ -239,7 +239,7 @@ export const SECOES_CONFIG: Secao[] = [
         print: { chave: "nfse-todas", legenda: "A aba Todas mostra o saldo, e não a soma." },
         itens: [
           { n: 1, titulo: "Saldo", texto: "Receita menos despesa, só de serviços. Não é lucro e não inclui venda de produto." },
-          { n: 2, titulo: "O aviso", texto: "Lembra que nota emitida e nota recebida vão em direções opostas, e quantas canceladas estão na lista e fora dos totais." },
+          { titulo: "Saldo, não soma", texto: "Nota emitida e nota recebida vão em direções opostas: o saldo é receita menos despesa, nunca a soma das duas. As canceladas ficam na lista e fora dos totais." },
         ],
       },
       {

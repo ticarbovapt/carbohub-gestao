@@ -32,9 +32,8 @@ export const SHOTS = [
     [13, (p) => cardProd("CarboZé 1 Litro")(p).locator("button").first()],
   ] },
   { chave: "sup-sp-alerta", papel: "colaborador", url: `${SUP}/cd-sp-loghouse/estoque`,
-    clip: (p) => [p.getByText(/abaixo do nível de segurança/).locator("xpath=ancestor::div[contains(@class,'rounded-lg')][1]"), p.getByText(/Estoque gerenciado manualmente/).locator("..")], marcas: [
+    clip: (p) => p.getByText(/abaixo do nível de segurança/).locator("xpath=ancestor::div[contains(@class,'rounded-lg')][1]"), marcas: [
     [1, (p) => p.getByText(/abaixo do nível de segurança/).locator("xpath=ancestor::div[contains(@class,'rounded-lg')][1]")],
-    [2, (p) => p.getByText(/Estoque gerenciado manualmente/).locator("..")],
   ] },
   { chave: "sup-ajuste", papel: "colaborador", url: `${SUP}/hub-natal/estoque`,
     antes: async (p) => { await cardProd("CarboZé 1 Litro")(p).locator("button").first().click(); await p.waitForTimeout(500); await dlg(p).locator('input[type="number"]').fill("192"); await dlg(p).locator("textarea").fill("Contagem física de sexta"); },
@@ -122,18 +121,17 @@ export const SHOTS = [
 
   // ── Mapeamento SKU ──
   { chave: "sup-mapa", papel: "colaborador", url: `${SUP}/cd-sp-loghouse/mapeamento`, viewport: ALTO,
-    clip: (p) => [p.getByText("São duas perguntas").locator("xpath=ancestor::div[contains(@class,'rounded-lg')][1]"), p.locator("main code", { hasText: "CZ1L-KIT2" }).locator("xpath=ancestor::div[contains(@class,'py-3')][1]")], marcas: [
-    [1, (p) => p.getByText("São duas perguntas").locator("xpath=ancestor::div[contains(@class,'rounded-lg')][1]")],
-    [2, (p) => p.getByRole("tab", { name: /Mapeamentos/ })],
-    [3, (p) => p.getByRole("tab", { name: /sem mapa/ })],
-    [4, btn(/Novo mapeamento/)],
-    [5, (p) => p.locator("main code", { hasText: /^124$/ }).locator("..")],
-    [6, (p) => p.getByText("Cliente recebe").first().locator("..")],
-    [7, (p) => p.getByText("Estoque baixa").first().locator("..")],
-    [8, (p) => p.locator('main button[title="Desativar"]').first()],
-    [9, (p) => p.locator("main code", { hasText: /^124$/ }).locator("xpath=ancestor::div[contains(@class,'py-3')][1]").locator("button").nth(1)],
-    [10, (p) => p.locator("main code", { hasText: /^124$/ }).locator("xpath=ancestor::div[contains(@class,'py-3')][1]").locator("button").nth(2)],
-    [11, txt("não informado")],
+    clip: (p) => [p.getByRole("tab", { name: /Mapeamentos/ }), btn(/Novo mapeamento/)(p), p.locator("main code", { hasText: "CZ1L-KIT2" }).locator("xpath=ancestor::div[contains(@class,'py-3')][1]")], marcas: [
+    [1, (p) => p.getByRole("tab", { name: /Mapeamentos/ })],
+    [2, (p) => p.getByRole("tab", { name: /sem mapa/ })],
+    [3, btn(/Novo mapeamento/)],
+    [4, (p) => p.locator("main code", { hasText: /^124$/ }).locator("..")],
+    [5, (p) => p.getByText("Cliente recebe").first().locator("..")],
+    [6, (p) => p.getByText("Estoque baixa").first().locator("..")],
+    [7, (p) => p.locator('main button[title="Desativar"]').first()],
+    [8, (p) => p.locator("main code", { hasText: /^124$/ }).locator("xpath=ancestor::div[contains(@class,'py-3')][1]").locator("button").nth(1)],
+    [9, (p) => p.locator("main code", { hasText: /^124$/ }).locator("xpath=ancestor::div[contains(@class,'py-3')][1]").locator("button").nth(2)],
+    [10, txt("não informado")],
   ] },
   { chave: "sup-sem-mapa", papel: "colaborador", url: `${SUP}/cd-sp-loghouse/mapeamento`,
     antes: async (p) => { await p.getByRole("tab", { name: /sem mapa/ }).click(); await p.waitForTimeout(500); },
@@ -251,23 +249,22 @@ export const SHOTS = [
       await p.evaluate(() => document.querySelectorAll("main, main *").forEach((e) => { if (e.scrollTop) e.scrollTop = 0; }));
       await p.waitForTimeout(300);
     },
-    clip: (p) => [p.locator("main h1").first(), p.getByText(/vai para a aba/).locator(".."), p.getByRole("button", { name: "Enviar para aprovação" })], marcas: [
-    [1, (p) => p.getByText(/vai para a aba/).locator("..")],
-    [2, (p) => p.getByText("Solicitante", { exact: true }).locator("xpath=ancestor::div[contains(@class,'rounded-xl')][1]")],
-    [3, (p) => p.getByRole("button", { name: /Compra do setor/ })],
-    [4, (p) => p.getByRole("button", { name: /Compra individual/ })],
-    [5, (p) => p.getByText("Motivo da requisição *").locator("..")],
-    [6, (p) => p.getByText("Prioridade", { exact: true }).locator("..")],
-    [7, (p) => p.getByText("Centro de Custo *").locator("..")],
-    [8, (p) => p.getByText("Precisa até (opcional)").locator("..")],
-    [9, btn("Adicionar item")],
-    [10, (p) => p.locator('input[placeholder="O que comprar"]').locator("../..")],
-    [11, txt("Valor estimado:")],
-    [12, btn(/Cotações/)],
-    [13, (p) => p.getByText("Observações (opcional)").locator("..")],
-    [14, btn("Limpar")],
-    [15, btn("Salvar rascunho")],
-    [16, btn("Enviar para aprovação")],
+    clip: (p) => [p.locator("main h1").first(), p.getByRole("button", { name: "Enviar para aprovação" })], marcas: [
+    [1, (p) => p.getByText("Solicitante", { exact: true }).locator("xpath=ancestor::div[contains(@class,'rounded-xl')][1]")],
+    [2, (p) => p.getByRole("button", { name: /Compra do setor/ })],
+    [3, (p) => p.getByRole("button", { name: /Compra individual/ })],
+    [4, (p) => p.getByText("Motivo da requisição *").locator("..")],
+    [5, (p) => p.getByText("Prioridade", { exact: true }).locator("..")],
+    [6, (p) => p.getByText("Centro de Custo *").locator("..")],
+    [7, (p) => p.getByText("Precisa até (opcional)").locator("..")],
+    [8, btn("Adicionar item")],
+    [9, (p) => p.locator('input[placeholder="O que comprar"]').locator("../..")],
+    [10, txt("Valor estimado:")],
+    [11, btn(/Cotações/)],
+    [12, (p) => p.getByText("Observações (opcional)").locator("..")],
+    [13, btn("Limpar")],
+    [14, btn("Salvar rascunho")],
+    [15, btn("Enviar para aprovação")],
   ] },
   { chave: "compras-em-nome", papel: "colaborador", url: "/requisicoes", espera: 900,
     antes: async (p) => {
@@ -279,9 +276,9 @@ export const SHOTS = [
   ] },
   { chave: "compras-individual", papel: "colaborador", url: "/requisicoes", espera: 900,
     antes: async (p) => { await p.getByRole("button", { name: /Compra individual/ }).click(); await p.waitForTimeout(300); },
-    clip: (p) => [p.getByRole("button", { name: /Compra do setor/ }), p.locator('input[placeholder="Cole o link do produto, se tiver"]')], marcas: [
+    clip: (p) => [p.getByRole("button", { name: /Compra do setor/ }), p.locator('input[placeholder="Link do produto"]')], marcas: [
     [1, (p) => p.getByText("Categoria *").locator("..")],
-    [2, sel('input[placeholder="Cole o link do produto, se tiver"]')],
+    [2, sel('input[placeholder="Link do produto"]')],
   ] },
   { chave: "compras-lista", papel: "colaborador", url: "/requisicoes", viewport: { width: 1440, height: 2000 }, espera: 900,
     clip: (p) => p.getByText("Requisições que eu abri").locator("xpath=ancestor::div[contains(@class,'rounded')][last()]"), marcas: [

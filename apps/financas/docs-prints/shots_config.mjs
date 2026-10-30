@@ -15,7 +15,7 @@ const semVoltar = (url) => async (p) => {
     const st = window.setTimeout;
     window.setTimeout = (f, ms, ...a) => (ms === 1800 ? 0 : st(f, ms, ...a));
   });
-  await p.goto("http://localhost:" + (process.env.DOCS_PORT ?? 8104) + url, { waitUntil: "domcontentloaded" });
+  await p.goto((process.env.BASE ?? "http://localhost:" + (process.env.DOCS_PORT ?? 8099)) + url, { waitUntil: "domcontentloaded" });
   await p.waitForTimeout(2500);
 };
 const centro = (p) => p.locator("main div.text-center").first();
@@ -113,14 +113,13 @@ export const SHOTS = [
     [13, (p) => p.getByText(/Página 1 de/).locator("..")],
   ] },
   { chave: "nfse-todas", papel: "colaborador", url: "/integracoes/nfse?papel=todas", viewport: { width: 1920, height: 1100 },
-    clip: (p) => [p.getByText("Notas no filtro").locator("xpath=ancestor::div[contains(@class,'grid')][1]"), txt("Receita e despesa não se somam")(p).locator("xpath=ancestor::div[contains(@class,'rounded')][1]")], marcas: [
+    clip: (p) => p.getByText("Notas no filtro").locator("xpath=ancestor::div[contains(@class,'grid')][1]"), marcas: [
     [1, (p) => p.getByText("Saldo (receita − despesa)").locator("xpath=ancestor::div[contains(@class,'rounded')][1]")],
-    [2, txt("Receita e despesa não se somam")],
   ] },
   { chave: "nfse-ano", papel: "colaborador", url: "/integracoes/nfse?ano=2025", viewport: { width: 1920, height: 1100 },
-    clip: (p) => [p.getByRole("tab", { name: "Emitidas · receita" }), txt("passou a emitir NFS-e")(p)], marcas: [
+    clip: (p) => [p.getByRole("tab", { name: "Emitidas · receita" }), p.locator("main select").first(), txt("Emissão pelo sistema nacional")(p)], marcas: [
     [1, sel("main select")],
-    [2, txt("passou a emitir NFS-e")],
+    [2, txt("Emissão pelo sistema nacional")],
   ] },
 
   // ── Funcionários ──
