@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { Mail, Repeat } from "lucide-react";
+import { Mail, Repeat, Store, Factory } from "lucide-react";
 import { UserCog, Users } from "lucide-react";
 import {
   ShoppingCart, Plus, Trash2, AlertTriangle, Building2, MapPin, Package, Gift, FileText, Search, Target, ChevronDown,
@@ -148,6 +148,22 @@ export default function Vender() {
   const vendedorLogado = profile?.full_name ?? profile?.username ?? "";
   const createVenda = useCreateVenda();
   const criarRecorrencia = useCriarRecorrencia();
+  // ── Unidade de negócio, escolhida por quem vende ──────────────────────────
+  //
+  // O vendedor é quem sabe se o cliente revende ou consome. Sem este campo a
+  // classificação dependia de inferência, e 108 pedidos de 85 clientes
+  // distintos ficaram sem canal — eles somem de todo recorte por Revenda ou
+  // Consumo, no Dashboard Comercial e na tela de Vendas.
+  //
+  // ⚠️ Só CONSUMO e REVENDA. `online` é da ponte do Bling, não de gente:
+  // oferecê-lo aqui deixaria alguém marcar como marketplace uma venda que ele
+  // mesmo fez, e ela sumiria da própria tela pelo `FILTRO_VENDA_DO_TIME`.
+  //
+  // Não precisa mexer no trigger: `carbo_set_segmento_pdv` começa com
+  // `if NEW.segmento is not null then return NEW` — a escolha humana vence a
+  // inferência por construção.
+  const [segmento, setSegmento] = useState<"consumo" | "revenda" | "">("");
+
   // Recorrência: o vendedor preenche UM mês; o sistema replica N vezes.
   const [recorrente, setRecorrente] = useState(false);
   const [recPeriodo, setRecPeriodo] = useState<RecorrenciaPeriodo>("mensal");
@@ -1017,6 +1033,8 @@ export default function Vender() {
       desconto_percent: percentAgregado,
       desconto_motivo: orderDesconto > 0 ? (discReason.trim() || undefined) : undefined,
       entrega_modalidade: modalidade,
+      // Vazio = deixa o trigger inferir pelo histórico do CNPJ ou pelo PDV.
+      segmento: segmento || undefined,
       agreed_delivery_date: deliveryDate || undefined,
       execution_date: executionDate || undefined,
       total: orderTotal,
@@ -1028,7 +1046,7 @@ export default function Vender() {
   // Limpa o formulário após salvar.
   function resetForm() {
     setMode("carboze"); setDoc(""); setCustomerName(""); setEmail(""); setPhone("");
-    setIsLicenciado(false); setRows([emptyRow()]); setObsPublica("");
+    setIsLicenciado(false); setRows([emptyRow()]); setObsPublica(""); setSegmento("");
     setNotasInternas(""); setTipoPonto(""); setClassificacao(""); setVolumeMedio("");
     setAtuaDiesel(false); setAtuaFrotas(false); setVendedorId("");
     setEndereco({ logradouro: "", numero: "", bairro: "", cidade: "", uf: "", cep: "" });
@@ -2245,6 +2263,61 @@ export default function Vender() {
                 </div>
               )}
             </div>
+          )}
+        </CarboCardContent>
+      </CarboCard>
+
+      {/* ── Unidade de negócio ──
+          Fica colado na Recorrência de propósito: as duas respondem "que tipo
+          de cliente é este?", e juntas é que fazem a classificação acontecer
+          no único momento em que alguém sabe a resposta — o da venda. */}
+      <CarboCard>
+        <CarboCardContent className="p-4 space-y-3">
+          <div>
+            <h3 className="font-semibold flex items-center gap-2">
+              <Store className="h-4 w-4 text-carbo-green" /> Unidade de negócio
+            </h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              Este cliente <strong>revende</strong> o produto ou <strong>consome</strong> na própria operação?
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            {([
+              { v: "revenda", label: "Revenda", hint: "Posto, loja, distribuidor", Icone: Store },
+              { v: "consumo", label: "Consumo", hint: "Frota, indústria, uso próprio", Icone: Factory },
+            ] as const).map(({ v, label, hint, Icone }) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setSegmento((cur) => (cur === v ? "" : v))}
+                className={`rounded-lg border p-3 text-left transition ${
+                  segmento === v
+                    ? "border-carbo-green bg-carbo-green/10"
+                    : "border-border hover:bg-muted/40"
+                }`}
+              >
+                <span className="flex items-center gap-2 text-sm font-medium">
+                  <Icone className={`h-4 w-4 ${segmento === v ? "text-carbo-green" : "text-muted-foreground"}`} />
+                  {label}
+                </span>
+                <span className="mt-0.5 block text-[11px] text-muted-foreground">{hint}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* ⚠️ O aviso diz a CONSEQUÊNCIA, não só a regra. Quem marca Revenda
+              precisa saber que o cliente vai virar ponto de venda ao confirmar
+              — é cadastro novo aparecendo em /pdvs, não um rótulo interno. */}
+          {segmento === "revenda" && (
+            <p className="rounded-md bg-sky-500/10 px-2.5 py-1.5 text-[11px] text-sky-600 dark:text-sky-400">
+              Ao confirmar a venda, este cliente entra em <strong>Pontos de Venda</strong> automaticamente.
+            </p>
+          )}
+          {!segmento && (
+            <p className="text-[11px] text-muted-foreground">
+              Sem escolher, o sistema tenta deduzir pelo histórico do CNPJ — e fica sem canal quando não consegue.
+            </p>
           )}
         </CarboCardContent>
       </CarboCard>

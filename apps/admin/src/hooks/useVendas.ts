@@ -56,6 +56,15 @@ export interface NovaVendaInput {
    *  "Gerar NF". 'producao' (ou vazio) segue a esteira normal. Quem deduz e
    *  quem BLOQUEIA por falta de saldo é o banco — a tela só informa. */
   entrega_modalidade?: "pronta_entrega" | "producao";
+  /** Unidade de negocio escolhida pelo VENDEDOR no ato da venda.
+   *
+   *  So `consumo` e `revenda`: `online` vem da ponte do Bling, nao de gente.
+   *
+   *  Vai direto para `carboze_orders.segmento`, e o trigger
+   *  `carbo_set_segmento_pdv` SAI DA FRENTE quando o campo chega preenchido
+   *  (a primeira linha dele e `if NEW.segmento is not null then return NEW`).
+   *  Ou seja: a escolha humana vence a inferencia, sem precisar mexer nela. */
+  segmento?: "consumo" | "revenda";
   itens: VendaItemInput[];
   form_snapshot?: unknown;   // snapshot do formulário (JSON) p/ reabrir/editar fielmente
 }
@@ -301,6 +310,8 @@ async function buildOrderFields(input: NovaVendaInput) {
     // Nulo = produção. Todo o histórico, o Bling e o e-commerce ficam nulos, e
     // o gatilho do banco trata nulo como produção — o de sempre.
     entrega_modalidade: input.entrega_modalidade ?? null,
+    // Nulo = deixa o trigger inferir (historico do CNPJ ou PDV cadastrado).
+    segmento: input.segmento ?? null,
     quote_form_snapshot: input.form_snapshot ?? null,
   };
 }
