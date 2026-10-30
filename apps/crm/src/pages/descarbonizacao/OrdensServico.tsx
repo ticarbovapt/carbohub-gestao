@@ -75,10 +75,7 @@ export default function OrdensServico() {
     <div className="p-4 md:p-6">
       <div className="mx-auto max-w-[1600px] space-y-5">
         <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Ordens de Serviço</h1>
-            <p className="mt-0.5 text-sm text-muted-foreground">Descarbonização CarboVAPT</p>
-          </div>
+          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Ordens de Serviço</h1>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => refetch()} title="Atualizar">
               <RefreshCw className={cn("h-4 w-4", isFetching && "animate-spin")} />
@@ -103,12 +100,9 @@ export default function OrdensServico() {
             <div className="flex flex-col gap-3 p-3.5 sm:flex-row sm:items-center">
               <div className="flex min-w-0 flex-1 items-start gap-3">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-                <div className="min-w-0">
-                  <p className="text-sm font-medium">
-                    {semOS.length === 1 ? "1 venda sem ordem de serviço" : `${semOS.length} vendas sem ordem de serviço`}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Sem a OS, o serviço não chega a quem executa.</p>
-                </div>
+                <p className="min-w-0 text-sm font-medium">
+                  {semOS.length === 1 ? "1 venda sem ordem de serviço" : `${semOS.length} vendas sem ordem de serviço`}
+                </p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setSemOsAberto((v) => !v)}>

@@ -26,7 +26,7 @@ export function ContasDaMeta() {
   if (visiveis.isLoading) {
     return (
       <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" /> Perguntando à Meta quais contas o token enxerga…
+        <Loader2 className="h-4 w-4 animate-spin" /> Carregando contas…
       </div>
     );
   }
@@ -37,7 +37,7 @@ export function ContasDaMeta() {
     return semToken ? (
       <div className="space-y-3 text-sm">
         <p className="flex items-center gap-2 font-medium">
-          <KeyRound className="h-4 w-4 text-primary" /> Falta o token da Meta (passo de quem administra o Business Manager)
+          <KeyRound className="h-4 w-4 text-primary" /> Falta o token da Meta
         </p>
         <ol className="list-decimal space-y-1.5 pl-5 text-muted-foreground">
           <li>Em <span className="text-foreground">business.facebook.com</span> → Configurações do negócio → <span className="text-foreground">Usuários do sistema</span>, crie um usuário do sistema (Admin).</li>
@@ -46,7 +46,6 @@ export function ContasDaMeta() {
           <li>No Supabase → Edge Functions → Secrets, crie <code className="text-xs">META_ADS_ACCESS_TOKEN</code> com esse token.</li>
           <li>Volte aqui e atualize a página: as contas aparecem para escolher.</li>
         </ol>
-        <p className="text-xs text-muted-foreground">O token nunca aparece no sistema: ele mora só no secret, e ninguém o lê por SQL.</p>
       </div>
     ) : (
       <div className="flex items-start gap-2 rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-sm">
@@ -60,8 +59,7 @@ export function ContasDaMeta() {
   if (contas.length === 0) {
     return (
       <p className="py-6 text-center text-sm text-muted-foreground">
-        O token funciona, mas não enxerga nenhuma conta de anúncio. No Business Manager, atribua a
-        conta de anúncios ao usuário do sistema e atualize a página.
+        Nenhuma conta de anúncio visível para o token.
       </p>
     );
   }

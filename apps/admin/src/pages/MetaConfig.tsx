@@ -225,12 +225,9 @@ export default function MetaConfigPage() {
       <div className="p-4 md:p-6 space-y-5 max-w-3xl mx-auto">
 
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Settings className="h-6 w-6 text-carbo-green" /> Configurar Metas
-            </h1>
-            <p className="text-sm text-muted-foreground mt-0.5">Gerencie metas mensais de vendedores e e-commerce</p>
-          </div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <Settings className="h-6 w-6 text-carbo-green" /> Configurar Metas
+          </h1>
         </div>
 
         {/* Tabs */}
@@ -288,11 +285,6 @@ export default function MetaConfigPage() {
                 onClick={openNew}>
                 <Plus className="h-4 w-4" /> Meta padrão
               </Button>
-            </div>
-
-            <div className="rounded-lg bg-muted/30 border border-border px-3 py-2 text-xs text-muted-foreground">
-              A <strong className="text-foreground">meta padrão</strong> vale para todos os meses automaticamente.
-              Se um mês for diferente, clique em <strong className="text-foreground">"Meta deste mês"</strong> para criar uma exceção — ela vence só naquele mês.
             </div>
 
             {isLoading ? (
@@ -371,19 +363,6 @@ export default function MetaConfigPage() {
               carregando={ecoLoading}
             />
 
-            {/* ⚠️ Esta frase dizia o CONTRÁRIO até 01/09/2026: "o Total Geral é
-                a soma das metas por plataforma; não existe meta total separada".
-                A regra foi revertida a pedido — agora o total é definido
-                primeiro, no bloco acima, e a distribuição vive por plataforma.
-                A frase ficou porque a pergunta que ela responde não mudou: quem
-                abre a tela precisa saber qual dos dois números manda. */}
-            <div className="rounded-lg bg-muted/30 border border-border px-3 py-2 text-xs text-muted-foreground">
-              A <strong className="text-foreground">meta geral</strong> é definida
-              acima e guardada separadamente. A soma por plataforma{" "}
-              <strong className="text-foreground">não precisa fechar</strong> com
-              ela — a diferença aparece na barra, para você decidir.
-            </div>
-
             {/* ⚠️ Enquanto carrega, NÃO diga "Não definida".
                 Antes o `isLoading` do hook era descartado: com os alvos ainda em
                 voo, `getTarget` devolvia 0 e a tela escrevia "Meta: Não definida"
@@ -453,11 +432,11 @@ export default function MetaConfigPage() {
               <Target className="h-5 w-5 text-carbo-green" />
               {editScope === "default" ? "Meta padrão" : "Meta deste mês"}
             </DialogTitle>
-            <DialogDescription>
-              {editScope === "default"
-                ? "Vale para todos os meses, até ser alterada."
-                : `Exceção só para ${format(month, "MMMM 'de' yyyy", { locale: ptBR })}.`}
-            </DialogDescription>
+            {editScope === "month" && (
+              <DialogDescription className="capitalize">
+                {format(month, "MMMM 'de' yyyy", { locale: ptBR })}
+              </DialogDescription>
+            )}
           </DialogHeader>
 
           <div className="space-y-4 py-2">

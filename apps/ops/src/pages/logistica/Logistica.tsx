@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CarboBadge } from "@/components/ui/carbo-badge";
-import { Truck, Calculator, BarChart3, Plus, Loader2, Clock, AlertCircle, MapPin, Sparkles, Package } from "lucide-react";
+import { Truck, Calculator, BarChart3, Plus, Loader2, Clock, AlertCircle, MapPin, Package } from "lucide-react";
 import { toast } from "sonner";
 import { LogisticsKpis, ShipmentsKanban, type Shipment } from "@/components/logistica/shipments";
 import { ShipmentDetailsDialog } from "@/components/logistica/ShipmentDetailsDialog";
@@ -206,7 +206,7 @@ export default function Logistica() {
     if (jamefEhMaisBarato && jamefResult?.ok) {
       return {
         titulo: `Jamef — ${brlFrete(jamefResult.total)}`,
-        motivo: "Menor preço entre as opções que responderam. A tabela de contrato não traz prazo: confirme a data com a transportadora antes de prometer entrega ao cliente.",
+        motivo: "Menor preço. Prazo a confirmar com a transportadora.",
       };
     }
     const melhor = (freightResults ?? []).find((r) => r.price === freightCheapest);
@@ -228,7 +228,7 @@ export default function Logistica() {
     <div className="p-4 md:p-6">
       <div className="space-y-6 max-w-[1500px] mx-auto">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <CarboPageHeader title="Controle Logístico" description="Rastreie separação, envio e entrega das remessas" icon={Truck} />
+          <CarboPageHeader title="Controle Logístico" icon={Truck} />
           <Button className="gap-2 shrink-0" onClick={() => setNovaOpen(true)}><Plus className="h-4 w-4" /> Nova Remessa</Button>
         </div>
 
@@ -362,7 +362,7 @@ export default function Logistica() {
                   {!freightResults && !jamefResult ? (
                     <div className="py-12 text-center text-muted-foreground">
                       <Truck className="h-10 w-10 mx-auto mb-2 opacity-30" />
-                      <p className="text-sm">Informe CEP, peso e dimensões e calcule para ver as transportadoras e prazos.</p>
+                      <p className="text-sm">Nenhuma cotação</p>
                     </div>
                   ) : (
                     <>
@@ -370,10 +370,7 @@ export default function Logistica() {
                           não a lista para comparar sozinho. */}
                       {sugestao && (
                         <div className="rounded-lg border border-carbo-green/40 bg-carbo-green/[0.07] px-3 py-2.5 mb-1">
-                          <div className="flex items-center gap-1.5">
-                            <Sparkles className="h-3.5 w-3.5 text-carbo-green shrink-0" />
-                            <span className="text-[11px] font-semibold uppercase tracking-wide text-carbo-green">Sugestão</span>
-                          </div>
+                          <span className="text-[11px] font-semibold uppercase tracking-wide text-carbo-green">Sugestão</span>
                           <p className="text-sm font-semibold mt-0.5">{sugestao.titulo}</p>
                           <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">{sugestao.motivo}</p>
                         </div>
@@ -387,7 +384,7 @@ export default function Logistica() {
                       {freightEstimated && (
                         <div className="flex items-start gap-1.5 rounded-md bg-amber-500/10 border border-amber-500/20 px-3 py-2 text-[11px] text-amber-600 dark:text-amber-400">
                           <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                          <span><strong>Estimativa aproximada</strong> — cotação em tempo real indisponível no momento.</span>
+                          <span><strong>Estimativa aproximada</strong> — cotação em tempo real indisponível.</span>
                         </div>
                       )}
                       {freightResults?.length === 0 && !jamefResult?.ok && (
@@ -426,7 +423,7 @@ export default function Logistica() {
           </TabsContent>
 
           <TabsContent value="estrategico" className="space-y-4 mt-4">
-            <CarboCard><CarboCardContent className="py-12 text-center text-muted-foreground"><BarChart3 className="h-10 w-10 mx-auto mb-2 opacity-30" /><p>Visão estratégica de logística (custo por rota, performance de transportadoras) — em breve.</p></CarboCardContent></CarboCard>
+            <CarboCard><CarboCardContent className="py-12 text-center text-muted-foreground"><BarChart3 className="h-10 w-10 mx-auto mb-2 opacity-30" /><p>Em breve</p></CarboCardContent></CarboCard>
           </TabsContent>
         </Tabs>
       </div>

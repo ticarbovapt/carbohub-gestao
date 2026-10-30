@@ -23,7 +23,7 @@ import { ContasDaMeta } from "@/components/ContasDaMeta";
 import { ChipVariacao, Destaques, Funil, LojaReal, variacao } from "@/components/meta/PainelMeta";
 import { CriativosProvider, Miniatura, Segmentos, StatusDoAnuncio } from "@/components/meta/SegmentosMeta";
 import {
-  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -140,14 +140,14 @@ function LinhaNo({
 // ── Estados vazios: cada um com a causa e o próximo passo ───────────────────
 
 function Vazio({ icone: Icone, titulo, children }: {
-  icone: typeof Plug; titulo: string; children: React.ReactNode;
+  icone: typeof Plug; titulo: string; children?: React.ReactNode;
 }) {
   return (
     <Card>
       <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
         <Icone className="h-9 w-9 text-muted-foreground/60" />
         <div className="text-base font-medium">{titulo}</div>
-        <div className="max-w-md text-sm text-muted-foreground">{children}</div>
+        {children && <div className="max-w-md text-sm text-muted-foreground">{children}</div>}
       </CardContent>
     </Card>
   );
@@ -210,14 +210,9 @@ export default function EcommerceAtribuicao() {
     <main className="mx-auto max-w-7xl px-4 sm:px-6 py-8 space-y-6">
       {/* ── Cabeçalho ── */}
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold">
-            <Megaphone className="h-6 w-6 text-primary" /> Anúncios da Meta
-          </h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Investimento, alcance e conversão das contas de anúncio, direto da Meta.
-          </p>
-        </div>
+        <h1 className="flex items-center gap-2 text-2xl font-bold">
+          <Megaphone className="h-6 w-6 text-primary" /> Anúncios da Meta
+        </h1>
 
         <div className="flex flex-wrap items-center gap-2">
           {(contas.data?.length ?? 0) > 1 && (
@@ -287,19 +282,12 @@ export default function EcommerceAtribuicao() {
             <CardTitle className="flex items-center gap-2 text-base">
               <Plug className="h-4 w-4 text-primary" /> Conectar a conta de anúncios
             </CardTitle>
-            <p className="text-xs text-muted-foreground">
-              Escolha qual conta da Meta este painel lê. Ao ligar, os últimos 30 dias já entram;
-              depois ela é relida sozinha três vezes por dia.
-            </p>
           </CardHeader>
           <CardContent><ContasDaMeta /></CardContent>
         </Card>
 
       ) : !data || data.linhas === 0 ? (
-        <Vazio icone={Info} titulo="Sem veiculação no período">
-          A conta está conectada, mas não há gasto registrado entre as datas selecionadas.
-          Experimente um período maior ou rode a sincronização.
-        </Vazio>
+        <Vazio icone={Info} titulo="Sem veiculação no período" />
 
       ) : (
         <>
@@ -310,11 +298,11 @@ export default function EcommerceAtribuicao() {
             <Indicador icone={ShoppingBag} titulo="Vendas (Meta)" valor={fmtMoeda(t!.valor, moeda)}
               apoio={`${fmtNum(t!.compras)} compras atribuídas`} extra={delta(t!.valor, ant?.valor, true)} />
             <Indicador icone={TrendingUp} titulo="ROAS (Meta)" valor={fmtRoas(t!.roas)}
-              apoio="retorno sobre o investido" destaque extra={delta(t!.roas, ant?.roas, true)} />
+              destaque extra={delta(t!.roas, ant?.roas, true)} />
             <Indicador icone={Target} titulo="CPA" valor={fmtMoeda(t!.cpa, moeda)}
-              apoio="custo por compra" extra={delta(t!.cpa, ant?.cpa, false)} />
+              extra={delta(t!.cpa, ant?.cpa, false)} />
             <Indicador icone={Eye} titulo="CPM" valor={fmtMoeda(t!.cpm, moeda)}
-              apoio="custo por mil impressões" extra={delta(t!.cpm, ant?.cpm, false)} />
+              extra={delta(t!.cpm, ant?.cpm, false)} />
             <Indicador icone={MousePointerClick} titulo="CTR" valor={fmtPct(t!.ctr)}
               apoio={`${fmtNum(t!.link_clicks)} cliques no link`} extra={delta(t!.ctr, ant?.ctr, true)} />
           </div>
@@ -367,9 +355,6 @@ export default function EcommerceAtribuicao() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-base">Campanhas</CardTitle>
-              <p className="text-xs text-muted-foreground">
-                Clique para abrir conjunto e anúncio. Ordenado por investimento.
-              </p>
             </CardHeader>
             <CardContent className="px-0">
               <div className="overflow-x-auto">
@@ -415,10 +400,7 @@ export default function EcommerceAtribuicao() {
           <div className="flex items-start gap-2 rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
             <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             <p>
-              <span className="font-medium text-foreground">“Vendas” e “ROAS” são a atribuição da própria Meta</span>{" "}
-              (7 dias de clique / 1 dia de visualização) — não o faturamento do CarboHub. Ela não
-              enxerga cancelamento, devolução nem margem de SKU, e credita a si mesma vendas que
-              fecharam por outro caminho. Use como leitura de mídia, não como resultado do negócio.
+              “Vendas” e “ROAS” são a atribuição da Meta, não o faturamento.
               {data.atualizadoEm && (
                 <> Última atualização: {new Date(data.atualizadoEm).toLocaleString("pt-BR")}.</>
               )}
@@ -430,9 +412,6 @@ export default function EcommerceAtribuicao() {
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Contas de anúncio</DialogTitle>
-            <DialogDescription>
-              As contas que o token da Meta enxerga. Só as ligadas entram no painel.
-            </DialogDescription>
           </DialogHeader>
           {verContas && <ContasDaMeta />}
         </DialogContent>

@@ -95,10 +95,7 @@ export function PaginaNaoEncontrada({ inicio = "/" }: { inicio?: string }) {
     <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 px-6 text-center">
       <p className="text-5xl font-bold text-muted-foreground/40">404</p>
       <h1 className="text-lg font-semibold text-foreground">Página não encontrada</h1>
-      <p className="max-w-md text-sm text-muted-foreground">
-        O endereço <code className="break-all rounded bg-muted px-1.5 py-0.5 text-xs">{pathname}</code>{" "}
-        não existe neste sistema. O link pode estar desatualizado ou com erro de digitação.
-      </p>
+      <code className="max-w-md break-all rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">{pathname}</code>
       <Link
         to={inicio}
         className="mt-2 inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"

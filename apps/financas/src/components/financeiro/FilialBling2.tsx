@@ -311,7 +311,7 @@ function DialogoBaixaFilial({ conta: c, tipo, open, onOpenChange }: {
       espelho={tipo === "receber" ? "bling2_contas_receber" : "bling2_contas_pagar"} blingId={c.bling_id}
       titulo={{ nome: c.nome || "—", numero: c.numero, vencimento: c.vencimento, valor: c.valor ?? valorEmAberto(c), saldo: valorEmAberto(c), historico: c.historico }}
       podeParcial enviando={enviando} onConfirmar={baixar}
-      aviso="A baixa é feita no Bling da filial. Se o Bling recusar, nada muda."
+      aviso="A baixa é feita no Bling da filial."
     />
   );
 }
@@ -373,7 +373,7 @@ function AcoesDaFilial({ conta: c, tipo, cfg }: { conta: Bling2Conta; tipo: Blin
   const excluir = async () => {
     const ok = await confirmar({
       titulo: "Excluir esta conta no Bling da filial?",
-      mensagem: `${c.nome || "—"} · ${brl(valorEmAberto(c))} · venc. ${dataBR(c.vencimento)}\n\nEla foi criada pelo sistema e é excluída no Bling 2. Se o Bling recusar, nada muda.`,
+      mensagem: `${c.nome || "—"} · ${brl(valorEmAberto(c))} · venc. ${dataBR(c.vencimento)}\n\nA conta será excluída no Bling 2.`,
       confirmar: "Excluir no Bling", perigo: true,
     });
     if (!ok) return;

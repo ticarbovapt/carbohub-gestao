@@ -172,8 +172,7 @@ export function PurchaseRequestForm({ serviceOrderId, onClose }: PurchaseRequest
             <div className="mt-2 flex items-center gap-1.5 text-sm font-semibold text-amber-700 dark:text-amber-300">
               <Users className="h-3.5 w-3.5" />
               <span>
-                A RC sai como <strong>{nomeDoSolicitante}</strong> — e fica registrado que quem
-                lançou foi você{meuNome ? ` (${meuNome})` : ""}.
+                A RC sai como <strong>{nomeDoSolicitante}</strong>; você fica registrado como quem lançou.
               </span>
             </div>
           )}

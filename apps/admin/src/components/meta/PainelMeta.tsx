@@ -34,7 +34,7 @@ export function ChipVariacao({ pct, bomQuandoSobe }: { pct: number | null; bomQu
   const bom = bomQuandoSobe === undefined || estavel ? null : sobe === bomQuandoSobe;
   const Icone = sobe ? ArrowUpRight : ArrowDownRight;
   return (
-    <span title="comparado ao mesmo número de dias imediatamente antes" className={cn(
+    <span title="vs. período anterior" className={cn(
       "inline-flex items-center gap-0.5 text-[11px] font-medium",
       bom === null ? "text-muted-foreground" : bom ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400",
     )}>
@@ -58,9 +58,9 @@ export function LojaReal({ painel, moeda, filtrandoConta }: { painel: MetaPainel
     { titulo: "Faturamento da loja", valor: fmtMoeda(loja.faturamento, moeda),
       apoio: <ChipVariacao pct={variacao(loja.faturamento, loja.faturamento_anterior)} bomQuandoSobe /> },
     { titulo: "Pedidos na loja", valor: fmtNum(loja.pedidos), apoio: <>ticket médio {fmtMoeda(ticket, moeda)}</> },
-    { titulo: "MER", valor: fmtRoas(mer), apoio: <>faturamento real ÷ investimento</>, destaque: true },
-    { titulo: "Investimento por pedido", valor: fmtMoeda(custoPedido, moeda), apoio: <>todo pedido da loja, de qualquer origem</> },
-    { titulo: "Quanto a Meta assume", valor: fmtPct(fatia), apoio: <>do faturamento ela diz ter gerado</> },
+    { titulo: "MER", valor: fmtRoas(mer), apoio: null, destaque: true },
+    { titulo: "Investimento por pedido", valor: fmtMoeda(custoPedido, moeda), apoio: null },
+    { titulo: "Quanto a Meta assume", valor: fmtPct(fatia), apoio: null },
   ];
 
   return (
@@ -69,25 +69,22 @@ export function LojaReal({ painel, moeda, filtrandoConta }: { painel: MetaPainel
         <CardTitle className="flex items-center gap-2 text-base">
           <Store className="h-4 w-4 text-primary" /> O resultado real da loja própria
         </CardTitle>
-        <p className="text-xs text-muted-foreground">
-          Nuvemshop + PayT no mesmo período, só o que é venda. Não depende da atribuição da Meta:
-          o MER diz quanto a loja inteira faturou para cada real investido.
-          {filtrandoConta && " A loja não se divide por conta de anúncio — estes números são da loja inteira."}
-        </p>
+        {filtrandoConta && (
+          <p className="text-xs text-muted-foreground">Números da loja inteira (não se dividem por conta).</p>
+        )}
       </CardHeader>
       <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {itens.map((i) => (
           <div key={i.titulo} className={cn("rounded-lg border px-3 py-2.5", i.destaque && "border-primary/50 bg-primary/5")}>
             <p className="text-xs text-muted-foreground">{i.titulo}</p>
             <p className={cn("text-xl font-bold tabular-nums", i.destaque && "text-primary")}>{i.valor}</p>
-            <p className="text-[11px] text-muted-foreground">{i.apoio}</p>
+            {i.apoio && <p className="text-[11px] text-muted-foreground">{i.apoio}</p>}
           </div>
         ))}
         {fatia != null && fatia > 100 && (
           <p className="sm:col-span-2 lg:col-span-5 flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400">
             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            A Meta está creditando a si mesma mais do que a loja vendeu no período — a atribuição dela conta
-            venda que veio por outro caminho e não enxerga cancelamento.
+            A Meta está creditando a si mesma mais do que a loja vendeu no período.
           </p>
         )}
       </CardContent>
@@ -120,10 +117,7 @@ export function Funil({ painel, moeda }: { painel: MetaPainel; moeda: string }) 
         <CardTitle className="flex items-center gap-2 text-base">
           <Filter className="h-4 w-4 text-primary" /> Do anúncio à compra
         </CardTitle>
-        <p className="text-xs text-muted-foreground">
-          {fmtNum(f.impressoes)} impressões no período. Cada etapa diz quantos passaram dela, quanto da etapa
-          anterior seguiu adiante e quanto custou cada um. Os eventos vêm do pixel do site, contados pela Meta.
-        </p>
+        <p className="text-xs text-muted-foreground">{fmtNum(f.impressoes)} impressões no período</p>
       </CardHeader>
       <CardContent className="space-y-2.5">
         {etapas.map((e) => {
@@ -153,9 +147,8 @@ export function Funil({ painel, moeda }: { painel: MetaPainel; moeda: string }) 
         })}
         {(f.produto > 0 || f.carrinho > 0) && (
           <p className="pt-1 text-xs text-muted-foreground">
-            Também registrados, fora da sequência: <span className="font-medium text-foreground">{fmtNum(f.produto)}</span> viram
-            o produto e <span className="font-medium text-foreground">{fmtNum(f.carrinho)}</span> adicionaram ao carrinho.
-            Nem todo caminho passa por eles — a página da PayT leva direto ao checkout.
+            Fora da sequência: <span className="font-medium text-foreground">{fmtNum(f.produto)}</span> viram
+            o produto · <span className="font-medium text-foreground">{fmtNum(f.carrinho)}</span> adicionaram ao carrinho
           </p>
         )}
       </CardContent>
@@ -219,7 +212,7 @@ export function Destaques({ painel, moeda }: { painel: MetaPainel; moeda: string
             <Trophy className="h-4 w-4 text-emerald-600" /> Os anúncios que mais retornam
           </CardTitle>
           <p className="text-xs text-muted-foreground">
-            Por ROAS (da Meta), entre os que investiram pelo menos {fmtMoeda(minimo, moeda)} no período.
+            Por ROAS (Meta) · investimento mínimo de {fmtMoeda(minimo, moeda)}
           </p>
         </CardHeader>
         <CardContent>
@@ -241,13 +234,12 @@ export function Destaques({ painel, moeda }: { painel: MetaPainel; moeda: string
             <AlertTriangle className="h-4 w-4 text-amber-600" /> Investindo e sem venda
           </CardTitle>
           <p className="text-xs text-muted-foreground">
-            Anúncios de venda que investiram pelo menos {fmtMoeda(minimo, moeda)} e a Meta não atribuiu compra
-            nenhuma. Engajamento e alcance ficam de fora: não foram feitos para vender.
+            Investimento mínimo de {fmtMoeda(minimo, moeda)}
           </p>
         </CardHeader>
         <CardContent>
           {semVenda.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">Nenhum — todo anúncio de venda acima do mínimo vendeu.</p>
+            <p className="py-6 text-center text-sm text-muted-foreground">Nenhum anúncio.</p>
           ) : (
             <ul className="divide-y">
               {semVenda.map((a) => {

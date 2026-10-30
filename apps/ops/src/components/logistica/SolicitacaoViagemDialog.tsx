@@ -4,7 +4,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -70,9 +69,6 @@ export function SolicitacaoViagemDialog({ open, onOpenChange }: SolicitacaoViage
           <DialogTitle className="flex items-center gap-2">
             <Plane className="h-4 w-4" /> Nova Solicitação de Viagem
           </DialogTitle>
-          <DialogDescription>
-            Preencha os dados da viagem corporativa para aprovação.
-          </DialogDescription>
         </DialogHeader>
         <form noValidate className="grid gap-4" onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
 

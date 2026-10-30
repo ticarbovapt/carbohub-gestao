@@ -14,10 +14,6 @@ export default function Campanhas() {
             <Megaphone className="h-7 w-7" />
           </div>
           <p className="mt-4 font-semibold text-foreground">Em construção</p>
-          <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
-            Esta é a base do módulo de Campanhas do Carbo Marketing. As funcionalidades
-            serão adicionadas aqui.
-          </p>
         </CarboCardContent>
       </CarboCard>
     </div>

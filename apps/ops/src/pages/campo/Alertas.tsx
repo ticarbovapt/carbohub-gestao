@@ -355,9 +355,6 @@ export default function Alertas() {
           <div className="rounded-xl border border-dashed py-20 text-center">
             <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-500/70" />
             <p className="mt-3 text-sm font-medium">{filtrando ? "Nenhum alerta neste filtro" : "Tudo em dia"}</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {filtrando ? "Tire um filtro para ver as outras pendências." : "Nenhuma pendência operacional aberta agora."}
-            </p>
           </div>
         ) : (
           <div className="space-y-4">

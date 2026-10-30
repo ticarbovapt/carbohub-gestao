@@ -112,9 +112,6 @@ export function DatasPainel({ card, onSalvar, onFechar }: {
         <select value={repetir ?? ""} disabled={!temEntrega} onChange={(e) => setRepetir(e.target.value || null)} className={`${campo} disabled:opacity-40`}>
           {RECORRENCIAS.map((r) => <option key={r.rot} value={r.v ?? ""}>{r.rot}</option>)}
         </select>
-        {repetir && temEntrega && (
-          <p className="text-[11px] text-muted-foreground">Ao concluir este cartão, nasce a próxima ocorrência logo abaixo dele, com a nova data e o checklist desmarcado.</p>
-        )}
       </div>
 
       <div className="space-y-1">
@@ -122,9 +119,6 @@ export function DatasPainel({ card, onSalvar, onFechar }: {
         <select value={lembrete ?? ""} disabled={!temEntrega} onChange={(e) => setLembrete(e.target.value === "" ? null : Number(e.target.value))} className={`${campo} disabled:opacity-40`}>
           {LEMBRETES.map((l) => <option key={l.rot} value={l.v ?? ""}>{l.rot}</option>)}
         </select>
-        {lembrete !== null && temEntrega && (
-          <p className="text-[11px] text-muted-foreground">Avisa no sininho os membros do cartão (sem membro, quem o criou).</p>
-        )}
       </div>
 
       <div className="space-y-1.5 pt-1">

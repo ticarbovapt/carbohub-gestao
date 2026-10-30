@@ -221,7 +221,7 @@ export function ConversationList({
         {isLoading ? (
           <p className="p-3 text-sm text-muted-foreground">Carregando…</p>
         ) : filtered.length === 0 ? (
-          <p className="p-3 text-sm text-muted-foreground">Nenhuma conversa. Clique em ✏️ para começar.</p>
+          <p className="p-3 text-sm text-muted-foreground">Nenhuma conversa.</p>
         ) : (
           filtered.map((c) => (
             <div key={c.channel.id} onClick={() => onSelect(c)} onContextMenu={(e) => openRowMenu(c, e)}

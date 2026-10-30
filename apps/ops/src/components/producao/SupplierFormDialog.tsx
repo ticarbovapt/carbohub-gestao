@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,9 +55,6 @@ export function SupplierFormDialog({ open, onOpenChange, mode, id, initial }: Su
       <DialogContent className="w-[calc(100%-2rem)] sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{mode === "create" ? "Novo Fornecedor" : "Editar Fornecedor"}</DialogTitle>
-          <DialogDescription>
-            {mode === "create" ? "Cadastre um fornecedor no mestre de MRP." : "Atualize os dados do fornecedor."}
-          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">

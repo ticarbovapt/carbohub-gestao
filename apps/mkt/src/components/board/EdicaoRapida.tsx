@@ -97,7 +97,7 @@ export function EdicaoRapida({ card, rect, boardId, labels, pessoas, onClose, on
         {painel && (
           <div className="mt-2 rounded-[var(--radius)] border border-border bg-popover shadow-[var(--shadow-elevated)] p-2 max-h-[70vh] overflow-y-auto">
             {painel === "etiquetas" && (labels.length === 0
-              ? <p className="text-xs text-muted-foreground p-1">Este quadro não tem etiquetas ainda.</p>
+              ? <p className="text-xs text-muted-foreground p-1">Nenhuma etiqueta.</p>
               : labels.map((l) => {
                   const on = card.labelIds.includes(l.id);
                   const cor = LABEL_COLORS[l.color] ?? l.color;
@@ -110,7 +110,7 @@ export function EdicaoRapida({ card, rect, boardId, labels, pessoas, onClose, on
                   );
                 }))}
             {painel === "membros" && (pessoas.length === 0
-              ? <p className="text-xs text-muted-foreground p-1">Ninguém neste quadro ainda — atribua pelo cartão aberto.</p>
+              ? <p className="text-xs text-muted-foreground p-1">Nenhum membro.</p>
               : pessoas.map((p) => {
                   const on = card.memberIds.includes(p.id);
                   return (

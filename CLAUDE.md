@@ -3183,6 +3183,18 @@ Ficam em inglês, por decisão: `chat`, `ecommerce`, `login`; e siglas/marcas
    cards da home, `rota:` da Documentação, `url:` dos `docs-prints`, e quem
    linka de fora (`carbo-push`, `NotificationBell`, Hub).
 
+### ⚠️ REGRA PERMANENTE: tela sem texto explicativo (30/10/2026)
+Pedido do dono do processo: *"tirar a cara de app feito por ia do sistema
+inteiro … esses comentarios que ficaram aparecendo nas telas explicando
+botões, dizendo o que é a tela"*. Os oito apps e `packages/` foram varridos.
+Na tela fica: rótulo, dado, ação, erro, confirmação destrutiva (uma frase de
+consequência) e aviso CONDICIONAL sobre o registro atual que pede ação ("sem
+telefone", "falta a NF de venda", "Preço definido pela gestão") — curto.
+NÃO entra: subtítulo dizendo o que a tela é, caixa "como funciona", rodapé
+explicando de onde vem o número, `DialogDescription` que repete o título,
+tooltip longo, emoji decorativo. A explicação mora na DOCUMENTAÇÃO do app
+(`src/docs/`), nunca na tela. Tela nova nasce assim.
+
 ### Regras anti-confusão (OBRIGATÓRIAS)
 1. **Todo pedido nomeia o alvo.** "no CRM" → `apps/crm`; "no controle"/"atual" → raiz (`src/`).
 2. **Na dúvida, PERGUNTE — nunca adivinhe.** Se a tela existe em mais de um app, liste os candidatos antes de mexer.

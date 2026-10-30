@@ -127,15 +127,12 @@ function RegrasDialog({ open, onClose, vendedores, defaultRate, defaultRateDesc,
       <DialogContent className="sm:max-w-xl max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Regras de comissão (%)</DialogTitle>
-          <DialogDescription>
-            Produto e descarbonização comissionam diferente — cada um tem o seu percentual.
-          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
           {/* Cabeçalho das colunas */}
           <div className="grid grid-cols-[minmax(0,1fr)_64px_64px_auto] sm:grid-cols-[1fr_110px_110px_auto] gap-2 sm:gap-3 items-end border-b border-border pb-3">
-            <Label className="text-xs text-muted-foreground">Padrão (sem regra própria)</Label>
+            <Label className="text-xs text-muted-foreground">Padrão</Label>
             <span className="text-[11px] font-medium text-muted-foreground text-center">Produto (NF)</span>
             <span className="text-[11px] font-medium text-muted-foreground text-center">Descarb.</span>
             <span />
@@ -151,7 +148,7 @@ function RegrasDialog({ open, onClose, vendedores, defaultRate, defaultRateDesc,
             </CarboButton>
           </div>
 
-          <p className="text-xs text-muted-foreground">Regra por vendedor (sobrepõe o padrão):</p>
+          <p className="text-xs text-muted-foreground">Por vendedor</p>
           {vendedores.length === 0 ? (
             <p className="text-sm text-muted-foreground">Sem vendedores no período.</p>
           ) : vendedores.map((v) => (
@@ -306,15 +303,10 @@ function CalcularTab() {
 
       <CarboCard>
         <CarboCardContent className="pt-6">
-          <p className="text-xs text-muted-foreground mb-3">
-            Duas bases, <strong>dois percentuais</strong>: produto entra quando a <strong>NF é emitida</strong>;
-            descarbonização entra quando a <strong>NFS-e é autorizada</strong> no Portal Nacional e comissiona com o seu próprio %.
-            Digite os percentuais e clique em <strong>Gerar comissão</strong> — ela vai pra aba Pagamentos.
-          </p>
           {isLoading || loadingDescarb ? (
             <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <CarboSkeleton key={i} className="h-12 w-full" />)}</div>
           ) : rows.length === 0 ? (
-            <CarboEmptyState icon={DollarSign} title="Sem vendas no período" description="Nenhum vendedor com venda faturada (com NF) ou descarbonização neste período." />
+            <CarboEmptyState icon={DollarSign} title="Sem vendas no período" />
           ) : (
             <CarboTable className="min-w-[760px]">
               <CarboTableHeader>
@@ -616,8 +608,7 @@ function PagamentosTab() {
                vazia, e causas opostas. Sem esta distinção alguém conclui que as
                comissões sumiram — e o filtro veio da URL, então pode nem ter
                sido essa pessoa que o escolheu. */
-            <CarboEmptyState icon={Wallet} title="Nada com esse filtro"
-              description="Existem comissões geradas, mas nenhuma casa com o vendedor/status selecionado." />
+            <CarboEmptyState icon={Wallet} title="Nada com esse filtro" />
           ) : (
             <CarboTable className="min-w-[900px]">
               <CarboTableHeader>
@@ -708,14 +699,13 @@ function BotaoNfs({ titulo, nfs, carregando, qtd }: {
         <DialogContent className="sm:max-w-2xl max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Notas fiscais — {titulo}</DialogTitle>
-            <DialogDescription>As NFs que formam a base da comissão. Baixe o DANFE (PDF) ou o XML de cada uma.</DialogDescription>
           </DialogHeader>
           <div className="rounded-lg border divide-y text-sm">
             {(nfs ?? []).map((nf) => <LinhaNf key={nf.bling_nf_id} nf={nf} />)}
           </div>
           {nfs && qtd != null && qtd > nfs.length && (
             <p className="text-[11px] text-muted-foreground">
-              {qtd - nfs.length} pedido(s) da base ainda sem a nota no espelho do Bling — aparecem aqui quando ela chegar.
+              {qtd - nfs.length} pedido(s) ainda sem nota no espelho do Bling.
             </p>
           )}
           <DialogFooter><CarboButton variant="outline" onClick={() => setAberto(false)}>Fechar</CarboButton></DialogFooter>
@@ -743,7 +733,6 @@ function BotaoNfses({ titulo, nfses, carregando, qtd }: {
         <DialogContent className="sm:max-w-2xl max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>NFS-e de descarbonização — {titulo}</DialogTitle>
-            <DialogDescription>As notas de serviço autorizadas no Portal Nacional que formam a base. Baixe o PDF ou o XML de cada uma.</DialogDescription>
           </DialogHeader>
           <div className="rounded-lg border divide-y text-sm">
             {(nfses ?? []).map((nf) => <LinhaNfse key={nf.emissao_id} nf={nf} />)}
@@ -896,7 +885,7 @@ function MemoriaDialog({ st, onClose }: { st: CommissionStatement | null; onClos
         )}
 
         {isLoading ? <p className="text-sm text-muted-foreground py-4">Carregando…</p>
-          : items.length === 0 ? <p className="text-sm text-muted-foreground py-4">Sem itens registrados (fechamento anterior à memória de cálculo).</p>
+          : items.length === 0 ? <p className="text-sm text-muted-foreground py-4">Sem itens registrados.</p>
           : (
             <div className="space-y-1.5 py-1">
               {items.map((i) => (
@@ -925,8 +914,7 @@ function MemoriaDialog({ st, onClose }: { st: CommissionStatement | null; onClos
               </div>
               {Number(st.base_descarb) > 0 && (
                 <p className="text-[11px] text-muted-foreground pt-1">
-                  Fechamento gerado antes de 30/10/2026 não lista a descarbonização: ela
-                  contava na venda, sem nota — o valor está na composição no topo.
+                  Fechamentos anteriores a 30/10/2026 não listam a descarbonização.
                 </p>
               )}
             </div>
@@ -944,17 +932,17 @@ export default function Comissionamento() {
   if (!gestor) {
     return (
       <div className="space-y-6">
-        <CarboPageHeader title="Comissionamento" description="Calcule a comissão sobre as vendas faturadas do período e controle os pagamentos." icon={Percent} />
+        <CarboPageHeader title="Comissionamento" icon={Percent} />
         <CarboCard><CarboCardContent>
           <CarboEmptyState icon={AlertCircle} title="Acesso restrito"
-            description="Só gestores podem gerar e pagar comissões. Fale com um gestor se precisar." />
+            description="Só gestores podem gerar e pagar comissões." />
         </CarboCardContent></CarboCard>
       </div>
     );
   }
   return (
     <div className="space-y-6">
-      <CarboPageHeader title="Comissionamento" description="Calcule a comissão sobre as vendas faturadas do período e controle os pagamentos." icon={Percent} />
+      <CarboPageHeader title="Comissionamento" icon={Percent} />
       <Tabs
         value={aba}
         onValueChange={(v) =>

@@ -196,10 +196,7 @@ export default function BoardTable() {
                     <span className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
                       <SearchX className="h-5 w-5 text-muted-foreground" />
                     </span>
-                    <div className="space-y-1">
-                      <p className="text-base font-semibold text-foreground">Nenhum resultado</p>
-                      <p className="text-sm text-muted-foreground">Ajuste a busca ou os filtros de etiqueta e membro.</p>
-                    </div>
+                    <p className="text-base font-semibold text-foreground">Nenhum resultado</p>
                   </div>
                 </td>
               </tr>

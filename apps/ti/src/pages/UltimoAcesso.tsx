@@ -226,8 +226,7 @@ function ordenar<T>(itens: T[], instante: (x: T) => string | null, antigos: bool
 function ThOrdem({ antigos, alternar, children }: { antigos: boolean; alternar: () => void; children: React.ReactNode }) {
   return (
     <th className={th}>
-      <button type="button" onClick={alternar} className="inline-flex items-center gap-1 uppercase hover:text-foreground"
-        title={antigos ? "Mostrando quem está há mais tempo sem entrar primeiro" : "Mostrando os acessos mais recentes primeiro"}>
+      <button type="button" onClick={alternar} className="inline-flex items-center gap-1 uppercase hover:text-foreground">
         {children} <ArrowUpDown className="h-3.5 w-3.5" />
         <span className="normal-case font-normal tracking-normal">{antigos ? "· mais antigos" : "· mais recentes"}</span>
       </button>

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, ShoppingCart, Info, Loader2, ChevronRight, ChevronDown } from "lucide-react";
+import { Plus, ShoppingCart, Loader2, ChevronRight, ChevronDown } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent, CarboCardHeader, CarboCardTitle } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
@@ -86,14 +86,8 @@ export default function RequisicaoCompra() {
       <div className="space-y-6 max-w-[1000px] mx-auto">
         <CarboPageHeader
           title="Solicitar Compra"
-          description="Material de trabalho para você — o financeiro aprova e faz a compra"
           icon={ShoppingCart}
         />
-
-        <div className="flex items-start gap-2 px-3 py-2 rounded-md bg-blue-500/10 border border-blue-500/20 text-sm text-blue-500">
-          <Info className="h-4 w-4 shrink-0 mt-0.5" />
-          <span>Compra <strong>pessoal</strong> (uso próprio). Vai para a aba <strong>Requisições</strong> do <strong>Carbo Finanças</strong> pra aprovação. <em>Insumo do setor é pedido no Carbo Ops.</em></span>
-        </div>
 
         <CarboCard>
           <CarboCardHeader><CarboCardTitle>Nova solicitação</CarboCardTitle></CarboCardHeader>
@@ -108,7 +102,7 @@ export default function RequisicaoCompra() {
               </div>
               <div className="space-y-1.5">
                 <Label>Link de referência (opcional)</Label>
-                <Input value={referenceUrl} onChange={(e) => setReferenceUrl(e.target.value)} placeholder="Cole o link do produto, se tiver" />
+                <Input value={referenceUrl} onChange={(e) => setReferenceUrl(e.target.value)} placeholder="Link do produto" />
               </div>
             </div>
 
@@ -157,16 +151,13 @@ export default function RequisicaoCompra() {
                 {draftQuotes.length > 0 && <CarboBadge variant="info" className="text-[10px]">{draftQuotes.length}</CarboBadge>}
               </button>
               {showCot && (
-                <>
-                  <p className="text-[11px] text-muted-foreground">Se levantou preço em mais de um fornecedor, coloque aqui. O financeiro também pode completar depois.</p>
-                  <CotacoesPanel items={items} draft={{ quotes: draftQuotes, onChange: setDraftQuotes }} />
-                </>
+                <CotacoesPanel items={items} draft={{ quotes: draftQuotes, onChange: setDraftQuotes }} />
               )}
             </div>
 
             <div className="space-y-1.5">
               <Label>Observação (opcional)</Label>
-              <Textarea value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Pra que você precisa, se ajudar o financeiro a decidir." rows={2} />
+              <Textarea value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Para que você precisa" rows={2} />
             </div>
 
             <div className="flex flex-wrap justify-end gap-3 pt-4 border-t border-border">

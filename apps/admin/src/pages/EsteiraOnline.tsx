@@ -3,7 +3,7 @@ import { Link, useLocation, useSearchParams } from "react-router-dom";
 import {
   Truck, Package, FileText, CheckCircle2, ShoppingCart, Copy, XCircle, Loader2, MapPin, Phone,
   CalendarClock, ExternalLink, MessageSquare, AlertTriangle, Clock, Box, User, Hash, Search,
-  Settings2, Link2, BellRing, BellOff, Repeat2, ShoppingBag, Mail, Timer, ChevronsLeftRight, ChevronsRightLeft,
+  Settings2, Link2, BellRing, BellOff, ShoppingBag, Mail, Timer, ChevronsLeftRight, ChevronsRightLeft,
 } from "lucide-react";
 import { toast } from "sonner";
 import { QuadroRolavel, useParamUrl } from "@carbo/shell";
@@ -642,10 +642,7 @@ function Trajeto({ r, etapa }: { r?: RastreioCard; etapa?: EtapaEsteira }) {
 
   if (!r) {
     return (
-      <p className="text-[11px] text-muted-foreground">
-        Ainda não consultamos este código. A coleta roda de hora em hora e busca
-        primeiro os envios que não chegaram.
-      </p>
+      <p className="text-[11px] text-muted-foreground">Ainda não consultado.</p>
     );
   }
 
@@ -655,9 +652,8 @@ function Trajeto({ r, etapa }: { r?: RastreioCard; etapa?: EtapaEsteira }) {
         <div className="flex items-start gap-1.5 rounded bg-carbo-green/10 px-2 py-1.5 text-[11px] text-carbo-green">
           <CheckCircle2 className="mt-px h-3.5 w-3.5 shrink-0" />
           <span>
-            <strong>A plataforma já confirmou a entrega.</strong> O histórico abaixo é a
-            última leitura da transportadora e ainda não alcançou — pode ignorar a
-            diferença ao falar com o cliente.
+            <strong>A plataforma já confirmou a entrega.</strong> O histórico da
+            transportadora ainda não foi atualizado.
           </span>
         </div>
       )}
@@ -1030,8 +1026,7 @@ export function Detalhe({ row, rastreio, avisos, templates, onClose }: {
             <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-[11px] text-amber-600 dark:text-amber-500">
               <AlertTriangle className="h-4 w-4 mt-px shrink-0" />
               <span>
-                A plataforma ainda não foi vinculada a este pedido — por isso ele não avança
-                sozinho para “em trânsito” e “entregue”. Não é atraso da transportadora.
+                Plataforma não vinculada — o pedido não avança sozinho para “em trânsito” e “entregue”.
               </span>
             </div>
           )}
@@ -1390,12 +1385,9 @@ function ColunasRecolhidas<T extends { total: number }>({ cols, porColuna, abert
                   </button>
                 </span>
               </div>
-              <div className="mt-0.5 flex items-center justify-between gap-2">
-                <span className="truncate text-[10px] leading-tight text-muted-foreground">{col.descricao}</span>
-                {cards.length > 0 && (
-                  <span className="shrink-0 text-[10px] font-medium tabular-nums text-muted-foreground">{brl(valor)}</span>
-                )}
-              </div>
+              {cards.length > 0 && (
+                <div className="mt-0.5 text-right text-[10px] font-medium tabular-nums text-muted-foreground">{brl(valor)}</div>
+              )}
             </div>
             <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain p-2">
               {cards.map((r) => <Fragment key={chave(r)}>{card(r, col)}</Fragment>)}
@@ -1410,7 +1402,7 @@ function ColunasRecolhidas<T extends { total: number }>({ cols, porColuna, abert
         <div className="flex max-h-full w-11 shrink-0 snap-start flex-col gap-2 self-stretch">
           {fechadas.map((col) => (
             <button key={col.key} type="button" onClick={() => alternar(col.key)}
-                    title={`${col.label} — ${col.descricao}. Clique para abrir.`}
+                    title={col.label}
                     className="flex min-h-0 flex-1 flex-col items-center gap-2 rounded-xl border border-dashed bg-muted/10 py-3 text-muted-foreground transition-colors hover:bg-muted/30 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
               <ChevronsLeftRight className="h-3.5 w-3.5 shrink-0" />
               <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: col.color }} />
@@ -1810,7 +1802,6 @@ export default function EsteiraOnline() {
       <CarboPageHeader
         icon={Truck}
         title="Esteira do On-line"
-        description="Da venda à entrega, direto do Bling e das plataformas. Espelho: nada aqui se arrasta."
         actions={
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
             {/* A configuração das mensagens automáticas mora aqui dentro, não
@@ -1992,10 +1983,7 @@ export default function EsteiraOnline() {
       {cardParam && !isLoading && !aberto && (
         <div className="flex shrink-0 items-start gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-600 dark:text-amber-500">
           <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />
-          <span>
-            O pedido deste link não está no período selecionado. Amplie as datas no
-            filtro acima para encontrá-lo.
-          </span>
+          <span>O pedido do link está fora do período selecionado.</span>
         </div>
       )}
 
@@ -2020,14 +2008,11 @@ export default function EsteiraOnline() {
                         {cards.length}
                       </span>
                     </div>
-                    <div className="mt-0.5 flex items-center justify-between gap-2">
-                      <span className="truncate text-[10px] leading-tight text-muted-foreground">{col.descricao}</span>
-                      {cards.length > 0 && (
-                        <span className="shrink-0 text-[10px] font-medium tabular-nums text-muted-foreground">
-                          {brl(valor)}
-                        </span>
-                      )}
-                    </div>
+                    {cards.length > 0 && (
+                      <div className="mt-0.5 text-right text-[10px] font-medium tabular-nums text-muted-foreground">
+                        {brl(valor)}
+                      </div>
+                    )}
                   </div>
                   <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain p-2">
                     {cards.map((r) => (
@@ -2050,16 +2035,6 @@ export default function EsteiraOnline() {
               )} />
           </QuadroRolavel>
 
-          <p className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground">
-            <ShoppingBag className="h-3 w-3 shrink-0" />
-            <span className="min-w-0">
-              Só a loja própria: Mercado Livre e Amazon fazem a própria recuperação e não
-              entregam o contato de quem abandonou. As janelas são <strong>encadeadas</strong> —
-              a 2ª conta a partir da 1ª, não do abandono —, e{" "}
-              <strong>Recuperado</strong> é observação: o sistema vê que houve pedido do mesmo
-              e-mail depois do abandono, não que ele veio da mensagem.
-            </span>
-          </p>
         </>
       ) : pipeline === "recompra" ? (
         <>
@@ -2080,14 +2055,11 @@ export default function EsteiraOnline() {
                         {cards.length}
                       </span>
                     </div>
-                    <div className="mt-0.5 flex items-center justify-between gap-2">
-                      <span className="truncate text-[10px] leading-tight text-muted-foreground">{col.descricao}</span>
-                      {cards.length > 0 && (
-                        <span className="shrink-0 text-[10px] font-medium tabular-nums text-muted-foreground">
-                          {brl(valor)}
-                        </span>
-                      )}
-                    </div>
+                    {cards.length > 0 && (
+                      <div className="mt-0.5 text-right text-[10px] font-medium tabular-nums text-muted-foreground">
+                        {brl(valor)}
+                      </div>
+                    )}
                   </div>
                   <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain p-2">
                     {cards.map((r) => (
@@ -2127,10 +2099,6 @@ export default function EsteiraOnline() {
                 {historico.length} entregues antes da régua —{" "}
                 {brl(historico.reduce((s, r) => s + (r.total || 0), 0))}
               </summary>
-              <p className="mt-2 text-[11px] text-muted-foreground">
-                A data de entrega destes é <strong>estimada</strong> (a régua nasceu depois deles),
-                por isso ficam fora do disparo automático. Ofertar a esta base é uma campanha à parte.
-              </p>
               <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3 xl:grid-cols-5">
                 {historico.slice(0, 30).map((r) => (
                   <CardRecompra key={r.bling_id} row={r} cor="#64748b" />
@@ -2144,14 +2112,6 @@ export default function EsteiraOnline() {
             </details>
           )}
 
-          <p className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground">
-            <Repeat2 className="h-3 w-3 shrink-0" />
-            <span className="min-w-0">
-              A coluna é calculada: dias desde a entrega e existência de venda nova do mesmo CPF.
-              {" "}<strong>Recomprou</strong> é observação, não atribuição — o sistema vê que o cliente
-              voltou, não que voltou por causa da oferta.
-            </span>
-          </p>
         </>
       ) : isLoading ? (
         <div className="flex items-center justify-center py-16 text-muted-foreground">
@@ -2209,13 +2169,8 @@ export default function EsteiraOnline() {
                     {pagos.length}
                   </span>
                 </div>
-                <div className="mt-0.5 flex items-center justify-between gap-2">
-                  <span className="truncate text-[10px] leading-tight text-muted-foreground">
-                    na loja, aguardando faturamento
-                  </span>
-                  <span className="shrink-0 text-[10px] font-medium tabular-nums text-muted-foreground">
-                    {brl(pagos.reduce((s, r) => s + (r.total || 0), 0))}
-                  </span>
+                <div className="mt-0.5 text-right text-[10px] font-medium tabular-nums text-muted-foreground">
+                  {brl(pagos.reduce((s, r) => s + (r.total || 0), 0))}
                 </div>
               </div>
               <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain p-2">
@@ -2242,16 +2197,11 @@ export default function EsteiraOnline() {
                       {cards.length}
                     </span>
                   </div>
-                  <div className="mt-0.5 flex items-center justify-between gap-2">
-                    <span className="truncate text-[10px] leading-tight text-muted-foreground">
-                      {etapa.descricao}
-                    </span>
-                    {cards.length > 0 && (
-                      <span className="shrink-0 text-[10px] font-medium tabular-nums text-muted-foreground">
-                        {brl(valor)}
-                      </span>
-                    )}
-                  </div>
+                  {cards.length > 0 && (
+                    <div className="mt-0.5 text-right text-[10px] font-medium tabular-nums text-muted-foreground">
+                      {brl(valor)}
+                    </div>
+                  )}
                 </div>
 
                 <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain p-2">
@@ -2301,11 +2251,6 @@ export default function EsteiraOnline() {
               {" "}antes do período — {brl(travadosAntigos.reduce((s, r) => s + (r.total || 0), 0))}
             </span>
           </summary>
-          <p className="mt-2 text-[11px] text-muted-foreground">
-            Pedidos anteriores a {de.split("-").reverse().join("/")} que ainda não
-            chegaram a "Entregue". Ficam fora do quadro por causa do filtro de
-            período — e são justamente os que esperam há mais tempo.
-          </p>
           <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3 xl:grid-cols-4">
             {travadosAntigos.slice(0, 40).map((r) => (
               <Card key={r.bling_id} row={r} rastreio={rastreioDe(r.rastreio)} parada={parados.get(r.bling_id)}
@@ -2339,20 +2284,6 @@ export default function EsteiraOnline() {
         </details>
       )}
 
-      {/* O rodapé explicativo virou chip: é texto que se lê UMA vez e depois
-          ocupa altura para sempre. Nada foi cortado — só deixou de ser
-          permanente. */}
-      <details className="[&[open]]:w-full rounded-xl border px-3 py-1.5">
-        <summary className="flex cursor-pointer items-center gap-1.5 text-xs font-medium text-muted-foreground">
-          <Clock className="h-3.5 w-3.5 shrink-0" />
-          Como ler esta tela
-        </summary>
-        <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-          "Pago" vem direto da loja e aparece segundos depois da compra; as etapas seguintes
-          vêm do Bling (pedido, nota, etiqueta) e das plataformas (envio, entrega).
-          A tela atualiza sozinha; nenhum card é arrastável de propósito.
-        </p>
-      </details>
         </div>
       )}
 

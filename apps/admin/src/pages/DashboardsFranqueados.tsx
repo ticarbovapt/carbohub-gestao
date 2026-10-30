@@ -9,7 +9,7 @@ import { CarboKPI } from "@/components/ui/carbo-kpi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
 import { fmtBRL, fmtBRLc, delta } from "@/lib/dash-format";
-import { PeriodPicker, rangeLabel } from "@/components/ui/PeriodPicker";
+import { PeriodPicker } from "@/components/ui/PeriodPicker";
 import { useParamUrl } from "@carbo/shell";
 import { usePeriodoUrl } from "@/hooks/usePeriodoUrl";
 import {
@@ -59,8 +59,7 @@ function AccessNotice() {
       <AlertTriangle className="h-8 w-8 text-amber-500/70" />
       <p className="text-sm font-medium">Sem acesso aos dados da rede</p>
       <p className="text-xs text-muted-foreground max-w-md">
-        Seu usuário precisa ter o Portal de Licenciados liberado em{" "}
-        <span className="font-medium">Usuários → Sistemas liberados</span> para ver o consolidado da rede.
+        Requer o Portal de Licenciados em Usuários → Sistemas liberados.
       </p>
     </div>
   );
@@ -71,7 +70,6 @@ function ErrorNotice({ onRetry }: { onRetry: () => void }) {
     <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 flex flex-col items-center gap-2 text-center">
       <AlertTriangle className="h-8 w-8 text-destructive/70" />
       <p className="text-sm font-medium">Não foi possível carregar os dados da rede</p>
-      <p className="text-xs text-muted-foreground">A consulta falhou. Tente novamente em alguns instantes.</p>
       <button
         onClick={onRetry}
         className="mt-1 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted transition-colors"
@@ -194,7 +192,6 @@ export default function DashboardsFranqueados() {
         icon={Building2}
         iconColor="blue"
         title="Licenciados — Visão Geral"
-        description={`Rede de descarbonização CarboVapt · ${rangeLabel(range)}`}
         actions={<PeriodPicker value={range} onChange={setRange} />}
       />
 
@@ -321,9 +318,6 @@ export default function DashboardsFranqueados() {
                 <CardTitle className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
                   <Gauge className="h-3.5 w-3.5 text-primary" /> Serviços por Categoria
                 </CardTitle>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Leves e caminhonetes (R$ 700) × pesados (R$ 1.400)
-                </p>
               </CardHeader>
               <CardContent className="px-2 pb-4 h-[280px]">
                 {porteQ.isLoading ? (
@@ -345,8 +339,7 @@ export default function DashboardsFranqueados() {
                 )}
                 {!porteQ.isLoading && servicosSemPorte > 0 && (
                   <p className="px-3 -mt-2 text-[11px] text-muted-foreground text-center">
-                    {servicosSemPorte} serviço{servicosSemPorte !== 1 ? "s" : ""} sem categoria informada
-                    {" "}não {servicosSemPorte !== 1 ? "entram" : "entra"} neste gráfico
+                    {servicosSemPorte} serviço{servicosSemPorte !== 1 ? "s" : ""} sem categoria
                   </p>
                 )}
               </CardContent>

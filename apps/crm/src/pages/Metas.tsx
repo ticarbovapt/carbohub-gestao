@@ -303,10 +303,7 @@ export default function Metas() {
     <div className="w-full p-4 md:p-6 space-y-5 max-w-4xl mx-auto">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">🏆 Meta de Vendedores</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Performance e metas mensais por vendedor</p>
-        </div>
+        <h1 className="text-2xl font-bold">Meta de Vendedores</h1>
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex gap-1 bg-muted/40 rounded-lg p-1">
             {(["mensal", "semanal"] as PeriodView[]).map((v) => (
@@ -348,15 +345,9 @@ export default function Metas() {
 
       {/* Info bar — mensal */}
       {periodView === "mensal" && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-blue-500/10 border border-blue-500/20 text-sm text-blue-400">
-          <TrendingUp className="h-4 w-4 shrink-0" />
-          <span>
-            Esperado hoje: <strong>{fmtPct(expectedPct)}</strong> (dia {dayOfMonth}/{daysInMonth}) ·{" "}
-            <span className="text-green-400 font-medium">verde</span> = na meta ·{" "}
-            <span className="text-amber-400 font-medium">amarelo</span> = atenção ·{" "}
-            <span className="text-red-400 font-medium">vermelho</span> = abaixo
-          </span>
-        </div>
+        <p className="text-sm text-muted-foreground">
+          Esperado hoje: <strong className="text-foreground">{fmtPct(expectedPct)}</strong> (dia {dayOfMonth}/{daysInMonth})
+        </p>
       )}
 
       {/* SEMANAL */}
@@ -482,10 +473,6 @@ export default function Metas() {
           )}
         </>
       )}
-
-      <p className="text-xs text-muted-foreground text-center pt-1">
-        Acompanhamento (somente leitura). Realizado das vendas salvas (status “pedido”). A configuração de metas é no Carbo Ops.
-      </p>
     </div>
   );
 }

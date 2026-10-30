@@ -189,7 +189,6 @@ export default function WorkspaceTable() {
                       <Search className="h-5 w-5 text-muted-foreground" />
                     </div>
                     <div className="mkt-empty-title mt-3 text-base font-semibold text-foreground">Nenhum cartão encontrado</div>
-                    <div className="mkt-empty-subcopy mt-1 text-sm text-muted-foreground">Ajuste a busca ou os filtros de quadro, etiqueta e membro para ver mais resultados.</div>
                   </div>
                 </td>
               </tr>

@@ -56,7 +56,7 @@ export function EnablePushButton() {
       onClick={activate}
       disabled={busy}
       className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-60"
-      title="Receber notificações mesmo com o app fechado"
+      title="Ativar notificações"
     >
       {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : state === "granted" ? <BellRing className="h-3.5 w-3.5" /> : <Bell className="h-3.5 w-3.5" />}
       Ativar notificações

@@ -687,8 +687,7 @@ function BuscaNaConversa({ waId, aoFechar, aoAbrir }: {
         <div className="mt-2 max-h-52 overflow-y-auto rounded-lg border bg-background">
           {achados.length === 0 ? (
             <p className="px-3 py-3 text-center text-[11px] text-muted-foreground">
-              Nada com esse termo — e a procura foi na conversa INTEIRA, não só no
-              que está na tela.
+              Nada com esse termo.
             </p>
           ) : (
             <>
@@ -712,7 +711,7 @@ function BuscaNaConversa({ waId, aoFechar, aoAbrir }: {
                   completa e não é. */}
               {achados.length >= 50 && (
                 <p className="px-3 py-2 text-center text-[10px] text-muted-foreground">
-                  Mostrando as 50 mais recentes — refine o termo para ver as outras.
+                  Mostrando as 50 mais recentes. Refine o termo.
                 </p>
               )}
             </>
@@ -959,8 +958,7 @@ function Balao({ m, primeira, ultima, mostrarComoReenviar }: {
           </div>
           {mostrarComoReenviar && (
             <p className="mt-1 pl-2.5 text-[10px] leading-snug text-muted-foreground/80">
-              O WhatsApp não entrega esse formato por esta API — o conteúdo não chegou
-              até nós. Peça para reenviar como texto, foto ou áudio.
+              Formato não entregue pela API. Peça para reenviar como texto, foto ou áudio.
             </p>
           )}
         </div>
@@ -1154,8 +1152,8 @@ function PainelDaBarra({ itens, indice, aoEscolher }: {
                       px-3 py-2 text-[11px] text-muted-foreground">
         {/* ⚠️ Diz ONDE se cria. "Nenhuma resposta" sozinho deixa a pessoa
             achando que o recurso está quebrado. */}
-        Nenhuma resposta com esse atalho — as respostas se criam no botão
-        <MessageSquarePlus className="mx-1 inline h-3 w-3" />aqui embaixo.
+        Nenhuma resposta com esse atalho. Crie em
+        <MessageSquarePlus className="mx-1 inline h-3 w-3" />.
       </div>
     );
   }
@@ -1223,7 +1221,7 @@ function GerenciadorDeRespostas({ lista, aoUsar }: {
   return (
     <div ref={caixa} className="relative">
       <Button size="sm" variant="outline" className="h-8 w-8 p-0"
-              title="Respostas rápidas — ou digite / no campo de resposta"
+              title="Respostas rápidas"
               aria-label="Respostas rápidas" aria-expanded={aberto}
               onClick={() => setAberto((v) => !v)}>
         <MessageSquarePlus className="h-3.5 w-3.5" />
@@ -1291,9 +1289,7 @@ function GerenciadorDeRespostas({ lista, aoUsar }: {
 
           {lista.length === 0 ? (
             <p className="py-4 text-center text-[11px] text-muted-foreground">
-              Nenhuma resposta ainda. As frases que o time repete todo dia moram
-              aqui — e saem com <span className="font-mono">/atalho</span> no campo
-              de resposta.
+              Nenhuma resposta ainda.
             </p>
           ) : (
             <div className="max-h-64 space-y-1 overflow-y-auto">
@@ -1621,7 +1617,7 @@ function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false }: {
                 {pedidoId != null && !vinculoProvavel && (
                   <div className="mt-1.5">
                     <button type="button" onClick={() => onVerPedido(pedidoId)}
-                            title="Ver o pedido sem sair da conversa"
+                            title="Ver pedido"
                             className="inline-flex items-center gap-1 rounded-md border bg-muted/40
                                        px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground
                                        transition-colors hover:bg-muted/70 hover:text-foreground">
@@ -1644,7 +1640,7 @@ function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false }: {
                   por certeza é como alguém responde sobre o pedido errado. */}
               {vinculoProvavel && (
                 <button type="button" onClick={() => onVerPedido(pedidoId!)}
-                        title="Pedido deduzido do último aviso enviado a este número, não da resposta do cliente. Confirme antes de tratar como certo."
+                        title="Pedido deduzido — confirme"
                         className="mt-1.5 inline-flex items-center gap-1 rounded-md border
                                    border-amber-500/30 bg-amber-500/5 px-1.5 py-0.5
                                    text-[10px] font-medium text-amber-500 transition-colors
@@ -1752,8 +1748,7 @@ function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false }: {
                           border-emerald-500/20 bg-carbo-green/5 px-2.5 py-1.5">
             <Sparkles className="h-3 w-3 shrink-0 text-emerald-500" />
             <span className="text-[11px] text-muted-foreground">
-              A última mensagem parece só um agradecimento — provavelmente não
-              precisa de resposta.
+              Parece só um agradecimento.
             </span>
             <Button size="sm" variant="ghost"
                     className="ml-auto h-6 gap-1 px-2 text-[11px] text-emerald-500"
@@ -1885,8 +1880,8 @@ function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false }: {
                           border-carbo-green/40 bg-carbo-green/5 p-2">
             <p className="w-full text-[10px] font-medium text-muted-foreground">
               {previa.som
-                ? "Ouça antes de mandar — ainda não foi enviado."
-                : "Confira antes de mandar — ainda não foi enviado."}
+                ? "Ouça antes de mandar — ainda não enviado."
+                : "Confira antes de mandar — ainda não enviado."}
             </p>
             {previa.som ? (
               <Reprodutor url={previa.url} />
@@ -2153,7 +2148,7 @@ function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false }: {
                   Confirmar
                 </Button>
                 <span className="text-[10px] text-muted-foreground">
-                  no máximo até {c.janela_ate ? hora(c.janela_ate) : "—"}, quando a janela fecha
+                  até {c.janela_ate ? hora(c.janela_ate) : "—"} (fim da janela)
                 </span>
               </div>
             )}
@@ -2172,15 +2167,9 @@ function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false }: {
                 <p className="text-[11px] font-medium text-amber-500">
                   Janela de 24 h fechada — não dá para responder por aqui
                 </p>
-                <p className="text-[11px] leading-relaxed text-muted-foreground">
-                  Passaram-se mais de 24 h desde a última mensagem do cliente. A Meta
-                  só aceita <strong className="font-medium text-foreground">template aprovado</strong> agora,
-                  e nenhum dos seis da esteira serve para responder dúvida.
-                </p>
                 <p className="flex items-center gap-1.5 text-[10px] text-muted-foreground/80">
                   <Lock className="h-3 w-3 shrink-0" />
-                  A janela reabre sozinha quando o cliente escrever de novo. Até lá,
-                  use outro canal.
+                  Reabre quando o cliente escrever de novo.
                 </p>
               </div>
             </div>
@@ -2223,14 +2212,9 @@ function QuemRecebe({ aoFechar }: { aoFechar: () => void }) {
               <BellRing className="h-4 w-4" /> Quem recebe o aviso
             </h3>
             <p className="mt-0.5 max-w-xl text-[11px] text-muted-foreground">
-              Toast e sininho quando um cliente responde, em qualquer app.
               {ligados === 0
-                ? " Ninguém está marcado — hoje o aviso não sai para pessoa nenhuma."
-                : ` ${ligados} ${ligados === 1 ? "pessoa marcada" : "pessoas marcadas"}.`}
-            </p>
-            <p className="mt-0.5 text-[10px] text-muted-foreground/70">
-              Só aparece quem tem acesso interno. Lojista e licenciado não podem ser
-              marcados.
+                ? "Ninguém marcado — o aviso não sai para ninguém."
+                : `${ligados} ${ligados === 1 ? "pessoa marcada" : "pessoas marcadas"}.`}
             </p>
           </div>
           <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={aoFechar}>
@@ -2376,9 +2360,7 @@ function CardDoPedido({ blingId, onClose }: { blingId: number; onClose: () => vo
                 pedido pode ter saído da esteira depois (venda de balcão, que a
                 esteira não mostra) ou nunca ter chegado ao Bling. */}
             <p className="mt-2 leading-relaxed text-muted-foreground/80">
-              O aviso foi enviado com este número, então ele existiu. Ou a venda
-              não é de canal on-line — a esteira só mostra esses —, ou o pedido
-              ainda não chegou ao Bling.
+              Venda fora do canal on-line ou ainda não chegou ao Bling.
             </p>
           </div>
         )}
@@ -2715,8 +2697,7 @@ function CompraOriginal({ c, onVerPedido }: {
         <p className="flex items-start gap-1.5 border-t border-border px-3 py-2
                       text-[11px] text-amber-500">
           <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
-          Este pedido não está na Esteira do On-line — ou a venda não é de canal
-          on-line, ou ainda não chegou ao Bling.
+          Fora da Esteira do On-line: venda não on-line ou ainda não no Bling.
         </p>
       )}
 
@@ -3534,7 +3515,6 @@ export default function Conversas() {
            histórico) saiu do cabeçalho porque é explicação, não algo que alguém
            faça a respeito — e foi para o card de caixa vazia, que é lido por
            quem chega sem contexto em vez de a cada abertura da tela. */
-        description="As respostas dos clientes no WhatsApp oficial — o único lugar onde elas existem."
         actions={
           <div className="flex flex-wrap items-center gap-3">
             {/* ── O SELETOR DE NÚMERO ──────────────────────────────────────
@@ -3582,7 +3562,7 @@ export default function Conversas() {
                 na coluna não pode fazer a urgência parecer menor. */}
             {esperando > 0 && (
               <span
-                title="Conversas que precisam de resposta. A segunda conta é a das que já estão fora da janela de 24 h — nelas a Meta recusa texto livre."
+                title="Precisam de resposta"
                 className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1
                             text-[11px] leading-none ${
                   urgentes > 0
@@ -3637,9 +3617,7 @@ export default function Conversas() {
             <p className="flex items-start gap-1.5 text-xs text-amber-500">
               <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />
               <span className="min-w-0">
-                Nenhum número de WhatsApp disponível para o seu acesso. O cadastro
-                (<span className="font-mono">carbo_wa_numeros</span>) é lido só por
-                quem está no time interno — não é a caixa que está vazia.
+                Nenhum número de WhatsApp disponível para o seu acesso — não é a caixa que está vazia.
               </span>
             </p>
           </CarboCardContent>
@@ -3663,10 +3641,6 @@ export default function Conversas() {
         <CarboCard>
           <CarboCardContent className="p-6 text-center">
             <p className="text-sm text-muted-foreground">Nenhuma conversa ainda.</p>
-            <p className="mx-auto mt-1 max-w-lg text-[11px] text-muted-foreground/80">
-              Ela aparece assim que um aviso da esteira for enviado, ou quando um
-              cliente escrever para o número — mesmo sem nunca ter recebido nada.
-            </p>
           </CarboCardContent>
         </CarboCard>
       )}
@@ -3865,9 +3839,6 @@ export default function Conversas() {
                         "Resolvidas") e não mudam de lugar — sem esta linha,
                         escolher "Mais antigas" e ver "Abertas" continuar no
                         topo se lê como filtro que não funcionou. */}
-                    <p className="px-0.5 text-[10px] leading-tight text-muted-foreground/70">
-                      A ordem vale dentro de cada grupo.
-                    </p>
                   </div>
                 )}
               </div>

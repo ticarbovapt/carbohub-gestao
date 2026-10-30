@@ -121,10 +121,6 @@ function VisitaEmCampo({ clientUuid }: { clientUuid: string }) {
     return (
       <div className="p-6 max-w-md mx-auto text-center space-y-3">
         <p className="text-sm font-medium">Visita não encontrada neste aparelho.</p>
-        <p className="text-xs text-muted-foreground">
-          Se ela já foi enviada, abra pela agenda. Visitas sincronizadas são
-          limpas do aparelho depois de um dia.
-        </p>
         <Button variant="outline" onClick={() => navigate("/rtm/agenda")}>Voltar para a agenda</Button>
       </div>
     );
@@ -269,8 +265,7 @@ function VisitaEmCampo({ clientUuid }: { clientUuid: string }) {
             </Bloco>
 
             {/* ── Prateleira ──────────────────────────────────────────── */}
-            <Bloco titulo="O que tinha na prateleira"
-              nota="'Não trabalha' é diferente de 'zerado' — só o zerado conta como ruptura.">
+            <Bloco titulo="O que tinha na prateleira">
               <div className="space-y-2">
                 {RTM_SKUS.map((sku) => (
                   <div key={sku} className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -522,12 +517,7 @@ function VisitaSalva({ id }: { id: string }) {
 
         <div className="rounded-lg border px-3 py-2 text-xs text-muted-foreground flex items-start gap-2">
           <TriangleAlert className="h-4 w-4 shrink-0 mt-0.5" />
-          <span>
-            Visita concluída não pode ser editada — nem aqui nem no banco. Se algo
-            está errado, registre uma correção: ela nasce como um novo registro
-            ligado a este, com autor e justificativa, e o original continua
-            visível. É isso que deixa o histórico auditável.
-          </span>
+          <span>Visita concluída não pode ser editada.</span>
         </div>
 
         <CarboCard>

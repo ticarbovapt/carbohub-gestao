@@ -46,8 +46,8 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
           </h1>
           <p className="text-sm text-muted-foreground mt-1 max-w-sm">
             {profile
-              ? "Seu perfil não tem o Carbo Finanças habilitado. Solicite a liberação ao time de gestão (feita no Carbo Admin)."
-              : "Esta conta não tem cadastro no sistema interno da Carbo. Fale com um gestor."}
+              ? "Solicite a liberação a um gestor."
+              : "Fale com um gestor."}
           </p>
         </div>
         <Button variant="outline" asChild>

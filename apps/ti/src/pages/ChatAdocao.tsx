@@ -75,14 +75,9 @@ export default function ChatAdocao() {
 
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-xl font-bold flex items-center gap-2">
-          <MessagesSquare className="h-5 w-5" /> Adoção do Carbo Chat
-        </h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Migração do WhatsApp para o sistema — números por setor e período. Sem conteúdo de mensagem, só agregados.
-        </p>
-      </div>
+      <h1 className="text-xl font-bold flex items-center gap-2">
+        <MessagesSquare className="h-5 w-5" /> Adoção do Carbo Chat
+      </h1>
 
       {/* Cartões */}
       {ov.isLoading || !o ? (
@@ -100,7 +95,7 @@ export default function ChatAdocao() {
           <Kpi icon={MessagesSquare} label="Conversas diretas" value={o.dms_ativas} sub="DMs ativas em 30d" />
           <Kpi icon={Bell} label="Com push" value={o.com_push} sub={`${pctPush}% dos internos`}
             tone={pctPush >= 70 ? "good" : "warn"} />
-          <Kpi icon={BellOff} label="Sem push" value={o.sem_push} sub="correr atrás" tone={o.sem_push > 0 ? "warn" : "good"} />
+          <Kpi icon={BellOff} label="Sem push" value={o.sem_push} tone={o.sem_push > 0 ? "warn" : "good"} />
         </div>
       )}
 
@@ -248,7 +243,7 @@ export default function ChatAdocao() {
                     </thead>
                     <tbody>
                       {(inactive.data ?? []).length === 0 ? (
-                        <tr><td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">Ninguém parado nesse período. 🎉</td></tr>
+                        <tr><td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">Ninguém parado nesse período.</td></tr>
                       ) : (inactive.data ?? []).map((r) => (
                         <tr key={r.user_id} className="border-b last:border-0 hover:bg-muted/40">
                           <td className="px-4 py-2 font-medium">{r.full_name ?? "—"}</td>

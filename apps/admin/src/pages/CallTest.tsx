@@ -75,10 +75,6 @@ export default function CallTest() {
           </ul>
         )}
       </div>
-
-      <p className="text-xs text-muted-foreground">
-        Dica: abra esta página em <b>2 abas</b> e clique em “Entrar” nas duas. O ponto verde acende em quem está falando.
-      </p>
     </div>
   );
 }

@@ -76,7 +76,6 @@ export default function FluxoCaixa() {
     <div className="space-y-6">
       <CarboPageHeader
         title="Fluxo de caixa"
-        description="Entradas previstas (a receber) × saídas previstas (a pagar), por semana. Contas em BRL."
         icon={Landmark}
       />
 
@@ -93,7 +92,7 @@ export default function FluxoCaixa() {
           { label: `Saídas previstas (${semanas} sem.)`, valor: totalSaida, cor: "text-destructive", loading: cashLoading, error: cashError },
           {
             label: `Saldo previsto (${semanas} sem.)`, valor: saldoPrevisto, cor: saldoPrevisto < 0 ? "text-destructive" : "text-success",
-            loading: cashLoading, error: cashError, sub: "Entradas − saídas previstas · não inclui saldo em banco",
+            loading: cashLoading, error: cashError, sub: "sem saldo em banco",
           },
           { label: "Inadimplência (vencido a receber)", valor: inadimplencia, cor: "text-destructive", loading: recLoading, error: recError },
         ].map((k) => (
@@ -114,7 +113,7 @@ export default function FluxoCaixa() {
               sem este aviso a primeira barra parece uma semana excepcional. */}
           <p className="mb-2 flex items-start gap-1.5 rounded-md border border-warning/30 bg-warning/10 px-2 py-1.5 text-xs text-warning-foreground">
             <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-            A 1ª semana inclui todo o vencido em aberto (a pagar e a receber), de qualquer data.
+            A 1ª semana inclui todo o vencido em aberto.
           </p>
           {cashData.length === 0 ? empty : (
             <ResponsiveContainer width="100%" height={340}>

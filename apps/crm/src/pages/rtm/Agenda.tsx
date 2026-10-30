@@ -235,7 +235,6 @@ export default function RtmAgenda() {
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <CarboPageHeader
             title="Agenda de visitas"
-            description="Quem deveria ser visitado — e o que aconteceu"
             icon={CalendarDays}
           />
           <div className="flex items-center gap-2 flex-wrap">
@@ -301,7 +300,7 @@ export default function RtmAgenda() {
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold truncate">Visita em andamento · {emAndamento.pdv_nome}</p>
               <p className="text-xs text-muted-foreground">
-                Check-in às {hora(emAndamento.ts_dispositivo_checkin)} — toque para continuar
+                Check-in às {hora(emAndamento.ts_dispositivo_checkin)}
               </p>
             </div>
             <ChevronRight className="h-4 w-4 shrink-0 text-blue-600" />
@@ -319,7 +318,7 @@ export default function RtmAgenda() {
               {online
                 ? `${pendentes.length} visita(s) aguardando envio${
                     desdeSucesso !== null && desdeSucesso > 5 ? ` · sem enviar há ${desdeSucesso} min` : ""}.`
-                : "Sem conexão. As visitas ficam salvas no aparelho e sobem sozinhas quando o sinal voltar."}
+                : "Sem conexão. As visitas ficam salvas no aparelho."}
             </span>
             {online && pendentes.length > 0 && (
               <Button size="sm" variant="outline" className="h-7"
@@ -417,10 +416,6 @@ export default function RtmAgenda() {
               <p className="text-sm font-medium">
                 {vend ? "Sua agenda está vazia."
                       : "Ninguém do time tem visita planejada nesta janela."}
-              </p>
-              <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                Comece colocando os PDVs a visitar. A visita entra na agenda <strong>antes</strong> do
-                dia — é isso que separa "não deu tempo" de "não estava no plano".
               </p>
               <Button size="sm" className="mt-1" onClick={() => setNovoOpen(true)}>
                 <Plus className="h-4 w-4 mr-1.5" /> Agendar primeira visita
@@ -1009,7 +1004,7 @@ function DialogAgendar({
 
           <div>
             <Label className="text-xs">Ponto de venda</Label>
-            <Input placeholder="Buscar por nome, endereço, cidade, CEP ou código..." value={busca}
+            <Input placeholder="Buscar PDV…" value={busca}
               onChange={(e) => setBusca(e.target.value)} className="h-9 mb-1.5" />
             <div className="max-h-52 overflow-y-auto rounded-md border divide-y">
               {lista.length === 0 && (

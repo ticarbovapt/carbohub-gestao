@@ -98,12 +98,6 @@ export function NaturezaBonificacaoDialog({
           </DialogTitle>
         </DialogHeader>
 
-        <p className="text-xs text-muted-foreground">
-          Escolha a natureza que o Bling deve usar na nota de remessa de brinde —
-          normalmente <strong>"Remessa em bonificação, doação ou brinde"</strong>.
-          É ela que faz a nota sair sem imposto sobre o produto dado.
-        </p>
-
         <div className="grid grid-cols-2 gap-2">
           {([[1, "Matriz"], [2, "Filial SP"]] as const).map(([v, label]) => (
             <button key={v} type="button" onClick={() => setConta(v)}
@@ -129,8 +123,7 @@ export function NaturezaBonificacaoDialog({
               <div>
                 <p>{(error as Error).message}</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Se persistir, a conexão com o Bling pode ter expirado — reconecte em
-                  Configurações e tente de novo.
+                  Se persistir, reconecte o Bling.
                 </p>
               </div>
             </div>

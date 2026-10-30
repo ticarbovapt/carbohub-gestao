@@ -99,8 +99,7 @@ export function LeadPainel({ leadId, onClose }: { leadId: string; onClose: () =>
               <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3">
                 <Archive className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
                 <p className="text-xs">
-                  <strong>Card arquivado.</strong> Não aparece mais nas pipelines, mas continua nos
-                  indicadores históricos — as datas em que ele foi criado e movido não mudam.
+                  <strong>Card arquivado.</strong> Fora das pipelines; continua nos indicadores.
                 </p>
               </div>
             )}
@@ -163,7 +162,7 @@ export function LeadPainel({ leadId, onClose }: { leadId: string; onClose: () =>
             <div className="space-y-2">
               <textarea
                 className="min-h-[72px] w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                placeholder="Comentar neste card… (aparece na timeline do vendedor)"
+                placeholder="Comentar neste card…"
                 value={texto}
                 onChange={(e) => setTexto(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) enviar(); }}

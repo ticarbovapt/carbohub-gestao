@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,7 +37,6 @@ export function NovaRemessaDialog({ open, onOpenChange }: { open: boolean; onOpe
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><Truck className="h-4 w-4" /> Nova Remessa</DialogTitle>
-          <DialogDescription>Registre uma remessa para rastreio operacional.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">

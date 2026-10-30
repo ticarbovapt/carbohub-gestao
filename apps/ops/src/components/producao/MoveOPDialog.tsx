@@ -157,7 +157,7 @@ export function MoveOPDialog({ open, onOpenChange, op, fromLabel, toLabel, toSta
           {skipWarning && (
             <div className="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-700 dark:text-amber-400">
               <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-              <span>Esta OP normalmente <strong>não passa por {toLabel}</strong> (pela rota escolhida). Mover mesmo assim?</span>
+              <span>Esta OP normalmente <strong>não passa por {toLabel}</strong>. Mover mesmo assim?</span>
             </div>
           )}
 
@@ -184,7 +184,7 @@ export function MoveOPDialog({ open, onOpenChange, op, fromLabel, toLabel, toSta
                 <RouteCard
                   icon={Factory}
                   title="Produzir do zero"
-                  subtitle="Fabrica o envasado agora (garrafa, líquido, tampa) e rotula"
+                  subtitle="Fabrica o envasado e rotula"
                   hint="Não usa envasado pronto"
                   hintTone="muted"
                   selected={route === "zero"}
@@ -203,7 +203,7 @@ export function MoveOPDialog({ open, onOpenChange, op, fromLabel, toLabel, toSta
                 </div>
               )}
               {hasChoice && !routeChosen && (
-                <p className="text-sm text-muted-foreground text-center py-2">Escolha a rota acima para ver o que será separado.</p>
+                <p className="text-sm text-muted-foreground text-center py-2">Escolha a rota.</p>
               )}
               {lines.length > 0 && routeChosen && (
                 <div className="rounded-lg border border-border overflow-hidden">
@@ -273,7 +273,7 @@ export function MoveOPDialog({ open, onOpenChange, op, fromLabel, toLabel, toSta
               ) : theoLines.length > 0 && (
                 <div className="rounded-lg border border-border overflow-hidden">
                   <div className="px-3 py-2 text-sm font-medium bg-muted/40">
-                    Insumos usados <span className="text-xs font-normal text-muted-foreground">(informe o total usado; o previsto é BOM × boas)</span>
+                    Insumos usados
                   </div>
                   <div className="divide-y divide-border">
                     {theoLines.map((l) => {
@@ -305,7 +305,7 @@ export function MoveOPDialog({ open, onOpenChange, op, fromLabel, toLabel, toSta
                   </div>
                   {totalLoss > 0 && (
                     <div className="px-3 py-2 text-xs text-red-600 dark:text-red-400 bg-red-500/5 border-t border-border">
-                      {totalLoss} {totalLoss === 1 ? "insumo com perda" : "insumos com perda"} — vão para Perdas Totais.
+                      {totalLoss} {totalLoss === 1 ? "insumo com perda" : "insumos com perda"}
                     </div>
                   )}
                 </div>

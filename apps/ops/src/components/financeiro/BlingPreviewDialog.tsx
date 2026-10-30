@@ -1,6 +1,6 @@
 // TODO: ligar em <tabela financeira/bling> (Supabase)
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { CarboBadge } from "@/components/ui/carbo-badge";
@@ -33,7 +33,6 @@ export function BlingPreviewDialog({ order, open, onOpenChange }: Props) {
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><FileText className="h-5 w-5 text-carbo-green" /> Pré-visualizar envio ao Bling</DialogTitle>
-          <DialogDescription>Confira os dados que serão enviados via API ao Bling para emissão da NF-e.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 text-sm">

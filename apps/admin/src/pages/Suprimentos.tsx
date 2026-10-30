@@ -161,8 +161,7 @@ export default function Suprimentos() {
     return (
       <div className="p-4 md:p-6">
         <div className="space-y-6 max-w-[1500px] mx-auto">
-          <CarboPageHeader icon={Boxes} iconColor="gradient" title="Suprimentos"
-            description="Hub Natal · saúde de estoque, giro, risco em R$ e custo de fabricação — visão estratégica, somente leitura" />
+          <CarboPageHeader icon={Boxes} iconColor="gradient" title="Suprimentos" />
           <Card className="rounded-2xl border-0 shadow-sm">
             <CardContent className="py-16 text-center text-sm text-muted-foreground">
               Não foi possível carregar os dados de suprimentos. Tente novamente mais tarde.
@@ -178,8 +177,7 @@ export default function Suprimentos() {
   return (
     <div className="p-4 md:p-6">
       <div className="space-y-6 max-w-[1500px] mx-auto">
-        <CarboPageHeader icon={Boxes} iconColor="gradient" title="Suprimentos"
-          description="Saúde de estoque, giro, risco em R$ e rede de distribuição — visão estratégica, somente leitura" />
+        <CarboPageHeader icon={Boxes} iconColor="gradient" title="Suprimentos" />
 
         {isLoading || !d ? <SectionSkeleton /> : (
           <>
@@ -211,9 +209,6 @@ export default function Suprimentos() {
                 <CardTitle className="text-base font-semibold flex items-center gap-2">
                   <ArrowLeftRight className="h-4 w-4 text-primary" /> Estado da Rede
                 </CardTitle>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Capital mobilizado e ruptura por hub, na ordem do fluxo físico (produção → venda). O que está em trânsito é capital comprometido, ainda não vendável.
-                </p>
               </CardHeader>
               <CardContent className="px-5 pb-5">
                 <div className="flex flex-col lg:flex-row items-stretch gap-3">
@@ -245,7 +240,6 @@ export default function Suprimentos() {
                   {d.transitoDiasMax != null && d.transitoDiasMax >= 15 && (
                     <CarboBadge variant="warning" size="sm">remessa parada há {d.transitoDiasMax} dias</CarboBadge>
                   )}
-                  <span className="text-[11px] text-muted-foreground/70 ml-auto">execução no Carbo Ops</span>
                 </div>
               </CardContent>
             </Card>
@@ -259,7 +253,7 @@ export default function Suprimentos() {
                     <Repeat2 className="h-4 w-4 text-primary" /> A Remanejar
                   </CardTitle>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Falta no hub de venda mas <strong className="text-foreground">existe em Natal</strong> — é transferência, não compra. {fmtNum(d.produtosRemanejarTotal)} caso(s).
+                    {fmtNum(d.produtosRemanejarTotal)} caso(s)
                   </p>
                 </CardHeader>
                 <CardContent className="px-0 pb-2">
@@ -352,7 +346,7 @@ export default function Suprimentos() {
                     <Snowflake className="h-4 w-4 text-amber-500" /> Produtos Parados
                   </CardTitle>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Estoque sem nenhuma movimentação em 90 dias — <strong className="text-foreground">{fmtNum(d.produtosParadosTotal)}</strong> produto(s), <strong className="text-foreground">{fmtBRL(d.valorParado)}</strong> ({d.valorTotal > 0 ? ((d.valorParado / d.valorTotal) * 100).toFixed(0) : 0}% do capital) sem giro — candidato a liquidação.
+                    <strong className="text-foreground">{fmtNum(d.produtosParadosTotal)}</strong> produto(s) · <strong className="text-foreground">{fmtBRL(d.valorParado)}</strong> ({d.valorTotal > 0 ? ((d.valorParado / d.valorTotal) * 100).toFixed(0) : 0}% do capital)
                   </p>
                 </CardHeader>
                 <CardContent className="px-0 pb-2">
@@ -399,13 +393,12 @@ export default function Suprimentos() {
                     <Layers className="h-4 w-4 text-amber-500" /> Excesso de Estoque
                   </CardTitle>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Ainda giram, mas há mais de 90 dias de consumo em estoque — <strong className="text-foreground">{fmtNum(d.produtosExcessoTotal)}</strong> produto(s), <strong className="text-foreground">{fmtBRL(d.valorExcesso)}</strong> além do necessário.
-                    <br /><span className="text-[11px]">Cobertura = estoque atual ÷ consumo médio por dia (saídas dos últimos 90 dias em Natal). Ex.: 804 dias = o estoque atual dura 804 dias no ritmo de consumo recente.</span>
+                    <strong className="text-foreground">{fmtNum(d.produtosExcessoTotal)}</strong> produto(s) · <strong className="text-foreground">{fmtBRL(d.valorExcesso)}</strong> além do necessário
                   </p>
                 </CardHeader>
                 <CardContent className="px-0 pb-2">
                   {d.produtosExcesso.length === 0 ? (
-                    <p className="py-12 text-center text-sm text-muted-foreground">Sem excesso relevante — estoque dimensionado ao consumo.</p>
+                    <p className="py-12 text-center text-sm text-muted-foreground">Sem excesso relevante.</p>
                   ) : (
                     <div className="overflow-x-auto">
                       <CarboTable>
@@ -448,7 +441,6 @@ export default function Suprimentos() {
                   <CardTitle className="text-base font-semibold flex items-center gap-2">
                     <PackageSearch className="h-4 w-4 text-primary" /> Concentração (ABC)
                   </CardTitle>
-                  <p className="text-xs text-muted-foreground mt-0.5">Onde o capital se concentra — foque o controle nos itens A.</p>
                 </CardHeader>
                 <CardContent className="px-5 pb-5 space-y-3">
                   <div className="flex h-3 w-full overflow-hidden rounded-full">
@@ -476,7 +468,7 @@ export default function Suprimentos() {
                   </CardTitle>
                   {d.topProdutos.length > 0 && (
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Esses 10 concentram <strong className="text-foreground">{d.topProdutosValorPct.toFixed(0)}%</strong> do capital mobilizado.
+                      <strong className="text-foreground">{d.topProdutosValorPct.toFixed(0)}%</strong> do capital mobilizado
                     </p>
                   )}
                 </CardHeader>
@@ -526,9 +518,6 @@ export default function Suprimentos() {
                   <CardTitle className="text-base font-semibold flex items-center gap-2">
                     <FlaskConical className="h-4 w-4 text-primary" /> Custo de Fabricação (ficha técnica)
                   </CardTitle>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Custo de produzir 1 unidade, somando os insumos da ficha. Quando há um semi-acabado, comparamos as 2 rotas (🏷️ Rotular vs ⚙️ Do zero) e mostramos a <strong className="text-foreground">mais barata</strong>. O <strong className="text-foreground">preço sugerido</strong> usa o preço praticado quando conhecido (“referência”); senão, com a ficha completa, sugere custo ÷ (1 − 70%); com ficha incompleta não sugere (“custo incompleto”), pra não mostrar preço enganoso. <strong className="text-foreground">Margem</strong> = (preço − custo) ÷ preço, só com custo completo.
-                  </p>
                 </CardHeader>
                 <CardContent className="px-0 pb-2">
                   <div className="overflow-x-auto">
@@ -549,7 +538,7 @@ export default function Suprimentos() {
                           const faltRef = p.rotaReferencia === "zero" ? (p.itensFaltantesZero ?? 0) : p.itensFaltantes;
                           const totRef = p.rotaReferencia === "zero" ? (p.totalItensBomZero ?? 0) : p.totalItensBom;
                           const outraCusto = p.rotaReferencia === "zero" ? p.custoCalculado : p.custoZero;
-                          const outraLabel = p.rotaReferencia === "zero" ? "🏷️ Rotular" : "⚙️ Do zero";
+                          const outraLabel = p.rotaReferencia === "zero" ? "Rotular" : "Do zero";
                           const economia = p.economiaZero;
                           return (
                             <CarboTableRow key={p.id}>
@@ -565,7 +554,7 @@ export default function Suprimentos() {
                                   {p.completo ? "" : "~"}{fmtBRL(p.custoReferencia)}
                                 </span>
                                 <span className="text-[10px] text-muted-foreground">
-                                  {p.rotaReferencia === "zero" ? "⚙️ Do zero" : "🏷️ Rotular"}
+                                  {p.rotaReferencia === "zero" ? "Do zero" : "Rotular"}
                                 </span>
                               </CarboTableCell>
                               <CarboTableCell>
@@ -574,12 +563,12 @@ export default function Suprimentos() {
                                     <span className="text-xs text-muted-foreground">custo igual nas 2 rotas</span>
                                   ) : economia > 0 ? (
                                     <div className="flex flex-col gap-0.5">
-                                      <CarboBadge variant="success" size="sm" className="w-fit">⚙️ Do zero economiza {fmtBRL(economia)}</CarboBadge>
+                                      <CarboBadge variant="success" size="sm" className="w-fit">Do zero economiza {fmtBRL(economia)}</CarboBadge>
                                       {outraCusto != null && <span className="text-[10px] text-muted-foreground">{outraLabel}: {fmtBRL(outraCusto)}</span>}
                                     </div>
                                   ) : (
                                     <div className="flex flex-col gap-0.5">
-                                      <CarboBadge variant="secondary" size="sm" className="w-fit">🏷️ Rotular economiza {fmtBRL(-economia)}</CarboBadge>
+                                      <CarboBadge variant="secondary" size="sm" className="w-fit">Rotular economiza {fmtBRL(-economia)}</CarboBadge>
                                       {outraCusto != null && <span className="text-[10px] text-muted-foreground">{outraLabel}: {fmtBRL(outraCusto)}</span>}
                                     </div>
                                   )
@@ -699,7 +688,6 @@ export default function Suprimentos() {
                       ? <TrendingDown className="h-4 w-4 text-primary" />
                       : <TrendingUp className="h-4 w-4 text-primary" />} Fluxo Líquido por Categoria ({fluxoPeriodo}d, R$)
                   </CardTitle>
-                  <p className="text-xs text-muted-foreground mt-0.5">Positivo = capital acumulando (entrou mais que saiu); negativo = drenando.</p>
                 </CardHeader>
                 <CardContent className="px-2 pb-4">
                   {fluxoLiquidoPorCategoria.length === 0 ? (
@@ -755,13 +743,10 @@ export default function Suprimentos() {
                   <CardTitle className="text-base font-semibold flex items-center gap-2">
                     <PackageSearch className="h-4 w-4 text-amber-500" /> Custos a Cadastrar
                   </CardTitle>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Produtos com estoque mas custo R$0 — somem do valor mobilizado. Completar no Ops libera visibilidade.
-                  </p>
                 </CardHeader>
                 <CardContent className="px-5 pb-5">
                   {d.produtosSemCusto.length === 0 ? (
-                    <p className="text-xs text-muted-foreground text-center py-8">Todos os produtos com estoque têm custo cadastrado. 🎉</p>
+                    <p className="text-xs text-muted-foreground text-center py-8">Todos os produtos com estoque têm custo cadastrado.</p>
                   ) : (
                     <div className="divide-y divide-border -mx-1">
                       {d.produtosSemCusto.map((p) => (

@@ -173,10 +173,9 @@ export function NfseEmitirDialog({ orderId, onOpenChange }: { orderId: string | 
             {NFSE_AMBIENTE_TELA === 2 && <CarboBadge variant="warning">TESTE · produção restrita</CarboBadge>}
           </DialogTitle>
           <DialogDescription>
-            Portal Nacional (gov.br). Confira os dados; nada é enviado antes de <strong>Emitir</strong>.
             {NFSE_AMBIENTE_TELA === 2
-              ? " Por enquanto as notas saem no ambiente de TESTE e não valem como documento fiscal."
-              : <> A nota é emitida <strong>de verdade</strong> no CNPJ da Carbo, na sequência do portal, e só se desfaz com cancelamento.</>}
+              ? "Ambiente de teste: a nota não vale como documento fiscal."
+              : "A nota é emitida de verdade e só se desfaz com cancelamento."}
           </DialogDescription>
         </DialogHeader>
 
@@ -201,8 +200,7 @@ export function NfseEmitirDialog({ orderId, onOpenChange }: { orderId: string | 
                 <p className="font-medium">Não sabemos se a nota da tentativa de {fmtQuando(semResposta.criado_em)} saiu.</p>
                 <p className="mt-1">{semResposta.erro}</p>
                 <p className="mt-1">
-                  Por isso não dá para emitir outra. Reenviar usa o <strong>mesmo número</strong> (DPS {semResposta.serie}/{semResposta.n_dps}):
-                  se a primeira já emitiu, o portal recusa a segunda em vez de duplicar.
+                  Reenvie com o <strong>mesmo número</strong> (DPS {semResposta.serie}/{semResposta.n_dps}); o portal não duplica.
                 </p>
                 <CarboButton size="sm" variant="outline" className="mt-2 gap-1" disabled={emitir.isPending || faltas.length > 0}
                   onClick={() => confirmar(semResposta)}>
@@ -246,9 +244,7 @@ export function NfseEmitirDialog({ orderId, onOpenChange }: { orderId: string | 
               <Campo rotulo="Indicador da operação *" largo
                 dica={(() => {
                   const op = C_IND_OP.find((c) => c.codigo === f.cIndOp);
-                  return op
-                    ? `${op.codigo} - ${C_IND_OP_PREFIXO} - ${op.local}`
-                    : "O mesmo campo do emissor web (IBS/CBS). Varia conforme onde o serviço é feito.";
+                  return op ? `${op.codigo} - ${C_IND_OP_PREFIXO} - ${op.local}` : undefined;
                 })()}>
                 <Select value={f.cIndOp} onValueChange={(v) => set("cIndOp", v)}>
                   <SelectTrigger className="text-left [&>span]:truncate"><SelectValue placeholder="Escolha…" /></SelectTrigger>
@@ -268,10 +264,10 @@ export function NfseEmitirDialog({ orderId, onOpenChange }: { orderId: string | 
                 <Input type="date" value={f.dCompet} max={hojeLocal()} onChange={(e) => set("dCompet", e.target.value)} />
               </Campo>
               <Campo rotulo="Descrição do serviço" largo
-                dica={data.veiculos.some((v) => v.placa) ? undefined : "A OS ainda não tem placa registrada — os veículos entram quando o Carbox executar. Pode escrever à mão."}>
+                dica={data.veiculos.some((v) => v.placa) ? undefined : "OS sem placa registrada."}>
                 <Textarea rows={3} value={f.descricao} maxLength={2000} onChange={(e) => set("descricao", e.target.value)} />
               </Campo>
-              <Campo rotulo="Informações complementares (automático)" largo dica="É por este rodapé que a nota volta ao pedido.">
+              <Campo rotulo="Informações complementares (automático)" largo>
                 <p className="rounded-md border bg-muted/30 px-3 py-2 text-xs">{rodape}</p>
               </Campo>
             </Secao>

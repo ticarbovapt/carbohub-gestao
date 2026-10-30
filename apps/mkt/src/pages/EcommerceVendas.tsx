@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+  Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
   AreaChart, Area, BarChart, Bar, Cell,
@@ -384,8 +384,8 @@ function CommissionCard({ platform, commissionTotal, netRevenue }: {
         <p className="text-xl font-bold leading-none">{semTaxa ? "—" : fmtBRL(commissionTotal)}</p>
         <p className="text-xs text-muted-foreground">
           {semTaxa
-            ? "taxa não cadastrada · clique para cadastrar"
-            : `taxa: ${(currentRate * 100).toFixed(2)}% · clique para gerenciar`}
+            ? "taxa não cadastrada"
+            : `taxa: ${(currentRate * 100).toFixed(2)}%`}
         </p>
       </div>
 
@@ -396,9 +396,6 @@ function CommissionCard({ platform, commissionTotal, netRevenue }: {
               <Receipt className="h-4 w-4 text-slate-400" />
               Comissão — {PMAP[platform].label}
             </DialogTitle>
-            <DialogDescription>
-              Gerencie a taxa de comissão da plataforma. Cada taxa vale a partir da data informada, preservando o cálculo de pedidos anteriores.
-            </DialogDescription>
           </DialogHeader>
 
           {/* Resumo financeiro */}
@@ -556,9 +553,6 @@ function ReconciliacaoPanel({
             como o número é buscado, não de onde ele vem. Quem lê a tela precisa
             saber que um lado é a soma crua no banco e o outro é o que os
             cartões acima mostram — é a divergência entre os dois que importa. */}
-        <span className="ml-auto text-xs text-muted-foreground">
-          soma direta no banco vs. o que esta tela mostra
-        </span>
       </CardHeader>
       <CardContent className="p-0 pb-4">
         <div className="overflow-x-auto">
@@ -606,10 +600,7 @@ function PlatformView({ platform, period, custom }: { platform: EcommercePlatfor
       >
         <div className="flex items-center gap-3">
           <span className="text-3xl">{cfg.emoji}</span>
-          <div>
-            <p className={cn("text-lg font-bold", cfg.textClass)}>{cfg.label}</p>
-            <p className="text-xs text-muted-foreground">Dados de vendas externos — período selecionado</p>
-          </div>
+          <p className={cn("text-lg font-bold", cfg.textClass)}>{cfg.label}</p>
         </div>
         {/* ⚠️ TRÊS estados, não dois.
             "Conectado" respondia só "o token existe e não venceu". Em
@@ -625,7 +616,6 @@ function PlatformView({ platform, period, custom }: { platform: EcommercePlatfor
           </Badge>
         ) : m.minutosSemSincronizar != null && m.minutosSemSincronizar > MINUTOS_ATE_ALERTAR ? (
           <Badge
-            title={`Token válido, mas a última sincronização com dado foi há ${textoDeAtraso(m.minutosSemSincronizar)}. O sync roda a cada 5 minutos.`}
             className="bg-amber-500/10 text-amber-600 border-amber-500/30 gap-1.5 text-xs"
           >
             <AlertCircle className="h-3 w-3" />
@@ -644,9 +634,6 @@ function PlatformView({ platform, period, custom }: { platform: EcommercePlatfor
         <div className="rounded-xl border border-dashed border-muted-foreground/30 bg-muted/20 p-6 flex flex-col items-center gap-2 text-center">
           <AlertCircle className="h-8 w-8 text-muted-foreground/50" />
           <p className="text-sm font-medium text-muted-foreground">Aguardando sincronização</p>
-          <p className="text-xs text-muted-foreground/70 max-w-md">
-            A integração será estabelecida automaticamente. Os dados aparecerão assim que a próxima sincronização ocorrer.
-          </p>
         </div>
       )}
 
@@ -818,7 +805,7 @@ function PlatformView({ platform, period, custom }: { platform: EcommercePlatfor
                     <td className="px-4 py-3 font-mono text-xs">
                       {p.sku
                         ? <span className="text-muted-foreground">{p.sku}</span>
-                        : <span className="text-amber-600 dark:text-amber-500 not-italic" title="A plataforma não enviou SKU nesta linha (a Shopee grava nulo). Sem SKU não há como resolver o multiplicador.">sem SKU</span>}
+                        : <span className="text-amber-600 dark:text-amber-500 not-italic" title="SKU não enviado pela plataforma">sem SKU</span>}
                     </td>
                     <td className="px-4 py-3 text-right">{fmtNum(p.orders)}</td>
                     <td className="px-4 py-3 text-center">
@@ -828,9 +815,7 @@ function PlatformView({ platform, period, custom }: { platform: EcommercePlatfor
                         <Badge
                           variant="outline"
                           className="text-xs font-mono px-2 border-amber-500/60 text-amber-600 dark:text-amber-500"
-                          title={p.sku
-                            ? `SKU "${p.sku}" sem cadastro ativo em sku_product_mappings para esta plataforma — as unidades abaixo são o número cru da plataforma.`
-                            : "Sem SKU não há multiplicador — as unidades abaixo são o número cru da plataforma."}
+                          title="Sem mapeamento de SKU"
                         >×?</Badge>
                       )}
                     </td>
@@ -1007,9 +992,6 @@ function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?:
         <div className="rounded-xl border border-dashed border-muted-foreground/30 bg-muted/20 p-6 flex flex-col items-center gap-2 text-center">
           <AlertCircle className="h-8 w-8 text-muted-foreground/50" />
           <p className="text-sm font-medium text-muted-foreground">Nenhuma plataforma conectada</p>
-          <p className="text-xs text-muted-foreground/70 max-w-md">
-            Quando as integrações forem configuradas, o comparativo mostrará dados reais de cada plataforma selecionada.
-          </p>
         </div>
       )}
 
@@ -1035,7 +1017,7 @@ function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?:
           />
           <MetricCard
             label="Unidades" value={fmtNum(totalUnits)}
-            sub="entregues ao cliente · só pedido pago, já com o multiplicador do pack"
+            sub="entregues ao cliente"
             icon={<Boxes className="h-4 w-4" />} accent="#38bdf8"
           />
           <MetricCard
@@ -1058,9 +1040,8 @@ function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?:
         <p className="text-xs text-amber-600 dark:text-amber-400 -mt-1">
           ⚠️ {porProduto.filter(p => !p.mapeado).length === 1
             ? "1 produto sem mapeamento de SKU"
-            : `${porProduto.filter(p => !p.mapeado).length} produtos sem mapeamento de SKU`}:
-          {" "}sem cadastro não há multiplicador, então o total de unidades está subestimado.
-          Cadastre em Ops → Suprimentos → CD SP → Mapeamento SKU.
+            : `${porProduto.filter(p => !p.mapeado).length} produtos sem mapeamento de SKU`} — unidades
+          subestimadas. Cadastre em Ops → Suprimentos → CD SP → Mapeamento SKU.
         </p>
       )}
 
@@ -1095,11 +1076,11 @@ function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?:
                       diferença são os perdidos") que pediu o `title` abaixo:
                       a coluna estava certa e não dizia o que era. */}
                   <th className="text-right px-2.5 py-2.5 font-medium w-px whitespace-nowrap"
-                      title="Pedidos que viraram VENDA: pago, enviado ou entregue. É a base do ticket médio.">
+                      title="Pago, enviado ou entregue">
                     Vendas
                   </th>
                   <th className="text-right px-2.5 py-2.5 font-medium w-px whitespace-nowrap"
-                      title="Pedidos que ENTRARAM no período, em qualquer status — não são carrinhos abandonados, que vivem noutra tela. Recebidos − Vendas é o que não converteu, e hoje isso é exatamente a coluna Cancel. É também o denominador da % de cancelamento.">
+                      title="Pedidos do período, em qualquer status">
                     Recebidos
                   </th>
                   {/* ⚠️ Uma coluna por PRODUTO DO CADASTRO, geradas de
@@ -1125,7 +1106,7 @@ function ComparativoView({ period, custom }: { period: EcommercePeriod; custom?:
                   <th className="text-left px-3 py-2.5 font-medium">Faturamento · participação</th>
                   <th className="text-right px-2.5 py-2.5 font-medium w-px whitespace-nowrap">Ticket médio</th>
                   <th className="text-right px-4 py-2.5 font-medium w-px whitespace-nowrap"
-                      title="Pedidos cancelados e quanto representam dos Recebidos. É a medida do que NÃO converteu — por isso não existe uma coluna 'Perdidos' ao lado: seria este mesmo número com outro nome.">
+                      title="Cancelados sobre recebidos">
                     Cancel.
                   </th>
                 </tr>
@@ -1486,7 +1467,6 @@ function HistoricoMensalView() {
         <div className="rounded-xl border border-dashed border-muted-foreground/30 bg-muted/20 p-10 flex flex-col items-center gap-2 text-center">
           <AlertCircle className="h-8 w-8 text-muted-foreground/40" />
           <p className="text-sm font-medium text-muted-foreground">Nenhum dado no período selecionado</p>
-          <p className="text-xs text-muted-foreground/60">Ajuste o período ou aguarde a sincronização.</p>
         </div>
       )}
 
@@ -1979,15 +1959,10 @@ export default function EcommerceVendas() {
       <div className="space-y-5">
         {/* Page header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <ShoppingCart className="h-6 w-6 text-primary" />
-              Vendas Online
-            </h1>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Acompanhamento de pedidos, receita e unidades por plataforma de e-commerce
-            </p>
-          </div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <ShoppingCart className="h-6 w-6 text-primary" />
+            Vendas Online
+          </h1>
           {active !== "historico" && (
             <div className="flex flex-wrap items-center gap-2">
               {/* ⚠️ `h-9`, como a barra da Esteira. Sem altura declarada o
@@ -2064,7 +2039,6 @@ export default function EcommerceVendas() {
               return (
                 <span
                   key={p.id}
-                  title="Em breve — integração ainda não disponível"
                   className="flex shrink-0 items-center gap-2 whitespace-nowrap px-3 sm:px-4 py-2.5 rounded-xl text-sm font-semibold border-2 border-border/50 text-muted-foreground/40 cursor-not-allowed select-none"
                 >
                   <span className="text-base grayscale opacity-50">{p.emoji}</span>

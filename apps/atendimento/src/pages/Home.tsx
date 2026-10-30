@@ -15,15 +15,15 @@ import { useAuth } from "@/contexts/AuthContext";
 // laranja (#F97316) ao lado dele vira a mesma cor a um metro de distância.
 const ACENTO = "#9333EA";
 
-type Atalho = { to: string; label: string; hint: string; icon: LucideIcon };
+type Atalho = { to: string; label: string; icon: LucideIcon };
 
 // Só o que EXISTE hoje. As telas de atendimento entram aqui quando existirem —
 // card apontando para tela vazia é pior que card ausente.
 const ATALHOS: Atalho[] = [
-  { to: "/chat", label: "Carbo Chat", hint: "Falar com o time, ao vivo", icon: MessagesSquare },
-  { to: "/vender", label: "Vender", hint: "Registrar uma venda ou orçamento", icon: ShoppingCart },
-  { to: "/chamados", label: "Bugs e sugestões", hint: "O que você reportou ao TI", icon: Bug },
-  { to: "/perfil", label: "Meu perfil", hint: "Foto, dados e departamento", icon: UserCircle },
+  { to: "/chat", label: "Carbo Chat", icon: MessagesSquare },
+  { to: "/vender", label: "Vender", icon: ShoppingCart },
+  { to: "/chamados", label: "Bugs e sugestões", icon: Bug },
+  { to: "/perfil", label: "Meu perfil", icon: UserCircle },
 ];
 
 export default function Home() {
@@ -35,26 +35,22 @@ export default function Home() {
       <div className="space-y-5 max-w-[1400px] mx-auto">
         <CarboPageHeader
           title={primeiroNome ? `Olá, ${primeiroNome}` : "Carbo Atendimento"}
-          description="O app do atendimento. Por enquanto ele traz a casca do ecossistema — chat, vendas e o canal com o TI; as telas de atendimento entram aqui."
           icon={Headset}
         />
 
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-          {ATALHOS.map(({ to, label, hint, icon: Icon }) => (
+          {ATALHOS.map(({ to, label, icon: Icon }) => (
             <Link key={to} to={to} className="block rounded-xl">
             <CarboCard variant="interactive" padding="none" className="h-full">
-              <CarboCardContent className="p-4 flex items-start gap-3">
+              <CarboCardContent className="p-4 flex items-center gap-3">
                 <span
                   className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0"
                   style={{ backgroundColor: `${ACENTO}1A`, color: ACENTO }}
                 >
                   <Icon className="h-5 w-5" />
                 </span>
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-1.5 text-sm font-semibold">
-                    {label} <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
-                  </span>
-                  <span className="block text-xs text-muted-foreground mt-0.5">{hint}</span>
+                <span className="min-w-0 flex-1 flex items-center gap-1.5 text-sm font-semibold">
+                  {label} <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
                 </span>
               </CarboCardContent>
             </CarboCard>

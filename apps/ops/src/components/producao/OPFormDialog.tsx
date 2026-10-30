@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -149,9 +149,6 @@ export function OPFormDialog({ open, onOpenChange, mode, id, initial, lockQuanti
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{mode === "create" ? "Nova Ordem de Produção" : "Editar Ordem de Produção"}</DialogTitle>
-          <DialogDescription>
-            {mode === "create" ? "Crie uma OP a partir de um Produto Final — checamos os insumos no HUB Natal." : "Atualize os dados da ordem de produção."}
-          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           {/* Produto Final — editável também no modo edição, p/ vincular OPs que
@@ -170,7 +167,7 @@ export function OPFormDialog({ open, onOpenChange, mode, id, initial, lockQuanti
               </SelectContent>
             </Select>
             {mode === "edit" && !productId && initial?.product_label && (
-              <p className="text-[11px] text-amber-600">Esta OP veio como “{initial.product_label}” (texto livre). Escolha o Produto Final para habilitar a checagem de estoque.</p>
+              <p className="text-[11px] text-amber-600">Veio como “{initial.product_label}” (texto livre). Escolha o Produto Final.</p>
             )}
           </div>
 
@@ -178,7 +175,7 @@ export function OPFormDialog({ open, onOpenChange, mode, id, initial, lockQuanti
           <div className="space-y-2">
             <Label>Quantidade Planejada *</Label>
             <Input type="number" min={1} value={plannedQty} onChange={(e) => setPlannedQty(e.target.value)} disabled={lockQuantity} className={lockQuantity ? "opacity-70 cursor-not-allowed" : undefined} />
-            {lockQuantity && <p className="text-[11px] text-muted-foreground">A quantidade vem do pedido de venda e não pode ser alterada aqui.</p>}
+            {lockQuantity && <p className="text-[11px] text-muted-foreground">Definida pelo pedido de venda.</p>}
           </div>
 
           {/* Checagem de materiais (HUB-RN) */}
@@ -195,8 +192,8 @@ export function OPFormDialog({ open, onOpenChange, mode, id, initial, lockQuanti
                   : canProduce ? <CheckCircle2 className="h-4 w-4" />
                   : <AlertTriangle className="h-4 w-4" />}
                 {bomLoading ? "Verificando insumos…"
-                  : materials.length === 0 ? "Produto sem ficha técnica (BOM) — cadastre os insumos para checar o estoque."
-                  : canProduce ? `Dá pra produzir ${fmt(qtyNum)} un — todos os insumos disponíveis no HUB Natal.`
+                  : materials.length === 0 ? "Produto sem ficha técnica (BOM)."
+                  : canProduce ? `Insumos disponíveis no HUB Natal para ${fmt(qtyNum)} un.`
                   : `Faltam ${missing.length} ${missing.length === 1 ? "insumo" : "insumos"} no HUB Natal para produzir ${fmt(qtyNum)} un.`}
               </div>
               {materials.length > 0 && (
@@ -262,15 +259,13 @@ export function OPFormDialog({ open, onOpenChange, mode, id, initial, lockQuanti
             <Input
               value={customerName}
               onChange={(e) => setCustomerName(e.target.value)}
-              placeholder={needsCustomer ? "Ex.: Lucas teste / Nome da empresa" : "Opcional (interno mostra a fonte + data)"}
+              placeholder={needsCustomer ? "Nome do cliente ou empresa" : "Opcional"}
               disabled={lockQuantity}
               className={needsCustomer && !customerName.trim() ? "border-destructive focus-visible:ring-destructive" : undefined}
             />
-            {needsCustomer && !customerName.trim() ? (
-              <p className="text-[11px] text-destructive">Obrigatório para venda/recorrência — informe o cliente/empresa.</p>
-            ) : !needsCustomer ? (
-              <p className="text-[11px] text-muted-foreground">Para Safety Stock / PCP Manual, o card mostra a fonte e a data de criação.</p>
-            ) : null}
+            {needsCustomer && !customerName.trim() && (
+              <p className="text-[11px] text-destructive">Obrigatório para venda/recorrência.</p>
+            )}
           </div>
 
           {/* Data de Necessidade */}

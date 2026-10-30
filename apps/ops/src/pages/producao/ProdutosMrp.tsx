@@ -91,7 +91,6 @@ export default function ProdutosMrp() {
       <div className="space-y-6 max-w-[1500px] mx-auto">
         <CarboPageHeader
           title="Catálogo MRP"
-          description="Insumos, SKUs, BOM Lists e controle de qualidade"
           icon={Package}
           actions={canEdit ? <CarboButton onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4 mr-1" /> Novo Produto</CarboButton> : undefined}
         />
@@ -109,7 +108,6 @@ export default function ProdutosMrp() {
         {view === "bom" ? (
           <CarboCard>
             <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">Selecione um <strong>Produto Final</strong> ou <strong>Semi-acabado</strong> para visualizar ou editar sua lista de insumos (BOM).</p>
               <div className="divide-y divide-border">
                 {produtosFinais.length === 0 && (
                   <p className="py-8 text-center text-sm text-muted-foreground">Nenhum produto final</p>
@@ -142,7 +140,7 @@ export default function ProdutosMrp() {
             ) : error ? (
               <CarboCard><CarboEmptyState icon={AlertTriangle} title="Erro ao carregar" description="Não foi possível buscar os produtos. Tente novamente." /></CarboCard>
             ) : filtered.length === 0 ? (
-              <CarboCard><CarboEmptyState icon={Package} title="Nenhum produto encontrado" description={products.length === 0 ? "Nenhum produto ativo no catálogo MRP." : "Ajuste os filtros de busca."} /></CarboCard>
+              <CarboCard><CarboEmptyState icon={Package} title="Nenhum produto encontrado" /></CarboCard>
             ) : (
               <CarboCard padding="none">
                 <div className="overflow-x-auto">
@@ -232,7 +230,7 @@ export default function ProdutosMrp() {
         open={!!deleteProduct}
         onOpenChange={(v) => { if (!v) setDeleteProduct(null); }}
         title="Excluir produto?"
-        description={`"${deleteProduct?.name ?? ""}" será removido do catálogo. Só é possível excluir produtos sem estoque, sem BOM que os use como insumo e sem OP. Se tiver vínculo, desative em vez de excluir.`}
+        description={`"${deleteProduct?.name ?? ""}" será removido do catálogo.`}
         onConfirm={deleteProduct ? async () => {
           try {
             await remove.mutateAsync({ id: deleteProduct.id, name: deleteProduct.name });

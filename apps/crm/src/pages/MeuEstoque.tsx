@@ -70,7 +70,6 @@ export default function MeuEstoque() {
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <CarboPageHeader
             title="Meu Estoque"
-            description="O que você tem em mãos para vender a pronta entrega"
             icon={PackageCheck}
           />
           {isGestor && (
@@ -94,9 +93,8 @@ export default function MeuEstoque() {
             <CarboCardContent className="py-10 text-center space-y-2">
               <PackageX className="h-8 w-8 mx-auto text-muted-foreground" />
               <p className="text-sm font-medium">Você não tem caixa de estoque.</p>
-              <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                Sem ela não dá para vender a pronta entrega — toda venda sua vai
-                para produção. Fale com o time de Operações para abrir a sua.
+              <p className="text-xs text-muted-foreground">
+                Fale com Operações para abrir a sua.
               </p>
             </CarboCardContent>
           </CarboCard>
@@ -118,9 +116,6 @@ export default function MeuEstoque() {
                   <div className="flex items-center gap-2">
                     <Truck className="h-4 w-4 text-amber-600" />
                     <h2 className="text-sm font-semibold">A caminho</h2>
-                    <span className="text-[11px] text-muted-foreground">
-                      já saiu de Natal — ainda não dá para vender
-                    </span>
                   </div>
                   <div className="divide-y">
                     {(aCaminho ?? []).map((t) => (
@@ -158,11 +153,11 @@ export default function MeuEstoque() {
                       </div>
                     ))}
                   </div>
-                  <p className="text-[11px] text-muted-foreground pt-1">
-                    {souODono
-                      ? "Confirme só o que estiver fisicamente com você — o aceite fica registrado no seu nome."
-                      : "Só o dono da caixa (ou a gestão, pelo Ops) confirma a chegada."}
-                  </p>
+                  {!souODono && (
+                    <p className="text-[11px] text-muted-foreground pt-1">
+                      Só o dono da caixa confirma a chegada.
+                    </p>
+                  )}
                 </CarboCardContent>
               </CarboCard>
             )}
@@ -179,7 +174,7 @@ export default function MeuEstoque() {
                     <Undo2 className="h-4 w-4 text-sky-600" />
                     <h2 className="text-sm font-semibold">Saindo da sua caixa</h2>
                     <span className="text-[11px] text-muted-foreground">
-                      já saiu do seu saldo — aguardando confirmação
+                      aguardando confirmação
                     </span>
                   </div>
                   <div className="divide-y">
@@ -214,7 +209,7 @@ export default function MeuEstoque() {
                 {itens.length === 0 ? (
                   <p className="text-sm text-muted-foreground py-4 text-center">
                     {soComSaldo
-                      ? "Sua caixa está vazia. Toda venda sua vai para produção."
+                      ? "Sua caixa está vazia."
                       : "Nenhum produto encontrado."}
                   </p>
                 ) : (

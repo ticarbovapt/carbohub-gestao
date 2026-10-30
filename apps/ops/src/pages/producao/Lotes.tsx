@@ -62,7 +62,6 @@ export default function Lotes() {
       <div className="space-y-6 max-w-[1500px] mx-auto">
         <CarboPageHeader
           title="Gestão de Lotes"
-          description="Controle de lotes de reagentes e qualidade"
           icon={FlaskConical}
           actions={
             <div className="flex items-center gap-3">
@@ -93,7 +92,7 @@ export default function Lotes() {
         {isLoading ? (
           <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</div>
         ) : filtered.length === 0 ? (
-          <CarboEmptyState title="Nenhum lote encontrado" description={lots.length === 0 ? "Crie o primeiro em “Novo Lote”." : "Tente ajustar os filtros de busca."} icon={FlaskConical} />
+          <CarboEmptyState title="Nenhum lote encontrado" icon={FlaskConical} />
         ) : (
           <div className="rounded-lg border bg-card overflow-x-auto">
             <Table className="min-w-[760px]">
@@ -164,7 +163,7 @@ export default function Lotes() {
         open={!!deleteLot}
         onOpenChange={(v) => { if (!v) setDeleteLot(null); }}
         title="Excluir lote?"
-        description={`Esta ação não pode ser desfeita. O lote ${deleteLot?.lot_code ?? ""} será excluído permanentemente.`}
+        description={`O lote ${deleteLot?.lot_code ?? ""} será excluído permanentemente.`}
         onConfirm={deleteLot ? async () => {
           try { await remove.mutateAsync(deleteLot.id); toast.success("Lote excluído."); setDeleteLot(null); }
           catch (e) { toast.error(e instanceof Error ? e.message : "Não foi possível excluir o lote."); }

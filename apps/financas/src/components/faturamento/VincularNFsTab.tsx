@@ -129,10 +129,7 @@ export function VincularNFsTab() {
       <CarboCard>
         <CarboCardContent className="pt-6 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <p className="font-semibold text-sm">NFs sem pedido vinculado</p>
-              <p className="text-xs text-muted-foreground">Baixe o PDF ou vincule ao pedido certo manualmente (o que as sugestões não casaram).</p>
-            </div>
+            <p className="font-semibold text-sm">NFs sem pedido vinculado</p>
             <div className="w-full sm:w-72">
               <CarboSearchInput placeholder="Buscar NF por nº ou cliente…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
             </div>
@@ -141,7 +138,7 @@ export function VincularNFsTab() {
           {isLoading ? (
             <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <CarboSkeleton key={i} className="h-12 w-full" />)}</div>
           ) : orphans.length === 0 ? (
-            <CarboEmptyState icon={FileText} title="Nenhuma NF pendente" description={search ? "Nenhuma NF encontrada." : "Todas as NFs importadas já estão vinculadas a um pedido."} />
+            <CarboEmptyState icon={FileText} title="Nenhuma NF pendente" description={search ? "Nenhuma NF encontrada." : undefined} />
           ) : (
             <CarboTable className="min-w-[640px]">
               <CarboTableHeader>

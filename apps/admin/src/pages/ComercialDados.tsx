@@ -624,10 +624,7 @@ export default function ComercialDados() {
     <main className="p-3 sm:p-4 lg:p-6 board-fade-in">
       <div className="space-y-4 max-w-[1600px] mx-auto">
         <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4">
-          <CarboPageHeader icon={Database} title="Dados Comerciais — Fonte"
-            description={lista === "servicos"
-              ? "As NFS-e emitidas no portal nacional que alimentam a descarbonização nos gráficos. Não há vendedor na nota, então o filtro de vendedor não se aplica aqui."
-              : "As linhas cruas de carboze_orders que alimentam os gráficos. Mesma base, mesmos filtros."} />
+          <CarboPageHeader icon={Database} title="Dados Comerciais — Fonte" />
           <div className="flex w-full xl:w-auto min-w-0 flex-col items-end gap-2">
             <ComercialTabs />
             <ComercialFilterBar filters={filters} onChange={setFilters} />
@@ -972,8 +969,8 @@ export default function ComercialDados() {
             )}
           </CarboCardContent>
         </CarboCard>
-        {lista === "pedidos" && rows.length > 500 && <p className="text-xs text-muted-foreground text-center">Mostrando as 500 primeiras · use os filtros ou o CSV para o resto ({rows.length} no total).</p>}
-        {lista === "clientes" && rowsSorted.length > 500 && <p className="text-xs text-muted-foreground text-center">Mostrando os 500 primeiros · use o CSV para o resto ({rowsSorted.length} no total).</p>}
+        {lista === "pedidos" && rows.length > 500 && <p className="text-xs text-muted-foreground text-center">Mostrando 500 de {rows.length}.</p>}
+        {lista === "clientes" && rowsSorted.length > 500 && <p className="text-xs text-muted-foreground text-center">Mostrando 500 de {rowsSorted.length}.</p>}
       </div>
 
       {/* Detalhe — pedidos, CNPJs do grupo, datas (para follow-up). */}
@@ -1008,7 +1005,6 @@ export default function ComercialDados() {
                     <SelectItem value="bling">Bling</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-[11px] text-muted-foreground">"Automática" deriva de onde o pedido entrou. Manual/Bling força o rótulo sem alterar o vínculo do Bling.</p>
               </div>
               <div className="flex justify-end gap-2 pt-1">
                 <Button variant="ghost" onClick={() => setEditRow(null)} disabled={savingEdit}>Cancelar</Button>
@@ -1101,7 +1097,7 @@ export default function ComercialDados() {
             <DialogTitle>Escolher vendedor do follow-up</DialogTitle>
           </DialogHeader>
           <p className="text-xs text-muted-foreground">
-            O último pedido de <b className="text-foreground">{vendDialog?.nome || "—"}</b> não tem vendedor. Escolha o dono do card.
+            Último pedido de <b className="text-foreground">{vendDialog?.nome || "—"}</b> sem vendedor.
           </p>
           <Select value={vendSel} onValueChange={setVendSel}>
             <SelectTrigger className="h-9"><SelectValue placeholder="Selecione o vendedor…" /></SelectTrigger>

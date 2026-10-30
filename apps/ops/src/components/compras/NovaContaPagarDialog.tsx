@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -55,7 +55,6 @@ export function NovaContaPagarDialog({ open, onOpenChange }: { open: boolean; on
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Lançar Conta a Pagar</DialogTitle>
-          <DialogDescription>A partir de uma OC recebida ou manual.</DialogDescription>
         </DialogHeader>
         <form noValidate className="grid gap-4" onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
 

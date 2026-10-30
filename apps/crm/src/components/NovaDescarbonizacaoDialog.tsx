@@ -5,7 +5,7 @@
 // (licenciados.service_orders via os_create).
 import { useState } from "react";
 import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -118,9 +118,6 @@ export function NovaDescarbonizacaoDialog({ open, onOpenChange }: NovaDescarboni
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle>Nova Ordem de Serviço</DialogTitle>
-            <DialogDescription>
-              Cadastre o cliente, o veículo e a data. As fotos são feitas no Carbox · o número é gerado automaticamente.
-            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-5 py-4">
@@ -225,19 +222,16 @@ export function NovaDescarbonizacaoDialog({ open, onOpenChange }: NovaDescarboni
                   : <span className="text-muted-foreground font-normal">(opcional)</span>}
               </Label>
               <Input id="sched" type="date" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} />
-              {serviceType === "frota" && (
-                <p className="text-xs text-muted-foreground">Na frota você pode adicionar mais veículos na mesma OS depois, no Carbox.</p>
-              )}
             </div>
 
             {/* Frota: responsáveis que acompanham a descarbonização (pode ter vários) */}
             {serviceType === "frota" && (
               <div className="space-y-2">
                 <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-                  Responsáveis pela empresa (acompanham a descarbonização)
+                  Responsáveis pela empresa
                 </Label>
                 {responsibles.length === 0 && (
-                  <p className="text-xs text-muted-foreground">Nenhum responsável adicionado. Você pode adicionar um ou mais.</p>
+                  <p className="text-xs text-muted-foreground">Nenhum responsável adicionado.</p>
                 )}
                 {responsibles.map((r, i) => (
                   <div key={i} className="flex items-end gap-2">

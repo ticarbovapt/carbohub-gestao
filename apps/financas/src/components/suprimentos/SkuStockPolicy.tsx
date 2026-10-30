@@ -207,9 +207,6 @@ export function SkuStockPolicy() {
                 onChange={(e) => setEditQty(Number(e.target.value))}
                 className="text-lg font-bold"
               />
-              <p className="text-xs text-muted-foreground">
-                Quando o estoque cair abaixo deste valor, o sistema alertará e sugerirá OP/PC automaticamente.
-              </p>
             </div>
             <div className="space-y-2">
               <Label>Cobertura mínima (dias)</Label>

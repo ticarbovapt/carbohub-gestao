@@ -67,7 +67,6 @@ export default function AcademyAcessos() {
     <div className="mx-auto w-full max-w-5xl space-y-5 p-4 md:p-6">
       <CarboPageHeader
         title="Carbo Academy — acessos"
-        description="Quem pediu para assistir a cada curso. Só depois da liberação as aulas, os vídeos e os PDFs abrem."
         icon={GraduationCap}
       />
 
@@ -114,9 +113,7 @@ export default function AcademyAcessos() {
         <CarboEmptyState
           icon={aba === "pendente" ? ShieldCheck : GraduationCap}
           title={aba === "pendente" ? "Nenhum pedido esperando" : "Nada por aqui"}
-          description={aba === "pendente"
-            ? "Quando alguém pedir acesso a um curso do Carbo Academy, o pedido aparece aqui."
-            : busca ? "Nenhum pedido bate com a busca." : "Ainda não há pedidos nesta situação."}
+          description={busca ? "Nenhum pedido bate com a busca." : undefined}
         />
       ) : (
         <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">

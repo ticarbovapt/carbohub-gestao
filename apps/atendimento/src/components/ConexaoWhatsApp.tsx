@@ -119,15 +119,10 @@ export function ConexaoWhatsApp() {
     <CarboCard>
       <CarboCardContent className="p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h3 className="flex items-center gap-2 text-sm font-semibold">
-              <Smartphone className="h-4 w-4 text-carbo-green" />
-              WhatsApp que envia os avisos
-            </h3>
-            <p className="mt-0.5 text-[11px] text-muted-foreground">
-              Provisório, enquanto o disparo for pela Evolution API.
-            </p>
-          </div>
+          <h3 className="flex min-w-0 items-center gap-2 text-sm font-semibold">
+            <Smartphone className="h-4 w-4 text-carbo-green" />
+            WhatsApp que envia os avisos
+          </h3>
 
           <div className="flex items-center gap-3">
             {status.isLoading ? (
@@ -154,9 +149,7 @@ export function ConexaoWhatsApp() {
             <AlertTriangle className="mt-px h-4 w-4 shrink-0" />
             <span>
               Faltam secrets nas Edge Functions:{" "}
-              <code>{status.data?.faltando?.join(", ")}</code>. Sem eles esta seção
-              não consegue falar com a Evolution — as mensagens em si continuam
-              indo pelo n8n.
+              <code>{status.data?.faltando?.join(", ")}</code>.
             </span>
           </div>
         )}
@@ -214,10 +207,6 @@ export function ConexaoWhatsApp() {
                       Ou digite o código: <span className="font-mono font-semibold text-foreground">{pareamento}</span>
                     </p>
                   )}
-                  <p className="mt-2 text-[11px] text-muted-foreground">
-                    O código se renova sozinho a cada 30 segundos — ele expira rápido,
-                    e ler um vencido faz o celular dizer “não foi possível conectar”.
-                  </p>
                 </div>
               </div>
             )}

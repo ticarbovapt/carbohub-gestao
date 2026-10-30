@@ -49,7 +49,7 @@ export function PurchaseOrdersList() {
   const cancelarOC = async (oc: PurchaseOrder) => {
     const ok = await confirmar({
       titulo: `Cancelar a OC ${oc.oc_number}?`,
-      mensagem: "A ordem sai do fluxo (não poderá ser recebida nem faturada). Use quando a OC foi gerada por engano ou a compra não vai acontecer.",
+      mensagem: "A ordem sai do fluxo e não poderá ser recebida nem faturada.",
       confirmar: "Cancelar OC",
       cancelar: "Voltar",
       perigo: true,

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "react-router-dom";
-import { Plus, Trash2, ShoppingCart, Info, Loader2, Boxes, User, UserCog, Users, ChevronRight, ChevronDown } from "lucide-react";
+import { Plus, Trash2, ShoppingCart, Loader2, Boxes, User, UserCog, Users, ChevronRight, ChevronDown } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent, CarboCardHeader, CarboCardTitle } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
@@ -170,14 +170,8 @@ export default function RequisicaoCompra() {
       <div className="space-y-6 max-w-[1100px] mx-auto">
         <CarboPageHeader
           title="Requisição de Compra"
-          description="Solicite uma compra — aprovação, OC, NF e contas a pagar seguem no Carbo Finanças"
           icon={ShoppingCart}
         />
-
-        <div className="flex items-start gap-2 px-3 py-2 rounded-md bg-blue-500/10 border border-blue-500/20 text-sm text-blue-500">
-          <Info className="h-4 w-4 shrink-0 mt-0.5" />
-          <span>A requisição enviada aqui vai para a aba <strong>Requisições</strong> do <strong>Carbo Finanças</strong>, onde é aprovada e segue o fluxo de compra.</span>
-        </div>
 
         <CarboCard>
           <CarboCardHeader><CarboCardTitle>Nova Requisição</CarboCardTitle></CarboCardHeader>
@@ -242,8 +236,7 @@ export default function RequisicaoCompra() {
                 <div className="mt-2 flex items-center gap-1.5 text-sm font-semibold text-amber-700 dark:text-amber-300">
                   <Users className="h-3.5 w-3.5" />
                   <span>
-                    A RC sai como <strong>{nomeDoSolicitante}</strong> — e fica registrado que quem
-                    lançou foi você{meuNome ? ` (${meuNome})` : ""}.
+                    A RC sai como <strong>{nomeDoSolicitante}</strong>.
                   </span>
                 </div>
               )}
@@ -252,14 +245,8 @@ export default function RequisicaoCompra() {
             {/* Escopo — define o formulário inteiro */}
             <div className="grid sm:grid-cols-2 gap-3">
               {([
-                { key: "setor", icon: Boxes, title: "Compra do setor", desc: "Insumo / operação — reposição de estoque, produção." },
-                {
-                  key: "individual", icon: User, title: "Compra individual",
-                  // O texto acompanha o solicitante: "seu" mente quando a RC é de outro.
-                  desc: requesterId
-                    ? `Material de trabalho de ${nomeDoSolicitante} — uso pessoal.`
-                    : "Material de trabalho seu — uso pessoal.",
-                },
+                { key: "setor", icon: Boxes, title: "Compra do setor" },
+                { key: "individual", icon: User, title: "Compra individual" },
               ] as const).map((opt) => {
                 const active = escopo === opt.key;
                 return (
@@ -267,15 +254,12 @@ export default function RequisicaoCompra() {
                     key={opt.key}
                     type="button"
                     onClick={() => switchEscopo(opt.key)}
-                    className={`flex items-start gap-3 rounded-xl border p-4 text-left transition-all ${active ? "border-carbo-green bg-carbo-green/5 ring-1 ring-carbo-green/30" : "border-border hover:border-muted-foreground/40"}`}
+                    className={`flex items-center gap-3 rounded-xl border p-4 text-left transition-all ${active ? "border-carbo-green bg-carbo-green/5 ring-1 ring-carbo-green/30" : "border-border hover:border-muted-foreground/40"}`}
                   >
                     <div className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${active ? "bg-carbo-green/15 text-carbo-green" : "bg-muted text-muted-foreground"}`}>
                       <opt.icon className="h-5 w-5" />
                     </div>
-                    <div>
-                      <p className="font-semibold text-sm">{opt.title}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{opt.desc}</p>
-                    </div>
+                    <p className="font-semibold text-sm">{opt.title}</p>
                   </button>
                 );
               })}
@@ -337,7 +321,7 @@ export default function RequisicaoCompra() {
                 </div>
                 <div className="space-y-1.5">
                   <Label>Link de referência (opcional)</Label>
-                  <Input value={referenceUrl} onChange={(e) => setReferenceUrl(e.target.value)} placeholder="Cole o link do produto, se tiver" />
+                  <Input value={referenceUrl} onChange={(e) => setReferenceUrl(e.target.value)} placeholder="Link do produto" />
                 </div>
               </div>
             )}
@@ -393,7 +377,6 @@ export default function RequisicaoCompra() {
               </button>
               {showCot && (
                 <>
-                  <p className="text-[11px] text-muted-foreground">Levante preço em mais de um fornecedor por item, se já tiver. O comprador também pode completar no Finanças.</p>
                   <CotacoesPanel items={items} draft={{ quotes: draftQuotes, onChange: setDraftQuotes }} />
                 </>
               )}
@@ -405,7 +388,7 @@ export default function RequisicaoCompra() {
               <Textarea
                 value={obs}
                 onChange={(e) => setObs(e.target.value)}
-                placeholder={isSetor ? "Contexto adicional pro comprador, se precisar." : "Algo que ajude o financeiro a decidir, se precisar."}
+                placeholder="Observações"
                 rows={isSetor ? 3 : 2}
               />
             </div>
@@ -429,7 +412,7 @@ export default function RequisicaoCompra() {
             {isLoading ? (
               <p className="py-8 text-center text-sm text-muted-foreground">Carregando…</p>
             ) : total === 0 ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">Você ainda não abriu requisições.</p>
+              <p className="py-8 text-center text-sm text-muted-foreground">Nenhuma requisição</p>
             ) : (
               <>
                 <CarboTable className="min-w-[640px]">

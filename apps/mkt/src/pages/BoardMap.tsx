@@ -81,7 +81,6 @@ export default function BoardMap() {
             <div className="mkt-empty pointer-events-auto max-w-sm rounded-[var(--radius)] border border-border bg-card/95 backdrop-blur px-6 py-8 shadow-[var(--shadow-card)]">
               <div className="mkt-empty-icon"><MapPin className="h-5 w-5" /></div>
               <p className="mkt-empty-title">Nenhum cartão com localização</p>
-              <p className="mkt-empty-subcopy">Defina um endereço em um cartão para vê-lo aparecer aqui no mapa.</p>
             </div>
           </div>
         )}

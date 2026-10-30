@@ -1,8 +1,7 @@
 import { useMemo } from "react";
-import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Bell, Search, Loader2, AlertTriangle, RotateCcw, Info } from "lucide-react";
+import { Bell, Search, Loader2, AlertTriangle, RotateCcw } from "lucide-react";
 import { useParamUrl } from "@carbo/shell";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
@@ -138,23 +137,14 @@ export default function Notificacoes() {
 
   return (
     <main className="mx-auto max-w-5xl px-4 sm:px-6 py-8 space-y-6">
-      <div>
-        <h1 className="flex items-center gap-2 text-2xl font-bold">
-          <Bell className="h-6 w-6 text-primary" /> Notificações
-        </h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Quem recebe cada tipo de aviso no sininho, no som e no celular. Por padrão recebe quem tem o app
-          que gera o aviso; o interruptor liga ou desliga cada pessoa.
-        </p>
-      </div>
+      <h1 className="flex items-center gap-2 text-2xl font-bold">
+        <Bell className="h-6 w-6 text-primary" /> Notificações
+      </h1>
 
       {data && !data.filtro_ativo && (
         <div className="flex gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
           <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-amber-600" />
-          <span>
-            O filtro ainda não está valendo: hoje os avisos chegam como antes. As escolhas feitas aqui ficam
-            salvas e passam a valer quando o TI ligar o filtro.
-          </span>
+          <span>Filtro desligado: os avisos chegam como antes. As escolhas ficam salvas para quando ele for ligado.</span>
         </div>
       )}
 
@@ -197,9 +187,7 @@ export default function Notificacoes() {
             <section className="rounded-2xl border bg-card overflow-hidden">
               <div className="px-5 py-4 border-b">
                 <p className="font-medium">Avisos que ainda não têm aba</p>
-                <p className="text-sm text-muted-foreground">
-                  Chegam para todos como antes, porque ninguém os classificou. Peça ao TI para colocá-los numa aba.
-                </p>
+                <p className="text-sm text-muted-foreground">Chegam para todos.</p>
               </div>
               <div className="divide-y">
                 {semAba.map((t) => (
@@ -219,13 +207,12 @@ export default function Notificacoes() {
                   <p className="font-medium">{aba.rotulo}</p>
                   <p className="text-sm text-muted-foreground">{aba.descricao}</p>
                 </div>
-                <p className="flex items-start gap-2 text-xs text-muted-foreground">
-                  <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                <p className="text-xs text-muted-foreground">
                   {aba.modo === "app"
                     ? <span>Padrão: recebe quem tem o <b className="font-medium text-foreground">{listaDeApps(aba.apps)}</b>.</span>
                     : aba.modo === "pessoal"
-                      ? <span>Padrão: todo mundo recebe o que é dirigido a si. Desligar aqui corta esses avisos da pessoa.</span>
-                      : <span>Quem recebe é escolhido à mão, na lista abaixo.</span>}
+                      ? <span>Padrão: todos recebem o que é dirigido a si.</span>
+                      : <span>Lista escolhida à mão.</span>}
                 </p>
                 {tiposDaAba.length > 0 && (
                   <ul className="grid gap-x-6 gap-y-1.5 text-sm lg:grid-cols-2">
@@ -250,13 +237,13 @@ export default function Notificacoes() {
                 <section className="rounded-2xl border bg-card px-5 py-6 text-sm">
                   {aba.aba === "atendimento" ? (
                     <p>
-                      Quem recebe o aviso de mensagem de cliente é escolhido na tela{" "}
+                      Lista definida em{" "}
                       <a className="font-medium text-primary hover:underline" href="https://atendimento.carbohub.com.br/conversas">
-                        Conversas, no Carbo Atendimento
+                        Conversas (Carbo Atendimento)
                       </a>.
                     </p>
                   ) : (
-                    <p>Esta aba tem lista própria, fora desta tela.</p>
+                    <p>Lista própria, fora desta tela.</p>
                   )}
                 </section>
               ) : (
@@ -284,7 +271,7 @@ export default function Notificacoes() {
 
                   <section className="rounded-2xl border bg-card overflow-hidden">
                     {lista.length === 0 ? (
-                      <div className="px-6 py-14 text-center text-sm text-muted-foreground">Ninguém encontrado. Ajuste a busca ou o filtro.</div>
+                      <div className="px-6 py-14 text-center text-sm text-muted-foreground">Ninguém encontrado.</div>
                     ) : (
                       <div className="divide-y">
                         {lista.map(({ p, padrao, escolha, recebe }) => (
@@ -329,10 +316,6 @@ export default function Notificacoes() {
           )}
         </>
       )}
-      <p className="text-xs text-muted-foreground">
-        A pessoa só aparece aqui se tiver acesso a algum sistema interno. Cadastro e acesso de cada um ficam em{" "}
-        <Link to="/usuarios" className="text-primary hover:underline">Usuários</Link>.
-      </p>
     </main>
   );
 }

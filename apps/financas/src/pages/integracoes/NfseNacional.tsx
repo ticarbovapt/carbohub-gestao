@@ -118,14 +118,14 @@ function contraparte(n: NfseRow): string {
 function seloDirecao(n: NfseRow) {
   if (n.papel === "emitida") {
     return (
-      <CarboBadge variant="success" size="sm" title="A Carbo prestou o serviço — dinheiro entra">
+      <CarboBadge variant="success" size="sm" title="Dinheiro entra">
         <ArrowUpRight className="h-3 w-3 mr-1" />Receita
       </CarboBadge>
     );
   }
   if (n.papel === "recebida") {
     return (
-      <CarboBadge variant="warning" size="sm" title="A Carbo contratou o serviço — dinheiro sai">
+      <CarboBadge variant="warning" size="sm" title="Dinheiro sai">
         <ArrowDownLeft className="h-3 w-3 mr-1" />Despesa
       </CarboBadge>
     );
@@ -169,7 +169,7 @@ function Arquivos({ n }: { n: NfseRow }) {
           uma representação nossa — ver `lib/nfsePdf.ts`. */}
       <CarboButton
         variant="outline" size="sm" disabled={baixando}
-        title="Baixar o XML assinado (é ele o documento fiscal)"
+        title="Baixar XML assinado"
         onClick={async () => {
           setBaixando(true);
           try { await baixarXmlNfse(n); }
@@ -185,7 +185,7 @@ function Arquivos({ n }: { n: NfseRow }) {
 
       <CarboButton
         variant="outline" size="sm"
-        title="Gerar PDF a partir do XML (representação, não é a DANFSE oficial)"
+        title="PDF gerado do XML"
         onClick={() => {
           try { gerarPdfNfse(n); }
           catch (e) { toast.error("Não consegui gerar o PDF: " + (e as Error).message); }
@@ -200,7 +200,7 @@ function Arquivos({ n }: { n: NfseRow }) {
           este botão a pessoa teria de transcrever 50 dígitos à mão. */}
       <CarboButton
         variant="ghost" size="sm"
-        title="Copiar a chave de acesso (para a consulta pública do portal)"
+        title="Copiar chave de acesso"
         disabled={!n.chave_acesso}
         onClick={async () => {
           try {
@@ -373,7 +373,6 @@ export default function NfseNacional() {
     <div className="space-y-5 max-w-[1500px] mx-auto">
       <CarboPageHeader
         title="NFS-e Nacional"
-        description="Notas de serviço do Portal Nacional (gov.br) — emitidas (receita) e recebidas (despesa)"
         icon={FileSpreadsheet}
         iconColor="blue"
       />
@@ -428,22 +427,6 @@ export default function NfseNacional() {
         )}
       </div>
 
-      {papel === "todas" && (
-        <CarboCard>
-          <CarboCardContent className="py-3 flex items-start gap-2 text-sm">
-            <Scale className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-            <span className="text-muted-foreground">
-              <strong className="text-foreground">Receita e despesa não se somam.</strong>{" "}
-              Nota <strong>emitida</strong> é serviço que a Carbo prestou (dinheiro entra);
-              nota <strong>recebida</strong> é serviço que a Carbo contratou (dinheiro sai).
-              O saldo acima é só o de <strong>serviços</strong> — não é lucro, e não inclui
-              venda de produto.
-              {resumo.canceladas > 0 && <> {resumo.canceladas} cancelada(s) estão na lista e fora dos totais.</>}
-            </span>
-          </CarboCardContent>
-        </CarboCard>
-      )}
-
       <div className="flex flex-wrap items-center gap-3">
         <Tabs value={papel} onValueChange={(v) => troca("papel", v)} className="min-w-0 max-w-full">
           <TabsList className="max-w-full justify-start overflow-x-auto">
@@ -497,9 +480,7 @@ export default function NfseNacional() {
           <CarboCardContent className="py-3 flex items-start gap-2 text-sm">
             <AlertTriangle className="h-4 w-4 text-warning mt-0.5 shrink-0" />
             <span className="text-muted-foreground">
-              {resumo.indefinidas} nota(s) com direção <strong>indefinida</strong> — a Carbo não
-              aparece como prestadora nem como tomadora (provável intermediação). Elas ficam
-              <strong> fora</strong> da receita e da despesa de propósito.
+              {resumo.indefinidas} nota(s) com direção <strong>indefinida</strong>, fora da receita e da despesa.
             </span>
           </CarboCardContent>
         </CarboCard>
@@ -510,10 +491,8 @@ export default function NfseNacional() {
           <CarboCardContent className="py-3 flex items-start gap-2 text-sm">
             <AlertTriangle className="h-4 w-4 text-warning mt-0.5 shrink-0" />
             <span className="text-muted-foreground">
-              A empresa passou a emitir NFS-e pelo sistema nacional em{" "}
-              <strong className="text-foreground">janeiro de {ANO_INICIO_EMITIDAS}</strong>.
-              Nenhuma nota emitida em {ano} está aqui — e isso é ausência de dado no portal,
-              não ausência de faturamento. As <strong>recebidas</strong> existem desde 2023.
+              Emissão pelo sistema nacional só a partir de{" "}
+              <strong className="text-foreground">janeiro de {ANO_INICIO_EMITIDAS}</strong>: não há notas emitidas em {ano} no portal.
             </span>
           </CarboCardContent>
         </CarboCard>
@@ -537,7 +516,6 @@ export default function NfseNacional() {
             <CarboEmptyState
               icon={FileSpreadsheet}
               title="Nenhuma nota neste filtro"
-              description="Troque o ano, a aba ou limpe a busca."
             />
           ) : (
             // ⚠️ SEIS colunas, não dez. Com dez a tabela estourava a largura e
@@ -616,9 +594,7 @@ export default function NfseNacional() {
                         <div className="flex items-center justify-end gap-1 tabular-nums font-medium">
                           {receita && <ArrowUpRight className="h-3.5 w-3.5 text-success shrink-0" />}
                           {despesa && <ArrowDownLeft className="h-3.5 w-3.5 text-warning shrink-0" />}
-                          <span title={receita ? "Receita — a Carbo prestou o serviço"
-                                     : despesa ? "Despesa — a Carbo contratou o serviço"
-                                     : "Direção indefinida"}>
+                          <span title={receita ? "Receita" : despesa ? "Despesa" : "Direção indefinida"}>
                             {fmtBRL(num(n.valor_liquido))}
                           </span>
                         </div>

@@ -49,35 +49,16 @@ const NOME_ETAPA: Record<EtapaMsg, string> = {
   carrinho_3:   "Carrinho — 3ª",
 };
 
-const QUANDO: Record<EtapaMsg, string> = {
-  confirmado:   "assim que o pedido é atendido no Bling",
-  nf_emitida:   "quando a nota é autorizada",
-  etiqueta:     "quando o rastreio é gerado, antes da coleta",
-  em_transito:  "quando a transportadora confirma o envio — é aqui que vai o código e o link",
-  saiu_entrega: "quando o rastreio mostra que saiu para o último trecho, no dia da entrega",
-  entregue:     "quando a entrega é confirmada",
-  // A única que não é etapa da esteira: dispara pela régua da segunda
-  // pipeline, contando dias a partir do carimbo de entrega.
-  recompra:     "dias após a entrega, para o cliente repor — ver a régua de recompra",
-  // ⚠️ As três únicas que não falam com cliente: falam com quem AINDA NÃO
-  // comprou. E as janelas são encadeadas — a 2ª conta a partir da 1ª, não do
-  // abandono. Escrito assim porque "24h depois" seria lido como 24h depois do
-  // abandono, e aí um carrinho velho pareceria dever três mensagens de uma vez.
-  carrinho_1:   "1 hora após o carrinho ser abandonado na loja própria",
-  carrinho_2:   "algumas horas após a 1ª mensagem — não após o abandono",
-  carrinho_3:   "a última, contada a partir da 2ª — depois dela o sistema não insiste",
-};
-
 /** Etapa que não é coluna da esteira. O aviso explica de onde ela vem, senão
  *  alguém procura essa coluna no quadro e não acha. */
 const FORA_DO_QUADRO: Partial<Record<EtapaMsg, string>> = {
-  saiu_entrega: "Não é coluna da esteira — vem do rastreio da transportadora.",
+  saiu_entrega: "Vem do rastreio da transportadora.",
   // ⚠️ O aviso importa mais aqui do que no `saiu_entrega`: estas três vão para
   // quem NÃO é cliente, sem pedido nenhum para justificar o contato. Quem liga
   // o texto precisa saber disso antes de clicar, não depois.
-  carrinho_1: "Vai para quem NÃO comprou — só da loja própria. Ver a pipeline de recuperação de carrinho.",
-  carrinho_2: "Vai para quem NÃO comprou — só da loja própria. Ver a pipeline de recuperação de carrinho.",
-  carrinho_3: "Vai para quem NÃO comprou — só da loja própria. Ver a pipeline de recuperação de carrinho.",
+  carrinho_1: "Vai para quem não comprou (loja própria).",
+  carrinho_2: "Vai para quem não comprou (loja própria).",
+  carrinho_3: "Vai para quem não comprou (loja própria).",
 };
 
 function Editor({ t }: { t: TemplateMsg }) {
@@ -129,7 +110,6 @@ function Editor({ t }: { t: TemplateMsg }) {
                 ? <CarboBadge variant="secondary" className="text-emerald-500">ligada</CarboBadge>
                 : <CarboBadge variant="secondary">desligada</CarboBadge>}
             </h3>
-            <p className="mt-0.5 text-[11px] text-muted-foreground">Dispara {QUANDO[t.etapa]}.</p>
             {FORA_DO_QUADRO[t.etapa] && (
               <p className="mt-0.5 text-[11px] text-muted-foreground/70">{FORA_DO_QUADRO[t.etapa]}</p>
             )}
@@ -148,13 +128,11 @@ function Editor({ t }: { t: TemplateMsg }) {
                 <p className="flex items-start gap-1.5 text-[11px] text-sky-500">
                   <Lock className="mt-px h-3 w-3 shrink-0" />
                   <span className="min-w-0 break-words">
-                    Texto aprovado pela Meta — <strong>editar aqui não muda o que o
-                    cliente recebe</strong>. A redação é a do template
+                    Texto do template
                     <code className="mx-1 rounded bg-muted px-1 font-mono text-[10px]">
                       {t.meta_template_nome}
                     </code>
-                    no Gerenciador do WhatsApp. Mudar o texto exige um template novo
-                    e nova aprovação.
+                    aprovado pela Meta — <strong>editar aqui não muda o que o cliente recebe</strong>.
                   </span>
                 </p>
                 <p className="mt-1.5 text-[10px] text-muted-foreground">
@@ -162,7 +140,7 @@ function Editor({ t }: { t: TemplateMsg }) {
                   <strong className={t.meta_status === "APPROVED" ? "text-emerald-500" : "text-amber-500"}>
                     {t.meta_status ?? "—"}
                   </strong>
-                  {t.meta_status !== "APPROVED" && " — enquanto não estiver APPROVED, nada é enviado."}
+                  {t.meta_status !== "APPROVED" && " — nada é enviado até a aprovação."}
                 </p>
               </div>
             )}
@@ -181,9 +159,7 @@ function Editor({ t }: { t: TemplateMsg }) {
                 <div className="flex flex-wrap gap-1">
                   {(t.meta_variaveis ?? []).map((v) => (
                     <span key={v.nome}
-                          title={v.fallback
-                            ? `Sem valor, manda "${v.fallback}"`
-                            : "Obrigatória — sem valor, o envio ESPERA o dado"}
+                          title={v.fallback ? `Reserva: "${v.fallback}"` : "Obrigatória"}
                           className={`rounded border px-1.5 py-0.5 font-mono text-[10px] ${
                             v.fallback
                               ? "text-muted-foreground"
@@ -192,18 +168,6 @@ function Editor({ t }: { t: TemplateMsg }) {
                     </span>
                   ))}
                 </div>
-                <p className="text-[10px] text-muted-foreground">
-                  <span className="text-amber-500">*</span> obrigatória: sem o dado, a
-                  mensagem <strong>espera</strong> em vez de sair incompleta — a Meta
-                  recusa parâmetro vazio. As demais têm texto de reserva.
-                </p>
-                {t.meta_botao_url_de && (
-                  <p className="text-[10px] text-muted-foreground">
-                    Botão <strong>Acompanhar pedido</strong> →{" "}
-                    <code className="font-mono">rastreio.carboze.com.br/rastreio/</code>
-                    + o código de rastreio.
-                  </p>
-                )}
               </div>
             ) : (
               <div className="mt-2 flex flex-wrap gap-1">
@@ -231,10 +195,7 @@ function Editor({ t }: { t: TemplateMsg }) {
                 <Input type="number" min={0} className="h-8 w-20"
                        value={rascunho.atraso_min}
                        onChange={(e) => setRascunho((r) => ({ ...r, atraso_min: Number(e.target.value) || 0 }))} />
-                <span className="basis-full text-[11px] text-muted-foreground sm:basis-auto">
-                  minutos após a entrega — perguntar “chegou tudo certo?” no
-                  mesmo minuto da baixa é antes de a pessoa abrir a caixa
-                </span>
+                <span className="text-[11px] text-muted-foreground">minutos após a entrega</span>
               </div>
             )}
           </div>
@@ -250,24 +211,10 @@ function Editor({ t }: { t: TemplateMsg }) {
                 {preview || <span className="text-muted-foreground">mensagem vazia</span>}
               </p>
             </div>
-            {daMeta ? (
-              previewMeta.faltando.length > 0 ? (
-                <p className="mt-1.5 flex items-start gap-1.5 text-[10px] text-amber-500">
-                  <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
-                  Sem {previewMeta.faltando.join(", ")}, a mensagem espera — ela não
-                  sai incompleta.
-                </p>
-              ) : (
-                <p className="mt-1.5 text-[10px] text-muted-foreground">
-                  Variável obrigatória sem valor <strong>segura</strong> o envio até o
-                  dado existir; as demais usam o texto de reserva. A Meta recusa
-                  parâmetro vazio, então não existe “sair sem essa linha”.
-                </p>
-              )
-            ) : (
-              <p className="mt-1.5 text-[10px] text-muted-foreground">
-                Linha cuja variável está vazia é removida — pedido sem link de rastreio
-                não manda “Acompanhe aqui:” seguido de nada.
+            {daMeta && previewMeta.faltando.length > 0 && (
+              <p className="mt-1.5 flex items-start gap-1.5 text-[10px] text-amber-500">
+                <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
+                Sem {previewMeta.faltando.join(", ")}, a mensagem espera.
               </p>
             )}
           </div>
@@ -339,7 +286,6 @@ export default function MensagensCliente() {
       <CarboPageHeader
         icon={MessageSquare}
         title="Mensagens ao cliente"
-        description="O que o cliente recebe no WhatsApp a cada avanço da esteira. O texto se monta aqui; o n8n entrega."
         actions={
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
             <Button asChild size="sm" variant="outline" className="h-8 gap-1.5">
@@ -375,12 +321,7 @@ export default function MensagensCliente() {
       {ligadas === 0 && (
         <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs text-amber-600 dark:text-amber-500">
           <AlertTriangle className="mt-px h-4 w-4 shrink-0" />
-          <span>
-            Nenhuma mensagem está ligada — nada é enviado. Escreva o texto, confira
-            a pré-visualização e ligue uma de cada vez.{" "}
-            <strong>Pedidos que já existiam não recebem nada</strong>: só quem
-            avançar de etapa a partir de agora.
-          </span>
+          <span>Nenhuma mensagem ligada — nada é enviado.</span>
         </div>
       )}
 
@@ -408,9 +349,6 @@ export default function MensagensCliente() {
                 </Button>
               );
             })}
-            <span className="text-[11px] text-muted-foreground">
-              {GRUPOS.find((g) => g.id === grupo)?.descricao}
-            </span>
           </div>
 
           {/* ⚠️ De qual número este grupo sai. Sem isto escrito, ligar a
@@ -437,9 +375,7 @@ export default function MensagensCliente() {
         <CarboCardContent className="p-4">
           <h3 className="mb-2 text-sm font-semibold">Últimos envios</h3>
           {!envios?.length ? (
-            <p className="text-[11px] text-muted-foreground">
-              Nada enviado ainda. Aqui aparece cada mensagem, com o motivo quando não sai.
-            </p>
+            <p className="text-[11px] text-muted-foreground">Nada enviado ainda.</p>
           ) : (
             <div className="max-h-80 space-y-1 overflow-y-auto">
               {envios.map((e) => (

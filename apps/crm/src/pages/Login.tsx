@@ -30,10 +30,7 @@ export default function Login() {
       <div className="w-full max-w-sm rounded-2xl border bg-card p-8 shadow-sm">
         <div className="flex items-center gap-2.5 mb-6">
           <Boxes className="h-7 w-7 text-carbo-green" />
-          <div>
-            <p className="text-lg font-bold leading-none">Carbo CRM</p>
-            <p className="text-xs text-muted-foreground mt-1">Acesse com sua conta Carbo</p>
-          </div>
+          <p className="text-lg font-bold leading-none">Carbo CRM</p>
         </div>
 
         <form onSubmit={submit} className="space-y-4">
@@ -65,10 +62,6 @@ export default function Login() {
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Entrar"}
           </Button>
         </form>
-
-        <p className="text-xs text-muted-foreground text-center mt-5">
-          Mesma conta do sistema Carbo. Sem acesso? Solicite ao gestor.
-        </p>
       </div>
     </div>
   );

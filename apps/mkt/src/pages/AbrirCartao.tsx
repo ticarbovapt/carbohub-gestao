@@ -24,7 +24,7 @@ export default function AbrirCartao() {
   }, [cardId]);
   if (destino) return <Navigate to={destino} replace />;
   if (erro) return (
-    <div className="p-10 text-center text-sm text-muted-foreground">Este cartão não existe mais — pode ter sido excluído junto com o quadro.</div>
+    <div className="p-10 text-center text-sm text-muted-foreground">Cartão não encontrado.</div>
   );
   return <div className="p-10 flex justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
 }

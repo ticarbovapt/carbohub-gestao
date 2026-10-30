@@ -52,7 +52,6 @@ export default function Compras() {
     <div className="space-y-6">
       <CarboPageHeader
         title="Compras"
-        description="Requisição, ordem de compra, recebimento e nota fiscal do fornecedor"
         icon={ShoppingCart}
         actions={
           aba === "requisicoes" ? (

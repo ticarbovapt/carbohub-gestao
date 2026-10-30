@@ -28,7 +28,6 @@ export function ShipmentDetailsDialog({ shipment, open, onOpenChange }: { shipme
   }, [shipment?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!shipment) return null;
-  const config = SHIPMENT_STATUS_CONFIG[shipment.status];
 
   const handleSave = async () => {
     try {
@@ -44,9 +43,7 @@ export function ShipmentDetailsDialog({ shipment, open, onOpenChange }: { shipme
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <span>{config.icon}</span> Embarque — {shipment.order_number}
-          </DialogTitle>
+          <DialogTitle>Embarque — {shipment.order_number}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -75,7 +72,7 @@ export function ShipmentDetailsDialog({ shipment, open, onOpenChange }: { shipme
             <Select value={status} onValueChange={(v) => setStatus(v as ShipmentStatus)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {STATUS_OPTIONS.map((s) => <SelectItem key={s} value={s}>{SHIPMENT_STATUS_CONFIG[s].icon} {SHIPMENT_STATUS_CONFIG[s].label}</SelectItem>)}
+                {STATUS_OPTIONS.map((s) => <SelectItem key={s} value={s}>{SHIPMENT_STATUS_CONFIG[s].label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>

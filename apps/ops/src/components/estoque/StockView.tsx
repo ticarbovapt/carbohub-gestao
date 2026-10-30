@@ -131,7 +131,7 @@ export function StockView({ hub, editable }: { hub: Hub; editable: boolean }) {
       ) : error ? (
         <CarboCard><CarboCardContent><CarboEmptyState icon={Package} title="Erro ao carregar" description="Não foi possível buscar o estoque." /></CarboCardContent></CarboCard>
       ) : filtered.length === 0 ? (
-        <CarboCard className="sm:col-span-2 xl:col-span-3"><CarboCardContent><CarboEmptyState icon={Package} title="Sem dados" description="Nenhum produto em estoque para este hub." /></CarboCardContent></CarboCard>
+        <CarboCard className="sm:col-span-2 xl:col-span-3"><CarboCardContent><CarboEmptyState icon={Package} title="Nenhum produto encontrado" /></CarboCardContent></CarboCard>
       ) : (
       <div className="space-y-5">
         <div className="flex justify-end gap-3 text-xs">

@@ -179,9 +179,6 @@ export function SincronizarTrello({ boardId, linkInicial, setOcupado, aoTerminar
   return (
     <section className="space-y-2">
       <h3 className="text-sm font-semibold text-foreground">Sincronizar com o Trello</h3>
-      <p className="text-sm text-muted-foreground">
-        Deixa este quadro igual ao do Trello: o Trello vence, cartão apagado lá é arquivado aqui, e o que foi criado aqui continua.
-      </p>
       {(fase === "ocioso" || fase === "lendo") && (
         <>
           <div className="flex gap-2">
@@ -235,7 +232,6 @@ export function SincronizarTrello({ boardId, linkInicial, setOcupado, aoTerminar
       {fase === "feito" && (
         <div className="space-y-1">
           <p className="text-sm text-success flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> Quadro sincronizado com o Trello.</p>
-          <p className="text-xs text-muted-foreground">Comentários novos e arquivos enviados ao Trello entram pelas seções abaixo.</p>
           <Button size="sm" variant="outline" onClick={() => { setFase("ocioso"); setPlano(null); }}>Comparar de novo</Button>
         </div>
       )}

@@ -147,7 +147,7 @@ export function Visualizador({ anexos, inicial, onClose, linkDe, onSubstituir, o
   const restaurar = async (v: VersaoAnexo) => {
     if (!(await confirmar({
       titulo: `Restaurar a v${v.versao}?`,
-      mensagem: `"${v.name}" volta a ser o arquivo atual, como v${Math.max(a.versao ?? 1, ...versoes.map((x) => x.versao)) + 1}. A atual (v${a.versao ?? 1}) fica no histórico — nada é apagado.`,
+      mensagem: `"${v.name}" volta a ser o arquivo atual, como v${Math.max(a.versao ?? 1, ...versoes.map((x) => x.versao)) + 1}. A atual (v${a.versao ?? 1}) fica no histórico.`,
       confirmar: "Restaurar",
     }))) return;
     setOcupado(true);
@@ -209,8 +209,8 @@ export function Visualizador({ anexos, inicial, onClose, linkDe, onSubstituir, o
                 </select>
               </label>
             )}
-            {temHistorico && <Bt titulo="Comparar lado a lado com a atual" ativo={comparar} on={() => setComparar((c) => !c)}><Columns2 className="h-4 w-4" /><span className="hidden md:inline">Comparar</span></Bt>}
-            {onSubstituir && !vista && !comparar && <Bt titulo="Substituir por outra versão (a atual fica no histórico)" on={() => onSubstituir(a)}><RefreshCw className="h-4 w-4" /><span className="hidden sm:inline">Substituir</span></Bt>}
+            {temHistorico && <Bt titulo="Comparar com a atual" ativo={comparar} on={() => setComparar((c) => !c)}><Columns2 className="h-4 w-4" /><span className="hidden md:inline">Comparar</span></Bt>}
+            {onSubstituir && !vista && !comparar && <Bt titulo="Substituir" on={() => onSubstituir(a)}><RefreshCw className="h-4 w-4" /><span className="hidden sm:inline">Substituir</span></Bt>}
             <Bt titulo="Copiar link" on={copiar}><Link2 className="h-4 w-4" /><span className="hidden lg:inline">Copiar link</span></Bt>
             <Bt titulo={vista ? `Baixar a v${vista.versao}` : "Baixar o original"} on={() => baixar()}><Download className="h-4 w-4" /><span className="hidden lg:inline">Baixar</span></Bt>
             <DialogPrimitive.Close className="h-9 w-9 inline-flex items-center justify-center rounded-md text-white/80 hover:text-white hover:bg-white/10" title="Fechar (Esc)"><X className="h-5 w-5" /></DialogPrimitive.Close>
@@ -428,9 +428,9 @@ function PlayerVideo({ src, tamanho, onBaixar, aguardandoConversao }: {
     return (
       <div className="max-w-md text-center space-y-3 px-6">
         {aguardandoConversao ? (
-          <p className="text-sm text-white/80">Este vídeo está no formato do <b>iPhone (HEVC)</b>, que o navegador não reproduz. <b>Uma cópia que toca está sendo gerada</b> e aparece aqui sozinha em até ~15 minutos. Enquanto isso, baixe o original para assistir.</p>
+          <p className="text-sm text-white/80">Vídeo em formato HEVC (iPhone), que o navegador não reproduz. Uma cópia compatível fica pronta em até ~15 min; até lá, baixe o original.</p>
         ) : (
-          <p className="text-sm text-white/80">Este navegador não consegue reproduzir este vídeo — é comum em <b>.MOV gravado no iPhone</b> (formato HEVC) quando a conversão não deu certo. O arquivo está inteiro: baixe para assistir, ou abra no Safari.</p>
+          <p className="text-sm text-white/80">O navegador não reproduz este vídeo. Baixe o original ou abra no Safari.</p>
         )}
         <button onClick={onBaixar} className="h-9 px-4 rounded-md bg-white/15 hover:bg-white/25 text-sm inline-flex items-center gap-2"><Download className="h-4 w-4" /> Baixar o original</button>
       </div>

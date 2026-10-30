@@ -103,7 +103,7 @@ const KANBAN_COLUMNS: { id: string; label: string; emoji: string; color: string;
 
 type OP = OpRow;
 
-function KpiCard({ icon: Icon, label, value, sub, color, onClick }: { icon: typeof TrendingUp; label: string; value: string; sub: string; color: string; onClick?: () => void }) {
+function KpiCard({ icon: Icon, label, value, color, onClick }: { icon: typeof TrendingUp; label: string; value: string; color: string; onClick?: () => void }) {
   return (
     <div
       className={cn("rounded-xl border bg-card p-4 space-y-1 text-left", onClick && "cursor-pointer hover:border-primary/50 transition-colors")}
@@ -114,7 +114,7 @@ function KpiCard({ icon: Icon, label, value, sub, color, onClick }: { icon: type
         <Icon className="h-4 w-4" /><span>{label}</span>
       </div>
       <p className={cn("text-2xl font-bold", color)}>{value}</p>
-      <p className="text-xs text-muted-foreground">{sub}{onClick && " · ver detalhes"}</p>
+      {onClick && <p className="text-xs text-muted-foreground">ver detalhes</p>}
     </div>
   );
 }
@@ -284,7 +284,6 @@ export default function OrdensProducao() {
         {/* Header */}
         <CarboPageHeader
           title="Ordens de Produção"
-          description="Gestão e acompanhamento de OPs"
           icon={Factory}
           actions={
             <>
@@ -303,12 +302,12 @@ export default function OrdensProducao() {
 
         {/* KPIs */}
         <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-          <KpiCard icon={Factory} label="OPs Abertas" value={String(abertas.length)} sub="em andamento" color="text-orange-500" />
-          <KpiCard icon={CheckCircle2} label="Prontas p/ Separar" value={String(prontas)} sub="com insumo em estoque" color="text-emerald-500" />
-          <KpiCard icon={CalendarClock} label="Atrasadas" value={String(atrasadas)} sub="prazo vencido" color={atrasadas > 0 ? "text-red-500" : "text-muted-foreground"} />
-          <KpiCard icon={Target} label="A Produzir" value={`${aProduzir} un`} sub="planejado nas abertas" color="text-blue-500" />
-          <KpiCard icon={TrendingUp} label="Rendimento Médio" value={rendimento != null ? `${rendimento}%` : "—"} sub="aprovado / produzido" color="text-green-500" />
-          <KpiCard icon={XCircle} label="Perdas Totais" value={String(perdasTotais)} sub="refugo do produto" color="text-red-500" onClick={() => setLossOpen(true)} />
+          <KpiCard icon={Factory} label="OPs Abertas" value={String(abertas.length)} color="text-orange-500" />
+          <KpiCard icon={CheckCircle2} label="Prontas p/ Separar" value={String(prontas)} color="text-emerald-500" />
+          <KpiCard icon={CalendarClock} label="Atrasadas" value={String(atrasadas)} color={atrasadas > 0 ? "text-red-500" : "text-muted-foreground"} />
+          <KpiCard icon={Target} label="A Produzir" value={`${aProduzir} un`} color="text-blue-500" />
+          <KpiCard icon={TrendingUp} label="Rendimento Médio" value={rendimento != null ? `${rendimento}%` : "—"} color="text-green-500" />
+          <KpiCard icon={XCircle} label="Perdas Totais" value={String(perdasTotais)} color="text-red-500" onClick={() => setLossOpen(true)} />
         </div>
 
         {/* Filtros */}
@@ -428,11 +427,11 @@ export default function OrdensProducao() {
                   {/* Rota recomendada / dependência */}
                   {!hasOpenOp && routeHint && (
                     <p className={cn("text-[11px] font-medium mt-2", routeHint === "rotular" ? "text-pink-600 dark:text-pink-400" : "text-orange-600 dark:text-orange-400")}>
-                      {routeHint === "rotular" ? "🏷️ dá pra só rotular (tem envasado)" : "⚙️ produzir do zero (sem envasado)"}
+                      {routeHint === "rotular" ? "Só rotular (tem envasado)" : "Produzir do zero (sem envasado)"}
                     </p>
                   )}
                   {!hasOpenOp && cascade && (
-                    <p className="text-[11px] font-medium text-red-600 dark:text-red-400 mt-0.5">⤷ Envasado também baixo — produza ele antes</p>
+                    <p className="text-[11px] font-medium text-red-600 dark:text-red-400 mt-0.5">Envasado também baixo</p>
                   )}
 
                   {/* Ação */}
@@ -478,7 +477,6 @@ export default function OrdensProducao() {
                 nasce quando o mês chega e a parcela vira pedido. */}
             <div className="w-[85vw] sm:w-[260px] shrink-0 snap-start flex flex-col rounded-xl border border-dashed bg-muted/20">
               <div className="px-3 py-2.5 border-b border-dashed flex items-center gap-2">
-                <span>🔁</span>
                 <span className="text-xs font-semibold" style={{ color: "#8b5cf6" }}>Pedidos de Recorrência</span>
                 <span className="ml-auto text-[11px] text-muted-foreground tabular-nums">{parcelas.length}</span>
               </div>
@@ -515,9 +513,6 @@ export default function OrdensProducao() {
                   <p className="text-[11px] text-muted-foreground/50 text-center py-4">Nenhuma recorrência agendada</p>
                 )}
               </div>
-              <p className="px-3 py-2 text-[10px] text-muted-foreground border-t border-dashed leading-snug">
-                Vira OP sozinho quando o mês chega.
-              </p>
             </div>
 
             {KANBAN_COLUMNS.map((col) => {
@@ -551,7 +546,7 @@ export default function OrdensProducao() {
                 >
                   <div className="rounded-t-2xl px-3 py-2.5 border-b border-border flex items-center justify-between gap-2" style={{ background: col.color + "12" }}>
                     <span className="text-sm font-semibold flex items-center gap-1.5">
-                      {col.emoji} {col.label}
+                      {col.label}
                       {isSkipped && <span className="text-[9px] font-normal text-muted-foreground">(pula)</span>}
                     </span>
                     <div className="flex items-center gap-1">
@@ -605,7 +600,7 @@ export default function OrdensProducao() {
                             <CalendarClock className="h-3 w-3 shrink-0" /> {o.need_date ? <>Prazo: {dt(o.need_date)}{overdue && " · vencido"}</> : "Sem prazo"}
                           </p>
                           {!isDone && dwellLabel(o.stage_since) && (
-                            <p className="flex items-center gap-1 text-[11px] text-muted-foreground mt-0.5 truncate" title="Tempo parado nesta etapa e quem moveu por último">
+                            <p className="flex items-center gap-1 text-[11px] text-muted-foreground mt-0.5 truncate" title="Tempo na etapa">
                               <Clock className="h-3 w-3 shrink-0" /> parado há {dwellLabel(o.stage_since)}
                               {lastMoves[o.id]?.movedByName && <span className="truncate"> · por {lastMoves[o.id].movedByName}</span>}
                             </p>
@@ -614,7 +609,7 @@ export default function OrdensProducao() {
                           <div className="flex items-center gap-1 mt-auto overflow-hidden">
                             {o.production_route && (
                               <span className={cn("shrink-0 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium", o.production_route === "rotular" ? "bg-pink-500/15 text-pink-600 dark:text-pink-400" : "bg-orange-500/15 text-orange-600 dark:text-orange-400")}>
-                                {o.production_route === "rotular" ? "🏷️ Rotular" : "⚙️ Do zero"}
+                                {o.production_route === "rotular" ? "Rotular" : "Do zero"}
                               </span>
                             )}
                             {prod === "ok" && <span className="shrink-0 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"><CheckCircle2 className="h-3 w-3" /> pronto</span>}
@@ -635,7 +630,7 @@ export default function OrdensProducao() {
                               <SelectContent>
                                 {KANBAN_COLUMNS.map((c) => (
                                   <SelectItem key={c.id} value={c.id} disabled={skippedColFor(o) === c.id}>
-                                    {c.emoji} {c.label}{skippedColFor(o) === c.id ? " (pula)" : ""}
+                                    {c.label}{skippedColFor(o) === c.id ? " (pula)" : ""}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
@@ -676,7 +671,6 @@ export default function OrdensProducao() {
           <div className="text-center py-16 text-muted-foreground">
             <Factory className="h-12 w-12 mx-auto mb-4 opacity-30" />
             <p className="text-lg font-medium">Nenhuma OP encontrada</p>
-            <p className="text-sm">Tente ajustar os filtros de busca.</p>
           </div>
         ) : (
           <div className="rounded-lg border bg-card overflow-auto flex-1 min-h-0">
@@ -763,11 +757,11 @@ export default function OrdensProducao() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><XCircle className="h-5 w-5 text-red-500" /> Perdas</DialogTitle>
             <DialogDescription>
-              Refugo de produto: <strong className="text-red-500">{perdasTotais} un</strong> · perdas de insumo abaixo (usado além do previsto).
+              Refugo de produto: <strong className="text-red-500">{perdasTotais} un</strong>
             </DialogDescription>
           </DialogHeader>
           {materialLosses.length === 0 ? (
-            <div className="py-10 text-center text-sm text-muted-foreground">Nenhuma perda de insumo registrada ainda.</div>
+            <div className="py-10 text-center text-sm text-muted-foreground">Nenhuma perda de insumo registrada</div>
           ) : (
             <div className="rounded-lg border border-border overflow-hidden">
               <div className="divide-y divide-border">
@@ -836,7 +830,7 @@ export default function OrdensProducao() {
         open={!!deleteOp}
         onOpenChange={(v) => { if (!v) setDeleteOp(null); }}
         title="Excluir OP?"
-        description={`Esta ação não pode ser desfeita. A ordem de produção ${deleteOp?.op_number ?? ""} será excluída permanentemente.`}
+        description={`A ordem de produção ${deleteOp?.op_number ?? ""} será excluída permanentemente.`}
         onConfirm={deleteOp ? async () => {
           try { await remove.mutateAsync(deleteOp.id); toast.success("Ordem de produção excluída."); setDeleteOp(null); }
           catch (e) { toast.error(e instanceof Error ? e.message : "Não foi possível excluir a OP."); }

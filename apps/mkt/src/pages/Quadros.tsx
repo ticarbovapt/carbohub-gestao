@@ -55,7 +55,6 @@ export default function Quadros() {
         >
           <Trello className="h-6 w-6 text-primary" /> Quadros
         </h1>
-        <p className="text-sm text-muted-foreground mt-1.5">Seus quadros de marketing — listas, cartões, checklists e datas.</p>
       </div>
 
       {/* Ver todos os quadros (visão da área de trabalho — cruza todos os quadros) */}
@@ -92,7 +91,6 @@ export default function Quadros() {
           <div className="mkt-empty">
             <div className="mkt-empty-icon"><LayoutGrid className="h-6 w-6" /></div>
             <p className="mkt-empty-title" style={{ fontFamily: HEADING_FONT }}>Crie seu primeiro quadro</p>
-            <p className="mkt-empty-subcopy">Organize campanhas, tarefas e datas do time de marketing em listas e cartões.</p>
             <Button
               size="sm"
               className="mt-4 gap-1.5"
@@ -186,7 +184,6 @@ export default function Quadros() {
               <div className="mkt-empty !py-8">
                 <div className="mkt-empty-icon"><Search className="h-6 w-6" /></div>
                 <p className="mkt-empty-title" style={{ fontFamily: HEADING_FONT }}>Nenhum resultado</p>
-                <p className="mkt-empty-subcopy">Nenhum cartão bate com o filtro. Ajuste os critérios de busca.</p>
               </div>
             ) : (
               <div className="divide-y divide-border max-h-72 overflow-y-auto">

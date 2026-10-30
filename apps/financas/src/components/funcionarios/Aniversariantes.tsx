@@ -156,9 +156,6 @@ export function Aniversariantes({ rows }: { rows: EmployeeRow[] }) {
                   <Sparkles className="h-4 w-4 text-emerald-500" />
                   {bd.todays.length === 1 ? "Aniversário hoje!" : `${bd.todays.length} aniversários hoje!`}
                 </h3>
-                <p className="text-sm text-muted-foreground mt-0.5">
-                  Não esqueça de parabenizar{bd.todays.length === 1 ? "" : ":"}
-                </p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {bd.todays.map((e) => (
                     <div key={e.row.key} className="flex items-center gap-2 rounded-full bg-background/60 border border-emerald-500/20 pl-1 pr-3 py-1">
@@ -280,9 +277,6 @@ export function Aniversariantes({ rows }: { rows: EmployeeRow[] }) {
                     </div>
                   ))}
                 </div>
-                <p className="text-[11px] text-muted-foreground pt-1">
-                  Edite o funcionário na aba “Equipe” para preencher a data de aniversário.
-                </p>
               </>
             )}
           </CarboCardContent>
@@ -291,7 +285,7 @@ export function Aniversariantes({ rows }: { rows: EmployeeRow[] }) {
 
       {/* Empty state geral (nenhum funcionário com data e nenhum sem data = sem gente) */}
       {bd.total === 0 && (
-        <CarboEmptyState icon={Cake} title="Nenhum funcionário" description="Cadastre funcionários na aba Equipe para acompanhar os aniversários." />
+        <CarboEmptyState icon={Cake} title="Nenhum funcionário" />
       )}
     </div>
   );

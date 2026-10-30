@@ -493,7 +493,6 @@ export default function Pipelines() {
       <div className="space-y-4">
         <CarboPageHeader
           title={isAll ? "Todos os funis" : (FUNNEL_CONFIG[ft]?.name ?? "Funil de Vendas")}
-          description={isAll ? "Visão consolidada de todos os funis" : (FUNNEL_CONFIG[ft]?.description ?? "Jornada do cliente — do lead ao fechamento")}
           icon={KanbanSquare}
           actions={<CarboButton onClick={() => { setFormStage(undefined); setIsFormOpen(true); }}><Plus className="h-4 w-4 mr-1" /> Novo Lead</CarboButton>}
         />

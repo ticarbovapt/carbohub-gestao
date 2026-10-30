@@ -125,7 +125,7 @@ export function CDSPRegistrarEnvioDialog({
             origem por linha multiplicaria as chances de erro sem servir a
             nenhum caso real — quem envia de dois lugares faz duas remessas. */}
         <div className="rounded-lg border border-border p-3 bg-muted/20">
-          <Label className="text-xs">Origem — sai daqui</Label>
+          <Label className="text-xs">Origem</Label>
           <Select value={origem} onValueChange={setOrigem}>
             <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -230,12 +230,6 @@ export function CDSPRegistrarEnvioDialog({
             <Plus className="h-3.5 w-3.5" /> Adicionar outro envio
           </Button>
         </div>
-
-        {/* O que vai acontecer, dito antes do clique. */}
-        <p className="text-[11px] text-muted-foreground">
-          O saldo sai de <strong>{origemNome}</strong> agora e fica <strong>em trânsito</strong>.
-          O destino só recebe quando alguém de lá der o aceite — e fica registrado quem deu.
-        </p>
 
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={registerEnvio.isPending}>Cancelar</Button>

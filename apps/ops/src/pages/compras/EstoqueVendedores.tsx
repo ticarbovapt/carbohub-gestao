@@ -80,7 +80,6 @@ export default function EstoqueVendedores() {
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <CarboPageHeader
             title="Estoque dos Vendedores"
-            description="O que cada vendedor tem em mãos para vender a pronta entrega"
             icon={PackageCheck}
           />
           <div className="flex items-center gap-2">
@@ -104,9 +103,6 @@ export default function EstoqueVendedores() {
                 <h2 className="text-sm font-semibold">
                   A caminho ({(transito ?? []).length})
                 </h2>
-                <span className="text-[11px] text-muted-foreground">
-                  já saiu de Natal, ainda não está na caixa
-                </span>
               </div>
               <div className="divide-y">
                 {(transito ?? []).map((t) => (
@@ -149,9 +145,6 @@ export default function EstoqueVendedores() {
                 <h2 className="text-sm font-semibold">
                   Voltando ({(voltando ?? []).length})
                 </h2>
-                <span className="text-[11px] text-muted-foreground">
-                  saiu da caixa do vendedor, ainda não chegou ao destino
-                </span>
               </div>
               <div className="divide-y">
                 {(voltando ?? []).map((t) => (
@@ -199,11 +192,6 @@ export default function EstoqueVendedores() {
             <CarboCardContent className="py-10 text-center space-y-2">
               <TriangleAlert className="h-8 w-8 mx-auto text-destructive" />
               <p className="text-sm font-medium">Não consegui carregar as caixas.</p>
-              <p className="text-xs text-muted-foreground max-w-md mx-auto">
-                Isto <strong>não</strong> quer dizer que não existem caixas — quer dizer
-                que a consulta falhou. Se a mensagem abaixo fala em permissão, provavelmente
-                falta a liberação do Carbo Ops no seu perfil.
-              </p>
               <p className="text-[11px] font-mono text-destructive/80 max-w-md mx-auto break-words">
                 {(error as Error).message}
               </p>
@@ -214,10 +202,6 @@ export default function EstoqueVendedores() {
             <CarboCardContent className="py-10 text-center space-y-2">
               <PackageCheck className="h-8 w-8 mx-auto text-muted-foreground" />
               <p className="text-sm font-medium">Nenhum vendedor tem caixa ainda.</p>
-              <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                A caixa nasce quando o perfil é marcado como vendedor. Se alguém
-                deveria aparecer aqui, confira o cadastro dele.
-              </p>
             </CarboCardContent>
           </CarboCard>
         ) : (
@@ -392,11 +376,6 @@ function DialogEnviar({ caixa, onClose }: { caixa: CaixaVendedor | null; onClose
         </DialogHeader>
 
         <div className="space-y-3">
-          <p className="text-xs text-muted-foreground">
-            Sai do Hub Natal e fica <strong>em trânsito</strong>. O saldo só entra
-            na caixa quando alguém confirmar a chegada.
-          </p>
-
           <div>
             <Label className="text-xs">Produto</Label>
             <Select value={produtoId} onValueChange={setProdutoId}>
@@ -428,7 +407,7 @@ function DialogEnviar({ caixa, onClose }: { caixa: CaixaVendedor | null; onClose
           <div>
             <Label className="text-xs">Observação (opcional)</Label>
             <Textarea rows={2} value={nota} onChange={(e) => setNota(e.target.value)}
-              placeholder="Reposição da semana, levou na viagem de terça..." />
+              placeholder="Observação" />
           </div>
         </div>
 
@@ -514,8 +493,7 @@ function DialogAjuste({
               onChange={(e) => setContado(e.target.value)} className="h-9" />
             {novo != null && delta !== 0 && (
               <p className={`text-[11px] mt-1 ${delta < 0 ? "text-red-600" : "text-emerald-600"}`}>
-                {delta < 0 ? `Baixa de ${Math.abs(delta)}` : `Entrada de ${delta}`} — o
-                movimento fica registrado no histórico.
+                {delta < 0 ? `Baixa de ${Math.abs(delta)}` : `Entrada de ${delta}`}
               </p>
             )}
           </div>
@@ -535,7 +513,7 @@ function DialogAjuste({
           <div>
             <Label className="text-xs">Observação (opcional)</Label>
             <Textarea rows={2} value={obs} onChange={(e) => setObs(e.target.value)}
-              placeholder="Caiu na entrega de terça, cliente devolveu..." />
+              placeholder="Observação" />
           </div>
         </div>
 
@@ -612,11 +590,6 @@ function DialogDevolver({
         </DialogHeader>
 
         <div className="space-y-3">
-          <p className="text-xs text-muted-foreground">
-            Sai da caixa agora e fica <strong>em trânsito</strong>. O saldo só entra
-            no destino quando alguém confirmar o recebimento.
-          </p>
-
           <div>
             <Label className="text-xs">Produto</Label>
             <Select value={produtoId} onValueChange={setProdutoId}>
@@ -666,7 +639,7 @@ function DialogDevolver({
           <div>
             <Label className="text-xs">Motivo / observação</Label>
             <Textarea rows={2} value={nota} onChange={(e) => setNota(e.target.value)}
-              placeholder="Sobra da rota, produto perto do vencimento, repasse para outro vendedor..." />
+              placeholder="Motivo" />
           </div>
         </div>
 
@@ -733,7 +706,7 @@ function MinimoCelula({
   return (
     <button
       onClick={() => { setValor(String(minimo || "")); setEditando(true); }}
-      title={minimo > 0 ? `Mínimo ${minimo} — avisa quando ficar abaixo` : "Definir mínimo (sem mínimo = sem aviso)"}
+      title={minimo > 0 ? `Mínimo ${minimo}` : "Definir mínimo"}
       className={`text-[11px] px-1.5 py-0.5 rounded border shrink-0 transition ${
         abaixo
           ? "border-amber-400 bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300"

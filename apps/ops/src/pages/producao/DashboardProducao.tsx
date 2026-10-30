@@ -1,6 +1,6 @@
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { KPICard } from "@/components/board/KPICard";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ClipboardCheck, AlertTriangle, CheckCircle, TrendingUp, Factory, Loader2 } from "lucide-react";
 import {
   AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -18,7 +18,7 @@ export default function DashboardProducao() {
   return (
     <div className="p-4 md:p-6">
       <div className="space-y-8 max-w-[1500px] mx-auto">
-        <CarboPageHeader title="Painel de Produção" description="Ordens de Produção e checklists operacionais" icon={Factory} />
+        <CarboPageHeader title="Painel de Produção" icon={Factory} />
 
         {isLoading || !data ? (
           <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</div>
@@ -27,9 +27,9 @@ export default function DashboardProducao() {
         {/* KPIs */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
           <KPICard title="OP Ativas" value={String(data.opAtivas)} subtitle={`${data.opConcluidas} concluídas de ${data.opTotal}`} icon={<TrendingUp className="h-6 w-6" />} variant="success" />
-          <KPICard title="OPs Concluídas" value={String(data.opConcluidas)} subtitle="Confirmadas / concluídas" icon={<CheckCircle className="h-6 w-6" />} variant="success" />
+          <KPICard title="OPs Concluídas" value={String(data.opConcluidas)} icon={<CheckCircle className="h-6 w-6" />} variant="success" />
           <KPICard title="Taxa de Conclusão" value={`${taxaConclusao}%`} subtitle={`${data.checklistsCompletos} de ${data.checklistsTotal} checklists`} icon={<ClipboardCheck className="h-6 w-6" />} />
-          <KPICard title="Etapas Pendentes" value={String(data.etapasPendentes)} subtitle="Em checklists abertos" icon={<AlertTriangle className="h-6 w-6" />} />
+          <KPICard title="Etapas Pendentes" value={String(data.etapasPendentes)} icon={<AlertTriangle className="h-6 w-6" />} />
         </div>
 
         {/* Gráficos */}
@@ -37,7 +37,6 @@ export default function DashboardProducao() {
           <Card className="lg:col-span-2">
             <CardHeader>
               <CardTitle className="text-base font-semibold">Ordens de Produção — Últimos 7 dias</CardTitle>
-              <CardDescription>Criadas vs. concluídas por dia</CardDescription>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={250}>
@@ -61,7 +60,6 @@ export default function DashboardProducao() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base font-semibold">OPs por Status</CardTitle>
-              <CardDescription>Distribuição atual</CardDescription>
             </CardHeader>
             <CardContent>
               {data.opByStatus.length === 0 ? (
@@ -85,7 +83,6 @@ export default function DashboardProducao() {
         <div className="rounded-xl border border-border bg-board-surface overflow-hidden">
           <div className="border-b border-border px-6 py-4">
             <h2 className="text-lg font-semibold text-board-text">Checklists Recentes</h2>
-            <p className="text-sm text-board-muted">Últimos checklists atualizados</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[560px]">

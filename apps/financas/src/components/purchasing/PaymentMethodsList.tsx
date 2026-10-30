@@ -62,7 +62,7 @@ export function PaymentMethodsList() {
   const excluir = async (pm: PaymentMethod) => {
     const ok = await confirmar({
       titulo: `Excluir "${pm.apelido}"?`,
-      mensagem: "Só dá para excluir um cartão que nunca foi usado. Se alguma compra ou assinatura usa este cartão, o sistema recusa — nesse caso, desative em vez de excluir.",
+      mensagem: "Cartão já usado não pode ser excluído; nesse caso, desative-o.",
       confirmar: "Excluir",
       perigo: true,
     });
@@ -72,10 +72,7 @@ export function PaymentMethodsList() {
   return (
     <div className="space-y-4">
       {/* Barra: o aviso à esquerda, a ação principal à direita */}
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <p className="text-xs text-muted-foreground">
-          Por segurança guardamos apenas os <strong>4 últimos dígitos</strong> e a bandeira — nunca o número completo.
-        </p>
+      <div className="flex justify-end">
         {canManage && (
           <Button onClick={openCreate} className="gap-2 carbo-gradient text-white self-start lg:self-auto" size="sm">
             <Plus className="h-4 w-4" /> Nova forma de pagamento

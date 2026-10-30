@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,9 +14,9 @@ import { useCanalMetas, useUpsertCanalMeta } from "@/hooks/useCanalMetas";
 interface Props { open: boolean; onOpenChange: (v: boolean) => void; ano: number }
 
 const CANAIS = [
-  { key: "consumo", label: "Consumo (B2B)", hint: "vazio = regra automática (mês anterior +15%)" },
-  { key: "revenda", label: "Revenda (PDV)", hint: "Nordeste + Sudeste" },
-  { key: "online", label: "On-line", hint: "a partir de jul/26" },
+  { key: "consumo", label: "Consumo (B2B)" },
+  { key: "revenda", label: "Revenda (PDV)" },
+  { key: "online", label: "On-line" },
 ] as const;
 
 export function CanalMetasDialog({ open, onOpenChange, ano }: Props) {
@@ -54,7 +54,6 @@ export function CanalMetasDialog({ open, onOpenChange, ano }: Props) {
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Metas por Canal — {ano}</DialogTitle>
-          <DialogDescription>Defina a meta mensal de cada canal. Salva apenas os campos preenchidos.</DialogDescription>
         </DialogHeader>
         <form noValidate className="grid gap-4" onSubmit={(e) => { e.preventDefault(); save(); }}>
         <div className="space-y-4 py-2">
@@ -71,9 +70,7 @@ export function CanalMetasDialog({ open, onOpenChange, ano }: Props) {
           </div>
           {CANAIS.map((c) => (
             <div key={c.key} className="space-y-1">
-              <Label className="text-xs flex items-center gap-1">
-                {c.label}<span className="text-[10px] text-muted-foreground font-normal">— {c.hint}</span>
-              </Label>
+              <Label className="text-xs">{c.label}</Label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">R$</span>
                 <Input inputMode="decimal" className="pl-8 h-9"

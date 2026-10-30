@@ -113,7 +113,7 @@ export function SubscriptionsList() {
   const excluir = async (s: Subscription) => {
     const ok = await confirmar({
       titulo: `Excluir "${s.nome}"?`,
-      mensagem: "A assinatura some do cadastro e do histórico. Se ela só foi encerrada, marque como Cancelada em vez de excluir — o histórico fica.",
+      mensagem: "A assinatura e o histórico serão excluídos. Para só encerrar, marque como Cancelada.",
       confirmar: "Excluir",
       perigo: true,
     });

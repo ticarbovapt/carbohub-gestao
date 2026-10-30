@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ClipboardCheck, CheckCircle, XCircle, Package, AlertTriangle, Loader2 } from "lucide-react";
+import { ClipboardCheck, CheckCircle, XCircle, Package, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useProductionOrderMutations } from "@/hooks/useProductionOrders";
@@ -125,13 +125,6 @@ export function ConfirmOPDialog({ open, onOpenChange, order }: ConfirmOPDialogPr
             <Textarea id="deviationNotes" value={deviationNotes}
               onChange={(e) => setDeviationNotes(e.target.value)}
               placeholder="Notas sobre desvios no processo..." rows={2} />
-          </div>
-
-          <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 flex items-start gap-2">
-            <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
-            <p className="text-sm text-amber-700 dark:text-amber-400">
-              Registra o resultado (aprovadas/rejeitadas) e move a OP para <strong>"Confirmada"</strong>. A baixa de insumos e a entrada do produto no estoque entram numa fase futura.
-            </p>
           </div>
         </div>
 

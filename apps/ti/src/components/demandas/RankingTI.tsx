@@ -128,14 +128,9 @@ export function RankingTI() {
     <CarboCard className="p-0 sm:p-6">
       <CarboCardContent className="p-4 space-y-4">
         <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div>
-            <h3 className="font-semibold text-sm flex items-center gap-2">
-              <Trophy className="h-4 w-4 text-carbo-green" /> Time de TI
-            </h3>
-            <p className="text-[11px] text-muted-foreground mt-0.5">
-              Como está o fluxo das demandas — não a produtividade das pessoas.
-            </p>
-          </div>
+          <h3 className="font-semibold text-sm flex items-center gap-2">
+            <Trophy className="h-4 w-4 text-carbo-green" /> Time de TI
+          </h3>
           <div className="flex items-center gap-2">
             <div className="inline-flex rounded-lg bg-muted p-0.5">
               {PERIODOS.map((p) => (
@@ -181,14 +176,14 @@ export function RankingTI() {
           <div className="space-y-2">{[1, 2, 3].map((i) => <div key={i} className="h-12 rounded-lg bg-muted/40 animate-pulse" />)}</div>
         ) : rankeados.length === 0 && formando.length === 0 ? (
           <p className="text-sm text-muted-foreground py-6 text-center">
-            Ainda sem entregas registradas neste período.
+            Sem entregas no período.
           </p>
         ) : (
           <>
             {/* Com menos de 3 pessoas, lista ordenada = "o melhor e o pior". */}
             {poucaGente && rankeados.length > 0 && (
               <p className="text-[11px] text-muted-foreground">
-                Poucas pessoas no período — mostrando os números sem ordenação comparativa.
+                Poucas pessoas no período: lista sem ordenação.
               </p>
             )}
 
@@ -271,17 +266,11 @@ export function RankingTI() {
                 <span>
                   Amostra em formação:{" "}
                   {formando.map((f) => `${f.person_name || "—"} (${f.entregas})`).join(" · ")}
-                  {" "}— aparecem na lista a partir de {MIN_AMOSTRA} entregas.
+                  {" "}(mín. {MIN_AMOSTRA} entregas)
                 </span>
               </p>
             )}
 
-            <p className="text-[10px] text-muted-foreground leading-relaxed border-t pt-2.5">
-              Estes números medem o fluxo das demandas, não as pessoas. Tempo de fila, triagem e
-              espera pelo solicitante não entram no número individual. Muito do trabalho do TI —
-              ajudar alguém por telefone, plantão, documentação — não vira demanda e não aparece aqui.
-              Histórico de tempo disponível a partir de 25/07/2026.
-            </p>
           </>
         )}
       </CarboCardContent>

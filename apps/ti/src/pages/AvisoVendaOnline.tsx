@@ -117,21 +117,16 @@ export default function AvisoVendaOnline({ embutido = false }: { embutido?: bool
 
   return (
     <main className={embutido ? "space-y-6" : "mx-auto max-w-4xl px-4 sm:px-6 py-8 space-y-6"}>
-      {!embutido && <div>
+      {!embutido && (
         <h1 className="flex items-center gap-2 text-2xl font-bold">
           <BellRing className="h-6 w-6 text-primary" /> Quem recebe a venda on-line
         </h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          O aviso de venda do e-commerce (sininho, som e celular) vai só para quem estiver ligado aqui.
-          A marca <span className="font-medium">Head</span> ajuda a escolher — ninguém é ligado sozinho.
-          A venda interna (feita pelo /vender) continua avisando o time como antes.
-        </p>
-      </div>}
+      )}
 
       {!isLoading && !error && contagem.recebem === 0 && (
         <div className="flex gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
           <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-amber-600" />
-          <span>Ninguém está ligado. Ligue quem deve receber antes de passar o aviso a valer só para esta lista.</span>
+          <span>Ninguém está ligado: nenhum aviso de venda on-line é entregue.</span>
         </div>
       )}
 
@@ -169,9 +164,6 @@ export default function AvisoVendaOnline({ embutido = false }: { embutido?: bool
             <BellRing className="h-10 w-10 mx-auto mb-3 text-muted-foreground/30" />
             <p className="font-medium">
               {ver === "recebem" && !busca ? "Ninguém recebe a venda on-line ainda" : "Ninguém encontrado"}
-            </p>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              {ver === "recebem" && !busca ? "Veja a aba Heads para começar." : "Ajuste a busca ou a aba."}
             </p>
           </div>
         ) : (

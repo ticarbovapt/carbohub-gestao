@@ -185,9 +185,9 @@ export function DemandaModal({ demanda, onClose }: { demanda: BugReport; onClose
                   </SelectContent>
                 </Select>
               </div>
-              <p className="text-[11px] text-muted-foreground mt-1.5">
-                {timeTI.length > 0 ? "Apenas o time de TI pode assumir." : "Nenhuma pessoa com departamento de TI cadastrada."}
-              </p>
+              {timeTI.length === 0 && (
+                <p className="text-[11px] text-muted-foreground mt-1.5">Nenhuma pessoa com departamento de TI cadastrada.</p>
+              )}
             </Bloco>
 
             <Bloco title="Prioridade">
@@ -264,8 +264,7 @@ export function DemandaModal({ demanda, onClose }: { demanda: BugReport; onClose
                 <input type="datetime-local" className="mt-2 h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
                   value={actDue} onChange={(e) => setActDue(e.target.value)} />
               )}
-              <div className="mt-2 flex items-center justify-between">
-                <span className="text-[11px] text-muted-foreground">Ctrl+Enter para registrar</span>
+              <div className="mt-2 flex items-center justify-end">
                 <Button size="sm" onClick={handleAddActivity} disabled={!actText.trim() || addActivity.isPending}>Registrar</Button>
               </div>
             </div>
@@ -320,8 +319,7 @@ export function DemandaModal({ demanda, onClose }: { demanda: BugReport; onClose
             <DialogHeader>
               <DialogTitle>Arquivar demanda</DialogTitle>
               <DialogDescription>
-                <strong>{demanda.title}</strong> sai do quadro, mas o registro e todo o histórico
-                continuam guardados para auditoria.
+                <strong>{demanda.title}</strong> sai do quadro; o histórico continua guardado.
               </DialogDescription>
             </DialogHeader>
             <DialogFooter className="gap-2">
@@ -341,8 +339,8 @@ export function DemandaModal({ demanda, onClose }: { demanda: BugReport; onClose
               <DialogTitle>{fechando === "resolved" ? "Concluir demanda" : "Recusar demanda"}</DialogTitle>
               <DialogDescription>
                 {fechando === "resolved"
-                  ? "O que foi feito? Quem reportou recebe esta resposta na notificação."
-                  : "Por que não será feita? Quem reportou recebe esta explicação."}
+                  ? "O que foi feito? Quem reportou recebe esta resposta."
+                  : "Por que não será feita? Quem reportou recebe esta resposta."}
               </DialogDescription>
             </DialogHeader>
             <textarea
@@ -419,7 +417,7 @@ interface TimelineProps {
 
 function Timeline({ activities, onTogglePin, onToggleTask, busy, resolveUser }: TimelineProps) {
   if (activities.length === 0) {
-    return <p className="text-sm text-muted-foreground">Nenhuma atividade ainda. Registre a primeira acima.</p>;
+    return <p className="text-sm text-muted-foreground">Nenhuma atividade ainda.</p>;
   }
 
   const pinned = activities.filter((a) => a.pinned);

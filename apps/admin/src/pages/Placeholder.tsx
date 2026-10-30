@@ -10,7 +10,7 @@ export default function Placeholder({ title, description }: { title: string; des
         </div>
         <h1 className="text-xl font-semibold">{title}</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          {description ?? "Em organização — esta área está sendo montada no Carbo Admin."}
+          {description ?? "Em construção."}
         </p>
       </div>
     </div>

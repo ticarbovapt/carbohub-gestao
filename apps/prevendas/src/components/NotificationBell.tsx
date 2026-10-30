@@ -97,7 +97,6 @@ function EmptyState({ message }: { message: string }) {
         <Bell className="h-6 w-6 opacity-40" />
       </div>
       <p className="text-sm font-medium">{message}</p>
-      <p className="text-xs text-muted-foreground/70 mt-1">Tudo em dia por aqui.</p>
     </div>
   );
 }

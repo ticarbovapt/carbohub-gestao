@@ -6,7 +6,7 @@ import {
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboKPI } from "@/components/ui/carbo-kpi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PeriodPicker, rangeLabel } from "@/components/ui/PeriodPicker";
+import { PeriodPicker } from "@/components/ui/PeriodPicker";
 import { usePeriodoUrl } from "@/hooks/usePeriodoUrl";
 import { useAuth } from "@/contexts/AuthContext";
 import { fmtBRL, fmtBRLc, delta } from "@/lib/dash-format";
@@ -50,9 +50,7 @@ function AccessNotice() {
       <AlertTriangle className="h-8 w-8 text-amber-500/70" />
       <p className="text-sm font-medium">Sem dados do Portal de Vendas</p>
       <p className="text-xs text-muted-foreground max-w-md">
-        Para ver o consolidado das lojas, seu usuário precisa ter <code className="font-mono bg-muted px-1 rounded">portal_pdv</code>{" "}
-        liberado em <span className="font-medium">Usuários → Sistemas liberados</span>. Sem essa liberação
-        o portal não devolve os números da rede.
+        Requer <code className="font-mono bg-muted px-1 rounded">portal_pdv</code> em Usuários → Sistemas liberados.
       </p>
     </div>
   );
@@ -104,7 +102,6 @@ export default function DashboardsLojas() {
         icon={Store}
         iconColor="green"
         title="Portal de Vendas — Visão Geral"
-        description={`Consolidado da rede do Portal de Vendas (CarboZé) · ${rangeLabel(range)}`}
         actions={<PeriodPicker value={range} onChange={setRange} />}
       />
 

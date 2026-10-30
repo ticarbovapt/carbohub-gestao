@@ -18,7 +18,7 @@ import { ptBR } from "date-fns/locale";
 import {
   ChevronLeft, ChevronRight, TrendingUp,
   TrendingDown, RefreshCw,
-  Calendar, Zap,
+  Calendar, Zap, Target,
 } from "lucide-react";
 import {
   useMetaStats,
@@ -328,7 +328,7 @@ function CumulativeLineChart({ month, activeTarget, hookPlatform }: {
               stroke="white"
               strokeWidth={2.5}
               label={{
-                value: `🎯 Dia ${targetHitPoint.label}`,
+                value: `Dia ${targetHitPoint.label}`,
                 position: "top",
                 fontSize: 11,
                 fontWeight: 600,
@@ -455,9 +455,9 @@ function ChartsSection({ month, totalTarget, platformStats }: {
     : (platformStats.find((s) => s.platform === filter)?.target ?? 0);
 
   const CHART_TABS: { value: ChartTab; label: string }[] = [
-    { value: "daily",      label: "📊 Diário"    },
-    { value: "cumulative", label: "📈 Acumulado" },
-    { value: "history",    label: "🗓️ Histórico" },
+    { value: "daily",      label: "Diário"    },
+    { value: "cumulative", label: "Acumulado" },
+    { value: "history",    label: "Histórico" },
   ];
 
   return (
@@ -606,17 +606,14 @@ export default function EcommerceMetas() {
         {/* Page header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">🎯 Meta Ecommerce</h1>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5">
-              <p className="text-sm text-muted-foreground">
-                Faturamento real vs metas mensais por plataforma
-              </p>
-              {updatedAt && (
-                <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                  <RefreshCw className="h-3 w-3" /> Atualizado às {updatedAt}
-                </span>
-              )}
-            </div>
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              <Target className="h-6 w-6 text-primary" /> Meta Ecommerce
+            </h1>
+            {updatedAt && (
+              <span className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                <RefreshCw className="h-3 w-3" /> Atualizado às {updatedAt}
+              </span>
+            )}
           </div>
 
           {/* Month selector */}
@@ -779,7 +776,7 @@ export default function EcommerceMetas() {
         {!isLoading && platformStats.some((s) => s.target > 0) && (
           <CarboCard className="p-4 sm:p-6">
             <CarboCardHeader>
-              <CarboCardTitle className="text-base">📈 Ranking de Performance por Plataforma</CarboCardTitle>
+              <CarboCardTitle className="text-base">Ranking de Performance por Plataforma</CarboCardTitle>
             </CarboCardHeader>
             <CarboCardContent>
               <div className="space-y-3">
@@ -818,9 +815,6 @@ export default function EcommerceMetas() {
                   );
                 })}
               </div>
-              <p className="text-[10px] text-muted-foreground mt-3 text-center">
-                Linha vertical = % esperado para hoje com base no dia do mês
-              </p>
             </CarboCardContent>
           </CarboCard>
         )}

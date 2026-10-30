@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ShoppingBag, Loader2, Calendar, Eye, MapPin, Phone, Mail, Package, User, Users, FileText, CreditCard, Truck, Boxes, Weight } from "lucide-react";
+import { ShoppingBag, Loader2, Calendar, MapPin, Phone, Mail, Package, User, Users, FileText, CreditCard, Truck, Boxes, Weight } from "lucide-react";
 import { QuadroRolavel, useParamUrl } from "@carbo/shell";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -62,18 +62,13 @@ export default function PosVenda() {
       <div className="max-w-[1700px] mx-auto w-full flex flex-col flex-1 min-h-0 gap-4">
         <CarboPageHeader
           title={isGestor ? "Pós-venda — Rastreio de venda" : "Pós-venda — Meus Pedidos"}
-          description="Acompanhe a jornada dos pedidos (somente leitura — quem controla é a operação)"
           icon={ShoppingBag}
         />
 
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-blue-500/10 border border-blue-500/20 text-sm text-blue-500 flex-1 min-w-[280px]">
-            <Eye className="h-4 w-4 shrink-0" />
-            <span>Visualização. As etapas são atualizadas pelo time de operações no Carbo Ops. Clique no card para ver os detalhes.</span>
-          </div>
-          {/* Filtro só para gestor: o vendedor já vê apenas o que é dele, pela
-              RLS. Oferecer o seletor a ele prometeria dado que não vem. */}
-          {isGestor && (
+        {/* Filtro só para gestor: o vendedor já vê apenas o que é dele, pela
+            RLS. Oferecer o seletor a ele prometeria dado que não vem. */}
+        {isGestor && (
+          <div className="flex flex-wrap items-center gap-3">
             <Select value={vendedorFilter} onValueChange={setVendedorFilter}>
               <SelectTrigger className="h-9 w-[230px] text-sm">
                 <span className="flex items-center gap-1.5 truncate">
@@ -88,8 +83,8 @@ export default function PosVenda() {
                 ))}
               </SelectContent>
             </Select>
-          )}
-        </div>
+          </div>
+        )}
 
         {isLoading ? (
           <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground">

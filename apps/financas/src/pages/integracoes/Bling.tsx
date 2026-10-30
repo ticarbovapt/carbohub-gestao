@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   Link2,
@@ -141,7 +141,7 @@ export default function BlingIntegration() {
     // desconectar aqui afeta TODOS. Confirma e desativa (reversível), sem apagar.
     if (!(await confirmar({
       titulo: "Desconectar o Bling?",
-      mensagem: "Isto desconecta o Bling de TODO o ecossistema (Controle, Ops, etc.), não só do Finanças.",
+      mensagem: "Desconecta o Bling de todo o ecossistema, não só do Finanças.",
       confirmar: "Desconectar", perigo: true,
     }))) return;
     try {
@@ -263,16 +263,10 @@ export default function BlingIntegration() {
   return (
     <div>
     <div className="space-y-6 max-w-5xl mx-auto">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-3">
-          <Link2 className="h-6 w-6 text-green-500" />
-          Integração Bling ERP
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          Sincronize tudo do Bling: pedidos, produtos, variações, estoque, clientes,
-          fornecedores, vendedores, notas fiscais, contas a pagar e pedidos de compra
-        </p>
-      </div>
+      <h1 className="text-2xl font-bold flex items-center gap-3">
+        <Link2 className="h-6 w-6 text-green-500" />
+        Integração Bling ERP
+      </h1>
 
       {/* Connection Status */}
       <Card>
@@ -282,10 +276,7 @@ export default function BlingIntegration() {
               <div className="h-12 w-12 shrink-0 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white font-bold text-lg">
                 B
               </div>
-              <div>
-                <CardTitle>Bling ERP</CardTitle>
-                <CardDescription>API v3 - OAuth2</CardDescription>
-              </div>
+              <CardTitle>Bling ERP</CardTitle>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {isConnected ? (
@@ -410,12 +401,6 @@ export default function BlingIntegration() {
               )}
             </Button>
 
-            <div className="flex items-center gap-2">
-              <div className="h-px w-8 bg-border hidden sm:block" />
-              <span className="text-xs text-muted-foreground hidden sm:block">então</span>
-              <div className="h-px w-8 bg-border hidden sm:block" />
-            </div>
-
             <Button
               size="lg"
               variant="outline"
@@ -431,20 +416,6 @@ export default function BlingIntegration() {
             </Button>
           </div>
 
-          {/* Bridge info */}
-          <Card className="border-orange-200 dark:border-orange-900/40 bg-orange-50/50 dark:bg-orange-950/10">
-            <CardContent className="p-4">
-              <p className="text-sm font-medium text-orange-700 dark:text-orange-400">Como funciona a importação de pedidos</p>
-              <ul className="text-xs text-muted-foreground mt-2 space-y-1">
-                <li>1. Clique <strong>Sincronizar Tudo</strong> para copiar os dados do Bling para a base intermediária</li>
-                <li>2. Clique <strong>Importar Pedidos Bling → CarboHub</strong> para converter e popular a tela de Controle de Pedidos</li>
-                <li>• Produtos são mapeados automaticamente por código SKU (SKU-CZ100, SKU-CZ1L, etc.)</li>
-                <li>• Licenciados são vinculados por nome/razão social</li>
-                <li>• Status Bling (Em Aberto, Atendido, Cancelado…) são convertidos para o fluxo CarboHub</li>
-                <li>• Re-executar atualiza apenas pedidos que mudaram de status</li>
-              </ul>
-            </CardContent>
-          </Card>
 
           {/* Sync History */}
           {syncLogs.length > 0 && (
@@ -453,9 +424,6 @@ export default function BlingIntegration() {
                 <CardTitle className="text-lg">Histórico de Sincronização</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-xs text-muted-foreground mb-3">
-                  Estado mais recente de cada sincronização com o Bling.
-                </p>
                 <div className="space-y-2">
                   {syncLogs.map((log) => (
                     <div

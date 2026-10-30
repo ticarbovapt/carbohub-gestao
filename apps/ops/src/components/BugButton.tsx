@@ -274,9 +274,6 @@ export function BugButton() {
             <div className="px-4 py-8 text-center space-y-1.5">
               <Bug className="h-8 w-8 mx-auto text-muted-foreground/25" />
               <p className="text-sm font-medium">Nada reportado ainda</p>
-              <p className="text-xs text-muted-foreground">
-                Achou algo estranho ou teve uma ideia? Conta pra gente.
-              </p>
             </div>
           ) : (
             <>
@@ -333,12 +330,7 @@ export function BugButton() {
               <div className="rounded-full bg-carbo-green/10 p-3">
                 <CheckCircle2 className="h-6 w-6 text-carbo-green" />
               </div>
-              <div>
-                <p className="text-sm font-medium">Recebido pelo TI</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Você é avisado a cada passo. Não precisa fazer mais nada.
-                </p>
-              </div>
+              <p className="text-sm font-medium">Recebido pelo TI</p>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" asChild>
                   <Link to="/chamados" onClick={() => setDialogOpen(false)}>Acompanhar</Link>
@@ -399,7 +391,7 @@ export function BugButton() {
                     onChange={(e) => setTitle(e.target.value)}
                   />
                   {touched && !title.trim() && (
-                    <p className="text-[11px] text-destructive">Um resumo curto ajuda o TI a achar isso depois.</p>
+                    <p className="text-[11px] text-destructive">Informe um resumo.</p>
                   )}
                 </div>
 
@@ -425,10 +417,8 @@ export function BugButton() {
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                   />
-                  {touched && !description.trim() ? (
-                    <p className="text-[11px] text-destructive">Descreva o que houve — sem isso o TI não consegue começar.</p>
-                  ) : (
-                    <p className="text-[11px] text-muted-foreground">Quanto mais detalhe, mais rápido resolve.</p>
+                  {touched && !description.trim() && (
+                    <p className="text-[11px] text-destructive">Descreva o que houve.</p>
                   )}
                 </div>
               </div>
@@ -493,7 +483,7 @@ export function BugButton() {
                   <button type="button" onClick={() => setCtxOpen((o) => !o)}
                     className="flex w-full items-center gap-1.5 text-[11px] text-muted-foreground transition-colors hover:text-foreground">
                     <Paperclip className="h-3 w-3 shrink-0" />
-                    <span className="text-left">Já vai junto: a tela, seu navegador e seu usuário — não precisa explicar</span>
+                    <span className="text-left">Contexto anexado</span>
                     <ChevronDown className={`h-3 w-3 shrink-0 transition-transform ${ctxOpen ? "rotate-180" : ""}`} />
                   </button>
                   {ctxOpen && (
@@ -506,10 +496,7 @@ export function BugButton() {
                 </div>
               </div>
 
-              <DialogFooter className="sm:justify-between gap-2">
-                <span className="hidden sm:block text-[11px] text-muted-foreground self-center">
-                  Ctrl+Enter para enviar
-                </span>
+              <DialogFooter className="gap-2">
                 <div className="flex gap-2">
                   <Button variant="ghost" onClick={() => setDialogOpen(false)}>Cancelar</Button>
                   <Button onClick={handleSubmit} disabled={enviando}>

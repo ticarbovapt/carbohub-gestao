@@ -179,7 +179,6 @@ export default function StatusAvisos() {
       <div className="space-y-5 max-w-5xl mx-auto">
         <CarboPageHeader
           title="Avisos de status"
-          description="A tarja que aparece no topo de todos os apps do ecossistema"
           icon={Megaphone}
         />
 
@@ -196,20 +195,11 @@ export default function StatusAvisos() {
         <Bloco
           icon={ativos.length ? Activity : ShieldCheck}
           title={ativos.length ? `No ar agora (${ativos.length})` : "Nada no ar"}
-          hint={
-            ativos.length
-              ? "Enquanto estiver aqui, a tarja aparece para todo mundo."
-              : "Nenhuma tarja declarada. A detecção automática continua medindo sozinha."
-          }
           className={ativos.length ? "p-4" : "p-4"}
         >
           {isLoading ? (
             <div className="h-16 rounded-xl bg-muted/40 animate-pulse" />
-          ) : ativos.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Tudo tranquilo. Publique um aviso abaixo quando algo estiver fora do ar ou em manutenção.
-            </p>
-          ) : (
+          ) : ativos.length === 0 ? null : (
             <div className="space-y-2">
               {ativos.map((a) => (
                 <LinhaAviso key={a.id} a={a}>
@@ -227,7 +217,6 @@ export default function StatusAvisos() {
         <Bloco
           icon={Send}
           title="Publicar um aviso"
-          hint="Ele entra no topo dos apps em segundos, para todo mundo que estiver com a tela aberta."
           className="p-4 space-y-4"
         >
           <div className="space-y-4">
@@ -265,7 +254,6 @@ export default function StatusAvisos() {
                   placeholder="Ex.: Emissão de nota fiscal indisponível"
                   maxLength={120}
                 />
-                <p className="mt-1 text-[11px] text-muted-foreground">Aparece em negrito na tarja.</p>
               </div>
               <div>
                 <Label>Previsão de normalização</Label>
@@ -280,7 +268,7 @@ export default function StatusAvisos() {
                     estende é quando o aviso mais importa. Quem apaga é o
                     "Encerrar", na seção de cima. */}
                 <p className="mt-1 text-[11px] text-muted-foreground">
-                  Opcional, e é só informação — a tarja não some sozinha nessa hora.
+                  Só informativa: a tarja não some sozinha.
                 </p>
               </div>
             </div>
@@ -292,12 +280,9 @@ export default function StatusAvisos() {
                 value={mensagem}
                 onChange={(e) => setMensagem(e.target.value)}
                 rows={2}
-                placeholder="Ex.: o Bling está fora do ar. Os pedidos continuam sendo registrados e serão faturados quando voltar."
+                placeholder="Ex.: o Bling está fora do ar; os pedidos seguem registrados."
                 maxLength={400}
               />
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                Opcional. Dizer o que ainda funciona evita metade das perguntas.
-              </p>
             </div>
 
             <div>
@@ -330,9 +315,7 @@ export default function StatusAvisos() {
                 <Clock className="h-4 w-4 text-carbo-green shrink-0" /> Quando você encerrar
               </h4>
               <p className="mt-0.5 mb-3 text-[11px] text-muted-foreground">
-                A tarja não some na hora: ela fica <span className="text-emerald-500 font-medium">verde</span>,
-                dizendo que normalizou. Quem passou a manhã travado precisa ler isso — senão continua
-                desconfiando e abre o chamado que a tarja existia para evitar.
+                A tarja fica <span className="text-emerald-500 font-medium">verde</span>, dizendo que normalizou.
               </p>
               <div className="grid gap-4 sm:grid-cols-[9rem_1fr]">
                 <div>
@@ -344,7 +327,7 @@ export default function StatusAvisos() {
                 <div>
                   <Label htmlFor="st-verde-txt">Texto do verde</Label>
                   <Input id="st-verde-txt" value={verdeTexto} onChange={(e) => setVerdeTexto(e.target.value)}
-                    placeholder='Vazio usa: O problema "…" foi resolvido e o sistema voltou ao normal.'
+                    placeholder='O problema "…" foi resolvido e o sistema voltou ao normal.'
                     maxLength={240} />
                 </div>
               </div>
@@ -372,9 +355,6 @@ export default function StatusAvisos() {
                   </div>
                 </div>
               </div>
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                Sem botão de fechar, de propósito: aviso que se esconde volta a virar pergunta no chat.
-              </p>
             </div>
 
             <div className="flex items-center justify-between gap-3 flex-wrap pt-1">
@@ -393,7 +373,6 @@ export default function StatusAvisos() {
         <Bloco
           icon={RotateCcw}
           title="Histórico"
-          hint="Aviso encerrado não é apagado — ele é a prova de que o sistema esteve fora."
         >
           {isLoading ? (
             <div className="space-y-2">
@@ -403,7 +382,6 @@ export default function StatusAvisos() {
             <CarboEmptyState
               icon={ShieldCheck}
               title="Nada encerrado ainda"
-              description="Quando você encerrar um aviso, ele fica guardado aqui com a hora de início e de fim."
             />
           ) : (
             <div className="space-y-2">

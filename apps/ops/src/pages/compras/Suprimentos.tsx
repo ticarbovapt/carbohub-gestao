@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/table";
 import {
   Package, MapPin, Users, Cloud, Send, AlertCircle, ArrowLeftRight, Settings2, Building2,
-  ArrowDownToLine, ArrowUpFromLine, Boxes, Layers, AlertTriangle, Activity, Info, Link2, Truck,
+  ArrowDownToLine, ArrowUpFromLine, Boxes, Layers, AlertTriangle, Activity, Link2, Truck,
   CheckCircle, XCircle, FileText, Loader2, Search, Globe, ArrowUpRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -396,7 +396,7 @@ export default function Suprimentos() {
       <div className="space-y-5 max-w-[1500px] mx-auto">
         {/* Header */}
         <div className="flex items-start justify-between gap-4 flex-wrap">
-          <CarboPageHeader title="Suprimentos" description="Estoque, Movimentações e Recebimento" icon={Package} />
+          <CarboPageHeader title="Suprimentos" icon={Package} />
         </div>
 
         {/* Hub selector */}
@@ -423,7 +423,7 @@ export default function Suprimentos() {
           <div className="flex items-start gap-3 px-4 py-3 rounded-lg bg-destructive/10 border border-destructive/30">
             <AlertCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-destructive">{lowStock.length} produtos abaixo do nível de segurança — enviar reposição ao CD</p>
+              <p className="text-sm font-semibold text-destructive">{lowStock.length} produtos abaixo do nível de segurança</p>
               <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
                 {lowStock.map((s) => <span key={s.name} className="text-xs text-muted-foreground">{s.name} ({s.qty} {s.unit})</span>)}
               </div>
@@ -446,7 +446,7 @@ export default function Suprimentos() {
                   LISTA de movimentações — quem procurava por data não percebia
                   que o controle já era este. Controle que governa duas coisas
                   e anuncia uma só é controle que ninguém usa para a segunda. */}
-              <span className="text-xs text-muted-foreground">Período (KPIs e movimentações):</span>
+              <span className="text-xs text-muted-foreground">Período:</span>
               {periodo === "intervalo" && (
                 <div className="flex items-center gap-1.5">
                   <Input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className="h-7 w-[140px] text-xs" />
@@ -497,12 +497,6 @@ export default function Suprimentos() {
                 `warehouse_stock`. Deixar cair no corpo comum mostraria uma
                 grade vazia com botões de editar um galpão que não é nosso. */}
             {isMlFull ? <MlFullPainel /> : (<>
-            {isSP && (
-              <div className="flex items-start gap-2 px-3 py-2 rounded-md bg-blue-500/10 border border-blue-500/20 text-sm text-blue-500">
-                <Info className="h-4 w-4 shrink-0 mt-0.5" />
-                <span><strong>CD São Paulo</strong> — Estoque gerenciado manualmente conforme transferências do CD contratado. Atualize ao receber confirmação de entrada no CD.</span>
-              </div>
-            )}
             <StockView hub={stockHub} editable />
             </>)}
           </TabsContent>
@@ -551,8 +545,7 @@ export default function Suprimentos() {
               <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/[0.07] px-3 py-2 text-xs">
                 <AlertTriangle className="h-4 w-4 shrink-0 mt-px text-amber-500" />
                 <span className="text-muted-foreground">
-                  Mostrando as <b className="text-foreground">300 mais recentes</b> do período — há mais.
-                  Filtre por produto ou encurte o período para ver o resto.
+                  Mostrando as <b className="text-foreground">300 mais recentes</b> do período. Filtre por produto ou encurte o período.
                 </span>
               </div>
             )}
@@ -561,10 +554,7 @@ export default function Suprimentos() {
               <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</div>
             ) : movsPeriodo.length === 0 ? (
               <CarboEmptyState
-                title={movBusca || movTipo ? "Nada encontrado com estes filtros" : "Nenhuma movimentação neste hub"}
-                description={movBusca || movTipo
-                  ? "Nenhuma movimentação deste hub no período combina com o filtro. Limpe o filtro ou amplie o período."
-                  : "Entradas, saídas e ajustes deste hub aparecem aqui."} />
+                title={movBusca || movTipo ? "Nada encontrado com estes filtros" : "Nenhuma movimentação neste hub"} />
             ) : (
             <div className="rounded-lg border bg-card overflow-x-auto">
               <Table className="min-w-[1000px]">
@@ -651,7 +641,7 @@ export default function Suprimentos() {
                           ) : (
                             <span
                               className={`${classe} bg-muted`}
-                              title={`${m.refExterna} · ainda sem card: o pedido só entra na esteira quando é faturado no Bling`}
+                              title={`${m.refExterna} · ainda sem card`}
                             >
                               <Globe className="h-3 w-3 shrink-0" />{rotulo}
                             </span>
@@ -702,7 +692,7 @@ export default function Suprimentos() {
               numa prateleira que ninguém conferiu. O estorno continua sendo de
               quem enviou, porque é ele que descobre que a carga não saiu. */}
           <TabsContent value="envios" className="mt-4 space-y-4">
-            {enviosDaqui.length === 0 ? <CarboEmptyState title="Nenhum envio registrado" description='Use "Registrar Envio" no topo da tela.' /> : (
+            {enviosDaqui.length === 0 ? <CarboEmptyState title="Nenhum envio registrado" /> : (
             <>
             <div className="flex items-center gap-5 px-1 flex-wrap text-sm">
               <span className="flex items-center gap-1.5 text-blue-400 font-medium"><Truck className="h-4 w-4" /> {enviosDaqui.filter((e) => e.status === "em_transito").length} em trânsito</span>
@@ -721,7 +711,7 @@ export default function Suprimentos() {
               tinha onde ser aceito e ficaria em trânsito para sempre. */}
           <TabsContent value="recebimento" className="mt-4 space-y-4">
             {chegandoAqui.length === 0 ? (
-              <CarboEmptyState title="Nada chegando" description="Envios de outros estoques para cá aparecem aqui, esperando o aceite." />
+              <CarboEmptyState title="Nada chegando" />
             ) : (
               <>
                 <div className="flex items-center gap-5 px-1 flex-wrap text-sm">
@@ -735,13 +725,13 @@ export default function Suprimentos() {
 
           {/* Notas Fiscais de entrada — Hub Natal (próxima fase) */}
           <TabsContent value="notas" className="mt-4">
-            <CarboEmptyState title="Nenhum registro" description="Notas fiscais de entrada (3-way match) entram na próxima fase." />
+            <CarboEmptyState title="Em breve" />
           </TabsContent>
 
           {/* Política de Estoque — mínimo do CD atual (cada CD só o dele) */}
           <TabsContent value="politica" className="mt-4 space-y-3">
             {isBling ? (
-              <CarboEmptyState title="Não se aplica ao CD Bling" description="O saldo do Bling vem da integração; não há política de mínimo manual aqui." />
+              <CarboEmptyState title="Não se aplica ao CD Bling" />
             ) : (
             <>
             <div className="relative max-w-md">

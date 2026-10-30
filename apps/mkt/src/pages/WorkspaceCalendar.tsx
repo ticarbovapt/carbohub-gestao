@@ -114,7 +114,6 @@ export default function WorkspaceCalendar() {
           <div className="mkt-empty">
             <div className="mkt-empty-icon"><LayoutGrid className="h-6 w-6" /></div>
             <div className="mkt-empty-title">Nenhum quadro por aqui</div>
-            <p className="mkt-empty-subcopy">Esta área de trabalho ainda não tem quadros. Crie um quadro para começar a organizar o calendário.</p>
           </div>
         </div>
       ) : (

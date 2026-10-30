@@ -128,7 +128,7 @@ export default function Home() {
   return (
     <div className="p-4 md:p-6">
       <div className="space-y-5 max-w-[1500px] mx-auto">
-        <CarboPageHeader title="Carbo Ops" description="O que está esperando por você hoje" icon={Factory} />
+        <CarboPageHeader title="Carbo Ops" icon={Factory} />
 
         {urgencias.length > 0 && (
           <div className="rounded-2xl border border-amber-500/30 bg-amber-500/[0.06] p-3">

@@ -139,7 +139,6 @@ export default function Compras() {
       <div className="space-y-6 max-w-[1500px] mx-auto">
         <CarboPageHeader
           title="Compras"
-          description="Requisições, ordens de compra, recebimento, notas fiscais e contas a pagar"
           icon={Wallet}
           actions={<Button onClick={() => setNovaOpen(true)} className="gap-2"><Plus className="h-4 w-4" /> Nova Requisição</Button>}
         />
@@ -178,7 +177,7 @@ export default function Compras() {
             </div>
             {rcLoading ? (
               <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</div>
-            ) : filteredRcs.length === 0 ? <CarboEmptyState title="Nenhuma requisição" description={rcs.length === 0 ? 'Crie a primeira em "Nova Requisição".' : "Ajuste o filtro de status."} /> : (
+            ) : filteredRcs.length === 0 ? <CarboEmptyState title="Nenhuma requisição" /> : (
             <div className="overflow-x-auto">
               <CarboTable className="min-w-[720px]">
                 <CarboTableHeader>
@@ -231,14 +230,14 @@ export default function Compras() {
           <TabsContent value="notas" className="mt-4">
             <CarboCard><CarboCardContent className="py-12 text-center text-muted-foreground">
               <Receipt className="h-10 w-10 mx-auto mb-2 opacity-30" />
-              <p>Notas Fiscais dependem da integração com o Bling — entram numa fase futura.</p>
+              <p>Em breve</p>
             </CarboCardContent></CarboCard>
           </TabsContent>
           <TabsContent value="pagar" className="mt-4">
             <div className="flex justify-end mb-3">
               <Button size="sm" onClick={() => setContaOpen(true)} className="gap-1.5"><Plus className="h-4 w-4" /> Lançar Conta</Button>
             </div>
-            {payables.length === 0 ? <CarboEmptyState title="Nenhuma conta a pagar" description='Lance a primeira em "Lançar Conta".' /> : (
+            {payables.length === 0 ? <CarboEmptyState title="Nenhuma conta a pagar" /> : (
               <div className="overflow-x-auto">
                 <CarboTable className="min-w-[720px]">
                   <CarboTableHeader><CarboTableRow>
@@ -282,11 +281,10 @@ export default function Compras() {
           </TabsContent>
           {canSeeDashboard && (
             <TabsContent value="dashboard" className="mt-4">
-              <CarboCard><CarboCardContent className="py-12 text-center text-muted-foreground"><BarChart3 className="h-10 w-10 mx-auto mb-2 opacity-30" /><p>Dashboard de compras — gráficos entram na fase de lógica.</p></CarboCardContent></CarboCard>
+              <CarboCard><CarboCardContent className="py-12 text-center text-muted-foreground"><BarChart3 className="h-10 w-10 mx-auto mb-2 opacity-30" /><p>Em breve</p></CarboCardContent></CarboCard>
             </TabsContent>
           )}
         </Tabs>
-        <p className="text-xs text-muted-foreground text-center">Notas fiscais e contas a pagar entram na próxima fase.</p>
       </div>
 
       <NovaRequisicaoDialog open={novaOpen} onOpenChange={setNovaOpen} />

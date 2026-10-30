@@ -7,11 +7,10 @@ import { ptBR } from "date-fns/locale";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -132,9 +131,6 @@ export function EditOrderDialog({ open, onOpenChange, order }: EditOrderDialogPr
       <DialogContent className="sm:max-w-2xl max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Editar Pedido</DialogTitle>
-          <DialogDescription>
-            Atualize as informações do pedido {order?.order_number}
-          </DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
@@ -358,9 +354,6 @@ export function EditOrderDialog({ open, onOpenChange, order }: EditOrderDialogPr
                         </SelectItem>
                       </SelectContent>
                     </Select>
-                    <FormDescription>
-                      Spot para pedidos únicos, Recorrente para PDVs com entregas periódicas
-                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -375,9 +368,6 @@ export function EditOrderDialog({ open, onOpenChange, order }: EditOrderDialogPr
                       <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
                         <div className="space-y-0.5">
                           <FormLabel>Ativar Recorrência</FormLabel>
-                          <FormDescription>
-                            Quando ativado, um novo pedido será sugerido na data prevista
-                          </FormDescription>
                         </div>
                         <FormControl>
                           <Switch
@@ -406,9 +396,6 @@ export function EditOrderDialog({ open, onOpenChange, order }: EditOrderDialogPr
                                 onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : null)}
                               />
                             </FormControl>
-                            <FormDescription>
-                              Dias entre entregas
-                            </FormDescription>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -449,9 +436,6 @@ export function EditOrderDialog({ open, onOpenChange, order }: EditOrderDialogPr
                                 />
                               </PopoverContent>
                             </Popover>
-                            <FormDescription>
-                              Data prevista para próximo pedido
-                            </FormDescription>
                             <FormMessage />
                           </FormItem>
                         )}

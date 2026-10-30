@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Sparkles, Link2, ChevronDown, ChevronRight, ArrowRight, X, CheckCircle2 } from "lucide-react";
+import { Sparkles, Link2, ChevronDown, ChevronRight, ArrowRight, X } from "lucide-react";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboButton } from "@/components/ui/carbo-button";
 import {
@@ -90,16 +90,12 @@ export function NfeLinkSuggestions() {
           <Sparkles className="h-4 w-4 text-carbo-green" />
           <span className="font-semibold text-sm">Sugestões de vínculo NF ↔ pedido</span>
           <span className="text-xs text-muted-foreground">
-            ({visible.length} recomendaç{visible.length === 1 ? "ão" : "ões"} — você confirma cada uma)
+            ({visible.length})
           </span>
         </button>
 
         {open && (
           <div className="px-4 pb-4 space-y-2">
-            <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
-              <CheckCircle2 className="h-3 w-3" />
-              Recomendado por cliente, valor e data. Confira antes de confirmar — o vínculo só é aplicado quando você clica.
-            </p>
             {visible.map((s) => <SuggestionRow key={s.orderId} s={s} dismiss={dismiss} />)}
           </div>
         )}

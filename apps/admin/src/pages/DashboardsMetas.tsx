@@ -320,7 +320,6 @@ export default function DashboardsMetas() {
           icon={Trophy}
           iconColor="green"
           title="Metas — Placar de Vendedores"
-          description="Espelho (somente leitura) da performance e metas mensais por vendedor"
         />
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex gap-1 bg-muted/40 rounded-lg p-1">
@@ -362,10 +361,7 @@ export default function DashboardsMetas() {
         <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-blue-500/10 border border-blue-500/20 text-sm text-blue-400">
           <TrendingUp className="h-4 w-4 shrink-0" />
           <span>
-            Esperado hoje: <strong>{fmtPct(expectedPct)}</strong> (dia {dayOfMonth}/{daysInMonth}) ·{" "}
-            <span className="text-green-400 font-medium">verde</span> = na meta ·{" "}
-            <span className="text-amber-400 font-medium">amarelo</span> = atenção ·{" "}
-            <span className="text-red-400 font-medium">vermelho</span> = abaixo
+            Esperado hoje: <strong>{fmtPct(expectedPct)}</strong> (dia {dayOfMonth}/{daysInMonth})
           </span>
         </div>
       )}
@@ -492,10 +488,6 @@ export default function DashboardsMetas() {
           )}
         </>
       )}
-
-      <p className="text-xs text-muted-foreground text-center pt-1">
-        Espelho somente leitura do Carbo Sales. Realizado das vendas salvas (status “pedido”). A configuração de metas é no Carbo Ops.
-      </p>
       </>
       )}
     </main>

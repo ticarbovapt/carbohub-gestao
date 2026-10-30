@@ -92,7 +92,7 @@ export function SuppliersList() {
   const excluir = async (s: Supplier) => {
     const ok = await confirmar({
       titulo: `Excluir "${s.name}"?`,
-      mensagem: "Só dá para excluir um fornecedor sem compras. Se houver cotação, ordem de compra ou conta a pagar ligada a ele, o sistema recusa — nesse caso, inative em vez de excluir.",
+      mensagem: "Fornecedor com compras não pode ser excluído; nesse caso, inative-o.",
       confirmar: "Excluir",
       perigo: true,
     });
@@ -106,7 +106,7 @@ export function SuppliersList() {
         <div className="relative w-full lg:max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Buscar por nome, razão social, CNPJ ou cidade..."
+            placeholder="Buscar nome, CNPJ ou cidade…"
             value={buscaTxt}
             onChange={(e) => setBuscaTxt(e.target.value)}
             className="pl-9"

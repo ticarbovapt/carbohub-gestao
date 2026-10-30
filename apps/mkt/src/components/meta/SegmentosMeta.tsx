@@ -129,7 +129,7 @@ function Tabela({ linhas, moeda, extra }: {
           {linhas.map((l) => {
             const d = derivar(l.b);
             const pouco = irrisorio(l.b.spend);
-            const nota = l.nota ?? (pouco ? "investimento pequeno demais para comparar" : undefined);
+            const nota = l.nota ?? (pouco ? "investimento irrisório" : undefined);
             return (
               <tr key={l.rotulo} className="border-t">
                 <td className="px-3 py-2">
@@ -205,14 +205,13 @@ export function Segmentos({ segmentos, moeda }: { segmentos: MetaSegmentos; moed
         </CardTitle>
         <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
           <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          A Meta estima parte das compras por segmento (iOS e consentimento de cookies), então a soma dos
-          segmentos pode não fechar com o total da página. Use para comparar segmentos entre si.
+          Compras por segmento são estimadas pela Meta — a soma pode não fechar com o total.
         </p>
       </CardHeader>
       <CardContent>
         {vazio ? (
           <p className="py-6 text-center text-sm text-muted-foreground">
-            Ainda sem dado por segmento — ele chega na próxima leitura da Meta.
+            Ainda sem dado por segmento.
           </p>
         ) : (
           <Tabs defaultValue="idade">

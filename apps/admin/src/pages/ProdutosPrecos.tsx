@@ -88,9 +88,7 @@ function PriceRow({ p, faixa, bonificacao }: { p: FinalProduct; faixa?: FaixaPre
           saldo na prateleira achando que só estava limpando a lista. */}
       <td className="px-4 py-2">
         <label className="flex items-center gap-2 cursor-pointer" title={
-          p.aparece_no_vender
-            ? "Aparece no dropdown do /vender. Desligar não desativa o produto — ele continua no estoque e na produção."
-            : "Escondido do /vender. O produto continua no estoque e na produção."
+          p.aparece_no_vender ? "Aparece no /vender" : "Escondido do /vender"
         }>
           <Switch checked={p.aparece_no_vender} disabled={noVender.isPending}
             onCheckedChange={(v) => noVender.mutate({ productId: p.id, aparece: !!v })} />
@@ -202,7 +200,6 @@ export default function ProdutosPrecos() {
       <CarboPageHeader
         icon={Tags}
         title="Tabela de preços"
-        description="Preço fixo por produto final, e as faixas por tipo de cliente. O /vender usa estes valores — o vendedor não digita preço."
       />
 
       <div className="flex flex-wrap items-center gap-3">
@@ -212,14 +209,14 @@ export default function ProdutosPrecos() {
         </div>
         <p className="text-xs text-muted-foreground">
           {vendaveis.length} produtos{semPreco > 0 ? ` · ${semPreco} sem preço definido` : " · todos com preço"}
-          {" · "}<span className="font-semibold text-foreground">{noDropdown}</span> linha(s) no dropdown do /vender
+          {" · "}<span className="font-semibold text-foreground">{noDropdown}</span> no /vender
         </p>
       </div>
 
       {isLoading ? (
         <p className="text-sm text-muted-foreground py-8 text-center">Carregando…</p>
       ) : grupos.length === 0 ? (
-        <CarboEmptyState icon={Tags} title="Nenhum produto" description="Não há produtos finais para o filtro atual." />
+        <CarboEmptyState icon={Tags} title="Nenhum produto" />
       ) : (
         <CarboCard>
           <CarboCardContent className="p-0 overflow-x-auto">

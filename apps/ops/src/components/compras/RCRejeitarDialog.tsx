@@ -1,7 +1,7 @@
 // TODO: ligar em <tabela de compras> (Supabase).
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
+  AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
 } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,9 +21,6 @@ export function RCRejeitarDialog({ rcNumber, open, onOpenChange, onConfirm }: { 
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Rejeitar requisição {rcNumber}?</AlertDialogTitle>
-          <AlertDialogDescription>
-            A requisição será marcada como rejeitada. Informe o motivo (opcional) para o histórico.
-          </AlertDialogDescription>
         </AlertDialogHeader>
         <div className="grid gap-2">
           <Label>Motivo da rejeição (opcional)</Label>

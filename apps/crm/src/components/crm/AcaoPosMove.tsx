@@ -53,32 +53,23 @@ export function AcaoPosMove({
           </DialogTitle>
           <DialogDescription>
             {ehGanho
-              ? <><strong>{nome}</strong> foi para Ganho. Falta transformar em pedido.</>
-              : <><strong>{nome}</strong> está na fila de orçamento. O preço ainda não foi montado.</>}
+              ? <><strong>{nome}</strong> foi para Ganho.</>
+              : <><strong>{nome}</strong> está na fila de orçamento.</>}
           </DialogDescription>
         </DialogHeader>
 
         {isLoading ? (
           <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" /> Procurando orçamento deste card…
+            <Loader2 className="h-4 w-4 animate-spin" /> Procurando orçamento…
           </div>
         ) : orcamento ? (
-          <div className="rounded-lg border border-carbo-green/40 bg-carbo-green/5 p-3 space-y-1">
+          <div className="rounded-lg border border-carbo-green/40 bg-carbo-green/5 p-3">
             <p className="text-sm font-medium">
               {orcamento.order_number ?? "Orçamento"} · {brl(orcamento.total)}
             </p>
-            <p className="text-xs text-muted-foreground">
-              {ehGanho
-                ? "Reabre preenchido com tudo — é só conferir e converter. Nada de redigitar."
-                : "Já existe um orçamento neste card. Reabra para revisar ou mandar de novo."}
-            </p>
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">
-            {ehGanho
-              ? "Não há orçamento montado neste card. Dá para lançar a venda direto — o cliente já vem preenchido."
-              : "Nenhum orçamento montado ainda. O cliente já vem preenchido no formulário."}
-          </p>
+          <p className="text-sm text-muted-foreground">Nenhum orçamento neste card.</p>
         )}
 
         <DialogFooter className="gap-2 sm:justify-between">

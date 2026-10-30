@@ -48,7 +48,6 @@ export function MinStockDialog({ open, onOpenChange, productId, productName, hub
         <div className="space-y-2">
           <Label>Estoque mínimo de segurança (unidades)</Label>
           <Input type="number" min={0} value={val} onChange={(e) => setVal(e.target.value)} autoFocus />
-          <p className="text-xs text-muted-foreground">Quando o estoque cair abaixo deste valor, o produto entra no alerta de reposição deste CD.</p>
         </div>
 
         <DialogFooter className="gap-2">

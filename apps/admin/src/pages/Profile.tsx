@@ -105,10 +105,7 @@ export default function Profile() {
 
   return (
     <div className="p-4 md:p-6 max-w-md mx-auto w-full space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold">Meu Perfil</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Suas informações no sistema</p>
-      </div>
+      <h1 className="text-2xl font-bold">Meu Perfil</h1>
 
       <CarboCard>
         <CarboCardContent className="p-6 flex flex-col items-center gap-4">
@@ -141,10 +138,6 @@ export default function Profile() {
           <InfoRow icon={Briefcase} label="Escopo" value={data?.escopo} />
         </CarboCardContent>
       </CarboCard>
-
-      <p className="text-xs text-center text-muted-foreground">
-        Para alterar outras informações, solicite ao seu gestor.
-      </p>
 
       <AvatarCropDialog imageSrc={cropSrc} mimeType={cropMime} onConfirm={handleCropConfirm} onCancel={() => setCropSrc(null)} />
     </div>

@@ -165,7 +165,6 @@ export function CotacoesPanel({
               <datalist id="cotacao-fornecedores">
                 {suppliers.map((s) => <option key={s.id} value={s.name} />)}
               </datalist>
-              <p className="text-[11px] text-muted-foreground">Escolha do cadastro pra não duplicar (ou digite um novo).</p>
             </div>
             <div className="space-y-1.5">
               <Label>Preço unitário (R$)</Label>

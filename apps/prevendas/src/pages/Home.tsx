@@ -17,19 +17,19 @@ import { useAuth } from "@/contexts/AuthContext";
 // vermelho, além de colado no md, lê como erro ao lado da tarja de status.
 const ACENTO = "#65A30D";
 
-type Atalho = { to: string; label: string; hint: string; icon: LucideIcon };
+type Atalho = { to: string; label: string; icon: LucideIcon };
 
 // Só o que EXISTE hoje. As telas de pré-vendas entram aqui quando existirem —
 // card apontando para tela vazia é pior que card ausente.
 const ATALHOS: Atalho[] = [
-  { to: "/funis", label: "Funis", hint: "Os leads em cada etapa, do contato ao closer", icon: KanbanSquare },
-  { to: "/vendas", label: "Vendas", hint: "O que o closer fechou a partir do SDR", icon: ShoppingBag },
-  { to: "/resultados", label: "Resultados", hint: "Repassados, fechados e conversão", icon: BarChart3 },
-  { to: "/atendimento", label: "Atendimento", hint: "As conversas com os postos no WhatsApp", icon: MessagesSquare },
-  { to: "/vender", label: "Vender", hint: "Registrar uma venda ou orçamento", icon: ShoppingCart },
-  { to: "/chamados", label: "Bugs e sugestões", hint: "O que você reportou ao TI", icon: Bug },
-  { to: "/perfil", label: "Meu perfil", hint: "Foto, dados e departamento", icon: UserCircle },
-  { to: "/documentacao", label: "Documentação", hint: "Como usar o sistema, tela a tela", icon: BookOpen },
+  { to: "/funis", label: "Funis", icon: KanbanSquare },
+  { to: "/vendas", label: "Vendas", icon: ShoppingBag },
+  { to: "/resultados", label: "Resultados", icon: BarChart3 },
+  { to: "/atendimento", label: "Atendimento", icon: MessagesSquare },
+  { to: "/vender", label: "Vender", icon: ShoppingCart },
+  { to: "/chamados", label: "Bugs e sugestões", icon: Bug },
+  { to: "/perfil", label: "Meu perfil", icon: UserCircle },
+  { to: "/documentacao", label: "Documentação", icon: BookOpen },
 ];
 
 export default function Home() {
@@ -41,26 +41,22 @@ export default function Home() {
       <div className="space-y-5 max-w-[1400px] mx-auto">
         <CarboPageHeader
           title={primeiroNome ? `Olá, ${primeiroNome}` : "Carbo Pré-Vendas"}
-          description="O app da pré-venda: a pipeline dos SDRs, do primeiro contato ao repasse para o closer."
           icon={Target}
         />
 
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-          {ATALHOS.map(({ to, label, hint, icon: Icon }) => (
+          {ATALHOS.map(({ to, label, icon: Icon }) => (
             <Link key={to} to={to} className="block rounded-xl">
             <CarboCard variant="interactive" padding="none" className="h-full">
-              <CarboCardContent className="p-4 flex items-start gap-3">
+              <CarboCardContent className="p-4 flex items-center gap-3">
                 <span
                   className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0"
                   style={{ backgroundColor: `${ACENTO}1A`, color: ACENTO }}
                 >
                   <Icon className="h-5 w-5" />
                 </span>
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-1.5 text-sm font-semibold">
-                    {label} <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
-                  </span>
-                  <span className="block text-xs text-muted-foreground mt-0.5">{hint}</span>
+                <span className="min-w-0 flex-1 flex items-center gap-1.5 text-sm font-semibold">
+                  {label} <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
                 </span>
               </CarboCardContent>
             </CarboCard>

@@ -174,9 +174,7 @@ function DialogoFilial({ nfe, onClose }: { nfe: NfeFilialSemPedido | null; onClo
                           bg-amber-500/10 px-3 py-2 text-[11px] text-amber-600 dark:text-amber-500">
             <Gift className="mt-px h-3.5 w-3.5 shrink-0" />
             <span>
-              A natureza desta nota é de <strong>bonificação</strong> — ela entra como
-              nota de <strong>remessa</strong> do pedido, não como a nota da venda.
-              O valor dela não conta no faturamento.
+              Nota de <strong>bonificação</strong>: entra como remessa do pedido e não conta no faturamento.
             </span>
           </div>
         )}
@@ -201,9 +199,7 @@ function DialogoFilial({ nfe, onClose }: { nfe: NfeFilialSemPedido | null; onClo
         {!naturezaConhecida && (
           <div className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
             <p className="text-[11px] leading-relaxed text-amber-600 dark:text-amber-500">
-              <strong>Esta nota é a da venda ou a remessa de bonificação?</strong>{" "}
-              O espelho ainda não trouxe a natureza dela, então quem sabe é você.
-              Um mesmo pedido pode ter as duas.
+              <strong>Nota da venda ou remessa de bonificação?</strong>
             </p>
             <div className="grid grid-cols-2 gap-2">
               <button type="button" onClick={() => setComo("venda")}
@@ -342,13 +338,7 @@ export function VincularNFsFilialTab() {
       <CarboCard>
         <CarboCardContent className="space-y-4 pt-6">
           <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-            <div>
-              <p className="text-sm font-semibold">NFs da FILIAL sem pedido vinculado</p>
-              <p className="text-xs text-muted-foreground">
-                O que o casamento automático não pegou — pedido com referência
-                trocada, nota avulsa, ou rodapé que não chegou.
-              </p>
-            </div>
+            <p className="text-sm font-semibold">NFs da FILIAL sem pedido vinculado</p>
             <div className="w-full sm:w-72">
               <CarboSearchInput
                 placeholder="Buscar por nº, cliente ou V…"
@@ -367,9 +357,7 @@ export function VincularNFsFilialTab() {
                           bg-carbo-green/5 px-3 py-2 text-[11px] text-muted-foreground">
               <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0 text-carbo-green" />
               <span>
-                <strong>{comCodigo}</strong> destas já trazem o número do pedido no rodapé —
-                o casamento automático as pega na próxima rodada (a cada 5 min).
-                Não precisa vincular à mão.
+                <strong>{comCodigo}</strong> com o pedido no rodapé: vinculam sozinhas em até 5 min.
               </span>
             </p>
           )}
@@ -383,10 +371,7 @@ export function VincularNFsFilialTab() {
                           bg-amber-500/5 px-3 py-2 text-[11px] text-muted-foreground">
               <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0 text-amber-500" />
               <span>
-                <strong>{esperandoNatureza}</strong> trazem o número do pedido mas ainda
-                estão sem a natureza no espelho — sem ela não dá para saber se a nota é a
-                da venda ou a remessa de bonificação, e o automático não arrisca.
-                Vincule à mão dizendo qual é, ou espere o espelho trazer.
+                <strong>{esperandoNatureza}</strong> com o pedido no rodapé, mas sem natureza: vincule à mão informando se é venda ou bonificação.
               </span>
             </p>
           )}
@@ -408,8 +393,8 @@ export function VincularNFsFilialTab() {
               icon={FileText}
               title="Nenhuma NF da filial pendente"
               description={search
-                ? "Nenhuma NF encontrada com essa busca."
-                : "Toda nota válida da filial já está vinculada a um pedido."}
+                ? "Nenhuma NF encontrada."
+                : undefined}
             />
           ) : (
             <CarboTable className="min-w-[860px]">

@@ -115,12 +115,8 @@ export default function Recorrencias() {
         <div className="h-10 w-10 rounded-xl bg-violet-500/10 grid place-items-center shrink-0">
           <Repeat className="h-5 w-5 text-violet-400" />
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 self-center">
           <h1 className="text-xl font-bold">Vendas de Recorrência</h1>
-          <p className="text-sm text-muted-foreground">
-            As entregas de cada mês. Contratos mensais, trimestrais e semestrais aparecem
-            só nos meses em que têm entrega.
-          </p>
         </div>
       </div>
 
@@ -255,9 +251,6 @@ export default function Recorrencias() {
                       <div className="max-w-[calc(100vw-4rem)] sm:max-w-none">
                       <CalendarDays className="h-7 w-7 mx-auto mb-2.5 opacity-40" />
                       <p className="text-sm">Nenhuma entrega em {MES_LONGO(ref)}.</p>
-                      <p className="text-xs mt-1">
-                        Os meses com bolinha na trilha acima têm entrega.
-                      </p>
                       </div>
                     </td>
                   </tr>
@@ -273,9 +266,7 @@ export default function Recorrencias() {
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir a entrega {aExcluir?.order_number}?</AlertDialogTitle>
             <AlertDialogDescription>
-              Some do sistema e não volta. As outras entregas do contrato continuam.
-              Se a venda existiu e só não vai acontecer, <strong>cancelar</strong> é melhor —
-              sai do faturamento mas fica no histórico.
+              Esta ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -295,7 +286,7 @@ export default function Recorrencias() {
           <AlertDialogHeader>
             <AlertDialogTitle>Cancelar a entrega {aCancelar?.order_number}?</AlertDialogTitle>
             <AlertDialogDescription>
-              Sai do faturamento e o estoque já separado é estornado. Fica no histórico.
+              Sai do faturamento e o estoque separado é estornado.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

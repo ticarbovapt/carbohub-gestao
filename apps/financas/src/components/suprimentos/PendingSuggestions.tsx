@@ -15,7 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -313,7 +313,6 @@ export function PendingSuggestions({ canApprove }: { canApprove: boolean }) {
         <CarboCardContent className="py-8 text-center">
           <Check className="h-8 w-8 mx-auto mb-2 text-carbo-green" />
           <p className="text-sm font-medium text-foreground">Nenhuma sugestão pendente</p>
-          <p className="text-xs text-muted-foreground mt-1">Todos os estoques estão equilibrados entre os HUBs</p>
         </CarboCardContent>
       </CarboCard>
     );
@@ -503,7 +502,6 @@ export function PendingSuggestions({ canApprove }: { canApprove: boolean }) {
         <DialogContent className="sm:max-w-xs">
           <DialogHeader>
             <DialogTitle>Editar quantidade</DialogTitle>
-            <DialogDescription>Ajuste a quantidade antes de aprovar</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div>

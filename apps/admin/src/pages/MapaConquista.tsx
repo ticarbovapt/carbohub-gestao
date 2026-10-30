@@ -373,15 +373,10 @@ export default function MapaConquista() {
     <div className={`flex h-full min-h-0 flex-col ${telaCheia ? "gap-2 p-2" : "gap-4 p-4 md:p-6"}`}>
       {!telaCheia && (
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <MapPin className="h-6 w-6 text-emerald-500" />
-              Mapa da conquista
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Cada município aceso é um lugar onde a Carbo já chegou — venda, PDV ou licenciado.
-            </p>
-          </div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <MapPin className="h-6 w-6 text-emerald-500" />
+            Mapa da conquista
+          </h1>
           {uf && (
             <Button variant="outline" size="sm" onClick={() => setUf(null)}>
               <ArrowLeft className="h-4 w-4 mr-1" /> Ver o Brasil
@@ -516,7 +511,7 @@ export default function MapaConquista() {
             <div className="absolute bottom-3 left-3 z-[500] max-w-[15rem] rounded-md bg-background/90 border px-3 py-2 text-xs space-y-1">
               <div className="flex items-start gap-2">
                 <span className="inline-block h-3 w-3 mt-0.5 shrink-0 rounded-sm" style={{ background: VERDE_FORTE }} />
-                {porMunicipio ? "Município conquistado" : "Estado com presença (mais forte = mais cidades)"}
+                {porMunicipio ? "Município conquistado" : "Estado com presença"}
               </div>
               {porMunicipio && (
                 <div className="flex items-start gap-2">
@@ -527,9 +522,6 @@ export default function MapaConquista() {
               <div className="flex items-start gap-2">
                 <span className="inline-block h-3 w-3 mt-0.5 shrink-0 rounded-sm border" style={{ background: APAGADO }} />
                 Ainda não
-              </div>
-              <div className="text-muted-foreground pt-1">
-                {uf ? "Passe o mouse para ver a cidade." : "Clique para abrir o estado."}
               </div>
             </div>
           </CardContent>
@@ -591,10 +583,7 @@ export default function MapaConquista() {
               {cruzamento.naoLocalizadas.length} cidade(s) não localizada(s) na lista do IBGE
             </div>
             <p className="text-xs text-muted-foreground mb-2">
-              Elas contam no placar, mas não têm onde ser pintadas: é o comprador escrevendo
-              bairro, abreviação ou forma curta no endereço do marketplace. Não adianta corrigir
-              o pedido — o próximo chega igual. Uma linha em <code>carbo_cidade_alias</code>{" "}
-              (nome como chega, UF, nome do IBGE) acende o município e vale daí em diante.
+              Cadastre o nome em <code>carbo_cidade_alias</code> para acender o município.
             </p>
             <div className="flex flex-wrap gap-1.5">
               {cruzamento.naoLocalizadas.slice(0, 40).map((c) => (

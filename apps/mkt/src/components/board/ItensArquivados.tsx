@@ -4,7 +4,7 @@ import { Archive, Loader2, RotateCcw, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { confirmar } from "@carbo/shell";
 import { supabase } from "@/integrations/supabase/client";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { BUCKET } from "@/lib/mktArquivos";
 
@@ -131,7 +131,7 @@ export function ItensArquivados({ boardId, open, onOpenChange, onAbrirCartao }: 
       const arquivos = [...new Set([...anexos, ...versoes].flatMap((a) => [a.storage_path, a.poster_path, a.web_path]).filter(Boolean) as string[])];
       const ok = await confirmar({
         titulo: `Excluir "${c.title}" para sempre?`,
-        mensagem: `Comentários, checklists e ${arquivos.length ? `${arquivos.length} arquivo(s)` : "anexos"} saem junto. Isto não tem volta — se só quer tirar da frente, deixe arquivado.`,
+        mensagem: `Comentários, checklists e ${arquivos.length ? `${arquivos.length} arquivo(s)` : "anexos"} saem junto. Esta ação não pode ser desfeita.`,
         confirmar: "Excluir", perigo: true,
       });
       if (!ok) return;
@@ -159,7 +159,6 @@ export function ItensArquivados({ boardId, open, onOpenChange, onAbrirCartao }: 
       <SheetContent side="right" className="w-full sm:max-w-md flex flex-col gap-3">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2"><Archive className="h-4 w-4" /> Itens arquivados</SheetTitle>
-          <SheetDescription>Saem do quadro e de todas as visões, mas continuam aqui com comentários e anexos.</SheetDescription>
         </SheetHeader>
         <div className="relative">
           <Search className="h-4 w-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />

@@ -410,7 +410,7 @@ export function Composer({
               if (e.key === "ArrowUp" && !text && !mention && onEditLast) { e.preventDefault(); onEditLast(); }
             }}
             aria-label="Escrever mensagem"
-            placeholder={isGroup ? "Mensagem…  @ menciona · Enter envia" : "Mensagem…  Enter envia"}
+            placeholder="Mensagem…"
             rows={1}
             className="max-h-40 min-h-[40px] flex-1 resize-none overflow-y-auto rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           />

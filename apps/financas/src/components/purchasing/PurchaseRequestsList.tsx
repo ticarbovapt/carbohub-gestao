@@ -159,7 +159,7 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
   const cancelarRC = async (rc: PurchaseRequest) => {
     const ok = await confirmar({
       titulo: `Cancelar a ${rc.rc_number}?`,
-      mensagem: "A requisição sai do fluxo e não pode ser reaberta. As cotações ficam guardadas nela.",
+      mensagem: "A requisição sai do fluxo e não pode ser reaberta.",
       confirmar: "Cancelar requisição",
       cancelar: "Voltar",
       perigo: true,
@@ -415,7 +415,7 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
                 <div>
                   <p className="text-sm text-muted-foreground mb-2">
                     Cotações por item
-                    {!editavel && <span className="ml-1 text-xs">(só leitura — a requisição já foi {REQUEST_STATUS_LABELS[sel.status].toLowerCase()})</span>}
+                    {!editavel && <span className="ml-1 text-xs">(só leitura)</span>}
                   </p>
                   <CotacoesPanel requestId={sel.id} items={sel.items as any} editable={editavel} />
                 </div>

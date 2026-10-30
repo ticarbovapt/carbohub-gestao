@@ -574,9 +574,6 @@ export function StockOverview() {
                     />
                   </div>
                 </div>
-                <p className="text-[10px] text-muted-foreground mt-1">
-                  Quantidade mínima consolidada para alertas e projeções.
-                </p>
               </div>
               <div>
                 <Label htmlFor="reason">Motivo do ajuste <span className="text-destructive">*</span></Label>

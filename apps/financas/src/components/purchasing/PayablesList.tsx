@@ -270,10 +270,10 @@ function PayablesMatriz({ seletor, abrirBaixa, onBaixaAberta }: {
       titulo: "Estornar o pagamento?",
       mensagem: `${p.supplier_name} · ${formatCurrency(p.amount)} · venc. ${dataBR(p.due_date)}\n\n` +
         (vai
-          ? "Este título vem do Bling. O estorno é feito primeiro no Bling e só depois aqui — se o Bling recusar, nada muda."
+          ? "O estorno também é feito no Bling."
           : doBling
-          ? "Este título vem do Bling. O estorno vale só aqui: se no Bling ele estiver pago, a próxima sincronização o traz de volta como pago."
-          : "A conta volta a ficar em aberto e a data de pagamento é apagada."),
+          ? "Estorno só aqui: se o título estiver pago no Bling, voltará como pago."
+          : "A conta volta a ficar em aberto."),
       confirmar: "Estornar",
       perigo: true,
     });
@@ -301,7 +301,7 @@ function PayablesMatriz({ seletor, abrirBaixa, onBaixaAberta }: {
       const ok = await confirmar({
         titulo: "Excluir esta conta no Bling?",
         mensagem: `${p.supplier_name} · ${formatCurrency(p.amount)} · venc. ${dataBR(p.due_date)}\n\n` +
-          "Ela foi criada pelo sistema: é excluída no Bling da matriz e cancelada aqui. Se o Bling recusar, nada muda.",
+          "A conta será excluída no Bling e cancelada aqui.",
         confirmar: "Excluir no Bling", cancelar: "Voltar", perigo: true,
       });
       if (!ok) return;
@@ -315,8 +315,8 @@ function PayablesMatriz({ seletor, abrirBaixa, onBaixaAberta }: {
       titulo: "Cancelar esta conta?",
       mensagem: `${p.supplier_name} · ${formatCurrency(p.amount)} · venc. ${dataBR(p.due_date)}\n\n` +
         (p.source === "bling"
-          ? "O cancelamento vale só aqui — no Bling o título continua em aberto."
-          : "Ela sai da fila e dos totais a pagar."),
+          ? "Cancelamento só aqui: no Bling o título continua em aberto."
+          : "A conta sai dos totais a pagar."),
       confirmar: "Cancelar conta",
       cancelar: "Voltar",
       perigo: true,
@@ -420,7 +420,7 @@ function PayablesMatriz({ seletor, abrirBaixa, onBaixaAberta }: {
                     <CarboTableCell className="py-3 whitespace-nowrap text-muted-foreground tabular-nums">
                       {/* ⚠️ O espelho do Bling não grava a data da baixa: dizer
                           "no Bling" é a verdade; inventar uma data, não. */}
-                      {p.paid_at ? dataBR(p.paid_at) : p.status === "pago" && isBling ? <span title="Baixado no Bling — o espelho não traz a data">no Bling</span> : "—"}
+                      {p.paid_at ? dataBR(p.paid_at) : p.status === "pago" && isBling ? <span title="Data não disponível">no Bling</span> : "—"}
                       {p.status === "pago" && ajustes && <span className="block text-xs">{ajustes}</span>}
                     </CarboTableCell>
                     <CarboTableCell className="py-3" onClick={(e) => e.stopPropagation()}>
@@ -465,10 +465,10 @@ function PayablesMatriz({ seletor, abrirBaixa, onBaixaAberta }: {
           valor: Number(payingPayable.amount), saldo: saldoDe(payingPayable) ?? Number(payingPayable.amount),
         } : null}
         podeParcial={!!payingPayable && vaiAoBling(cfgBling, payingPayable)}
-        motivoSemParcial="Baixa parcial só com o envio ao Bling ligado — é o Bling que guarda o saldo."
+        motivoSemParcial="Baixa parcial só com o envio ao Bling ligado."
         enviando={pagando || updateStatus.isPending} onConfirmar={handlePay}
         aviso={payingPayable?.source === "bling"
-          ? (vaiAoBling(cfgBling, payingPayable) ? "A baixa vai para o Bling na hora, na conta escolhida." : "A baixa vale só aqui — no Bling o título continua em aberto.")
+          ? (vaiAoBling(cfgBling, payingPayable) ? "A baixa também vai para o Bling." : "Baixa só aqui: no Bling o título continua em aberto.")
           : undefined}
       />
     </div>

@@ -216,7 +216,7 @@ export default function Resultados() {
 
   return (
     <div className="space-y-6 p-4 md:p-6">
-      <CarboPageHeader title="Resultados" description="Do repasse ao fechamento" icon={BarChart3} actions={filtros}
+      <CarboPageHeader title="Resultados" icon={BarChart3} actions={filtros}
         className="md:flex-col md:items-stretch lg:flex-row lg:items-center" />
 
       {erro && (

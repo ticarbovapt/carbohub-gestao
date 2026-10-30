@@ -129,12 +129,9 @@ export default function MetasVendedoresConfig() {
     <div className="p-4 md:p-6">
       <div className="space-y-5 max-w-3xl mx-auto">
 
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Settings className="h-6 w-6 text-carbo-green" /> Configurar Metas
-          </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Gerencie metas mensais de vendedores e e-commerce</p>
-        </div>
+        <h1 className="text-2xl font-bold flex items-center gap-2">
+          <Settings className="h-6 w-6 text-carbo-green" /> Configurar Metas
+        </h1>
 
         {/* Tabs */}
         <div className="flex gap-1 border-b border-border">
@@ -159,18 +156,13 @@ export default function MetasVendedoresConfig() {
               </Button>
             </div>
 
-            <div className="rounded-lg bg-muted/30 border border-border px-3 py-2 text-xs text-muted-foreground">
-              A <strong className="text-foreground">meta padrão</strong> passa a valer <strong className="text-foreground">a partir do mês selecionado</strong> ({format(month, "MMM/yyyy", { locale: ptBR })}) e segue para os próximos — sem mexer nos meses anteriores.
-              Para um mês pontual diferente, use <strong className="text-foreground">"Meta deste mês"</strong>.
-            </div>
-
             {isLoading ? (
               <div className="space-y-2">{[1, 2, 3].map((i) => <div key={i} className="h-14 rounded-xl bg-muted/40 animate-pulse" />)}</div>
             ) : metas.length === 0 ? (
               <CarboCard>
                 <CarboCardContent className="py-12 text-center space-y-3">
                   <Target className="h-10 w-10 mx-auto text-muted-foreground/30" />
-                  <p className="text-muted-foreground">Nenhum vendedor marcado. Marque “É vendedor?” no Admin para alguém aparecer aqui.</p>
+                  <p className="text-muted-foreground">Nenhum vendedor</p>
                 </CarboCardContent>
               </CarboCard>
             ) : (
@@ -227,10 +219,7 @@ export default function MetasVendedoresConfig() {
                 <CarboCard key={p.id}>
                   <CarboCardContent className="p-4 flex items-center gap-4">
                     <div className="h-11 w-11 rounded-xl flex items-center justify-center text-xl shrink-0" style={{ background: p.color + "20" }}>{p.emoji}</div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-sm">{p.label}</p>
-                      <p className="text-xs text-muted-foreground">Meta de faturamento mensal</p>
-                    </div>
+                    <p className="flex-1 min-w-0 font-semibold text-sm">{p.label}</p>
                     <div className="w-44 space-y-1">
                       <Label className="text-[10px] text-muted-foreground">Meta (R$)</Label>
                       <div className="relative">
@@ -245,8 +234,8 @@ export default function MetasVendedoresConfig() {
             <CarboCard className="border-carbo-green/30">
               <CarboCardContent className="p-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="h-11 w-11 rounded-xl bg-carbo-green/10 flex items-center justify-center text-xl">🎯</div>
-                  <div><p className="font-semibold text-sm">Total Geral</p><p className="text-xs text-muted-foreground">Soma das metas por plataforma</p></div>
+                  <div className="h-11 w-11 rounded-xl bg-carbo-green/10 flex items-center justify-center"><Target className="h-5 w-5 text-carbo-green" /></div>
+                  <p className="font-semibold text-sm">Total Geral</p>
                 </div>
                 <p className="text-2xl font-bold tabular-nums text-carbo-green">{brl(ecomTotal)}</p>
               </CarboCardContent>
@@ -254,13 +243,9 @@ export default function MetasVendedoresConfig() {
             <div className="flex justify-end">
               <Button className="gap-2" onClick={() => toast.success("Metas salvas! (port visual — lógica entra depois)")}><Save className="h-4 w-4" /> Salvar metas</Button>
             </div>
-            <p className="text-xs text-muted-foreground text-center">Aba de e-commerce: a gravação real entra na fase de lógica.</p>
           </>
         )}
 
-        <p className="text-xs text-muted-foreground text-center">
-          O acompanhamento (ranking, progresso) fica no Carbo Sales e em Acompanhamento. Aqui é só a configuração.
-        </p>
       </div>
 
       {/* ── Dialog Nova / Editar Meta ────────────────────────────────────── */}
@@ -273,8 +258,8 @@ export default function MetasVendedoresConfig() {
             </DialogTitle>
             <DialogDescription>
               {editScope === "default"
-                ? `Passa a valer a partir de ${format(month, "MMMM 'de' yyyy", { locale: ptBR })} (e meses seguintes).`
-                : `Exceção só para ${format(month, "MMMM 'de' yyyy", { locale: ptBR })}.`}
+                ? `A partir de ${format(month, "MMMM 'de' yyyy", { locale: ptBR })}`
+                : `Só ${format(month, "MMMM 'de' yyyy", { locale: ptBR })}`}
             </DialogDescription>
           </DialogHeader>
 

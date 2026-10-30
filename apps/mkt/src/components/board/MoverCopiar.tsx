@@ -130,9 +130,7 @@ export function MoverCopiar({ modo, card, onClose, onFeito }: {
             </div>
           </div>
           {boardId !== card.board_id && (
-            <p className="text-xs text-muted-foreground">
-              Para outro quadro: etiquetas vão pelo nome e cor (criadas lá se faltarem); campos só vão se existir um com o mesmo nome lá.
-            </p>
+            <p className="text-xs text-muted-foreground">Campos sem equivalente no quadro de destino não vão.</p>
           )}
           <Button className="w-full" onClick={confirmarAcao} disabled={ocupado || !listId}>
             {ocupado ? <Loader2 className="h-4 w-4 animate-spin" /> : modo === "mover" ? "Mover" : "Criar cópia"}

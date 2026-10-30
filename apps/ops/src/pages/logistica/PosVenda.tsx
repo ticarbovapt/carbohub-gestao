@@ -271,11 +271,11 @@ function ChipNf({ nfId, numero, conta, variant, rotulo }: {
 
   // Sem id da nota não há o que baixar — segue como etiqueta, não como botão.
   // Botão que não faz nada é pior que texto: ele promete.
-  if (!nfId) return <CarboBadge variant={variant} className="gap-1">🧾 {texto}</CarboBadge>;
+  if (!nfId) return <CarboBadge variant={variant} className="gap-1">{texto}</CarboBadge>;
 
   return (
     <button type="button" onClick={baixar} onPointerDown={(e) => e.stopPropagation()}
-      disabled={baixando} title="Baixar a NF (DANFE) para enviar com a carga"
+      disabled={baixando} title="Baixar DANFE"
       className="inline-flex items-center gap-1 disabled:opacity-60">
       <CarboBadge variant={variant} className="gap-1 cursor-pointer hover:brightness-125 transition-[filter]">
         {baixando ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
@@ -409,13 +409,13 @@ const CorpoDoCard = memo(function CorpoDoCard({ o, op, onStage, onEtiqueta }: {
       </div>
       {o.fulfillment_stage === "criar_op" && (
         o.production_done ? (
-          <CarboBadge variant="success" className="gap-1">✅ Produzido — mover p/ Em Separação</CarboBadge>
+          <CarboBadge variant="success" className="gap-1">Produzido — mover p/ Em Separação</CarboBadge>
         ) : op ? (
           <CarboBadge variant="default" className="gap-1">
-            🏭 {op.done}/{op.total} produzidas · {op.sector}
+            {op.done}/{op.total} produzidas · {op.sector}
           </CarboBadge>
         ) : (
-          <CarboBadge variant="warning" className="gap-1">⚠️ Sem OP — recriar (mover p/ Pedido Recebido e voltar)</CarboBadge>
+          <CarboBadge variant="warning" className="gap-1">Sem OP — mover p/ Pedido Recebido e voltar</CarboBadge>
         )
       )}
       {/* ⚠️ A nota de VENDA tem de ESTAR FALTANDO para o selo
@@ -432,7 +432,7 @@ const CorpoDoCard = memo(function CorpoDoCard({ o, op, onStage, onEtiqueta }: {
           mentir no próximo pedido que ficar preso. */}
       {o.fulfillment_stage === "gerar_nf"
         && !notaDoPedido(o, "venda").id && (
-        <CarboBadge variant="warning" className="gap-1">🧾 Liberado no Faturamento — aguardando NF</CarboBadge>
+        <CarboBadge variant="warning" className="gap-1">Liberado no Faturamento — aguardando NF</CarboBadge>
       )}
       {/* ⚠️ SEM condição de etapa. A nota passa a acompanhar o
           card até o fim: é depois da entrega que o cliente liga
@@ -804,7 +804,6 @@ export default function PosVenda() {
       <div className="max-w-[1700px] mx-auto w-full flex flex-col flex-1 min-h-0 gap-4">
         <CarboPageHeader
           title="Rastreio de venda"
-          description="Jornada das vendas manuais (Carbo Sales) — operações controlam da Nova Venda à Entrega"
           icon={ShoppingBag}
         />
 
@@ -866,7 +865,7 @@ export default function PosVenda() {
                       <span className="flex items-center gap-1.5">
                         {stage.key === "criar_op" && items.some((i) => i.production_done) && (
                           <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" title="Produzidos aguardando mover para Em Separação">
-                            🏭 {items.filter((i) => i.production_done).length} pronto{items.filter((i) => i.production_done).length > 1 ? "s" : ""}
+                            {items.filter((i) => i.production_done).length} pronto{items.filter((i) => i.production_done).length > 1 ? "s" : ""}
                           </span>
                         )}
                         <span className="text-xs text-muted-foreground tabular-nums">{items.length}</span>
@@ -926,9 +925,6 @@ export default function PosVenda() {
           </DndContext>
         )}
 
-        <p className="text-xs text-muted-foreground">
-          <strong>Arraste</strong> o card entre as colunas ou use o seletor para mudar a etapa. <strong>Clique</strong> no card para ver os detalhes. Para andar para os lados: passe o mouse nas setas das bordas, arraste o espaço vazio ou use o botão do meio do mouse.
-        </p>
       </div>
 
       {/* Portão de estoque — vale para Em Separação e Criar Ordem de Produção */}
@@ -1127,13 +1123,8 @@ export default function PosVenda() {
                   <p className="font-semibold text-sm truncate">{etiquetaOrder.shipment_carrier || "—"}</p>
                 </div>
                 <p className="col-span-3 text-[11px] text-muted-foreground pt-1">
-                  Serão gerada(s) <strong>{etqTotalVolumes}</strong> etiqueta(s) (uma por volume). Para alterar, use “Editar” no detalhe do pedido.
+                  Serão gerada(s) <strong>{etqTotalVolumes}</strong> etiqueta(s).
                 </p>
-                {colunaDaEtapa(etiquetaOrder.fulfillment_stage) === "emitir_etiqueta" && (
-                  <p className="col-span-3 text-[11px] text-muted-foreground">
-                    Ao gerar, o card vai para <strong>Etiqueta emitida · aguardando despacho</strong>.
-                  </p>
-                )}
               </div>
 
               <div className="flex flex-col gap-2 pt-1">
@@ -1167,8 +1158,7 @@ export default function PosVenda() {
                   <span className="font-mono text-xs text-muted-foreground shrink-0">{sepOrder.order_number}</span>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Conte as caixas e pese o pedido fechado. Ao confirmar, o card vai para{" "}
-                  <strong>Separado</strong> e o estoque é deduzido do HUB-RN.
+                  O estoque é deduzido do HUB-RN ao confirmar.
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-3 rounded-lg border border-border p-3">
@@ -1183,9 +1173,6 @@ export default function PosVenda() {
                     onChange={(e) => setSepPeso(e.target.value)} placeholder="ex.: 12,5" />
                 </div>
               </div>
-              <p className="text-[11px] text-muted-foreground">
-                A transportadora e o valor do frete são informados depois, ao gerar a nota.
-              </p>
               <div className="flex flex-col gap-2 pt-1">
                 <Button className="w-full gap-1.5" disabled={sepSaving} onClick={confirmSeparado}>
                   {sepSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Confirmar → Separado
@@ -1210,7 +1197,6 @@ export default function PosVenda() {
                   <span className="font-semibold text-sm">{gnfOrder.customer_name}</span>
                   <span className="font-mono text-xs text-muted-foreground shrink-0">{gnfOrder.order_number}</span>
                 </div>
-                <p className="text-xs text-muted-foreground">Ao confirmar, o card segue para <strong>Gerar Nota Fiscal</strong>.</p>
               </div>
 
               {/* Volumes e peso já vieram da separação — mostrados só para conferir,

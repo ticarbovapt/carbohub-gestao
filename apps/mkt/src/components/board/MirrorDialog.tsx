@@ -26,10 +26,6 @@ export function MirrorDialog({ onConfirm, onClose }: {
             Espelhar cartão
           </DialogTitle>
         </DialogHeader>
-        <div className="flex items-start gap-2 rounded-[var(--input-radius)] border border-border bg-muted/40 p-3 text-xs leading-relaxed text-muted-foreground">
-          <Link2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" />
-          <span>O espelho reflete título, descrição, etiquetas, checklists e membros do original. A edição continua só no cartão original.</span>
-        </div>
         <div className="space-y-4">
           <div className="space-y-1.5">
             <label className="mkt-meta-label">Quadro</label>

@@ -31,7 +31,7 @@ export function ShipmentsKanban({ shipments, onView }: { shipments: Shipment[]; 
         return (
           <div key={status} className="w-[85vw] sm:w-64 shrink-0 snap-start rounded-2xl border border-border bg-board-surface/40 flex flex-col">
             <div className="rounded-t-2xl px-3 py-2.5 border-b border-border flex items-center justify-between" style={{ background: cfg.color + "12" }}>
-              <span className="text-sm font-semibold flex items-center gap-1.5">{cfg.icon} {cfg.label}</span>
+              <span className="text-sm font-semibold flex items-center gap-1.5">{cfg.label}</span>
               <span className="text-xs font-bold rounded-full px-2 py-0.5" style={{ background: cfg.color + "20", color: cfg.color }}>{items.length}</span>
             </div>
             <div className="p-2 space-y-2 min-h-[80px]">

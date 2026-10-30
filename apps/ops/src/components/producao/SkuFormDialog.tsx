@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,9 +69,6 @@ export function SkuFormDialog({ open, onOpenChange, mode, id, initial }: SkuForm
       <DialogContent className="w-[calc(100%-2rem)] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{mode === "create" ? "Novo SKU" : "Editar SKU"}</DialogTitle>
-          <DialogDescription>
-            {mode === "create" ? "Cadastre um novo produto acabado (SKU)" : "Atualize os dados do produto acabado (SKU)"}
-          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">

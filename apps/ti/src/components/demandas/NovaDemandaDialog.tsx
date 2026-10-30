@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogHeader, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle, DialogHeader, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -64,7 +64,6 @@ export function NovaDemandaDialog({ open, onClose }: { open: boolean; onClose: (
       <DialogContent className="sm:max-w-lg max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Nova demanda</DialogTitle>
-          <DialogDescription>Para registrar o que chegou por fora do botão de reporte.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3 py-1">
@@ -153,7 +152,6 @@ export function NovaDemandaDialog({ open, onClose }: { open: boolean; onClose: (
             <p className="text-[11px] text-muted-foreground">
               Prioridade sugerida:{" "}
               <strong className="text-foreground">{prioridade ? prioOf(prioridade).label : "a triar"}</strong>
-              {" "}— dá pra ajustar depois no card.
             </p>
           </div>
         </div>

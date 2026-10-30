@@ -88,8 +88,7 @@ function Fila() {
       {isLoading ? (
         <p className="text-sm text-muted-foreground py-8 text-center">Carregando…</p>
       ) : rows.length === 0 ? (
-        <CarboEmptyState icon={CheckCircle2} title="Nada na fila"
-          description={filter === "pending" ? "Nenhum desconto aguardando aprovação. Com a alçada desligada, tudo é aprovado automaticamente." : "Nenhum registro neste filtro."} />
+        <CarboEmptyState icon={CheckCircle2} title="Nada na fila" />
       ) : (
         <CarboCard>
           <CarboCardContent className="p-0 overflow-x-auto">
@@ -228,13 +227,8 @@ function Config() {
   return (
     <CarboCard>
       <CarboCardContent className="p-4 space-y-4">
-        <div className="flex items-start justify-between gap-3 rounded-xl border p-3">
-          <div>
-            <p className="text-sm font-medium">Alçada ativada</p>
-            <p className="text-xs text-muted-foreground">
-              Enquanto <b>desativada</b>, todo desconto é aprovado automaticamente (nada entra na fila).
-            </p>
-          </div>
+        <div className="flex items-center justify-between gap-3 rounded-xl border p-3">
+          <p className="text-sm font-medium">Alçada ativada</p>
           <Switch checked={eff} onCheckedChange={setEnabled} />
         </div>
 
@@ -244,7 +238,7 @@ function Config() {
             <Button size="sm" variant="outline" onClick={addTier}><Plus className="h-4 w-4 mr-1" /> Faixa</Button>
           </div>
           {effTiers.length === 0 && (
-            <p className="text-xs text-muted-foreground">Sem faixas — com a alçada ligada e sem faixas, tudo continua automático. Ex.: 0–5% Automático, 5–10% Gestor, 10%+ CEO.</p>
+            <p className="text-xs text-muted-foreground">Nenhuma faixa cadastrada.</p>
           )}
           <div className="space-y-2">
             {effTiers.map((t, i) => (
@@ -316,8 +310,7 @@ function FilaFabricacao() {
       {isLoading ? (
         <p className="text-sm text-muted-foreground py-8 text-center">Carregando…</p>
       ) : rows.length === 0 ? (
-        <CarboEmptyState icon={CheckCircle2} title="Nada na fila"
-          description={filter === "pending" ? "Nenhuma fabricação aguardando liberação. Com a alçada desligada, prazos curtos são apenas sinalizados." : "Nenhum registro neste filtro."} />
+        <CarboEmptyState icon={CheckCircle2} title="Nada na fila" />
       ) : (
         <CarboCard>
           <CarboCardContent className="p-0 overflow-x-auto">
@@ -440,13 +433,8 @@ function ConfigFabricacao() {
   return (
     <CarboCard>
       <CarboCardContent className="p-4 space-y-4">
-        <div className="flex items-start justify-between gap-3 rounded-xl border p-3">
-          <div>
-            <p className="text-sm font-medium">Alçada de fabricação ativada</p>
-            <p className="text-xs text-muted-foreground">
-              Enquanto <b>desativada</b>, vendas com prazo curto são apenas sinalizadas (auto-liberadas) — nada entra na fila.
-            </p>
-          </div>
+        <div className="flex items-center justify-between gap-3 rounded-xl border p-3">
+          <p className="text-sm font-medium">Alçada de fabricação ativada</p>
           <Switch checked={eff.enabled} onCheckedChange={(v) => patch({ enabled: v })} />
         </div>
         <div className="grid sm:grid-cols-2 gap-3">
@@ -493,7 +481,6 @@ export default function Aprovacoes() {
       <CarboPageHeader
         icon={isDesc ? BadgePercent : Factory}
         title="Aprovações"
-        description={isDesc ? "Descontos que precisam de aval e a alçada de desconto." : "Fabricações de prazo curto e as regras de prazo."}
         actions={
           <div className="flex gap-1 rounded-lg border p-1">
             {([["desconto", "Desconto", BadgePercent], ["fabricacao", "Fabricação", Factory]] as const).map(([k, label, Ico]) => (

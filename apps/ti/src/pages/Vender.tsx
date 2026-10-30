@@ -1353,10 +1353,6 @@ export default function Vender() {
               </span>
             </div>
           )}
-
-          <p className="mt-1.5 text-xs text-muted-foreground">
-            A comissão desta venda vai para o vendedor selecionado.
-          </p>
         </div>
       )}
 
@@ -1377,13 +1373,6 @@ export default function Vender() {
               </button>
             ))}
           </div>
-          {/* ⚠️ Dito na tela, porque a regra é nova e muda o que o vendedor
-              podia fazer ontem: até 29/09/2026 dava para pôr produto e serviço
-              no mesmo pedido. */}
-          <p className="text-[11px] text-muted-foreground">
-            Uma venda é de um tipo só — o faturamento sai por caminhos diferentes.
-            Para vender os dois ao mesmo cliente, registre duas vendas.
-          </p>
         </CarboCardContent>
       </CarboCard>
 
@@ -1391,9 +1380,6 @@ export default function Vender() {
       <CarboCard>
         <CarboCardContent className="p-4 space-y-3">
           <h3 className="font-semibold flex items-center gap-2"><Search className="h-4 w-4 text-carbo-green" /> Busca por CNPJ ou CPF</h3>
-          <p className="text-xs text-muted-foreground">
-            Comece a digitar: se o cliente já existe na base, ele aparece na lista e os dados vêm junto. Para cliente novo, "Buscar dados" consulta a Receita pelo CNPJ; CPF é validado e segue manual.
-          </p>
           <div className="flex flex-col sm:flex-row gap-2">
             <ClienteDocInput
               value={doc}
@@ -1439,10 +1425,7 @@ export default function Vender() {
               <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(00) 00000-0000" />
             </div>
             <div className="flex items-start justify-between gap-3 rounded-xl border p-3">
-              <div>
-                <p className="text-sm font-medium">É Licenciado?</p>
-                <p className="text-xs text-muted-foreground">Marque se o cliente é um licenciado Carbo</p>
-              </div>
+              <p className="text-sm font-medium">É Licenciado?</p>
               <Switch checked={isLicenciado} onCheckedChange={setIsLicenciado} />
             </div>
 
@@ -1476,9 +1459,7 @@ export default function Vender() {
                   {ieResult.valid ? <CheckCircle2 className="h-3 w-3 shrink-0" /> : <AlertCircle className="h-3 w-3 shrink-0" />}
                   {ieResult.message}
                 </p>
-              ) : (
-                <p className="text-[11px] text-muted-foreground">Escolha a UF e digite a IE — valida formato e dígito de qualquer estado do Brasil. Marque “Isento” se não houver.</p>
-              )}
+              ) : null}
             </div>
           </div>
         </CarboCardContent>
@@ -1549,12 +1530,12 @@ export default function Vender() {
                   </CircleMarker>
                 </MapContainer>
               </div>
-              <p className="text-[11px] text-muted-foreground flex items-center gap-1"><MapPin className="h-3 w-3" /> Posição <b>aproximada</b> pelo endereço — confira se bate com o {ehCarboze ? "local de entrega" : "endereço do cliente"}.</p>
+              <p className="text-[11px] text-muted-foreground flex items-center gap-1"><MapPin className="h-3 w-3" /> Posição aproximada</p>
             </div>
           ) : (
             <div className="rounded-xl border border-dashed flex flex-col items-center justify-center gap-2 py-10 text-center text-muted-foreground">
               <MapPin className="h-6 w-6" />
-              <p className="text-sm px-6">{mapMsg ?? <>Preencha o endereço e clique em <b>Localizar no mapa</b> para visualizar o ponto aproximado {ehCarboze ? "de entrega" : "do endereço"}.</>}</p>
+              <p className="text-sm px-6">{mapMsg ?? "Endereço não localizado no mapa"}</p>
             </div>
           )}
 
@@ -1627,12 +1608,9 @@ export default function Vender() {
                   <p className="flex items-start gap-1.5 text-xs text-destructive">
                     <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-px" />
                     {gestor ? (
-                      <span>Este produto ainda não tem preço na tabela. Digite o valor no campo
-                        de preço ou cadastre em <b>Admin › Comercial › Tabela de preços</b>.</span>
+                      <span>Produto sem preço na tabela. Digite o valor ou cadastre em Admin › Comercial › Tabela de preços.</span>
                     ) : (
-                      <span>Este produto ainda não tem preço na tabela. Peça à gestão para cadastrar em
-                        <b className="mx-1">Admin › Comercial › Tabela de preços</b> — o valor não é
-                        digitado aqui.</span>
+                      <span>Produto sem preço na tabela. Peça à gestão para cadastrar.</span>
                     )}
                   </p>
                 )}
@@ -1771,7 +1749,7 @@ export default function Vender() {
                                 updateRow(r.id, { unitPriceStr: txt, unitPrice: Number.isFinite(n) ? Math.round(n * 100) / 100 : 0 });
                               }}
                               onBlur={() => updateRow(r.id, { unitPriceStr: r.unitPrice ? r.unitPrice.toFixed(2).replace(".", ",") : "" })}
-                              title="Gestor: o preço vem da tabela e pode ser alterado aqui."
+                              title="Preço editável"
                               placeholder="0,00" />
                             {alterado && (
                               <p className="text-[11px] text-amber-600 dark:text-amber-400 leading-tight">
@@ -1798,9 +1776,7 @@ export default function Vender() {
                               : r.unitPrice ? brl(r.unitPrice)
                               : "sem preço"
                             }
-                            title={r.productId && !r.unitPrice
-                              ? "Produto sem preço definido — a gestão precisa cadastrar em Admin › Tabela de preços."
-                              : "Preço definido pela gestão em Admin › Tabela de preços."}
+                            title={r.productId && !r.unitPrice ? "Produto sem preço" : "Preço da tabela"}
                             placeholder="—" />
                           {alterado && (
                             <p className="text-[11px] text-muted-foreground leading-tight">Preço definido pela gestão</p>
@@ -1902,7 +1878,7 @@ export default function Vender() {
           </div>
 
           {serviceRows.length === 0 && (
-            <p className="text-xs text-muted-foreground">Nenhum serviço adicionado. Use “Adicionar Serviço” para incluir descarbonizações.</p>
+            <p className="text-xs text-muted-foreground">Nenhum serviço adicionado.</p>
           )}
 
           {/* ⚠️ O SELETOR "Tipo de serviço" (B2C/B2B/Frota) SAIU em 29/09/2026,
@@ -2021,18 +1997,10 @@ export default function Vender() {
 
           {/* ── Serviços que acompanham ──────────────────────────────────────
               Vão DESCRITOS no orçamento como bonificação a R$ 0,00. Não somam,
-              não descontam e não geram vaga de veículo na OS.
-
-              ⚠️ O texto "não alteram o valor" fica na tela de propósito: sem
-              ele, quem marca duas caixinhas e vê o total parado no mesmo número
-              acha que a tela não registrou — e marca de novo, ou desiste. */}
+              não descontam e não geram vaga de veículo na OS. Cada caixinha
+              mostra "Bonificado" — é o que diz que o total não muda. */}
           <div className="border-t pt-3 space-y-2">
-            <div>
-              <Label>Serviços que acompanham <span className="text-xs font-normal text-muted-foreground">(opcional)</span></Label>
-              <p className="text-[11px] text-muted-foreground">
-                Não alteram o valor — entram no orçamento como bonificados, um por veículo.
-              </p>
-            </div>
+            <Label>Serviços que acompanham <span className="text-xs font-normal text-muted-foreground">(opcional)</span></Label>
             <div className="space-y-2">
               {DESCARB_EXTRAS.map((ex) => {
                 const marcado = extras.includes(ex.key);
@@ -2074,7 +2042,7 @@ export default function Vender() {
                 Venda" sem entender a recusa. */}
             {extras.length > 0 && !hasValidService && (
               <p className="text-[11px] text-amber-600">
-                Escolha ao menos uma descarbonização acima — estes serviços acompanham a venda, não são a venda.
+                Escolha ao menos uma descarbonização — estes serviços só acompanham a venda.
               </p>
             )}
           </div>
@@ -2115,7 +2083,6 @@ export default function Vender() {
                 className={`rounded-lg border px-3 py-2.5 text-left transition ${
                   modalidade === "producao" ? "border-carbo-green bg-carbo-green/10" : "hover:bg-muted"}`}>
                 <p className="text-sm font-medium">Precisa produzir</p>
-                <p className="text-[11px] text-muted-foreground">Segue a esteira normal: produção, separação e envio.</p>
               </button>
 
               <button type="button" onClick={() => setModalidade("pronta_entrega")}
@@ -2134,11 +2101,6 @@ export default function Vender() {
 
             {modalidade === "pronta_entrega" && (
               <div className="rounded-lg border bg-muted/40 p-3 space-y-2">
-                <p className="text-[11px] text-muted-foreground">
-                  O produto sai da sua caixa assim que a venda for salva, e o pedido
-                  nasce em <strong>Gerar Nota Fiscal</strong> — sem passar por produção.
-                </p>
-
                 {/* ⚠️ O aviso é da TELA, mas quem recusa é o BANCO. Os dois números
                     podem divergir por segundos se o Ops confirmar uma chegada agora;
                     por isso a decisão final não é daqui. */}
@@ -2149,7 +2111,7 @@ export default function Vender() {
                       <p key={f.id}>• {f.nome}: você tem {f.tem}, o pedido pede {f.pedido}</p>
                     ))}
                     <p className="text-muted-foreground pt-1">
-                      Se você tem o produto em mãos, a contagem está errada — peça ao Ops para acertar.
+                      Se o produto está com você, peça ao Ops para acertar a contagem.
                     </p>
                   </div>
                 ) : (
@@ -2203,7 +2165,6 @@ export default function Vender() {
                   />
                 </PopoverContent>
               </Popover>
-              <p className="text-[11px] text-muted-foreground">Combine com o cliente. O prazo de fábrica (PPF/PPE) é calculado em dias úteis.</p>
             </div>
             )}
 
@@ -2240,7 +2201,6 @@ export default function Vender() {
                   />
                 </PopoverContent>
               </Popover>
-              <p className="text-[11px] text-muted-foreground">Estimativa da data de execução da descarbonização.</p>
             </div>
             )}
           </div>
@@ -2273,14 +2233,9 @@ export default function Vender() {
           no único momento em que alguém sabe a resposta — o da venda. */}
       <CarboCard>
         <CarboCardContent className="p-4 space-y-3">
-          <div>
-            <h3 className="font-semibold flex items-center gap-2">
-              <Store className="h-4 w-4 text-carbo-green" /> Unidade de negócio
-            </h3>
-            <p className="text-xs text-muted-foreground mt-1">
-              Este cliente <strong>revende</strong> o produto ou <strong>consome</strong> na própria operação?
-            </p>
-          </div>
+          <h3 className="font-semibold flex items-center gap-2">
+            <Store className="h-4 w-4 text-carbo-green" /> Unidade de negócio
+          </h3>
 
           <div className="grid grid-cols-2 gap-2">
             {([
@@ -2314,11 +2269,6 @@ export default function Vender() {
               Ao confirmar a venda, este cliente entra em <strong>Pontos de Venda</strong> automaticamente.
             </p>
           )}
-          {!segmento && (
-            <p className="text-[11px] text-muted-foreground">
-              Sem escolher, o sistema tenta deduzir pelo histórico do CNPJ — e fica sem canal quando não consegue.
-            </p>
-          )}
         </CarboCardContent>
       </CarboCard>
 
@@ -2328,14 +2278,9 @@ export default function Vender() {
       <CarboCard>
         <CarboCardContent className="p-4 space-y-3">
           <div className="flex items-start justify-between gap-3">
-            <div>
-              <h3 className="font-semibold flex items-center gap-2">
-                <Repeat className="h-4 w-4 text-carbo-green" /> Recorrência
-              </h3>
-              <p className="text-xs text-muted-foreground mt-1">
-                Repete este mesmo pedido nos próximos meses, já gravado no sistema.
-              </p>
-            </div>
+            <h3 className="font-semibold flex items-center gap-2">
+              <Repeat className="h-4 w-4 text-carbo-green" /> Recorrência
+            </h3>
             <Switch
               checked={recorrente}
               onCheckedChange={setRecorrente}
@@ -2390,11 +2335,6 @@ export default function Vender() {
                     {recProximosMeses[0]} → {recProximosMeses[recProximosMeses.length - 1]}
                   </span>
                 </div>
-                <p className="text-xs text-muted-foreground pt-1.5 border-t">
-                  Entra no faturamento <b>mês a mês</b>, {brl(orderTotal)} por vez — não os{" "}
-                  {brl(orderTotal * recParcelas)} de uma vez. As entregas futuras ficam como
-                  <b> Agendado</b> e podem ter a quantidade alterada antes de cada mês.
-                </p>
               </div>
             </>
           )}
@@ -2503,7 +2443,7 @@ export default function Vender() {
           <Button variant="outline" className="min-w-0 lg:flex-none" onClick={handleQuote} disabled={generating || !podeSalvar || editandoVenda}>
             <FileText className="h-4 w-4 mr-1" /> {generating ? "Gerando..." : (editId ? (<><span className="hidden sm:inline">Salvar e&nbsp;</span>Gerar PDF</>) : (<><span className="hidden sm:inline">Gerar&nbsp;</span>Orçamento</>))}
           </Button>
-          <Button variant="outline" className="min-w-0 lg:flex-none" onClick={handleEmailQuote} disabled={emailing || !podeSalvar} title="Salvar, gerar o PDF e enviar ao e-mail do cliente">
+          <Button variant="outline" className="min-w-0 lg:flex-none" onClick={handleEmailQuote} disabled={emailing || !podeSalvar} title="Enviar orçamento por e-mail">
             <Mail className="h-4 w-4 mr-1" /> {emailing ? "Enviando..." : (<><span className="hidden sm:inline">Enviar por&nbsp;</span>E-mail</>)}
           </Button>
           <CarboButton onClick={handleSell} className="col-span-2 order-first lg:order-none lg:flex-none lg:min-w-[150px]" disabled={!podeSalvar || editFaturado}>
@@ -2513,7 +2453,7 @@ export default function Vender() {
       </div>
 
       <p className="text-xs text-muted-foreground text-center">
-        Vendedor: <b>{vendedor || "—"}</b>{vendedorId ? "" : " (usuário logado)"} · Catálogo real, busca de CNPJ, mapa e gravação ativos.
+        Vendedor: <b>{vendedor || "—"}</b>
       </p>
     </div>
   );

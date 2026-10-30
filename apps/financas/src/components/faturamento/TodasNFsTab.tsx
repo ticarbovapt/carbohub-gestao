@@ -39,12 +39,9 @@ export function TodasNFsTab() {
     <CarboCard>
       <CarboCardContent className="pt-6 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <p className="font-semibold text-sm">Todas as notas fiscais</p>
-            <p className="text-xs text-muted-foreground">Todas as NFs do Bling — baixe o PDF de qualquer uma. Busque por nº, cliente ou pedido.</p>
-          </div>
+          <p className="font-semibold text-sm">Todas as notas fiscais</p>
           <div className="w-full sm:w-72">
-            <CarboSearchInput placeholder="Buscar por nº da NF, cliente ou pedido…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
+            <CarboSearchInput placeholder="Buscar NF, cliente ou pedido…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
           </div>
         </div>
 

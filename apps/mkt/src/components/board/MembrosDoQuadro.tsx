@@ -125,7 +125,7 @@ function Compartilhar({ boardId, tituloQuadro, membros, sugestoes, onClose }: {
     const eu = m.id === user?.id;
     if (!(await confirmar({
       titulo: eu ? "Sair deste quadro?" : `Tirar ${m.full_name ?? "esta pessoa"} do quadro?`,
-      mensagem: "Ela deixa de aparecer como membro. Continua podendo abrir o quadro, como todo o time interno.",
+      mensagem: "Deixa de aparecer como membro, mas continua podendo abrir o quadro.",
       confirmar: eu ? "Sair" : "Tirar",
     }))) return;
     const voltar = mudar((ms) => ms.filter((x) => x.id !== m.id));
@@ -155,7 +155,7 @@ function Compartilhar({ boardId, tituloQuadro, membros, sugestoes, onClose }: {
         <div className="space-y-4">
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Adicionar pessoa do time pelo nome…" className="pl-8 h-9 text-sm" />
+            <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Adicionar pessoa…" className="pl-8 h-9 text-sm" />
             {encontrados.length > 0 && (
               <div className="absolute z-30 left-0 right-0 top-full mt-1 rounded-[var(--radius)] border border-border bg-popover shadow-[var(--shadow-elevated)] p-1">
                 {encontrados.map((p) => (
@@ -169,7 +169,7 @@ function Compartilhar({ boardId, tituloQuadro, membros, sugestoes, onClose }: {
 
           <div>
             <p className="mkt-meta-label pb-1">Membros do quadro · {membros.length}</p>
-            {membros.length === 0 && <p className="text-xs text-muted-foreground py-2">Ninguém ainda — adicione pela busca ou pelas sugestões abaixo.</p>}
+            {membros.length === 0 && <p className="text-xs text-muted-foreground py-2">Nenhum membro.</p>}
             <div className="max-h-64 overflow-y-auto divide-y divide-border">
               {membros.map((m) => (
                 <Linha key={m.id} p={m}>
@@ -200,9 +200,7 @@ function Compartilhar({ boardId, tituloQuadro, membros, sugestoes, onClose }: {
               <Button size="sm" variant="ghost" disabled={ocupado} onClick={() => adicionar({ id: user.id, full_name: "Você", avatar_url: null })}>Entrar no quadro</Button>
             )}
           </div>
-          <p className="text-[11px] text-muted-foreground">
-            Membro é quem participa: aparece aqui e no topo do quadro, e é avisado quando entra. Todo o time interno continua podendo abrir o quadro.
-          </p>
+          <p className="text-[11px] text-muted-foreground">Todo o time interno pode abrir o quadro, sendo membro ou não.</p>
         </div>
       </DialogContent>
     </Dialog>

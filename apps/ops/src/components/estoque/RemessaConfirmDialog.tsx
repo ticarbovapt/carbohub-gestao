@@ -39,11 +39,9 @@ export function RemessaConfirmDialog({
             {isEstorno ? "Estornar envio" : "Confirmar chegada"}
             {produto ? ` — ${produto}` : ""}?
           </AlertDialogTitle>
-          <AlertDialogDescription>
-            {isEstorno
-              ? "O envio será marcado como não recebido e a quantidade retornará ao estoque de origem (Hub Natal)."
-              : "A remessa será marcada como entregue e a quantidade entrará no estoque do destino."}
-          </AlertDialogDescription>
+          {isEstorno && (
+            <AlertDialogDescription>A quantidade volta ao Hub Natal.</AlertDialogDescription>
+          )}
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel disabled={pending}>Cancelar</AlertDialogCancel>

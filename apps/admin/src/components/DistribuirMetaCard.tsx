@@ -206,9 +206,7 @@ export function DistribuirMetaCard({
             </Button>
             <Button variant="outline" size="sm" onClick={() => repartir("proporcional")}
               disabled={total <= 0 || itens.length === 0 || semHistorico}
-              title={semHistorico
-                ? "Ninguém tem realizado neste período — sem base para proporção."
-                : "Reparte proporcionalmente ao que cada um já vendeu no mês."}>
+              title={semHistorico ? "Sem realizado no período" : undefined}>
               <TrendingUp className="mr-1.5 h-4 w-4" /> Proporcional ao realizado
             </Button>
           </div>
@@ -271,7 +269,7 @@ export function DistribuirMetaCard({
                 <Button
                   variant="ghost" size="icon" className="h-8 w-8"
                   onClick={() => alternarTrava(i.id)}
-                  title={travado ? "Destravar (entra na próxima repartição)" : "Travar neste valor"}
+                  title={travado ? "Destravar" : "Travar neste valor"}
                   aria-label={travado ? "Destravar" : "Travar"}
                 >
                   {travado
@@ -291,9 +289,7 @@ export function DistribuirMetaCard({
 
         <div className="flex items-center justify-between gap-3">
           <p className="text-xs text-muted-foreground">
-            {travados.size > 0
-              ? `${travados.size} linha(s) travada(s) — as repartições só mexem no resto.`
-              : "Editar um valor à mão trava a linha automaticamente."}
+            {travados.size > 0 ? `${travados.size} linha(s) travada(s)` : ""}
           </p>
           <Button onClick={salvar} disabled={!mexeu || distribuir.isPending || total <= 0}
             className="bg-carbo-green text-white hover:bg-carbo-green/90">

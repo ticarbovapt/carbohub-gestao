@@ -219,7 +219,6 @@ export default function Orders() {
       <div className="space-y-6">
         <CarboPageHeader
           title="Pedidos de Venda"
-          description="Gestão de pedidos, faturamento e entregas"
           icon={ShoppingBag}
           actions={
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
@@ -357,7 +356,7 @@ export default function Orders() {
           <div className="flex flex-col md:flex-row gap-3">
             <div className="flex-1 max-w-md">
               <CarboSearchInput
-                placeholder="Buscar por número, cliente ou licenciado..."
+                placeholder="Buscar número, cliente ou licenciado…"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -465,7 +464,7 @@ export default function Orders() {
             </Select>
 
             <span className="ml-auto text-xs text-muted-foreground">
-              Mostrando <strong>{filteredOrders.length}</strong> pedidos
+              <strong>{filteredOrders.length}</strong> pedidos
             </span>
           </div>
         </div>
@@ -484,7 +483,6 @@ export default function Orders() {
             <CarboEmptyState
               icon={ShoppingBag}
               title="Nenhum pedido encontrado"
-              description={searchQuery ? "Tente ajustar os filtros de busca" : "Comece criando seu primeiro pedido"}
               action={
                 gestor
                   ? {

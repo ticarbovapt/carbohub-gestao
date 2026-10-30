@@ -2,10 +2,10 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-  Link2, Unlink, RefreshCw, Loader2, CheckCircle, XCircle, Clock, ShieldCheck,
+  Link2, Unlink, RefreshCw, Loader2, CheckCircle, XCircle, Clock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { confirmar } from "@carbo/shell";
@@ -130,7 +130,7 @@ export default function Bling2Integracao() {
     // a integração que está no ar.
     if (!(await confirmar({
       titulo: "Desconectar o Bling 2?",
-      mensagem: "Isto NÃO afeta a integração Bling principal — só esta segunda conta. Os dados já sincronizados continuam no sistema.",
+      mensagem: "Não afeta a integração Bling principal. Os dados já sincronizados continuam no sistema.",
       confirmar: "Desconectar", perigo: true,
     }))) return;
     try {
@@ -212,36 +212,10 @@ export default function Bling2Integracao() {
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-3">
-          <Link2 className="h-6 w-6 text-sky-500" />
-          Integração Bling 2
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          Segunda conta Bling, sincronizada por completo e em base própria — produtos,
-          variações, estoque, contatos, vendedores, pedidos, notas fiscais, contas a
-          pagar e a receber e pedidos de compra.
-        </p>
-      </div>
-
-      {/* O aviso de isolamento fica no topo, não no rodapé: é a pergunta que
-          qualquer um faz ao ver duas integrações Bling lado a lado. */}
-      <Card className="border-sky-200 dark:border-sky-900/40 bg-sky-50/50 dark:bg-sky-950/10">
-        <CardContent className="p-4 flex gap-3">
-          <ShieldCheck className="h-5 w-5 text-sky-600 shrink-0 mt-0.5" />
-          <div className="text-sm">
-            <p className="font-medium text-sky-700 dark:text-sky-400">
-              Esta integração não cruza com a Bling principal
-            </p>
-            <p className="text-muted-foreground text-xs mt-1">
-              Tudo daqui fica em tabelas próprias (<code>bling2_*</code>). Nada vira
-              pedido no sistema, nada entra no faturamento e nenhuma nota é vinculada a
-              pedido. Conectar, sincronizar ou desconectar aqui não altera em nada a
-              integração Bling que já está no ar.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+      <h1 className="text-2xl font-bold flex items-center gap-3">
+        <Link2 className="h-6 w-6 text-sky-500" />
+        Integração Bling 2
+      </h1>
 
       <Card>
         <CardHeader>
@@ -250,10 +224,7 @@ export default function Bling2Integracao() {
               <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center text-white font-bold text-lg">
                 B2
               </div>
-              <div>
-                <CardTitle>{apelido || "Bling — segunda conta"}</CardTitle>
-                <CardDescription>API v3 · OAuth2 · credenciais próprias</CardDescription>
-              </div>
+              <CardTitle>{apelido || "Bling — segunda conta"}</CardTitle>
             </div>
             <div className="flex items-center gap-2">
               {conectado ? (
@@ -334,18 +305,11 @@ export default function Bling2Integracao() {
               )}
             </Button>
           </div>
-          {/* Explica o botão separado: itens são 1 chamada por pedido e a
-              primeira carga não cabe numa execução só. */}
-          <p className="text-xs text-muted-foreground text-center -mt-3">
-            Os itens de cada pedido são buscados um a um (200 por execução) — repita
-            até a contagem parar de subir.
-          </p>
 
           {logs.length > 0 && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">Histórico de sincronização</CardTitle>
-                <CardDescription>Estado mais recente de cada entidade.</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">

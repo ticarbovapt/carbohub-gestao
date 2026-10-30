@@ -23,7 +23,6 @@ export function Assinaturas() {
     <div className="space-y-6">
       <CarboPageHeader
         title="Assinaturas"
-        description="Serviços recorrentes: o que renova, quando e em qual cartão"
         icon={RefreshCw}
       />
       <SubscriptionsList />
@@ -34,7 +33,7 @@ export function Assinaturas() {
 export function Fornecedores() {
   return (
     <div className="space-y-6">
-      <CarboPageHeader title="Fornecedores" description="Cadastro de fornecedores" icon={Building2} />
+      <CarboPageHeader title="Fornecedores" icon={Building2} />
       <SuppliersList />
     </div>
   );
@@ -45,7 +44,6 @@ export function FormasPagamento() {
     <div className="space-y-6">
       <CarboPageHeader
         title="Formas de pagamento"
-        description="Cartões e meios usados nas compras"
         icon={Wallet}
       />
       <PaymentMethodsList />
@@ -61,14 +59,13 @@ export function PainelFinanceiro() {
     <div className="space-y-6">
       <CarboPageHeader
         title="Painel financeiro"
-        description="Aging, previsão, curva ABC e indicadores"
         icon={BarChart3}
       />
       {gestor ? (
         <PurchasingDashboard />
       ) : (
         <p className="rounded-lg border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
-          O painel financeiro é só para gestores. Se você precisa dele, peça ao Admin para marcar a sua função como gestor.
+          Painel restrito a gestores.
         </p>
       )}
     </div>

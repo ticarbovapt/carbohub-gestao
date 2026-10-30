@@ -77,7 +77,7 @@ export function BaixaNoBling({
     return (
       <Button
         variant="ghost" size="sm" className="h-6 gap-1 px-1.5 text-[11px] text-muted-foreground"
-        disabled={enviando} onClick={enviar} title="A baixa foi feita aqui antes de a integração estar ligada"
+        disabled={enviando} onClick={enviar} title="Baixa feita só aqui"
       >
         <Send className="h-3 w-3" /> {enviando ? "Enviando…" : "Enviar ao Bling"}
       </Button>

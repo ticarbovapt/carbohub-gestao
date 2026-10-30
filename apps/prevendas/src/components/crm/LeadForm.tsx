@@ -195,11 +195,7 @@ export function LeadForm({ funnelType, initialStage, onClose }: LeadFormProps) {
               handoff, então não há a quem entregar isto. */}
           {isOutbound && (
             <>
-              <SectionLabel>Qualificação (o que o closer precisa saber)</SectionLabel>
-              <p className="text-[11px] text-muted-foreground -mt-2">
-                Pode ficar em branco agora e ser preenchido conforme a conversa avança.
-                O closer recebe exatamente o que estiver aqui.
-              </p>
+              <SectionLabel>Qualificação</SectionLabel>
               {/* As perguntas mudam com o funil (posto indicado × prospecção a
                   frio); as colunas são as mesmas — ver perguntasDeQualificacao. */}
               <div className="grid grid-cols-2 gap-3">
@@ -270,7 +266,7 @@ export function LeadForm({ funnelType, initialStage, onClose }: LeadFormProps) {
                       <Input placeholder="00.000.000/0000-00" value={form.cnpj} onChange={(e) => set("cnpj", e.target.value)} />
                     </Field>
                     <Field label="Inscrição Estadual">
-                      <Input placeholder="Isento, se não tiver" value={form.customer_ie} onChange={(e) => set("customer_ie", e.target.value)} />
+                      <Input placeholder="Isento" value={form.customer_ie} onChange={(e) => set("customer_ie", e.target.value)} />
                     </Field>
                   </div>
                   <Field label="Razão social">
@@ -292,9 +288,6 @@ export function LeadForm({ funnelType, initialStage, onClose }: LeadFormProps) {
                       <Input placeholder="00000-000" inputMode="numeric" value={form.cep} onChange={(e) => set("cep", e.target.value)} />
                     </Field>
                   </div>
-                  <p className="text-[11px] text-muted-foreground">
-                    Cidade e UF vêm de Localização, acima. Estes campos são reaproveitados ao gerar o orçamento.
-                  </p>
                 </>
               )}
             </>

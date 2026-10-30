@@ -166,7 +166,6 @@ export function PurchasingDashboard() {
               className={`px-3 py-1.5 text-sm rounded-md transition-colors ${periodoSel === v ? "bg-carbo-green text-white" : "text-muted-foreground hover:text-foreground"}`}>{l}</button>
           ))}
         </div>
-        <span className="text-[11px] text-muted-foreground">Contas a pagar em BRL. Assinaturas em BRL/USD separadas. Origem "{source === "all" ? "todas" : source}".</span>
       </div>
 
       {/* KPIs */}
@@ -313,7 +312,7 @@ export function PurchasingDashboard() {
           </CarboCardHeader>
           <CarboCardContent>
             {pendentes.length === 0 ? (
-              <p className="text-muted-foreground text-sm text-center py-12">Nenhuma RC aguardando aprovação 🎉</p>
+              <p className="text-muted-foreground text-sm text-center py-12">Nenhuma RC aguardando aprovação</p>
             ) : (
               <div className="space-y-2 max-h-[260px] overflow-y-auto">
                 {pendentes.slice(0, 12).map((rc) => {
@@ -359,7 +358,6 @@ export function PurchasingDashboard() {
                 </BarChart>
               </ResponsiveContainer>
             )}
-            <p className="text-[11px] text-muted-foreground mt-2">Normalizado por mês. BRL e USD separados — nunca somados.</p>
           </CarboCardContent>
         </CarboCard>
 

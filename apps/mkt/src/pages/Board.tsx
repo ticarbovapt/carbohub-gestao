@@ -439,7 +439,7 @@ function BoardColumn({
                 <button onClick={() => setModelosAbertos(false)} className="p-0.5 text-muted-foreground hover:text-foreground"><X className="h-3.5 w-3.5" /></button>
               </div>
               {modelos.length === 0 ? (
-                <p className="px-1.5 py-1.5 text-xs text-muted-foreground">Nenhum modelo neste quadro ainda. Abra um cartão pronto e use <b>Salvar como modelo</b>.</p>
+                <p className="px-1.5 py-1.5 text-xs text-muted-foreground">Nenhum modelo neste quadro.</p>
               ) : modelos.map((md) => (
                 <div key={md.id} className="group/md flex items-center gap-1">
                   <button onClick={() => { setModelosAbertos(false); onUsarModelo(list.id, md, text); setText(""); setAdding(false); }}
@@ -465,7 +465,7 @@ function BoardColumn({
               <div className="flex items-center gap-2">
                 <Button size="sm" onClick={submit}>Adicionar</Button>
                 <button onClick={() => setAdding(false)} className="p-1.5 text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
-                <button onClick={() => setModelosAbertos((v) => !v)} title="Usar um modelo (o título digitado vale)" className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-muted"><LayoutTemplate className="h-3.5 w-3.5" /> Modelo</button>
+                <button onClick={() => setModelosAbertos((v) => !v)} title="Usar um modelo" className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-muted"><LayoutTemplate className="h-3.5 w-3.5" /> Modelo</button>
               </div>
             </div>
           ) : (

@@ -330,7 +330,6 @@ export default function Pdvs() {
           <CarboPageHeader
             icon={Store}
             title="Pontos de Venda"
-            description="Cadastro dos PDVs. Venda para CNPJ daqui entra automaticamente como canal Revenda."
           />
           {/* ⚠️ Cadastrar PDV é de QUALQUER pessoa do time, não só da gestão.
               Quem descobre a loja nova é quem está na rua — e o caminho antigo
@@ -380,7 +379,7 @@ export default function Pdvs() {
         <div className="flex flex-wrap gap-2">
           <div className="relative flex-1 min-w-[240px]">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input className="pl-8" placeholder="Nome, razão social, CNPJ, endereço, CEP ou código…"
+            <Input className="pl-8" placeholder="Buscar PDV…"
               value={busca} onChange={(e) => setBusca(e.target.value)} />
           </div>
           <Select value={fUf} onValueChange={setFUf}>
@@ -413,8 +412,7 @@ export default function Pdvs() {
               </div>
             ) : lista.length === 0 ? (
               <div className="py-10">
-                <CarboEmptyState icon={Store} title="Nenhum PDV encontrado"
-                  description={pdvs.length ? "Ajuste a busca ou os filtros." : "Cadastre o primeiro ponto de venda."} />
+                <CarboEmptyState icon={Store} title="Nenhum PDV encontrado" />
               </div>
             ) : (
               <table className="w-full text-sm">
@@ -462,7 +460,7 @@ export default function Pdvs() {
                       </td>
                       <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">
                         {p.sem_documento
-                          ? <span className="text-amber-500" title="Sem documento — não classifica venda automaticamente">sem documento</span>
+                          ? <span className="text-amber-500" title="Sem documento">sem documento</span>
                           : fmtDoc(p.cnpj)}
                       </td>
                       {/* Cidade/UF em cima, rua embaixo. A rua é `truncate` com
@@ -532,11 +530,6 @@ export default function Pdvs() {
             )}
           </CarboCardContent>
         </CarboCard>
-
-        <p className="text-[11px] text-muted-foreground">
-          Pausar ou desativar <strong>não</strong> reclassifica o histórico: quem comprou enquanto era PDV
-          continua contando como Revenda. O status serve para gestão da operação.
-        </p>
       </div>
 
       {/* Criar / editar */}
@@ -544,9 +537,6 @@ export default function Pdvs() {
         <DialogContent className="max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editId ? "Editar PDV" : "Novo PDV"}</DialogTitle>
-            <DialogDescription>
-              O CNPJ é o que liga o PDV às vendas — sem ele, o canal não é classificado sozinho.
-            </DialogDescription>
           </DialogHeader>
           {form && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 py-1">
@@ -597,7 +587,7 @@ export default function Pdvs() {
                 {/* Dito na tela, não só no código: senão alguém troca o dono
                     achando que está corrigindo a comissão de uma venda. */}
                 <p className="text-[11px] text-muted-foreground">
-                  Carteira do ponto. Não altera o vendedor das vendas nem a comissão.
+                  Não altera o vendedor nem a comissão das vendas.
                 </p>
               </div>
               <div className="space-y-1.5 md:col-span-2 rounded-lg border p-3">
@@ -615,12 +605,6 @@ export default function Pdvs() {
                       onChange={(e) => set({ micro_desde: e.target.value })} />
                   </div>
                 )}
-                {/* Dito na tela: foi confundir as duas datas que fez o Auto
-                    Diesel aparecer aberto em jul/2026 comprando desde dez/2025. */}
-                <p className="text-[11px] text-muted-foreground">
-                  Continua sendo PDV e contando na base de pontos. A data aqui é de virar
-                  microdistribuidor — a abertura do ponto é o campo Abertura.
-                </p>
               </div>
               <div className="space-y-1.5 md:col-span-2">
                 <Label>Endereço</Label>
@@ -691,10 +675,6 @@ export default function Pdvs() {
                       })} />
                   </div>
                 ))}
-                <p className="text-[11px] text-muted-foreground">
-                  Preço em branco fica vazio, não R$ 0,00. "A confirmar" marca o que ainda
-                  ninguém checou no ponto.
-                </p>
               </div>
             </div>
           )}
@@ -785,8 +765,7 @@ function PdvDetalhe({ pdv, onClose }: { pdv: PdvRow | null; onClose: () => void 
                entender que a tela não guarda endereço — e aí ninguém preenche.
                São 5 PDVs assim, todos herdados da planilha sem o dado. */
             <div className="rounded-lg border border-dashed px-3 py-2 text-xs text-muted-foreground">
-              Endereço não cadastrado. Edite o PDV para preencher — ele é o que
-              a agenda de visitas usa para localizar o ponto.
+              Endereço não cadastrado.
             </div>
           )}
         </div>
@@ -823,8 +802,7 @@ function PdvDetalhe({ pdv, onClose }: { pdv: PdvRow | null; onClose: () => void 
           <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/[0.06] px-3 py-2 text-xs">
             <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5 text-amber-500" />
             <span className="text-muted-foreground">
-              Sem CNPJ/CPF cadastrado. As vendas deste PDV <strong>não</strong> são classificadas como
-              Revenda automaticamente até o documento ser preenchido.
+              Sem CNPJ/CPF cadastrado — as vendas deste PDV não são classificadas como Revenda.
             </span>
           </div>
         )}

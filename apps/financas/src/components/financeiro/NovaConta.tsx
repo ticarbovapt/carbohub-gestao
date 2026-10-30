@@ -222,7 +222,7 @@ export function NovaConta({ tipo, conta, open, onOpenChange, onCriada }: {
                   {buscando ? (
                     <p className="p-3 text-xs text-muted-foreground">Buscando…</p>
                   ) : !achados.length ? (
-                    <p className="p-3 text-xs text-muted-foreground">Nenhum contato com esse nome ou documento no Bling da {empresa}. Cadastre lá primeiro.</p>
+                    <p className="p-3 text-xs text-muted-foreground">Nenhum contato encontrado no Bling da {empresa}.</p>
                   ) : achados.map((f) => (
                     <button key={f.bling_id} type="button" onClick={() => setContato(f)}
                       className="flex w-full items-center justify-between gap-2 border-b border-border px-3 py-2 text-left last:border-0 hover:bg-muted/50">
@@ -289,10 +289,10 @@ export function NovaConta({ tipo, conta, open, onOpenChange, onCriada }: {
             </div>
             <div className="grid grid-cols-2 gap-3 sm:max-w-md">
               <Campo rotulo="Juros mensal (%)">
-                <Input className="h-9 cursor-default bg-muted/40 tabular-nums text-muted-foreground" readOnly tabIndex={-1} value={pct(formaEscolhida?.juros)} title="Vem da forma de pagamento no Bling" />
+                <Input className="h-9 cursor-default bg-muted/40 tabular-nums text-muted-foreground" readOnly tabIndex={-1} value={pct(formaEscolhida?.juros)} title="Da forma de pagamento" />
               </Campo>
               <Campo rotulo="Multa (%)">
-                <Input className="h-9 cursor-default bg-muted/40 tabular-nums text-muted-foreground" readOnly tabIndex={-1} value={pct(formaEscolhida?.multa)} title="Vem da forma de pagamento no Bling" />
+                <Input className="h-9 cursor-default bg-muted/40 tabular-nums text-muted-foreground" readOnly tabIndex={-1} value={pct(formaEscolhida?.multa)} title="Da forma de pagamento" />
               </Campo>
             </div>
 
@@ -317,7 +317,7 @@ export function NovaConta({ tipo, conta, open, onOpenChange, onCriada }: {
                 <Input type="number" min={1} max={36} className="h-9" value={qtd} onChange={(e) => setQtd(e.target.value)} />
               </Campo>
               <p className="pb-2 text-xs text-muted-foreground">
-                {n > 1 ? `Parcelada: ${n} contas no Bling, de mês em mês a partir do 1º vencimento.` : "Única."}
+                {n > 1 ? `${n} parcelas mensais` : "Única."}
               </p>
             </div>
             {parcelas.length > 0 && (

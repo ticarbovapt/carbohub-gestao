@@ -427,7 +427,7 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
                 depender de a pessoa saber olhar a barra de endereço é depender
                 demais — e o gestor que quer mandar o card pro vendedor está
                 justamente com o card aberto, não com a barra em foco. */}
-            <button onClick={copiarLink} className="text-muted-foreground hover:text-foreground p-1.5" title="Copiar link deste card">
+            <button onClick={copiarLink} className="text-muted-foreground hover:text-foreground p-1.5" title="Copiar link">
               {linkCopiado ? <Check className="h-4 w-4 text-carbo-green" /> : <Link2 className="h-4 w-4" />}
             </button>
             {canDelete && (
@@ -477,7 +477,7 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
                   <Hourglass className="h-3.5 w-3.5" />
                   {lead.waiting_on
                     ? (esperaVencida(lead) ? "A espera venceu" : "Aguardando")
-                    : "Este negócio está parado esperando algo?"}
+                    : "Espera"}
                 </p>
 
                 {lead.waiting_on && !editEspera ? (
@@ -490,10 +490,7 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
                       <p className="text-xs text-muted-foreground">{lead.waiting_note}</p>
                     )}
                     {esperaVencida(lead) && (
-                      <p className="text-xs text-destructive">
-                        O prazo passou. Ou renove com uma data nova, ou volte a tocar o negócio —
-                        enquanto estiver vencido ele conta como esquecido.
-                      </p>
+                      <p className="text-xs text-destructive">O prazo passou.</p>
                     )}
                     <div className="flex gap-2">
                       <Button size="sm" variant="outline" onClick={() => startEditEspera()}>
@@ -557,10 +554,7 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
                 <p className="flex items-center gap-1.5 text-sm font-medium">
                   <ArrowRight className="h-4 w-4 text-primary" /> Repassado ao closer
                 </p>
-                <p className="text-xs text-muted-foreground">
-                  Está na fila do closer, esperando alguém assumir. Você continua vendo o card
-                  e o que acontece com ele.
-                </p>
+                <p className="text-xs text-muted-foreground">Aguardando o closer assumir.</p>
               </div>
             )}
 
@@ -569,10 +563,6 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
               <div className="rounded-lg border border-primary/40 bg-primary/5 p-3 space-y-2">
                 <p className="flex items-center gap-1.5 text-sm font-medium">
                   <ArrowRight className="h-4 w-4 text-primary" /> Veio do {FUNNEL_CONFIG[lead.origin_funnel_type as FunnelType]?.shortName ?? "SDR"}, sem dono
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Todo o histórico abaixo foi herdado do card do SDR. Assuma para começar a
-                  trabalhar — enquanto ninguém pegar, ele fica visível para todos.
                 </p>
                 <Button size="sm" className="w-full" disabled={pegar.isPending}
                   onClick={() => pegar.mutate(lead.id)}>
@@ -596,11 +586,6 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
                     <p className="text-sm">
                       <strong>{orcamento.order_number ?? "sem número"}</strong> · {brl(orcamento.total)}
                     </p>
-                    <p className="text-xs text-muted-foreground">
-                      {isWonStage(stage)
-                        ? "Reabra preenchido para virar venda — sem redigitar nada."
-                        : "Já montado e ligado a este card."}
-                    </p>
                     <Button size="sm" className="w-full gap-1.5" onClick={abrirOrcamento}>
                       <ShoppingCart className="h-4 w-4" />
                       {isWonStage(stage) ? "Reabrir e gerar a venda" : "Abrir orçamento"}
@@ -609,7 +594,7 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
                 ) : (
                   <>
                     <p className="text-xs text-muted-foreground">
-                      Nenhum orçamento montado para este card ainda.
+                      Nenhum orçamento montado.
                     </p>
                     <Button size="sm" className="w-full gap-1.5" onClick={handleGerarVenda}>
                       <ShoppingCart className="h-4 w-4" /> Montar orçamento
@@ -679,7 +664,7 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
                     {isOutbound && faltamQual.length > 0 && (
                       <p className="flex items-start gap-1.5 text-[11px] text-amber-500">
                         <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-px" />
-                        Falta {faltamQual.join(", ")} — o closer vai receber o card sem isso.
+                        Falta {faltamQual.join(", ")}.
                       </p>
                     )}
                   </>
@@ -725,7 +710,7 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
                   <Field label="Razão social" value={lead.legal_name} />
                   <Field label="Nome fantasia" value={lead.trade_name} />
                   {!lead.contact_name && !lead.contact_phone && !lead.contact_email && (
-                    <p className="text-xs text-muted-foreground">Nenhum contato cadastrado. Clique em <span className="font-medium">Editar</span> para adicionar.</p>
+                    <p className="text-xs text-muted-foreground">Nenhum contato cadastrado.</p>
                   )}
                 </>
               )}
@@ -789,9 +774,6 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
                     </Button>
                     <Button size="sm" variant="outline" onClick={() => setEditFat(false)} disabled={updateLead.isPending}>Cancelar</Button>
                   </div>
-                  <p className="mt-1 text-[11px] text-muted-foreground">
-                    Vai preenchido para a tela de venda. Telefone e e-mail vêm de Cliente / Contato.
-                  </p>
                 </>
               ) : temFaturamento ? (
                 <>
@@ -801,10 +783,7 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
                   <Field label="Endereço" value={enderecoCompleto} />
                 </>
               ) : (
-                <p className="text-xs text-muted-foreground">
-                  Ainda sem dados fiscais. Preencha aqui, ou gere o orçamento e eles
-                  voltam preenchidos para cá sozinhos.
-                </p>
+                <p className="text-xs text-muted-foreground">Sem dados fiscais.</p>
               )}
             </Card>
 
@@ -894,8 +873,7 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
                 <input type="datetime-local" className="mt-2 h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
                   value={actDue} onChange={(e) => setActDue(e.target.value)} />
               )}
-              <div className="mt-2 flex items-center justify-between">
-                <span className="text-[11px] text-muted-foreground">Ctrl+Enter para registrar</span>
+              <div className="mt-2 flex items-center justify-end">
                 <Button size="sm" onClick={handleAddActivity} disabled={!actText.trim() || addActivity.isPending}>Registrar</Button>
               </div>
             </div>
@@ -959,9 +937,7 @@ export function DealDetail({ lead, funnelType, onClose }: DealDetailProps) {
             <DialogHeader>
               <DialogTitle>Arquivar lead</DialogTitle>
               <DialogDescription>
-                <strong>{displayName}</strong> sai das pipelines e das buscas, mas continua no
-                histórico — ele foi criado, movido e talvez ganho ou perdido em datas que não
-                mudam depois do fato. A gestão pode desarquivar.
+                <strong>{displayName}</strong> sai das pipelines e das buscas. A gestão pode desarquivar.
               </DialogDescription>
             </DialogHeader>
             <DialogFooter className="gap-2">
@@ -1012,7 +988,7 @@ interface TimelineProps {
 
 function Timeline({ activities, onTogglePin, pinBusy, resolveUser, stageLabel }: TimelineProps) {
   if (activities.length === 0) {
-    return <p className="text-sm text-muted-foreground">Nenhuma atividade ainda. Registre a primeira acima.</p>;
+    return <p className="text-sm text-muted-foreground">Nenhuma atividade ainda.</p>;
   }
 
   // Fixados sobem para uma faixa no topo, mas permanecem na sequência normal abaixo.

@@ -259,8 +259,8 @@ function RecebiveisMatriz({ seletor, botaoNova, abrirBaixa, onBaixaAberta }: {
     }
     const ok = await confirmar({
       titulo: "Estornar o recebimento?",
-      mensagem: `${r.customer_name || "Título"} · ${brl(r.amount)}, recebido em ${dataBR(r.received_at)}.\nO título volta a ficar em aberto e a data de recebimento é apagada.` +
-        (vai ? "\nO estorno é feito primeiro no Bling e só depois aqui — se o Bling recusar, nada muda." : ""),
+      mensagem: `${r.customer_name || "Título"} · ${brl(r.amount)}, recebido em ${dataBR(r.received_at)}.\nO título volta a ficar em aberto.` +
+        (vai ? "\nO estorno também é feito no Bling." : ""),
       confirmar: "Estornar", perigo: true,
     });
     if (!ok) return;
@@ -286,7 +286,7 @@ function RecebiveisMatriz({ seletor, botaoNova, abrirBaixa, onBaixaAberta }: {
       const ok = await confirmar({
         titulo: "Excluir este título no Bling?",
         mensagem: `${r.customer_name || "Título"} · ${brl(r.amount)} · venc. ${dataBR(r.due_date)}\n\n` +
-          "Ele foi lançado pelo sistema: é excluído no Bling da matriz e cancelado aqui. Se o Bling recusar, nada muda.",
+          "O título será excluído no Bling e cancelado aqui.",
         confirmar: "Excluir no Bling", cancelar: "Voltar", perigo: true,
       });
       if (!ok) return;
@@ -298,7 +298,7 @@ function RecebiveisMatriz({ seletor, botaoNova, abrirBaixa, onBaixaAberta }: {
     }
     const ok = await confirmar({
       titulo: "Cancelar este título?",
-      mensagem: `${r.customer_name || "Título"} · ${brl(r.amount)}, vencimento ${dataBR(r.due_date)}.\nTítulo cancelado sai do a receber, do aging e do fluxo de caixa.`,
+      mensagem: `${r.customer_name || "Título"} · ${brl(r.amount)}, vencimento ${dataBR(r.due_date)}.\nO título sai do a receber e do fluxo de caixa.`,
       confirmar: "Cancelar título", cancelar: "Voltar", perigo: true,
     });
     if (ok) update.mutate({ id: r.id, status: "cancelado" });
@@ -457,10 +457,10 @@ function RecebiveisMatriz({ seletor, botaoNova, abrirBaixa, onBaixaAberta }: {
           valor: Number(receiving.amount), saldo: saldoDe(receiving) ?? Number(receiving.amount),
         } : null}
         podeParcial={!!receiving && vaiAoBling(cfgBling, receiving)}
-        motivoSemParcial="Baixa parcial só com o envio ao Bling ligado — é o Bling que guarda o saldo."
+        motivoSemParcial="Baixa parcial só com o envio ao Bling ligado."
         enviando={recebendo || update.isPending} onConfirmar={doReceive}
         aviso={receiving?.source === "bling"
-          ? (vaiAoBling(cfgBling, receiving) ? "A baixa vai para o Bling na hora, na conta escolhida." : "A baixa vale só aqui — no Bling o título continua em aberto.")
+          ? (vaiAoBling(cfgBling, receiving) ? "A baixa também vai para o Bling." : "Baixa só aqui: no Bling o título continua em aberto.")
           : undefined}
       />
 
@@ -555,17 +555,9 @@ export function GerarDeVendasDialog({ open, onClose }: { open: boolean; onClose:
         <DialogHeader>
           <DialogTitle>Gerar títulos a receber de pedidos faturados</DialogTitle>
         </DialogHeader>
-        <div className="text-[11px] text-warning-foreground bg-warning/10 border border-warning/30 rounded-lg p-2 space-y-1">
-          <p>
-            <strong>Para pedido sem prazo reconhecido ou anterior à automação.</strong> Hoje o título nasce sozinho
-            quando a NF de venda é emitida (origem "NF") — pedido que já tem título não aparece aqui.
-          </p>
-          <p>
-            <strong>Título vindo do Bling não tem pedido vinculado</strong> — se este pedido já tem título importado do Bling,
-            gerar aqui duplica. Confira a lista de contas a receber antes.
-          </p>
-          <p>Um título por parcela, com os vencimentos tirados do prazo de pagamento do pedido, a partir da data da venda. Venda on-line fica de fora (é paga na plataforma).</p>
-        </div>
+        <p className="text-[11px] text-warning-foreground bg-warning/10 border border-warning/30 rounded-lg p-2">
+          Título importado do Bling não tem pedido vinculado: gerar aqui pode duplicar.
+        </p>
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input className="pl-8" placeholder="Buscar pedido ou cliente" value={busca} onChange={(e) => { setBusca(e.target.value); setMostrar(POR_VEZ); }} />

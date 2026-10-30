@@ -53,7 +53,6 @@ export default function Login() {
             <ShieldCheck className="h-7 w-7 text-white" />
           </div>
           <h1 className="text-2xl font-bold">Carbo Pré-Vendas</h1>
-          <p className="text-sm text-muted-foreground mt-1">Gestão de identidades e acessos</p>
         </div>
 
         <form onSubmit={handleSubmit} className="rounded-2xl border bg-card p-6 shadow-sm space-y-4">

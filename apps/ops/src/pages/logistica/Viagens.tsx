@@ -75,7 +75,6 @@ export default function Viagens() {
       <div className="space-y-5 max-w-[1500px] mx-auto">
         <CarboPageHeader
           title="Viagens & Prestação de Contas"
-          description="Solicite, aprove e preste contas de viagens corporativas"
           icon={Plane}
           actions={<Button className="gap-2" onClick={() => setNovaOpen(true)}><Plus className="h-4 w-4" /> Nova Solicitação</Button>}
         />
@@ -100,7 +99,7 @@ export default function Viagens() {
                   {rows.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={7} className="p-0">
-                        <CarboEmptyState icon={Plane} title="Nenhuma viagem" description="Nenhuma viagem registrada." />
+                        <CarboEmptyState icon={Plane} title="Nenhuma viagem" />
                       </TableCell>
                     </TableRow>
                   )}
@@ -145,7 +144,7 @@ export default function Viagens() {
           <AlertDialogHeader>
             <AlertDialogTitle>Aprovar solicitação de viagem?</AlertDialogTitle>
             <AlertDialogDescription>
-              {aprovarViagem && (<>Confirma a aprovação da viagem para <strong>{aprovarViagem.destino}</strong> de <strong>{aprovarViagem.solicitante}</strong>?</>)}
+              {aprovarViagem && `${aprovarViagem.destino} — ${aprovarViagem.solicitante}`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -160,7 +159,7 @@ export default function Viagens() {
           <AlertDialogHeader>
             <AlertDialogTitle>Reprovar solicitação de viagem?</AlertDialogTitle>
             <AlertDialogDescription>
-              {reprovarViagem && (<>Informe o motivo da reprovação da viagem para <strong>{reprovarViagem.destino}</strong> de <strong>{reprovarViagem.solicitante}</strong>.</>)}
+              {reprovarViagem && `${reprovarViagem.destino} — ${reprovarViagem.solicitante}`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-1.5 py-1">

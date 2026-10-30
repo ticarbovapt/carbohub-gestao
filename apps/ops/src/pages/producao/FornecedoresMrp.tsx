@@ -34,19 +34,18 @@ export default function FornecedoresMrp() {
       <div className="space-y-6 max-w-[1500px] mx-auto">
         <CarboPageHeader
           title="Fornecedores (MRP)"
-          description="Cadastro mestre de fornecedores"
           icon={Building2}
           actions={canEdit ? <CarboButton onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4 mr-1" /> Novo Fornecedor</CarboButton> : undefined}
         />
 
-        <div className="max-w-md"><CarboSearchInput placeholder="Buscar por CNPJ, razão social ou nome fantasia..." value={search} onChange={(e) => setSearch(e.target.value)} /></div>
+        <div className="max-w-md"><CarboSearchInput placeholder="Buscar fornecedor…" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
 
         {isLoading ? (
           <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /> Carregando fornecedores…</div>
         ) : error ? (
           <CarboEmptyState icon={Building2} title="Erro ao carregar" description="Não foi possível buscar os fornecedores." />
         ) : filtered.length === 0 ? (
-          <CarboEmptyState icon={Building2} title="Nenhum fornecedor" description={suppliers.length === 0 ? "Cadastre o primeiro fornecedor." : "Ajuste a busca."} />
+          <CarboEmptyState icon={Building2} title="Nenhum fornecedor" />
         ) : (
           <div className="overflow-x-auto">
             <CarboTable className="min-w-[720px]">

@@ -222,10 +222,10 @@ const CANAL_CARDS: { key: CanalKey | "naoClassificado" | "descarbonizacao"; labe
   { key: "descarbonizacao", label: "CarboVAPT", accent: "border-l-cyan-500", bar: "bg-cyan-500", text: "text-cyan-500" },
   { key: "naoClassificado", label: "Não classificado", accent: "border-l-slate-400", bar: "bg-slate-400", text: "text-board-muted" },
 ];
-const META_CARDS: { key: CanalKey; title: string; color: string; note: string }[] = [
-  { key: "consumo", title: "Consumo (B2B)", color: "#3b82f6", note: "Meta = real do mês anterior + 15%" },
-  { key: "revenda", title: "Revenda (PDV)", color: "#f59e0b", note: "Meta R$75k/mês (NE 25k + SE 50k)" },
-  { key: "online", title: "On-line", color: "#22c55e", note: "Meta R$27k/mês a partir de jul/26" },
+const META_CARDS: { key: CanalKey; title: string; color: string }[] = [
+  { key: "consumo", title: "Consumo (B2B)", color: "#3b82f6" },
+  { key: "revenda", title: "Revenda (PDV)", color: "#f59e0b" },
+  { key: "online", title: "On-line", color: "#22c55e" },
 ];
 const MODO_LABEL: Record<string, string> = {
   acum: "Total acumulado (tamanho da base)", ativos: "Ativos no mês (compraram no mês)", novos: "Novos no mês (1ª compra)",
@@ -540,7 +540,7 @@ export default function DashboardComercial() {
 
         {/* 1. Header + filtros */}
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-          <CarboPageHeader icon={TrendingUp} title="Dashboard — Comercial" description="Licenciados, pedidos e performance de vendas" />
+          <CarboPageHeader icon={TrendingUp} title="Dashboard — Comercial" />
           <div className="flex w-full sm:w-auto min-w-0 flex-col items-end gap-2">
             <ComercialTabs />
             <ComercialFilterBar filters={filters} onChange={setFilters} />
@@ -555,11 +555,11 @@ export default function DashboardComercial() {
         <div className="grid gap-2 sm:gap-3 grid-cols-2 lg:grid-cols-4">
           <KpiCard title="CarboZé on-line" value={fmtK(data?.totalOnline ?? 0)}
                    quebra={<QuebraVendaFrete venda={data?.vendaOnline ?? 0} frete={data?.freteOnline ?? 0} barra="bg-blue-500" />}
-                   sub={`${data?.qtdOnline ?? 0} pedidos · marketplaces e loja própria`}
+                   sub={`${data?.qtdOnline ?? 0} pedidos`}
                    Icon={Globe} accent="border-l-blue-500" iconBg="bg-blue-500/10 text-blue-500" />
           <KpiCard title="Comercial Expansão" value={fmtK(data?.totalNaoOnline ?? 0)}
                    quebra={<QuebraVendaFrete venda={data?.vendaNaoOnline ?? 0} frete={data?.freteNaoOnline ?? 0} barra="bg-green-500" />}
-                   sub={`${data?.qtdNaoOnline ?? 0} pedidos · venda direta e revenda`}
+                   sub={`${data?.qtdNaoOnline ?? 0} pedidos`}
                    Icon={ShoppingCart} accent="border-l-green-500" iconBg="bg-green-500/10 text-green-600" />
           <KpiCard title="CarboVAPT" value={fmtK(servicos?.descarbonizacao ?? 0)}
                    sub={`${servicos?.notasDescarbonizacao ?? 0} notas de serviço${servicos?.outros ? ` · +${fmtK(servicos.outros)} em outros serviços` : ""}`}
@@ -569,7 +569,7 @@ export default function DashboardComercial() {
           <KpiCard title="Faturamento total"
                    value={fmtK((data?.totalBRL ?? 0) + (servicos?.total ?? 0))}
                    quebra={<QuebraVendaFrete venda={(data?.vendaBRL ?? 0) + (servicos?.total ?? 0)} frete={data?.freteBRL ?? 0} barra="bg-amber-400" />}
-                   sub={`${(data?.totalVendas ?? 0) + (servicos?.notas ?? 0)} vendas · produto + serviço`}
+                   sub={`${(data?.totalVendas ?? 0) + (servicos?.notas ?? 0)} vendas`}
                    Icon={DollarSign} accent="border-l-amber-400" iconBg="bg-amber-400/10 text-amber-500" />
         </div>
 
@@ -579,10 +579,7 @@ export default function DashboardComercial() {
             portal, não ausência de serviço. */}
         {servicos && servicos.primeiroMes && (
           <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-            A receita de serviço vem da NFS-e do Portal Nacional, que só tem notas emitidas
-            a partir de <strong className="text-foreground">{servicos.primeiroMes}</strong>.
-            Meses anteriores aparecem sem CarboVAPT por falta de dado no portal, não
-            por ausência de serviço. {servicos.notas} nota(s) no período.
+            CarboVAPT: NFS-e disponível a partir de <strong className="text-foreground">{servicos.primeiroMes}</strong> · {servicos.notas} nota(s) no período.
           </div>
         )}
 
@@ -610,7 +607,7 @@ export default function DashboardComercial() {
                      : `${k?.maiorCliente ?? "—"} · produto`}
                    Icon={Trophy} accent="border-l-amber-400" iconBg="bg-amber-400/10 text-amber-500" />
           <KpiCard title="Top Recorrência" value={topGeral.nome}
-                   sub={`${topGeral.qtd} operação(ões) · produto + serviço`}
+                   sub={`${topGeral.qtd} operação(ões)`}
                    Icon={Repeat2} accent="border-l-blue-400" iconBg="bg-blue-400/10 text-blue-500" />
           {/* ⚠️ O ticket GERAL não é a média das três médias — é o total
               dividido pelo total. Média de médias daria peso igual a um canal
@@ -670,7 +667,7 @@ export default function DashboardComercial() {
           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-border px-4 sm:px-6 py-3">
             <div>
               <h2 className="text-base font-bold text-board-text flex items-center gap-2"><BarChart3 className="h-4 w-4 text-primary" /> Evolução Mensal de Vendas</h2>
-              <p className="text-xs text-board-muted mt-0.5">Via Bling · <span className="font-semibold text-board-text">{k?.totalVendas ?? 0} pedidos</span> · <span className="font-semibold text-green-500">{brl(k?.totalBRL ?? 0)} acumulado</span></p>
+              <p className="text-xs text-board-muted mt-0.5"><span className="font-semibold text-board-text">{k?.totalVendas ?? 0} pedidos</span> · <span className="font-semibold text-green-500">{brl(k?.totalBRL ?? 0)} acumulado</span></p>
             </div>
             <Link to={verPedidos} className="text-xs font-semibold text-primary hover:underline shrink-0">Ver pedidos →</Link>
           </div>
@@ -720,7 +717,7 @@ export default function DashboardComercial() {
             <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-border px-4 sm:px-6 py-3">
               <div>
                 <h2 className="text-base font-bold text-board-text flex items-center gap-2"><TrendingUp className="h-4 w-4 text-orange-400" /> Crescimento Anual</h2>
-                <p className="text-xs text-board-muted mt-0.5">Real (produto + serviço) vs <span className="font-semibold text-orange-400">meta configurada</span> · {year}</p>
+                <p className="text-xs text-board-muted mt-0.5">{year}</p>
               </div>
               <div className="flex items-center gap-3 text-[10px] text-board-muted">
                 <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-emerald-500/70" /> Real</span>
@@ -747,7 +744,7 @@ export default function DashboardComercial() {
             <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-border px-4 sm:px-6 py-3">
               <div>
                 <h2 className="text-base font-bold text-board-text flex items-center gap-2"><TrendingUp className="h-4 w-4 text-violet-500" /> Evolução do Ticket Médio</h2>
-                <p className="text-xs text-board-muted mt-0.5">Valor médio por pedido mês a mês · <span className="font-semibold text-violet-500">{fmtK(k?.ticketMedio ?? 0)} média geral</span></p>
+                <p className="text-xs text-board-muted mt-0.5"><span className="font-semibold text-violet-500">{fmtK(k?.ticketMedio ?? 0)} média geral</span></p>
               </div>
             </div>
             <div className="px-4 pt-4 pb-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -779,7 +776,6 @@ export default function DashboardComercial() {
           <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">
             <div className="border-b border-border px-4 sm:px-6 py-3">
               <h2 className="text-base font-bold text-board-text flex items-center gap-2"><BarChart3 className="h-4 w-4 text-blue-400" /> Vendas por Canal</h2>
-              <p className="text-xs text-board-muted mt-0.5">Consumo · Revenda · On-line · CarboVAPT (NFS-e) · classifique cada pedido em <Link to={verPedidos} className="font-semibold text-primary hover:underline">Pedidos</Link></p>
             </div>
             {/* ⚠️ LINHAS, não azulejos 2×3. Cinco canais em duas colunas davam
                 três fileiras com a última pela metade — altura de painel de
@@ -829,7 +825,7 @@ export default function DashboardComercial() {
                     misturá-las foi o que fez o gráfico mostrar 110 PDVs
                     existindo 73. */}
                 <p className="text-xs text-board-muted mt-0.5">
-                  {MODO_LABEL[modoClientes]} — B2B, On-line e CarboVAPT por cliente único (CNPJ/CPF); PDV pelo cadastro de pontos
+                  {MODO_LABEL[modoClientes]}
                 </p>
                 {pdvDelta && (
                   <div className="mt-1.5 inline-flex items-center gap-1.5 rounded-md bg-amber-400/10 px-2 py-1">
@@ -883,23 +879,19 @@ export default function DashboardComercial() {
         {/* 8. Metas por canal */}
         <div className="rounded-2xl border border-border bg-board-surface overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-border px-4 sm:px-6 py-3">
-            <div>
-              <h2 className="text-base font-bold text-board-text flex items-center gap-2"><BarChart3 className="h-4 w-4 text-blue-400" /> Metas por Canal · {year}</h2>
-              <p className="text-xs text-board-muted mt-0.5">Real (barras) vs meta (linha) de cada canal · a meta geral está na curva acima</p>
-            </div>
+            <h2 className="text-base font-bold text-board-text flex items-center gap-2"><BarChart3 className="h-4 w-4 text-blue-400" /> Metas por Canal · {year}</h2>
             <button onClick={() => setMetasOpen(true)} className="text-xs font-semibold text-primary hover:underline shrink-0 flex items-center gap-1"><Pencil className="h-3.5 w-3.5" /> Editar metas</button>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 p-4">
             {META_CARDS.map((c) => (
               <div key={c.key} className="rounded-xl border border-border bg-board-surface/40 p-3">
-                <div className="flex items-center justify-between mb-0.5">
+                <div className="flex items-center justify-between mb-1.5">
                   <span className="text-sm font-semibold text-board-text">{c.title}</span>
                   <div className="flex items-center gap-2 text-[9px] text-board-muted">
                     <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: c.color }} />Real</span>
                     <span className="flex items-center gap-1"><span className="inline-block w-4 border-t-2 border-dashed border-orange-400" />Meta</span>
                   </div>
                 </div>
-                <p className="text-[10px] text-board-muted mb-1.5">{c.note}</p>
                 <ResponsiveContainer width="100%" height={160}>
                   <ComposedChart data={canalSeries?.[c.key] ?? []} margin={{ top: 16, right: 6, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
@@ -933,7 +925,6 @@ export default function DashboardComercial() {
             métrica, ou seja, com NF válida. */}
         <p className="-mt-1 text-xs text-board-muted">
           Período: <span className="font-semibold text-board-text">{periodoLabel}</span>
-          {" · "}só pedidos que contam métrica (com NF válida) · bonificação incluída · insumo e serviço fora
         </p>
         {/* ⚠️ A COBERTURA fica na tela, ao lado do número. "Posso confiar
             nisto?" não pode ser uma investigação de meia hora cada vez que
@@ -945,17 +936,17 @@ export default function DashboardComercial() {
             a ser ignorado. */}
         {unidades?.cobertura != null && (
           <p className={`-mt-2 text-[11px] ${unidades.cobertura >= 95 ? "text-board-muted" : "text-amber-500"}`}>
-            Cobertura: <span className="font-semibold">{unidades.cobertura.toFixed(1)}%</span> do valor que deveria contar
+            Cobertura: <span className="font-semibold">{unidades.cobertura.toFixed(1)}%</span>
             {unidades.semNotaPedidos > 0
-              ? ` · faltam ${unidades.semNotaPedidos} pedido(s) sem nota válida (${fmtK(unidades.semNotaValor)}) — venda real, ainda sem NF`
-              : " · nenhuma venda sem nota válida"}
+              ? ` · ${unidades.semNotaPedidos} pedido(s) sem NF válida (${fmtK(unidades.semNotaValor)})`
+              : ""}
             {/* ⚠️ Dito à parte, e nunca somado ao buraco: entrega programada
                 para o futuro não é venda que faltou, é venda que ainda não
                 aconteceu. Misturar as duas faria a cobertura acusar um
                 problema que não existe. */}
             {unidades.agendadosPedidos > 0 && (
               <span className="text-board-muted">
-                {" · "}fora da conta: {unidades.agendadosPedidos} entrega(s) agendada(s) para datas futuras ({fmtK(unidades.agendadosValor)})
+                {" · "}{unidades.agendadosPedidos} entrega(s) agendada(s) fora da conta ({fmtK(unidades.agendadosValor)})
               </span>
             )}
           </p>
@@ -965,9 +956,7 @@ export default function DashboardComercial() {
             e a correção de verdade é no cadastro de origem, não aqui. */}
         {!!unidades?.linhasCorrigidas && (
           <p className="-mt-2 text-[11px] text-amber-500">
-            {unidades.linhasCorrigidas} linha(s) com quantidade deslocada em duas casas no cadastro antigo do Bling
-            (preço abaixo de R$ 1,00 e quantidade múltipla de 100) foram lidas ÷100. O total em R$ da linha não muda —
-            só o par quantidade × preço estava trocado.
+            {unidades.linhasCorrigidas} linha(s) do Bling com quantidade corrigida (÷100).
           </p>
         )}
 
@@ -1009,7 +998,7 @@ export default function DashboardComercial() {
                   ao lado de um frasco que também vale 1 — o mesmo erro que
                   somar packs com itens. */}
               <p className="text-xs text-board-muted mt-0.5">
-                <span className="font-semibold text-green-500">{fmtNum(unidades?.eqItens ?? 0)} itens</span> do catálogo · venda direta e revenda · {fmtK(unidades?.eqReceita ?? 0)}
+                <span className="font-semibold text-green-500">{fmtNum(unidades?.eqItens ?? 0)} itens</span> do catálogo · {fmtK(unidades?.eqReceita ?? 0)}
               </p>
             </div>
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5 p-3">
@@ -1040,7 +1029,7 @@ export default function DashboardComercial() {
                   de propósito, e um total sem data ao lado seria lido como "do
                   recorte atual". */}
               <p className="text-xs text-board-muted mt-0.5">
-                Todo o histórico · {fmtNum(estabilizador.unidades)} unidades vendidas · bonificação incluída
+                Todo o histórico · {fmtNum(estabilizador.unidades)} unidades vendidas
               </p>
             </div>
             <div className="text-right">
@@ -1096,7 +1085,7 @@ export default function DashboardComercial() {
                   última barra sempre parece queda, e sem o aviso ela é lida
                   como tendência. */}
               <p className="px-2 pt-1 text-[10px] text-board-muted">
-                Litros por mês, pela data efetiva da venda. A última barra é o mês corrente, ainda em andamento.
+                Mês corrente parcial.
               </p>
             </div>
           )}
@@ -1135,7 +1124,7 @@ export default function DashboardComercial() {
           {estabilizador.semBom.length > 0 && (
             <div className="border-t border-border bg-amber-500/[0.06] px-4 sm:px-6 py-2.5">
               <p className="text-[11px] text-amber-500">
-                Fora da conta, por falta de lista de materiais cadastrada:{" "}
+                Sem lista de materiais:{" "}
                 {estabilizador.semBom.map((p) => `${p.nome} (${fmtNum(p.itens)} itens)`).join(" · ")}
               </p>
             </div>
@@ -1143,8 +1132,7 @@ export default function DashboardComercial() {
           {estabilizador.onlineIncompleto && (
             <div className="border-t border-border bg-amber-500/[0.06] px-4 sm:px-6 py-2.5">
               <p className="text-[11px] text-amber-500">
-                Algum SKU on-line está sem <span className="font-semibold">unidades por venda</span> no mapa de SKU —
-                a venda on-line desse produto ficou fora do consumo acima.
+                SKU on-line sem <span className="font-semibold">unidades por venda</span> no mapa de SKU — fora do consumo.
               </p>
             </div>
           )}

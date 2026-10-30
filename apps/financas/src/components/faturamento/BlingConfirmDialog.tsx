@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Loader2, CheckCircle2, UserPlus, AlertTriangle, Receipt } from "lucide-react";
 import {
-  Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription,
+  Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle,
 } from "@/components/ui/dialog";
 import { CarboButton } from "@/components/ui/carbo-button";
 import { CarboBadge } from "@/components/ui/carbo-badge";
@@ -133,10 +133,6 @@ export function BlingConfirmDialog({
       <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle>Criar pedido no Bling</DialogTitle>
-          <DialogDescription>
-            Confira (e ajuste, se for cliente novo) os dados antes de enviar. Nada é
-            criado no Bling até você clicar em <strong>Confirmar e criar</strong>.
-          </DialogDescription>
         </DialogHeader>
 
         {/* ── Em qual empresa a nota sai ──────────────────────────────────
@@ -159,8 +155,7 @@ export function BlingConfirmDialog({
           </div>
           {conta === 2 && (
             <p className="text-[11px] text-amber-600">
-              A nota sairá no CNPJ da <strong>filial SP</strong>. Confira antes de confirmar —
-              corrigir depois exige cancelamento.
+              A nota sairá no CNPJ da <strong>filial SP</strong>; corrigir depois exige cancelamento.
             </p>
           )}
         </div>

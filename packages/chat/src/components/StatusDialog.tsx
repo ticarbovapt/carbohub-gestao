@@ -150,7 +150,6 @@ export function StatusDialog({ onClose }: { onClose: () => void }) {
             <input type="checkbox" checked={dnd} onChange={(e) => setDnd(e.target.checked)} className="mt-0.5" />
             <span className="text-sm">
               <span className="flex items-center gap-1.5 font-medium"><BellOff className="h-3.5 w-3.5" /> Não perturbe</span>
-              <span className="text-xs text-muted-foreground">Segura o push (a mensagem chega, mas não toca).</span>
             </span>
           </label>
 
@@ -160,7 +159,6 @@ export function StatusDialog({ onClose }: { onClose: () => void }) {
               <input type="checkbox" checked={quietOn} onChange={(e) => setQuietOn(e.target.checked)} className="mt-0.5" />
               <span className="text-sm">
                 <span className="flex items-center gap-1.5 font-medium"><Moon className="h-3.5 w-3.5" /> Horário de silêncio</span>
-                <span className="text-xs text-muted-foreground">Não toca o push nesse intervalo (fuso de Brasília).</span>
               </span>
             </label>
             {quietOn && (
@@ -178,8 +176,7 @@ export function StatusDialog({ onClose }: { onClose: () => void }) {
             <label className="flex items-start gap-2.5">
               <input type="checkbox" checked={urgentBypass} onChange={(e) => setUrgentBypass(e.target.checked)} className="mt-0.5" />
               <span className="text-sm">
-                <span className="font-medium">Deixar urgente furar</span>
-                <span className="text-xs text-muted-foreground">Menção direta e @todos ainda tocam mesmo no silêncio.</span>
+                <span className="font-medium">Deixar menção direta e @todos tocarem</span>
               </span>
             </label>
           )}

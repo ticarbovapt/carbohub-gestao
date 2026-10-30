@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useParamUrl } from "@carbo/shell";
 import {
-  AlertTriangle, Info, Link2, Pencil, Plus, Save, Trash2, X, ListChecks, Boxes,
+  AlertTriangle, Link2, Pencil, Plus, Save, Trash2, X, ListChecks, Boxes,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -137,28 +137,6 @@ export function SkuMapeamento() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start gap-2 px-4 py-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
-        <Info className="h-4 w-4 text-blue-400 shrink-0 mt-0.5" />
-        <div className="text-sm">
-          <p className="font-medium mb-0.5">São duas perguntas, e elas quase nunca dão o mesmo número</p>
-          <p className="text-xs text-muted-foreground">
-            <strong className="text-foreground">Cliente recebe</strong> — quantas unidades vão na
-            caixa do comprador. É o que os painéis de venda contam.{" "}
-            <strong className="text-foreground">Estoque baixa</strong> — o que sai da prateleira, e
-            depende de como o galpão guarda o produto.
-          </p>
-          <p className="text-xs text-muted-foreground mt-1.5">
-            O kit de 10 sachês entrega <strong className="text-foreground">10 sachês</strong> ao
-            cliente e tira <strong className="text-foreground">1 caixa fechada</strong> do galpão —
-            porque a LogHouse guarda caixas, não sachês soltos. Já o kit de 5 frascos entrega 5
-            frascos e tira 5 frascos: ali os dois números coincidem, e é essa coincidência que
-            engana.{" "}
-            <strong className="text-foreground">SKU sem mapa não erra: ele some</strong> — a venda
-            não deduz nada e não aparece em lugar nenhum.
-          </p>
-        </div>
-      </div>
-
       <Tabs value={aba} onValueChange={setAba}>
         <TabsList>
           <TabsTrigger value="mapa" className="gap-1.5">
@@ -182,20 +160,12 @@ export function SkuMapeamento() {
           {isLoading ? (
             <div className="py-8 text-center text-sm text-muted-foreground">Carregando…</div>
           ) : mapas.length === 0 ? (
-            <CarboEmptyState
-              title="Nenhum mapeamento cadastrado"
-              description="Comece pela aba “SKUs vendidos sem mapa”: ela lista o que já vendeu e ainda não tem destino."
-            />
+            <CarboEmptyState title="Nenhum mapeamento cadastrado" />
           ) : (
             <div className="space-y-2">
               {mapas.map((m) => {
                 const p = m.produto;
                 const kitSuspeito = kitImplausivel(p, m.unidades_por_venda);
-                // Legado que discorda do número atual — só conferência.
-                const legadoDiverge =
-                  (m.units_per_kit != null && Number(m.units_per_kit) !== m.unidades_por_venda) ||
-                  (m.display_units_per_pack != null &&
-                    Number(m.display_units_per_pack) !== m.unidades_por_venda);
                 return (
                   <CarboCard key={m.id} className={m.is_active ? "" : "opacity-60"}>
                     <CarboCardContent className="py-3">
@@ -245,10 +215,7 @@ export function SkuMapeamento() {
                                   </span>
                                 </span>
                               ) : (
-                                <span
-                                  className="font-semibold text-amber-400"
-                                  title="Sem esse número os painéis de venda contam a quantidade crua da plataforma."
-                                >
+                                <span className="font-semibold text-amber-400">
                                   não informado
                                 </span>
                               )}
@@ -269,16 +236,8 @@ export function SkuMapeamento() {
                           {kitSuspeito && (
                             <p className="flex items-start gap-1.5 text-[11px] text-amber-400">
                               <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-px" />
-                              Cada venda baixaria <strong>{m.unidades_por_venda} caixas
-                              fechadas</strong> de {p?.product_code}. Se a intenção era baixar{" "}
-                              {m.unidades_por_venda} unidades soltas, o destino tem de ser o
-                              produto avulso — não o kit.
-                            </p>
-                          )}
-                          {legadoDiverge && m.display_units_per_pack == null && (
-                            <p className="text-[11px] text-muted-foreground">
-                              Cadastro antigo, sem o número do cliente. Os painéis de venda vão
-                              mostrar “×?” até alguém preenchê-lo.
+                              <span>Cada venda baixaria <strong>{m.unidades_por_venda} caixas
+                              fechadas</strong> de {p?.product_code}.</span>
                             </p>
                           )}
                         </div>
@@ -332,19 +291,10 @@ export function SkuMapeamento() {
 
         {/* ── A lista de trabalho ───────────────────────────────────────── */}
         <TabsContent value="sem-mapa" className="mt-4 space-y-3">
-          <p className="text-xs text-muted-foreground">
-            SKUs que já apareceram em vendas pagas/enviadas/entregues e não têm mapa ativo, do maior
-            volume para o menor. Fonte: <code className="font-mono">carbo_estoque_ensaio</code> — a
-            view do ensaio, que não mexe em estoque nenhum. Linhas que chegaram{" "}
-            <strong className="text-foreground">sem SKU na origem</strong> aparecem aqui do mesmo
-            jeito, com o botão desabilitado: não dá para mapeá-las por SKU, e escondê-las tornaria
-            invisível justamente o caso que mais precisa de atenção.
-          </p>
-
           {carregandoSemMapa ? (
             <div className="py-8 text-center text-sm text-muted-foreground">Carregando…</div>
           ) : semMapa.length === 0 ? (
-            <CarboEmptyState title="Nada pendente" description="Todo SKU vendido tem um mapa ativo." />
+            <CarboEmptyState title="Nada pendente" />
           ) : (
             <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 divide-y divide-amber-500/15">
               {semMapa.map((s) => {
@@ -360,7 +310,7 @@ export function SkuMapeamento() {
                     {semSku ? (
                       <span className="text-xs font-medium text-amber-400 shrink-0 flex items-center gap-1.5">
                         <AlertTriangle className="h-3.5 w-3.5" />
-                        sem SKU na origem — não é possível mapear por SKU
+                        sem SKU na origem
                       </span>
                     ) : (
                       <code className="text-sm font-mono font-semibold bg-muted px-1.5 py-0.5 rounded shrink-0">
@@ -379,12 +329,7 @@ export function SkuMapeamento() {
                       size="sm"
                       className="ml-auto gap-1.5"
                       disabled={semSku}
-                      title={
-                        semSku
-                          ? "A venda chegou sem SKU do produto: o mapa é por SKU, então não há o que cadastrar aqui. " +
-                            "Corrija na origem (o canal precisa mandar o SKU) — enquanto isso, esta venda não deduz estoque."
-                          : undefined
-                      }
+                      title={semSku ? "Venda sem SKU na origem" : undefined}
                       onClick={() => s.product_sku && abrirDaLista(s.platform, s.product_sku)}
                     >
                       <Link2 className="h-3.5 w-3.5" /> Mapear
@@ -411,7 +356,7 @@ export function SkuMapeamento() {
             <div>
               <Label>SKU da plataforma <span className="text-destructive">*</span></Label>
               <Input
-                placeholder="Ex.: MLB-1234567, B08XYZ, CZ-SACHE-KIT10"
+                placeholder="Ex.: MLB-1234567"
                 value={form.platform_sku}
                 onChange={(e) => setForm((f) => ({ ...f, platform_sku: e.target.value }))}
               />
@@ -431,10 +376,6 @@ export function SkuMapeamento() {
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-[11px] text-muted-foreground mt-1">
-                “Todas as plataformas” vale para qualquer canal que venda esse mesmo SKU — que é o
-                caso comum. Um mapa específico de plataforma, quando existir, vence o genérico.
-              </p>
             </div>
 
             <div>
@@ -457,11 +398,6 @@ export function SkuMapeamento() {
                   tem saldo ZERO e a caixa fechada tem 1.253. Mandar apontar para
                   o avulso levaria a dedução ao negativo na primeira venda. O
                   destino é o que o galpão guarda, e isso muda por produto. */}
-              <p className="text-[11px] text-muted-foreground mt-1">
-                É o produto que o galpão <strong className="text-foreground">guarda</strong>. O
-                frasco de 100ml fica avulso na prateleira; o sachê fica dentro da caixa fechada, e
-                aí o destino é a própria caixa.
-              </p>
             </div>
 
             {/* ── Os dois números, lado a lado ──────────────────────────────
@@ -483,12 +419,8 @@ export function SkuMapeamento() {
                     setForm((f) => ({ ...f, display_units_per_pack: e.target.value }))
                   }
                 />
-                <span className="text-sm text-muted-foreground">unidades na mão do comprador</span>
+                <span className="text-sm text-muted-foreground">un</span>
               </div>
-              <p className="text-[11px] text-muted-foreground mt-1">
-                Kit de 5 frascos = 5. Kit de 10 sachês = 10. É este número que os painéis de venda
-                contam — o Histórico, o Comparativo e a aba Produtos Vendidos.
-              </p>
             </div>
 
             <div>
@@ -507,15 +439,9 @@ export function SkuMapeamento() {
                 <span className="text-sm text-muted-foreground">
                   {produtoEscolhido
                     ? `× ${produtoEscolhido.product_code}`
-                    : "× o produto escolhido acima"}
+                    : "×"}
                 </span>
               </div>
-              <p className="text-[11px] text-muted-foreground mt-1">
-                Kit de 5 frascos apontando para o frasco = 5. Kit de 10 sachês apontando para a
-                caixa = <strong className="text-foreground">1</strong>, porque sai uma caixa
-                fechada. Número inteiro — o banco recusa fração, e arredondar em silêncio quebraria
-                o saldo.
-              </p>
             </div>
 
             {avisoKit && (
@@ -523,11 +449,7 @@ export function SkuMapeamento() {
                 <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
                 <p className="text-xs text-amber-300/90">
                   <strong>“{produtoEscolhido?.product_code}” é um KIT e o fator é {fator}.</strong>{" "}
-                  Cada venda baixaria {fator} KITS do estoque, não {fator} unidades — o fator
-                  multiplica de novo o que o kit já agrupa. Escolha uma das duas: destino no item
-                  unitário com fator {fator}, ou destino no kit com fator 1 (é o cadastro certo
-                  quando o galpão guarda o kit fechado e o avulso tem saldo zero). Se estiver certo
-                  assim mesmo, pode salvar — isto é um aviso, não uma trava.
+                  Cada venda baixaria {fator} kits do estoque.
                 </p>
               </div>
             )}

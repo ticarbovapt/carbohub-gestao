@@ -95,7 +95,7 @@ export function ChatFeed({ onBack }: { onBack?: () => void }) {
         {feed.isLoading ? (
           <div className="flex justify-center py-8 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>
         ) : socialPosts.length === 0 ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">Ainda não há reconhecimentos. Seja o primeiro a elogiar um colega 👏</p>
+          <p className="py-8 text-center text-sm text-muted-foreground">Ainda não há reconhecimentos.</p>
         ) : (
           socialPosts.map((p) => <FeedPostCard key={p.id} post={p} />)
         )}

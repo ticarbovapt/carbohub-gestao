@@ -91,7 +91,6 @@ function EditDialog({
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-[11px] text-muted-foreground">Se a pessoa já é usuária do sistema, vincule aqui. Dá pra criar o funcionário sem usuário e vincular depois.</p>
             </div>
           )}
 
@@ -221,10 +220,10 @@ export default function Funcionarios() {
   if (!gestor) {
     return (
       <div className="space-y-6">
-        <CarboPageHeader title="Funcionários" description="Dados financeiros para pagamento (PIX, banco) e contato de emergência." icon={Users} />
+        <CarboPageHeader title="Funcionários" icon={Users} />
         <CarboCard><CarboCardContent>
           <CarboEmptyState icon={AlertCircle} title="Acesso restrito"
-            description="Só gestores podem ver e editar dados financeiros de funcionários (PIX, conta bancária). Fale com um gestor se precisar." />
+            description="Só gestores podem ver dados financeiros de funcionários." />
         </CarboCardContent></CarboCard>
       </div>
     );
@@ -234,7 +233,6 @@ export default function Funcionarios() {
     <div className="space-y-6">
       <CarboPageHeader
         title="Funcionários"
-        description="Dados financeiros para pagamento (PIX, banco) e contato de emergência."
         icon={Users}
         actions={<CarboButton className="gap-1.5" onClick={openNew}><UserPlus className="h-4 w-4" /> Novo funcionário</CarboButton>}
       />
@@ -266,7 +264,7 @@ export default function Funcionarios() {
           {isLoading ? (
             <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <CarboSkeleton key={i} className="h-12 w-full" />)}</div>
           ) : list.length === 0 ? (
-            <CarboEmptyState icon={Users} title="Nenhum funcionário" description={search ? "Nenhum encontrado." : "Clique em Novo funcionário para cadastrar."} />
+            <CarboEmptyState icon={Users} title="Nenhum funcionário" description={search ? "Nenhum encontrado." : undefined} />
           ) : (
             <CarboTable>
               <CarboTableHeader>

@@ -68,7 +68,7 @@ export function RecebimentoDialog({ open, onOpenChange }: { open: boolean; onOpe
           {selected && (
             <>
               <div>
-                <Label className="text-xs">Itens — confira a quantidade recebida</Label>
+                <Label className="text-xs">Itens</Label>
                 <div className="mt-2 space-y-2">
                   <div className="grid grid-cols-12 gap-2 text-xs text-muted-foreground px-1">
                     <span className="col-span-7">Descrição</span>

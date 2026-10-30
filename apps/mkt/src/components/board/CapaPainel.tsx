@@ -85,7 +85,6 @@ export function CapaPainel({ cardId, cover, onChange }: { cardId: string; cover:
             </div>
           </button>
         </div>
-        {!capa && <p className="text-[11px] text-muted-foreground">Escolha uma cor ou imagem para escolher o tamanho.</p>}
       </div>
 
       {cover && (

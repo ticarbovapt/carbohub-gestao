@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -74,9 +74,6 @@ export function LotFormDialog({ open, onOpenChange, mode, id, initial }: LotForm
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Editar Lote" : "Novo Lote de Reagente"}</DialogTitle>
-          <DialogDescription>
-            {isEdit ? "Atualize os dados do lote (produto e volume inicial são fixos)." : "Registre um novo lote de reagente recebido."}
-          </DialogDescription>
         </DialogHeader>
         <form noValidate className="grid gap-4" onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
 

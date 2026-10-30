@@ -29,10 +29,6 @@ export default function PedidosTravada() {
               <Lock className="h-5 w-5 text-muted-foreground" />
             </div>
             <p className="text-base font-semibold">Tela temporariamente indisponível</p>
-            <p className="text-sm text-muted-foreground max-w-xs mx-auto">
-              A tela de Pedidos está fora do ar por enquanto. Para acompanhar
-              suas vendas, use a tela de Vendas.
-            </p>
             <Button className="gap-1.5 mt-1" onClick={() => navigate("/vendas")}>
               <TrendingUp className="h-4 w-4" /> Ir para Vendas
             </Button>

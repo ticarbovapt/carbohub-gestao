@@ -342,7 +342,7 @@ export function Conversation({ conv, focus, onClearFocus, onBack, onDeleted }: {
           ) : isLoading ? (
             <p className="text-sm text-muted-foreground">Carregando…</p>
           ) : messages.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nenhuma mensagem ainda. Diga oi 👋</p>
+            <p className="text-sm text-muted-foreground">Nenhuma mensagem ainda.</p>
           ) : (
             <div className="space-y-2" role="log" aria-live="polite" aria-relevant="additions" aria-label="Mensagens">
               {messages.map((m, i) => {
@@ -416,7 +416,7 @@ export function Conversation({ conv, focus, onClearFocus, onBack, onDeleted }: {
           </div>
         ) : isPublicPreview ? (
           <div className="flex flex-col items-center gap-2 border-t bg-primary/5 p-3 text-center sm:flex-row sm:justify-between sm:text-left">
-            <span className="text-xs text-muted-foreground">Você está vendo um canal público. Entre para participar e receber os avisos.</span>
+            <span className="text-xs text-muted-foreground">Canal público</span>
             <button onClick={() => join.mutate(conv.channel.id)} disabled={join.isPending}
               className="shrink-0 rounded-md bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground disabled:opacity-50">
               {join.isPending ? "Entrando…" : "Entrar no canal"}

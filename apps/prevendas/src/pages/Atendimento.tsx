@@ -91,7 +91,7 @@ function RespostasRapidas({ lista, aoCriar, aoApagar, aoUsar }: {
   return (
     <div ref={caixa} className="relative">
       <Button size="sm" variant="outline" className="h-8 w-8 p-0"
-              title="Respostas rápidas — ou digite / no campo de resposta"
+              title="Respostas rápidas"
               aria-label="Respostas rápidas" aria-expanded={aberto}
               onClick={() => setAberto((v) => !v)}>
         <MessageSquarePlus className="h-3.5 w-3.5" />
@@ -142,9 +142,7 @@ function RespostasRapidas({ lista, aoCriar, aoApagar, aoUsar }: {
           )}
           {lista.length === 0 ? (
             <p className="py-4 text-center text-[11px] text-muted-foreground">
-              Nenhuma resposta ainda. As frases que o time repete todo dia moram
-              aqui — e saem com <span className="font-mono">/atalho</span> no campo
-              de resposta.
+              Nenhuma resposta ainda.
             </p>
           ) : (
             <div className="max-h-64 space-y-1 overflow-y-auto">
@@ -180,15 +178,9 @@ function QuemRecebe({ recebo, alternar, aoFechar }: {
     <CarboCard>
       <CarboCardContent className="p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h3 className="flex items-center gap-2 text-sm font-semibold">
-              <BellRing className="h-4 w-4" /> Quem recebe o aviso
-            </h3>
-            <p className="mt-0.5 max-w-xl text-[11px] text-muted-foreground">
-              Toast e sininho quando um posto responde, em qualquer app.
-              {recebo ? " 1 pessoa marcada." : " Ninguém está marcado — hoje o aviso não sai para pessoa nenhuma."}
-            </p>
-          </div>
+          <h3 className="flex items-center gap-2 text-sm font-semibold">
+            <BellRing className="h-4 w-4" /> Quem recebe o aviso
+          </h3>
           <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={aoFechar}>
             <X className="h-3.5 w-3.5" /> Fechar
           </Button>
@@ -444,11 +436,6 @@ export default function Atendimento() {
               {recortado ? (
                 <>
                   <p className="mt-2 text-xs text-muted-foreground">Nenhuma conversa com esse filtro.</p>
-                  <p className="mx-auto mt-1 max-w-[15rem] text-[10px] text-muted-foreground/80">
-                    {busca.trim()
-                      ? <>Nada casou com “{busca.trim()}”. São 0 conversas no total.</>
-                      : <>São 0 conversas no total — troque o filtro para vê-las.</>}
-                  </p>
                   <Button size="sm" variant="outline" className="mt-3 h-7 text-[11px]" onClick={limparTudo}>
                     Limpar busca e filtros
                   </Button>
@@ -457,9 +444,6 @@ export default function Atendimento() {
                 <>
                   <div className="hidden lg:block">
                     <p className="mt-2 text-xs text-muted-foreground">Nenhuma conversa ainda.</p>
-                    <p className="mx-auto mt-1 max-w-[15rem] text-[10px] text-muted-foreground/80">
-                      Ela aparece quando houver um número ativo e um posto escrever para ele.
-                    </p>
                   </div>
                   {/* Abaixo do `lg` a coluna da conversa some: o aviso vem para cá. */}
                   <div className="mt-2 lg:hidden"><SemNumero /></div>
@@ -633,15 +617,6 @@ export default function Atendimento() {
                               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); enviar(); }
                             }} />
                   <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-1.5">
-                    <div className="hidden min-w-0 items-center gap-1.5 text-[10px] text-muted-foreground/70 2xl:flex">
-                      <kbd className="rounded border bg-background px-1 py-px font-mono text-[10px]">/</kbd>
-                      <span className="shrink-0">resposta pronta</span>
-                      <span className="mx-0.5 shrink-0 text-muted-foreground/40">·</span>
-                      <kbd className="shrink-0 rounded border bg-background px-1 py-px font-sans text-[10px]">⌘/Ctrl</kbd>
-                      <span className="shrink-0" aria-hidden="true">+</span>
-                      <kbd className="shrink-0 rounded border bg-background px-1 py-px font-sans text-[10px]">V</kbd>
-                      <span className="truncate">cola print</span>
-                    </div>
                     <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5 sm:gap-2">
                       <input ref={arquivoRef} type="file" className="hidden"
                              accept="image/jpeg,image/png,application/pdf,text/plain"
@@ -673,7 +648,7 @@ export default function Atendimento() {
                               disabled={!texto.trim()} onClick={abrirAgendar}>
                         <CalendarClock className="h-3.5 w-3.5" /> Agendar
                       </Button>
-                      <Button size="sm" className="h-8 gap-1.5" title="Enviar — ⌘/Ctrl + Enter"
+                      <Button size="sm" className="h-8 gap-1.5" title="Enviar"
                               disabled={!texto.trim() && !arquivo} onClick={enviar}>
                         <Send className="h-3.5 w-3.5" /> Enviar
                       </Button>

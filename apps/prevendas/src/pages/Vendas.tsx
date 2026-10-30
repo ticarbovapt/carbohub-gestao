@@ -631,10 +631,7 @@ export default function Vendas() {
       <div className="space-y-5 max-w-[1500px] mx-auto">
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2"><ShoppingBag className="h-6 w-6 text-carbo-green" /> Vendas e Orçamentos</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">Acompanhamento de pedidos e orçamentos por vendedor</p>
-          </div>
+          <h1 className="text-2xl font-bold flex items-center gap-2"><ShoppingBag className="h-6 w-6 text-carbo-green" /> Vendas e Orçamentos</h1>
           <div className="flex flex-col items-start lg:items-end gap-2 shrink-0">
             {!hasCustomRange && (
               <div className="flex items-center gap-1 bg-muted/40 rounded-lg px-2 py-1.5">
@@ -740,7 +737,7 @@ export default function Vendas() {
         <div className="flex gap-2 flex-wrap">
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Cliente, cidade, CNPJ/CPF, IE, telefone, CEP, e-mail ou nº do pedido…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8" />
+            <Input placeholder="Buscar cliente, CNPJ, pedido…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8" />
           </div>
           {isHead && (
             <Select value={vendedorFilter} onValueChange={setVendedor}>
@@ -768,8 +765,7 @@ export default function Vendas() {
           <div className="flex items-start gap-2 rounded-lg border border-carbo-green/30 bg-carbo-green/[0.06] px-3 py-2 text-xs">
             <Search className="h-3.5 w-3.5 shrink-0 mt-0.5 text-carbo-green" />
             <span className="text-muted-foreground">
-              Buscando <b className="text-foreground">"{search.trim()}"</b> em todo o histórico —
-              os filtros de período e de vendedor estão sendo ignorados.
+              Buscando <b className="text-foreground">"{search.trim()}"</b> em todo o histórico, sem filtro de período e vendedor.
               {" "}
               <button type="button" onClick={() => setSearch("")}
                 className="font-semibold text-carbo-green hover:underline">
@@ -1213,10 +1209,6 @@ export default function Vendas() {
             </div>
           </CarboCard>
         )}
-
-        <p className="text-xs text-muted-foreground text-center">
-          Vendas e orçamentos de <code>carboze_orders</code> (Bling + legado + nativas). Selecione pedidos para atribuir vendedor em massa.
-        </p>
       </div>
 
       {/* Barra de ação em massa */}
@@ -1247,12 +1239,7 @@ export default function Vendas() {
                 <p>
                   A venda <strong className="font-mono">{toDelete?.order_number}</strong> de{" "}
                   <strong>{toDelete?.customer_name}</strong> ({toDelete ? fmtBRL(toDelete.total) : ""}) será
-                  removida do sistema. O número volta a ficar livre e as próximas vendas seguem a sequência.
-                </p>
-                <p className="text-muted-foreground">
-                  Excluir some com o histórico. Se a venda existiu e caiu (cliente desistiu, boleto não
-                  pagou, NF cancelada), o certo é <strong>Cancelar venda</strong> — tira do faturamento,
-                  estorna o estoque e mantém o registro.
+                  removida do sistema.
                 </p>
                 <p className="text-muted-foreground">Esta ação não pode ser desfeita.</p>
               </div>
@@ -1289,9 +1276,7 @@ export default function Vendas() {
                 {/* Dito antes de confirmar, não depois: se o pedido já foi separado, o
                     estoque volta pro HUB-RN e alguém precisa saber que o número mudou. */}
                 <p className="text-muted-foreground">
-                  Se o estoque já tinha sido deduzido (pedido separado), ele é{" "}
-                  <strong>devolvido ao HUB-RN</strong> automaticamente. A venda continua no
-                  histórico — para apagar de vez, use Excluir.
+                  Estoque já deduzido volta ao HUB-RN.
                 </p>
                 <div className="space-y-1.5">
                   <label htmlFor="cancel-reason" className="text-xs font-medium">
@@ -1301,7 +1286,7 @@ export default function Vendas() {
                     id="cancel-reason"
                     value={cancelReason}
                     onChange={(e) => setCancelReason(e.target.value)}
-                    placeholder="Ex.: cliente desistiu; boleto não pago; NF cancelada no Bling"
+                    placeholder="Ex.: cliente desistiu"
                     rows={2}
                     autoFocus
                   />

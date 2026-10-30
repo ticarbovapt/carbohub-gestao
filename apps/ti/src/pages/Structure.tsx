@@ -147,7 +147,7 @@ function DepartmentsPanel({
           onClick={add}>
           {createDept.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Criando...</> : <><Plus className="h-4 w-4" /> Adicionar departamento</>}
         </Button>
-        <p className="text-xs text-muted-foreground">A sigla vira o prefixo do username (ex: MKT0001).</p>
+        <p className="text-xs text-muted-foreground">Prefixo do username (ex.: MKT0001).</p>
       </div>
     </section>
   );
@@ -199,7 +199,7 @@ function FunctionsPanel({ department }: { department: string }) {
 
       {!department ? (
         <p className="p-8 text-sm text-muted-foreground text-center">
-          Selecione um departamento à esquerda para gerenciar suas funções.
+          Selecione um departamento.
         </p>
       ) : (
         <>
@@ -213,8 +213,8 @@ function FunctionsPanel({ department }: { department: string }) {
                 <div key={f.id} className="p-3 space-y-2 bg-muted/30">
                   <Input value={eLabel} onChange={(e) => setELabel(e.target.value)} placeholder="Nome da função" />
                   <select className={selectCls} value={eLevel} onChange={(e) => setELevel(e.target.value as "gestor" | "colaborador")}>
-                    <option value="colaborador">Colaborador — vê só o próprio</option>
-                    <option value="gestor">Gestor — vê o global (manda)</option>
+                    <option value="colaborador">Colaborador</option>
+                    <option value="gestor">Gestor</option>
                   </select>
                   <div className="flex gap-2">
                     <Button size="sm" className="flex-1 carbo-gradient text-white" disabled={updateFn.isPending}
@@ -248,8 +248,8 @@ function FunctionsPanel({ department }: { department: string }) {
             <p className="text-sm font-medium">Nova função</p>
             <Input value={nLabel} onChange={(e) => setNLabel(e.target.value)} placeholder="Ex: Estagiário de Ops" />
             <select className={selectCls} value={nLevel} onChange={(e) => setNLevel(e.target.value as "gestor" | "colaborador")}>
-              <option value="colaborador">Colaborador — vê só o próprio</option>
-              <option value="gestor">Gestor — vê o global (manda)</option>
+              <option value="colaborador">Colaborador</option>
+              <option value="gestor">Gestor</option>
             </select>
             <Button className="w-full carbo-gradient text-white" disabled={!nLabel.trim() || createFn.isPending} onClick={add}>
               {createFn.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Criando...</> : <><Plus className="h-4 w-4" /> Adicionar função</>}

@@ -2,7 +2,7 @@
 // página Vender; aqui a venda é registrada por este dialog) e grava em carboze_orders.
 import { useMemo, useState } from "react";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+  Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
   ShoppingCart, Plus, Trash2, Building2, MapPin, Package, Gift, FileText, Search, Target, ChevronDown,
@@ -159,7 +159,6 @@ export function NovaVendaDialog({ open, onOpenChange }: NovaVendaDialogProps) {
           <DialogTitle className="flex items-center gap-2">
             <ShoppingCart className="h-5 w-5 text-carbo-green" /> Nova Venda
           </DialogTitle>
-          <DialogDescription>Registre um novo pedido de venda.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5">
@@ -183,9 +182,6 @@ export function NovaVendaDialog({ open, onOpenChange }: NovaVendaDialogProps) {
           <CarboCard>
             <CarboCardContent className="p-4 space-y-3">
               <h3 className="font-semibold flex items-center gap-2"><Search className="h-4 w-4 text-carbo-green" /> Busca por CNPJ ou CPF</h3>
-              <p className="text-xs text-muted-foreground">
-                CNPJ busca os dados automaticamente. CPF (pessoa física) é validado e segue com preenchimento manual.
-              </p>
               <Input value={doc} onChange={(e) => setDoc(e.target.value)} placeholder="CNPJ ou CPF" />
             </CarboCardContent>
           </CarboCard>
@@ -208,10 +204,7 @@ export function NovaVendaDialog({ open, onOpenChange }: NovaVendaDialogProps) {
                   <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(00) 00000-0000" />
                 </div>
                 <div className="flex items-start justify-between gap-3 rounded-xl border p-3">
-                  <div>
-                    <p className="text-sm font-medium">É Licenciado?</p>
-                    <p className="text-xs text-muted-foreground">Marque se o cliente é um licenciado Carbo</p>
-                  </div>
+                  <p className="text-sm font-medium">É Licenciado?</p>
                   <Switch checked={isLicenciado} onCheckedChange={setIsLicenciado} />
                 </div>
               </div>
@@ -370,7 +363,7 @@ export function NovaVendaDialog({ open, onOpenChange }: NovaVendaDialogProps) {
         </div>
 
         <p className="text-xs text-muted-foreground text-center">
-          Vendedor: <b>{vendedor || "—"}</b> (usuário logado) · grava em <code>carboze_orders</code> como pedido pendente.
+          Vendedor: <b>{vendedor || "—"}</b>
         </p>
       </DialogContent>
     </Dialog>

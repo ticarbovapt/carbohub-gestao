@@ -36,14 +36,9 @@ export default function MinhaEquipe() {
 
   return (
     <main className="mx-auto max-w-4xl px-4 sm:px-6 py-8 space-y-6">
-      <div>
-        <h1 className="flex items-center gap-2 text-2xl font-bold">
-          <UsersIcon className="h-6 w-6 text-primary" /> Minha Equipe
-        </h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Colegas do seu departamento — para achar contato rápido. Somente visualização.
-        </p>
-      </div>
+      <h1 className="flex items-center gap-2 text-2xl font-bold">
+        <UsersIcon className="h-6 w-6 text-primary" /> Minha Equipe
+      </h1>
 
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -58,7 +53,6 @@ export default function MinhaEquipe() {
           <div className="px-6 py-16 text-center">
             <UsersIcon className="h-10 w-10 mx-auto mb-3 text-muted-foreground/30" />
             <p className="font-medium">Nenhum colega encontrado</p>
-            <p className="text-sm text-muted-foreground mt-0.5">Ajuste a busca.</p>
           </div>
         ) : (
           <div className="divide-y">

@@ -175,12 +175,11 @@ ${listas.map((l) => {
     } finally { setOcupado(null); }
   };
 
-  const Item = ({ icone: I, rot, onClick, desc }: { icone: typeof Info; rot: string; onClick: () => void; desc?: string }) => (
+  const Item = ({ icone: I, rot, onClick }: { icone: typeof Info; rot: string; onClick: () => void }) => (
     <button type="button" onClick={onClick} disabled={!!ocupado}
       className="w-full flex items-start gap-3 rounded-md px-2.5 py-2 text-left hover:bg-muted disabled:opacity-60">
       <I className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground" />
-      <span className="min-w-0"><span className="block text-sm text-foreground">{ocupado && rot.toLowerCase().includes(ocupado) ? `${rot}…` : rot}</span>
-        {desc && <span className="block text-xs text-muted-foreground">{desc}</span>}</span>
+      <span className="min-w-0 block text-sm text-foreground">{ocupado && rot.toLowerCase().includes(ocupado) ? `${rot}…` : rot}</span>
     </button>
   );
 
@@ -198,9 +197,9 @@ ${listas.map((l) => {
         <div className="flex-1 overflow-y-auto p-3">
           {pagina === "menu" && (
             <div className="space-y-0.5">
-              <Item icone={Info} rot="Sobre este quadro" desc="Descrição e quem criou" onClick={() => setPagina("sobre")} />
-              <Item icone={Activity} rot="Atividade" desc="Comentários e mudanças recentes" onClick={() => setPagina("atividade")} />
-              <Item icone={Tag} rot="Etiquetas" desc="Criar, renomear, trocar a cor, excluir" onClick={() => setPagina("etiquetas")} />
+              <Item icone={Info} rot="Sobre este quadro" onClick={() => setPagina("sobre")} />
+              <Item icone={Activity} rot="Atividade" onClick={() => setPagina("atividade")} />
+              <Item icone={Tag} rot="Etiquetas" onClick={() => setPagina("etiquetas")} />
               <Item icone={Palette} rot="Cor do quadro" onClick={() => setPagina("cor")} />
               <Item icone={Settings2} rot="Campos personalizados" onClick={() => { fechar(); onCampos(); }} />
               <Item icone={Archive} rot="Itens arquivados" onClick={() => { fechar(); onArquivados(); }} />
@@ -208,9 +207,9 @@ ${listas.map((l) => {
               <Item icone={ChevronsLeft} rot="Recolher todas as listas" onClick={() => { onRecolherTodas(); fechar(); }} />
               <Item icone={ChevronsRight} rot="Expandir todas as listas" onClick={() => { onExpandirTodas(); fechar(); }} />
               <div className="my-2 border-t border-border" />
-              <Item icone={FileText} rot="Exportar planilha (CSV)" desc="Um cartão por linha, abre no Excel" onClick={() => exportar("csv")} />
-              <Item icone={Download} rot="Exportar tudo (JSON)" desc="Cartões, comentários, checklists e anexos (links)" onClick={() => exportar("json")} />
-              <Item icone={Printer} rot="Imprimir" desc="As listas e cartões ativos, em folha" onClick={imprimir} />
+              <Item icone={FileText} rot="Exportar planilha (CSV)" onClick={() => exportar("csv")} />
+              <Item icone={Download} rot="Exportar tudo (JSON)" onClick={() => exportar("json")} />
+              <Item icone={Printer} rot="Imprimir" onClick={imprimir} />
             </div>
           )}
           {pagina === "sobre" && <Sobre board={board} onSalvo={inval} />}
@@ -226,7 +225,6 @@ ${listas.map((l) => {
                   }}
                   className={`h-10 rounded-md ${board.background === k ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`} style={{ background: cor }} />
               ))}
-              <p className="col-span-5 text-xs text-muted-foreground pt-1">A cor marca o quadro na lista de quadros e no cabeçalho.</p>
             </div>
           )}
         </div>
@@ -264,7 +262,7 @@ function Sobre({ board, onSalvo }: { board: Board & { descricao?: string | null 
         {editando ? (
           <div className="space-y-2">
             <textarea autoFocus value={texto} onChange={(e) => setTexto(e.target.value)} rows={8}
-              placeholder="Para que serve este quadro, como o time usa as listas…"
+              placeholder="Descrição do quadro…"
               className="w-full text-sm rounded-[var(--input-radius)] border border-border bg-card px-3 py-2 resize-y focus:outline-none focus:ring-2 focus:ring-primary/40" />
             <div className="flex gap-2"><Button size="sm" onClick={salvar}>Salvar</Button>
               <Button size="sm" variant="ghost" onClick={() => { setTexto(board.descricao ?? ""); setEditando(false); }}>Cancelar</Button></div>
@@ -275,7 +273,7 @@ function Sobre({ board, onSalvo }: { board: Board & { descricao?: string | null 
           </button>
         ) : (
           <button type="button" onClick={() => setEditando(true)} className="w-full text-left text-sm text-muted-foreground rounded-md bg-muted/50 hover:bg-muted px-3 py-3">
-            Adicionar uma descrição — para que serve este quadro, como o time usa as listas…
+            Adicionar uma descrição…
           </button>
         )}
       </div>
@@ -361,7 +359,7 @@ function EtiquetasDoQuadro({ boardId, labels, onMudou }: { boardId: string; labe
   return (
     <div className="space-y-4">
       <div className="space-y-1.5">
-        {labels.length === 0 && <p className="text-xs text-muted-foreground">Este quadro ainda não tem etiquetas.</p>}
+        {labels.length === 0 && <p className="text-xs text-muted-foreground">Nenhuma etiqueta.</p>}
         {labels.map((l) => (
           <div key={l.id} className="flex items-center gap-1.5">
             <select value={l.color} onChange={(e) => atualizar(l.id, { color: e.target.value })} title="Cor"

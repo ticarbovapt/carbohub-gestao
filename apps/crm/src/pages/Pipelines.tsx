@@ -33,7 +33,7 @@ const hojeISO = () => new Date().toISOString().slice(0, 10);
 import type { FunnelType, CRMLead } from "@/types/crm";
 import { toast } from "sonner";
 import { playMoveSuccess } from "@/lib/sfx";
-import { SEGMENTS, segmentOf, isFunilDeSdr, stageLabelAnywhere, funilDoCloser } from "@/types/crm";
+import { SEGMENTS, segmentOf, isFunilDeSdr } from "@/types/crm";
 import { FUNIS_VISIVEIS, FUNIL_PADRAO, USA_SEGMENTO, MOSTRA_QUENTES_E_TENTATIVAS } from "@/lib/funisDoApp";
 
 // Só as pipelines vivas viram aba. As antigas seguem em FUNNEL_CONFIG para
@@ -477,7 +477,6 @@ export default function Pipelines() {
       <div className="space-y-4">
         <CarboPageHeader
           title={isAll ? "Todos os funis" : (FUNNEL_CONFIG[ft]?.name ?? "Funil de Vendas")}
-          description={isAll ? "Visão consolidada de todos os funis" : (FUNNEL_CONFIG[ft]?.description ?? "Jornada do cliente — do lead ao fechamento")}
           icon={KanbanSquare}
           actions={<CarboButton onClick={() => { setFormStage(undefined); setIsFormOpen(true); }}><Plus className="h-4 w-4 mr-1" /> Novo Lead</CarboButton>}
         />
@@ -659,17 +658,11 @@ export default function Pipelines() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader><DialogTitle>Passar ao closer</DialogTitle></DialogHeader>
           <div className="py-2 space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Um card novo nasce no <strong>{FUNNEL_CONFIG[funilDoCloser(repasseLead?.funnel_type ?? ft)].name}</strong>, na fila, com todo o histórico e os
-              comentários deste aqui. O seu card fica em "{stageLabelAnywhere("repassado", (repasseLead?.funnel_type ?? ft) as FunnelType)}" — ele conta como
-              SQL entregue, nunca como receita.
-            </p>
             {faltaNoRepasse.length > 0 && (
               <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-2.5 flex items-start gap-2">
                 <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
                 <p className="text-xs">
-                  Falta <strong>{faltaNoRepasse.join(", ")}</strong> na qualificação. Dá para
-                  repassar assim mesmo, mas o closer vai receber o card sem isso.
+                  Falta <strong>{faltaNoRepasse.join(", ")}</strong> na qualificação.
                 </p>
               </div>
             )}
@@ -677,7 +670,7 @@ export default function Pipelines() {
               <p className="text-xs font-medium text-muted-foreground">Recado ao closer (opcional)</p>
               <textarea
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-y min-h-[64px] focus:outline-none focus:ring-2 focus:ring-ring"
-                placeholder="ex.: prefere ser chamado à tarde; já conhece o produto pelo primo"
+                placeholder="Ex.: prefere ser chamado à tarde"
                 value={repasseNota} onChange={(e) => setRepasseNota(e.target.value)}
               />
             </div>

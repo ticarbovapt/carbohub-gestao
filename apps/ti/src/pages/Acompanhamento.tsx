@@ -93,7 +93,6 @@ export default function Acompanhamento() {
     <div className="p-4 sm:p-6 space-y-4">
       <CarboPageHeader
         title="Acompanhamento"
-        description="Como a operação comercial se comportou no período"
         icon={Activity}
         actions={
           <div className="flex flex-wrap items-center gap-2">
@@ -127,15 +126,12 @@ export default function Acompanhamento() {
           <div className="text-xs leading-relaxed">
             {avisoTrilha && (
               <p>
-                <strong>A movimentação só é confiável a partir de 06/07/2026.</strong> Antes dessa
-                data o registro de mudança de etapa não existia — os dias anteriores aparecem com
-                zero por falta de registro, não por falta de trabalho.
+                <strong>Movimentação registrada só a partir de 06/07/2026.</strong>
               </p>
             )}
             {avisoLacuna && (
               <p className={avisoTrilha ? "mt-1" : ""}>
-                <strong>24 e 25/07 estão subcontados.</strong> Cerca de 30 movimentos foram perdidos
-                numa limpeza de duplicatas em 26/07.
+                <strong>24 e 25/07 estão subcontados</strong> (cerca de 30 movimentos perdidos).
               </p>
             )}
           </div>
@@ -197,9 +193,7 @@ export default function Acompanhamento() {
 
           {data.valores.estimado_aberto > 0 && (
             <p className="text-[11px] text-muted-foreground -mt-1">
-              Pipeline aberto por estimativa de quem cadastrou: <strong>{brl(data.valores.estimado_aberto)}</strong>.
-              Onde existe orçamento montado, o valor acima é o real — a estimativa só preenche o que
-              ainda não foi precificado.
+              Pipeline aberto por estimativa: <strong>{brl(data.valores.estimado_aberto)}</strong>
             </p>
           )}
 
@@ -368,8 +362,7 @@ export default function Acompanhamento() {
                   </table>
                 </div>
                 <p className="text-[11px] text-muted-foreground mt-2">
-                  "Sem qualif." = repassado sem volume, dor, decisor ou prazo — o closer recebe o
-                  card cego. Volume alto com essa coluna alta é entrega ruim, não produtividade.
+                  "Sem qualif." = repassado sem volume, dor, decisor ou prazo.
                 </p>
               </CarboCardContent>
             </CarboCard>
@@ -402,12 +395,9 @@ export default function Acompanhamento() {
           {/* Os esquecidos, clicáveis */}
           <CarboCard padding="none">
             <CarboCardContent className="p-4">
-              <h2 className="text-sm font-bold mb-1">Esquecidos</h2>
-              <p className="text-xs text-muted-foreground mb-3">
-                Passaram do prazo da etapa e não têm próximo passo agendado nem tarefa em aberto.
-              </p>
+              <h2 className="text-sm font-bold mb-3">Esquecidos</h2>
               {data.lista_esquecidos.length === 0 ? (
-                <Vazio texto="Nada esquecido. Todo lead parado tem próximo passo marcado." />
+                <Vazio texto="Nada esquecido." />
               ) : (
                 <div className="divide-y">
                   {data.lista_esquecidos.map((l) => (
@@ -451,11 +441,7 @@ export default function Acompanhamento() {
       {data && data.lista_espera_vencida.length > 0 && (
         <CarboCard padding="none">
           <CarboCardContent className="p-4">
-            <h2 className="text-sm font-bold mb-1">Esperas vencidas</h2>
-            <p className="text-xs text-muted-foreground mb-3">
-              O prazo que o próprio vendedor marcou já passou. Ou renova com data nova, ou volta a
-              tocar o negócio.
-            </p>
+            <h2 className="text-sm font-bold mb-3">Esperas vencidas</h2>
             <div className="divide-y">
               {data.lista_espera_vencida.map((l) => (
                 <button key={l.id} onClick={() => setPainelId(l.id)}
@@ -547,9 +533,7 @@ function SlaDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
         <DialogHeader>
           <DialogTitle>Prazo por etapa</DialogTitle>
           <DialogDescription>
-            Quantos dias um lead pode ficar numa etapa sem se mover antes de contar como parado.
-            Nutrição tolera 30 dias; Negociação, três. Um número só para todas as etapas viraria
-            ruído.
+            Dias sem movimento até o lead contar como parado.
           </DialogDescription>
         </DialogHeader>
 

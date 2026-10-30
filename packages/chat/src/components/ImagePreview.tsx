@@ -259,12 +259,12 @@ export function ImagePreview({
 
           {/* Dito ANTES de enviar, não depois: quem manda precisa saber que a
               imagem vai ser reduzida, senão acha que o sistema estragou. */}
-          <p className="mt-2 flex items-center gap-1.5 text-[11px] text-white/45">
-            <ImageOff className="h-3 w-3 shrink-0" />
-            {vaiComprimir
-              ? "Imagens grandes são reduzidas antes do envio para não pesar o carregamento."
-              : "Enter envia · Esc cancela"}
-          </p>
+          {vaiComprimir && (
+            <p className="mt-2 flex items-center gap-1.5 text-[11px] text-white/45">
+              <ImageOff className="h-3 w-3 shrink-0" />
+              Imagens grandes serão reduzidas antes do envio.
+            </p>
+          )}
         </div>
       )}
     </div>

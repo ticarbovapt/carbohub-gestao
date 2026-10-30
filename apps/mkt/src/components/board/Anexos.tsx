@@ -253,7 +253,7 @@ export function Anexos({ cardId, boardId, anexos, anexoInicial, onAdicionarLink,
                 </button>
                 <button type="button" onClick={() => setAberto(idx)} className="min-w-0 flex-1 text-left">
                   <p className="text-sm font-medium text-foreground truncate">
-                    {(a.versao ?? 1) > 1 && <span className="mr-1.5 inline-flex items-center rounded bg-primary/15 text-primary text-[11px] font-semibold px-1.5 py-px align-[1px]" title="Versão atual — as anteriores ficam no histórico">v{a.versao}</span>}
+                    {(a.versao ?? 1) > 1 && <span className="mr-1.5 inline-flex items-center rounded bg-primary/15 text-primary text-[11px] font-semibold px-1.5 py-px align-[1px]" title="Versão atual">v{a.versao}</span>}
                     {a.name}
                   </p>
                   <p className="text-xs text-muted-foreground truncate">
@@ -292,7 +292,7 @@ export function Anexos({ cardId, boardId, anexos, anexoInicial, onAdicionarLink,
       <div className="flex gap-2">
         <Input value={link} onChange={(e) => setLink(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && link.trim()) onAdicionarLink(link, () => setLink("")); }}
-          placeholder="Ou cole um link (Google Drive, Figma, Canva…)" className="h-9 text-sm" />
+          placeholder="Ou cole um link…" className="h-9 text-sm" />
         <Button size="sm" variant="outline" disabled={!link.trim()} onClick={() => onAdicionarLink(link, () => setLink(""))}>Anexar link</Button>
       </div>
       {links.map((a) => (
@@ -317,7 +317,6 @@ export function Anexos({ cardId, boardId, anexos, anexoInicial, onAdicionarLink,
           <div className="rounded-2xl border-2 border-dashed border-primary bg-background/95 px-10 py-8 text-center shadow-xl">
             <Upload className="h-8 w-8 mx-auto text-primary" />
             <p className="mt-2 text-base font-semibold">Solte para anexar ao cartão</p>
-            <p className="text-sm text-muted-foreground">Vídeos, imagens, PDFs — vão direto para o nosso banco</p>
           </div>
         </div>
       )}

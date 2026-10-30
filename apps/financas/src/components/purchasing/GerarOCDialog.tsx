@@ -80,11 +80,9 @@ export function GerarOCDialog({ rc, onClose }: { rc: PurchaseRequest | null; onC
       <DialogContent className="sm:max-w-lg max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Gerar Ordem de Compra — {rc.rc_number}</DialogTitle>
-          <DialogDescription>
-            {groups.length > 1
-              ? `Como as cotações vencedoras são de ${groups.length} fornecedores, será gerada uma OC por fornecedor.`
-              : "A OC sai com o fornecedor e os preços da cotação vencedora."}
-          </DialogDescription>
+          {groups.length > 1 && (
+            <DialogDescription>{groups.length} fornecedores: uma OC por fornecedor.</DialogDescription>
+          )}
         </DialogHeader>
 
         <div className="space-y-3 py-1 min-w-0">
@@ -115,7 +113,7 @@ export function GerarOCDialog({ rc, onClose }: { rc: PurchaseRequest | null; onC
           {semCotacao > 0 && (
             <div className="flex items-start gap-2 text-xs text-warning-foreground bg-warning/10 border border-warning/30 rounded-lg p-2.5">
               <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-              <span>{semCotacao} item(ns) sem cotação escolhida vão numa OC <strong>"A definir"</strong> com o valor estimado — e a OC não pode ser editada depois. Escolha a cotação antes, se quiser o fornecedor certo.</span>
+              <span>{semCotacao} item(ns) sem cotação escolhida vão numa OC <strong>"A definir"</strong> com o valor estimado; a OC não pode ser editada depois.</span>
             </div>
           )}
         </div>

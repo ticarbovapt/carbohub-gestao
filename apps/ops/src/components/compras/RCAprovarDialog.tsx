@@ -1,7 +1,7 @@
 // TODO: ligar em <tabela de compras> (Supabase).
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
+  AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
 } from "@/components/ui/alert-dialog";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -19,9 +19,6 @@ export function RCAprovarDialog({ rcNumber, open, onOpenChange, onConfirm }: { r
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Aprovar requisição {rcNumber}?</AlertDialogTitle>
-          <AlertDialogDescription>
-            A requisição será marcada como aprovada e seguirá para geração do pedido de compra (PC).
-          </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel disabled={pending}>Cancelar</AlertDialogCancel>

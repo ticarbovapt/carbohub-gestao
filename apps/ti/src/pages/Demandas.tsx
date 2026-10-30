@@ -298,10 +298,7 @@ export default function Demandas() {
         ) : filtered.length === 0 && filtroAtivo ? (
           <div className="h-full flex flex-col items-center justify-center gap-3 text-center">
             <Inbox className="h-10 w-10 text-muted-foreground/30" />
-            <div>
-              <p className="font-medium">Nenhuma demanda com esses filtros</p>
-              <p className="text-sm text-muted-foreground">Ajuste a busca ou limpe os filtros.</p>
-            </div>
+            <p className="font-medium">Nenhuma demanda com esses filtros</p>
             <Button variant="outline" size="sm" onClick={limparFiltros}>Limpar filtros</Button>
           </div>
         ) : (

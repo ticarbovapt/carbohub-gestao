@@ -122,7 +122,7 @@ export function RegistrarCompraDialog({ oc, onClose }: { oc: PurchaseOrder | nul
                 </SelectContent>
               </Select>
               {methods.length === 0 && (
-                <p className="text-[11px] text-muted-foreground">Cadastre cartões na aba "Cartões" pra escolher aqui.</p>
+                <p className="text-[11px] text-muted-foreground">Nenhum cartão cadastrado.</p>
               )}
               <Label className="pt-1 block">Pago em *</Label>
               <Input type="date" value={pagoEm} max={today()} onChange={(e) => setPagoEm(e.target.value)} />
@@ -131,7 +131,6 @@ export function RegistrarCompraDialog({ oc, onClose }: { oc: PurchaseOrder | nul
             <div className="space-y-1.5">
               <Label>Previsão de vencimento *</Label>
               <Input type="date" value={venc} onChange={(e) => setVenc(e.target.value)} />
-              <p className="text-[11px] text-muted-foreground">Usada pra pré-preencher a conta a pagar ao lançar a NF.</p>
             </div>
           )}
         </div>
@@ -194,8 +193,7 @@ export function ReceberDialog({ oc, onClose }: { oc: PurchaseOrder | null; onClo
         <DialogHeader>
           <DialogTitle>Receber — {oc.oc_number}</DialogTitle>
           <DialogDescription>
-            Confira o que chegou de {oc.supplier_name}. Divergência de quantidade/qualidade é registrada.
-            {temAnterior && " Esta OC já teve recebimento: o esperado é o que ainda falta."}
+            {oc.supplier_name}{temAnterior && " · já teve recebimento: o esperado é o saldo."}
           </DialogDescription>
         </DialogHeader>
         {carregando ? (
@@ -234,7 +232,6 @@ export function ReceberDialog({ oc, onClose }: { oc: PurchaseOrder | null; onClo
               <div className="space-y-1.5 pt-1">
                 <Label>Observação da divergência *</Label>
                 <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="O que veio diferente?" />
-                <p className="text-[11px] text-muted-foreground">Com divergência a OC fica "parcialmente recebida" e volta para esta fila com o saldo.</p>
               </div>
             )}
           </div>
@@ -362,18 +359,18 @@ export function LancarNFDialog({ oc, onClose }: { oc: PurchaseOrder | null; onCl
             <MatchTag ok={value_match} label="Valor" />
             {matched ? <CarboBadge variant="success" className="text-[10px]">3-way OK</CarboBadge> : <CarboBadge variant="warning" className="text-[10px]">Divergência</CarboBadge>}
           </div>
-          {!receiving_match && <p className="text-[11px] text-muted-foreground">Sem recebimento completo e conferido — o match de recebimento fica marcado como divergente.</p>}
+          {!receiving_match && <p className="text-[11px] text-muted-foreground">Sem recebimento conferido: ficará marcado como divergente.</p>}
 
           <div className="space-y-1.5">
             <Label>Anexo da NF (PDF ou XML)</Label>
             <Input type="file" accept=".pdf,.xml,application/pdf,text/xml,application/xml" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
             {file
               ? <p className="text-[11px] text-muted-foreground truncate">Anexo: {file.name}</p>
-              : <p className="text-[11px] text-muted-foreground">Opcional — fica arquivado e disponível pra download depois.</p>}
+              : <p className="text-[11px] text-muted-foreground">Opcional</p>}
           </div>
 
           {oc.is_paid ? (
-            <p className="text-[11px] text-success">OC paga na compra — o pagamento já está em Contas a pagar; a NF não gera outra conta.</p>
+            <p className="text-[11px] text-success">OC paga na compra: a NF não gera outra conta a pagar.</p>
           ) : (
             <label className="flex items-center gap-2 text-sm pt-1">
               <input type="checkbox" checked={gerarPagavel} onChange={(e) => setGerarPagavel(e.target.checked)} /> Gerar conta a pagar
@@ -384,7 +381,6 @@ export function LancarNFDialog({ oc, onClose }: { oc: PurchaseOrder | null; onCl
               <div className="space-y-1.5">
                 <Label>Prazo</Label>
                 <Input value={prazo} onChange={(e) => aplicarPrazo(e.target.value)} placeholder="ex.: 30/60/90, 28 dias, à vista" />
-                <p className="text-[11px] text-muted-foreground">Monta as parcelas a partir da data da NF. Ajuste data e valor de cada uma, se precisar.</p>
               </div>
               {parcelas.map((p, i) => (
                 <div key={i} className="grid grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2">

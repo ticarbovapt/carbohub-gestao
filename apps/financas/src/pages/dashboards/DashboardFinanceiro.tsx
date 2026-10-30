@@ -8,7 +8,6 @@ export default function DashboardFinanceiro() {
       <div className="space-y-6">
         <CarboPageHeader
           title="Dashboard Financeiro"
-          description="Contas a pagar, ordens de compra e fluxo financeiro"
           icon={Wallet}
         />
         <PurchasingDashboard />

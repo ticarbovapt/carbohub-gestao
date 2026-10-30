@@ -248,7 +248,6 @@ export default function BoardTimeline() {
                   <div className="mkt-empty">
                     <div className="mkt-empty-icon"><GanttChartSquare className="h-5 w-5" /></div>
                     <p className="mkt-empty-title">Nenhum cartão com data ainda</p>
-                    <p className="mkt-empty-subcopy">Defina início e/ou entrega nos cartões para vê-los aqui na linha do tempo como barras.</p>
                   </div>
                 </div>
               ) : (
@@ -278,7 +277,6 @@ export default function BoardTimeline() {
             <div className="flex items-center gap-1.5">
               <CalendarOff className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
               <p className="mkt-meta-label">Sem datas ({undated.length})</p>
-              <span className="text-xs text-muted-foreground truncate">— defina início/entrega no cartão para posicioná-lo na linha do tempo</span>
             </div>
             <div className="flex gap-2 flex-wrap">
               {undated.map((c) => (

@@ -133,9 +133,6 @@ export function FilterControls({ value, onChange, labels, team, completo, meuId 
               className={`flex-1 rounded px-2 py-1 transition-colors ${(value.modo ?? "todas") === k ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>{rot}</button>
           ))}
         </div>
-        <p className="text-[11px] text-muted-foreground">
-          {(value.modo ?? "todas") === "todas" ? "O cartão precisa bater em TODAS as opções marcadas." : "Basta o cartão bater em UMA das opções marcadas."} A palavra-chave e as datas De/Até valem sempre.
-        </p>
         {completo && (
           <Opcao on={!!value.recolherVazias} onChange={(v) => set({ recolherVazias: v })}>Recolher listas sem cartões no filtro</Opcao>
         )}

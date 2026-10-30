@@ -256,7 +256,7 @@ export function EditUserDialog({ user, approved, onClose }: Props) {
                 {resetDone ? (
                   <div className="space-y-2">
                     <p className="text-sm font-medium text-emerald-600">Senha redefinida!</p>
-                    <p className="text-xs text-muted-foreground">No próximo acesso ele refaz o primeiro login (define uma nova senha). Passe as credenciais:</p>
+                    <p className="text-xs text-muted-foreground">Credenciais para o próximo acesso:</p>
                     <div className="flex flex-wrap items-center gap-2 text-sm">
                       <code className="font-mono font-bold text-primary bg-primary/10 px-2 py-1 rounded break-all">{user.username}</code>
                       <code className="font-mono font-bold text-amber-600 bg-amber-500/10 px-2 py-1 rounded">{DEFAULT_PASSWORD}</code>
@@ -309,7 +309,7 @@ export function EditUserDialog({ user, approved, onClose }: Props) {
               <button onClick={onClose} className="p-1 rounded hover:bg-muted"><X className="h-4 w-4" /></button>
             </div>
             <p className="text-xs text-muted-foreground mb-4 pl-7">
-              <span className="font-mono break-all">{user.username}</span> — o username não muda.
+              <span className="font-mono break-all">{user.username}</span>
             </p>
 
             <div className="space-y-3">
@@ -381,7 +381,6 @@ export function EditUserDialog({ user, approved, onClose }: Props) {
                         checked={interfaces.includes(s.iface)} onChange={() => toggleInterface(s.iface)} />
                       <span className="font-medium">{s.label}</span>
                       {s.comingSoon && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 font-medium">Em breve</span>}
-                      <span className="min-w-0 text-muted-foreground text-xs [overflow-wrap:anywhere]">— {s.hint}</span>
                     </label>
                   ))}
                 </div>
@@ -391,10 +390,7 @@ export function EditUserDialog({ user, approved, onClose }: Props) {
               <label className="flex items-start gap-3 rounded-xl border p-3 cursor-pointer bg-muted/30">
                 <input type="checkbox" className="h-4 w-4 mt-0.5 accent-primary"
                   checked={isVendedor} onChange={(e) => setIsVendedorState(e.target.checked)} />
-                <span>
-                  <span className="text-sm font-medium">É vendedor?</span>
-                  <span className="block text-xs text-muted-foreground">Marca o usuário como vendedor — passa a aparecer no quadro de Metas e nos rankings do Carbo Sales.</span>
-                </span>
+                <span className="text-sm font-medium">É vendedor?</span>
               </label>
 
               <div className="flex gap-2 pt-1">
@@ -418,9 +414,8 @@ export function EditUserDialog({ user, approved, onClose }: Props) {
                     <p className="flex items-start gap-2 text-sm text-amber-600">
                       <Lock className="h-4 w-4 mt-0.5 shrink-0" />
                       <span>
-                        <span className="font-semibold">Acesso bloqueado.</span> Os dados continuam
-                        no sistema. Ao desbloquear, a pessoa entra com a <span className="font-semibold">mesma
-                        senha</span> — ela nunca foi alterada.
+                        <span className="font-semibold">Acesso bloqueado.</span> Ao desbloquear, a pessoa entra
+                        com a mesma senha.
                       </span>
                     </p>
                     <Button variant="outline" size="sm" className="w-full"
@@ -445,7 +440,7 @@ export function EditUserDialog({ user, approved, onClose }: Props) {
                       <span>
                         <span className="font-semibold">{user.full_name || user.username}</span> deixa
                         de entrar em <span className="font-semibold">todos</span> os sistemas do
-                        CarboHub. Nada é apagado, e dá para desfazer a qualquer momento.
+                        CarboHub. Nada é apagado.
                       </span>
                     </p>
                     {/* ⚠️ Sessão aberta não cai na hora, e isso precisa ser DITO
@@ -453,8 +448,7 @@ export function EditUserDialog({ user, approved, onClose }: Props) {
                         renovação do token, que é de 1 h. Descobrir isso depois
                         é pior que ler agora. */}
                     <p className="text-[11px] text-muted-foreground">
-                      Quem estiver com o sistema aberto neste instante continua até 1 h.
-                      Se for urgente, use também <span className="font-medium">Redefinir senha</span>.
+                      Sessões abertas continuam por até 1 h. Se for urgente, redefina também a senha.
                     </p>
                     <Input
                       placeholder="Motivo (opcional) — ex.: desligamento"

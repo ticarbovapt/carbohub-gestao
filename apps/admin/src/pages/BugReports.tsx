@@ -82,7 +82,6 @@ export default function BugReports() {
       <div className="space-y-5 max-w-5xl mx-auto">
         <CarboPageHeader
           title="Reporte de Bugs e Sugestões"
-          description="O que o time reportou — bugs corrigidos e sugestões avaliadas pelo TI"
           icon={Bug}
         />
 

@@ -12,17 +12,17 @@ const sum30 = (rows: { bucket: string; total: number }[]) => rows.filter((a) => 
 
 // Atalhos para as áreas — os mesmos endereços do menu lateral.
 const ATALHOS = [
-  { to: "/compras/requisicoes", label: "Compras", desc: "Requisição, ordem de compra, recebimento e NF do fornecedor.", icon: ShoppingCart, color: "text-carbo-blue" },
-  { to: "/pagar", label: "Contas a pagar", desc: "O que vence e o que já venceu, com baixa.", icon: CreditCard, color: "text-warning" },
-  { to: "/receber", label: "Contas a receber", desc: "Títulos a receber, baixa e inadimplência.", icon: HandCoins, color: "text-carbo-green" },
-  { to: "/fluxo-caixa", label: "Fluxo de caixa", desc: "Entradas × saídas previstas por semana.", icon: Landmark, color: "text-carbo-blue" },
-  { to: "/suprimentos", label: "Suprimentos", desc: "Estoque, movimentações e política.", icon: Package, color: "text-carbo-green" },
-  { to: "/pedidos", label: "Pedidos de Venda", desc: "Pedidos, faturamento e entregas.", icon: ClipboardList, color: "text-primary" },
-  { to: "/comissionamento", label: "Comissionamento", desc: "Calcular comissões e controlar pagamentos.", icon: Percent, color: "text-carbo-green" },
-  { to: "/funcionarios", label: "Funcionários", desc: "Dados bancários/PIX e contato de emergência.", icon: Users, color: "text-warning" },
-  { to: "/painel-financeiro", label: "Painel financeiro", desc: "Aging, previsão, curva ABC e indicadores.", icon: BarChart3, color: "text-carbo-blue", gestor: true },
-  { to: "/integracoes/bling", label: "Integração Bling", desc: "Conectar e sincronizar com o Bling ERP.", icon: Link2, color: "text-success" },
-  { to: "/integracoes/bling2", label: "Integração Bling 2", desc: "Segunda conta Bling, em base própria e isolada.", icon: Link2, color: "text-sky-500" },
+  { to: "/compras/requisicoes", label: "Compras", icon: ShoppingCart, color: "text-carbo-blue" },
+  { to: "/pagar", label: "Contas a pagar", icon: CreditCard, color: "text-warning" },
+  { to: "/receber", label: "Contas a receber", icon: HandCoins, color: "text-carbo-green" },
+  { to: "/fluxo-caixa", label: "Fluxo de caixa", icon: Landmark, color: "text-carbo-blue" },
+  { to: "/suprimentos", label: "Suprimentos", icon: Package, color: "text-carbo-green" },
+  { to: "/pedidos", label: "Pedidos de Venda", icon: ClipboardList, color: "text-primary" },
+  { to: "/comissionamento", label: "Comissionamento", icon: Percent, color: "text-carbo-green" },
+  { to: "/funcionarios", label: "Funcionários", icon: Users, color: "text-warning" },
+  { to: "/painel-financeiro", label: "Painel financeiro", icon: BarChart3, color: "text-carbo-blue", gestor: true },
+  { to: "/integracoes/bling", label: "Integração Bling", icon: Link2, color: "text-success" },
+  { to: "/integracoes/bling2", label: "Integração Bling 2", icon: Link2, color: "text-sky-500" },
 ];
 
 function Kpi({ to, icon: Icon, label, value, tone = "", sub }: { to: string; icon: any; label: string; value: string; tone?: string; sub?: string }) {
@@ -60,17 +60,14 @@ export default function Home() {
           <div className="h-12 w-12 rounded-xl bg-carbo-green/10 flex items-center justify-center">
             <Wallet className="h-6 w-6 text-carbo-green" />
           </div>
-          <div>
-            <h1 className="text-2xl font-bold">Carbo Finanças{nome ? `, olá ${nome}` : ""}</h1>
-            <p className="text-muted-foreground text-sm">Visão executiva do caixa, contas e aprovações.</p>
-          </div>
+          <h1 className="text-2xl font-bold">Carbo Finanças{nome ? `, olá ${nome}` : ""}</h1>
         </div>
 
         {/* Painel executivo */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           <Kpi to="/pagar?status=vencido" icon={AlertTriangle} label="A pagar vencido" value={brl(pagarVencido)} tone={pagarVencido > 0 ? "text-destructive" : ""} />
           <Kpi to="/pagar" icon={Clock} label="A pagar (30 dias)" value={brl(pagar30)} />
-          <Kpi to="/receber?status=atrasado" icon={HandCoins} label="A receber vencido" value={brl(receberVencido)} tone={receberVencido > 0 ? "text-destructive" : ""} sub="inadimplência" />
+          <Kpi to="/receber?status=atrasado" icon={HandCoins} label="A receber vencido" value={brl(receberVencido)} tone={receberVencido > 0 ? "text-destructive" : ""} />
           <Kpi to="/fluxo-caixa" icon={TrendingUp} label="Previsto (8 sem.)" sub="sem saldo em banco" value={brl(saldo8)} tone={saldo8 < 0 ? "text-destructive" : "text-success"} />
           <Kpi to="/compras/requisicoes" icon={ClipboardList} label="RCs a aprovar" value={String(rcPend.length)} tone={rcPend.length > 0 ? "text-warning" : ""} />
         </div>
@@ -81,8 +78,7 @@ export default function Home() {
               <CarboCard className="hover:shadow-md transition-shadow cursor-pointer">
                 <CarboCardContent className="p-4">
                   <a.icon className={`h-7 w-7 ${a.color} mb-2`} />
-                  <p className="font-semibold">{a.label}</p>
-                  <p className="text-sm text-muted-foreground mb-2">{a.desc}</p>
+                  <p className="font-semibold mb-2">{a.label}</p>
                   <span className="text-xs font-semibold text-primary inline-flex items-center gap-1">Abrir <ArrowRight className="h-3.5 w-3.5" /></span>
                 </CarboCardContent>
               </CarboCard>

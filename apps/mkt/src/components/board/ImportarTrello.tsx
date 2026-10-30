@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { Upload, AlertTriangle, Loader2, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { montarImportacao, type Importacao, type PessoaDaqui } from "@/lib/trelloImport";
 
@@ -116,7 +116,6 @@ export function ImportarTrello({ pessoas, titulosExistentes }: { pessoas: Pessoa
         <DialogContent className="max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Importar quadro do Trello</DialogTitle>
-            <DialogDescription>Confira o que vai entrar. Ele vira um quadro novo; nada existente é alterado.</DialogDescription>
           </DialogHeader>
 
           {erro && (
@@ -158,15 +157,14 @@ export function ImportarTrello({ pessoas, titulosExistentes }: { pessoas: Pessoa
                 <div className="flex gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-300">
                   <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
                   <span>
-                    <b>{r.anexosNoTrello} anexos ({r.anexosNoTrelloMB} MB) são arquivos guardados no Trello.</b> Eles entram como link
-                    para o Trello: abrem só com login lá e deixam de existir se o quadro do Trello for apagado. Antes de cancelar o
-                    Trello, baixe esses arquivos.
+                    <b>{r.anexosNoTrello} anexos ({r.anexosNoTrelloMB} MB) estão guardados no Trello</b> e entram como link: abrem só
+                    com login lá. Baixe-os antes de cancelar o Trello.
                   </span>
                 </div>
               )}
               {r.comentariosDesde && (
                 <p className="text-xs text-muted-foreground">
-                  O export do Trello só traz as últimas 1.000 ações: comentários anteriores a{" "}
+                  Comentários anteriores a{" "}
                   {new Date(r.comentariosDesde).toLocaleDateString("pt-BR")} não estão no arquivo.
                 </p>
               )}

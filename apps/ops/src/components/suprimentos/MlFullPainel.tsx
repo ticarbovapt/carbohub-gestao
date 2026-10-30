@@ -85,7 +85,7 @@ export function MlFullPainel() {
         </Badge>
         {sync.velho && (
           <span className="text-destructive text-xs">
-            O espelho atualiza a cada 15 min — este número pode estar velho.
+            Pode estar desatualizado.
           </span>
         )}
         <Button size="sm" variant="ghost" className="ml-auto gap-1.5"
@@ -109,12 +109,9 @@ export function MlFullPainel() {
           cartão de alerta para isso é ruído, e ruído nesta tela ensina a
           ignorá-la, que é justamente o que ela não pode virar. */}
       {isLoading ? (
-        <CarboEmptyState title="Carregando…" description="Buscando o espelho do Mercado Livre." />
+        <CarboEmptyState title="Carregando…" />
       ) : linhas.length === 0 ? (
-        <CarboEmptyState
-          title="Nenhum anúncio no Fulfillment"
-          description="O espelho roda de hora em hora. Se continuar vazio, os anúncios podem não estar marcados como Full no painel do Mercado Livre — nesse caso o ajuste é lá, não aqui."
-        />
+        <CarboEmptyState title="Nenhum anúncio no Fulfillment" />
       ) : (
         <Card>
           <CardContent className="p-0">
@@ -258,11 +255,7 @@ export function MlFullPainel() {
             <DialogTitle>Remessa para o ML Full</DialogTitle>
             {/* ⚠️ A descrição diz o que a ação NÃO faz. Quem clica espera ver o
                 número do ML subir, e ele não sobe hoje. */}
-            <DialogDescription>
-              Tira do <strong>Hub Natal</strong> e põe em trânsito. O saldo no ML
-              não muda agora — ele sobe quando o Mercado Livre receber e o espelho
-              trouxer o número novo.
-            </DialogDescription>
+            <DialogDescription>Sai do Hub Natal e fica em trânsito.</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3">

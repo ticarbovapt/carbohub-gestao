@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -138,9 +138,6 @@ export function MrpProductFormDialog({ open, onOpenChange, mode, id, initial }: 
       <DialogContent className="w-[calc(100%-2rem)] sm:max-w-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{mode === "create" ? "Novo Produto" : "Editar Produto"}</DialogTitle>
-          <DialogDescription>
-            {mode === "create" ? "Cadastre um item no catálogo MRP (insumo, embalagem ou SKU)." : "Atualize os dados do item no catálogo MRP."}
-          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -179,13 +176,11 @@ export function MrpProductFormDialog({ open, onOpenChange, mode, id, initial }: 
           <div className="space-y-2">
             <Label>Estoque de Segurança (referência)</Label>
             <Input type="number" min={0} placeholder="0" value={safetyStock} onChange={(e) => setSafetyStock(e.target.value)} />
-            <p className="text-[11px] text-muted-foreground">O mínimo por hub que aciona a reposição é configurado em Suprimentos → Política de Estoque.</p>
           </div>
 
           <div className="space-y-2">
             <Label>Custo unitário (R$)</Label>
             <Input type="number" step="0.01" min="0" placeholder="0,00" value={unitCost} onChange={(e) => setUnitCost(e.target.value)} />
-            <p className="text-[11px] text-muted-foreground">Usado para calcular o valor mobilizado em estoque (visível no Carbo Admin → Estoque &amp; Custos).</p>
           </div>
 
           <div className="space-y-2">
@@ -206,12 +201,6 @@ export function MrpProductFormDialog({ open, onOpenChange, mode, id, initial }: 
                 </label>
               ))}
             </div>
-            <p className="text-[11px] text-muted-foreground">
-              Desmarcar tira o produto da tela de estoque daquele hub.
-              {" "}
-              <strong>Produto com saldo continua aparecendo</strong>, sinalizado — esconder
-              estoque que existe seria pior que a poluição da lista.
-            </p>
           </div>
 
           <div className="space-y-2">

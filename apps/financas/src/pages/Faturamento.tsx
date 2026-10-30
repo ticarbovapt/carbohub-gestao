@@ -288,7 +288,7 @@ export default function Faturamento() {
                       ) : (
                         <div className="flex items-center gap-1.5">
                           <CarboBadge variant="warning">Sem NFS-e</CarboBadge>
-                          {nfseTeste && <CarboBadge size="sm" variant="outline" title="Emitida no ambiente de teste — não vale como nota">teste ok</CarboBadge>}
+                          {nfseTeste && <CarboBadge size="sm" variant="outline" title="Ambiente de teste: não vale como nota">teste ok</CarboBadge>}
                         </div>
                       )
                     ) : (hasNF || (nota && !showAction)) ? (
@@ -325,7 +325,7 @@ export default function Faturamento() {
                       {servico && !hasNF ? (
                         <div className="flex justify-end">
                           <CarboButton size="sm" onClick={() => setToNfse(o.id)}
-                            title="CarboVAPT: a nota de serviço sai pelo Portal Nacional (NFS-e), não pelo Bling.">
+                            title="NFS-e pelo Portal Nacional">
                             <FileText className="h-3.5 w-3.5 mr-1" /> Emitir NFS-e
                           </CarboButton>
                         </div>
@@ -335,7 +335,7 @@ export default function Faturamento() {
                         <div className="flex justify-end">
                           <CarboButton size="sm" onClick={() => setToBling(o)}
                             title={temBonificacao(o.items)
-                              ? "Este pedido tem bonificação: serão criados DOIS pedidos no Bling — o pago e a remessa de brinde, com natureza própria."
+                              ? "Venda e remessa de bonificação"
                               : undefined}>
                             <Receipt className="h-3.5 w-3.5 mr-1" />
                             {temBonificacao(o.items) ? "Criar no Bling (2 notas)" : "Criar no Bling"}
@@ -345,7 +345,7 @@ export default function Faturamento() {
                         // Travado: o pedido ainda não chegou em "Gerar NF" no Pós-venda.
                         <span
                           className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
-                          title="Libera quando o pedido chegar em 'Gerar Nota Fiscal' no Pós-venda (Carbo Ops)."
+                          title="Aguardando a etapa Gerar NF"
                         >
                           <Lock className="h-3 w-3" /> {stageLabel(o.fulfillment_stage)}
                         </span>
@@ -539,7 +539,6 @@ export default function Faturamento() {
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <CarboPageHeader
             title="Faturamento"
-            description="Vendas do sistema prontas para faturar + pedidos criados direto no Bling (rastreabilidade)"
             icon={Receipt}
           />
           {/* Configuração feita UMA vez. Fica aqui, e não numa tela de ajustes
@@ -567,14 +566,13 @@ export default function Faturamento() {
               {/* Com busca, o mês NÃO vale (a busca vasculha todo o histórico) —
                   e a tela diz isso, senão o "Out / 2026" fixo dá a entender
                   que o resultado é só daquele mês. */}
-              <span className={`min-w-28 text-center font-medium ${search.trim() ? "text-muted-foreground line-through" : ""}`}
-                title={search.trim() ? "A busca ignora o mês e procura em todo o histórico" : undefined}>
+              <span className={`min-w-28 text-center font-medium ${search.trim() ? "text-muted-foreground line-through" : ""}`}>
                 {MONTHS[month.getMonth()]} / {month.getFullYear()}
               </span>
               <CarboButton variant="outline" size="icon" onClick={() => changeMonth(1)} aria-label="Próximo mês"><ChevronRight className="h-4 w-4" /></CarboButton>
             </div>
             <div className="flex-1 lg:min-w-48">
-              <CarboSearchInput placeholder="Buscar por cliente, CNPJ/CPF, nº do pedido ou NF, cidade, telefone, e-mail…" value={search} onChange={(e) => { setSearch(e.target.value); resetPages(); }} />
+              <CarboSearchInput placeholder="Buscar cliente, CNPJ/CPF, pedido ou NF…" value={search} onChange={(e) => { setSearch(e.target.value); resetPages(); }} />
             </div>
             {search.trim() && (
               <span className="text-xs text-muted-foreground whitespace-nowrap">Buscando em todos os meses</span>
@@ -606,11 +604,6 @@ export default function Faturamento() {
               <Tabela rows={sistPag.slice} showAction />
               <Pager page={sistPag.safePage} pageCount={sistPag.pageCount} total={sistema.length} onPage={setPSist} />
             </CarboCardContent></CarboCard>
-            <p className="text-xs text-muted-foreground mt-3">
-              Fluxo: <strong>Criar no Bling</strong> envia o pedido pro Bling (o nº <code>V…</code> vai na observação) e abre o Bling
-              pra você conferir e emitir a NF-e. A sincronização casa a NF ao pedido pela observação — o pedido continua aqui como
-              <strong> Faturado</strong> (com a NF pra baixar). Desligue <em>“Mostrar já faturados”</em> pra ver só os pendentes.
-            </p>
           </TabsContent>
 
           <TabsContent value="online" className="mt-4">
@@ -618,12 +611,6 @@ export default function Faturamento() {
               <Tabela rows={onlinePag.slice} showAction={false} />
               <Pager page={onlinePag.safePage} pageCount={onlinePag.pageCount} total={online.length} onPage={setPOnline} />
             </CarboCardContent></CarboCard>
-            <p className="text-xs text-muted-foreground mt-3">
-              Vendas de <strong>marketplace</strong> (Nuvemshop, Mercado Livre, Amazon…).
-              A nota delas é emitida pela plataforma ou em lote — não uma a uma
-              por aqui. Ficam separadas para não afogar as vendas do time, que
-              são as que precisam de ação.
-            </p>
           </TabsContent>
 
           <TabsContent value="bling" className="mt-4">
@@ -631,12 +618,6 @@ export default function Faturamento() {
               <Tabela rows={blingPag.slice} showAction={false} />
               <Pager page={blingPag.safePage} pageCount={blingPag.pageCount} total={bling.length} onPage={setPBling} />
             </CarboCardContent></CarboCard>
-            <p className="text-xs text-muted-foreground mt-3">
-              Pedidos criados <strong>direto no Bling</strong> (não nasceram de uma venda do sistema) e vendas do sistema já enviadas
-              ao Bling — ficam aqui para rastreabilidade. <strong>Sem NF</strong> = a nota ainda não foi emitida no Bling (só existe o
-              pedido de venda). Quando a NF é emitida com o <code>V…</code> na observação, ela casa automaticamente e o pedido passa a
-              mostrar a NF pra baixar. Desligue <em>“Mostrar já faturados”</em> pra ver só os que ainda estão sem NF.
-            </p>
           </TabsContent>
 
           <TabsContent value="vincular" className="mt-4">
@@ -645,15 +626,6 @@ export default function Faturamento() {
 
           <TabsContent value="vincular-filial" className="mt-4">
             <VincularNFsFilialTab />
-            <p className="mt-3 text-xs text-muted-foreground">
-              A nota da <strong>filial SP</strong> casa sozinha por dois caminhos: o
-              <strong> id do pedido</strong> (quando a venda foi criada no Bling pelo
-              sistema) e o <strong>rodapé da NF</strong> (o <code>V…</code> em
-              "Informações complementares"). Esta aba é o resto — nota avulsa,
-              pedido com referência trocada, ou rodapé que não chegou.
-              O vínculo é uma decisão registrada de quem clicou: o sistema
-              sugere, quem confirma é você.
-            </p>
           </TabsContent>
 
           <TabsContent value="todas" className="mt-4">

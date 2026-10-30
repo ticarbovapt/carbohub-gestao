@@ -115,8 +115,8 @@ export default function BoardDashboard() {
         {/* KPIs */}
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           <Tile label="Cartões" value={String(metrics.total)} accent="hsl(var(--accent))" icon={Layers} />
-          <Tile label="Cartões concluídos" value={String(metrics.concluidos)} sub="marcados como concluído no cartão" accent="hsl(var(--primary))" icon={CheckCircle2} />
-          <Tile label="Taxa de conclusão" value={`${metrics.taxa}%`} sub="pelo checkbox do cartão" accent="hsl(var(--primary))" icon={CheckCircle2} />
+          <Tile label="Cartões concluídos" value={String(metrics.concluidos)} accent="hsl(var(--primary))" icon={CheckCircle2} />
+          <Tile label="Taxa de conclusão" value={`${metrics.taxa}%`} accent="hsl(var(--primary))" icon={CheckCircle2} />
           <Tile label="Atrasados" value={String(metrics.atrasadosAll.length)} accent={metrics.atrasadosAll.length ? "hsl(var(--destructive))" : "hsl(var(--border))"} icon={AlertTriangle} />
           <Tile label="Sem data" value={String(metrics.semData)} accent="hsl(var(--warning))" icon={CalendarOff} />
         </div>
@@ -189,7 +189,7 @@ export default function BoardDashboard() {
               <CardTitle className="text-base font-semibold flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-destructive" /> Atrasados ({metrics.atrasadosAll.length})</CardTitle>
             </CardHeader>
             <CardContent className="px-5 pb-5">
-              {metrics.atrasadosAll.length === 0 ? <p className="text-sm text-muted-foreground text-center py-8">Nenhum cartão atrasado. 🎉</p> : (
+              {metrics.atrasadosAll.length === 0 ? <p className="text-sm text-muted-foreground text-center py-8">Nenhum cartão atrasado.</p> : (
                 <div className="divide-y divide-border -mx-1 max-h-[280px] overflow-y-auto">
                   {metrics.atrasadosAll.map(({ card, diasAtraso }) => (
                     <button key={card.id} onClick={() => setOpenCardId(card.mirrorOf ?? card.id)} className="w-full flex items-center justify-between gap-2 py-2 px-1 text-left hover:bg-muted/40 rounded-md">

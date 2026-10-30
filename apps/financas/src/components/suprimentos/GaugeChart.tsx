@@ -194,8 +194,7 @@ export function GaugeChart({ value, max, label, unit = "un", size = 120 }: Gauge
           </div>
         </TooltipTrigger>
         <TooltipContent side="bottom">
-          <p className="text-xs">Baseado no estoque de segurança definido</p>
-          <p className="text-xs text-muted-foreground">Meta por hub: {max} {unit}</p>
+          <p className="text-xs">Meta por hub: {max} {unit}</p>
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>

@@ -27,7 +27,7 @@ export default function AcompanhamentoMetas() {
     <div className="p-4 md:p-6">
       <div className="space-y-5 max-w-4xl mx-auto">
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <CarboPageHeader title="Acompanhamento de Metas — E-commerce" description="Andamento do faturamento por plataforma vs meta" icon={Target} />
+          <CarboPageHeader title="Acompanhamento de Metas — E-commerce" icon={Target} />
           <div className="flex items-center gap-1 bg-muted/40 rounded-lg px-2 py-1.5">
             <Button variant="ghost" size="icon" className="h-7 w-7"><ChevronLeft className="h-4 w-4" /></Button>
             <span className="text-sm font-semibold w-28 text-center capitalize">junho de 2026</span>

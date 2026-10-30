@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -151,16 +151,6 @@ export function BomDialog({ open, onOpenChange, productId, productName }: BomDia
             <ClipboardList className="h-5 w-5 text-primary" />
             BOM — {productName}
           </DialogTitle>
-          <DialogDescription>Lista de insumos consumidos por unidade produzida.</DialogDescription>
-          {temSemi && (
-            <p className="text-xs text-muted-foreground pt-1">
-              Este produto tem um <strong>semi-acabado</strong> na ficha, então pode ser fabricado de 2 formas
-              (mesma lógica de rota das Ordens de Produção): <Tag className="inline h-3 w-3 -mt-0.5" /> <strong>Rotular</strong> (usa
-              o semi-acabado pronto — a ficha editável abaixo) e <Settings2 className="inline h-3 w-3 -mt-0.5" /> <strong>Do zero</strong> (monta
-              a partir dos insumos crus). A rota “Do zero” é <strong>calculada automaticamente</strong> a partir da ficha do
-              semi-acabado — só leitura, não altera a produção.
-            </p>
-          )}
         </DialogHeader>
 
         <div className="space-y-4">
@@ -183,7 +173,7 @@ export function BomDialog({ open, onOpenChange, productId, productName }: BomDia
                 </Select>
               )}
               {selectedInsumo && (
-                <p className="text-[11px] text-muted-foreground">Estoque em <strong>{unitLabel(stockUnit)}</strong> — pode cadastrar em outra unidade (converte na produção).</p>
+                <p className="text-[11px] text-muted-foreground">Estoque em <strong>{unitLabel(stockUnit)}</strong></p>
               )}
             </div>
             <div className="space-y-1.5">
@@ -216,7 +206,7 @@ export function BomDialog({ open, onOpenChange, productId, productName }: BomDia
 
           {temSemi && (
             <div className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
-              <Tag className="h-4 w-4 text-primary" /> Rotular <span className="text-xs font-normal text-muted-foreground">(usa o semi-acabado pronto — ficha editável)</span>
+              <Tag className="h-4 w-4 text-primary" /> Rotular
             </div>
           )}
           <div className="overflow-x-auto rounded-lg border border-border">
@@ -272,7 +262,6 @@ export function BomDialog({ open, onOpenChange, productId, productName }: BomDia
             <div className="space-y-2">
               <div className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
                 <Settings2 className="h-4 w-4 text-primary" /> Do zero
-                <span className="text-xs font-normal text-muted-foreground">(monta a partir dos insumos crus — calculado da ficha do semi-acabado)</span>
               </div>
               <div className="overflow-x-auto rounded-lg border border-dashed border-border bg-muted/10">
                 <CarboTable>
@@ -304,7 +293,7 @@ export function BomDialog({ open, onOpenChange, productId, productName }: BomDia
                 </CarboTable>
               </div>
               {zeroTotal.missing > 0 && (
-                <p className="text-xs text-amber-500">⚙️ Do zero: falta custo de {zeroTotal.missing} insumo(s) — o valor acima é parcial (só o que tem custo cadastrado).</p>
+                <p className="text-xs text-amber-500">Falta custo de {zeroTotal.missing} insumo(s).</p>
               )}
             </div>
           )}

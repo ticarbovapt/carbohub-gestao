@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { RefreshCw, Loader2, CheckCircle2, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { casarPessoas, criadoEm, type PessoaDaqui } from "@/lib/trelloImport";
@@ -67,7 +67,7 @@ export function TrazerDoTrello({ boardId }: { boardId: string }) {
   if (!veioDoTrello) return null;
   return (
     <>
-      <button onClick={() => setAberto(true)} title="Sincronizar com o Trello · arquivos · comentários"
+      <button onClick={() => setAberto(true)} title="Sincronizar com o Trello"
         className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md px-2.5 py-1.5 transition-colors">
         <RefreshCw className="h-4 w-4" /> Trello
       </button>
@@ -93,7 +93,6 @@ function Painel({ boardId, onClose, atualizar }: { boardId: string; onClose: () 
       <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Trello</DialogTitle>
-          <DialogDescription>Pode rodar quantas vezes quiser: o que já veio não duplica.</DialogDescription>
         </DialogHeader>
         {isLoading ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : (
           <>
@@ -176,14 +175,14 @@ function Arquivos({ boardId, setOcupado }: { boardId: string; setOcupado: (b: bo
           )}
           <div className="flex gap-2">
             {!rodando && <Button size="sm" onClick={copiar}>Copiar para o sistema</Button>}
-            {rodando && <Button size="sm" variant="outline" onClick={() => { parar.current = true; }}>Parar depois dos que estão em andamento</Button>}
+            {rodando && <Button size="sm" variant="outline" onClick={() => { parar.current = true; }}>Parar</Button>}
           </div>
         </>
       )}
       {!rodando && copiados > 0 && <p className="text-sm text-success">{copiados} arquivo(s) copiado(s).</p>}
       {falhas.length > 0 && (
         <div className="rounded-md border border-destructive/40 bg-destructive/5 p-2 space-y-1">
-          <p className="text-sm text-destructive flex items-center gap-1.5"><AlertTriangle className="h-4 w-4" /> {falhas.length} não copiaram — continuam no Trello e entram de novo ao clicar "Copiar".</p>
+          <p className="text-sm text-destructive flex items-center gap-1.5"><AlertTriangle className="h-4 w-4" /> {falhas.length} não copiaram. Clique em "Copiar para o sistema" para tentar de novo.</p>
           <ul className="text-xs text-muted-foreground max-h-32 overflow-y-auto space-y-0.5">
             {falhas.map((f, i) => <li key={i} className="break-words"><span className="text-foreground">{f.nome}</span>: {f.erro}</li>)}
           </ul>
@@ -306,7 +305,6 @@ function Comentarios({ boardId, setOcupado, linkInicial }: { boardId: string; se
       <h3 className="text-sm font-semibold text-foreground">Comentários</h3>
       {(fase === "ocioso" || fase === "buscando") && (
         <>
-          <p className="text-sm text-muted-foreground">Cole o link do quadro no Trello.</p>
           <div className="flex gap-2">
             <Input value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://trello.com/b/…" className="h-9 text-sm" disabled={fase === "buscando"} />
             <Button size="sm" onClick={buscar} disabled={fase === "buscando" || !link.trim()}>

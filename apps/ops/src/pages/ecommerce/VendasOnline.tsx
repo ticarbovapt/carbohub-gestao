@@ -81,10 +81,7 @@ function PlatformView({ platform }: { platform: Platform }) {
       <div className={cn("rounded-2xl border p-4 flex items-center justify-between", cfg.bgClass, cfg.borderClass)}>
         <div className="flex items-center gap-3">
           <span className="text-3xl">{cfg.emoji}</span>
-          <div>
-            <p className={cn("text-lg font-bold", cfg.textClass)}>{cfg.label}</p>
-            <p className="text-xs text-muted-foreground">Dados de vendas externos — período selecionado</p>
-          </div>
+          <p className={cn("text-lg font-bold", cfg.textClass)}>{cfg.label}</p>
         </div>
         {m.isConnected ? (
           <Badge className="bg-green-500/10 text-green-600 border-green-500/30 gap-1.5 text-xs">
@@ -99,7 +96,6 @@ function PlatformView({ platform }: { platform: Platform }) {
         <div className="rounded-xl border border-dashed border-muted-foreground/30 bg-muted/20 p-6 flex flex-col items-center gap-2 text-center">
           <AlertCircle className="h-8 w-8 text-muted-foreground/50" />
           <p className="text-sm font-medium text-muted-foreground">Aguardando sincronização</p>
-          <p className="text-xs text-muted-foreground/70 max-w-md">A integração será estabelecida automaticamente. Os dados aparecerão assim que a próxima sincronização ocorrer.</p>
         </div>
       )}
 
@@ -385,10 +381,7 @@ export default function Ecommerce() {
       <div className="space-y-5 max-w-[1500px] mx-auto">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2"><ShoppingCart className="h-6 w-6 text-primary" /> Vendas Online</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">Acompanhamento de pedidos, receita e unidades por plataforma de e-commerce</p>
-          </div>
+          <h1 className="text-2xl font-bold flex items-center gap-2"><ShoppingCart className="h-6 w-6 text-primary" /> Vendas Online</h1>
           {active !== "historico" && (
             <Select value={period} onValueChange={(v) => setPeriod(v as Period)}>
               <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
@@ -403,7 +396,7 @@ export default function Ecommerce() {
             const on = active === p.id;
             if (p.disabled) {
               return (
-                <span key={p.id} title="Em breve — integração ainda não disponível" className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border-2 border-border/50 text-muted-foreground/40 cursor-not-allowed select-none">
+                <span key={p.id} title="Em breve" className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border-2 border-border/50 text-muted-foreground/40 cursor-not-allowed select-none">
                   <span className="text-base grayscale opacity-50">{p.emoji}</span>{p.label}<span className="text-[10px] font-normal">(em breve)</span>
                 </span>
               );

@@ -46,7 +46,6 @@ export default function Skus() {
       <div className="space-y-6 max-w-[1500px] mx-auto">
         <CarboPageHeader
           title="Gestão de SKUs"
-          description="Produtos acabados e fichas técnicas (BOM)"
           icon={Package}
           actions={
             <div className="flex items-center gap-3">
@@ -79,7 +78,7 @@ export default function Skus() {
         ) : error ? (
           <CarboEmptyState title="Erro ao carregar" description="Não foi possível buscar os SKUs. Tente novamente." icon={Package} />
         ) : filtered.length === 0 ? (
-          <CarboEmptyState title="Nenhum SKU encontrado" description={skus.length === 0 ? "Nenhum SKU cadastrado." : "Tente ajustar os filtros de busca."} icon={Package} />
+          <CarboEmptyState title="Nenhum SKU encontrado" icon={Package} />
         ) : (
           <div className="overflow-x-auto">
             <CarboTable className="min-w-[680px]">
@@ -143,7 +142,7 @@ export default function Skus() {
         open={!!deleteSku}
         onOpenChange={(v) => { if (!v) setDeleteSku(null); }}
         title="Excluir SKU?"
-        description={`Esta ação não pode ser desfeita. O SKU ${deleteSku?.code ?? ""} será excluído permanentemente.`}
+        description={`O SKU ${deleteSku?.code ?? ""} será excluído permanentemente.`}
         onConfirm={deleteSku ? async () => {
           await remove.mutateAsync(deleteSku.id);
           toast.success(`SKU ${deleteSku.code} excluído.`);

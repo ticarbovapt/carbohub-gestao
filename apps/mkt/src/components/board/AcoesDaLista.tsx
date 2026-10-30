@@ -179,7 +179,6 @@ export function ListaDialogo({ modo, lista, boardId, onClose }: {
             <div className="space-y-1.5">
               <label className="mkt-meta-label block">Nome da nova lista</label>
               <Input value={titulo} onChange={(e) => setTitulo(e.target.value)} className="h-9 text-sm" />
-              <p className="text-[11px] text-muted-foreground">Vão os cartões com etiquetas, membros, checklists, campos e anexos. Comentários não.</p>
             </div>
           )}
           <div className="space-y-1.5">
@@ -198,7 +197,6 @@ export function ListaDialogo({ modo, lista, boardId, onClose }: {
                   {outras.map((l) => <option key={l.id} value={l.id}>{l.title}</option>)}
                 </select>
               )}
-              <p className="text-[11px] text-muted-foreground">Os cartões vão para o fim da lista, na ordem em que estão. Arquivados ficam.</p>
             </div>
           ) : (
             <div className="space-y-1.5">
@@ -209,9 +207,7 @@ export function ListaDialogo({ modo, lista, boardId, onClose }: {
             </div>
           )}
           {destino !== boardId && (
-            <p className="text-xs text-muted-foreground">
-              Para outro quadro: etiquetas vão pelo nome e cor (criadas lá se faltarem); campos só vão se existir um com o mesmo nome lá.
-            </p>
+            <p className="text-xs text-muted-foreground">Campos sem equivalente no quadro de destino não vão.</p>
           )}
           {ocupado && ocupado !== "…" && <p className="text-xs text-muted-foreground truncate">{ocupado}</p>}
           <Button className="w-full" onClick={confirmar} disabled={!!ocupado || (modo === "mover_cartoes" && !listaDestino)}>

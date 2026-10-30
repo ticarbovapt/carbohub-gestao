@@ -276,7 +276,7 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [], anex
               {data.card.is_archived && (
                 <div className="flex items-center gap-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm">
                   <Archive className="h-4 w-4 text-warning shrink-0" />
-                  <span className="flex-1 text-foreground">Este cartão está arquivado — não aparece no quadro.</span>
+                  <span className="flex-1 text-foreground">Este cartão está arquivado.</span>
                   <Button size="sm" variant="outline" className="gap-1.5 h-7"
                     onClick={() => mut.updateCard.mutate({ is_archived: false, archived_at: null }, { onSuccess: () => toast.success("Cartão restaurado.") })}>
                     <RotateCcw className="h-3.5 w-3.5" /> Restaurar
@@ -292,7 +292,7 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [], anex
                     <div className="absolute z-20 mt-1 w-72 left-0 max-sm:fixed max-sm:left-3 max-sm:right-3 max-sm:w-auto max-sm:max-w-none rounded-[var(--radius)] border border-border bg-popover shadow-[var(--shadow-elevated)] p-2.5 space-y-2">
                       <p className="mkt-meta-label">Etiquetas do quadro</p>
                       <div className="space-y-1 max-h-52 overflow-y-auto">
-                        {labels.length === 0 && <p className="text-xs text-muted-foreground px-1 py-1">Nenhuma etiqueta ainda — crie abaixo.</p>}
+                        {labels.length === 0 && <p className="text-xs text-muted-foreground px-1 py-1">Nenhuma etiqueta.</p>}
                         {labels.map((l) => (
                           <div key={l.id} className="flex items-center gap-2">
                             <input type="checkbox" checked={data.labelIds.includes(l.id)} onChange={(e) => mut.toggleLabel.mutate({ labelId: l.id, on: e.target.checked })} className="h-4 w-4 shrink-0 rounded border-border accent-[hsl(var(--primary))]" title="Aplicar ao cartão" />
@@ -358,13 +358,13 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [], anex
                 <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setMoverCopiar("mover")}><ArrowRight className="h-3.5 w-3.5" /> Mover</Button>
                 <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setMoverCopiar("copiar")}><Copy className="h-3.5 w-3.5" /> Copiar</Button>
                 <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShowMirror(true)}><Link2 className="h-3.5 w-3.5" /> Espelhar</Button>
-                <Button size="sm" variant={sigo ? "secondary" : "outline"} className="gap-1.5" onClick={alternarSeguir} title="Receber no sininho o que acontecer neste cartão">
+                <Button size="sm" variant={sigo ? "secondary" : "outline"} className="gap-1.5" onClick={alternarSeguir}>
                   <Eye className="h-3.5 w-3.5" /> {sigo ? "Seguindo" : "Seguir"}
                 </Button>
                 <Button size="sm" variant="outline" className="gap-1.5" onClick={copiarLink}><Share2 className="h-3.5 w-3.5" /> Copiar link</Button>
-                <Button size="sm" variant="outline" className="gap-1.5" title="Guardar etiquetas, checklist, campos e descrição para criar cartões iguais"
+                <Button size="sm" variant="outline" className="gap-1.5"
                   onClick={async () => {
-                    const nome = await pedirTexto({ titulo: "Salvar como modelo", rotulo: "Nome do modelo (ex.: Reels padrão)", valorInicial: data.card.title, obrigatorio: true, confirmar: "Salvar modelo" });
+                    const nome = await pedirTexto({ titulo: "Salvar como modelo", rotulo: "Nome do modelo", valorInicial: data.card.title, obrigatorio: true, confirmar: "Salvar modelo" });
                     if (!nome?.trim()) return;
                     modelos.salvar.mutate({ nome: nome.trim(), detalhe: data }, {
                       onSuccess: () => toast.success(`Modelo "${nome.trim()}" salvo. Use pelo ícone ao lado de "Adicionar cartão" em qualquer lista deste quadro.`),
@@ -573,7 +573,7 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [], anex
                       <button onClick={() => { mut.updateCard.mutate({ location_name: null, location_lat: null, location_lng: null }); setAddr(""); }} className="text-destructive hover:underline">remover</button>
                     </div>
                   ) : (
-                    <p className="text-xs text-muted-foreground">Sem localização — busque um endereço para plotar no Mapa.</p>
+                    <p className="text-xs text-muted-foreground">Sem localização.</p>
                   )}
                 </div>
               
@@ -640,7 +640,7 @@ export function CardModal({ cardId, boardId, labels, onClose, pessoas = [], anex
                   </div>
                 ))}
                 {data.comments.length === 0 && !detalhes && <p className="text-xs text-muted-foreground">Nenhum comentário ainda.</p>}
-                {detalhes && atividade.length === 0 && <p className="text-xs text-muted-foreground">Sem atividade registrada além dos comentários.</p>}
+                {detalhes && atividade.length === 0 && <p className="text-xs text-muted-foreground">Sem atividade.</p>}
               </div>
             </div>
 
@@ -751,11 +751,11 @@ function NovoComentario({ valor, onChange, onEnviar, inputRef, pessoas, onMencio
             }
             if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); enviar(); }
           }}
-          rows={aberto ? 3 : 1} placeholder="Escrever um comentário… (@ para mencionar)"
+          rows={aberto ? 3 : 1} placeholder="Escrever um comentário…"
           className="w-full text-sm rounded-[var(--input-radius)] border border-border bg-card px-3 py-2 resize-y focus:outline-none focus:ring-2 focus:ring-primary/40" />
         {busca && opcoes.length > 0 && (
           <div className="absolute z-30 left-0 right-0 top-full mt-1 rounded-[var(--radius)] border border-border bg-popover shadow-[var(--shadow-elevated)] p-1">
-            <p className="px-2 pt-1 pb-1.5 text-[11px] text-muted-foreground">Mencionar — a pessoa é avisada no sininho</p>
+            <p className="px-2 pt-1 pb-1.5 text-[11px] text-muted-foreground">Mencionar</p>
             {opcoes.map((p, k) => (
               <button key={p.id} type="button" onMouseDown={(e) => { e.preventDefault(); escolher(p); }} onMouseEnter={() => setSel(k)}
                 className={`w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm ${k === sel ? "bg-muted" : ""}`}>

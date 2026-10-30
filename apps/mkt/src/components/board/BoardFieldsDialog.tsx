@@ -127,7 +127,6 @@ export function BoardFieldsDialog({ boardId, onClose }: { boardId: string; onClo
             <div className="mkt-empty">
               <div className="mkt-empty-icon"><SlidersHorizontal className="h-5 w-5" /></div>
               <p className="mkt-empty-title">Nenhum campo ainda</p>
-              <p className="mkt-empty-subcopy">Crie campos personalizados para adicionar informações extras aos cartões deste quadro.</p>
             </div>
           )}
         </div>

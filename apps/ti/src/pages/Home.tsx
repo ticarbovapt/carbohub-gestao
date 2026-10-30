@@ -168,7 +168,6 @@ export default function Home() {
       <div className="space-y-5 max-w-[1400px] mx-auto">
         <CarboPageHeader
           title={primeiroNome ? `Olá, ${primeiroNome}` : "Visão geral do TI"}
-          description="O que chegou, o que falta resolver e como está o andamento das demandas."
           icon={LayoutDashboard}
           actions={
             <Button onClick={irParaDemandas} className="gap-1.5">
@@ -214,30 +213,30 @@ export default function Home() {
 
         {/* ── Operacional: o que fazer agora ── */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-          <Bloco title="Minhas demandas" icon={Hand} hint="Atribuídas a você e ainda não entregues">
+          <Bloco title="Minhas demandas" icon={Hand}>
             {minhas.length === 0
-              ? <CarboEmptyState icon={CheckCircle2} title="Nada na sua fila" description="Você não tem demandas em aberto." />
+              ? <CarboEmptyState icon={CheckCircle2} title="Nada na sua fila" />
               : <div className="space-y-0.5">{minhas.slice(0, 6).map((d) => <DemandaLine key={d.id} d={d} onClick={() => abrirDemanda(d.id)} />)}</div>}
           </Bloco>
 
-          <Bloco title="Sem responsável" icon={UserX} hint="Precisam de alguém pra assumir"
+          <Bloco title="Sem responsável" icon={UserX}
             action={semDono.length > 0 ? <span className="text-xs font-semibold text-destructive shrink-0">{semDono.length}</span> : undefined}>
             {semDono.length === 0
-              ? <CarboEmptyState icon={CheckCircle2} title="Tudo com dono" description="Nenhuma demanda órfã." />
+              ? <CarboEmptyState icon={CheckCircle2} title="Tudo com dono" />
               : <div className="space-y-0.5">{semDono.slice(0, 6).map((d) => <DemandaLine key={d.id} d={d} onClick={() => abrirDemanda(d.id)} />)}</div>}
           </Bloco>
 
-          <Bloco title="Paradas há mais de 7 dias" icon={AlertTriangle} hint="Sem movimentação — risco de esquecer"
+          <Bloco title="Paradas há mais de 7 dias" icon={AlertTriangle}
             action={paradas.length > 0 ? <span className="text-xs font-semibold text-amber-500 shrink-0">{paradas.length}</span> : undefined}>
             {paradas.length === 0
-              ? <CarboEmptyState icon={CheckCircle2} title="Nada parado" description="Tudo teve movimentação recente." />
+              ? <CarboEmptyState icon={CheckCircle2} title="Nada parado" />
               : <div className="space-y-0.5">{paradas.slice(0, 6).map((d) => <DemandaLine key={d.id} d={d} onClick={() => abrirDemanda(d.id)} />)}</div>}
           </Bloco>
         </div>
 
         {/* ── Indicadores ── */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <Bloco title="Por etapa" icon={LayoutDashboard} hint="Distribuição no fluxo">
+          <Bloco title="Por etapa" icon={LayoutDashboard}>
             {porEtapa.length === 0 ? (
               <p className="text-sm text-muted-foreground py-8 text-center">Sem dados.</p>
             ) : (
@@ -253,7 +252,7 @@ export default function Home() {
             )}
           </Bloco>
 
-          <Bloco title="Fila por prioridade" icon={AlertTriangle} hint="Só o que ainda não foi entregue">
+          <Bloco title="Fila por prioridade" icon={AlertTriangle}>
             <ResponsiveContainer width="100%" height={210}>
               <BarChart data={porPrioridade}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
@@ -269,7 +268,7 @@ export default function Home() {
             </ResponsiveContainer>
           </Bloco>
 
-          <Bloco title="Por sistema" icon={Inbox} hint="De onde vêm as demandas">
+          <Bloco title="Por sistema" icon={Inbox}>
             {porApp.length === 0 ? (
               <p className="text-sm text-muted-foreground py-8 text-center">Sem dados.</p>
             ) : (
@@ -294,10 +293,10 @@ export default function Home() {
         </div>
 
         {/* Últimas que chegaram */}
-        <Bloco title="Chegaram por último" icon={Inbox} hint="As entradas mais recentes"
+        <Bloco title="Chegaram por último" icon={Inbox}
           action={<Button variant="ghost" size="sm" onClick={irParaDemandas} className="gap-1 text-xs">Ver todas <ArrowRight className="h-3 w-3" /></Button>}>
           {recentes.length === 0
-            ? <CarboEmptyState icon={Inbox} title="Nenhuma demanda ainda" description="Os reportes dos apps aparecem aqui." />
+            ? <CarboEmptyState icon={Inbox} title="Nenhuma demanda ainda" />
             : (
               <div className="space-y-0.5">
                 {recentes.map((d) => (

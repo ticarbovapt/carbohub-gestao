@@ -8,7 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import { SYSTEMS, DEFAULT_INTERFACES, brandOf } from "@/lib/interfaces";
 import { useProfiles, useCreateUser, useDeptFunctions, useAllDeptFunctions, useUsuariosBloqueados, type AdminProfile } from "@/hooks/useAdminUsers";
@@ -233,14 +233,9 @@ export default function Users() {
       <main className="mx-auto max-w-6xl px-4 sm:px-6 py-8 space-y-6">
         {/* ── Cabeçalho ── */}
         <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="flex items-center gap-2 text-2xl font-bold">
-              <UsersIcon className="h-6 w-6 text-primary" /> Usuários
-            </h1>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Gerencie acessos, departamentos e funções da equipe.
-            </p>
-          </div>
+          <h1 className="flex items-center gap-2 text-2xl font-bold">
+            <UsersIcon className="h-6 w-6 text-primary" /> Usuários
+          </h1>
           <Button className="carbo-gradient text-white shadow-sm" onClick={() => setCreateOpen(true)}>
             <UserPlus className="h-4 w-4" /> Criar usuário
           </Button>
@@ -316,7 +311,6 @@ export default function Users() {
                 <Search className="h-6 w-6 text-muted-foreground" />
               </div>
               <p className="font-medium">Nenhum usuário encontrado</p>
-              <p className="text-sm text-muted-foreground mt-0.5">Ajuste a busca ou os filtros acima.</p>
             </div>
           ) : (
             <>
@@ -349,7 +343,7 @@ export default function Users() {
                               <p className="font-medium min-w-0 flex items-center gap-1.5">
                                 <span className="break-words">{p.full_name ?? "—"}</span>
                                 {bloqueados.has(p.id) && (
-                                  <span title="Acesso bloqueado — os dados continuam no sistema"
+                                  <span title="Acesso bloqueado"
                                     className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-destructive/15 text-destructive shrink-0">
                                     <Lock className="h-2.5 w-2.5" /> Bloqueado
                                   </span>
@@ -425,9 +419,6 @@ export default function Users() {
             <SheetTitle className="flex items-center gap-2">
               <UserPlus className="h-5 w-5 text-primary" /> Criar usuário
             </SheetTitle>
-            <SheetDescription>
-              Username e senha são gerados automaticamente. O colaborador troca no 1º acesso.
-            </SheetDescription>
           </SheetHeader>
 
           <div className="space-y-3 mt-5">
@@ -462,10 +453,6 @@ export default function Users() {
                   selectedFn.access_level === "gestor"
                     ? "bg-amber-500/15 text-amber-600" : "bg-muted text-muted-foreground"}`}>
                   {selectedFn.access_level === "gestor" ? "Gestor" : "Colaborador"}
-                </span>
-                <span className="text-muted-foreground">
-                  {selectedFn.access_level === "gestor"
-                    ? "vê o global do app (manda)." : "vê só o próprio."}
                 </span>
               </p>
             )}
@@ -513,7 +500,6 @@ export default function Users() {
                       checked={interfaces.includes(s.iface)} onChange={() => toggleInterface(s.iface)} />
                     <span className="font-medium">{s.label}</span>
                     {s.comingSoon && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 font-medium">Em breve</span>}
-                    <span className="text-muted-foreground text-xs">— {s.hint}</span>
                   </label>
                 ))}
               </div>
@@ -525,12 +511,6 @@ export default function Users() {
                 ? <><Loader2 className="h-4 w-4 animate-spin" /> Criando...</>
                 : <><UserPlus className="h-4 w-4" /> Criar usuário</>}
             </Button>
-
-            <p className="text-xs text-muted-foreground">
-              Username gerado automaticamente (ex: OPS0001) e senha padrão{" "}
-              <code className="font-mono bg-muted px-1 rounded">{DEFAULT_PASSWORD}</code>.
-              No 1º acesso o colaborador troca a senha e informa o e-mail real.
-            </p>
           </div>
         </SheetContent>
       </Sheet>
@@ -547,9 +527,6 @@ export default function Users() {
               <CheckCircle2 className="h-8 w-8 text-emerald-500" />
             </div>
             <h3 className="text-xl font-bold">Conta criada!</h3>
-            <p className="text-sm text-muted-foreground mt-1">
-              Compartilhe as credenciais com o colaborador.
-            </p>
             <div className="rounded-xl border bg-muted/30 p-4 space-y-3 my-4 text-left">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground flex items-center gap-1.5"><KeyRound className="h-4 w-4" /> Username</span>

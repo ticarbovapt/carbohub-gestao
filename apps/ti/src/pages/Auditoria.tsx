@@ -126,15 +126,9 @@ export default function Auditoria() {
     <div className="mx-auto max-w-5xl space-y-5 p-4 md:p-6">
       {/* Cabeçalho */}
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-xl font-semibold">
-            <ShieldCheck className="h-5 w-5 text-primary" /> Central de Auditoria
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Tudo que acontece no sistema: exclusões, movimentações de estoque, etapas de produção,
-            status de venda, sincronizações e mais. Só gestores têm acesso.
-          </p>
-        </div>
+        <h1 className="flex items-center gap-2 text-xl font-semibold">
+          <ShieldCheck className="h-5 w-5 text-primary" /> Central de Auditoria
+        </h1>
         <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
           <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} /> Atualizar
         </Button>
@@ -185,7 +179,7 @@ export default function Auditoria() {
         </div>
       ) : rows.length === 0 ? (
         <div className="rounded-lg border bg-card p-10 text-center text-sm text-muted-foreground">
-          Nenhum evento encontrado para os filtros atuais.
+          Nenhum evento encontrado.
         </div>
       ) : (
         <div className="space-y-2">
