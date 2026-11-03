@@ -56,6 +56,38 @@ const ACAO_DO_SOLICITANTE: PurchaseRequestStatus[] = ["rascunho", "aguardando_ap
 
 const semAcento = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
+// ─────────────────────────────────────────────────────────────────────────────
+// O QUE ESTÁ SENDO PEDIDO
+//
+// A lista mostrava número, solicitante, centro de custo, tipo, valor, prazo,
+// status e data — tudo menos a única coisa que a pergunta "aprovo ou não?"
+// começa por: O QUE É. Para saber, era preciso abrir cada linha.
+//
+// ⚠️ O dado já estava na mão: `items` é coluna da própria `purchase_requests`
+// (jsonb) e a lista já usa `select("*")` — o detalhe lê daí. Não há consulta
+// nova aqui, só um campo que não estava sendo mostrado.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** ⚠️ Blindado: `items` é jsonb e no histórico há RC sem item nenhum. */
+const itensDaRC = (rc: PurchaseRequest) => (Array.isArray(rc.items) ? rc.items : []);
+
+const qtdDoItem = (i: { quantidade?: number; unidade?: string }) =>
+  `${Number(i?.quantidade) || 0} ${i?.unidade || "un"}`;
+
+/** Todos os itens em texto — serve ao `title` da célula e à busca. */
+const textoDosItens = (rc: PurchaseRequest) =>
+  itensDaRC(rc).map((i) => `${i?.descricao ?? ""} (${qtdDoItem(i)})`).join(" · ");
+
+/** A justificativa como COMPLEMENTO, nunca no lugar do item.
+ *  ⚠️ Link não entra: metade das justificativas é uma URL de marketplace
+ *  colada, e uma linha de `https://www.mercadolivre.com.br/kit-3-cont…`
+ *  empurra para fora da tela justamente o texto que explicaria a compra. */
+const notaDaRC = (rc: PurchaseRequest) => {
+  const t = (rc.justification ?? "").trim();
+  if (!t || /^https?:\/\//i.test(t)) return null;
+  return t;
+};
+
 export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseRequestsListProps) {
   const [statusFilter, setStatusFilter] = useParamUrl("status", "all");
   const [tipoFilter, setTipoFilter] = useParamUrl("tipo", "all");
@@ -108,7 +140,13 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
     if (setorFilter !== "all" && setorOf(rc) !== setorFilter) return false;
     if (escopoFilter !== "all" && escopoOf(rc) !== escopoFilter) return false;
     if (termo) {
-      const alvo = semAcento([rc.rc_number, requesterName(rc), rc.cost_center, rc.suggested_supplier ?? ""].join(" "));
+      // ⚠️ O item entra na busca. Ele virou a coluna principal da tabela, e
+      // campo que se lê e não se procura é a pior combinação: quem vê
+      // "Rótulo Carbozé 100 mL" na tela digita isso na caixa.
+      const alvo = semAcento([
+        rc.rc_number, requesterName(rc), rc.cost_center, rc.suggested_supplier ?? "",
+        textoDosItens(rc), rc.justification ?? "",
+      ].join(" "));
       if (!alvo.includes(termo)) return false;
     }
     return true;
@@ -200,7 +238,7 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
           <Input
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
-            placeholder="Nº, solicitante, centro de custo, fornecedor…"
+            placeholder="Item, nº, solicitante, centro de custo…"
             className="pl-8"
           />
         </div>
@@ -259,13 +297,16 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
         <CarboTableHeader>
           <CarboTableRow>
             <CarboTableHead>Nº RC</CarboTableHead>
+            {/* ⭐ A segunda coluna é O QUE ESTÁ SENDO PEDIDO, e é a mais larga.
+                Antes a leitura começava por quem pediu e de que centro de
+                custo — dados de rateio, não a necessidade. */}
+            <CarboTableHead>Item / necessidade</CarboTableHead>
             <CarboTableHead>Solicitante</CarboTableHead>
             <CarboTableHead>Centro de Custo</CarboTableHead>
             <CarboTableHead>Tipo</CarboTableHead>
             <CarboTableHead>Valor Estimado</CarboTableHead>
             <CarboTableHead>Prazo</CarboTableHead>
             <CarboTableHead>Status</CarboTableHead>
-            <CarboTableHead>Data</CarboTableHead>
             <CarboTableHead><span className="sr-only">Ação</span></CarboTableHead>
           </CarboTableRow>
         </CarboTableHeader>
@@ -292,7 +333,36 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
           ) : (
             requests.map((rc) => (
               <CarboTableRow key={rc.id} interactive onClick={() => setSelectedRC(rc)}>
-                <CarboTableCell className="font-mono font-medium">{rc.rc_number}</CarboTableCell>
+                {/* A data desceu para cá: ela é carimbo do registro, e ocupava
+                    uma coluna inteira ao lado da que faltava. */}
+                <CarboTableCell className="font-mono font-medium whitespace-nowrap">
+                  <div className="leading-tight">
+                    <p>{rc.rc_number}</p>
+                    <p className="text-[11px] font-sans font-normal text-muted-foreground">{dataBR(rc.created_at)}</p>
+                  </div>
+                </CarboTableCell>
+                <CarboTableCell className="max-w-[22rem]">
+                  {/* ⚠️ `truncate` com `title`: descrição é texto livre e já
+                      chega com 50 caracteres ("Controle Remoto P/ Porta De Aço
+                      Automática do Galpão"). Quebrar em três linhas faria cada
+                      RC ter altura diferente e a varredura da fila morreria. */}
+                  {itensDaRC(rc).length === 0 ? (
+                    <span className="text-sm text-muted-foreground">— sem itens</span>
+                  ) : (
+                    <div className="leading-tight" title={textoDosItens(rc)}>
+                      <p className="font-medium truncate">{itensDaRC(rc)[0]?.descricao || "(sem descrição)"}</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {qtdDoItem(itensDaRC(rc)[0])}
+                        {itensDaRC(rc).length > 1 && (
+                          <span className="ml-1 text-primary">
+                            +{itensDaRC(rc).length - 1} {itensDaRC(rc).length === 2 ? "item" : "itens"}
+                          </span>
+                        )}
+                        {notaDaRC(rc) && <span> · {notaDaRC(rc)}</span>}
+                      </p>
+                    </div>
+                  )}
+                </CarboTableCell>
                 <CarboTableCell>
                   <div className="leading-tight">
                     <p className="font-medium">{requesterName(rc)}</p>
@@ -320,7 +390,6 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
                     {REQUEST_STATUS_LABELS[rc.status]}
                   </CarboBadge>
                 </CarboTableCell>
-                <CarboTableCell className="text-muted-foreground text-sm">{dataBR(rc.created_at)}</CarboTableCell>
                 <CarboTableCell onClick={(e) => e.stopPropagation()}>
                   {rc.status === "aprovada" && (
                     <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => setGerarOC(rc)}>
