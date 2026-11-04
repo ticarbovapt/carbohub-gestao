@@ -36,6 +36,34 @@ export async function rpcCompras<T = unknown>(nome: string, args: Record<string,
   return data as T;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Posso aprovar a MINHA própria requisição?
+//
+// ⚠️ Quem responde é o BANCO, pela mesma função que o gatilho `fin_rc_guarda`
+// consulta na hora de gravar (`fin_pode_autoaprovar`). A tela não repete a
+// regra: habilitar um botão que o banco vai recusar é pior do que não ter o
+// botão — e foi exatamente o que aconteceu antes, quando o código anotava que
+// a trava "mora só na tela" enquanto o gatilho também a aplicava.
+//
+// A lista é curta e quase estática: cai no cache por meia hora.
+// ─────────────────────────────────────────────────────────────────────────────
+export function usePodeAutoaprovar() {
+  const { user } = useAuth();
+  const uid = user?.id ?? null;
+  return useQuery({
+    queryKey: ["pode-autoaprovar", uid],
+    enabled: !!uid,
+    staleTime: 30 * 60 * 1000,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("fin_pode_autoaprovar", { p_uid: uid });
+      // Banco sem a migração ainda: o certo é NÃO liberar. Falha que solta o
+      // botão esconde a regra; falha que o prende mostra a recusa de sempre.
+      if (error) return false;
+      return data === true;
+    },
+  });
+}
+
 // ---- Purchase Requests ----
 
 export function usePurchaseRequests(filters?: { status?: string; costCenter?: string }) {

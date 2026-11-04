@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { usePurchaseRequests, useApprovePurchaseRequest } from "@/hooks/usePurchasing";
+import { usePurchaseRequests, useApprovePurchaseRequest, usePodeAutoaprovar } from "@/hooks/usePurchasing";
 import { useEnviarParaAprovacao, useCancelarRequisicao, podeCancelarRequisicao } from "@/hooks/useRequisicaoAcoes";
 import { PurchaseRequestForm } from "./PurchaseRequestForm";
 import {
@@ -104,6 +104,10 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
   const cancelar = useCancelarRequisicao();
   const { gestor, user } = useAuth();
   const meuId = user?.id ?? null;
+  // Exceção nominal: quem está em `fin_compras_autoaprovacao` decide a
+  // própria RC. Hoje é uma pessoa — o time lança requisição em nome dela, o
+  // que a tornava solicitante sem ter registrado nada.
+  const { data: podeAutoaprovar = false } = usePodeAutoaprovar();
 
   // Nomes e setores SÓ do time interno (carbo_time_interno_lista). O
   // `carbo_all_profiles` devolvia a tabela inteira, lojista e licenciado inclusos.
@@ -209,8 +213,18 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
   const sel = selectedRC;
   const souDono = sel ? ehMinha(sel) : false;
   const podeMexer = souDono || gestor;
-  // Gestor não aprova a PRÓPRIA RC. ⚠️ A regra mora só na tela (Fase 3: banco).
-  const aprovaPropria = !!sel && souDono;
+  /**
+   * Gestor não decide a PRÓPRIA RC — salvo quem está na lista de autoaprovação.
+   *
+   * ⚠️ A regra NÃO mora só aqui (o comentário anterior dizia que sim, e estava
+   * errado): o gatilho `fin_rc_guarda` aplica a mesma coisa no banco, e vale
+   * para qualquer caminho de escrita. Esta linha e o gatilho perguntam à MESMA
+   * função; mudar uma sem a outra devolve um botão que recusa ou um botão que
+   * mente.
+   */
+  const bloqueadoPorSerDono = !!sel && souDono && !podeAutoaprovar;
+  /** É minha E eu tenho a exceção: decide, mas com aviso na cara. */
+  const autoaprovando = !!sel && souDono && podeAutoaprovar;
   const editavel = !!sel && (sel.status === "rascunho" || sel.status === "aguardando_aprovacao");
 
   const vazio = visao === "acao" && !termo && tipoFilter === "all" && setorFilter === "all" && escopoFilter === "all";
@@ -508,9 +522,18 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
                     {itensSemCotacao > 0 && <> · <span className="text-warning-foreground">{itensSemCotacao} item(ns) sem cotação</span></>}
                   </>
                 )}
-                {gestor && sel.status === "aguardando_aprovacao" && aprovaPropria && (
+                {gestor && sel.status === "aguardando_aprovacao" && bloqueadoPorSerDono && (
                   <p className="mt-1 text-warning-foreground">
                     Esta requisição é sua — quem aprova é outro gestor.
+                  </p>
+                )}
+                {/* ⚠️ A exceção aparece ESCRITA, toda vez. Autoaprovação que
+                    acontece em silêncio é a mesma coisa que não ter controle:
+                    quem decide precisa ver que está decidindo sozinho, e quem
+                    auditar depois precisa achar isto na tela, não só no log. */}
+                {gestor && sel.status === "aguardando_aprovacao" && autoaprovando && (
+                  <p className="mt-1 text-warning-foreground">
+                    Autoaprovação: a requisição é sua e você decide sozinho. Fica registrada em seu nome.
                   </p>
                 )}
               </div>
@@ -530,13 +553,13 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
 
                 {sel.status === "aguardando_aprovacao" && gestor && (
                   <>
-                    <Button variant="outline" className="gap-1.5 text-destructive" disabled={ocupado || aprovaPropria} onClick={() => rejeitar(sel)}>
+                    <Button variant="outline" className="gap-1.5 text-destructive" disabled={ocupado || bloqueadoPorSerDono} onClick={() => rejeitar(sel)}>
                       <XCircle className="h-4 w-4" /> Rejeitar
                     </Button>
                     <Button
                       className="gap-1.5 bg-carbo-green hover:bg-carbo-green/90 text-white"
-                      disabled={ocupado || aprovaPropria}
-                      title={aprovaPropria ? "Você não pode aprovar a própria requisição" : undefined}
+                      disabled={ocupado || bloqueadoPorSerDono}
+                      title={bloqueadoPorSerDono ? "Você não pode aprovar a própria requisição" : undefined}
                       onClick={() => aprovar(sel)}
                     >
                       <CheckCircle2 className="h-4 w-4" /> Aprovar
