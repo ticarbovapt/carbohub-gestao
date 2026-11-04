@@ -4,6 +4,7 @@ import {
   Truck, Package, FileText, CheckCircle2, ShoppingCart, Copy, XCircle, Loader2, MapPin, Phone,
   CalendarClock, ExternalLink, MessageSquare, AlertTriangle, Clock, Box, User, Hash, Search,
   Settings2, Link2, BellRing, BellOff, ShoppingBag, Mail, Timer, ChevronsLeftRight, ChevronsRightLeft,
+  PhoneOff,
 } from "lucide-react";
 import { toast } from "sonner";
 import { QuadroRolavel, useParamUrl } from "@carbo/shell";
@@ -191,101 +192,87 @@ function BotaoCopiar({ texto, oque, className = "", truncar = false }: {
 }
 
 /**
- * De onde veio o rastreio.
- *
- * ⚠️ Só aparece quando NÃO é o Bling. O Bling é a origem esperada e dizê-lo em
- * todo card seria ruído; o que precisa de nome é a exceção — a etiqueta que
- * nasceu no painel do Melhor Envio e por isso ficou invisível durante semanas.
+ * De onde veio o rastreio — só quando NÃO é o Bling. O Bling é a origem
+ * esperada; o que precisa de nome é a exceção (a etiqueta que nasceu no painel
+ * do Melhor Envio). Mora na linha da transportadora, que é metadado: na linha
+ * do canal ele cortava o nome da loja ("N…").
  */
-function ChipOrigem({ origem }: { origem: EsteiraRow["rastreio_origem"] }) {
-  if (!origem || origem === "bling") return null;
-  const rotulo = origem === "melhorenvio" ? "Melhor Envio" : "plataforma";
+const origemDoRastreio = (origem: EsteiraRow["rastreio_origem"]): string | null =>
+  !origem || origem === "bling" ? null : origem === "melhorenvio" ? "via Melhor Envio" : "via plataforma";
+
+/**
+ * O canal num chip curto, com a cor dele. O nome inteiro ("Mercado Livre ·
+ * Nuvemshop · Ara…") era cortado pela cidade e pelos chips ao lado; o chip tem
+ * largura fixa e a cidade é que encolhe. A cor é só a bolinha: categoria, não
+ * alerta.
+ */
+const CANAIS: Array<[RegExp, string, string]> = [
+  [/full/i,              "ML Full",   "#8b5cf6"],
+  [/mercado\s*livre|^ml\b/i, "ML",  "#eab308"],
+  [/nuvem/i,             "Nuvemshop", "#3b82f6"],
+  [/payt/i,              "PayT",      "#14b8a6"],
+  [/amazon/i,            "Amazon",    "#f97316"],
+  [/shopee/i,            "Shopee",    "#ef4444"],
+];
+function ChipCanal({ canal }: { canal: string | null }) {
+  if (!canal) return null;
+  const achado = CANAIS.find(([re]) => re.test(canal));
+  const [rotulo, cor] = achado ? [achado[1], achado[2]] : [canal, "#64748b"];
   return (
-    <span className="shrink-0 rounded bg-muted px-1 text-[9px] leading-4 text-muted-foreground">
-      via {rotulo}
+    <span title={canal}
+          className="inline-flex max-w-[9rem] shrink-0 items-center gap-1 rounded bg-muted px-1.5 text-[10px] font-medium leading-4 text-foreground/80">
+      <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: cor }} />
+      <span className="truncate">{rotulo}</span>
     </span>
   );
 }
 
 /**
- * Etiqueta perto de vencer, ou já vencida.
+ * Os ALERTAS do card, do mais grave para o menos grave.
  *
- * ⚠️ Etiqueta do Melhor Envio expira, e o frete pago vai junto. Vencida, ela
- * ainda tem `generated_at` — por isso a view usa a SITUAÇÃO e não a data, e por
- * isso o card precisa gritar antes: depois de vencer, não há o que fazer além
- * de comprar de novo.
+ * ⚠️ O card mostra SÓ O PRIMEIRO (e "+N"); o diálogo mostra todos. Antes um
+ * card de Etiqueta trazia três linhas vermelhas ("previa … atrasado", "parado
+ * há 28d", "etiqueta vencida") com o mesmo peso — e o olho não sabia qual era
+ * o problema. As regras são as mesmas de antes, só a apresentação mudou:
+ *
+ *   erro   etiqueta morta (vencida, cancelada, sem ativa), atraso da
+ *          transportadora, parado além do limite da etapa (view
+ *          `carbo_esteira_parados`)
+ *   aviso  sem status da plataforma (não anda sozinho), etiqueta perto de
+ *          vencer
+ *
+ * ⚠️ Etiqueta "em preparação" NÃO é alerta: é o pedido de hoje com o envio
+ * montado no Melhor Envio. Fica como informação, em azul.
  */
-function ChipValidade({ row }: { row: EsteiraRow }) {
-  // ⚠️ "Sem etiqueta" tem dois significados MUITO diferentes, e a coluna os
-  // empilhava: pedido de hoje com o envio já montado no Melhor Envio (só falta
-  // pagar) e pedido de três semanas que ninguém tocou.
-  //
-  // Medido nos 10 que sobraram: 3 estavam em preparação e 7 eram abandono real.
-  // Sem esta distinção, quem olha a coluna trata os dois como o mesmo trabalho —
-  // e o de hoje ainda não é trabalho nenhum.
-  if (row.me_situacao === "rascunho" || row.me_situacao === "pago") {
-    return (
-      <span className="shrink-0 rounded bg-sky-500/10 px-1 text-[10px] leading-4 text-sky-500">
-        etiqueta em preparação
-      </span>
-    );
+type Alerta = { nivel: "erro" | "aviso"; texto: string; Icon: typeof AlertTriangle; dica?: string };
+
+function alertasDoCard(row: EsteiraRow, r?: RastreioCard, p?: ParadoRow): Alerta[] {
+  const a: Alerta[] = [];
+  if (row.me_situacao === "vencido") a.push({ nivel: "erro", texto: "etiqueta vencida", Icon: AlertTriangle });
+  else if (row.me_situacao === "cancelado") a.push({ nivel: "erro", texto: "etiqueta cancelada", Icon: AlertTriangle });
+  else if (row.me_tem_ativo === false) a.push({ nivel: "erro", texto: "sem etiqueta ativa", Icon: AlertTriangle });
+  if (r?.atrasado && !r.entregue_em)
+    a.push({ nivel: "erro", texto: r.previsao_entrega ? `atrasado · previa ${diaCurto(r.previsao_entrega)}` : "atrasado",
+             Icon: CalendarClock });
+  if (p) a.push({ nivel: "erro", texto: `parado há ${p.dias_parado}d`, Icon: AlertTriangle, dica: p.diagnostico ?? undefined });
+  if (!row.tem_status_da_plataforma && row.etapa !== "entregue" && row.etapa !== "cancelado")
+    a.push({ nivel: "aviso", texto: "não anda sozinho", Icon: AlertTriangle,
+             dica: "Sem status da plataforma: o card não avança sozinho" });
+  if (row.me_situacao === "gerado" && row.me_expirado_em) {
+    const dias = Math.floor((new Date(row.me_expirado_em).getTime() - Date.now()) / 86_400_000);
+    if (dias <= 3) a.push({ nivel: "aviso", texto: dias <= 0 ? "etiqueta vence hoje" : `etiqueta vence em ${dias}d`, Icon: Clock });
   }
-  if (row.me_situacao === "vencido") {
-    return (
-      <span className="flex shrink-0 items-center gap-1 text-[10px] font-medium leading-4 text-red-500">
-        <AlertTriangle className="h-3 w-3" /> etiqueta vencida
-      </span>
-    );
-  }
-  // ⚠️ Cancelada NÃO tinha ramo aqui, e é a pior das mortas: o card pode estar
-  // em "em trânsito" (o carimbo de postagem é fato) enquanto o código já não
-  // vale na transportadora. Sem este chip, era um card de aparência normal.
-  // O aviso de "saiu para entrega" desses ficou travado no banco (20260947);
-  // aqui é a metade visível da mesma decisão.
-  if (row.me_situacao === "cancelado") {
-    return (
-      <span className="flex shrink-0 items-center gap-1 text-[10px] font-medium leading-4 text-red-500">
-        <AlertTriangle className="h-3 w-3" /> etiqueta cancelada
-      </span>
-    );
-  }
-  // Morta por outro motivo que não vencimento nem cancelamento — não deveria
-  // acontecer, e se acontecer é melhor aparecer do que passar como normal.
-  if (row.me_tem_ativo === false) {
-    return (
-      <span className="flex shrink-0 items-center gap-1 text-[10px] font-medium leading-4 text-red-500">
-        <AlertTriangle className="h-3 w-3" /> sem etiqueta ativa
-      </span>
-    );
-  }
-  if (row.me_situacao !== "gerado" || !row.me_expirado_em) return null;
-  const dias = Math.floor(
-    (new Date(row.me_expirado_em).getTime() - Date.now()) / 86_400_000);
-  if (dias > 3) return null;
-  return (
-    <span className="flex shrink-0 items-center gap-1 text-[10px] font-medium leading-4 text-amber-500">
-      <Clock className="h-3 w-3" />
-      {dias <= 0 ? "vence hoje" : `vence em ${dias}d`}
-    </span>
-  );
+  return a;
 }
 
-/**
- * Chip de "parado há N dias".
- *
- * ⚠️ Só aparece quando a view diz que passou do limite DAQUELA etapa. Um card
- * de dez dias em trânsito é normal; um de dez dias com NF emitida e nenhuma
- * etiqueta é R$ parado na prateleira. Mostrar a idade de todo mundo faria o
- * número virar decoração — que é o oposto do que ele existe para ser.
- */
-function ChipParado({ p }: { p?: ParadoRow }) {
-  if (!p) return null;
+function ChipAlerta({ a }: { a: Alerta }) {
+  const { Icon } = a;
   return (
-    <span
-      title={p.diagnostico}
-      className="flex shrink-0 items-center gap-1 text-[10px] font-medium leading-4 text-red-500"
-    >
-      <AlertTriangle className="h-3 w-3" /> parado há {p.dias_parado}d
+    <span title={a.dica}
+          className={`inline-flex min-w-0 items-center gap-1 text-[11px] font-medium leading-4 ${
+            a.nivel === "erro" ? "text-red-500" : "text-amber-500"}`}>
+      <Icon className="h-3 w-3 shrink-0" />
+      <span className="truncate">{a.texto}</span>
     </span>
   );
 }
@@ -295,7 +282,7 @@ function ChipPrevisao({ r }: { r?: RastreioCard }) {
   if (!r) return null;
   if (r.entregue_em) {
     return (
-      <span className="inline-flex items-center gap-1 text-xs font-medium leading-4 text-emerald-500">
+      <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-xs font-medium leading-4 text-emerald-500">
         <CheckCircle2 className="h-3 w-3 shrink-0" />
         entregue {diaCurto(r.entregue_em)}
       </span>
@@ -303,7 +290,7 @@ function ChipPrevisao({ r }: { r?: RastreioCard }) {
   }
   if (!r.previsao_entrega) return null;
   return (
-    <span className={`inline-flex items-center gap-1 text-xs font-medium leading-4 ${
+    <span className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-xs font-medium leading-4 ${
       r.atrasado ? "text-red-500" : "text-foreground"
     }`}>
       <CalendarClock className="h-3 w-3 shrink-0" />
@@ -433,7 +420,11 @@ function avisoDoTelefone(fone: string | null): { titulo: string; detalhe: string
  * que ensina a equipe a ignorar a cor — aí ela não serve no dia em que estiver
  * certa.
  */
-type Sinal = { tom: string; rotulo: string; Icon: typeof BellRing } | null;
+// `soIcone`: "sem telefone" aparecia em âmbar em quase todo card do ML e da
+// PayT (no ML a ausência é permanente) — alerta que aparece em tudo deixa de
+// ser lido. Vira um ícone discreto com a explicação no `title`; continua
+// VISÍVEL, só sem gritar. "na fila" também sai do âmbar: é o normal de passagem.
+type Sinal = { tom: string; rotulo: string; Icon: typeof BellRing; soIcone?: boolean } | null;
 
 function sinalDoAviso(e: EnvioMsg | undefined, esperado: boolean, temFone: boolean): Sinal {
   // ⚠️ "sem telefone" vem ANTES de "sem aviso", e a ordem é a informação.
@@ -450,7 +441,7 @@ function sinalDoAviso(e: EnvioMsg | undefined, esperado: boolean, temFone: boole
   // resposta dentro do sistema.
   if (!temFone && !e) {
     return esperado
-      ? { tom: "text-amber-500", rotulo: "sem telefone", Icon: BellOff }
+      ? { tom: "text-muted-foreground/70", rotulo: "sem telefone", Icon: PhoneOff, soIcone: true }
       : null;
   }
   if (e) {
@@ -465,11 +456,11 @@ function sinalDoAviso(e: EnvioMsg | undefined, esperado: boolean, temFone: boole
     // esperado. É exatamente o "número com problema de recebimento".
     if (NAO_CHEGOU_POR_FALHA.has(e.status))
       return { tom: "text-red-500", rotulo: "falhou", Icon: BellOff };
-    if (e.status === "pendente") return { tom: "text-amber-500",   rotulo: "na fila",      Icon: Clock    };
+    if (e.status === "pendente") return { tom: "text-muted-foreground", rotulo: "na fila",  Icon: Clock    };
     // `ignorado` é duas coisas. Sem telefone é problema e aparece; marco zero
     // (pedido que já existia quando o aviso foi ligado) é decisão nossa e some.
     if ((e.motivo ?? "").startsWith("telefone"))
-      return { tom: "text-amber-500", rotulo: "sem telefone", Icon: BellOff };
+      return { tom: "text-muted-foreground/70", rotulo: "sem telefone", Icon: PhoneOff, soIcone: true };
     return null;
   }
   return esperado ? { tom: "text-amber-500", rotulo: "sem aviso", Icon: BellOff } : null;
@@ -477,12 +468,13 @@ function sinalDoAviso(e: EnvioMsg | undefined, esperado: boolean, temFone: boole
 
 function ChipAviso({ sinal }: { sinal: Sinal }) {
   if (!sinal) return null;
-  const { tom, rotulo, Icon } = sinal;
+  const { tom, rotulo, Icon, soIcone } = sinal;
   return (
     <span className={`inline-flex shrink-0 items-center gap-1 text-[10px] font-medium leading-4 ${tom}`}
-          title={`Aviso ao cliente: ${rotulo}`}>
+          title={soIcone ? "Sem telefone — o cliente não recebe aviso" : `Aviso ao cliente: ${rotulo}`}
+          aria-label={rotulo}>
       <Icon className="h-3 w-3 shrink-0" />
-      {rotulo}
+      {!soIcone && rotulo}
     </span>
   );
 }
@@ -495,10 +487,10 @@ function ChipAviso({ sinal }: { sinal: Sinal }) {
 // cards por coluna. Antes de acrescentar qualquer linha, pergunte de onde ela
 // tira o espaço.
 //
-// A gordura removida: `p-3` → `py-2.5`, duas divisórias → uma, o badge do canal
-// (20px de altura para exibir uma palavra) → texto puro na linha de contexto, e
-// as três linhas do bloco de envio → `flex-wrap`, que junta o que couber lado a
-// lado quando a coluna é larga.
+// Quatro linhas, sempre na mesma ordem (04/11/2026, pedido do dono do
+// processo: "parece confuso"): quem e quanto · canal, cidade e idade · UM
+// alerta e onde está · conferência (transportadora, NF, rastreio) em cinza. O
+// canal voltou a ser chip — curto e na linha que já existia, sem custar altura.
 function Card({ row, rastreio, cor, sinal, parada, onClick }: {
   row: EsteiraRow; rastreio?: RastreioCard; cor: string; sinal: Sinal;
   // ⚠️ Vem da view `carbo_esteira_parados`, não de conta feita aqui. A mesma
@@ -508,14 +500,22 @@ function Card({ row, rastreio, cor, sinal, parada, onClick }: {
   parada?: ParadoRow;
   onClick: () => void;
 }) {
-  const atrasado = rastreio?.atrasado && !rastreio?.entregue_em;
-  const travado = !row.tem_status_da_plataforma && row.etapa !== "entregue" && row.etapa !== "cancelado";
+  const alertas = alertasDoCard(row, rastreio, parada);
+  const principal = alertas[0];
   const parado = empacado(row);
   const quando = idade(row.data_pedido);
-  const contexto = [
-    row.canal,
-    row.entrega_cidade ? `${row.entrega_cidade}/${row.entrega_uf}` : null,
-  ].filter(Boolean).join(" · ");
+  const cidade = row.entrega_cidade ? `${row.entrega_cidade}/${row.entrega_uf}` : null;
+  const emPreparacao = row.me_situacao === "rascunho" || row.me_situacao === "pago";
+  const atrasado = rastreio?.atrasado && !rastreio?.entregue_em;
+  const evento = rastreio?.eventos?.[0]?.descricao;
+  const origem = origemDoRastreio(row.rastreio_origem);
+  const transporte = [row.transportadora, row.servico].filter(Boolean).join(" · ");
+
+  /* A BORDA é o sinal de "precisa de atenção" — vermelha para erro, âmbar para
+     aviso. A faixa da esquerda fica SEMPRE na cor da etapa: antes ela virava
+     vermelha no atraso, e o vermelho competia com o das três linhas de alerta. */
+  const borda = principal?.nivel === "erro" ? "border-red-500/50"
+              : principal?.nivel === "aviso" || parado ? "border-amber-500/40" : "";
 
   return (
     <div
@@ -524,26 +524,12 @@ function Card({ row, rastreio, cor, sinal, parada, onClick }: {
       onClick={onClick}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } }}
       className={`group relative cursor-pointer rounded-lg border bg-card px-3 py-2.5 pl-3.5 transition-all
-        hover:border-carbo-green/50 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-carbo-green/40
-        ${atrasado ? "border-red-500/40" : ""}`}
+        hover:border-carbo-green/50 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-carbo-green/40 ${borda}`}
     >
-      {/* Faixa da etapa. Vira vermelha no atraso: é o único caso em que a cor
-          da coluna perde para o estado do pedido. */}
-      <span
-        className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full"
-        style={{ background: atrasado ? "#ef4444" : cor }}
-      />
+      <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full" style={{ background: cor }} />
 
-      {/* Nome ELÁSTICO, valor firme. Com `justify-between` sobrava um buraco de
-          180px entre os dois numa coluna larga; com `flex-1` a folga vira nome
-          visível — "Maria Aparecida da Silva Santos" deixa de truncar. */}
+      {/* 1. Quem e quanto. */}
       <div className="flex items-baseline gap-2">
-        {travado && (
-          <AlertTriangle
-            className="h-3 w-3 shrink-0 self-center text-amber-500"
-            aria-label="não avança sozinho — plataforma não vinculada"
-          />
-        )}
         <span className="min-w-0 flex-1 truncate text-[13px] font-semibold leading-tight">
           {row.cliente ?? "—"}
         </span>
@@ -552,18 +538,14 @@ function Card({ row, rastreio, cor, sinal, parada, onClick }: {
         </span>
       </div>
 
-      <div className="mt-1 flex items-baseline gap-2 text-[11px] leading-4 text-muted-foreground">
-        <span className="min-w-0 flex-1 truncate">{contexto || "—"}</span>
-        {/* O sinal do aviso mora AQUI, na linha de contexto, e não numa linha
-            própria: o card tem orçamento de ~100px e uma linha nova custaria
-            um sexto dele. Como o chip só aparece quando há o que dizer, na
-            maior parte do tempo esta linha continua exatamente como era. */}
-        <ChipOrigem origem={row.rastreio_origem} />
+      {/* 2. Canal, aviso ao cliente e há quanto tempo. A idade só ganha cor
+          quando o pedido está empacado — o resto do tempo é cinza, como dado.
+          A cidade desceu para a linha de conferência: aqui ela era cortada
+          até sobrar uma letra ("N.", "C…"). */}
+      <div className="mt-1 flex items-center gap-1.5 text-[11px] leading-4 text-muted-foreground">
+        <ChipCanal canal={row.canal} />
+        <span className="flex-1" />
         <ChipAviso sinal={sinal} />
-        {/* ⚠️ A idade fica ÂMBAR quando o pedido está empacado. O texto já
-            estava aqui ("há 29d") e passava batido em cinza, do lado de um "há
-            2d" idêntico — a informação existia e não comunicava nada. Cor é o
-            que separa a cauda do fluxo normal sem custar um pixel a mais. */}
         {quando && (
           <span className={`shrink-0 tabular-nums ${parado ? "font-semibold text-amber-500" : ""}`}>
             {quando}
@@ -571,46 +553,52 @@ function Card({ row, rastreio, cor, sinal, parada, onClick }: {
         )}
       </div>
 
-      {/* Onde está e quando chega — a razão de a tela existir, e por isso o
-          único bloco em `text-foreground`. A transportadora desce para
-          metadado: ela não muda decisão nenhuma no relance. */}
-      {(row.transportadora || rastreio || row.me_situacao) && (
-        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border/50 pt-2">
-          <ChipPrevisao r={rastreio} />
-          <ChipValidade row={row} />
-          <ChipParado p={parada} />
-          {rastreio?.eventos?.[0] && (
-            <span className="flex min-w-0 items-center gap-1 text-xs font-medium leading-4">
-              <MapPin className="h-3 w-3 shrink-0 text-muted-foreground" />
-              <span className="truncate">{rastreio.eventos[0].descricao}</span>
-            </span>
+      {/* 3. UM alerta (o mais grave) e onde a encomenda está. */}
+      {(principal || evento || emPreparacao || (rastreio && !atrasado)) && (
+        <div className="mt-2 space-y-1 border-t border-border/50 pt-2">
+          {principal && (
+            <div className="flex items-center gap-1.5">
+              <ChipAlerta a={principal} />
+              {alertas.length > 1 && (
+                <span className="shrink-0 rounded bg-muted px-1 text-[10px] font-medium tabular-nums text-muted-foreground"
+                      title={alertas.slice(1).map((x) => x.texto).join(" · ")}>
+                  +{alertas.length - 1}
+                </span>
+              )}
+            </div>
           )}
-          {row.transportadora && (
-            <span className="flex min-w-0 items-center gap-1 text-[10px] leading-4 text-muted-foreground/70">
-              <Truck className="h-3 w-3 shrink-0" />
-              <span className="truncate">
-                {row.transportadora}{row.servico ? ` · ${row.servico}` : ""}
-              </span>
-            </span>
+          {(emPreparacao || (!atrasado && (rastreio?.entregue_em || rastreio?.previsao_entrega)) || evento) && (
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs leading-4">
+              {emPreparacao && (
+                <span className="shrink-0 rounded bg-sky-500/10 px-1 text-[10px] text-sky-500">etiqueta em preparação</span>
+              )}
+              {!atrasado && <ChipPrevisao r={rastreio} />}
+              {evento && (
+                <span className="flex min-w-0 max-w-full items-center gap-1 text-muted-foreground">
+                  <MapPin className="h-3 w-3 shrink-0" />
+                  <span className="truncate">{evento}</span>
+                </span>
+              )}
+            </div>
           )}
         </div>
       )}
 
-      {/* Rodapé sem divisória: separado por hierarquia, não por régua. O número
-          da NF saiu — é dado de conferência, está no detalhe e na busca. Fica
-          só o caso NEGATIVO, que é o que merece atenção. */}
-      {/* NF, data e rastreio numa linha só. Eu tinha tirado NF e data por
-          recomendação de "reduzir ruído" — foi um corte errado: são o que se
-          confere ao falar com o cliente. Cabem aqui sem custar altura nenhuma,
-          porque dividem a linha que o rastreio já ocupava. */}
-      <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] leading-4 text-muted-foreground/70">
+      {/* 4. Conferência: cidade, transportadora, NF e rastreio — tudo em cinza. O
+          rastreio TRUNCA em vez de quebrar em três linhas; o botão copia ele
+          inteiro. */}
+      {(cidade || transporte || origem) && (
+        <div className="mt-1.5 flex min-w-0 items-center gap-1 text-[10px] leading-4 text-muted-foreground/70">
+          {transporte && <Truck className="h-3 w-3 shrink-0" />}
+          <span className="truncate">{[cidade, transporte, origem].filter(Boolean).join(" · ")}</span>
+        </div>
+      )}
+      <div className="mt-1 flex items-center justify-between gap-2 text-[10px] leading-4 text-muted-foreground/70">
         <span className="shrink-0">
-          {row.nf_numero
-            ? <>NF {row.nf_numero} · {dia(row.data_pedido)}</>
-            : <span className="text-amber-500/80">sem NF · {dia(row.data_pedido)}</span>}
+          {row.nf_numero ? `NF ${row.nf_numero}` : "sem NF"} · {dia(row.data_pedido)}
         </span>
         {row.rastreio && (
-          <BotaoCopiar texto={row.rastreio} oque="Rastreio" className="min-w-0 font-mono" />
+          <BotaoCopiar texto={row.rastreio} oque="Rastreio" truncar className="min-w-0 font-mono" />
         )}
       </div>
     </div>
@@ -907,8 +895,8 @@ function Bloco({ titulo, icon: Icon, children }: {
  * conseguiu para aquele. Faltar qualquer um deles esconde a seção, nunca
  * quebra o card.
  */
-export function Detalhe({ row, rastreio, avisos, templates, onClose }: {
-  row: EsteiraRow; rastreio?: RastreioCard;
+export function Detalhe({ row, rastreio, parada, avisos, templates, onClose }: {
+  row: EsteiraRow; rastreio?: RastreioCard; parada?: ParadoRow;
   avisos?: Map<string, EnvioMsg>;
   templates?: Array<{ etapa: EtapaMsg; ativo: boolean; titulo: string }>;
   onClose: () => void;
@@ -917,6 +905,8 @@ export function Detalhe({ row, rastreio, avisos, templates, onClose }: {
   const endereco = [row.entrega_endereco, row.entrega_bairro].filter(Boolean).join(" — ");
   const cidade = [row.entrega_cidade, row.entrega_uf].filter(Boolean).join("/");
   const etapa = ETAPAS.find((e) => e.key === row.etapa);
+  // Todos os alertas do card — no card só aparece o mais grave.
+  const alertas = alertasDoCard(row, rastreio, parada);
   const atrasado = rastreio?.atrasado && !rastreio?.entregue_em;
 
   return (
@@ -938,11 +928,13 @@ export function Detalhe({ row, rastreio, avisos, templates, onClose }: {
                     {etapa.label}
                   </span>
                 )}
-                {atrasado && (
-                  <span className="inline-flex items-center gap-1 rounded bg-red-500/10 px-1.5 py-0.5 text-[11px] font-medium text-red-500">
-                    <AlertTriangle className="h-3 w-3" /> atrasado
+                {alertas.map((a) => (
+                  <span key={a.texto} title={a.dica}
+                        className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium ${
+                          a.nivel === "erro" ? "bg-red-500/10 text-red-500" : "bg-amber-500/10 text-amber-600 dark:text-amber-500"}`}>
+                    <a.Icon className="h-3 w-3" /> {a.texto}
                   </span>
-                )}
+                ))}
               </div>
             </div>
             <div className="text-right">
@@ -1171,20 +1163,26 @@ function CardPago({ row }: { row: AguardandoRow }) {
         <span className="shrink-0 text-[13px] font-semibold tabular-nums">{brl(row.total)}</span>
       </div>
 
-      <div className="mt-1 flex items-baseline gap-2 text-[11px] leading-4 text-muted-foreground">
-        <span className="min-w-0 flex-1 truncate">
-          {[row.canal, `#${row.pedido_loja}`].filter(Boolean).join(" · ")}
-        </span>
+      <div className="mt-1 flex items-center gap-1.5 text-[11px] leading-4 text-muted-foreground">
+        <ChipCanal canal={row.canal} />
+        <span className="min-w-0 flex-1 truncate">#{row.pedido_loja}</span>
+        {/* O telefone é a diferença entre poder e não poder avisar o cliente
+            agora. Ausente, vira um ícone discreto (ML e PayT quase nunca
+            mandam) — dito, mas sem uma linha inteira em cada card. */}
+        {!row.cliente_fone && (
+          <span title="sem telefone na plataforma" aria-label="sem telefone na plataforma" className="shrink-0">
+            <PhoneOff className="h-3 w-3 text-muted-foreground/70" />
+          </span>
+        )}
         <span className={`shrink-0 font-medium tabular-nums ${tom}`}>{tempo}</span>
       </div>
 
-      {/* O telefone aparece porque é a diferença entre poder e não poder avisar
-          o cliente agora. Na Nuvemshop ele vem; ML e Amazon não expõem — e a
-          ausência dita, em vez de omitida, evita a pergunta "cadê?". */}
-      <div className="mt-1 flex items-center gap-1 text-[10px] leading-4 text-muted-foreground/70">
-        <Phone className="h-3 w-3 shrink-0" />
-        <span className="truncate">{row.cliente_fone ?? "sem telefone na plataforma"}</span>
-      </div>
+      {row.cliente_fone && (
+        <div className="mt-1 flex items-center gap-1 text-[10px] leading-4 text-muted-foreground/70">
+          <Phone className="h-3 w-3 shrink-0" />
+          <span className="truncate">{row.cliente_fone}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -1787,7 +1785,7 @@ export default function EsteiraOnline() {
   }, [visiveis, mapaRastreio]);
 
   const cancelados = visiveis.filter((r) => r.etapa === "cancelado");
-  const emAndamento = visiveis.filter((r) => r.etapa !== "cancelado");
+  const aEntregar = visiveis.filter((r) => r.etapa !== "cancelado" && r.etapa !== "entregue");
   const problemas = linhas.filter(ehProblema).length;
 
   return (
@@ -1833,11 +1831,15 @@ export default function EsteiraOnline() {
               </>
             ) : (
               <>
+                {/* ⚠️ "Em andamento" é o que AINDA NÃO foi entregue. Antes a
+                    contagem incluía os entregues (2.396 "em andamento" ao lado
+                    de 1.469 "entregues", somando-os duas vezes) e o valor se
+                    chamava "em trânsito" sem ser só o trânsito. */}
                 <Indicador icon={ShoppingCart} cor="text-blue-500"
-                           rotulo="em andamento" valor={String(emAndamento.length)} />
+                           rotulo="em andamento" valor={String(aEntregar.length)} />
                 <Indicador icon={Package} cor="text-carbo-green"
-                           rotulo="em trânsito"
-                           valor={brl(emAndamento.reduce((s, r) => s + (r.total || 0), 0))} />
+                           rotulo="a entregar"
+                           valor={brl(aEntregar.reduce((s, r) => s + (r.total || 0), 0))} />
                 <Indicador icon={CheckCircle2} cor="text-emerald-500"
                            rotulo="entregues" valor={String(porEtapa.get("entregue")?.length ?? 0)} />
                 <Indicador icon={AlertTriangle} cor="text-amber-500"
@@ -2247,11 +2249,10 @@ export default function EsteiraOnline() {
         <details className="[&[open]]:w-full rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-1.5">
           <summary className="flex cursor-pointer items-center gap-1.5 text-xs font-medium">
             <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-500" />
-            {travadosAntigos.length} travados
-            {/* O detalhe some no celular: a contagem é o que faz alguém abrir,
-                o valor é consequência. */}
+            {travadosAntigos.length} {travadosAntigos.length === 1 ? "travado" : "travados"} de antes do período
+            {/* O valor some no celular: a contagem é o que faz alguém abrir. */}
             <span className="hidden sm:inline">
-              {" "}antes do período — {brl(travadosAntigos.reduce((s, r) => s + (r.total || 0), 0))}
+              {" "}· {brl(travadosAntigos.reduce((s, r) => s + (r.total || 0), 0))}
             </span>
           </summary>
           <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3 xl:grid-cols-4">
@@ -2273,9 +2274,9 @@ export default function EsteiraOnline() {
         <details className="[&[open]]:w-full rounded-xl border px-3 py-1.5">
           <summary className="flex cursor-pointer items-center gap-1.5 text-xs font-medium">
             <XCircle className="h-3.5 w-3.5 shrink-0 text-red-500" />
-            {cancelados.length} cancelados
+            {cancelados.length} {cancelados.length === 1 ? "cancelado" : "cancelados"}
             <span className="hidden sm:inline">
-              {" "}— {brl(cancelados.reduce((s, r) => s + (r.total || 0), 0))}
+              {" "}· {brl(cancelados.reduce((s, r) => s + (r.total || 0), 0))}
             </span>
           </summary>
           <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3 xl:grid-cols-5">
@@ -2291,7 +2292,7 @@ export default function EsteiraOnline() {
       )}
 
       {aberto && (
-        <Detalhe row={aberto} rastreio={rastreioDe(aberto.rastreio)}
+        <Detalhe row={aberto} rastreio={rastreioDe(aberto.rastreio)} parada={parados.get(aberto.bling_id)}
                  avisos={avisos} templates={templates}
                  onClose={() => abrirCard(null)} />
       )}

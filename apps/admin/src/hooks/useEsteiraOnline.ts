@@ -144,8 +144,12 @@ export interface EsteiraRow {
 
 /** As colunas do quadro, na ordem do fluxo. `cancelado` fica fora: não é etapa
  *  da esteira, é saída dela — aparece num contador à parte. */
+// ⚠️ Uma cor por etapa, sem repetir (04/11/2026): "Sem etiqueta" era o mesmo
+// âmbar do "Pago" e "Etiqueta" o mesmo azul do "Em trânsito" — a cor não dizia
+// em que etapa se estava. Âmbar (Pago, fixo na tela) → roxo → rosa → índigo →
+// ciano → verde.
 export const ETAPAS: Array<{ key: EtapaEsteira; label: string; descricao: string; color: string }> = [
-  { key: "confirmado",  label: "Confirmado",   descricao: "pedido atendido no Bling",           color: "#9333ea" },
+  { key: "confirmado",  label: "Confirmado",   descricao: "pedido atendido no Bling",           color: "#a855f7" },
   // ⚠️ "Sem etiqueta", e não mais "NF emitida".
   //
   // O rótulo antigo descrevia o que JÁ ACONTECEU (a nota saiu) numa coluna cuja
@@ -156,8 +160,8 @@ export const ETAPAS: Array<{ key: EtapaEsteira; label: string; descricao: string
   // Com o Melhor Envio como fonte, o que sobra nesta coluna é o caso real:
   // nota emitida e nenhuma etiqueta em lugar nenhum. Aí o nome tem de dizer
   // isso, porque agora é trabalho de gente, não cegueira de sistema.
-  { key: "nf_emitida",  label: "Sem etiqueta", descricao: "nota emitida, nenhuma etiqueta ainda", color: "#f59e0b" },
-  { key: "etiqueta",    label: "Etiqueta",     descricao: "gerada, aguardando postagem",        color: "#0ea5e9" },
+  { key: "nf_emitida",  label: "Sem etiqueta", descricao: "nota emitida, nenhuma etiqueta ainda", color: "#ec4899" },
+  { key: "etiqueta",    label: "Etiqueta",     descricao: "gerada, aguardando postagem",        color: "#6366f1" },
   { key: "em_transito", label: "Em trânsito",  descricao: "postado — a caminho",                color: "#06b6d4" },
   { key: "entregue",    label: "Entregue",     descricao: "entrega confirmada",                 color: "#10b981" },
 ];
