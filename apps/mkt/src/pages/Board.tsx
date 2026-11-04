@@ -94,7 +94,11 @@ function textoDoCampo(f: CustomField, v: unknown): { texto: string; cor?: string
   if (v === null || v === undefined || v === "" || (Array.isArray(v) && v.length === 0)) return null;
   if (f.type === "select") { const o = f.options.find((x) => x.id === v); return o ? { texto: o.label, cor: o.color } : null; }
   if (f.type === "multiselect") {
-    const ls = (v as string[]).map((id) => f.options.find((x) => x.id === id)?.label).filter(Boolean);
+    // ⚠️ O valor pode NÃO ser lista: campo que nasceu "Seleção única" e virou
+    // múltipla guarda o id solto. `.map` direto derrubava o QUADRO inteiro
+    // (tela preta, "e.map is not a function") — um valor velho num cartão.
+    const ids = Array.isArray(v) ? v : [v];
+    const ls = ids.map((id) => f.options.find((x) => x.id === id)?.label).filter(Boolean);
     return ls.length ? { texto: ls.join(", ") } : null;
   }
   if (f.type === "checkbox") return v === true ? { texto: "sim" } : null;

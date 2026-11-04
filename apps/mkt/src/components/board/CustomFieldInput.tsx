@@ -27,7 +27,9 @@ export function CustomFieldInput({ field, value, onSave }: { field: CustomField;
     );
   }
   if (field.type === "multiselect") {
-    const arr = Array.isArray(value) ? (value as string[]) : [];
+    // Valor solto (campo que era "Seleção única") vale como lista de um — senão
+    // a opção marcada sumiria da tela e o próximo clique a apagaria.
+    const arr = Array.isArray(value) ? (value as string[]) : value ? [String(value)] : [];
     return (
       <div className="flex flex-wrap gap-1.5">
         {field.options.map((o) => {
