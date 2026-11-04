@@ -42,7 +42,7 @@ export const SECOES_ESTEIRA: Secao[] = [
           { n: 6, titulo: "Período", texto: "Quais pedidos entram no quadro pela data da compra: 7 ou 30 dias, 3, 6 ou 12 meses, ou “Escolher datas…” para um intervalo livre." },
           { n: 7, titulo: "Aviso", texto: "Filtra pelo WhatsApp da etapa atual: Sem aviso enviado (inclui os que estão na fila e os sem telefone), Aviso com erro (a mensagem não chegou) e Aviso enviado (enviado, entregue ou lido)." },
           { n: 8, titulo: "Só os que precisam de atenção", texto: "Deixa no quadro apenas os problemas: entrega atrasada, pedido que não anda sozinho, etiqueta vencida, cancelada ou perto de vencer, e pedido parado há mais de uma semana na mesma etapa. O número ao lado é quantos são." },
-          { n: 9, titulo: "Pago", texto: "Compras já pagas na loja que ainda não chegaram ao Bling. Aparece só quando há alguém dentro. O tempo fica laranja depois de 2 horas e vermelho depois de 6 — é hora de cobrar o faturamento. Vazia quer dizer que tudo o que foi pago já chegou ao Bling." },
+          { n: 9, titulo: "Pago", texto: "Compras já pagas na loja que ainda não chegaram ao Bling. Aparece só quando há alguém dentro. O tempo fica laranja depois de 2 horas e vermelho depois de 6 (na PayT, 4 e 8, porque ela leva até 8 horas para mandar ao Bling) — é hora de cobrar o faturamento. Vazia quer dizer que tudo o que foi pago já chegou ao Bling." },
           { n: 10, titulo: "Confirmado", texto: "Pedido atendido no Bling, ainda sem nota fiscal." },
           { n: 11, titulo: "Sem etiqueta", texto: "A nota já saiu e ainda não existe etiqueta de envio. É trabalho de expedição." },
           { n: 12, titulo: "Etiqueta", texto: "Etiqueta gerada, esperando a postagem." },
@@ -78,7 +78,7 @@ export const SECOES_ESTEIRA: Secao[] = [
         titulo: "Outros sinais do quadro",
         print: { chave: "esteira-cards2", legenda: "A coluna Pago e cards de Confirmado, Sem etiqueta e Etiqueta." },
         itens: [
-          { n: 1, titulo: "Tempo no Pago", texto: "Há quanto tempo a compra foi paga e ainda não chegou ao Bling. Cinza até 2 h, laranja até 6 h, vermelho depois." },
+          { n: 1, titulo: "Tempo no Pago", texto: "Há quanto tempo a compra foi paga e ainda não chegou ao Bling. Na PayT conta do pagamento, não da abertura do carrinho. Cinza até 2 h, laranja até 6 h, vermelho depois (PayT: 4 h e 8 h)." },
           { n: 2, titulo: "Sem telefone na plataforma", texto: "A loja não mandou o telefone (Mercado Livre e Amazon não mandam). Esse cliente não vai receber os avisos." },
           { n: 3, titulo: "Etiqueta vence em N dias", texto: "Etiqueta do Melhor Envio perto do vencimento — se vencer sem postar, o frete pago se perde. Também pode aparecer “etiqueta vencida” ou “etiqueta cancelada”, em vermelho." },
           { n: 4, titulo: "Na fila", texto: "O aviso desta etapa está esperando para sair. Às vezes espera um dado (por exemplo, o código de rastreio da transportadora, que só nasce na coleta)." },

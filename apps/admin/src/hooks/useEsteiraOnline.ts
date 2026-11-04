@@ -356,6 +356,69 @@ export interface AguardandoRow {
   minutos_parado: number;
 }
 
+/**
+ * PayT: o tempo parado conta do PAGAMENTO, não da abertura do carrinho
+ * (dono do processo, 04/11/2026). O `ordered_at` da PayT é o `started_at` do
+ * checkout — carrinho aberto num dia e pago dias depois (Pix/boleto, carrinho
+ * recuperado) aparecia com 140 h no "Pago" quando a PayT, que leva ~8 h para
+ * mandar ao Bling, ainda estava no prazo. O instante vem de `payt_eventos`:
+ * o PRIMEIRO `paid` de cada transação cujo ÚLTIMO status é `paid` (estornada
+ * depois não conta), e do carrinho, o mais cedo entre elas.
+ * ⚠️ Só a TELA muda: a view e o `ordered_at` (data da venda nos painéis) não.
+ * ⚠️ Leitura que falha ou carrinho sem `paid` no log fica como era.
+ */
+async function comRelogioDoPagamento(rows: AguardandoRow[]): Promise<AguardandoRow[]> {
+  const carrinhos = [...new Set(rows.filter((r) => r.platform === "payt").map((r) => r.pedido_loja))];
+  if (carrinhos.length === 0) return rows;
+
+  type Ev = { id: number; cart_id: string; transaction_id: string | null; status: string | null;
+              atualizado_em: string | null; recebido_em: string };
+  const eventos: Ev[] = [];
+  try {
+    for (let i = 0; i < carrinhos.length; i += 100) {
+      const lote = carrinhos.slice(i, i + 100);
+      eventos.push(...await lerTudo<Ev>((de, ate) => (supabase as any)
+        .from("payt_eventos")
+        .select("id, cart_id, transaction_id, status, atualizado_em, recebido_em")
+        .in("cart_id", lote)
+        .eq("eh_teste", false)
+        .not("transaction_id", "is", null)
+        .order("id")
+        .range(de, ate)));
+    }
+  } catch (e) {
+    console.warn("[Pago] relógio do pagamento da PayT indisponível:", e);
+    return rows;
+  }
+
+  const quando = (e: Ev) => e.atualizado_em ?? e.recebido_em;
+  const porTransacao = new Map<string, Ev[]>();
+  for (const e of eventos) {
+    const k = `${e.cart_id}|${e.transaction_id}`;
+    (porTransacao.get(k) ?? porTransacao.set(k, []).get(k)!).push(e);
+  }
+  const pagoEm = new Map<string, number>();
+  for (const evs of porTransacao.values()) {
+    evs.sort((a, b) => quando(a).localeCompare(quando(b)) || a.id - b.id);
+    if (evs[evs.length - 1].status !== "paid") continue;
+    const primeiroPago = evs.find((e) => e.status === "paid")!;
+    const t = new Date(quando(primeiroPago)).getTime();
+    const atual = pagoEm.get(primeiroPago.cart_id);
+    if (atual === undefined || t < atual) pagoEm.set(primeiroPago.cart_id, t);
+  }
+
+  const agora = Date.now();
+  return rows
+    .map((r) => {
+      const t = r.platform === "payt" ? pagoEm.get(r.pedido_loja) : undefined;
+      return t === undefined ? r : { ...r, minutos_parado: Math.max(0, Math.floor((agora - t) / 60000)) };
+    })
+    .sort((a, b) => b.minutos_parado - a.minutos_parado
+      || a.ordered_at.localeCompare(b.ordered_at)
+      || a.platform.localeCompare(b.platform)
+      || a.pedido_loja.localeCompare(b.pedido_loja));
+}
+
 export function useEcommerceAguardando() {
   return useQuery({
     queryKey: ["ecommerce-aguardando-bling"],
@@ -370,7 +433,7 @@ export function useEcommerceAguardando() {
         .order("ordered_at", { ascending: true })
         .order("platform")
         .order("pedido_loja"));
-      return data;
+      return comRelogioDoPagamento(data);
     },
     // Mesmo relógio do quadro — ver RECARGA_MS. Foi a diferença entre os dois
     // que fazia o card sumir na travessia.

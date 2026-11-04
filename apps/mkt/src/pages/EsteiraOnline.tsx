@@ -1152,7 +1152,10 @@ function Indicador({ icon: Icon, cor, rotulo, valor }: {
 // por isso que o tempo é o único elemento com cor.
 function CardPago({ row }: { row: AguardandoRow }) {
   const horas = row.minutos_parado / 60;
-  const tom = horas >= 6 ? "text-red-500" : horas >= 2 ? "text-amber-500" : "text-muted-foreground";
+  // A PayT leva até ~8 h para mandar ao Bling, e o tempo dela conta do
+  // PAGAMENTO (`comRelogioDoPagamento`): vermelho só depois do prazo dela.
+  const [ambar, vermelho] = row.platform === "payt" ? [4, 8] : [2, 6];
+  const tom = horas >= vermelho ? "text-red-500" : horas >= ambar ? "text-amber-500" : "text-muted-foreground";
   const tempo = row.minutos_parado < 60
     ? `${Math.max(1, Math.round(row.minutos_parado))} min`
     : `${Math.floor(horas)}h`;
