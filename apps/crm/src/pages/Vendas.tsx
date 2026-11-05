@@ -1,8 +1,9 @@
 import { useState, useMemo, Fragment } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { format, startOfMonth, addMonths, subMonths, parseISO } from "date-fns";
+import { format, startOfMonth, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { useParamUrl } from "@carbo/shell";
+import { useParamUrl, intervaloDoAtalho, detectarAtalho } from "@carbo/shell";
+import { PeriodoFiltro, atalhosDoFiltro, type Periodo } from "@/components/ui/PeriodoFiltro";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Button } from "@/components/ui/button";
@@ -10,8 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  ChevronLeft, ChevronRight, Search, ShoppingBag, TrendingUp,
-  Package, Users, ArrowRightCircle, CalendarDays, X, Trash2, Loader2, FileDown,
+  Search, ShoppingBag, TrendingUp,
+  Package, Users, ArrowRightCircle, X, Trash2, Loader2, FileDown,
   ChevronDown, Pencil, FileText, Lock, Ban, Gift,
   Store, Factory, Globe, HelpCircle, Repeat, Package2, Wrench, Blend,
 } from "lucide-react";
@@ -284,20 +285,38 @@ export default function Vendas() {
   const { user, isGestor } = useAuth();
   const isHead = isGestor;
 
-  // ⚠️ Mês, intervalo, busca, vendedor e filtro de KPI moram na URL
+  // ⚠️ Período, busca, vendedor e filtro de KPI moram na URL
   // (`?mes=&de=&ate=&busca=&vendedor=&kpi=`): F5 e link compartilhado mantêm a
-  // tela, e o Voltar desfaz a troca de mês/filtro. A busca grava com `replace`
-  // para não criar uma entrada no histórico por letra digitada.
+  // tela, e o Voltar desfaz a troca de filtro. A busca e o período gravam com
+  // `replace` para não criar uma entrada no histórico por letra/clique.
+  //
+  // ⚠️ O seletor é o das Vendas Online (`PeriodoFiltro`), que fala em PAR DE
+  // DATAS. A URL continua com as MESMAS chaves de antes, e link antigo abre o
+  // mesmo recorte: "Mês fechado…" grava `?mes=` (o mês corrente é o endereço
+  // limpo, que é como a tela abre); qualquer outro atalho grava `?de=&ate=`.
   const mesAtual = format(startOfMonth(new Date()), "yyyy-MM");
-  const [mesUrl, setMesUrl] = useParamUrl("mes", mesAtual);
+  const [mesUrl, setMesUrl] = useParamUrl("mes", mesAtual, { replace: true });
   const month = useMemo(() => {
     const [a, m] = mesUrl.split("-").map(Number);
     return a && m ? new Date(a, m - 1, 1) : startOfMonth(new Date());
   }, [mesUrl]);
-  const setMonth = (v: Date | ((m: Date) => Date)) =>
-    setMesUrl(format(typeof v === "function" ? v(month) : v, "yyyy-MM"));
-  const [customFrom, setCustomFrom] = useParamUrl("de");
-  const [customTo, setCustomTo] = useParamUrl("ate");
+  const [customFrom, setCustomFrom] = useParamUrl("de", "", { replace: true });
+  const [customTo, setCustomTo] = useParamUrl("ate", "", { replace: true });
+  // O hook recebe `de`/`ate` CRUS, como antes (link antigo com uma ponta só
+  // continua valendo o que valia); o seletor só mostra o par.
+  const periodo = useMemo<Periodo>(
+    () => (customFrom || customTo
+      ? { from: customFrom, to: customTo }
+      : intervaloDoAtalho("mes", format(month, "yyyy-MM"))),
+    [customFrom, customTo, month],
+  );
+  const mudarPeriodo = (p: Periodo) => {
+    if (detectarAtalho(p, atalhosDoFiltro()).atalho === "mes") {
+      setCustomFrom(null); setCustomTo(null); setMesUrl(p.from.slice(0, 7));
+    } else {
+      setMesUrl(null); setCustomFrom(p.from); setCustomTo(p.to);
+    }
+  };
   const [search, setSearch] = useParamUrl("busca", "", { replace: true });
   const [vendedorFilter, setVendedor] = useParamUrl("vendedor", "__all__");
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -327,10 +346,6 @@ export default function Vendas() {
   const setSegsAtivos = (n: Set<SegmentoId>) => setSegUrl([...n].join(","));
   const setTiposAtivos = (n: Set<TipoPedido>) => setTipoUrl([...n].join(","));
 
-  const hasCustomRange = !!(customFrom || customTo);
-  const clearCustomRange = () => { setCustomFrom(""); setCustomTo(""); };
-  const today = new Date();
-  const isCurrentMonth = month.getFullYear() === today.getFullYear() && month.getMonth() === today.getMonth();
 
   // Dados reais — carboze_orders no período (o hook já aplica o filtro de data).
   // Piso igual ao do hook: 1 caractere já busca, porque o casamento é por
@@ -681,21 +696,7 @@ export default function Vendas() {
         <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3">
           <h1 className="text-2xl font-bold flex items-center gap-2"><ShoppingBag className="h-6 w-6 text-carbo-green" /> Vendas e Orçamentos</h1>
           <div className="flex flex-col items-end gap-2 shrink-0">
-            {!hasCustomRange && (
-              <div className="flex items-center gap-1 bg-muted/40 rounded-lg px-2 py-1.5">
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setMonth((m) => startOfMonth(subMonths(m, 1)))}><ChevronLeft className="h-4 w-4" /></Button>
-                <span className="text-sm font-semibold w-32 text-center capitalize">{format(month, "MMM 'de' yyyy", { locale: ptBR })}</span>
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setMonth((m) => startOfMonth(addMonths(m, 1)))} disabled={isCurrentMonth}><ChevronRight className="h-4 w-4" /></Button>
-              </div>
-            )}
-            <div className="flex items-center gap-2 flex-wrap justify-end">
-              <div className="flex items-center gap-1 text-xs text-muted-foreground"><CalendarDays className="h-3.5 w-3.5" /> Período:</div>
-              <Input type="date" className="h-8 w-36 text-xs" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} title="Data início" />
-              <span className="text-xs text-muted-foreground">até</span>
-              <Input type="date" className="h-8 w-36 text-xs" value={customTo} onChange={(e) => setCustomTo(e.target.value)} title="Data fim" />
-              {hasCustomRange && <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground px-2" onClick={clearCustomRange}><X className="h-3 w-3 mr-1" /> Limpar</Button>}
-            </div>
-            {hasCustomRange && <p className="text-[11px] text-primary font-medium">Exibindo período personalizado</p>}
+            <PeriodoFiltro value={periodo} onChange={mudarPeriodo} className="justify-end" />
           </div>
         </div>
 
@@ -711,7 +712,7 @@ export default function Vendas() {
             <CarboCardContent className="p-3 text-center">
               <p className="text-lg 2xl:text-xl font-bold text-violet-400 tabular-nums">{fmtBRL(totalVendido)}</p>
               <p className="text-xs text-muted-foreground">Total vendido</p>
-              <p className="text-[10px] text-muted-foreground/70 mt-0.5">{vendidas.length} venda(s) no mês</p>
+              <p className="text-[10px] text-muted-foreground/70 mt-0.5">{vendidas.length} venda(s) no período</p>
             </CarboCardContent>
           </CarboCard>
           <CarboCard padding="none" onClick={() => toggleKpi("faturado")}

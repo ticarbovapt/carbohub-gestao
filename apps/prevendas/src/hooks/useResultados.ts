@@ -37,16 +37,11 @@ export interface Repasse {
   pedidos: number;
 }
 
-/** Primeiro e último dia do mês, em `AAAA-MM-DD` (calendário local). */
-export function limitesDoMes(mes: Date) {
-  const a = mes.getFullYear(), m = mes.getMonth() + 1;
-  const ultimo = new Date(a, m, 0).getDate();
-  const p = (n: number) => String(n).padStart(2, "0");
-  return { de: `${a}-${p(m)}-01`, ate: `${a}-${p(m)}-${p(ultimo)}` };
-}
+/** O recorte: as duas pontas em `AAAA-MM-DD`, inclusivas (calendário local).
+ *  Vem do seletor de período da tela (`PeriodoFiltro`). */
+export interface Recorte { de: string; ate: string }
 
-export function useRepasses(mes: Date, userId?: string) {
-  const { de, ate } = limitesDoMes(mes);
+export function useRepasses({ de, ate }: Recorte, userId?: string) {
   return useQuery({
     queryKey: ["prevendas-repasses", de, ate, userId],
     enabled: !!userId,
@@ -58,7 +53,7 @@ export function useRepasses(mes: Date, userId?: string) {
   });
 }
 
-/** O trabalho ANTES do repasse: os cards do SDR (f14) criados no mês. */
+/** O trabalho ANTES do repasse: os cards do SDR (f14) criados no período. */
 export interface LeadSdr {
   id: string;
   stage: string;
@@ -66,8 +61,7 @@ export interface LeadSdr {
   assigned_to: string | null;
 }
 
-export function useLeadsSdr(mes: Date, userId?: string) {
-  const { de, ate } = limitesDoMes(mes);
+export function useLeadsSdr({ de, ate }: Recorte, userId?: string) {
   return useQuery({
     queryKey: ["prevendas-leads-sdr", de, ate, userId],
     enabled: !!userId,

@@ -1,14 +1,13 @@
 import { useMemo, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { addMonths, format, startOfMonth, subMonths } from "date-fns";
-import { ptBR } from "date-fns/locale";
-import { useParamUrl } from "@carbo/shell";
+import { format, startOfMonth } from "date-fns";
+import { useParamUrl, intervaloDoAtalho, detectarAtalho, rotuloDoPeriodo } from "@carbo/shell";
+import { PeriodoFiltro, atalhosDoFiltro, type Periodo } from "@/components/ui/PeriodoFiltro";
 import {
-  BarChart3, Send, CheckCircle2, Percent, TrendingUp, Timer, ChevronLeft, ChevronRight,
+  BarChart3, Send, CheckCircle2, Percent, TrendingUp, Timer,
 } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboKPI } from "@/components/ui/carbo-kpi";
-import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRepasses, useLeadsSdr, type Repasse } from "@/hooks/useResultados";
@@ -98,27 +97,37 @@ const th = "px-3 py-2.5 sm:px-5 text-[11px] font-medium uppercase tracking-wide 
 export default function Resultados() {
   const navigate = useNavigate();
   const { user, isGestor } = useAuth();
-  // Mês e SDR moram na URL (`?mes=2026-09&sdr=<id>`): o F5 não volta ao mês
-  // corrente no meio da conversa sobre setembro, e o link mostra o mesmo
-  // recorte a quem o recebe. Mês corrente e "todos" não vão para o endereço.
-  const [mesUrl, setMesUrl] = useParamUrl("mes", format(startOfMonth(new Date()), "yyyy-MM"));
-  const mes = useMemo(() => {
+  // Período e SDR moram na URL (`?mes=2026-09&sdr=<id>`, ou `?de=&ate=`): o F5
+  // não volta ao mês corrente no meio da conversa sobre setembro, e o link
+  // mostra o mesmo recorte a quem o recebe. Mês corrente e "todos" não vão
+  // para o endereço. O seletor é o das Vendas Online (`PeriodoFiltro`):
+  // "Mês fechado…" grava `?mes=` (link antigo abre igual); os outros atalhos,
+  // `?de=&ate=`.
+  const mesAtual = format(startOfMonth(new Date()), "yyyy-MM");
+  const [mesUrl, setMesUrl] = useParamUrl("mes", mesAtual, { replace: true });
+  const [deUrl, setDeUrl] = useParamUrl("de", "", { replace: true });
+  const [ateUrl, setAteUrl] = useParamUrl("ate", "", { replace: true });
+  const periodo = useMemo<Periodo>(() => {
+    if (deUrl && ateUrl) return { from: deUrl, to: ateUrl };
     const [a, m] = mesUrl.split("-").map(Number);
-    return a && m ? new Date(a, m - 1, 1) : startOfMonth(new Date());
-  }, [mesUrl]);
-  const setMes = (f: (m: Date) => Date) => setMesUrl(format(f(mes), "yyyy-MM"));
+    return intervaloDoAtalho("mes", a && m ? mesUrl : mesAtual);
+  }, [deUrl, ateUrl, mesUrl, mesAtual]);
+  const mudarPeriodo = (p: Periodo) => {
+    if (detectarAtalho(p, atalhosDoFiltro()).atalho === "mes") {
+      setDeUrl(null); setAteUrl(null); setMesUrl(p.from.slice(0, 7));
+    } else {
+      setMesUrl(null); setDeUrl(p.from); setAteUrl(p.to);
+    }
+  };
+  const recorte = useMemo(() => ({ de: periodo.from, ate: periodo.to }), [periodo]);
   const [sdrSel, setSdrSel] = useParamUrl("sdr", "todos");
 
-  const repassesQ = useRepasses(mes, user?.id);
-  const leadsQ = useLeadsSdr(mes, user?.id);
+  const repassesQ = useRepasses(recorte, user?.id);
+  const leadsQ = useLeadsSdr(recorte, user?.id);
   const carregando = repassesQ.isLoading || leadsQ.isLoading;
   const erro = (repassesQ.error ?? leadsQ.error) as Error | null;
 
-  const noMesAtual = startOfMonth(new Date()).getTime() <= mes.getTime();
-  const rotuloMes = format(mes, "MMMM 'de' yyyy", { locale: ptBR });
-  const rotuloMesTitulo = rotuloMes.charAt(0).toUpperCase() + rotuloMes.slice(1);
-
-  // SDRs que aparecem no mês — o seletor do gestor só oferece quem tem número.
+  // SDRs que aparecem no período — o seletor do gestor só oferece quem tem número.
   const sdrs = useMemo(() => {
     const m = new Map<string, string>();
     for (const r of repassesQ.data ?? []) if (r.sdr_id) m.set(r.sdr_id, r.sdr_nome ?? "—");
@@ -201,16 +210,7 @@ export default function Resultados() {
           </SelectContent>
         </Select>
       )}
-      <div className="flex w-full items-center justify-between rounded-lg border sm:w-auto">
-        <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setMes((m) => subMonths(m, 1))} aria-label="Mês anterior">
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <span className="min-w-[150px] text-center text-sm font-medium">{rotuloMesTitulo}</span>
-        <Button variant="ghost" size="icon" className="h-9 w-9" disabled={noMesAtual}
-          onClick={() => setMes((m) => addMonths(m, 1))} aria-label="Próximo mês">
-          <ChevronRight className="h-4 w-4" />
-        </Button>
-      </div>
+      <PeriodoFiltro value={periodo} onChange={mudarPeriodo} className="w-full sm:w-auto" />
     </div>
   );
 
@@ -237,7 +237,7 @@ export default function Resultados() {
 
       {!carregando && r.total === 0 ? (
         <div className="rounded-xl border border-dashed px-6 py-14 text-center text-sm text-muted-foreground">
-          Nenhum lead repassado em {rotuloMes}.
+          Nenhum lead repassado ({rotuloDoPeriodo(periodo)}).
         </div>
       ) : !carregando && (
         <>
