@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePickerInput } from "@/components/ui/date-picker-input";
 import {
@@ -57,14 +57,25 @@ export function PeriodoFiltro({
   className?: string;
 }) {
   const opcoes = useMemo(() => atalhosDoFiltro(comTodo, longos), [comTodo, longos]);
-  const { atalho, mes } = useMemo(() => detectarAtalho(value, opcoes), [value, opcoes]);
+  const detectado = useMemo(() => detectarAtalho(value, opcoes), [value, opcoes]);
   const meses = useMemo(() => mesesParaEscolher(desde), [desde]);
+
+  /* ⚠️ "Por período…" e "Mês fechado…" precisam de um MODO local. O atalho é
+     deduzido das datas, e "Por período…" nasce com as datas que a tela já
+     mostrava (os últimos 30 dias, por exemplo): sem o modo, a dedução voltava
+     a dizer "Últimos 30 dias" e os campos de data nunca apareciam. O mesmo no
+     mês fechado do mês corrente no último dia (igual a "Este mês"). Escolher
+     outro atalho desfaz o modo. */
+  const [modo, setModo] = useState<"custom" | "mes" | null>(null);
+  const atalho: AtalhoPeriodo = modo ?? detectado.atalho;
+  const mes = atalho === "mes" ? (value.from ? value.from.slice(0, 7) : "") : detectado.mes;
 
   /** ⚠️ Intervalo pela metade não existe: trocar de atalho já grava as DUAS
    *  pontas. "Por período…" nasce com o intervalo que a tela já mostrava. */
   const escolher = (a: AtalhoPeriodo) => {
-    if (a === "mes") return onChange(intervaloDoAtalho("mes", value.from || undefined));
-    if (a === "custom") return onChange(value.from && value.to ? value : intervaloDoAtalho("30d"));
+    if (a === "mes") { setModo("mes"); return onChange(intervaloDoAtalho("mes", value.from || undefined)); }
+    if (a === "custom") { setModo("custom"); return onChange(value.from && value.to ? value : intervaloDoAtalho("30d")); }
+    setModo(null);
     onChange(intervaloDoAtalho(a));
   };
 

@@ -9,7 +9,7 @@ import { CarboKPI } from "@/components/ui/carbo-kpi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
 import { fmtBRL, fmtBRLc, delta } from "@/lib/dash-format";
-import { PeriodPicker } from "@/components/ui/PeriodPicker";
+import { PeriodoFiltro } from "@/components/ui/PeriodoFiltro";
 import { useParamUrl } from "@carbo/shell";
 import { usePeriodoUrl } from "@/hooks/usePeriodoUrl";
 import {
@@ -192,7 +192,7 @@ export default function DashboardsFranqueados() {
         icon={Building2}
         iconColor="blue"
         title="Licenciados — Visão Geral"
-        actions={<PeriodPicker value={range} onChange={setRange} />}
+        actions={<PeriodoFiltro value={range} onChange={setRange} disableFuture />}
       />
 
       {falhou ? (

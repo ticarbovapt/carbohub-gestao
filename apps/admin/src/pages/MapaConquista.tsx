@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo } from "react";
-import { useParamUrl } from "@carbo/shell";
+import { useParamUrl, intervaloDoAtalho, detectarAtalho, rotuloDoPeriodo, type AtalhoPeriodo, type Periodo } from "@carbo/shell";
+import { PeriodoFiltro, atalhosDoFiltro } from "@/components/ui/PeriodoFiltro";
 import { MapContainer, GeoJSON, useMap } from "react-leaflet";
 import type { Layer, LeafletMouseEvent, PathOptions } from "leaflet";
 import L from "leaflet";
@@ -7,7 +8,6 @@ import "leaflet/dist/leaflet.css";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, Loader2, MapPin, Sparkles, Store, Building2, ShoppingCart, AlertTriangle, Grid3x3, Map as MapIcon, Maximize2, Minimize2 } from "lucide-react";
 import {
   useCidadesConquistadas, useMunicipiosIBGE, useMalha,
@@ -59,12 +59,20 @@ const BORDA = "#334155";
  * tela — quem depender dele em outro lugar segue com os 30 dias fixos, que é o
  * contrato antigo e não foi quebrado.
  */
-const PERIODOS: Array<{ id: string; label: string; inicio: () => Date }> = [
-  { id: "mes",  label: "Este mês",       inicio: () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); } },
-  { id: "30d",  label: "Últimos 30 dias", inicio: () => { const d = new Date(); d.setDate(d.getDate() - 30); return d; } },
-  { id: "90d",  label: "Últimos 90 dias", inicio: () => { const d = new Date(); d.setDate(d.getDate() - 90); return d; } },
-  { id: "ano",  label: "Este ano",        inicio: () => new Date(new Date().getFullYear(), 0, 1) },
-];
+const OPCOES = atalhosDoFiltro(false, true);
+/* O período na URL: atalho RELATIVO pelo nome (`?periodo=90d`), para o link
+ * de "últimos 90 dias" continuar sendo os últimos 90 dias amanhã; mês fechado
+ * e intervalo livre como datas (`?de=&ate=`).
+ * ⚠️ `mes` (este mês, o padrão), `30d` e `90d` são os nomes de antes do
+ * `PeriodoFiltro` — link antigo abre igual; `ano` (que o seletor novo não tem)
+ * abre de 1º de janeiro até hoje, como "Por período…". */
+const PERIODO_NA_URL: Partial<Record<AtalhoPeriodo, string>> = {
+  today: "hoje", yesterday: "ontem", "7d": "7d", "30d": "30d", "90d": "90d",
+  "180d": "180d", "365d": "365d", month: "mes",
+};
+const ATALHO_DA_URL: Record<string, AtalhoPeriodo> =
+  Object.fromEntries(Object.entries(PERIODO_NA_URL).map(([a, u]) => [u, a as AtalhoPeriodo]));
+const DIA = /^\d{4}-\d{2}-\d{2}$/;
 
 /** "10/08" — dia e mês, na ordem que se lê no Brasil.
  *
@@ -164,8 +172,24 @@ export default function MapaConquista() {
   const [presencaUrl, setPresencaUrl] = useParamUrl("presenca", "todos");
   const filtro: FiltroPresenca = FILTROS.some((f) => f.id === presencaUrl) ? (presencaUrl as FiltroPresenca) : "todos";
   const setFiltro = (f: FiltroPresenca) => setPresencaUrl(f);
-  const [periodoUrl, setPeriodo] = useParamUrl("periodo", "mes");
-  const periodo = PERIODOS.some((p) => p.id === periodoUrl) ? periodoUrl : "mes";
+  const [periodoUrl, setPeriodoUrl] = useParamUrl("periodo", "mes", { replace: true });
+  const [deUrl, setDeUrl] = useParamUrl("de", "", { replace: true });
+  const [ateUrl, setAteUrl] = useParamUrl("ate", "", { replace: true });
+  const periodo: Periodo = useMemo(() => {
+    if (DIA.test(deUrl) && DIA.test(ateUrl) && deUrl <= ateUrl) return { from: deUrl, to: ateUrl };
+    if (periodoUrl === "ano") {
+      const hoje = intervaloDoAtalho("today").to;
+      return { from: `${hoje.slice(0, 4)}-01-01`, to: hoje };
+    }
+    return intervaloDoAtalho(ATALHO_DA_URL[periodoUrl] ?? "month");
+  }, [periodoUrl, deUrl, ateUrl]);
+  const setPeriodo = (p: Periodo) => {
+    const nome = PERIODO_NA_URL[detectarAtalho(p, OPCOES).atalho];
+    setPeriodoUrl(nome ?? null);
+    setDeUrl(nome ? null : p.from);
+    setAteUrl(nome ? null : p.to);
+  };
+  const rotuloPeriodo = rotuloDoPeriodo(periodo, OPCOES);
   /* Mapa em tela cheia.
    *
    * ⚠️ A ÚNICA alavanca do tamanho do Brasil é a ALTURA. O Brasil é quase
@@ -179,13 +203,11 @@ export default function MapaConquista() {
   const [telaUrl, setTelaUrl] = useParamUrl("tela", "");
   const telaCheia = telaUrl === "cheia";
 
-  const infoPeriodo = PERIODOS.find((p) => p.id === periodo) ?? PERIODOS[0];
   // Comparação em string ISO: `primeira_venda` é 'YYYY-MM-DD', e nesse formato
   // a ordem lexical É a cronológica. Converter para Date daria fuso de brinde.
-  const inicioISO = useMemo(() => {
-    const d = infoPeriodo.inicio();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  }, [infoPeriodo]);
+  // As DUAS pontas inclusivas: com mês fechado o fim deixou de ser "hoje".
+  const inicioISO = periodo.from;
+  const fimISO = periodo.to;
 
   // ⚠️ `useCallback` não é enfeite aqui: esta função entra no array de
   // dependências dos memos abaixo. Sem ele, a identidade muda a cada render e
@@ -193,8 +215,9 @@ export default function MapaConquista() {
   // que é exatamente a intenção.
   const ehRecente = useCallback(
     (c: CidadeConquistada): boolean =>
-      Boolean(c.primeira_venda) && c.primeira_venda! >= inicioISO,
-    [inicioISO],
+      Boolean(c.primeira_venda) && c.primeira_venda!.slice(0, 10) >= inicioISO
+        && c.primeira_venda!.slice(0, 10) <= fimISO,
+    [inicioISO, fimISO],
   );
 
   const cidades = useCidadesConquistadas();
@@ -337,7 +360,7 @@ export default function MapaConquista() {
       c.tem_venda ? `${c.pedidos} pedido${c.pedidos === 1 ? "" : "s"} · ${fmtBRLCompacto(Number(c.valor))}` : null,
       c.tem_pdv ? `${c.pdvs} PDV${c.pdvs === 1 ? "" : "s"}` : null,
       c.tem_licenciado ? `${c.licenciados} licenciado${c.licenciados === 1 ? "" : "s"}` : null,
-      ehRecente(c) ? `🆕 conquista — ${infoPeriodo.label.toLowerCase()}` : null,
+      ehRecente(c) ? `🆕 conquista — ${rotuloPeriodo}` : null,
     ].filter(Boolean);
     layer.bindTooltip(`<b>${nome}</b><br/>${partes.join("<br/>")}`, { sticky: true });
     layer.on("mouseover", (e: LeafletMouseEvent) => (e.target as any).setStyle?.({ weight: 3 }));
@@ -390,7 +413,7 @@ export default function MapaConquista() {
         <Placar titulo="Cidades" valor={placar.cidades.toLocaleString("pt-BR")}
           rodape={placar.municipiosBR ? `de ${placar.municipiosBR.toLocaleString("pt-BR")} no Brasil` : "—"} />
         <Placar titulo="Estados" valor={`${placar.estados}`} rodape="de 27" />
-        <Placar titulo={`Novas · ${infoPeriodo.label.toLowerCase()}`} valor={`+${placar.novas}`} rodape="primeira compra no período" destaque />
+        <Placar titulo={`Novas · ${rotuloPeriodo}`} valor={`+${placar.novas}`} rodape="primeira compra no período" destaque />
         <Placar titulo="Pedidos" valor={placar.pedidos.toLocaleString("pt-BR")} rodape={escopo} />
         <Placar titulo="Faturamento" valor={fmtBRLCompacto(placar.valor)} rodape={escopo} />
       </div>
@@ -420,14 +443,7 @@ export default function MapaConquista() {
           </Button>
         )}
 
-        <Select value={periodo} onValueChange={setPeriodo}>
-          <SelectTrigger className="h-8 w-44"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {PERIODOS.map((p) => (
-              <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <PeriodoFiltro value={periodo} onChange={setPeriodo} longos disableFuture />
 
         {/* Só faz sentido no Brasil: dentro de um estado já é sempre município. */}
         {!uf && (
@@ -494,7 +510,7 @@ export default function MapaConquista() {
                     // período, então trocar de "este mês" para "90 dias" não
                     // remontava nada e o mapa mantinha as cores antigas. A
                     // regra é: tudo que muda a COR entra aqui.
-                    key={`${uf ?? `BR-${granularidade}`}-${filtro}-${periodo}-${cruzamento.porCodigo.size}`}
+                    key={`${uf ?? `BR-${granularidade}`}-${filtro}-${periodo.from}_${periodo.to}-${cruzamento.porCodigo.size}`}
                     data={malha.data as never}
                     style={estilo as never}
                     onEachFeature={aoCriarFeature}
@@ -516,7 +532,7 @@ export default function MapaConquista() {
               {porMunicipio && (
                 <div className="flex items-start gap-2">
                   <span className="inline-block h-3 w-3 mt-0.5 shrink-0 rounded-sm" style={{ background: AMBAR }} />
-                  Conquistado — {infoPeriodo.label.toLowerCase()}
+                  Conquistado — {rotuloPeriodo}
                 </div>
               )}
               <div className="flex items-start gap-2">
@@ -531,7 +547,7 @@ export default function MapaConquista() {
           <Card>
             <CardContent className="p-4">
               <div className="text-sm font-semibold flex items-center gap-1.5 mb-2">
-                <Sparkles className="h-4 w-4 text-amber-500" /> Conquistas · {infoPeriodo.label.toLowerCase()}
+                <Sparkles className="h-4 w-4 text-amber-500" /> Conquistas · {rotuloPeriodo}
                 {/* ⚠️ O placar diz "+105" e a lista mostra 12. Sem este
                     contador, parecia que 93 cidades tinham sumido. */}
                 {placar.novas > recentes.length && (
@@ -541,7 +557,7 @@ export default function MapaConquista() {
                 )}
               </div>
               {recentes.length === 0 ? (
-                <p className="text-xs text-muted-foreground">Nenhuma cidade nova em {infoPeriodo.label.toLowerCase()}.</p>
+                <p className="text-xs text-muted-foreground">Nenhuma cidade nova no período.</p>
               ) : (
                 <div className="space-y-1.5 max-h-64 overflow-y-auto">
                   {recentes.map((c) => (

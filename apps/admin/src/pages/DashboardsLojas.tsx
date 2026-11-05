@@ -6,7 +6,7 @@ import {
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboKPI } from "@/components/ui/carbo-kpi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PeriodPicker } from "@/components/ui/PeriodPicker";
+import { PeriodoFiltro } from "@/components/ui/PeriodoFiltro";
 import { usePeriodoUrl } from "@/hooks/usePeriodoUrl";
 import { useAuth } from "@/contexts/AuthContext";
 import { fmtBRL, fmtBRLc, delta } from "@/lib/dash-format";
@@ -102,7 +102,7 @@ export default function DashboardsLojas() {
         icon={Store}
         iconColor="green"
         title="Portal de Vendas — Visão Geral"
-        actions={<PeriodPicker value={range} onChange={setRange} />}
+        actions={<PeriodoFiltro value={range} onChange={setRange} disableFuture />}
       />
 
       {!kLoad && !hasData && <AccessNotice />}

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useParamUrl } from "@carbo/shell";
+import { useParamUrl, intervaloDoAtalho, detectarAtalho, type AtalhoPeriodo, type Periodo } from "@carbo/shell";
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
@@ -15,10 +15,11 @@ import {
 } from "@/components/ui/select";
 import {
   useMetaAds, useMetaAdsContas, useMetaAdsSync, useMetaAdsUltimoSync, useMetaAdsPainel, useMetaCriativos, useMetaSegmentos, derivar,
-  PERIOD_LABEL, fmtMoeda, fmtNum, fmtPct, fmtRoas,
-  type MetaPeriod, type MetaNo, type MetaDerivadas,
+  fmtMoeda, fmtNum, fmtPct, fmtRoas,
+  type MetaNo, type MetaDerivadas,
 } from "@/hooks/useMetaAds";
 import { cn } from "@/lib/utils";
+import { PeriodoFiltro, atalhosDoFiltro } from "@/components/ui/PeriodoFiltro";
 import { ContasDaMeta } from "@/components/ContasDaMeta";
 import { ChipVariacao, Destaques, Funil, LojaReal, variacao } from "@/components/meta/PainelMeta";
 import { CriativosProvider, Miniatura, Segmentos, StatusDoAnuncio } from "@/components/meta/SegmentosMeta";
@@ -47,11 +48,19 @@ import {
 // rodapé — ele sai quando a coluna "ROAS real" entrar ao lado.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const PERIODOS: MetaPeriod[] = ["today", "yesterday", "7d", "30d", "month"];
-// O período na URL fala português (`?periodo=ontem`); o valor interno é o do hook.
-const PERIODO_NA_URL: Record<string, string> = {
+// O período na URL. Atalho RELATIVO fica pelo nome (`?periodo=ontem`), para
+// o link de "últimos 7 dias" continuar sendo os últimos 7 dias amanhã; mês
+// fechado e intervalo livre vão como datas (`?de=&ate=`).
+// ⚠️ Os nomes são os de antes do `PeriodoFiltro` — link antigo abre igual.
+const PERIODO_NA_URL: Partial<Record<AtalhoPeriodo, string>> = {
   today: "hoje", yesterday: "ontem", "7d": "7d", "30d": "30d", month: "este-mes",
 };
+const ATALHO_DA_URL: Record<string, AtalhoPeriodo> = {
+  ...Object.fromEntries(Object.entries(PERIODO_NA_URL).map(([a, u]) => [u, a])),
+  today: "today", yesterday: "yesterday", month: "month",
+};
+const OPCOES = atalhosDoFiltro();
+const DIA = /^\d{4}-\d{2}-\d{2}$/;
 
 // ── Card de indicador ────────────────────────────────────────────────────────
 
@@ -154,22 +163,32 @@ function Vazio({ icone: Icone, titulo, children }: {
 }
 
 export default function EcommerceAtribuicao() {
-  // Período e conta na URL (`?periodo=7d&conta=act_…`): F5 e link abrem o
-  // mesmo recorte. Ausente = 30 dias, todas as contas.
-  const [periodoUrl, setPeriodoUrl] = useParamUrl("periodo", "30d");
-  const period: MetaPeriod = PERIODOS.find((k) => PERIODO_NA_URL[k] === periodoUrl) ?? "30d";
-  const setPeriod = (v: MetaPeriod) => setPeriodoUrl(PERIODO_NA_URL[v] ?? v);
+  // Período e conta na URL (`?periodo=7d&conta=act_…`, ou `?de=&ate=`): F5 e
+  // link abrem o mesmo recorte. Ausente = 30 dias, todas as contas.
+  const [periodoUrl, setPeriodoUrl] = useParamUrl("periodo", "30d", { replace: true });
+  const [deUrl, setDeUrl] = useParamUrl("de", "", { replace: true });
+  const [ateUrl, setAteUrl] = useParamUrl("ate", "", { replace: true });
+  const periodo: Periodo = useMemo(() => {
+    if (DIA.test(deUrl) && DIA.test(ateUrl) && deUrl <= ateUrl) return { from: deUrl, to: ateUrl };
+    return intervaloDoAtalho(ATALHO_DA_URL[periodoUrl] ?? "30d");
+  }, [periodoUrl, deUrl, ateUrl]);
+  const setPeriodo = (p: Periodo) => {
+    const nome = PERIODO_NA_URL[detectarAtalho(p, OPCOES).atalho];
+    setPeriodoUrl(nome ?? null);
+    setDeUrl(nome ? null : p.from);
+    setAteUrl(nome ? null : p.to);
+  };
   const [actId, setActId] = useParamUrl("conta", "todas");
   const [aberto, setAberto] = useState<Set<string>>(new Set());
   const [verContas, setVerContas] = useState(false);
 
   const contas = useMetaAdsContas();
-  const { data, isLoading, error } = useMetaAds(period, undefined, actId === "todas" ? undefined : actId);
+  const { data, isLoading, error } = useMetaAds(periodo, actId === "todas" ? undefined : actId);
   const sync = useMetaAdsSync();
   const logs = useMetaAdsUltimoSync();
-  const painel = useMetaAdsPainel(period, actId === "todas" ? undefined : actId);
+  const painel = useMetaAdsPainel(periodo, actId === "todas" ? undefined : actId);
   const criativos = useMetaCriativos();
-  const segmentos = useMetaSegmentos(period, actId === "todas" ? undefined : actId);
+  const segmentos = useMetaSegmentos(periodo, actId === "todas" ? undefined : actId);
 
   const alternar = (id: string) =>
     setAberto((s) => {
@@ -227,14 +246,7 @@ export default function EcommerceAtribuicao() {
             </Select>
           )}
 
-          <Select value={period} onValueChange={(v) => setPeriod(v as MetaPeriod)}>
-            <SelectTrigger className="w-[170px]"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {PERIODOS.map((p) => (
-                <SelectItem key={p} value={p}>{PERIOD_LABEL[p]}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <PeriodoFiltro value={periodo} onChange={setPeriodo} desde="2026-07" disableFuture />
 
           {(contas.data?.length ?? 0) > 0 && (
             <Button variant="ghost" onClick={() => setVerContas(true)}>

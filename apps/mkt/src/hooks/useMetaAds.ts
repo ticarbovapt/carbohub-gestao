@@ -1,5 +1,4 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { subDays, startOfMonth, format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { lerSemTeto } from "@carbo/shell";
 import { toast } from "sonner";
@@ -22,34 +21,12 @@ const db = supabase as unknown as {
   from: (t: string) => any;
 };
 
-export type MetaPeriod = "today" | "yesterday" | "7d" | "30d" | "month" | "custom";
-
+/**
+ * O período, em YYYY-MM-DD, as duas pontas INCLUSIVAS. Quem escolhe é o
+ * seletor da tela (`PeriodoFiltro`, conta de data em `@carbo/shell`); aqui ele
+ * só vira `de`/`ate` da consulta.
+ */
 export interface MetaRange { from: string; to: string }
-export interface MetaCustom { from?: string; to?: string }
-
-export const PERIOD_LABEL: Record<MetaPeriod, string> = {
-  today: "Hoje",
-  yesterday: "Ontem",
-  "7d": "Últimos 7 dias",
-  "30d": "Últimos 30 dias",
-  month: "Mês atual",
-  custom: "Personalizado",
-};
-
-/** Início e fim do período, em YYYY-MM-DD, ambos INCLUSIVOS. */
-export function rangeDoPeriodo(period: MetaPeriod, custom?: MetaCustom): MetaRange {
-  const hoje = new Date();
-  const f = (d: Date) => format(d, "yyyy-MM-dd");
-
-  switch (period) {
-    case "today":     return { from: f(hoje), to: f(hoje) };
-    case "yesterday": return { from: f(subDays(hoje, 1)), to: f(subDays(hoje, 1)) };
-    case "7d":        return { from: f(subDays(hoje, 6)), to: f(hoje) };
-    case "30d":       return { from: f(subDays(hoje, 29)), to: f(hoje) };
-    case "month":     return { from: f(startOfMonth(hoje)), to: f(hoje) };
-    case "custom":    return { from: custom?.from ?? f(subDays(hoje, 29)), to: custom?.to ?? f(hoje) };
-  }
-}
 
 // ── Linha crua da view ───────────────────────────────────────────────────────
 
@@ -213,8 +190,7 @@ export function useMetaAdsContas() {
   });
 }
 
-export function useMetaAds(period: MetaPeriod, custom?: MetaCustom, actId?: string) {
-  const { from, to } = rangeDoPeriodo(period, custom);
+export function useMetaAds({ from, to }: MetaRange, actId?: string) {
 
   return useQuery({
     queryKey: ["meta-ads", "insights", from, to, actId ?? "todas"],
@@ -289,8 +265,7 @@ export interface MetaPainel {
  * ⚠️ `null` quando a função ainda não existe (front antes do SQL): as seções
  * novas somem e o resto da tela segue igual — ausência não derruba a página.
  */
-export function useMetaAdsPainel(period: MetaPeriod, actId?: string) {
-  const { from, to } = rangeDoPeriodo(period);
+export function useMetaAdsPainel({ from, to }: MetaRange, actId?: string) {
   return useQuery({
     queryKey: ["meta-ads", "painel", from, to, actId ?? "todas"],
     staleTime: 2 * 60 * 1000,
@@ -373,8 +348,7 @@ export interface MetaSegmento extends Brutos { chave1: string; chave2: string }
 export type MetaSegmentos = Partial<Record<"idade_genero" | "posicionamento" | "regiao", MetaSegmento[]>>;
 
 /** Idade × gênero, posicionamento e região — agregados no banco. */
-export function useMetaSegmentos(period: MetaPeriod, actId?: string) {
-  const { from, to } = rangeDoPeriodo(period);
+export function useMetaSegmentos({ from, to }: MetaRange, actId?: string) {
   return useQuery({
     queryKey: ["meta-ads", "segmentos", from, to, actId ?? "todas"],
     staleTime: 2 * 60 * 1000,
