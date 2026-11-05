@@ -5,7 +5,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import { useAuth } from "@/contexts/AuthContext";
-import { useParamUrl } from "@carbo/shell";
+import { useParamUrl, intervaloDoAtalho, type AtalhoPeriodo } from "@carbo/shell";
+import { PeriodoFiltro, type Periodo } from "@/components/ui/PeriodoFiltro";
 import { useAllProfiles } from "@/hooks/useBugReports";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -35,10 +36,21 @@ interface TimeRow {
   triagem_p50_horas: number | null; firmeza_pct: number | null; fila_envelhecida: number;
 }
 
-const PERIODOS = [
-  { dias: 30, label: "30 dias" },
-  { dias: 90, label: "90 dias" },
-] as const;
+// Período = PAR de datas (`?de=&ate=`, as duas pontas inclusivas). Sem nada na
+// URL, os últimos 90 dias, como sempre foi. ⚠️ O `?dias=30|90` antigo continua
+// LIDO (link mandado antes do seletor único).
+const PADRAO: AtalhoPeriodo = "90d";
+const DIAS_ANTIGO: Record<string, AtalhoPeriodo> = { "30": "30d", "90": "90d" };
+const DIA = /^\d{4}-\d{2}-\d{2}$/;
+
+/** As pontas que a RPC recebe: início do 1º dia e início do dia SEGUINTE ao
+ *  último (o `p_to` é exclusivo, `created_at < p_to`), no dia LOCAL. */
+function instantes(p: Periodo) {
+  const ini = new Date(`${p.from}T00:00:00`);
+  const fim = new Date(`${p.to}T00:00:00`);
+  fim.setDate(fim.getDate() + 1);
+  return { p_from: ini.toISOString(), p_to: fim.toISOString() };
+}
 
 const dur = (min: number | null) => {
   if (min == null) return "—";
@@ -48,27 +60,21 @@ const dur = (min: number | null) => {
 };
 const horas = (h: number | null) => (h == null ? "—" : h < 24 ? `${h.toFixed(1)}h` : `${(h / 24).toFixed(1)}d`);
 
-function useRanking(dias: number) {
+function useRanking(p: Periodo) {
   return useQuery({
-    queryKey: ["ti_ranking", dias],
+    queryKey: ["ti_ranking", p.from, p.to],
     queryFn: async (): Promise<RankRow[]> => {
-      const from = new Date(Date.now() - dias * 86_400_000).toISOString();
-      const { data, error } = await (supabase as any).rpc("carbo_ti_ranking", {
-        p_from: from, p_to: new Date().toISOString(),
-      });
+      const { data, error } = await (supabase as any).rpc("carbo_ti_ranking", instantes(p));
       if (error) throw error;
       return (data ?? []) as RankRow[];
     },
   });
 }
-function useTimeMetrics(dias: number) {
+function useTimeMetrics(p: Periodo) {
   return useQuery({
-    queryKey: ["ti_time", dias],
+    queryKey: ["ti_time", p.from, p.to],
     queryFn: async (): Promise<TimeRow | null> => {
-      const from = new Date(Date.now() - dias * 86_400_000).toISOString();
-      const { data, error } = await (supabase as any).rpc("carbo_ti_time", {
-        p_from: from, p_to: new Date().toISOString(),
-      });
+      const { data, error } = await (supabase as any).rpc("carbo_ti_time", instantes(p));
       if (error) throw error;
       return ((data ?? [])[0] ?? null) as TimeRow | null;
     },
@@ -77,14 +83,27 @@ function useTimeMetrics(dias: number) {
 
 export function RankingTI() {
   const { user } = useAuth();
-  // Período na URL (`?dias=30`): F5 não volta aos 90 dias calado. Valor fora
-  // da lista (link editado à mão) cai no padrão, nunca numa janela inventada.
-  const [diasUrl, setDiasUrl] = useParamUrl("dias", "90");
-  const dias = PERIODOS.some((p) => String(p.dias) === diasUrl) ? Number(diasUrl) : 90;
-  const setDias = (d: number) => setDiasUrl(String(d));
+  // Período na URL (`?de=&ate=`): F5 não volta aos 90 dias calado. Data
+  // inválida (link editado à mão) cai no padrão, nunca numa janela inventada.
+  const [diasUrl, setDiasUrl] = useParamUrl("dias", "", { replace: true });
+  const [deUrl, setDe] = useParamUrl("de", "", { replace: true });
+  const [ateUrl, setAte] = useParamUrl("ate", "", { replace: true });
+  const periodo = useMemo<Periodo>(() => (
+    DIA.test(deUrl) && DIA.test(ateUrl)
+      ? (deUrl <= ateUrl ? { from: deUrl, to: ateUrl } : { from: ateUrl, to: deUrl })
+      : intervaloDoAtalho(DIAS_ANTIGO[diasUrl] ?? PADRAO)
+  ), [deUrl, ateUrl, diasUrl]);
+  // O padrão NÃO vai para a URL: o endereço limpo continua sendo "90 dias até hoje".
+  const trocarPeriodo = (p: Periodo) => {
+    const padrao = intervaloDoAtalho(PADRAO);
+    const ehPadrao = p.from === padrao.from && p.to === padrao.to;
+    setDiasUrl(null);
+    setDe(ehPadrao ? null : p.from);
+    setAte(ehPadrao ? null : p.to);
+  };
   const [comoOpen, setComoOpen] = useState(false);
-  const { data: linhas = [], isLoading } = useRanking(dias);
-  const { data: time } = useTimeMetrics(dias);
+  const { data: linhas = [], isLoading } = useRanking(periodo);
+  const { data: time } = useTimeMetrics(periodo);
   const { data: dir = [] } = useAllProfiles();
 
   const avatarOf = (id: string) => dir.find((x) => x.id === id)?.avatar_url ?? null;
@@ -132,15 +151,7 @@ export function RankingTI() {
             <Trophy className="h-4 w-4 text-carbo-green" /> Time de TI
           </h3>
           <div className="flex items-center gap-2">
-            <div className="inline-flex rounded-lg bg-muted p-0.5">
-              {PERIODOS.map((p) => (
-                <button key={p.dias} onClick={() => setDias(p.dias)}
-                  className={`rounded-md px-2.5 py-1 text-xs font-medium transition-all ${
-                    dias === p.dias ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
-                  {p.label}
-                </button>
-              ))}
-            </div>
+            <PeriodoFiltro value={periodo} onChange={trocarPeriodo} longos disableFuture />
             <button onClick={() => setComoOpen((o) => !o)}
               className="text-muted-foreground hover:text-foreground p-1" title="Como é calculado">
               <Info className="h-4 w-4" />

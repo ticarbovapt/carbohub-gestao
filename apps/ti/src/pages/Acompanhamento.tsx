@@ -20,15 +20,15 @@ import {
 import { useVendedoresDir } from "@/hooks/useVendedoresDir";
 import { LeadPainel } from "@/components/comercial/LeadPainel";
 import { funilNome, etapaNome } from "@/lib/funis";
-import { useParamUrl } from "@carbo/shell";
+import { useParamUrl, intervaloDoAtalho, type AtalhoPeriodo } from "@carbo/shell";
+import { PeriodoFiltro, type Periodo } from "@/components/ui/PeriodoFiltro";
 
-const PERIODOS = [
-  { dias: 7, label: "7 dias" },
-  { dias: 30, label: "30 dias" },
-  { dias: 90, label: "90 dias" },
-];
-
-const iso = (d: Date) => d.toISOString().slice(0, 10);
+// Período = PAR de datas (`?de=&ate=`, pontas inclusivas — é o que a RPC
+// recebe). Sem nada na URL, os últimos 30 dias, como sempre foi. ⚠️ O
+// `?dias=7|30|90` antigo continua LIDO (link mandado antes do seletor único).
+const PADRAO: AtalhoPeriodo = "30d";
+const DIAS_ANTIGO: Record<string, AtalhoPeriodo> = { "7": "7d", "30": "30d", "90": "90d" };
+const DIA = /^\d{4}-\d{2}-\d{2}$/;
 // Data-só é parseada como UTC por new Date("2026-07-30") e volta um dia no
 // fuso do Brasil. Montamos a data local componente a componente.
 const brDate = (s: string) => {
@@ -37,12 +37,25 @@ const brDate = (s: string) => {
 };
 
 export default function Acompanhamento() {
-  // Período, vendedor e o card aberto na URL (`?dias=7&vendedor=<id>&lead=<id>`):
+  // Período, vendedor e o card aberto na URL (`?de=&ate=&vendedor=<id>&lead=<id>`):
   // F5 e link mandado ao gestor abrem a MESMA leitura, com o card aberto.
-  // Período fora da lista (link editado) cai no padrão de 30 dias.
-  const [diasUrl, setDiasUrl] = useParamUrl("dias", "30");
-  const dias = PERIODOS.some((p) => String(p.dias) === diasUrl) ? Number(diasUrl) : 30;
-  const setDias = (d: number) => setDiasUrl(String(d));
+  // Data inválida (link editado) cai no padrão de 30 dias.
+  const [diasUrl, setDiasUrl] = useParamUrl("dias", "", { replace: true });
+  const [deUrl, setDe] = useParamUrl("de", "", { replace: true });
+  const [ateUrl, setAte] = useParamUrl("ate", "", { replace: true });
+  const periodo = useMemo<Periodo>(() => (
+    DIA.test(deUrl) && DIA.test(ateUrl)
+      ? (deUrl <= ateUrl ? { from: deUrl, to: ateUrl } : { from: ateUrl, to: deUrl })
+      : intervaloDoAtalho(DIAS_ANTIGO[diasUrl] ?? PADRAO)
+  ), [deUrl, ateUrl, diasUrl]);
+  // O padrão NÃO vai para a URL: o endereço limpo continua sendo "30 dias até hoje".
+  const trocarPeriodo = (p: Periodo) => {
+    const padrao = intervaloDoAtalho(PADRAO);
+    const ehPadrao = p.from === padrao.from && p.to === padrao.to;
+    setDiasUrl(null);
+    setDe(ehPadrao ? null : p.from);
+    setAte(ehPadrao ? null : p.to);
+  };
   const [vendedor, setVendedor] = useParamUrl("vendedor", "");
   const [slaAberto, setSlaAberto] = useState(false);
   // Card aberto no painel espelhado. Fica DENTRO do Admin, ao vivo: o gestor lê
@@ -50,12 +63,7 @@ export default function Acompanhamento() {
   const [painelUrl, setPainelId] = useParamUrl("lead", "");
   const painelId = painelUrl || null;
 
-  const { desde, ate } = useMemo(() => {
-    const hoje = new Date();
-    const ini = new Date();
-    ini.setDate(hoje.getDate() - (dias - 1));
-    return { desde: iso(ini), ate: iso(hoje) };
-  }, [dias]);
+  const { from: desde, to: ate } = periodo;
 
   const { data, isLoading, error } = useAcompanhamento(desde, ate, vendedor || null);
   const { data: dir = [] } = useVendedoresDir();
@@ -73,9 +81,34 @@ export default function Acompanhamento() {
   const avisoTrilha = desde < TRILHA_INICIO;
   const avisoLacuna = DIAS_SUBCONTADOS.some((d) => d >= desde && d <= ate);
 
+  // ⚠️ O cabeçalho (com o seletor) fica de pé no erro: a RPC recusa intervalo
+  // de mais de 366 dias, e sem o seletor não haveria como sair dali pela tela.
+  const cabecalho = (
+    <CarboPageHeader
+      title="Acompanhamento"
+      icon={Activity}
+      actions={
+        <div className="flex flex-wrap items-center gap-2">
+          <PeriodoFiltro value={periodo} onChange={trocarPeriodo} longos disableFuture />
+          <select
+            className="h-8 rounded-md border border-input bg-background px-2 text-xs max-w-[180px]"
+            value={vendedor} onChange={(e) => setVendedor(e.target.value)}
+          >
+            <option value="">Todos os vendedores</option>
+            {dir.map((v) => <option key={v.id} value={v.id}>{v.full_name ?? v.id}</option>)}
+          </select>
+          <Button variant="outline" size="sm" onClick={() => setSlaAberto(true)}>
+            <Settings2 className="h-4 w-4 mr-1.5" /> Prazos
+          </Button>
+        </div>
+      }
+    />
+  );
+
   if (error) {
     return (
-      <div className="p-4 sm:p-6">
+      <div className="p-4 sm:p-6 space-y-4">
+        {cabecalho}
         <CarboCard padding="none">
           <CarboCardContent className="p-6 flex items-start gap-3">
             <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
@@ -85,40 +118,14 @@ export default function Acompanhamento() {
             </div>
           </CarboCardContent>
         </CarboCard>
+        <SlaDialog open={slaAberto} onClose={() => setSlaAberto(false)} />
       </div>
     );
   }
 
   return (
     <div className="p-4 sm:p-6 space-y-4">
-      <CarboPageHeader
-        title="Acompanhamento"
-        icon={Activity}
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            {PERIODOS.map((p) => (
-              <Button
-                key={p.dias}
-                variant={dias === p.dias ? "default" : "outline"}
-                size="sm"
-                onClick={() => setDias(p.dias)}
-              >
-                {p.label}
-              </Button>
-            ))}
-            <select
-              className="h-8 rounded-md border border-input bg-background px-2 text-xs max-w-[180px]"
-              value={vendedor} onChange={(e) => setVendedor(e.target.value)}
-            >
-              <option value="">Todos os vendedores</option>
-              {dir.map((v) => <option key={v.id} value={v.id}>{v.full_name ?? v.id}</option>)}
-            </select>
-            <Button variant="outline" size="sm" onClick={() => setSlaAberto(true)}>
-              <Settings2 className="h-4 w-4 mr-1.5" /> Prazos
-            </Button>
-          </div>
-        }
-      />
+      {cabecalho}
 
       {(avisoTrilha || avisoLacuna) && (
         <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 flex items-start gap-2.5">

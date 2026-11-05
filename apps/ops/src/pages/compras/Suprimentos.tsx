@@ -7,7 +7,9 @@ import { CarboEmptyState } from "@/components/ui/carbo-empty-state";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MlFullPainel } from "@/components/suprimentos/MlFullPainel";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PeriodoFiltro, atalhosDoFiltro, type Periodo } from "@/components/ui/PeriodoFiltro";
+import { intervaloDoAtalho, detectarAtalho, rotuloDoPeriodo } from "@carbo/shell";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -116,7 +118,50 @@ const ORIGEM_LABEL: Record<string, string> = {
   producao: "Produção",
 };
 
-const PERIODOS = [{ v: "7d", label: "Últimos 7 dias" }, { v: "30d", label: "Últimos 30 dias" }, { v: "mes", label: "Este mês" }];
+// ── Período: o seletor ÚNICO do sistema (`PeriodoFiltro`) ─────────────────
+// Na URL ele é o PAR de datas (`?de=&ate=`, as duas pontas inclusivas). O
+// `?periodo=` antigo continua LIDO — link velho abre o mesmo recorte — e o
+// canonizador o troca pelo par. O localStorage guarda o CÓDIGO (relativo:
+// "7d" amanhã ainda é "7 dias até hoje"), no vocabulário de sempre:
+//
+//   7d · 30d · mes (= este mês, até hoje) · hoje · ontem · AAAA-MM · intervalo + de/ate
+//
+// ⚠️ Aqui "mes" é o mês CORRENTE (o nome antigo), não o "Mês fechado…" do
+// seletor — mudar o significado mudaria o que um link velho mostra.
+const PERIODO_PADRAO = "7d";
+const DIA = /^\d{4}-\d{2}-\d{2}$/;
+const MES = /^\d{4}-(0[1-9]|1[0-2])$/;
+// ⚠️ Data de período é conferida ANTES de virar `Date`. O campo de data do
+// Chrome deixava digitar ano de 5 dígitos ("20261-10-05"); `new Date()`
+// devolvia Invalid Date e o `toISOString()` das movimentações derrubava a TELA
+// INTEIRA — tela preta, em TODA visita seguinte, porque o valor ficava guardado
+// no navegador (06/10/2026). Data inválida é tratada como ausente.
+const dataValida = (v: string) => DIA.test(v) && !Number.isNaN(new Date(`${v}T00:00:00`).getTime());
+const RELATIVOS: Record<string, Parameters<typeof intervaloDoAtalho>[0]> = {
+  "7d": "7d", "30d": "30d", mes: "month", hoje: "today", ontem: "yesterday",
+};
+/** Código (URL antiga ou localStorage) → par de datas. Inválido = null. */
+function periodoDoCodigo(cod: string, de: string, ate: string): Periodo | null {
+  const c = cod === "custom" ? "intervalo" : cod; // "custom" = nome antigo do intervalo (até 29/10/2026)
+  if (RELATIVOS[c]) return intervaloDoAtalho(RELATIVOS[c]);
+  if (MES.test(c)) return intervaloDoAtalho("mes", c);
+  if (c === "intervalo") {
+    const f = dataValida(de) ? de : "", t = dataValida(ate) ? ate : "";
+    if (!f && !t) return null;
+    // Intervalo pela metade (link antigo): a ponta que falta vira a outra.
+    const a = f || t, b = t || f;
+    return a <= b ? { from: a, to: b } : { from: b, to: a };
+  }
+  return null;
+}
+/** Par de datas → código, para o localStorage. */
+function codigoDoPeriodo(p: Periodo): { cod: string; de: string; ate: string } {
+  const { atalho, mes } = detectarAtalho(p, atalhosDoFiltro());
+  const cod = ({ "7d": "7d", "30d": "30d", month: "mes", today: "hoje", yesterday: "ontem" } as Record<string, string>)[atalho];
+  if (cod) return { cod, de: "", ate: "" };
+  if (atalho === "mes") return { cod: mes, de: "", ate: "" };
+  return { cod: "intervalo", de: p.from, ate: p.to };
+}
 const fmtDate = (iso: string) => (iso ? new Date(iso).toLocaleDateString("pt-BR") : "—");
 
 
@@ -140,7 +185,8 @@ export default function Suprimentos() {
   //
   // Hub e aba foram para o caminho porque dizem O QUE se está olhando. O
   // período diz COMO se está filtrando, e filtro no repo mora em query string
-  // (OSBoard, Pager). Daí `?periodo=`, não um terceiro segmento de caminho.
+  // (OSBoard, Pager). Daí `?de=&ate=` (era `?periodo=`), não um terceiro
+  // segmento de caminho.
   //
   // O localStorage NÃO virou um segundo dono: ele só fornece o valor inicial
   // quando a URL não diz nada. A partir daí quem manda é a URL, e o efeito
@@ -152,28 +198,17 @@ export default function Suprimentos() {
   // dashboard: quem abre /suprimentos puro cai no período que usava antes.
   const [searchParams, setSearchParams] = useSearchParams();
   const leiaLocal = (k: string) => { try { return localStorage.getItem(k) || ""; } catch { return ""; } };
-  // "YYYY-MM" é valor válido (mês específico do seletor), por isso o regex.
-  const periodoValido = (v: string) => ["7d", "30d", "mes", "intervalo"].includes(v) || /^\d{4}-\d{2}$/.test(v);
-  // ⚠️ "custom" é o nome ANTIGO do intervalo livre (até 29/10/2026, quando o
-  // valor passou a ser português). Link velho e localStorage antigo ainda o
-  // trazem: lido como "intervalo", e o canonizador regrava a URL.
-  const semNomeAntigo = (v: string) => (v === "custom" ? "intervalo" : v);
-  const pUrlCru = searchParams.get("periodo") ?? "";
-  const pUrl = semNomeAntigo(pUrlCru);
-  const pLocal = semNomeAntigo(leiaLocal("ops_sup_periodo"));
-  const periodo = periodoValido(pUrl) ? pUrl : (periodoValido(pLocal) ? pLocal : "7d");
-  // ⚠️ Data de período é conferida ANTES de virar `Date`. O campo de data do
-  // Chrome deixa digitar ano de 5 dígitos ("20261-10-05"); isso ia para a URL E
-  // para o localStorage, `new Date()` devolvia Invalid Date e o `toISOString()`
-  // das movimentações derrubava a TELA INTEIRA — tela preta, só para quem
-  // digitou, em TODA visita seguinte, porque o valor ficava guardado no
-  // navegador dele (06/10/2026, um usuário do Ops sem conseguir abrir
-  // Suprimentos). Data inválida agora é tratada como ausente.
-  const dataValida = (v: string) =>
-    /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(new Date(`${v}T00:00:00`).getTime());
-  const soValida = (v: string) => (dataValida(v) ? v : "");
-  const customFrom = soValida(searchParams.get("de") ?? (pUrl ? "" : leiaLocal("ops_sup_from")));
-  const customTo = soValida(searchParams.get("ate") ?? (pUrl ? "" : leiaLocal("ops_sup_to")));
+  const deUrl = searchParams.get("de") ?? "", ateUrl = searchParams.get("ate") ?? "";
+  const periodoUrlAntigo = searchParams.get("periodo") ?? "";
+  // A URL manda: `?periodo=` antigo (que não seja intervalo) → o par de
+  // `de`/`ate` → a preferência guardada → 7 dias.
+  const periodoDaUrl =
+    (periodoUrlAntigo && periodoUrlAntigo !== "intervalo" && periodoUrlAntigo !== "custom"
+      ? periodoDoCodigo(periodoUrlAntigo, "", "") : null)
+    ?? periodoDoCodigo("intervalo", deUrl, ateUrl);
+  const periodo: Periodo = periodoDaUrl
+    ?? periodoDoCodigo(leiaLocal("ops_sup_periodo"), leiaLocal("ops_sup_from"), leiaLocal("ops_sup_to"))
+    ?? intervaloDoAtalho(PERIODO_PADRAO);
   // ── Filtros da aba Movimentações ────────────────────────────────────────
   // Na URL, como o período: o link copiado da barra leva o recorte junto, e o
   // F5 não devolve a lista inteira. Sem `localStorage` de propósito — período
@@ -188,28 +223,21 @@ export default function Suprimentos() {
     setSearchParams(sp, { replace: true });
   };
 
-  // Escreve na URL (histórico normal: o Voltar desfaz a troca de período) e
+  // Escreve o par na URL (com `replace`, como os outros filtros da tela) e
   // lembra a preferência para a próxima sessão.
-  const aplicaPeriodo = (next: { periodo?: string; de?: string; ate?: string }) => {
-    const p = next.periodo ?? periodo;
-    const de = next.de ?? customFrom;
-    const ate = next.ate ?? customTo;
-    const sp = new URLSearchParams(searchParams);
-    sp.set("periodo", p);
-    // `de`/`ate` só existem no modo custom — deixá-los na URL fora dele seria
-    // ruído que ninguém lê e que confunde quem tenta editar o endereço à mão.
-    if (p === "intervalo") { de ? sp.set("de", de) : sp.delete("de"); ate ? sp.set("ate", ate) : sp.delete("ate"); }
-    else { sp.delete("de"); sp.delete("ate"); }
-    setSearchParams(sp);
+  const trocarPeriodo = (p: Periodo) => {
+    const sp = new URLSearchParams(window.location.search);
+    sp.delete("periodo");
+    sp.set("de", p.from);
+    sp.set("ate", p.to);
+    setSearchParams(sp, { replace: true });
+    const c = codigoDoPeriodo(p);
     try {
-      localStorage.setItem("ops_sup_periodo", p);
-      localStorage.setItem("ops_sup_from", p === "intervalo" ? de : "");
-      localStorage.setItem("ops_sup_to", p === "intervalo" ? ate : "");
+      localStorage.setItem("ops_sup_periodo", c.cod);
+      localStorage.setItem("ops_sup_from", c.de);
+      localStorage.setItem("ops_sup_to", c.ate);
     } catch { /* ignora */ }
   };
-  const setPeriodo = (v: string) => aplicaPeriodo({ periodo: v });
-  const setCustomFrom = (v: string) => aplicaPeriodo({ periodo: "intervalo", de: v });
-  const setCustomTo = (v: string) => aplicaPeriodo({ periodo: "intervalo", ate: v });
 
   // Canoniza: /suprimentos puro, hub inexistente ou combinação impossível
   // viram o endereço válido. `replace` para não empilhar histórico — senão o
@@ -219,33 +247,20 @@ export default function Suprimentos() {
       navigate(`/suprimentos/${slugOf(hub)}/${activeTab}?${searchParams}`, { replace: true });
       return;
     }
-    // Período ausente ou inválido na URL: grava o efetivo, para que o endereço
-    // copiado da barra já leve o filtro junto.
-    if (pUrlCru !== periodo) {
+    // Período ausente, inválido ou no formato antigo (`?periodo=`): grava o
+    // par efetivo, para que o endereço copiado da barra já leve o filtro junto.
+    if (periodoUrlAntigo || deUrl !== periodo.from || ateUrl !== periodo.to) {
       const sp = new URLSearchParams(searchParams);
-      sp.set("periodo", periodo);
-      if (periodo === "intervalo") {
-        if (customFrom) sp.set("de", customFrom);
-        if (customTo) sp.set("ate", customTo);
-      }
+      sp.delete("periodo");
+      sp.set("de", periodo.from);
+      sp.set("ate", periodo.to);
       setSearchParams(sp, { replace: true });
     }
-  }, [hubSlug, aba, hub, activeTab, navigate, pUrlCru, periodo, customFrom, customTo, searchParams, setSearchParams]);
+  }, [hubSlug, aba, hub, activeTab, navigate, periodoUrlAntigo, deUrl, ateUrl, periodo.from, periodo.to, searchParams, setSearchParams]);
   const [envioOpen, setEnvioOpen] = useState(false);
   const [remessaConfirm, setRemessaConfirm] = useState<{ action: "confirmar" | "estornar"; id: string; produto: string } | null>(null);
 
-  // Últimos 12 meses para o seletor por mês.
-  const monthOptions = useMemo(() => {
-    const now = new Date();
-    return Array.from({ length: 12 }, (_, i) => {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const v = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      const label = d.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
-      return { v, label: label.charAt(0).toUpperCase() + label.slice(1) };
-    });
-  }, []);
-  const periodLabel = periodo === "7d" ? "7 dias" : periodo === "30d" ? "30 dias" : periodo === "mes" ? "este mês"
-    : periodo === "intervalo" ? "período" : (monthOptions.find((m) => m.v === periodo)?.label ?? "período");
+  const periodLabel = rotuloDoPeriodo(periodo, atalhosDoFiltro());
   const isRN = hub === "rn", isSP = hub === "sp", isVendas = hub === "spv", isBling = hub === "bling", isEsc = hub === "esc", isMlFull = hub === "mlfull";
   const stockHub = HUBS.find((h) => h.id === hub) ?? HUBS[0];
 
@@ -276,22 +291,12 @@ export default function Suprimentos() {
       .map((p) => ({ name: p.name, qty: p.hubs[stockId] ?? 0, unit: p.stock_unit || "un" })),
     [products, stockId],
   );
-  // Intervalo [from, to] do período escolhido (rápido, mês específico ou custom).
-  const rangeBruto = useMemo(() => {
-    const now = new Date();
-    if (periodo === "7d") { const f = new Date(); f.setDate(f.getDate() - 7); return { from: f, to: now }; }
-    if (periodo === "30d") { const f = new Date(); f.setDate(f.getDate() - 30); return { from: f, to: now }; }
-    if (periodo === "mes") { return { from: new Date(now.getFullYear(), now.getMonth(), 1), to: now }; }
-    if (periodo === "intervalo") {
-      const f = customFrom ? new Date(customFrom + "T00:00:00") : new Date(0);
-      const t = customTo ? new Date(customTo + "T23:59:59") : now;
-      // Se o usuário inverter (de > até), troca em vez de mostrar vazio.
-      return f > t ? { from: t, to: f } : { from: f, to: t };
-    }
-    const [y, mth] = periodo.split("-").map(Number);
-    if (y && mth) return { from: new Date(y, mth - 1, 1), to: new Date(y, mth, 0, 23, 59, 59) };
-    const f = new Date(); f.setDate(f.getDate() - 7); return { from: f, to: now };
-  }, [periodo, customFrom, customTo]);
+  // Instantes [from, to] do período: do início do 1º dia ao fim do último
+  // (dia LOCAL).
+  const rangeBruto = useMemo(() => ({
+    from: new Date(`${periodo.from}T00:00:00`),
+    to: new Date(`${periodo.to}T23:59:59.999`),
+  }), [periodo.from, periodo.to]);
   // ⚠️ A última rede: se ainda assim sair data inválida (um mês "2026-13"
   // passa no regex do seletor), a tela cai nos 7 dias em vez de cair inteira.
   // Um filtro errado é corrigível na tela; uma tela preta, não.
@@ -299,8 +304,8 @@ export default function Suprimentos() {
     if (!Number.isNaN(rangeBruto.from.getTime()) && !Number.isNaN(rangeBruto.to.getTime())) {
       return rangeBruto;
     }
-    const f = new Date(); f.setDate(f.getDate() - 7);
-    return { from: f, to: new Date() };
+    const p = intervaloDoAtalho(PERIODO_PADRAO);
+    return { from: new Date(`${p.from}T00:00:00`), to: new Date(`${p.to}T23:59:59.999`) };
   }, [rangeBruto]);
   // Movimentações do hub no período — hub e janela filtrados NO SERVIDOR.
   // Antes vinham as 300 mais recentes de todos os hubs e a tela recortava
@@ -447,27 +452,7 @@ export default function Suprimentos() {
                   que o controle já era este. Controle que governa duas coisas
                   e anuncia uma só é controle que ninguém usa para a segunda. */}
               <span className="text-xs text-muted-foreground">Período:</span>
-              {periodo === "intervalo" && (
-                <div className="flex items-center gap-1.5">
-                  <Input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className="h-7 w-[140px] text-xs" />
-                  <span className="text-xs text-muted-foreground">até</span>
-                  <Input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className="h-7 w-[140px] text-xs" />
-                </div>
-              )}
-              <Select value={periodo} onValueChange={setPeriodo}>
-                <SelectTrigger className="w-[170px] h-7 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectLabel>Rápido</SelectLabel>
-                    {PERIODOS.map((p) => <SelectItem key={p.v} value={p.v}>{p.label}</SelectItem>)}
-                    <SelectItem value="intervalo">Personalizado…</SelectItem>
-                  </SelectGroup>
-                  <SelectGroup>
-                    <SelectLabel>Por mês</SelectLabel>
-                    {monthOptions.map((m) => <SelectItem key={m.v} value={m.v}>{m.label}</SelectItem>)}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
+              <PeriodoFiltro value={periodo} onChange={trocarPeriodo} disableFuture className="justify-end" />
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
               <CarboCard variant="kpi" padding="sm"><CarboCardContent><div className="flex items-center gap-2 mb-1"><Layers className="h-4 w-4 text-carbo-blue" /><span className="text-xs text-muted-foreground">Total Produtos</span></div><p className="text-2xl font-bold">{kpis.total}</p></CarboCardContent></CarboCard>
