@@ -26,6 +26,7 @@ export function ComercialFilterBar({ filters, onChange, className = "" }: {
             data crus. ⚠️ O que sai daqui continua sendo o PAR `de`/`ate`: a
             URL, os "Ver pedidos →" e a tela de Dados Comerciais não mudam. */}
         <PeriodoFiltro
+          comTodo
           className="w-full sm:w-auto"
           value={{ from: filters.from, to: filters.to }}
           onChange={(p) => set({ from: p.from, to: p.to })}

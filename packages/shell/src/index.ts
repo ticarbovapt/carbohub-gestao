@@ -41,3 +41,7 @@ export {
 // parte e só é baixado por quem gera a proposta.
 export const carregarMarcaCarbovapt = () => import("./carbovaptMarca");
 export { QuadroRolavel } from "./QuadroRolavel";
+export {
+  intervaloDoAtalho, detectarAtalho, mesesParaEscolher, diasDoPeriodo, periodoAnterior, rotuloDoPeriodo, diaIso,
+} from "./periodo";
+export type { Periodo, AtalhoPeriodo } from "./periodo";

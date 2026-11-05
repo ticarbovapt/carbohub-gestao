@@ -7,7 +7,7 @@ import {
   PhoneOff,
 } from "lucide-react";
 import { toast } from "sonner";
-import { QuadroRolavel, useParamUrl } from "@carbo/shell";
+import { QuadroRolavel, useParamUrl, intervaloDoAtalho, type AtalhoPeriodo } from "@carbo/shell";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Button } from "@/components/ui/button";
@@ -26,7 +26,7 @@ import {
   type CarrinhoRow, type ColunaCarrinho,
 } from "@/hooks/useEsteiraOnline";
 import { useTemplatesMsg, ORDEM_ETAPAS, type EnvioMsg, type EtapaMsg } from "@/hooks/useMensagensCliente";
-import { DatePickerInput } from "@/components/ui/date-picker-input";
+import { PeriodoFiltro, type Periodo } from "@/components/ui/PeriodoFiltro";
 
 /**
  * Esteira do On-line — quadro de acompanhamento da entrega.
@@ -1422,23 +1422,12 @@ function ColunasRecolhidas<T extends { total: number }>({ cols, porColuna, abert
 }
 
 export default function EsteiraOnline() {
-  /* ── Período: atalho OU intervalo livre ────────────────────────────────
+  /* ── Período: o seletor ÚNICO do sistema (`PeriodoFiltro`) ─────────────
    *
-   * Antes eram três opções fixas (7/30/90) para uma pergunta com infinitas
-   * respostas. "A primeira semana de julho" não cabia em nenhuma, e quem
-   * precisava disso não tinha saída dentro da tela.
-   *
-   * Os atalhos continuam porque são o uso comum e um clique bate dois campos
-   * de data. `periodo = 'intervalo'` revela as duas datas — que já são a verdade
-   * usada na consulta nos dois casos, então não existe "modo" nenhum por baixo:
-   * o atalho apenas PREENCHE as datas. Um caminho só, sem estado paralelo para
-   * divergir. */
-  const hojeISO = new Date().toISOString().slice(0, 10);
-  const menosDias = (n: number) => {
-    const d = new Date();
-    d.setDate(d.getDate() - n);
-    return d.toISOString().slice(0, 10);
-  };
+   * O período é o PAR de datas que vai à consulta (`?de=&ate=`). Sem nada na
+   * URL, os últimos 30 dias, como sempre foi. ⚠️ Os links antigos continuam
+   * valendo: `?periodo=7|30|90|180|365` vira o intervalo daquele atalho e
+   * `?periodo=intervalo&de=&ate=` vira as datas. */
   /* Três pipelines na mesma tela, e a ordem no seletor é a do tempo do cliente
    * ao contrário — de propósito, porque é a ordem de importância operacional.
    *
@@ -1458,7 +1447,7 @@ export default function EsteiraOnline() {
    *   ?quadro=recompra|carrinho        o quadro (ausente = da venda à entrega)
    *   ?pedido=<bling_id>               o pedido aberto
    *   ?busca= &canal= &aviso= &atencao=1
-   *   ?periodo=7|90|180|365|intervalo  (ausente = 30 dias) · ?de= &ate= no intervalo
+   *   ?de= &ate=                       o período (ausente = 30 dias; ?periodo= antigo ainda é lido)
    *
    * F5 e link mandado no chat abrem a MESMA tela — antes busca, canal, período
    * e filtros eram `useState` e o F5 devolvia tudo ao padrão. O padrão de cada
@@ -1479,21 +1468,18 @@ export default function EsteiraOnline() {
     mexe(n);
     setParams(n, { replace });
   };
-  const PERIODOS = ["7", "30", "90", "180", "365", "intervalo"];
-  const periodo = PERIODOS.includes(params.get("periodo") ?? "") ? params.get("periodo")! : "30";
+  const PERIODO_ANTIGO: Record<string, AtalhoPeriodo> = { "7": "7d", "30": "30d", "90": "90d", "180": "180d", "365": "365d" };
   const DIA = /^\d{4}-\d{2}-\d{2}$/;
   const deUrl = params.get("de") ?? "", ateUrl = params.get("ate") ?? "";
-  const de  = periodo === "intervalo" ? (DIA.test(deUrl) ? deUrl : menosDias(30)) : menosDias(Number(periodo));
-  const ate = periodo === "intervalo" && DIA.test(ateUrl) ? ateUrl : hojeISO;
-  const trocarPeriodo = (v: string) => gravar((n) => {
-    if (v === "30") n.delete("periodo"); else n.set("periodo", v);
-    // Ao abrir "Escolher datas…" os campos nascem com o intervalo que a tela
-    // JÁ mostrava (o atalho de antes), não vazios.
-    if (v === "intervalo") { n.set("de", de); n.set("ate", ate); }
-    else { n.delete("de"); n.delete("ate"); }
+  const { from: de, to: ate } = DIA.test(deUrl) && DIA.test(ateUrl)
+    ? (deUrl <= ateUrl ? { from: deUrl, to: ateUrl } : { from: ateUrl, to: deUrl })
+    : intervaloDoAtalho(PERIODO_ANTIGO[params.get("periodo") ?? ""] ?? "30d");
+  const trocarPeriodo = (p: Periodo) => gravar((n) => {
+    n.delete("periodo");
+    const padrao = intervaloDoAtalho("30d");
+    if (p.from === padrao.from && p.to === padrao.to) { n.delete("de"); n.delete("ate"); }
+    else { n.set("de", p.from); n.set("ate", p.to); }
   }, true);
-  const setDe  = (v: string) => gravar((n) => { if (v) n.set("de", v); }, true);
-  const setAte = (v: string) => gravar((n) => { if (v) n.set("ate", v); }, true);
   // ⚠️ Tudo com `replace`, como o quadro e o pedido aberto: o Voltar sai da
   // tela em vez de desfazer filtro por filtro (decisão desta tela, a mesma das
   // Vendas Online).
@@ -1908,26 +1894,7 @@ export default function EsteiraOnline() {
             {canais.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
           </SelectContent>
         </Select>
-        <Select value={periodo} onValueChange={trocarPeriodo}>
-          <SelectTrigger className="h-9 w-36"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="7">7 dias</SelectItem>
-            <SelectItem value="30">30 dias</SelectItem>
-            <SelectItem value="90">90 dias</SelectItem>
-            <SelectItem value="180">6 meses</SelectItem>
-            <SelectItem value="365">12 meses</SelectItem>
-            <SelectItem value="intervalo">Escolher datas…</SelectItem>
-          </SelectContent>
-        </Select>
-        {periodo === "intervalo" && (
-          <div className="flex items-center gap-1.5">
-            <DatePickerInput value={de} onChange={setDe} clearable={false}
-                             disableFuture className="h-9 w-36" />
-            <span className="text-xs text-muted-foreground">até</span>
-            <DatePickerInput value={ate} onChange={setAte} clearable={false}
-                             disableFuture className="h-9 w-36" />
-          </div>
-        )}
+        <PeriodoFiltro value={{ from: de, to: ate }} onChange={trocarPeriodo} longos disableFuture />
         {/* Filtro de aviso. Fica ao lado do de atraso porque responde a mesma
             pergunta — "o que está fora do trilho?" — só que do lado do cliente
             em vez do lado da entrega. */}
