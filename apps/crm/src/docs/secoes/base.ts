@@ -237,7 +237,7 @@ export const SECOES_BASE: Secao[] = [
       {
         print: { chave: "vendas", legenda: "Vendas e Orçamentos, visão do colaborador." },
         itens: [
-          { n: 1, titulo: "Período", texto: "Hoje, Ontem, Últimos 7 ou 30 dias, Este mês (até hoje), Mês fechado… (escolhe o mês ao lado) ou Por período… (abre as duas datas). Abre no mês corrente inteiro. A data que vale é a do faturamento." },
+          { n: 1, titulo: "Período", texto: "Hoje, Ontem, Últimos 7 ou 30 dias, Este mês (até hoje), Mês fechado… (escolhe o mês ao lado) ou Por período… (abre as duas datas). Abre no mês corrente inteiro (“Mês fechado…” com o mês atual). A data que vale é a do faturamento." },
           { n: 2, titulo: "Números do período", texto: "Total vendido, faturado, aguardando faturamento, vindo de meses anteriores, em orçamento e canceladas. Clique num número para filtrar a tabela por ele; clique de novo para tirar o filtro." },
           { n: 3, titulo: "Buscar", texto: "Procura pelo nome do cliente, cidade, CNPJ/CPF, IE, telefone, CEP, e-mail ou número do pedido, em todo o histórico (ignora o período)." },
           { n: 4, titulo: "Status", texto: "Orçamento, Cancelado ou a etapa do pedido (Nova Venda, Em Separação, Em Transporte, Entregue…)." },

@@ -19,7 +19,7 @@ export const SHOTS = [
     clip: (p) => [p.locator("main h1").first(), btn(/Hub Natal/)(p).locator(".."), cardProd("CarboZé 1 Litro")(p)], marcas: [
     [1, (p) => btn(/Hub Natal/)(p).locator("..")],
     [2, btn(/Registrar Envio/)],
-    [3, (p) => p.getByText("Período:", { exact: true }).locator("..")],
+    [3, (p) => p.getByRole("combobox").filter({ hasText: /^(Hoje|Ontem|Últimos|Este mês|Mês fechado|Por período)/ }).first().locator("..")],
     [4, (p) => p.getByText("Total Produtos").locator("xpath=ancestor::div[contains(@class,'grid')][1]")],
     [5, sel('[role="tablist"]')],
     [6, sel('input[placeholder="Buscar produto..."]')],
