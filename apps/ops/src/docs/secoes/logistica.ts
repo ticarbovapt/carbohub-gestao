@@ -16,7 +16,7 @@ export const SECOES_LOGISTICA: Secao[] = [
       colaborador: [
         "Vê os pedidos de todos os vendedores e move qualquer um de etapa.",
         "Entram no quadro as vendas lançadas pela tela Vender (no Sales ou aqui). Pedidos de loja on-line e pedidos que nasceram no Bling não entram. Venda só de serviço (descarbonização) também não: ela segue pela Ordem de Serviço.",
-        "Pedidos entregues e cancelados aparecem só dos últimos 30 dias, a não ser que você mude o filtro “Finalizados”.",
+        "Pedidos entregues e cancelados aparecem só dos últimos 30 dias, a não ser que você mude o período “Entregues e cancelados”.",
         "O quadro se atualiza sozinho: quando alguém move um card, ele muda na sua tela também.",
       ],
       gestor: [
@@ -29,12 +29,11 @@ export const SECOES_LOGISTICA: Secao[] = [
         print: { chave: "rastreio", legenda: "Rastreio de venda com os pedidos em cada etapa." },
         itens: [
           { n: 1, titulo: "Rastreio de venda", texto: "A jornada das vendas manuais. Operações controla da Nova Venda até a Entrega." },
-          { n: 2, titulo: "Finalizados", texto: "Quantos dias de pedidos entregues e cancelados aparecem: últimos 30 dias, últimos 90 dias ou tudo. Os pedidos em andamento aparecem sempre, todos." },
-          { n: 3, titulo: "Finalizados ocultos", texto: "Avisa quantos entregues/cancelados ficaram fora do período escolhido. Clique para ver tudo." },
-          { n: 4, titulo: "Coluna = etapa", texto: "Cada coluna é uma etapa, na ordem em que o pedido anda. Role o quadro para o lado para ver as outras: são doze." },
-          { n: 5, titulo: "Quantidade", texto: "Quantos pedidos estão naquela etapa agora." },
-          { n: 6, titulo: "Card do pedido", texto: "Um pedido. Clique para abrir os detalhes; arraste para outra coluna para mudar a etapa." },
-          { n: 7, titulo: "Seletor de etapa", texto: "Outra forma de mudar a etapa, sem arrastar: escolha a nova etapa na lista. Arrastar e escolher passam pelas mesmas conferências (veja “Mudando de etapa”)." },
+          { n: 2, titulo: "Entregues e cancelados", texto: "O período das colunas Entregue e Cancelado, pela data em que o pedido chegou nelas: Todo o período, Hoje, Ontem, Últimos 7, 30 ou 90 dias, Últimos 6 ou 12 meses, Este mês (até hoje), Mês fechado… ou Por período…. O padrão é Últimos 30 dias. Não mexe nas outras colunas: os pedidos em andamento aparecem sempre, todos." },
+          { n: 3, titulo: "Coluna = etapa", texto: "Cada coluna é uma etapa, na ordem em que o pedido anda. Role o quadro para o lado para ver as outras: são doze." },
+          { n: 4, titulo: "Quantidade", texto: "Quantos pedidos estão naquela etapa agora." },
+          { n: 5, titulo: "Card do pedido", texto: "Um pedido. Clique para abrir os detalhes; arraste para outra coluna para mudar a etapa." },
+          { n: 6, titulo: "Seletor de etapa", texto: "Outra forma de mudar a etapa, sem arrastar: escolha a nova etapa na lista. Arrastar e escolher passam pelas mesmas conferências (veja “Mudando de etapa”)." },
         ],
       },
       {
@@ -64,7 +63,7 @@ export const SECOES_LOGISTICA: Secao[] = [
           { n: 3, titulo: "Caixa separada de bonificação", texto: "O pedido tem brinde. A bonificação sai em caixa separada e com nota própria (a nota de remessa em bonificação). Embale à parte, senão a nota não fecha com o volume." },
           { n: 4, titulo: "O que é o pedido", texto: "O primeiro produto e a quantidade; “+1” quer dizer que há mais itens (veja todos nos detalhes)." },
           { n: 5, titulo: "Número do pedido", texto: "O número da venda (começa com V). É o mesmo do Sales e do rodapé da nota fiscal." },
-          { n: 6, titulo: "Prazo de entrega", texto: "Quantos dias faltam para a entrega combinada com o cliente: em âmbar quando faltam 3 dias ou menos, em vermelho quando já passou (“2d atrasado”)." },
+          { n: 6, titulo: "Prazo de entrega", texto: "Quantos dias faltam para a entrega combinada com o cliente: em âmbar quando faltam 3 dias ou menos, em vermelho quando já passou (“2d atrasado”). Não aparece nos pedidos entregues e cancelados." },
           { n: 7, titulo: "NF de venda", texto: "A nota fiscal de venda. Clique para abrir o DANFE (o PDF da nota) e mandar com a carga. Se o PDF ainda não existir, abre o XML. O chip acompanha o card até a entrega, porque é depois dela que o cliente costuma pedir a nota." },
           { n: 8, titulo: "NF de bonificação", texto: "A nota de remessa do brinde. Clique para abrir o DANFE dela. As duas notas viajam juntas com a carga." },
           { n: 9, titulo: "Emitir etiqueta", texto: "Só aparece na etapa Emitir Etiqueta. Abre a emissão da etiqueta de transporte (veja abaixo). Em Etiqueta emitida o botão vira “Reimprimir etiqueta”." },

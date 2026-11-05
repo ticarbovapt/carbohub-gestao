@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { lerSemTeto, lerPorIdsSemTeto } from "@carbo/shell";
+import { lerSemTeto, lerPorIdsSemTeto, intervaloDoAtalho, type Periodo } from "@carbo/shell";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Pós-venda: jornada das VENDAS MANUAIS (carboze_orders sem external_ref — as
@@ -254,20 +254,25 @@ const TERMINAL_STAGES = ["entregue", "cancelado"];
 
 export interface PosVendaData {
   orders: PosVendaOrder[];
-  terminalShown: number;   // finalizados carregados (dentro da janela)
-  terminalTotal: number;   // finalizados no total (para saber quantos ficaram fora)
+  terminalShown: number;   // finalizados carregados (dentro do período)
 }
 
 /**
- * Vendas manuais para o rastreio. NUNCA trunca os ATIVOS (carrega todos); os
- * FINALIZADOS (entregue/cancelado) vêm por JANELA DE TEMPO (terminalDays), com
- * contagem real — assim o board fica leve sem esconder nada em silêncio.
+ * Vendas manuais para o rastreio. NUNCA recorta os ATIVOS (carrega todos); só
+ * os FINALIZADOS (entregue/cancelado) vêm pelo PERÍODO escolhido na tela (o
+ * seletor de período dos apps), pela data em que foram movidos (`updated_at`).
+ * Período vazio = todos os finalizados.
+ *
+ * ⚠️ Era `terminalDays` (30/90/"tudo") com `.limit(500)`: "Tudo" trazia os 500
+ * mais recentes e dizia que era tudo. Agora pagina sem teto (`lerSemTeto`).
  */
-export function usePosVendaOrders(terminalDays: number | "all" = 30) {
+export function usePosVendaOrders(finalizados: Periodo = intervaloDoAtalho("30d")) {
   return useQuery({
-    queryKey: ["ops", "pos-venda", terminalDays],
+    queryKey: ["ops", "pos-venda", finalizados.from, finalizados.to],
     queryFn: async (): Promise<PosVendaData> => {
-      const cutoff = terminalDays === "all" ? null : new Date(Date.now() - terminalDays * 86_400_000).toISOString();
+      // Dia LOCAL inteiro nas duas pontas (00:00 do início, 23:59:59 do fim).
+      const desde = finalizados.from ? new Date(`${finalizados.from}T00:00:00`).toISOString() : null;
+      const ate = finalizados.to ? new Date(`${finalizados.to}T23:59:59.999`).toISOString() : null;
       // Rastreio = vendas MANUAIS (Carbo Sales). Regra do external_ref:
       //  • sem external_ref → venda ainda no fluxo manual (aparece).
       //  • com external_ref (foi pro Bling p/ NF) → só aparece se for venda
@@ -287,13 +292,14 @@ export function usePosVendaOrders(terminalDays: number | "all" = 30) {
           .not("fulfillment_stage", "in", "(entregue,cancelado)")
           .order("created_at", { ascending: false }).order("id"))
           .then((data) => ({ data, error: null }), (error) => ({ data: null, error }));
-      // Finalizados: só dentro da janela, mais recentes primeiro.
-      const runTerminal = (cols: string) => {
-        let q = base(cols).in("fulfillment_stage", TERMINAL_STAGES)
-          .order("updated_at", { ascending: false }).limit(500);
-        if (cutoff) q = q.gte("updated_at", cutoff);
-        return q;
-      };
+      // Finalizados: só dentro do período, mais recentes primeiro — sem teto.
+      const runTerminal = (cols: string): Promise<{ data: any[] | null; error: any }> =>
+        lerSemTeto<any>(() => {
+          let q = base(cols).in("fulfillment_stage", TERMINAL_STAGES);
+          if (desde) q = q.gte("updated_at", desde);
+          if (ate) q = q.lte("updated_at", ate);
+          return q.order("updated_at", { ascending: false }).order("id");
+        }).then((data) => ({ data, error: null }), (error) => ({ data: null, error }));
 
       let act = await runActive(SELECT_COLS);
       let term = await runTerminal(SELECT_COLS);
@@ -316,16 +322,6 @@ export function usePosVendaOrders(terminalDays: number | "all" = 30) {
       act.data = (act.data || []).filter(notServiceOnly);
       term.data = (term.data || []).filter(notServiceOnly);
 
-      // Total de finalizados (para o "há mais N ocultos"). Só quando há janela.
-      let terminalTotal = (term.data || []).length;
-      if (cutoff) {
-        const cnt = await db.from("carboze_orders")
-          .select("*", { count: "exact", head: true })
-          .is("external_ref", null).or("status.is.null,status.neq.quote")
-          .in("fulfillment_stage", TERMINAL_STAGES);
-        terminalTotal = cnt.count ?? terminalTotal;
-      }
-
       const list = [...(act.data || []), ...(term.data || [])] as PosVendaOrder[];
 
       // Enriquece com a foto do vendedor (profiles.avatar_url).
@@ -335,7 +331,7 @@ export function usePosVendaOrders(terminalDays: number | "all" = 30) {
         const map = new Map((profs || []).map((p: any) => [p.id, p.avatar_url]));
         for (const o of list) o.vendedor_avatar = (o.vendedor_id && map.get(o.vendedor_id)) || null;
       }
-      return { orders: list, terminalShown: (term.data || []).length, terminalTotal };
+      return { orders: list, terminalShown: (term.data || []).length };
     },
     refetchInterval: 60_000,
   });

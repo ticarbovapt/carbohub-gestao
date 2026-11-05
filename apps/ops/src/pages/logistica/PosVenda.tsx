@@ -17,7 +17,8 @@ import {
   useEstoqueDoPedido, useOpsBySource, fetchNfFiles, type NfFiles,
   POSVENDA_STAGES, colunaDaEtapa, type FulfillmentStage, type PosVendaOrder,
 } from "@/hooks/usePosVenda";
-import { QuadroRolavel, useParamUrl } from "@carbo/shell";
+import { QuadroRolavel, useParamUrl, intervaloDoAtalho, type Periodo } from "@carbo/shell";
+import { PeriodoFiltro } from "@/components/ui/PeriodoFiltro";
 import { gerarEtiquetaPDF, type EtiquetaData } from "@/lib/etiquetaPdf";
 
 const brl = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
@@ -350,6 +351,10 @@ const CorpoDoCard = memo(function CorpoDoCard({ o, op, onStage, onEtiqueta }: {
   onStage: (o: PosVendaOrder, stage: FulfillmentStage) => void;
   onEtiqueta: (o: PosVendaOrder) => void;
 }) {
+  /* ⚠️ O card faz sentido com a COLUNA em que está: entregue ou cancelado não
+     tem prazo a cumprir ("5d atrasado" num pedido entregue lia como problema),
+     nem caixa a separar, nem carga a segurar. */
+  const finalizado = o.fulfillment_stage === "entregue" || o.fulfillment_stage === "cancelado";
   return (
     <>
       {/* Recorrência primeiro: o mês devido é a informação que
@@ -371,7 +376,7 @@ const CorpoDoCard = memo(function CorpoDoCard({ o, op, onStage, onEtiqueta }: {
       </div>
       {/* O QUE é o pedido. Antes o card só dizia quem e quanto —
           a Separação tinha de abrir o detalhe para saber o item. */}
-      {itensBonificados(o.items).length > 0 && (
+      {!finalizado && itensBonificados(o.items).length > 0 && (
         <div className="rounded-md border border-amber-400/50 bg-amber-50 dark:bg-amber-950/30 px-2 py-1">
           <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-300 flex items-center gap-1">
             <Gift className="h-3 w-3 shrink-0" /> Caixa separada de bonificação
@@ -386,13 +391,15 @@ const CorpoDoCard = memo(function CorpoDoCard({ o, op, onStage, onEtiqueta }: {
       {/* ⚠️ VERMELHO, não âmbar: o de cima é procedimento
           ("embale separado"), este é documento fiscal
           faltando numa carga que pode já estar na rua. */}
-      {faltaNotaDeVenda(o) && (
+      {/* Entregue sem a nota de venda continua sendo problema fiscal — o
+          aviso fica, sem o "não despache". Cancelado não precisa de nota. */}
+      {o.fulfillment_stage !== "cancelado" && faltaNotaDeVenda(o) && (
         <div className="rounded-md border border-red-400/60 bg-red-50 dark:bg-red-950/30 px-2 py-1">
           <p className="text-[11px] font-semibold text-red-700 dark:text-red-300 flex items-center gap-1">
             <FileWarning className="h-3 w-3 shrink-0" /> Só a NF de bonificação está vinculada
           </p>
           <p className="text-[11px] text-red-700/90 dark:text-red-300/90">
-            Falta a NF de venda — não despache sem ela.
+            {finalizado ? "Falta a NF de venda." : "Falta a NF de venda — não despache sem ela."}
           </p>
         </div>
       )}
@@ -401,7 +408,7 @@ const CorpoDoCard = memo(function CorpoDoCard({ o, op, onStage, onEtiqueta }: {
       )}
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs text-muted-foreground font-mono">{o.order_number || "—"}</p>
-        {o.status !== "agendado" && o.agreed_delivery_date && (
+        {!finalizado && o.status !== "agendado" && o.agreed_delivery_date && (
           <span className={`text-[11px] tabular-nums font-medium ${prazoCor(o.agreed_delivery_date)}`}>
             {prazoTexto(o.agreed_delivery_date)}
           </span>
@@ -486,17 +493,28 @@ const CorpoDoCard = memo(function CorpoDoCard({ o, op, onStage, onEtiqueta }: {
 });
 
 export default function PosVenda() {
-  // Janela dos FINALIZADOS (entregue/cancelado). Ativos sempre carregam 100%.
-  // Na URL (`?finalizados=90` ou `=tudo`), para o F5 não voltar aos 30 dias
-  // de quem tinha aberto o histórico inteiro. 30 é o padrão e não aparece.
-  const [finalizadosUrl, setFinalizadosUrl] = useParamUrl("finalizados", "30");
-  const terminalDays: number | "all" = finalizadosUrl === "tudo" ? "all"
-    : (Number(finalizadosUrl) > 0 ? Number(finalizadosUrl) : 30);
-  const setTerminalDays = (v: number | "all") => setFinalizadosUrl(v === "all" ? "tudo" : String(v));
-  const { data, isLoading } = usePosVendaOrders(terminalDays);
+  /* Período dos FINALIZADOS (Entregue e Cancelado) — o seletor de período dos
+     apps, e SÓ para essas duas colunas: os pedidos em andamento aparecem
+     sempre todos (esconder um pedido em operação não faz sentido).
+     URL: `?finalizados=de,ate` (ex. `2026-10-01,2026-10-31`) ou `=tudo`; sem
+     nada, os últimos 30 dias. ⚠️ Os valores antigos (`30`, `90`, `tudo`)
+     continuam lidos. */
+  const [finalizadosUrl, setFinalizadosUrl] = useParamUrl("finalizados", "", { replace: true });
+  const finalizados: Periodo = (() => {
+    if (finalizadosUrl === "tudo") return { from: "", to: "" };
+    const m = /^(\d{4}-\d{2}-\d{2}),(\d{4}-\d{2}-\d{2})$/.exec(finalizadosUrl);
+    if (m) return m[1] <= m[2] ? { from: m[1], to: m[2] } : { from: m[2], to: m[1] };
+    if (finalizadosUrl === "90") return intervaloDoAtalho("90d");
+    return intervaloDoAtalho("30d");
+  })();
+  const setFinalizados = (p: Periodo) => {
+    const padrao = intervaloDoAtalho("30d");
+    if (p.from === padrao.from && p.to === padrao.to) return setFinalizadosUrl(null);
+    setFinalizadosUrl(!p.from && !p.to ? "tudo" : `${p.from},${p.to}`);
+  };
+  const { data, isLoading } = usePosVendaOrders(finalizados);
   usePosVendaRealtime(); // move card → reflete na tela de todos ao vivo
   const orders = data?.orders ?? [];
-  const terminalHidden = Math.max(0, (data?.terminalTotal ?? 0) - (data?.terminalShown ?? 0));
   const updateStage = useUpdateFulfillmentStage();
   const updateShipInfo = useUpdateShipmentInfo();
   const [dragId, setDragId] = useState<string | null>(null);
@@ -807,22 +825,10 @@ export default function PosVenda() {
           icon={ShoppingBag}
         />
 
-        {/* Janela dos finalizados — os ativos sempre aparecem 100%. */}
+        {/* Período só dos finalizados — os em andamento aparecem sempre todos. */}
         <div className="flex items-center justify-end gap-2 shrink-0 -mt-1 flex-wrap">
-          <span className="text-xs text-muted-foreground">Finalizados:</span>
-          <Select value={String(terminalDays)} onValueChange={(v) => setTerminalDays(v === "all" ? "all" : Number(v))}>
-            <SelectTrigger className="h-8 w-[150px] text-xs"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="30">Últimos 30 dias</SelectItem>
-              <SelectItem value="90">Últimos 90 dias</SelectItem>
-              <SelectItem value="all">Tudo</SelectItem>
-            </SelectContent>
-          </Select>
-          {terminalDays !== "all" && terminalHidden > 0 && (
-            <button onClick={() => setTerminalDays("all")} className="text-xs text-primary hover:underline">
-              +{terminalHidden} finalizado{terminalHidden > 1 ? "s" : ""} oculto{terminalHidden > 1 ? "s" : ""} · ver tudo
-            </button>
-          )}
+          <span className="text-xs text-muted-foreground">Entregues e cancelados:</span>
+          <PeriodoFiltro value={finalizados} onChange={setFinalizados} comTodo longos disableFuture />
         </div>
 
         {isLoading ? (

@@ -58,11 +58,10 @@ export const SHOTS = [
   { chave: "rastreio", papel: "colaborador", url: "/rastreio", viewport: QUADRO, espera: 1200, marcas: [
     [1, (p) => p.locator("main h1").first()],
     [2, (p) => p.getByRole("combobox").filter({ hasText: "Últimos 30 dias" })],
-    [3, btn(/finalizados? ocultos?/)],
-    [4, (p) => col("Nova Venda")(p).locator("div.border-b").first()],
-    [5, (p) => col("Nova Venda")(p).locator("div.border-b span.tabular-nums").first()],
-    [6, pv("Posto Lagoa Azul")],
-    [7, (p) => pv("Posto Lagoa Azul")(p).getByRole("combobox")],
+    [3, (p) => col("Nova Venda")(p).locator("div.border-b").first()],
+    [4, (p) => col("Nova Venda")(p).locator("div.border-b span.tabular-nums").first()],
+    [5, pv("Posto Lagoa Azul")],
+    [6, (p) => pv("Posto Lagoa Azul")(p).getByRole("combobox")],
   ] },
   { chave: "rastreio-card", papel: "colaborador", url: "/rastreio", viewport: QUADRO,
     antes: ver(pv("Posto Beira Rio")), clip: pv("Posto Beira Rio"), pad: 22, marcas: [
