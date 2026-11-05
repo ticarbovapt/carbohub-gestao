@@ -29,7 +29,7 @@ export const SECOES_PAINEIS: Secao[] = [
     blocos: [
       {
         titulo: "A tela",
-        print: { chave: "mapa-conquista", legenda: "O Brasil por estado, com o período “Este mês”." },
+        print: { chave: "mapa-conquista", legenda: "O Brasil por estado, com o período “Este mês (até hoje)”." },
         itens: [
           { n: 1, titulo: "Cidades", texto: "Quantos municípios já têm presença da Carbo, e quantos municípios o Brasil tem ao todo." },
           { n: 2, titulo: "Estados", texto: "Em quantos dos 27 estados a Carbo já chegou." },
@@ -38,7 +38,7 @@ export const SECOES_PAINEIS: Secao[] = [
           { n: 5, titulo: "Faturamento", texto: "Quanto essas cidades somam em vendas. Com um estado aberto, só aquele estado." },
           { n: 6, titulo: "Que presença mostrar", texto: "“Toda presença” acende qualquer cidade com venda, PDV ou licenciado. Os outros botões mostram só um tipo: só onde houve venda, só onde há ponto de venda ou só onde há licenciado." },
           { n: 7, titulo: "Tela cheia", texto: "Esconde os números e a lista ao lado e deixa só o mapa, maior. Bom para deixar numa TV. Clique de novo para sair." },
-          { n: 8, titulo: "Período", texto: "Este mês, últimos 30 dias, últimos 90 dias ou este ano. Decide o que conta como “conquista nova”: o cartão Novas, a cor âmbar no mapa e a lista Conquistas mudam juntos." },
+          { n: 8, titulo: "Período", texto: "Hoje, Ontem, Últimos 7, 30 ou 90 dias, Últimos 6 ou 12 meses, Este mês (até hoje), Mês fechado… (escolhe o mês ao lado) ou Por período… (abre as duas datas). Abre em Este mês (até hoje). Decide o que conta como “conquista nova”: o cartão Novas, a cor âmbar no mapa e a lista Conquistas mudam juntos." },
           { n: 9, titulo: "Por estado / Por município", texto: "Como o Brasil é desenhado: 27 estados (mais forte = mais cidades conquistadas) ou todos os municípios de uma vez. Dentro de um estado aberto o desenho é sempre por município." },
           { n: 10, titulo: "O mapa", texto: "Passe o mouse num estado para ver quantos municípios dele já acenderam. Clique para abrir o estado: aí aparecem os municípios, e o botão “Ver o Brasil” volta. Dentro do estado, o mouse sobre uma cidade mostra pedidos, PDVs e licenciados dela. A roda do mouse aproxima." },
           { n: 11, titulo: "Legenda", texto: "Verde = conquistado. Âmbar = conquistado dentro do período escolhido (só aparece com os municípios). Escuro = ainda não." },
@@ -80,7 +80,7 @@ export const SECOES_PAINEIS: Secao[] = [
         papel: "gestor",
         print: { chave: "painel-lojas", legenda: "O painel do mês atual.", papel: "gestor" },
         itens: [
-          { n: 1, titulo: "Período", texto: "7 dias, 15 dias, mês atual ou personalizado (duas datas). Vale para a tela inteira. Abre sempre no mês atual." },
+          { n: 1, titulo: "Período", texto: "Hoje, Ontem, Últimos 7 ou 30 dias, Este mês (até hoje), Mês fechado… (escolhe o mês ao lado) ou Por período… (abre as duas datas). Vale para a tela inteira. Abre em Este mês (até hoje)." },
           { n: 2, titulo: "Receita", texto: "Quanto as lojas venderam no período, com a variação contra o período anterior de mesmo tamanho (verde subiu, vermelho caiu)." },
           { n: 3, titulo: "Vendas", texto: "Quantas vendas foram registradas no balcão, com a variação contra o período anterior." },
           { n: 4, titulo: "Unidades vendidas", texto: "Quantos produtos saíram no balcão." },
@@ -124,7 +124,7 @@ export const SECOES_PAINEIS: Secao[] = [
         papel: "gestor",
         print: { chave: "painel-licenciados", legenda: "O painel do mês atual.", papel: "gestor" },
         itens: [
-          { n: 1, titulo: "Período", texto: "7 dias, 15 dias, mês atual ou personalizado. Vale para todos os blocos da tela." },
+          { n: 1, titulo: "Período", texto: "Hoje, Ontem, Últimos 7 ou 30 dias, Este mês (até hoje), Mês fechado… (escolhe o mês ao lado) ou Por período… (abre as duas datas). Vale para todos os blocos da tela. Abre em Este mês (até hoje)." },
           { n: 2, titulo: "Receita no período", texto: "Quanto a rede faturou com serviços, com a variação contra o período anterior. Sem período anterior para comparar, a variação não aparece (em vez de mostrar um 0% que não quer dizer nada)." },
           { n: 3, titulo: "Serviços no período", texto: "Quantas descarbonizações foram registradas, com a variação." },
           { n: 4, titulo: "Ticket médio", texto: "Valor médio de um serviço." },

@@ -28,7 +28,7 @@ export const SECOES_SUPRIMENTOS: Secao[] = [
         itens: [
           { n: 1, titulo: "Galpões", texto: "Escolhe qual estoque você está olhando. As abas e os números abaixo mudam para o galpão escolhido. O endereço da página guarda o galpão e a aba: dá para mandar o link para um colega." },
           { n: 2, titulo: "Registrar Envio", texto: "Manda mercadoria deste galpão para outro, para a caixa de um vendedor ou para um licenciado. Veja “Mandar mercadoria para outro estoque”, abaixo. Não aparece no CD Bling nem no ML Full." },
-          { n: 3, titulo: "Período", texto: "Últimos 7 dias, 30 dias, este mês, um mês específico ou um período que você escolhe. Vale para os números de entradas e saídas e para a lista de Movimentações." },
+          { n: 3, titulo: "Período", texto: "Hoje, Ontem, Últimos 7 ou 30 dias, Este mês (até hoje), Mês fechado… (escolhe o mês ao lado) ou Por período… (abre as duas datas). Abre em Últimos 7 dias. Vale para os números de entradas e saídas e para a lista de Movimentações." },
           { n: 4, titulo: "Números do galpão", texto: "Total de produtos, quantos estão abaixo do mínimo (Em Baixa) e quantas entradas, saídas e movimentações houve no período." },
           { n: 5, titulo: "Abas", texto: "Estoque, Movimentações, Envios, Recebimento e Política de Estoque existem em todos os galpões. Alguns têm abas próprias: o CD SP LogHouse tem Em Trânsito e Mapeamento SKU; o CD SP Vendas tem Remessas; o Hub Natal tem Notas Fiscais (ainda sem uso)." },
           { n: 6, titulo: "Buscar produto", texto: "Filtra pelo nome ou pelo código." },

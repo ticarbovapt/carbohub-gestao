@@ -140,7 +140,7 @@ export const SHOTS = [
   { chave: "anuncios", papel: "colaborador", url: "/ecommerce/anuncios", viewport: { width: 1440, height: 4200 }, espera: 1800,
     clip: (p) => p.locator("main main").first(), marcas: [
     [1, (p) => p.locator("main main button[role=combobox]").first()],
-    [2, (p) => p.locator("main main button[role=combobox]").nth(1)],
+    [2, (p) => p.locator("main main").getByRole("combobox").filter({ hasText: /^(Hoje|Ontem|Últimos|Este mês|Mês fechado|Por período)/ }).first().locator("..")],
     [3, btn("Contas")],
     [4, btn(/Sincronizar agora/)],
     [5, (p) => p.locator("main main div.grid").first()],

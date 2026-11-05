@@ -187,15 +187,14 @@ SHOTS.push(
   ] },
   // Vendas
   { chave: "vendas", papel: "colaborador", url: "/vendas", viewport: { width: 1600, height: 900 }, marcas: [
-    [1, (p) => p.getByRole("button").filter({ has: p.locator("svg.lucide-chevron-left") }).first().locator("..")],
-    [2, (p) => p.getByText("Período:").locator("..")],
-    [3, (p) => p.getByText("Total vendido").locator("xpath=ancestor::div[contains(@class,'grid')][1]")],
-    [4, (p) => p.getByPlaceholder(/Buscar cliente, CNPJ, pedido/)],
-    [5, (p) => p.locator("thead th").filter({ hasText: /^Status$/i })],
-    [6, (p) => p.locator("thead th").filter({ hasText: /^SDR$/i })],
-    [7, (p) => p.getByRole("button", { name: /Editar \/ Converter/ })],
-    [8, (p) => p.getByRole("button", { name: /Baixar NF/ })],
-    [9, row("V2026100027")],
+    [1, (p) => p.getByRole("combobox").filter({ hasText: /^(Hoje|Ontem|Últimos|Este mês|Mês fechado|Por período)/ }).first().locator("..")],
+    [2, (p) => p.getByText("Total vendido").locator("xpath=ancestor::div[contains(@class,'grid')][1]")],
+    [3, (p) => p.getByPlaceholder(/Buscar cliente, CNPJ, pedido/)],
+    [4, (p) => p.locator("thead th").filter({ hasText: /^Status$/i })],
+    [5, (p) => p.locator("thead th").filter({ hasText: /^SDR$/i })],
+    [6, (p) => p.getByRole("button", { name: /Editar \/ Converter/ })],
+    [7, (p) => p.getByRole("button", { name: /Baixar NF/ })],
+    [8, row("V2026100027")],
   ] },
   { chave: "vendas-detalhe", papel: "colaborador", url: "/vendas", viewport: { width: 1600, height: 1500 },
     antes: async (p) => { await row("V2026100031")(p).click(); },
@@ -222,7 +221,7 @@ SHOTS.push(
   ] },
   // Resultados
   { chave: "resultados", papel: "colaborador", url: "/resultados", viewport: { width: 1440, height: 1180 }, espera: 1500, marcas: [
-    [1, (p) => p.getByRole("button", { name: "Mês anterior" }).locator("..")],
+    [1, (p) => p.getByRole("combobox").filter({ hasText: /^(Hoje|Ontem|Últimos|Este mês|Mês fechado|Por período)/ }).first().locator("..")],
     [2, (p) => p.getByText("Repassados", { exact: true }).first().locator("xpath=ancestor::div[contains(@class,'grid')][1]")],
     [3, (p) => p.locator("section").filter({ has: p.getByRole("heading", { name: "Situação dos repassados" }) })],
     [4, (p) => p.locator("section").filter({ has: p.getByRole("heading", { name: "Por closer" }) })],

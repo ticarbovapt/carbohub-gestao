@@ -75,7 +75,7 @@ export const SECOES_AUDITORIA: Secao[] = [
       {
         print: { chave: "acompanhamento", legenda: "O topo do Acompanhamento: o dia, o dinheiro e o movimento diário.", papel: "gestor" },
         itens: [
-          { n: 1, titulo: "Período", texto: "Últimos 7, 30 ou 90 dias. Vale para os números “no período”, o gráfico e as perdas." },
+          { n: 1, titulo: "Período", texto: "Hoje, Ontem, Últimos 7, 30 ou 90 dias, Últimos 6 ou 12 meses, Este mês (até hoje), Mês fechado… (escolhe o mês ao lado) ou Por período… (abre as duas datas). Abre em Últimos 30 dias. Vale para os números “no período”, o gráfico e as perdas." },
           { n: 2, titulo: "Vendedor", texto: "Mostra o time todo ou só uma pessoa." },
           { n: 3, titulo: "Prazos", texto: "Abre a lista de quantos dias cada etapa tolera antes de o card contar como parado (veja abaixo)." },
           { n: 4, titulo: "O dia de hoje", texto: "Cards criados, movimentados, ganhos e perdidos hoje." },

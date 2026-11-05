@@ -237,15 +237,14 @@ export const SECOES_BASE: Secao[] = [
       {
         print: { chave: "vendas", legenda: "Vendas e Orçamentos, visão do colaborador." },
         itens: [
-          { n: 1, titulo: "Mês", texto: "Navega entre os meses. A data que vale é a do faturamento." },
-          { n: 2, titulo: "Período", texto: "Escolha um intervalo livre de datas. “Limpar” volta ao mês." },
-          { n: 3, titulo: "Números do mês", texto: "Total vendido, faturado, aguardando faturamento, vindo de meses anteriores, em orçamento e canceladas. Clique num número para filtrar a tabela por ele; clique de novo para tirar o filtro." },
-          { n: 4, titulo: "Buscar", texto: "Procura pelo nome do cliente, cidade, CNPJ/CPF, IE, telefone, CEP, e-mail ou número do pedido, em todo o histórico (ignora o mês)." },
-          { n: 5, titulo: "Status", texto: "Orçamento, Cancelado ou a etapa do pedido (Nova Venda, Em Separação, Em Transporte, Entregue…)." },
-          { n: 6, titulo: "Filtros", texto: "“Ocultar pedidos Bling” esconde os pedidos importados do Bling (o número ao lado diz quantos e quanto somam — é o que explica um total diferente de outra tela). Unidade de negócio: revenda, consumo, on-line ou sem classificação. Tipo: produto (CarboZé), serviço (CarboVAPT) ou misto." },
-          { n: 7, titulo: "Editar / Converter", texto: "Em orçamentos: editar, converter em venda ou baixar o PDF." },
-          { n: 8, titulo: "Baixar NF", texto: "Abre a nota fiscal (PDF, ou XML se o PDF ainda não chegou). “PDF” baixa a segunda via do pedido." },
-          { n: 9, titulo: "Linha", texto: "Clique para abrir os detalhes da venda." },
+          { n: 1, titulo: "Período", texto: "Hoje, Ontem, Últimos 7 ou 30 dias, Este mês (até hoje), Mês fechado… (escolhe o mês ao lado) ou Por período… (abre as duas datas). Abre no mês corrente inteiro. A data que vale é a do faturamento." },
+          { n: 2, titulo: "Números do período", texto: "Total vendido, faturado, aguardando faturamento, vindo de meses anteriores, em orçamento e canceladas. Clique num número para filtrar a tabela por ele; clique de novo para tirar o filtro." },
+          { n: 3, titulo: "Buscar", texto: "Procura pelo nome do cliente, cidade, CNPJ/CPF, IE, telefone, CEP, e-mail ou número do pedido, em todo o histórico (ignora o período)." },
+          { n: 4, titulo: "Status", texto: "Orçamento, Cancelado ou a etapa do pedido (Nova Venda, Em Separação, Em Transporte, Entregue…)." },
+          { n: 5, titulo: "Filtros", texto: "“Ocultar pedidos Bling” esconde os pedidos importados do Bling (o número ao lado diz quantos e quanto somam — é o que explica um total diferente de outra tela). Unidade de negócio: revenda, consumo, on-line ou sem classificação. Tipo: produto (CarboZé), serviço (CarboVAPT) ou misto." },
+          { n: 6, titulo: "Editar / Converter", texto: "Em orçamentos: editar, converter em venda ou baixar o PDF." },
+          { n: 7, titulo: "Baixar NF", texto: "Abre a nota fiscal (PDF, ou XML se o PDF ainda não chegou). “PDF” baixa a segunda via do pedido." },
+          { n: 8, titulo: "Linha", texto: "Clique para abrir os detalhes da venda." },
         ],
       },
       {

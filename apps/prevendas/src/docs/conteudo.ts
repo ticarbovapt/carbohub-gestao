@@ -386,15 +386,14 @@ export const SECOES: Secao[] = [
       {
         print: { chave: "vendas", legenda: "Vendas e Orçamentos, visão do colaborador." },
         itens: [
-          { n: 1, titulo: "Mês", texto: "Navega entre os meses. A data que vale é a do faturamento." },
-          { n: 2, titulo: "Período", texto: "Escolha um intervalo livre de datas. “Limpar” volta ao mês." },
-          { n: 3, titulo: "Números do mês", texto: "Total vendido, faturado, aguardando faturamento, vindo de meses anteriores, em orçamento e canceladas. Clique num número para filtrar a tabela por ele; clique de novo para tirar o filtro." },
-          { n: 4, titulo: "Buscar", texto: "Procura pelo nome do cliente, cidade, CNPJ/CPF, IE, telefone, CEP, e-mail ou número do pedido, em todo o histórico (ignora o mês). Número com 3 dígitos ou mais casa em qualquer parte do documento, telefone, CEP ou IE." },
-          { n: 5, titulo: "Status", texto: "Orçamento, Cancelado ou a etapa do pedido (Nova Venda, Em Separação, Em Transporte, Entregue…)." },
-          { n: 6, titulo: "SDR e Closer", texto: "Quem originou o lead e quem fechou a venda." },
-          { n: 7, titulo: "Editar / Converter", texto: "Em orçamentos: editar, converter em venda ou baixar o PDF." },
-          { n: 8, titulo: "Baixar NF", texto: "Abre a nota fiscal (PDF, ou XML se o PDF ainda não chegou). “PDF” baixa a segunda via do pedido." },
-          { n: 9, titulo: "Linha", texto: "Clique para abrir os detalhes da venda." },
+          { n: 1, titulo: "Período", texto: "Hoje, Ontem, Últimos 7 ou 30 dias, Este mês (até hoje), Mês fechado… (escolhe o mês ao lado) ou Por período… (abre as duas datas). Abre no mês corrente inteiro. A data que vale é a do faturamento." },
+          { n: 2, titulo: "Números do período", texto: "Total vendido, faturado, aguardando faturamento, vindo de meses anteriores, em orçamento e canceladas. Clique num número para filtrar a tabela por ele; clique de novo para tirar o filtro." },
+          { n: 3, titulo: "Buscar", texto: "Procura pelo nome do cliente, cidade, CNPJ/CPF, IE, telefone, CEP, e-mail ou número do pedido, em todo o histórico (ignora o período). Número com 3 dígitos ou mais casa em qualquer parte do documento, telefone, CEP ou IE." },
+          { n: 4, titulo: "Status", texto: "Orçamento, Cancelado ou a etapa do pedido (Nova Venda, Em Separação, Em Transporte, Entregue…)." },
+          { n: 5, titulo: "SDR e Closer", texto: "Quem originou o lead e quem fechou a venda." },
+          { n: 6, titulo: "Editar / Converter", texto: "Em orçamentos: editar, converter em venda ou baixar o PDF." },
+          { n: 7, titulo: "Baixar NF", texto: "Abre a nota fiscal (PDF, ou XML se o PDF ainda não chegou). “PDF” baixa a segunda via do pedido." },
+          { n: 8, titulo: "Linha", texto: "Clique para abrir os detalhes da venda." },
         ],
       },
       {
@@ -441,13 +440,13 @@ export const SECOES: Secao[] = [
     },
     blocos: [
       {
-        print: { chave: "resultados", legenda: "Resultados do mês, visão do colaborador." },
+        print: { chave: "resultados", legenda: "Resultados do período, visão do colaborador." },
         itens: [
-          { n: 1, titulo: "Mês", texto: "Navega entre os meses de repasse." },
+          { n: 1, titulo: "Período", texto: "De quando são os repasses: Hoje, Ontem, Últimos 7 ou 30 dias, Este mês (até hoje), Mês fechado… (escolhe o mês ao lado) ou Por período… (abre as duas datas). Abre no mês corrente inteiro." },
           { n: 2, titulo: "Números", texto: "Repassados, fechados, conversão, receita gerada pelos repasses e o tempo médio do repasse até fechar." },
           { n: 3, titulo: "Situação dos repassados", texto: "Quantos fecharam, estão em negociação (e em que etapa), estão na fila sem closer ou foram perdidos." },
           { n: 4, titulo: "Por closer", texto: "Quanto cada closer recebeu, fechou e vendeu." },
-          { n: 5, titulo: "Antes do repasse", texto: "Leads criados no mês, descartados e a taxa de repasse." },
+          { n: 5, titulo: "Antes do repasse", texto: "Leads criados no período, descartados e a taxa de repasse." },
           { n: 6, titulo: "Repasses", texto: "Cada lead repassado, com o closer, a etapa e o valor vendido. Clique no nome para abrir o card. “Na fila” = ainda sem closer." },
         ],
       },

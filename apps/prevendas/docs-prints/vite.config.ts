@@ -4,7 +4,7 @@ import path from "path";
 const app = path.resolve(__dirname, "..");
 export default defineConfig({
   root: app,
-  server: { port: 8099, strictPort: true },
+  server: { port: Number(process.env.DOCS_PORT ?? 8099), strictPort: true },
   plugins: [react()],
   resolve: {
     alias: [

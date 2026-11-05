@@ -59,7 +59,7 @@ export const SHOTS = [
     [5, placar("Faturamento")],
     [6, (p) => btn("Toda presença")(p).locator("..")],
     [7, btn("Tela cheia")],
-    [8, (p) => p.locator("main button[role=combobox]").first()],
+    [8, (p) => p.locator("main button[role=combobox]").first().locator("..")],
     [9, (p) => btn("Por estado")(p).locator("..")],
     [10, sel("main .leaflet-container")],
     [11, (p) => p.getByText("Ainda não", { exact: true }).locator("xpath=ancestor::div[contains(@class,'absolute')][1]")],
@@ -74,7 +74,7 @@ export const SHOTS = [
 
   // ── Portal de Vendas ──
   { chave: "painel-lojas", papel: "gestor", url: "/portal-de-vendas", viewport: ALTO(1100), marcas: [
-    [1, (p) => p.getByRole("button", { name: /7 dias/ }).locator("..")],
+    [1, (p) => p.locator("main button[role=combobox]").first().locator("..")],
     [2, cartao("Receita")],
     [3, cartao("Vendas")],
     [4, cartao("Unidades vendidas")],
@@ -91,7 +91,7 @@ export const SHOTS = [
 
   // ── Licenciados ──
   { chave: "painel-licenciados", papel: "gestor", url: "/licenciados", viewport: ALTO(1500), marcas: [
-    [1, (p) => p.getByRole("button", { name: /7 dias/ }).locator("..")],
+    [1, (p) => p.locator("main button[role=combobox]").first().locator("..")],
     [2, cartao("Receita no período")],
     [3, cartao("Serviços no período")],
     [4, cartao("Ticket médio")],

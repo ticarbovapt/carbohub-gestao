@@ -62,7 +62,7 @@ export const SECOES_DEMANDAS: Secao[] = [
           "No fim da Visão geral. Mostra como está o fluxo das demandas — não é nota das pessoas. Não há pódio nem pontuação única: cada coluna é uma informação separada.",
         print: { chave: "ranking-ti", legenda: "O quadro Time de TI, com “Como é calculado” aberto." },
         itens: [
-          { n: 1, titulo: "Período", texto: "Últimos 30 ou 90 dias." },
+          { n: 1, titulo: "Período", texto: "Hoje, Ontem, Últimos 7, 30 ou 90 dias, Últimos 6 ou 12 meses, Este mês (até hoje), Mês fechado… (escolhe o mês ao lado) ou Por período… (abre as duas datas). Abre em Últimos 90 dias." },
           { n: 2, titulo: "Como é calculado", texto: "Abre e fecha a explicação de cada número." },
           { n: 3, titulo: "Números do time", texto: "Quantas foram entregues, o tempo típico do pedido à entrega (e em quanto tempo saem 90% delas), o tempo até triar, a firmeza (quanto do que foi entregue não voltou) e quantas estão na fila há mais de 14 dias." },
           { n: 4, titulo: "As colunas", texto: "Entregas: concluídas no período, com peso pela prioridade (crítica vale mais que baixa); entrega que reabre em até 14 dias vale zero. Velocidade: o tempo que a demanda ficou na mão da pessoa (Em andamento + Em teste) comparado com o típico do time na mesma prioridade — 0,8× é 20% mais rápido que o normal. Firmeza: quanto do que ela entregou não foi reaberto. Assumidas / Em aberto: a carga de cada um." },

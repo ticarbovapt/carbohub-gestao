@@ -241,7 +241,7 @@ export const SECOES_ECOMMERCE: Secao[] = [
         print: { chave: "anuncios", legenda: "Anúncios da Meta nos últimos 30 dias, todas as contas." },
         itens: [
           { n: 1, titulo: "Conta", texto: "Todas as contas ou uma só. Só aparece quando há mais de uma conta ligada." },
-          { n: 2, titulo: "Período", texto: "Hoje, Ontem, Últimos 7 dias, Últimos 30 dias ou Mês atual. Abre em 30 dias." },
+          { n: 2, titulo: "Período", texto: "Hoje, Ontem, Últimos 7 ou 30 dias, Este mês (até hoje), Mês fechado… (escolhe o mês ao lado) ou Por período… (abre as duas datas). Abre em Últimos 30 dias." },
           { n: 3, titulo: "Contas", texto: "Mostra as contas de anúncio que o sistema enxerga e quais estão ligadas. Veja “Contas de anúncio”, abaixo." },
           { n: 4, titulo: "Sincronizar agora", texto: "Busca na Meta os últimos 30 dias. Leva alguns segundos; ao terminar, avisa quantas linhas chegaram." },
           { n: 5, titulo: "Os seis números", texto: "Investimento (e impressões), Vendas da Meta (e compras), ROAS, CPA (custo por compra), CPM (custo por mil impressões) e CTR (de cada 100 que viram, quantos clicaram no link)." },

@@ -35,7 +35,7 @@ export const SHOTS = [
   { chave: "ranking-ti", papel: "colaborador", url: "/", viewport: ALTO,
     antes: async (p) => { await p.locator('button[title="Como é calculado"]').click(); },
     clip: (p) => bloco("Time de TI")(p), marcas: [
-    [1, (p) => bloco("Time de TI")(p).getByRole("button", { name: "30 dias" }).locator("..")],
+    [1, (p) => bloco("Time de TI")(p).getByRole("combobox").filter({ hasText: /^(Hoje|Ontem|Últimos|Este mês|Mês fechado|Por período)/ }).first().locator("..")],
     [2, sel('button[title="Como é calculado"]')],
     [3, (p) => bloco("Time de TI")(p).getByText(/entregues/).first().locator("xpath=ancestor::div[contains(@class,'rounded-lg')][1]")],
     [4, (p) => bloco("Time de TI")(p).locator("thead")],

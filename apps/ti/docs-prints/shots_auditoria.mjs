@@ -46,7 +46,7 @@ export const SHOTS = [
   // ── Acompanhamento Comercial ──
   { chave: "acompanhamento", papel: "gestor", url: "/acompanhamento", viewport: ALTO,
     clip: (p) => [main(p).getByRole("heading", { name: "Acompanhamento" }), caixa("Movimento diário")(p)], marcas: [
-    [1, (p) => main(p).getByRole("button", { name: "30 dias" })],
+    [1, (p) => main(p).getByRole("combobox").filter({ hasText: /^(Hoje|Ontem|Últimos|Este mês|Mês fechado|Por período)/ }).first().locator("..")],
     [2, (p) => main(p).locator("select")],
     [3, btn(/Prazos/)],
     [4, (p) => main(p).getByText("Criados hoje", { exact: true }).locator("xpath=ancestor::div[contains(@class,'grid')][1]")],
