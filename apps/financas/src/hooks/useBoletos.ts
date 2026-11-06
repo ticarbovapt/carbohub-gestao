@@ -170,10 +170,14 @@ export function useCobranca() {
 }
 
 /** O endereço do pagador lido do XML da NF do Bling (pela função — a tela não baixa XML). */
-export async function enderecoDaNf(ref: RefTitulo): Promise<{ endereco: Record<string, string | null>; nf: string } | null> {
+/**
+ * O endereço do pagador lido no Bling pela função: NF, CADASTRO do contato
+ * (endereço de cobrança) ou XML da NF. A tela não baixa nada sozinha.
+ */
+export async function enderecoDaNf(ref: RefTitulo): Promise<{ endereco: Record<string, string | null>; origem: string } | null> {
   const { data, error } = await supabase.functions.invoke("bradesco-cobranca", { body: { acao: "endereco_nf", ...ref } });
   if (error || !(data as any)?.ok) return null;
-  return { endereco: (data as any).endereco, nf: (data as any).nf };
+  return { endereco: (data as any).endereco, origem: (data as any).origem ?? "Bling" };
 }
 
 export async function registrarEmail(id: string, para: string) {

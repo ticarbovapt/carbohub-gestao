@@ -435,3 +435,29 @@ export function urlXmlConfiavel(u: string | null | undefined): boolean {
     return x.protocol === "https:" && (x.hostname === "bling.com.br" || x.hostname.endsWith(".bling.com.br"));
   } catch { return false; }
 }
+
+/**
+ * O CADASTRO do contato no Bling (`GET /contatos/{id}`, API v3): `endereco.cobranca`
+ * quando tem CEP (é o endereço de cobrança — o certo para boleto), senão
+ * `endereco.geral`. A listagem de contatos NÃO traz endereço, por isso o espelho
+ * (`bling_contacts`/`bling2_contacts`) não serve aqui.
+ */
+export function enderecoDoContatoBling(c: unknown): (EnderecoPagador & { documento: string }) | null {
+  const x = (c ?? {}) as Record<string, any>;
+  const e = x.endereco ?? {};
+  const escolhido = [e.cobranca, e.geral, e].find((b) => b && soDigitos(b.cep).length === 8);
+  if (!escolhido) return null;
+  const s = (v: unknown) => String(v ?? "").trim();
+  return {
+    cep: soDigitos(escolhido.cep),
+    logradouro: s(escolhido.endereco),
+    numero: s(escolhido.numero),
+    complemento: s(escolhido.complemento),
+    bairro: s(escolhido.bairro),
+    cidade: s(escolhido.municipio),
+    uf: s(escolhido.uf).toUpperCase(),
+    email: s(x.emailNotaFiscal || x.email).split(/[;,\s]+/)[0] ?? "",
+    fone: soDigitos(x.celular || x.telefone),
+    documento: soDigitos(x.numeroDocumento),
+  };
+}

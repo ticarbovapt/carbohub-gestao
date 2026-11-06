@@ -29,7 +29,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import {
   baixaAceita, corpoBaixa, corpoConsulta, errosDoBanco, faltasDoPagador, formatarLinha,
   jsonBancario, lerConsulta, lerRegistroHibrido, montarHibrido, multaEJuros, centavos,
-  tituloInexistente, enderecoDoXmlNfe, urlXmlConfiavel, type Carteira, type Pagador,
+  tituloInexistente, enderecoDoXmlNfe, urlXmlConfiavel, enderecoDoContatoBling, type Carteira, type Pagador,
 } from "../_shared/bradescoCobranca.ts";
 import { CAMINHOS, ErroBradesco, postar, type Ambiente } from "../_shared/bradescoApi.ts";
 import { SANDBOX_BAIXA, SANDBOX_CONSULTA_HIBRIDO, SANDBOX_REGISTRO_HIBRIDO } from "../_shared/bradescoSandbox.ts";
@@ -244,30 +244,72 @@ async function cancelar(admin: any, userId: string, b: Json) {
   return { ok: true, status: "cancelado" };
 }
 
-// ── ENDEREÇO pela NF do Bling ──────────────────────────────────────────────
-// O documento sai do TÍTULO (servidor) e as NFs, do banco: a tela não manda
-// URL nenhuma — esta função não baixa o que alguém escolher. E só do Bling,
-// por https (`urlXmlConfiavel`). O XML é público por link (o bling2-sync já o
-// lê assim para a natureza da operação).
+// ── ENDEREÇO do pagador, pelo Bling ───────────────────────────────────────
+// Ordem: NF (JSON do espelho) → CADASTRO do contato no Bling (`GET /contatos/{id}`,
+// endereço de cobrança) → XML da NF. O título e o contato saem do BANCO: a tela
+// não manda id nem URL — esta função não baixa o que alguém escolher, e o XML
+// só de `*.bling.com.br`.
+// ⚠️ O token do Bling é SÓ LIDO (a regra de toda função fora do bling-sync):
+// perto de vencer, pula o cadastro em vez de renovar.
+const BLING_API = "https://api.bling.com.br/Api/v3";
+const MARGEM_TOKEN_MS = 2 * 60 * 1000;
+
+async function tokenBling(admin: any, conta: 1 | 2): Promise<string | null> {
+  // A MESMA leitura das funções que já rodam: bling-contas-espelho (conta 1) e
+  // bling2-contas (conta 2).
+  const { data } = conta === 1
+    ? await admin.from("bling_integration").select("access_token, expires_at").eq("is_active", true).maybeSingle()
+    : await admin.from("bling2_integration").select("access_token, expires_at")
+        .eq("is_active", true).order("connected_at", { ascending: false }).limit(1).maybeSingle();
+  if (!data?.access_token) return null;
+  if (new Date(data.expires_at).getTime() - Date.now() < MARGEM_TOKEN_MS) return null;
+  return data.access_token as string;
+}
+
+async function contatoDoBling(admin: any, conta: 1 | 2, contatoId: number) {
+  const token = await tokenBling(admin, conta);
+  if (!token) return null;
+  try {
+    const r = await fetch(`${BLING_API}/contatos/${contatoId}`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!r.ok) return null;
+    const j = await r.json().catch(() => null);
+    return enderecoDoContatoBling(j?.data ?? j);
+  } catch { return null; }
+}
+
 async function enderecoDaNf(admin: any, b: Json) {
   const { data: t, error } = await admin.rpc("fin_boleto_titulo", {
     p_receivable: b.receivable_id ?? null, p_bling2: b.bling2_conta_id ?? null, p_travar: false,
   });
   if (error || !t) return { ok: false, erro: error?.message ?? "Título não encontrado." };
-  if (!t.documento) return { ok: false, erro: "O título não tem CPF/CNPJ." };
-  const { data: nfs, error: eNf } = await admin.rpc("fin_boleto_nfs_do_cliente", { p_doc: t.documento, p_limite: 5 });
-  if (eNf) return { ok: false, erro: eNf.message };
+
+  let nfs: Json[] = [];
+  if (t.documento) {
+    const { data } = await admin.rpc("fin_boleto_nfs_do_cliente", { p_doc: t.documento, p_limite: 5 });
+    nfs = (data ?? []) as Json[];
+    const comJson = nfs.find((n) => n.endereco?.cep);
+    if (comJson) return { ok: true, endereco: comJson.endereco, origem: `Endereço da NF ${comJson.numero}` };
+  }
+
+  // O cadastro do cliente no Bling — pelo contato do PRÓPRIO título.
+  if (t.contato_id && (t.conta === 1 || t.conta === 2)) {
+    const e = await contatoDoBling(admin, t.conta, Number(t.contato_id));
+    if (e) return { ok: true, endereco: e, origem: "Cadastro do cliente no Bling" };
+  }
+
   let tentadas = 0;
-  for (const n of (nfs ?? []) as Json[]) {
-    if (n.endereco?.cep) return { ok: true, endereco: n.endereco, nf: n.numero, fonte: "json" };
+  for (const n of nfs) {
     if (!urlXmlConfiavel(n.xml_url) || tentadas >= 3) continue;
     tentadas++;
     try {
       const r = await fetch(n.xml_url, { signal: AbortSignal.timeout(8000) });
       if (!r.ok) continue;
       const e = enderecoDoXmlNfe(await r.text());
-      if (e) return { ok: true, endereco: e, nf: n.numero, fonte: "xml" };
+      if (e) return { ok: true, endereco: e, origem: `Endereço da NF ${n.numero}` };
     } catch { /* tenta a próxima nota */ }
   }
-  return { ok: false, erro: (nfs ?? []).length ? "As NFs do cliente não trazem endereço legível." : "Nenhuma NF do cliente no Bling." };
+  return { ok: false, erro: "Não achei o endereço do cliente no Bling (nem no cadastro, nem nas NFs)." };
 }
