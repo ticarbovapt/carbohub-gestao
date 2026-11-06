@@ -103,7 +103,12 @@ export interface BoletoPreparo {
     numero: string | null; vencimento: string | null; aberto: boolean; situacao: string | null;
   };
   carteira: { ambiente: "sandbox" | "producao"; multa_pct: number; juros_mes_pct: number } | null;
+  /** Endereço pronto: do último boleto do cliente ou do JSON da NF do Bling. */
   sugestao: Record<string, string | null> | null;
+  /** O pedido do sistema (endereço de ENTREGA) — só se nem a NF tiver. */
+  pedido?: Record<string, string | null> | null;
+  /** Há NF com XML: a função pode ler o endereço de lá (20261151). */
+  nf_xml?: boolean;
 }
 
 export function useBoletoPreparo(ref: RefTitulo | null) {
@@ -162,6 +167,13 @@ export function useCobranca() {
       qc.invalidateQueries({ queryKey: ["fin_boleto_preparo"] });
     },
   });
+}
+
+/** O endereço do pagador lido do XML da NF do Bling (pela função — a tela não baixa XML). */
+export async function enderecoDaNf(ref: RefTitulo): Promise<{ endereco: Record<string, string | null>; nf: string } | null> {
+  const { data, error } = await supabase.functions.invoke("bradesco-cobranca", { body: { acao: "endereco_nf", ...ref } });
+  if (error || !(data as any)?.ok) return null;
+  return { endereco: (data as any).endereco, nf: (data as any).nf };
 }
 
 export async function registrarEmail(id: string, para: string) {

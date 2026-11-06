@@ -6,6 +6,8 @@
 //   acao "emitir"     registra o boleto do título (matriz ou filial)
 //   acao "consultar"  2ª via: confere no banco e atualiza (pago, baixado…)
 //   acao "cancelar"   pede a baixa (código 57) — o boleto deixa de ser pagável
+//   acao "endereco_nf" o endereço do pagador pelo XML da NF do Bling (a tela
+//                     pede quando o JSON da nota não o trouxe)
 //
 // Regras em _shared/bradescoCobranca.ts (testadas); rede em _shared/bradescoApi.ts.
 //
@@ -27,7 +29,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import {
   baixaAceita, corpoBaixa, corpoConsulta, errosDoBanco, faltasDoPagador, formatarLinha,
   jsonBancario, lerConsulta, lerRegistroHibrido, montarHibrido, multaEJuros, centavos,
-  tituloInexistente, type Carteira, type Pagador,
+  tituloInexistente, enderecoDoXmlNfe, urlXmlConfiavel, type Carteira, type Pagador,
 } from "../_shared/bradescoCobranca.ts";
 import { CAMINHOS, ErroBradesco, postar, type Ambiente } from "../_shared/bradescoApi.ts";
 import { SANDBOX_BAIXA, SANDBOX_CONSULTA_HIBRIDO, SANDBOX_REGISTRO_HIBRIDO } from "../_shared/bradescoSandbox.ts";
@@ -73,6 +75,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     if (b.acao === "emitir") return json(await emitir(admin, u.user.id, b));
     if (b.acao === "consultar") return json(await consultar(admin, b));
     if (b.acao === "cancelar") return json(await cancelar(admin, u.user.id, b));
+    if (b.acao === "endereco_nf") return json(await enderecoDaNf(admin, b));
     return json({ ok: false, erro: "Ação desconhecida." }, 400);
   } catch (e) {
     // ErroBradesco = token/secrets: NADA foi enviado ao banco.
@@ -239,4 +242,32 @@ async function cancelar(admin: any, userId: string, b: Json) {
   });
   if (error) return { ok: false, erro: `O banco baixou, mas não consegui gravar aqui: ${error.message}` };
   return { ok: true, status: "cancelado" };
+}
+
+// ── ENDEREÇO pela NF do Bling ──────────────────────────────────────────────
+// O documento sai do TÍTULO (servidor) e as NFs, do banco: a tela não manda
+// URL nenhuma — esta função não baixa o que alguém escolher. E só do Bling,
+// por https (`urlXmlConfiavel`). O XML é público por link (o bling2-sync já o
+// lê assim para a natureza da operação).
+async function enderecoDaNf(admin: any, b: Json) {
+  const { data: t, error } = await admin.rpc("fin_boleto_titulo", {
+    p_receivable: b.receivable_id ?? null, p_bling2: b.bling2_conta_id ?? null, p_travar: false,
+  });
+  if (error || !t) return { ok: false, erro: error?.message ?? "Título não encontrado." };
+  if (!t.documento) return { ok: false, erro: "O título não tem CPF/CNPJ." };
+  const { data: nfs, error: eNf } = await admin.rpc("fin_boleto_nfs_do_cliente", { p_doc: t.documento, p_limite: 5 });
+  if (eNf) return { ok: false, erro: eNf.message };
+  let tentadas = 0;
+  for (const n of (nfs ?? []) as Json[]) {
+    if (n.endereco?.cep) return { ok: true, endereco: n.endereco, nf: n.numero, fonte: "json" };
+    if (!urlXmlConfiavel(n.xml_url) || tentadas >= 3) continue;
+    tentadas++;
+    try {
+      const r = await fetch(n.xml_url, { signal: AbortSignal.timeout(8000) });
+      if (!r.ok) continue;
+      const e = enderecoDoXmlNfe(await r.text());
+      if (e) return { ok: true, endereco: e, nf: n.numero, fonte: "xml" };
+    } catch { /* tenta a próxima nota */ }
+  }
+  return { ok: false, erro: (nfs ?? []).length ? "As NFs do cliente não trazem endereço legível." : "Nenhuma NF do cliente no Bling." };
 }

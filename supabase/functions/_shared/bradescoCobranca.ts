@@ -393,3 +393,45 @@ export function baixaAceita(http: number | null, corpo: unknown): boolean {
   return http !== null && http >= 200 && http < 300
     && (/CBTT0532/.test(String(r.mensagem ?? "")) || Number(r?.dados?.status) === 57);
 }
+
+// ── Endereço do pagador a partir da NF-e (o endereço FISCAL) ─────────────────
+export type EnderecoPagador = {
+  cep: string; logradouro: string; numero: string; complemento: string;
+  bairro: string; cidade: string; uf: string; email: string; fone: string;
+};
+
+const ENTIDADES: Record<string, string> = { "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&apos;": "'", "&#39;": "'" };
+const desXml = (s: string) => s.replace(/&(amp|lt|gt|quot|apos|#39);/g, (m) => ENTIDADES[m] ?? m).trim();
+
+/**
+ * `<dest>…<enderDest>` do XML da NF-e — layout nacional, obrigatório, o mesmo
+ * nas duas contas Bling. Devolve null sem CEP (endereço sem CEP não registra
+ * boleto, e devolver metade faria a tela parecer preenchida).
+ */
+export function enderecoDoXmlNfe(xml: string): EnderecoPagador | null {
+  const dest = xml.match(/<dest>([\s\S]*?)<\/dest>/i)?.[1];
+  if (!dest) return null;
+  const end = dest.match(/<enderDest>([\s\S]*?)<\/enderDest>/i)?.[1] ?? "";
+  const tag = (bloco: string, t: string) => desXml(bloco.match(new RegExp(`<${t}>([\\s\\S]*?)</${t}>`, "i"))?.[1] ?? "");
+  const cep = soDigitos(tag(end, "CEP"));
+  if (cep.length !== 8) return null;
+  return {
+    cep,
+    logradouro: tag(end, "xLgr"),
+    numero: tag(end, "nro"),
+    complemento: tag(end, "xCpl"),
+    bairro: tag(end, "xBairro"),
+    cidade: tag(end, "xMun"),
+    uf: tag(end, "UF").toUpperCase(),
+    email: tag(dest, "email").split(/[;,\s]+/)[0] ?? "",
+    fone: soDigitos(tag(end, "fone")),
+  };
+}
+
+/** Só baixa XML do próprio Bling, por https — a URL vem do banco, mas a função não vira proxy. */
+export function urlXmlConfiavel(u: string | null | undefined): boolean {
+  try {
+    const x = new URL(String(u ?? ""));
+    return x.protocol === "https:" && (x.hostname === "bling.com.br" || x.hostname.endsWith(".bling.com.br"));
+  } catch { return false; }
+}

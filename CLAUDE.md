@@ -3914,7 +3914,13 @@ docs/bradesco/                            o manual lido do portal + as collectio
    lá o PDF sai sem as barras e diz por quê.
 8. ⚠️ `cindcdEconmMoeda: 9` é o que o sandbox aceitou; o manual escreve "Fixo
    = 00006". Conferir no 1º registro de produção pela consulta.
-9. PENDENTE (fase 4): pago pela consulta só marca o BOLETO; a baixa do título
+9. ⚠️ **O endereço vem da NF do Bling, não de digitação** (`20261151`, queixa
+   do 1º teste: "não faz sentido eu precisar preencher"). Ordem: último boleto do
+   cliente → JSON da NF (`contato.endereco`, contas 1 e 2) → XML da NF
+   (`<enderDest>`, ação `endereco_nf` da função — o documento sai do título e as
+   URLs do banco, só `*.bling.com.br`) → endereço de ENTREGA do pedido. A tela
+   diz de onde veio. O documento casa por DÍGITOS nos dois lados.
+10. PENDENTE (fase 4): pago pela consulta só marca o BOLETO; a baixa do título
    (e o envio ao Bling) vem com a lista de liquidados/webhook, via
    `fin_banco_eventos` + `fin_banco_conciliar` (que hoje casa por `receivables`
    e terá de olhar `fin_boletos`). Documentação do Finanças: quando for a produção.
