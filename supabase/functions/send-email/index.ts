@@ -7,6 +7,7 @@ import { Resend } from "https://esm.sh/resend@4.0.0";
 //
 // Um único ponto de envio (identidade Grupo Carbo) reusado por vários casos:
 //   template "orcamento"        → envia o PDF do orçamento ao cliente
+//   template "boleto"           → envia o PDF do boleto (Finanças → contas a receber)
 //   template "boas_vindas"      → após 1º login (e-mail definitivo da pessoa)
 //   template "senha_alterada"   → confirmação de troca de senha
 //   template "alerta_seguranca" → aviso genérico de segurança (login novo, etc.)
@@ -123,6 +124,31 @@ const TEMPLATES: Record<string, TemplateFn> = {
           p(`Segue em anexo o seu orçamento ${numero ? `<strong>${numero}</strong> ` : ""}em PDF.`) +
           p(`Qualquer dúvida sobre valores, prazos ou condições, é só responder para o nosso time comercial${vendedor ? ` (${vendedor})` : ""} — teremos prazer em ajudar.`) +
           p(`<span style="color:#6B7280; font-size:13px;">Este orçamento tem validade conforme indicado no documento anexo.</span>`),
+      }),
+    };
+  },
+
+  // Boleto do contas a receber (Finanças). O PDF vai anexo; a linha digitável
+  // e o Pix copia-e-cola vão no corpo, para quem paga pelo celular sem abrir o PDF.
+  boleto: (d) => {
+    const esc = (v: unknown) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
+    const cliente = esc(d.customer_name || "Cliente");
+    const valor = esc(d.valor);
+    const venc = esc(d.vencimento);
+    const linha = esc(d.linha_digitavel);
+    const pix = esc(d.pix_copia_cola);
+    const mono = "font-family:Consolas,Menlo,monospace; font-size:13px; color:#1F2937; background:#F3F4F6; padding:10px 12px; border-radius:8px; word-break:break-all; display:block;";
+    return {
+      subject: `Boleto Grupo Carbo — vencimento ${String(d.vencimento ?? "")}`.trim(),
+      html: brandedEmail({
+        preheader: `Boleto de ${String(d.valor ?? "")} com vencimento em ${String(d.vencimento ?? "")}.`,
+        title: "Seu boleto",
+        bodyHtml:
+          p(`Olá, <strong style="color:#0F402D;">${cliente}</strong>.`) +
+          p(`Segue em anexo o boleto de <strong>${valor}</strong>, com vencimento em <strong>${venc}</strong>.`) +
+          (linha ? p(`Linha digitável:<br><span style="${mono}">${linha}</span>`) : "") +
+          (pix ? p(`Ou pague com Pix (copia e cola):<br><span style="${mono}">${pix}</span>`) : "") +
+          p(`<span style="color:#6B7280; font-size:13px;">Se o pagamento já foi feito, desconsidere este e-mail.</span>`),
       }),
     };
   },

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { BoletoDialogo, ChipBoleto, itemBoleto, type AlvoBoleto } from "@/components/financeiro/Boleto";
+import { useBoletosDosTitulos, type FinBoleto } from "@/hooks/useBoletos";
 import { confirmar, useParamUrl } from "@carbo/shell";
 import { Check, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -156,6 +158,10 @@ export function FilialBling2({ tipo, seletor, abrirBaixa, onBaixaAberta }: {
     tipo, filtro, busca: buscaUrl, page, pageSize, ordem, de: periodo.de, ate: periodo.ate,
   });
   const rows = paged?.rows ?? [];
+  // Boleto Bradesco: só a RECEBER (a pagar não tem). Ids = bling_id da filial.
+  const { data: boletos } = useBoletosDosTitulos("bling2_conta_id", tipo === "receber" ? rows.map((c) => c.bling_id) : []);
+  const [alvoBoleto, setAlvoBoleto] = useState<AlvoBoleto | null>(null);
+  const boletoDe = (c: Bling2Conta) => (tipo === "receber" ? boletos?.get(String(c.bling_id)) : undefined);
   const total = paged?.count ?? 0;
   const { data: cfgBaixa } = useBaixaBling2Config();
   const irPara = (n: number) => setPaginaUrl(n <= 0 ? null : String(n + 1));
@@ -258,7 +264,10 @@ export function FilialBling2({ tipo, seletor, abrirBaixa, onBaixaAberta }: {
                         <span className="block text-xs">{resumoAjustes(c.baixa_ajustes, c.valor)}</span>
                       )}
                     </CarboTableCell>
-                    <CarboTableCell className="py-3"><AcoesDaFilial conta={c} tipo={tipo} cfg={cfgBaixa} /></CarboTableCell>
+                    <CarboTableCell className="py-3">
+                      <AcoesDaFilial conta={c} tipo={tipo} cfg={cfgBaixa} boleto={boletoDe(c)}
+                        onBoleto={tipo === "receber" ? () => setAlvoBoleto({ ref: { bling2_conta_id: Number(c.bling_id) }, boleto: boletoDe(c) ?? null }) : undefined} />
+                    </CarboTableCell>
                   </CarboTableRow>
                 );
               })
@@ -269,6 +278,7 @@ export function FilialBling2({ tipo, seletor, abrirBaixa, onBaixaAberta }: {
         <Paginacao page={page} pageSize={pageSize} total={total} onPage={irPara}
           onPageSize={(n) => { setPageSize(n); setPaginaUrl(null); }} />
       </div>
+      <BoletoDialogo alvo={alvoBoleto} onClose={() => setAlvoBoleto(null)} />
       {/* A conta recém-lançada ("Salvar e dar baixa"): a MESMA baixa da linha. */}
       {externa && (
         <DialogoBaixaFilial conta={externa} tipo={tipo} open onOpenChange={(v) => { if (!v) setExterna(null); }} />
@@ -324,7 +334,10 @@ function DialogoBaixaFilial({ conta: c, tipo, open, onOpenChange }: {
 // ⚠️ Baixa feita NO Bling 2 não ganha "Desfazer" aqui: desfaz-se lá, e o
 // espelho acompanha. Desfazer daqui apagaria um borderô que não é nosso.
 // ─────────────────────────────────────────────────────────────────────────────
-function AcoesDaFilial({ conta: c, tipo, cfg }: { conta: Bling2Conta; tipo: Bling2Tipo; cfg: BaixaBling2Config | undefined }) {
+function AcoesDaFilial({ conta: c, tipo, cfg, boleto, onBoleto }: {
+  conta: Bling2Conta; tipo: Bling2Tipo; cfg: BaixaBling2Config | undefined;
+  boleto?: FinBoleto; onBoleto?: () => void;
+}) {
   const qc = useQueryClient();
   const [aberto, setAberto] = useState(false);
   const [enviando, setEnviando] = useState(false);
@@ -353,7 +366,12 @@ function AcoesDaFilial({ conta: c, tipo, cfg }: { conta: Bling2Conta; tipo: Blin
   };
 
   const acao = tipo === "receber" ? "Receber" : "Pagar";
-  const celula = (filhos: ReactNode) => <div className="flex items-center justify-end gap-1">{filhos}</div>;
+  const celula = (filhos: ReactNode) => (
+    <div className="flex items-center justify-end gap-1">
+      {onBoleto && <ChipBoleto b={boleto} onClick={onBoleto} />}
+      {filhos}
+    </div>
+  );
 
   if (c.cb_baixa_bordero && !aberta(c)) {
     return celula(
@@ -399,8 +417,10 @@ function AcoesDaFilial({ conta: c, tipo, cfg }: { conta: Bling2Conta; tipo: Blin
           {c.cb_baixa_erro ? "Tentar de novo" : acao}
         </Button>
       ) : !c.cb_baixa_erro && <span className="whitespace-nowrap text-xs text-muted-foreground">baixa no Bling</span>}
-      <MenuAcoes itens={c.cb_criado_nome
-        ? [{ l: "Excluir no Bling", onClick: excluir, perigo: true, disabled: enviando }] : []} />
+      <MenuAcoes itens={[
+        ...(onBoleto ? [itemBoleto(boleto, onBoleto)] : []),
+        ...(c.cb_criado_nome ? [{ l: "Excluir no Bling", onClick: excluir, perigo: true, disabled: enviando }] : []),
+      ]} />
 
       {aberto && <DialogoBaixaFilial conta={c} tipo={tipo} open onOpenChange={(v) => { setAberto(v); if (!v) recarregar(); }} />}
     </>,
