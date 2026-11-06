@@ -20,6 +20,10 @@ export type Tema = "reclamacao" | "pagamento" | "produto" | "confianca" | "entre
 
 export interface PainelKpis {
   pedem: number;
+  /** Base da TAXA DE RESPOSTA: as que pedem menos as que ainda esperam (não se decidiram). */
+  pedem_encerradas: number;
+  /** Base do SLA: encerradas + as que ainda esperam e JÁ passaram da meta. */
+  sla_base: number;
   nao_pedem?: number;
   respondidas: number;
   fechadas_sem_resposta: number;
@@ -40,6 +44,8 @@ export interface PainelKpis {
   atendimentos_respondidos?: number;
   /** Resolvidos no 1º contato: 1 rodada, respondida, cliente não voltou em 7 dias. */
   fcr?: number;
+  /** Base do FCR: atendimentos respondidos que já têm 7 dias (o de ontem não se julga ainda). */
+  fcr_base?: number;
   /** TMA: 1ª mensagem do cliente → última resposta de gente (minutos corridos). */
   tma_mediana?: number | null; tma_p90?: number | null; tma_media?: number | null;
   msgs_por_atendimento?: number | null;
@@ -53,7 +59,7 @@ export interface PainelConfig {
 export interface PainelNumero { id: string; rotulo: string; funcao: string; cor: string | null; ativo: boolean; exibicao: string | null }
 
 export interface PainelDia {
-  dia: string; pedem: number; respondidas: number; perdidas: number; fechadas_sem_resposta: number;
+  dia: string; pedem: number; pedem_encerradas: number; sla_base: number; respondidas: number; perdidas: number; fechadas_sem_resposta: number;
   aguardando: number; dentro_meta: number; tmr_mediana: number | null; tmr_util_mediana: number | null;
   nao_pedem: number; mensagens: number;
 }
@@ -69,11 +75,11 @@ export interface PainelCelula {
 
 export interface PainelPorNumero {
   numero_id: string; rotulo: string | null; cor: string | null;
-  pedem: number; respondidas: number; perdidas: number; fechadas_sem_resposta: number; aguardando: number;
+  pedem: number; pedem_encerradas: number; sla_base: number; respondidas: number; perdidas: number; fechadas_sem_resposta: number; aguardando: number;
   dentro_meta: number; tmr_mediana: number | null; tmr_util_mediana: number | null; ultima_resposta_em: string | null;
 }
 
-export interface PainelTema { tema: Tema; pedem: number; respondidas: number; sem_resposta: number; tmr_mediana: number | null }
+export interface PainelTema { tema: Tema; pedem: number; pedem_encerradas: number; respondidas: number; sem_resposta: number; tmr_mediana: number | null }
 export interface PainelEtiqueta { nome: string; cor: string; n: number }
 
 export interface PainelAtendente {
@@ -85,7 +91,8 @@ export interface PainelAtendente {
   tmr_mediana: number | null; tmr_p90: number | null; tmr_util_mediana: number | null;
   dentro_meta: number;
   mensagens: number; falharam: number; conversas: number; dias_ativos: number;
-  resolvidas: number; reabertas: number; fechadas_sem_resposta: number; notas: number;
+  resolvidas: number; reabertas: number; resolvidas_maduras: number; reabertas_maduras: number;
+  fechadas_sem_resposta: number; notas: number;
   em_atendimento_agora: number;
   ultima_resposta_em: string | null;
   primeira_hora: string | null; ultima_hora: string | null;
@@ -121,7 +128,9 @@ export interface PainelAtendimento {
   config: PainelConfig;
   numeros: PainelNumero[];
   kpis: { atual?: PainelKpis; anterior?: PainelKpis };
-  atividade: { mensagens: number; falharam: number; atendentes_ativos: number; resolvidas: number; reabertas: number };
+  /** Reabertura: use `reabertas_maduras ÷ resolvidas_maduras` (resolvidas há 7+ dias); as recentes ainda podem reabrir. */
+  atividade: { mensagens: number; falharam: number; atendentes_ativos: number; resolvidas: number; reabertas: number;
+               resolvidas_maduras: number; reabertas_maduras: number };
   diario: PainelDia[];
   /** Faixas pelo tempo em horário de atendimento. */
   faixas: PainelFaixa[];

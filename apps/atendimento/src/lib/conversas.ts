@@ -261,19 +261,20 @@ const ENCERRAMENTOS = [
   "obrigado", "obrigada", "obg", "vlw", "valeu", "grato", "grata",
   "recebi", "recebido", "chegou", "entendi", "perfeito", "otimo", "excelente",
   "show", "top", "joia", "tudo", "bem", "bom", "boa", "sim", "isso", "eh",
-  "de", "nada", "ate", "mais", "abraco", "bs", "abs", "att",
+  "de", "mais", "abraco", "bs", "abs", "att",
   // Acrescentadas em 06/11/2026, medidas nas conversas reais. ⚠️ A MESMA lista
   // mora em `public.carbo_wa_pede_resposta` (migração 20261148), que decide o
   // que o Painel do atendimento conta como "pede resposta". Mudou uma, mude a
   // outra. ⚠️ FORA de propósito: "dia/tarde/noite" ("Bom dia" sozinho costuma
   // abrir uma conversa) e "sem/problema/avaria/entrega" ("sem entrega" e
-  // "avaria" são reclamação — juntas, todas sairiam como agradecimento).
+  // "avaria" são reclamação — juntas, todas sairiam como agradecimento), e
+  // "nada/ate/foi" ("até agora nada", "chegou nada", "já foi entregue").
   "okk", "obgd", "muito", "pela", "pelo", "atencao", "retorno", "agilidade", "gentileza",
   "agradeco", "agradecido", "agradecida", "deus", "abencoe",
   "certinho", "certinha", "direitinho", "tranquilo", "maravilha", "positivo",
   "confirmado", "confirmo", "ja", "ta", "to", "td", "tb", "tbm", "tambem", "sucesso",
   "entregue", "recebida", "recebidos", "recebidas", "chegaram", "bacana", "legal", "certa",
-  "aqui", "agora", "o", "a", "os", "as", "e", "foi", "esta", "grande",
+  "aqui", "agora", "o", "a", "os", "as", "e", "esta", "grande",
   "ordem", "conforme",
   "vou", "vamos", "testar", "usar",
 ];

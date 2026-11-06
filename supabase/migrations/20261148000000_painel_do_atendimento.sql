@@ -148,7 +148,12 @@ create table if not exists public.carbo_wa_atendimento_hist (
   por              uuid,
   por_nome         text,
   em               timestamptz not null default now(),
-  origem           text not null default 'tela' check (origem in ('tela','retrato','resolvidas'))
+  origem           text not null default 'tela' check (origem in ('tela','retrato','resolvidas')),
+  -- ⚠️ true = uma DECISÃO de status (mudou o status ou o `desde`); false = só
+  -- trocou o responsável. Sem isto, passar a conversa a um colega contava
+  -- como mais um "resolvido" de quem passou (medido na revisão: 1 resolução +
+  -- 2 trocas = 3 resolvidas e 3 reabertas).
+  marca            boolean not null default true
 );
 create index if not exists carbo_wa_atendimento_hist_par on public.carbo_wa_atendimento_hist (numero_id, wa_id, em);
 create index if not exists carbo_wa_atendimento_hist_por on public.carbo_wa_atendimento_hist (por, em) where por is not null;
@@ -175,15 +180,20 @@ begin
     return new;
   end if;
   begin
-    v_por := coalesce(new.atualizado_por, auth.uid());
+    -- ⚠️ Quem está LOGADO vence o campo que o navegador manda: `atualizado_por`
+    -- vem do cliente, e a RLS só exige time interno — confiar nele deixaria
+    -- lançar "fechou sem responder" no nome de outra pessoa. O campo só vale
+    -- sem sessão (service role, SQL).
+    v_por := coalesce(auth.uid(), new.atualizado_por);
     insert into public.carbo_wa_atendimento_hist
-      (numero_id, wa_id, status, status_antes, desde, responsavel, responsavel_nome, por, por_nome, em, origem)
+      (numero_id, wa_id, status, status_antes, desde, responsavel, responsavel_nome, por, por_nome, em, origem, marca)
     values
       (new.numero_id, new.wa_id, new.status,
        case when tg_op = 'UPDATE' then old.status end,
        new.desde, new.responsavel, new.responsavel_nome,
        v_por, (select p.full_name from public.profiles p where p.id = v_por),
-       now(), 'tela');
+       now(), 'tela',
+       tg_op = 'INSERT' or new.status is distinct from old.status or new.desde is distinct from old.desde);
   exception when others then
     -- ⚠️ Histórico que falha não pode desfazer o clique de quem atende.
     raise warning 'carbo_wa_atendimento_hist: %', sqlerrm;
@@ -240,13 +250,23 @@ begin
   -- Tipo desconhecido sem texto: melhor sobrar (aparece) que sumir.
   if t = '' then return coalesce(p_tipo, '') not in ('text', 'button', 'interactive'); end if;
   -- ⚠️ A resposta automática do WhatsApp Business do PRÓPRIO cliente
-  -- ("Fulano agradece seu contato. Como podemos ajudar?") não é pergunta,
-  -- mesmo com "?": cliente não escreve "como podemos ajudar".
-  if t ~* (
-       'agradece (o |a )?(seu|sua) (contato|mensagem|prefer)|n[aã]o estamos dispon[ií]ve|'
-    || 'como (podemos|posso) (te |lhe )?ajud|mensagem autom[aá]tica|retornare(i|mos)|responderemos|'
-    || 'entraremos em contato|assim que poss[ií]vel (iremos|irei|retorn|respond|lhe)|'
-    || 'seja bem[- ]vind|hor[aá]rio de atendimento') then
+  -- ("Fulano agradece seu contato. Como podemos ajudar?") não é pergunta.
+  -- FORTE (frase que cliente não escreve): basta uma, mesmo com "?".
+  -- FRACA ("não estamos disponíveis", "responderemos"…): precisa de DUAS —
+  -- "Recebi uma mensagem automática e ninguém respondeu" e "Qual o horário de
+  -- atendimento?" são perguntas, e uma frase fraca sozinha as esconderia.
+  if t ~* '(agradece (o |a )?(seu|sua) (contato|mensagem|prefer)|como (podemos|posso) (te |lhe )?ajud)' then
+    return false;
+  end if;
+  -- (Uma regex só antes de contar: quase nenhuma mensagem passa dela, e a
+  -- função roda uma vez por mensagem.)
+  if t ~* ('n[aã]o estamos dispon|mensagem autom|retornare|responderemos|entraremos em contato|'
+        || 'assim que poss|bem[- ]vind|hor[aá]rio de atendimento|agradecemos|deixe (seu|sua)|no momento')
+     and (select count(*) from unnest(array[
+        'n[aã]o estamos dispon[ií]ve', 'mensagem autom[aá]tica', 'retornare(i|mos)', 'responderemos',
+        'entraremos em contato', 'assim que poss[ií]vel', 'seja bem[- ]vind', 'hor[aá]rio de atendimento',
+        'agradecemos (a |o )?(sua|seu)', 'deixe (seu|sua) (recado|mensagem)', 'no momento'
+      ]) f where t ~* f) >= 2 then
     return false;
   end if;
   if position('?' in t) > 0 then return true; end if;
@@ -265,16 +285,17 @@ begin
       'obrigado','obrigada','obg','obgd','vlw','valeu','grato','grata',
       'recebi','recebido','chegou','entendi','perfeito','otimo','excelente',
       'show','top','joia','tudo','bem','bom','boa','sim','isso','eh',
-      'de','nada','ate','mais','abraco','bs','abs','att',
+      'de','mais','abraco','bs','abs','att',
       -- acrescentadas em 06/11/2026, medidas nas conversas reais
       'muito','pela','pelo','atencao','retorno','agilidade','gentileza',
       'agradeco','agradecido','agradecida','deus','abencoe',
       'certinho','certinha','direitinho','tranquilo','maravilha','positivo',
       'confirmado','confirmo','ja','ta','to','td','tb','tbm','tambem','sucesso',
       'entregue','recebida','recebidos','recebidas','chegaram','bacana','legal','certa',
-      'aqui','agora','o','a','os','as','e','foi','esta','grande',
-      -- ⚠️ FORA de propósito: dia/tarde/noite ("Bom dia" abre conversa) e
-      -- sem/problema/avaria/entrega ("sem entrega", "avaria" são reclamação).
+      'aqui','agora','o','a','os','as','e','esta','grande',
+      -- ⚠️ FORA de propósito: dia/tarde/noite ("Bom dia" abre conversa),
+      -- sem/problema/avaria/entrega ("sem entrega", "avaria" são reclamação)
+      -- e nada/ate/foi ("até agora nada", "chegou nada", "já foi entregue?").
       'ordem','conforme',
       'vou','vamos','testar','usar'
     ])) then
@@ -291,10 +312,10 @@ create or replace function public.carbo_wa_tema(p_texto text)
 returns text language sql immutable set search_path = public as $$
   select case
     when t = '' then 'outros'
-    when t ~ '(procon|reclame aqui|reclamac|reclamar|advogad|justica|defesa do consumidor|processar|denunci|cancel|devolu|devolv|estorno|reembols|desist)' then 'reclamacao'
+    when t ~ '(procon|reclame aqui|reclamac|reclamar|advogad|justica|defesa do consumidor|vou processar|processar (voces|vcs|a empresa)|denunci|cancel|devolu|devolv|estorno|reembols|desist)' then 'reclamacao'
     when t ~ '(cobr|duplic|duas vezes|dois pedidos|2 pedidos|duas compras|2 compras|pix|cart(ao|oes)|boleto|pagamento|pagar|paguei|parcel|roleta|cupom|desconto|preco|valor|juros)' then 'pagamento'
     when t ~ '(vaz|molhad|amassad|quebr|errad|faltou|falta |veio aberto|chegou aberto|defeito|diferente|sem data|vencid)' then 'produto'
-    when t ~ '(golpe|confi|fraude|site oficial|e seguro|enganad)' then 'confianca'
+    when t ~ '(golpe|confiavel|confiar|confianca|confio|fraude|site oficial|e seguro|enganad)' then 'confianca'
     when t ~ '(rastre|entreg|chega|receb|prazo|transportad|correio|jadlog|pacote|despach|demor|envio|enviad|pedido|compra|nao veio)' then 'entrega'
     when t ~ '(diesel|gasolina|etanol|alcool|flex|moto|tanque|litro|sache|frasco|quant|como us|serve|funciona|motor|carro|aditivo|carbur)' then 'uso'
     when t ~ '(loja fisica|onde (compro|encontro|vende|acho)|revend|representante|distribu|atacado|posto|na minha cidade|aqui em )' then 'onde_comprar'
@@ -307,7 +328,7 @@ $$;
 create or replace function public.carbo_wa_risco(p_texto text)
 returns boolean language sql immutable set search_path = public as $$
   select translate(lower(coalesce(p_texto, '')), 'áàâãäéèêëíìîïóòôõöúùûüç', 'aaaaaeeeeiiiiooooouuuuc')
-         ~ '(procon|reclame aqui|advogad|justica|defesa do consumidor|processar|denunci|golpe|fraude|estorno|chargeback|cobrad[oa] duas|cobranca duplicada|nao autoriz)';
+         ~ '(procon|reclame aqui|advogad|justica|defesa do consumidor|vou processar|processar (voces|vcs|a empresa)|denunci|golpe|fraude|estorno|chargeback|cobrad[oa] duas|cobranca duplicada|nao autoriz)';
 $$;
 
 -- Minutos entre dois instantes contando SÓ o horário de atendimento (dia de
@@ -360,13 +381,13 @@ drop function if exists public.carbo_atendimento_rodadas(timestamptz, text);
 create or replace function public.carbo_atendimento_rodadas(p_desde timestamptz, p_numero text)
 returns table (
   numero_id text, wa_id text, idx bigint, ep bigint,
-  inicio timestamptz, inicio_pede timestamptz, ultimo_cliente_em timestamptz,
+  inicio timestamptz, inicio_pede timestamptz, ultimo_cliente_em timestamptz, ultimo_pede_em timestamptz,
   proxima_em timestamptz, pede boolean, n_msgs bigint, n_pede bigint,
   textos text, ultimo_texto text, ultimo_tipo text,
   respondido_em timestamptz, resp_pessoa text, resp_nome text,
   n_humanos bigint, ultimo_humano_em timestamptz,
   mark_em timestamptz, mark_status text, mark_por text, mark_por_nome text,
-  desfecho text, primeira_do_ep boolean
+  desfecho text, primeira_do_ep boolean, respondida_depois boolean
 )
 language sql stable set search_path = public as $$
   with msgs as (
@@ -385,29 +406,38 @@ language sql stable set search_path = public as $$
             or ((m.enviado_por is not null or m.enviado_por_nome is not null)
                 and coalesce(m.status, '') <> 'falhou'))
   ),
+  -- ⚠️ Ordem: instante, e no EMPATE a mensagem de gente vem antes — senão uma
+  -- resposta e uma pergunta no mesmo segundo fariam a resposta "responder" a
+  -- pergunta que chegou junto, e o desempate seria o wamid (aleatório).
   seq as (
     select s.*,
            count(*) filter (where s.quem = 'humano')
-             over (partition by s.numero_id, s.wa_id order by s.ocorrido_em, s.wamid
+             over (partition by s.numero_id, s.wa_id order by s.ocorrido_em, (s.quem = 'cliente'), s.wamid
                    rows between unbounded preceding and current row) as n_humano,
            lag(s.ocorrido_em)
-             over (partition by s.numero_id, s.wa_id order by s.ocorrido_em, s.wamid) as anterior_em
+             over (partition by s.numero_id, s.wa_id order by s.ocorrido_em, (s.quem = 'cliente'), s.wamid) as anterior_em
       from msgs s
   ),
   seq2 as (
     select s.*,
            sum(case when s.anterior_em is null or s.ocorrido_em - s.anterior_em > interval '24 hours' then 1 else 0 end)
-             over (partition by s.numero_id, s.wa_id order by s.ocorrido_em, s.wamid
+             over (partition by s.numero_id, s.wa_id order by s.ocorrido_em, (s.quem = 'cliente'), s.wamid
                    rows between unbounded preceding and current row) as ep_n
       from seq s
   ),
-  -- A qual rodada cada mensagem de gente responde: a última aberta antes dela.
-  -- (n_humano só cresce, então o maior valor de cliente até ali é ela.)
+  -- A qual rodada cada mensagem de gente responde: a última aberta antes dela
+  -- (n_humano e ep_n só crescem, então o maior valor de cliente até ali é ela).
+  -- ⚠️ O episódio é o da RODADA, não o da resposta: resposta dada mais de 24 h
+  -- depois (por modelo da Meta) cai num episódio novo, e juntando pelo dela a
+  -- rodada virava "perdida" e a demora sumia do tempo de resposta.
   seq3 as (
     select s.*,
            max(case when s.quem = 'cliente' then s.n_humano end)
-             over (partition by s.numero_id, s.wa_id order by s.ocorrido_em, s.wamid
-                   rows between unbounded preceding and current row) as idx_resp
+             over (partition by s.numero_id, s.wa_id order by s.ocorrido_em, (s.quem = 'cliente'), s.wamid
+                   rows between unbounded preceding and current row) as idx_resp,
+           max(case when s.quem = 'cliente' then s.ep_n end)
+             over (partition by s.numero_id, s.wa_id order by s.ocorrido_em, (s.quem = 'cliente'), s.wamid
+                   rows between unbounded preceding and current row) as ep_resp
       from seq2 s
   ),
   rod as (
@@ -415,6 +445,7 @@ language sql stable set search_path = public as $$
            min(s.ocorrido_em) as inicio,
            min(s.ocorrido_em) filter (where s.pede) as inicio_pede,
            max(s.ocorrido_em) as ultimo_cliente_em,
+           max(s.ocorrido_em) filter (where s.pede) as ultimo_pede_em,
            bool_or(s.pede) as pede,
            count(*) as n_msgs,
            count(*) filter (where s.pede) as n_pede,
@@ -426,7 +457,7 @@ language sql stable set search_path = public as $$
      group by 1, 2, 3, 4
   ),
   hum as (
-    select s.numero_id, s.wa_id, s.idx_resp as idx, s.ep_n as ep,
+    select s.numero_id, s.wa_id, s.idx_resp as idx, s.ep_resp as ep,
            min(s.ocorrido_em) as respondido_em,
            (array_agg(s.pessoa order by s.ocorrido_em))[1] as resp_pessoa,
            (array_agg(s.pessoa_nome order by s.ocorrido_em))[1] as resp_nome,
@@ -439,12 +470,16 @@ language sql stable set search_path = public as $$
   junta as (
     select r.*, h.respondido_em, h.resp_pessoa, h.resp_nome,
            coalesce(h.n_humanos, 0) as n_humanos, h.ultimo_humano_em,
-           lead(r.inicio) over (partition by r.numero_id, r.wa_id order by r.inicio) as proxima_em
+           lead(r.inicio) over (partition by r.numero_id, r.wa_id order by r.inicio) as proxima_em,
+           -- Alguma rodada DEPOIS desta foi respondida? (quem voltou e foi
+           -- atendido não é mais trabalho — sem laço sobre a tabela inteira.)
+           max(h.respondido_em) over (partition by r.numero_id, r.wa_id order by r.inicio
+                                      rows between 1 following and unbounded following) is not null as respondida_depois
       from rod r
       left join hum h on h.numero_id = r.numero_id and h.wa_id = r.wa_id
                      and h.idx = r.idx and h.ep = r.ep
   )
-  select j.numero_id, j.wa_id, j.idx, j.ep, j.inicio, j.inicio_pede, j.ultimo_cliente_em,
+  select j.numero_id, j.wa_id, j.idx, j.ep, j.inicio, j.inicio_pede, j.ultimo_cliente_em, j.ultimo_pede_em,
          j.proxima_em, j.pede, j.n_msgs, j.n_pede, j.textos, j.ultimo_texto, j.ultimo_tipo,
          j.respondido_em, j.resp_pessoa, j.resp_nome, j.n_humanos, j.ultimo_humano_em,
          mk.em, mk.status, mk.por, mk.por_nome,
@@ -456,10 +491,14 @@ language sql stable set search_path = public as $$
            else 'perdida'
          end as desfecho,
          j.pede and j.inicio = min(j.inicio) filter (where j.pede)
-                                 over (partition by j.numero_id, j.wa_id, j.ep) as primeira_do_ep
+                                 over (partition by j.numero_id, j.wa_id, j.ep) as primeira_do_ep,
+         j.respondida_depois
     from junta j
-    -- A marca que fechou a rodada sem resposta: resolvido/aguardando dado
-    -- DEPOIS da última mensagem dela e antes da próxima mensagem do cliente.
+    -- A marca que fechou a rodada sem resposta: uma DECISÃO resolvido/aguardando
+    -- depois da última mensagem que PEDE (um 👍 do cliente depois não a anula)
+    -- e antes da próxima rodada.
+    -- ⚠️ Pelo `em` (relógio do SERVIDOR), nunca pelo `desde`, que vem do
+    -- navegador: PC 2 min atrasado fazia a marca cair antes da mensagem.
     left join lateral (
       select h.em, h.status, h.por::text as por,
              coalesce(h.por_nome, pr.full_name) as por_nome
@@ -467,9 +506,10 @@ language sql stable set search_path = public as $$
         left join public.profiles pr on pr.id = h.por
        where j.respondido_em is null and j.pede
          and h.numero_id = j.numero_id and h.wa_id = j.wa_id
+         and h.marca
          and h.status in ('resolvido', 'aguardando')
-         and coalesce(h.desde, h.em) >= j.ultimo_cliente_em
-         and (j.proxima_em is null or coalesce(h.desde, h.em) < j.proxima_em)
+         and h.em >= j.ultimo_pede_em
+         and (j.proxima_em is null or h.em < j.proxima_em)
        order by h.em
        limit 1
     ) mk on true;
@@ -538,6 +578,12 @@ begin
            case when r0.respondido_em is not null and r0.pede and r0.inicio >= v_ini then
              public.carbo_minutos_uteis(coalesce(r0.inicio_pede, r0.inicio), r0.respondido_em,
                                         c.hora_inicio, c.hora_fim, c.dias) end as min_util,
+           -- A que ainda espera: quanto de horário de atendimento já correu.
+           -- ⚠️ É o que decide se ela já está FORA da meta (entra no SLA) ou
+           -- ainda não (fica fora da conta até se decidir).
+           case when r0.desfecho = 'aguardando' then
+             public.carbo_minutos_uteis(coalesce(r0.inicio_pede, r0.inicio), now(),
+                                        c.hora_inicio, c.hora_fim, c.dias) end as espera_util,
            public.carbo_wa_tema(r0.textos) as tema,
            public.carbo_wa_risco(r0.textos) as risco,
            -- A próxima rodada que PEDE do mesmo par (para o FCR, sem laço).
@@ -567,7 +613,11 @@ begin
            extract(epoch from e.ultimo_humano_em - e.inicio) / 60.0 as min_tma,
            -- FCR: uma rodada que pede, respondida, e o cliente não voltou
            -- pedindo nada nos 7 dias seguintes.
-           (e.rodadas_pede = 1 and e.rodadas_resp = 1
+           -- ⚠️ Só se julga atendimento MADURO (7 dias já passaram): o de
+           -- ontem, sem "próxima rodada" ainda, sairia sempre perfeito.
+           (e.rodadas_resp > 0 and e.fim + interval '7 days' <= now()) as fcr_maduro,
+           (e.rodadas_resp > 0 and e.fim + interval '7 days' <= now()
+            and e.rodadas_pede = 1 and e.rodadas_resp = 1
             and (e.proxima_pede_em is null or e.proxima_pede_em > e.fim + interval '7 days')) as fcr
       from ep e
      where e.pede
@@ -588,23 +638,33 @@ begin
   ),
   -- Marcas de status no período (quem resolve), e se a conversa REABRIU:
   -- o cliente voltou pedindo algo em até 7 dias depois do "resolvido".
+  -- ⚠️ Só DECISÃO de status (`marca`): trocar o responsável não é resolver.
+  -- ⚠️ `em` (relógio do servidor), nunca `desde` (relógio do navegador).
+  -- `madura` = já passaram os 7 dias em que uma reabertura pode acontecer.
   mk as (
     select h.*, coalesce(h.por_nome, pr.full_name) as nome,
+           h.em + interval '7 days' <= now() as madura,
            h.status = 'resolvido' and exists (
              select 1 from public.carbo_wa_mensagens x
               where x.wa_id = h.wa_id and x.numero_id = h.numero_id
                 and x.direcao = 'entrada'
-                and x.ocorrido_em > coalesce(h.desde, h.em)
-                and x.ocorrido_em <= coalesce(h.desde, h.em) + interval '7 days'
+                and x.ocorrido_em > h.em
+                and x.ocorrido_em <= h.em + interval '7 days'
                 and public.carbo_wa_pede_resposta(x.tipo, x.texto)) as reabriu
       from public.carbo_wa_atendimento_hist h
       left join public.profiles pr on pr.id = h.por
-     where h.origem = 'tela' and h.em >= v_de and h.em < v_fim
+     where h.origem = 'tela' and h.marca and h.em >= v_de and h.em < v_fim
        and (p_numero is null or h.numero_id = p_numero)
   ),
   kpi as (
     select p.periodo,
            count(*)                                                    as pedem,
+           -- ⚠️ As bases das taxas. A que ainda espera NÃO entra na taxa de
+           -- resposta (não se decidiu), e só entra no SLA quando já passou da
+           -- meta — senão a mensagem de 3 minutos atrás derrubava o "hoje".
+           count(*) filter (where p.desfecho <> 'aguardando')          as pedem_encerradas,
+           count(*) filter (where p.desfecho <> 'aguardando'
+                               or p.espera_util > c.meta_resposta_min) as sla_base,
            count(*) filter (where p.desfecho = 'respondida')           as respondidas,
            count(*) filter (where p.desfecho = 'fechada_sem_resposta') as fechadas_sem_resposta,
            count(*) filter (where p.desfecho = 'perdida')              as perdidas,
@@ -634,6 +694,7 @@ begin
            count(*)                                         as atendimentos,
            count(*) filter (where e.rodadas_resp > 0)       as atendimentos_respondidos,
            count(*) filter (where e.fcr)                    as fcr,
+           count(*) filter (where e.fcr_maduro)             as fcr_base,
            round((percentile_cont(0.5) within group (order by e.min_tma))::numeric, 1) as tma_mediana,
            round((percentile_cont(0.9) within group (order by e.min_tma))::numeric, 1) as tma_p90,
            round(avg(e.min_tma)::numeric, 1)                as tma_media,
@@ -642,7 +703,9 @@ begin
   ),
   kpi_mk as (
     select count(*) filter (where status = 'resolvido') as resolvidas,
-           count(*) filter (where status = 'resolvido' and reabriu) as reabertas
+           count(*) filter (where status = 'resolvido' and reabriu) as reabertas,
+           count(*) filter (where status = 'resolvido' and madura) as resolvidas_maduras,
+           count(*) filter (where status = 'resolvido' and madura and reabriu) as reabertas_maduras
       from mk
   ),
   kpi_hm as (
@@ -669,38 +732,77 @@ begin
   pes as (
     select p.chave, max(p.nome) as nome from pessoas p where p.chave is not null group by p.chave
   ),
+  -- ⚠️ Agregado UMA vez por pessoa e juntado — não 20 subconsultas por
+  -- pessoa varrendo as mesmas tabelas.
+  a_rp as (
+    select x.resp_pessoa as chave,
+           count(*) as respondidas,
+           count(*) filter (where x.primeira_do_ep) as primeiras,
+           round((percentile_cont(0.5) within group (order by x.min_resp))::numeric, 1) as tmr_mediana,
+           round((percentile_cont(0.9) within group (order by x.min_resp))::numeric, 1) as tmr_p90,
+           round((percentile_cont(0.5) within group (order by x.min_util))::numeric, 1) as tmr_util_mediana,
+           count(*) filter (where x.min_util <= c.meta_resposta_min) as dentro_meta
+      from rp x where x.periodo = 'atual' and x.resp_pessoa is not null group by 1
+  ),
+  a_fs as (
+    select x.mark_por as chave, count(*) as fechadas_sem_resposta
+      from rp x where x.periodo = 'atual' and x.desfecho = 'fechada_sem_resposta' and x.mark_por is not null group by 1
+  ),
+  a_hm as (
+    select hm.pessoa as chave, count(*) as mensagens,
+           count(*) filter (where hm.status = 'falhou') as falharam,
+           count(distinct (hm.numero_id, hm.wa_id)) as conversas,
+           count(distinct hm.dia) as dias_ativos,
+           to_char(min((hm.ocorrido_em at time zone v_tz)::time), 'HH24:MI') as primeira_hora,
+           to_char(max((hm.ocorrido_em at time zone v_tz)::time), 'HH24:MI') as ultima_hora
+      from hm group by 1
+  ),
+  a_mk as (
+    select mk.por::text as chave,
+           count(*) filter (where mk.status = 'resolvido') as resolvidas,
+           count(*) filter (where mk.status = 'resolvido' and mk.reabriu) as reabertas,
+           count(*) filter (where mk.status = 'resolvido' and mk.madura) as resolvidas_maduras,
+           count(*) filter (where mk.status = 'resolvido' and mk.madura and mk.reabriu) as reabertas_maduras
+      from mk where mk.por is not null group by 1
+  ),
+  a_nt as (
+    select n.autor::text as chave, count(*) as notas
+      from public.carbo_wa_notas n
+     where n.apagada_em is null and n.criado_em >= v_de and n.criado_em < v_fim
+       and (p_numero is null or n.numero_id = p_numero)
+     group by 1
+  ),
+  a_ea as (
+    select a.responsavel::text as chave, count(*) as em_atendimento_agora
+      from public.carbo_wa_atendimento a
+     where a.status = 'em_atendimento' and a.responsavel is not null
+       and (p_numero is null or a.numero_id = p_numero)
+     group by 1
+  ),
   atendentes as (
     select pe.chave, pe.nome,
-           (select count(*) from rp x where x.periodo = 'atual' and x.resp_pessoa = pe.chave)                       as respondidas,
-           (select count(*) from rp x where x.periodo = 'atual' and x.resp_pessoa = pe.chave and x.primeira_do_ep)  as primeiras,
-           (select round((percentile_cont(0.5) within group (order by x.min_resp))::numeric, 1)
-              from rp x where x.periodo = 'atual' and x.resp_pessoa = pe.chave)                                     as tmr_mediana,
-           (select round((percentile_cont(0.9) within group (order by x.min_resp))::numeric, 1)
-              from rp x where x.periodo = 'atual' and x.resp_pessoa = pe.chave)                                     as tmr_p90,
-           (select round((percentile_cont(0.5) within group (order by x.min_util))::numeric, 1)
-              from rp x where x.periodo = 'atual' and x.resp_pessoa = pe.chave)                                     as tmr_util_mediana,
-           (select count(*) from rp x where x.periodo = 'atual' and x.resp_pessoa = pe.chave
-                                        and x.min_util <= c.meta_resposta_min)                                       as dentro_meta,
-           (select count(*) from hm where hm.pessoa = pe.chave)                                                      as mensagens,
-           (select count(*) from hm where hm.pessoa = pe.chave and hm.status = 'falhou')                             as falharam,
-           (select count(distinct (hm.numero_id, hm.wa_id)) from hm where hm.pessoa = pe.chave)                      as conversas,
-           (select count(distinct hm.dia) from hm where hm.pessoa = pe.chave)                                        as dias_ativos,
-           (select count(*) from mk where mk.por::text = pe.chave and mk.status = 'resolvido')                       as resolvidas,
-           (select count(*) from mk where mk.por::text = pe.chave and mk.status = 'resolvido' and mk.reabriu)        as reabertas,
-           (select count(*) from rp x where x.periodo = 'atual' and x.desfecho = 'fechada_sem_resposta'
-                                        and x.mark_por = pe.chave)                                                   as fechadas_sem_resposta,
-           (select count(*) from public.carbo_wa_notas n
-             where n.autor::text = pe.chave and n.apagada_em is null
-               and n.criado_em >= v_de and n.criado_em < v_fim
-               and (p_numero is null or n.numero_id = p_numero))                                                    as notas,
-           (select count(*) from public.carbo_wa_atendimento a
-             where a.responsavel::text = pe.chave and a.status = 'em_atendimento'
-               and (p_numero is null or a.numero_id = p_numero))                                                    as em_atendimento_agora,
-           (select max(m.ocorrido_em) from public.carbo_wa_mensagens m
-             where m.direcao = 'saida' and m.enviado_por::text = pe.chave)                                           as ultima_resposta_em,
-           (select to_char(min((hm.ocorrido_em at time zone v_tz)::time), 'HH24:MI') from hm where hm.pessoa = pe.chave) as primeira_hora,
-           (select to_char(max((hm.ocorrido_em at time zone v_tz)::time), 'HH24:MI') from hm where hm.pessoa = pe.chave) as ultima_hora
+           coalesce(ar.respondidas, 0) as respondidas, coalesce(ar.primeiras, 0) as primeiras,
+           ar.tmr_mediana, ar.tmr_p90, ar.tmr_util_mediana, coalesce(ar.dentro_meta, 0) as dentro_meta,
+           coalesce(ah.mensagens, 0) as mensagens, coalesce(ah.falharam, 0) as falharam,
+           coalesce(ah.conversas, 0) as conversas, coalesce(ah.dias_ativos, 0) as dias_ativos,
+           coalesce(am.resolvidas, 0) as resolvidas, coalesce(am.reabertas, 0) as reabertas,
+           coalesce(am.resolvidas_maduras, 0) as resolvidas_maduras, coalesce(am.reabertas_maduras, 0) as reabertas_maduras,
+           coalesce(af.fechadas_sem_resposta, 0) as fechadas_sem_resposta,
+           coalesce(an.notas, 0) as notas,
+           coalesce(ae.em_atendimento_agora, 0) as em_atendimento_agora,
+           -- ⚠️ Comparação por uuid (usa o índice por autor); chave "nome:" é
+           -- mensagem antiga sem id, e para ela não há como saber.
+           case when pe.chave !~ '^nome:' then
+             (select max(m.ocorrido_em) from public.carbo_wa_mensagens m
+               where m.enviado_por = pe.chave::uuid and m.direcao = 'saida') end as ultima_resposta_em,
+           ah.primeira_hora, ah.ultima_hora
       from pes pe
+      left join a_rp ar on ar.chave = pe.chave
+      left join a_fs af on af.chave = pe.chave
+      left join a_hm ah on ah.chave = pe.chave
+      left join a_mk am on am.chave = pe.chave
+      left join a_nt an on an.chave = pe.chave
+      left join a_ea ae on ae.chave = pe.chave
   ),
   fila as (
     select r.*,
@@ -713,9 +815,7 @@ begin
     select r.* from r
      where r.desfecho = 'perdida' and r.ultimo_cliente_em >= now() - interval '7 days'
        -- ⚠️ Quem voltou a escrever e FOI respondido depois já não é trabalho.
-       and not exists (select 1 from r x
-                        where x.numero_id = r.numero_id and x.wa_id = r.wa_id
-                          and x.inicio > r.inicio and x.respondido_em is not null)
+       and not r.respondida_depois
   ),
   ctt as (
     select distinct on (ct.numero_id, ct.wa_id) ct.numero_id, ct.wa_id, ct.nome
@@ -741,6 +841,8 @@ begin
     'diario', coalesce((select jsonb_agg(d order by d.dia) from (
          select g.dia::date as dia,
                 count(p.*) as pedem,
+                count(p.*) filter (where p.desfecho <> 'aguardando') as pedem_encerradas,
+                count(p.*) filter (where p.desfecho <> 'aguardando' or p.espera_util > c.meta_resposta_min) as sla_base,
                 count(p.*) filter (where p.desfecho = 'respondida') as respondidas,
                 count(p.*) filter (where p.desfecho = 'perdida') as perdidas,
                 count(p.*) filter (where p.desfecho = 'fechada_sem_resposta') as fechadas_sem_resposta,
@@ -794,6 +896,8 @@ begin
     'por_numero', coalesce((select jsonb_agg(x order by x.pedem desc) from (
          select p.numero_id, n.rotulo, n.cor,
                 count(*) as pedem,
+                count(*) filter (where p.desfecho <> 'aguardando') as pedem_encerradas,
+                count(*) filter (where p.desfecho <> 'aguardando' or p.espera_util > c.meta_resposta_min) as sla_base,
                 count(*) filter (where p.desfecho = 'respondida') as respondidas,
                 count(*) filter (where p.desfecho = 'perdida') as perdidas,
                 count(*) filter (where p.desfecho = 'fechada_sem_resposta') as fechadas_sem_resposta,
@@ -808,6 +912,7 @@ begin
           group by p.numero_id, n.rotulo, n.cor) x), '[]'::jsonb),
     'temas', coalesce((select jsonb_agg(x order by x.pedem desc) from (
          select p.tema, count(*) as pedem,
+                count(*) filter (where p.desfecho <> 'aguardando') as pedem_encerradas,
                 count(*) filter (where p.desfecho = 'respondida') as respondidas,
                 count(*) filter (where p.desfecho in ('perdida', 'fechada_sem_resposta')) as sem_resposta,
                 round((percentile_cont(0.5) within group (order by p.min_resp))::numeric, 1) as tmr_mediana
@@ -934,24 +1039,24 @@ begin
           from r left join ctt on ctt.numero_id = r.numero_id and ctt.wa_id = r.wa_id
          where r.desfecho = 'fechada_sem_resposta' and r.mark_por = p_pessoa
          order by r.mark_em desc limit 300) y), '[]'::jsonb),
+    -- ⚠️ O filtro "voltou em até 7 dias" fica DENTRO, antes do limite: com
+    -- o limite antes, mais de 300 resoluções escondiam reaberturas antigas.
     'reabertas', coalesce((select jsonb_agg(y order by y.resolvida_em desc) from (
-        select h.numero_id, h.wa_id, ctt.nome, h.em as resolvida_em,
-               (select min(m.ocorrido_em) from public.carbo_wa_mensagens m
-                 where m.numero_id = h.numero_id and m.wa_id = h.wa_id
-                   and m.direcao = 'entrada' and m.ocorrido_em > coalesce(h.desde, h.em)
-                   and public.carbo_wa_pede_resposta(m.tipo, m.texto)) as voltou_em,
-               (select left(coalesce(m.texto, '[' || m.tipo || ']'), 300) from public.carbo_wa_mensagens m
-                 where m.numero_id = h.numero_id and m.wa_id = h.wa_id
-                   and m.direcao = 'entrada' and m.ocorrido_em > coalesce(h.desde, h.em)
-                   and public.carbo_wa_pede_resposta(m.tipo, m.texto)
-                 order by m.ocorrido_em limit 1) as texto
+        select h.numero_id, h.wa_id, ctt.nome, h.em as resolvida_em, v.voltou_em, v.texto
           from public.carbo_wa_atendimento_hist h
+          join lateral (
+            select m.ocorrido_em as voltou_em, left(coalesce(m.texto, '[' || m.tipo || ']'), 300) as texto
+              from public.carbo_wa_mensagens m
+             where m.wa_id = h.wa_id and m.numero_id = h.numero_id
+               and m.direcao = 'entrada' and m.ocorrido_em > h.em
+               and m.ocorrido_em <= h.em + interval '7 days'
+               and public.carbo_wa_pede_resposta(m.tipo, m.texto)
+             order by m.ocorrido_em limit 1) v on true
           left join ctt on ctt.numero_id = h.numero_id and ctt.wa_id = h.wa_id
-         where h.origem = 'tela' and h.status = 'resolvido' and h.por::text = p_pessoa
+         where h.origem = 'tela' and h.marca and h.status = 'resolvido' and h.por::text = p_pessoa
            and h.em >= v_de and h.em < v_fim
            and (p_numero is null or h.numero_id = p_numero)
-         order by h.em desc limit 300) y where y.voltou_em is not null
-           and y.voltou_em <= y.resolvida_em + interval '7 days'), '[]'::jsonb),
+         order by h.em desc limit 300) y), '[]'::jsonb),
     'por_hora', coalesce((select jsonb_agg(y order by y.hora) from (
         select extract(hour from m.ocorrido_em at time zone v_tz)::int as hora, count(*) as mensagens
           from public.carbo_wa_mensagens m

@@ -197,7 +197,7 @@ describe("pareceEncerramento", () => {
     for (const t of ["ok", "Ok", "OK!", "blz", "beleza", "obrigado", "Obg",
                      "vlw", "valeu", "certo", "entendi", "perfeito",
                      "Ok recebido", "Ok obrigado", "recebi obrigado",
-                     "tudo certo", "show", "top", "👍", "ok 👍", "de nada"]) {
+                     "tudo certo", "show", "top", "👍", "ok 👍"]) {
       expect(pareceEncerramento(t)).toBe(true);
     }
   });
@@ -217,7 +217,8 @@ describe("pareceEncerramento", () => {
   });
 
   it("palavra de reclamação sozinha NUNCA vira agradecimento", () => {
-    for (const t of ["sem entrega", "avaria", "problema", "Bom dia", "boa noite", "entrega"]) {
+    for (const t of ["sem entrega", "avaria", "problema", "Bom dia", "boa noite", "entrega",
+                     "Nada até agora", "chegou nada", "já foi entregue"]) {
       expect(pareceEncerramento(t)).toBe(false);
     }
   });
