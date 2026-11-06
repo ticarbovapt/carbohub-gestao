@@ -73,11 +73,15 @@ jobs:
           # olhe a conclusão da run no Actions. `alvo`/versão na própria
           # resposta da função é o jeito barato de saber qual código respondeu.
           # Remediar é reempurrar: um push novo refaz a fila inteira.
+          # ⚠️ `--yes` é OBRIGATÓRIO desde 06/11/2026: o CLI "latest" passou a
+          # pedir confirmação para deploy em produção e, sem terminal, recusa
+          # com "Confirmation required … Nothing was changed". A run inteira
+          # falhou na 1ª função (status-sonda) e NENHUMA subiu.
           dep() {
             local fn="$1"; shift
             local tentativa
             for tentativa in 1 2 3; do
-              if supabase functions deploy "$fn" \
+              if supabase functions deploy "$fn" --yes \
                    --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} "$@"; then
                 return 0
               fi
