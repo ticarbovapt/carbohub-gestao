@@ -201,6 +201,10 @@ jobs:
           # e recusa `producao: true`). Nao entra em cron nenhum.
           # --no-verify-jwt porque quem chama e curl com o X-Cron-Secret.
           dep nfse-dps-teste --no-verify-jwt
+          # Bradesco: o TESTE de conexão (token mTLS + registro de boleto) no
+          # SANDBOX, URL fixa. Não entra em cron; chamado pelo SQL Editor com o
+          # X-Cron-Secret (supabase/consultas/bradesco_teste_sandbox.sql).
+          dep bradesco-teste --no-verify-jwt
           # NFS-e: a EMISSÃO do CarboVAPT (Finanças → Faturamento). Chamada pelo
           # NAVEGADOR, por gente logada — por isso SEM --no-verify-jwt; a função
           # ainda confere o app do Finanças por dentro.
