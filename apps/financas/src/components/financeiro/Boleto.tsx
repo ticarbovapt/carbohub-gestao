@@ -109,18 +109,15 @@ function EmitirBoleto({ alvo, onEmitido, onClose }: { alvo: AlvoBoleto; onEmitid
         : s.origem === "pedido" ? `Endereço de entrega do pedido ${s.pedido ?? ""}`.trim() : null;
 
     if (data.sugestao) { setF(montar(data.sugestao, false)); setOrigem(rotulo(data.sugestao)); return; }
-    if (data.nf_xml) {
-      setBuscandoNf(true);
-      enderecoDaNf(alvo.ref).then((r) => {
-        if (!vivo) return;
-        if (r) { setF(montar(r.endereco, false)); setOrigem(`Endereço da NF ${r.nf}`); }
-        else if (data.pedido) { setF(montar(data.pedido, true)); setOrigem(rotulo(data.pedido)); }
-        else setF(montar(null, false));
-      }).finally(() => vivo && setBuscandoNf(false));
-      return () => { vivo = false; };
-    }
-    if (data.pedido) { setF(montar(data.pedido, true)); setOrigem(rotulo(data.pedido)); return; }
-    setF(montar(null, false));
+    // Sem endereço pronto: a função procura no Bling (cadastro do cliente e NFs).
+    setBuscandoNf(true);
+    enderecoDaNf(alvo.ref).then((r) => {
+      if (!vivo) return;
+      if (r) { setF(montar(r.endereco, false)); setOrigem(r.origem); }
+      else if (data.pedido) { setF(montar(data.pedido, true)); setOrigem(rotulo(data.pedido)); }
+      else setF(montar(null, false));
+    }).finally(() => vivo && setBuscandoNf(false));
+    return () => { vivo = false; };
   }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function buscarCep() {
@@ -178,7 +175,7 @@ function EmitirBoleto({ alvo, onEmitido, onClose }: { alvo: AlvoBoleto; onEmitid
       </DialogHeader>
 
       {isLoading || (!f && !error) ? (
-        <p className="py-10 text-center text-sm text-muted-foreground"><Loader2 className="mr-2 inline h-4 w-4 animate-spin" />{buscandoNf ? "Buscando o endereço na NF do Bling…" : "Carregando…"}</p>
+        <p className="py-10 text-center text-sm text-muted-foreground"><Loader2 className="mr-2 inline h-4 w-4 animate-spin" />{buscandoNf ? "Buscando o endereço do cliente no Bling…" : "Carregando…"}</p>
       ) : error ? (
         <Aviso cor="destructive">{(error as Error).message}</Aviso>
       ) : !t || !f ? null : !t.aberto ? (

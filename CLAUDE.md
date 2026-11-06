@@ -3916,10 +3916,14 @@ docs/bradesco/                            o manual lido do portal + as collectio
    = 00006". Conferir no 1º registro de produção pela consulta.
 9. ⚠️ **O endereço vem da NF do Bling, não de digitação** (`20261151`, queixa
    do 1º teste: "não faz sentido eu precisar preencher"). Ordem: último boleto do
-   cliente → JSON da NF (`contato.endereco`, contas 1 e 2) → XML da NF
-   (`<enderDest>`, ação `endereco_nf` da função — o documento sai do título e as
-   URLs do banco, só `*.bling.com.br`) → endereço de ENTREGA do pedido. A tela
-   diz de onde veio. O documento casa por DÍGITOS nos dois lados.
+   cliente → JSON da NF (`contato.endereco`, contas 1 e 2) → CADASTRO do contato
+   no Bling (`GET /contatos/{id}`, endereço de cobrança; `20261152` — o contato
+   sai do PRÓPRIO título: `bling_contas_receber.contato_id` / `bling2_contas_receber.cliente_id`)
+   → XML da NF (`<enderDest>`) → endereço de ENTREGA do pedido. Tudo pela ação
+   `endereco_nf` da função; a tela não manda id nem URL. A tela diz de onde veio.
+   ⚠️ O espelho de contatos vem da LISTAGEM do Bling, que NÃO traz endereço — e a
+   NF do 1º cliente testado não casava pelo CNPJ (`[]`): por isso o cadastro ao vivo.
+   ⚠️ O token do Bling é só LIDO (perto de vencer, pula).
 10. PENDENTE (fase 4): pago pela consulta só marca o BOLETO; a baixa do título
    (e o envio ao Bling) vem com a lista de liquidados/webhook, via
    `fin_banco_eventos` + `fin_banco_conciliar` (que hoje casa por `receivables`

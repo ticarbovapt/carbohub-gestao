@@ -3,7 +3,7 @@ import {
   jsonBancario, lerJsonBancario, linhaParaBarras, formatarLinha, negociacao11, partesCnpj,
   montarHibrido, multaEJuros, lerRegistroHibrido, errosDoBanco, faltasDoPagador, textoBanco,
   lerConsulta, dataDDMMAAAA, tituloInexistente, corpoConsulta, corpoBaixa, baixaAceita,
-  enderecoDoXmlNfe, urlXmlConfiavel,
+  enderecoDoXmlNfe, urlXmlConfiavel, enderecoDoContatoBling,
 } from "../../../supabase/functions/_shared/bradescoCobranca";
 
 // As linhas abaixo são as que o SANDBOX do Bradesco devolveu em 06/11/2026 —
@@ -199,5 +199,31 @@ describe("endereço do pagador pelo XML da NF-e", () => {
     expect(urlXmlConfiavel("http://www.bling.com.br/x")).toBe(false);
     expect(urlXmlConfiavel("https://bling.com.br.evil.com/x")).toBe(false);
     expect(urlXmlConfiavel(null)).toBe(false);
+  });
+});
+
+describe("endereço pelo cadastro do contato no Bling", () => {
+  const contato = {
+    id: 1, nome: "CRF ALIMENTOS", numeroDocumento: "48.828.205/0001-96", telefone: "(84) 3211-0000", celular: "",
+    email: "compras@crf.com.br", emailNotaFiscal: "nfe@crf.com.br",
+    endereco: {
+      geral: { endereco: "Av Geral", numero: "1", complemento: "", bairro: "Centro", cep: "59.000-000", municipio: "Natal", uf: "rn" },
+      cobranca: { endereco: "Rua Cobrança", numero: "99", complemento: "Sala 3", bairro: "Tirol", cep: "59020-100", municipio: "Natal", uf: "RN" },
+    },
+  };
+  it("prefere o endereço de COBRANÇA", () => {
+    expect(enderecoDoContatoBling(contato)).toEqual({
+      cep: "59020100", logradouro: "Rua Cobrança", numero: "99", complemento: "Sala 3", bairro: "Tirol",
+      cidade: "Natal", uf: "RN", email: "nfe@crf.com.br", fone: "8432110000", documento: "48828205000196",
+    });
+  });
+  it("sem cobrança, usa o geral", () => {
+    const r = enderecoDoContatoBling({ ...contato, endereco: { geral: contato.endereco.geral, cobranca: { cep: "" } } });
+    expect(r?.logradouro).toBe("Av Geral");
+    expect(r?.uf).toBe("RN");
+  });
+  it("sem CEP em lugar nenhum, nada", () => {
+    expect(enderecoDoContatoBling({ endereco: { geral: { endereco: "X" } } })).toBeNull();
+    expect(enderecoDoContatoBling(null)).toBeNull();
   });
 });
