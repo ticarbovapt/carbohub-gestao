@@ -2687,9 +2687,27 @@ apps/atendimento/src/hooks/usePainelAtendimento.ts · pages/PainelAtendimento.ts
 7. ⚠️ **No SQL Editor as funções do painel RECUSAM** (sem usuário não há
    gestor) — está certo. Confira pela base:
    `carbo_atendimento_rodadas(now() - interval '30 days', null)`.
-8. Medido num Postgres local com 4× o volume real (13 mil mensagens): 1,4 s
-   para 30 dias; no volume real ~0,4 s. A tela relê de minuto em minuto (é a
-   fila de AGORA), uma consulta por gestor, nunca por time.
+8. Medido num Postgres local: ~0,25 s no volume real (30 dias), ~1,8 s com 4×.
+   A tela relê de minuto em minuto (é a fila de AGORA), uma consulta por
+   gestor, nunca por time.
+9. ⚠️ **O que a revisão do SQL pegou, e não se desfaz:**
+   - a resposta casa com o EPISÓDIO DA RODADA (`ep_resp`), não com o dela:
+     resposta dada > 24 h depois (modelo da Meta) virava "perdida" e a demora
+     sumia do TMR;
+   - empate de instante: a mensagem de GENTE vem antes (senão o desempate era
+     o wamid, aleatório);
+   - `carbo_wa_atendimento_hist.marca` = DECISÃO de status; trocar responsável
+     não é resolver (1 resolução + 2 trocas davam 3 "resolvidas");
+   - marca comparada pelo `em` (servidor), nunca pelo `desde` (navegador), e
+     com a última mensagem que PEDE (um 👍 depois não anula o fechamento);
+   - autoria = `auth.uid()` antes de `atualizado_por` (o navegador manda o
+     campo; confiar nele deixava lançar "fechou sem responder" em nome alheio);
+   - BASES: taxa = respondidas ÷ `pedem_encerradas`; SLA = dentro da meta ÷
+     `sla_base` (a que espera só entra depois de passar da meta); FCR e
+     reabertura só julgam o que tem 7 dias (`fcr_base`, `*_maduras`) — o de
+     ontem sairia sempre perfeito;
+   - "nada", "ate" e "foi" saíram da lista de agradecimento ("até agora nada",
+     "chegou nada"), e a resposta automática fraca exige DUAS frases.
 
 ### Segredo de função: FECHE quando ele não existe
 Padrão obrigatório em toda edge function chamada por máquina:
