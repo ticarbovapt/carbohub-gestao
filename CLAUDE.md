@@ -6036,6 +6036,13 @@ tela); a área própria é `conversas` (a lista e a conversa aberta). Sem Minha 
    LANGUAGE=pt_BR` na captura; sem isso o Chromium mostra `10/26/2026 PM`.
 2. Achado, NÃO corrigido: em 1440 px o painel "Respostas rápidas" fica em parte
    atrás da coluna da lista (o print foi feito em 1920).
+3. **Painel do atendimento e aba Assuntos** (06/11/2026): `secoes/painel.ts`
+   (seções `painel` e `painel-assuntos`, `papel: "gestor"`), prints em
+   `shots_painel.mjs` (área `painel`, fixtures `fx_painel.ts`/`fx_assuntos.ts`,
+   marcadores em `m_painel.json`). O bloco "Como as contas funcionam" espelha as
+   DEFINIÇÕES do cabeçalho da `20261148` — mudou a conta lá, mude o texto.
+   ⚠️ O `<main>` do painel rola por dentro: `fullPage` não pega; use viewport
+   alta para o elemento estar na tela no recorte.
 
 ### Documentação do Admin — `/documentacao` (26/10/2026)
 Mesmo motor, em `apps/admin` (item na seção Ajuda). Áreas próprias: `painelcom`

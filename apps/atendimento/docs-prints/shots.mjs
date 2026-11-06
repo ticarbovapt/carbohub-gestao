@@ -5,4 +5,5 @@ import { SHOTS as BASE } from "./shots_base.mjs";
 import { SHOTS as CONVERSAS } from "./shots_conversas.mjs";
 import { SHOTS as ESTEIRA } from "./shots_esteira.mjs";
 import { SHOTS as COMERCIAL } from "./shots_comercial.mjs";
-export const SHOTS = [...BASE, ...CONVERSAS, ...ESTEIRA, ...COMERCIAL];
+import { SHOTS as PAINEL } from "./shots_painel.mjs";
+export const SHOTS = [...BASE, ...CONVERSAS, ...ESTEIRA, ...COMERCIAL, ...PAINEL];
