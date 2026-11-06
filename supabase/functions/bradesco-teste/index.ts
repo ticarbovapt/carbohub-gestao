@@ -46,10 +46,23 @@ function pem(v: string | undefined): string | null {
   return t ? t + "\n" : null;
 }
 
+/**
+ * JSON com inteiros GRANDES intactos. ⚠️ A negociação do Bradesco
+ * (`cnegocCobr`, `nuNegociacao` = agência + conta) tem 18 dígitos e passa do
+ * maior inteiro exato do JavaScript (2^53): `111111111111111111` virava
+ * `111111111111111100` sem erro nenhum — medido no 1º teste do sandbox
+ * (06/11/2026). Campo assim é `bigint` (sufixo `n`) e sai no JSON como número,
+ * dígito a dígito.
+ */
+export function jsonBancario(v: unknown): string {
+  return JSON.stringify(v, (_k, x) => (typeof x === "bigint" ? `__INT__${x}` : x))
+    .replace(/"__INT__(-?\d+)"/g, "$1");
+}
+
 // ── Corpos "Sucesso" das collections de SANDBOX (copiados como estão) ──────
 const CORPO_COMUM = {
   nuCPFCNPJ: 31759489, filialCPFCNPJ: 1, ctrlCPFCNPJ: 55, idProduto: 9,
-  nuNegociacao: 285600000000222652, nuCliente: "1",
+  nuNegociacao: 285600000000222652n, nuCliente: "1",
   dtEmissaoTitulo: "27.05.2025", dtVencimentoTitulo: "27.08.2025",
   vlNominalTitulo: "500.00", cdEspecieTitulo: 2, cindcdAceitSacdo: "2",
   percentualJuros: 0, vlJuros: "5.00", qtdeDiasJuros: 1,
@@ -69,7 +82,7 @@ const CORPO_COMUM = {
 const CORPO_HIBRIDO = {
   ctitloCobrCdent: 0, registrarTitulo: 1, nroCpfCnpjBenef: 68542653, codUsuario: "APISERVIC",
   filCpfCnpjBenef: "1018", tipoAcesso: 2, digCpfCnpjBenef: 38, cpssoaJuridContr: "", ctpoContrNegoc: "",
-  cidtfdProdCobr: 9, nseqContrNegoc: "", cnegocCobr: 111111111111111111, filler: "", eNseqContrNegoc: "",
+  cidtfdProdCobr: 9, nseqContrNegoc: "", cnegocCobr: 111111111111111111n, filler: "", eNseqContrNegoc: "",
   tipoRegistro: 1, codigoBanco: 237, cprodtServcOper: "", demisTitloCobr: "17.12.2024",
   ctitloCliCdent: "TESTEBIA", dvctoTitloCobr: "20.02.2025", cidtfdTpoVcto: "", vnmnalTitloCobr: 6000,
   cindcdEconmMoeda: 9, cespceTitloCobr: 2, qmoedaNegocTitlo: 0, ctpoProteTitlo: 0, cindcdAceitSacdo: "N",
@@ -164,7 +177,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       const r = await chamar(cli, BASE + caminho, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: auth },
-        body: JSON.stringify(corpo),
+        body: jsonBancario(corpo),
       });
       tentativas.push({ authorization: forma, status: r.status, ms: r.ms, erro: r.erro, resposta: r.corpo });
       // Recusa de autorização ⇒ tenta a outra forma; qualquer outra resposta já é a do registro.
