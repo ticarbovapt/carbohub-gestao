@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Headset, MessagesSquare, ShoppingCart, Bug, UserCircle, ArrowRight, type LucideIcon } from "lucide-react";
+import { Headset, MessagesSquare, ShoppingCart, Bug, UserCircle, ArrowRight, Gauge, type LucideIcon } from "lucide-react";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
 import { CarboCard, CarboCardContent } from "@/components/ui/carbo-card";
 import { useAuth } from "@/contexts/AuthContext";
@@ -27,7 +27,9 @@ const ATALHOS: Atalho[] = [
 ];
 
 export default function Home() {
-  const { profile } = useAuth();
+  const { profile, isGestor } = useAuth();
+  // O painel do gestor entra primeiro, e só para quem pode abri-lo.
+  const atalhos = isGestor ? [{ to: "/painel", label: "Painel do atendimento", icon: Gauge }, ...ATALHOS] : ATALHOS;
   const primeiroNome = (profile?.full_name ?? "").split(" ")[0];
 
   return (
@@ -39,7 +41,7 @@ export default function Home() {
         />
 
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-          {ATALHOS.map(({ to, label, icon: Icon }) => (
+          {atalhos.map(({ to, label, icon: Icon }) => (
             <Link key={to} to={to} className="block rounded-xl">
             <CarboCard variant="interactive" padding="none" className="h-full">
               <CarboCardContent className="p-4 flex items-center gap-3">

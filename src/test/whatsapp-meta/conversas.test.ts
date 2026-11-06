@@ -197,7 +197,7 @@ describe("pareceEncerramento", () => {
     for (const t of ["ok", "Ok", "OK!", "blz", "beleza", "obrigado", "Obg",
                      "vlw", "valeu", "certo", "entendi", "perfeito",
                      "Ok recebido", "Ok obrigado", "recebi obrigado",
-                     "tudo certo", "show", "top", "👍", "ok 👍", "de nada"]) {
+                     "tudo certo", "show", "top", "👍", "ok 👍"]) {
       expect(pareceEncerramento(t)).toBe(true);
     }
   });
@@ -207,6 +207,20 @@ describe("pareceEncerramento", () => {
     expect(pareceEncerramento("Ok mas não chegou")).toBe(false);
     expect(pareceEncerramento("obrigado, e o prazo?")).toBe(false);
     expect(pareceEncerramento("ok?")).toBe(false);
+  });
+
+  it("os agradecimentos longos que o painel mediu (06/11/2026) passam", () => {
+    for (const t of ["Obrigado pela atenção", "Chegou certinho 🫂", "Recebido, tudo certo, Deus abençoe",
+                     "Ok, vou testar", "Já chegou, obrigado 👍🏽", "Entregue, valeu"]) {
+      expect(pareceEncerramento(t)).toBe(true);
+    }
+  });
+
+  it("palavra de reclamação sozinha NUNCA vira agradecimento", () => {
+    for (const t of ["sem entrega", "avaria", "problema", "Bom dia", "boa noite", "entrega",
+                     "Nada até agora", "chegou nada", "já foi entregue"]) {
+      expect(pareceEncerramento(t)).toBe(false);
+    }
   });
 
   it("pergunta explícita nunca passa, por mais curta que seja", () => {
