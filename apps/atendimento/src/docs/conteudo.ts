@@ -4,6 +4,7 @@ import { SECOES_VENDER, SECOES_FIM } from "./secoes/comuns";
 import { SECOES_CONVERSAS } from "./secoes/conversas";
 import { SECOES_ESTEIRA } from "./secoes/esteira";
 import { SECOES_COMERCIAL } from "./secoes/comercial";
+import { SECOES_PAINEL } from "./secoes/painel";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Conteúdo da Documentação do Carbo Atendimento — uma seção por tela, em
@@ -17,12 +18,12 @@ import { SECOES_COMERCIAL } from "./secoes/comercial";
 // ⚠️ `papel: "gestor"` some para o colaborador (seção, bloco, print ou item).
 // ─────────────────────────────────────────────────────────────────────────────
 
-const TODAS = [...SECOES_BASE, ...SECOES_CONVERSAS, ...SECOES_ESTEIRA, ...SECOES_VENDER,
+const TODAS = [...SECOES_BASE, ...SECOES_CONVERSAS, ...SECOES_ESTEIRA, ...SECOES_PAINEL, ...SECOES_VENDER,
   ...SECOES_COMERCIAL, ...SECOES_FIM];
 
 /** A ordem do índice: a do menu. Seção que não estiver aqui vai para o fim. */
 const ORDEM = ["comece", "inicio", "navegacao", "chat", "conversas", "conversa-aberta", "esteira", "mensagens",
-  "vender", "bugs", "perfil"];
+  "painel", "painel-assuntos", "vender", "bugs", "perfil"];
 const pos = (id: string) => (ORDEM.indexOf(id) === -1 ? ORDEM.length : ORDEM.indexOf(id));
 
 export const SECOES: Secao[] = [...TODAS].sort((a, b) => pos(a.id) - pos(b.id));

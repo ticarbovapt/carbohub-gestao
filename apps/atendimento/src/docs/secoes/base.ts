@@ -35,7 +35,9 @@ export const SECOES_BASE: Secao[] = [
     titulo: "Início",
     rota: "/",
     resumo: "A primeira tela do Atendimento tem quatro atalhos: Carbo Chat, Vender, Bugs e sugestões e Meu perfil. Conversas, Esteira e Mensagens ficam no menu, em Cliente.",
-    blocos: [{ texto: "Clique num cartão para ir à tela." }],
+    blocos: [{ texto: "Clique num cartão para ir à tela.", itens: [
+      { papel: "gestor", titulo: "Para o gestor", texto: "O primeiro atalho é o Painel do atendimento — veja a seção dele." },
+    ] }],
   },
 
   // ── Navegação ───────────────────────────────────────────────────────────────
@@ -49,6 +51,7 @@ export const SECOES_BASE: Secao[] = [
         itens: [
           { n: 1, titulo: "Logo", texto: "Volta para o Hub (carbohub.com.br). Com o botão do meio do mouse, abre em outra guia." },
           { n: 2, titulo: "Menu", texto: "Visão geral e Carbo Chat; Cliente (Conversas, Esteira do On-line, Mensagens ao Cliente). A tela em que você está fica destacada." },
+          { papel: "gestor", titulo: "Gestão (só gestor)", texto: "Entre Cliente e Ajuda, o gestor tem a seção Gestão, com o Painel do atendimento." },
           { n: 3, titulo: "Documentação", texto: "Esta página." },
           { n: 4, titulo: "Recolher menu", texto: "Deixa a barra lateral só com os ícones. No celular o menu abre pelo botão ☰ do topo." },
           { n: 5, titulo: "Trocar de sistema", texto: "Lista os sistemas liberados para você e o Início (o Hub)." },
