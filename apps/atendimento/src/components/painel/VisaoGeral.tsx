@@ -84,8 +84,8 @@ export function GraficoDiario({ p, ver }: { p: PainelAtendimento; ver: Ver }) {
                     linhas={[
                       { rotulo: "Pediam resposta", valor: fmtNum(d.pedem) },
                       ...SERIES.map((s) => ({ rotulo: s.rotulo, valor: fmtNum(d[s.chave]), cor: s.cor })),
-                      { rotulo: "Taxa de resposta", valor: fmtPct(pct(d.respondidas, d.pedem)) },
-                      { rotulo: "Dentro da meta", valor: fmtNum(d.dentro_meta) },
+                      { rotulo: "Taxa de resposta", valor: fmtPct(pct(d.respondidas, d.pedem_encerradas)) },
+                      { rotulo: "Dentro da meta", valor: `${fmtNum(d.dentro_meta)} · ${fmtPct(pct(d.dentro_meta, d.sla_base))}` },
                       { rotulo: "Só agradecimento", valor: fmtNum(d.nao_pedem) },
                       { rotulo: "Mensagens da equipe", valor: fmtNum(d.mensagens) },
                     ]}
@@ -199,8 +199,8 @@ export function PorNumero({ p, ver, agora, onNumero }: { p: PainelAtendimento; v
           </TableHeader>
           <TableBody>
             {linhas.map((n) => {
-              const taxa = pct(n.respondidas, n.pedem);
-              const sla = pct(n.dentro_meta, n.pedem);
+              const taxa = pct(n.respondidas, n.pedem_encerradas);
+              const sla = pct(n.dentro_meta, n.sla_base);
               const desde = n.ultima_resposta_em ? minutosDesde(n.ultima_resposta_em, agora) : Infinity;
               const esquecida = desde > ESQUECIDA_MIN;
               return (
@@ -260,7 +260,7 @@ export function TabelaTemas({ temas, titulo = "Assuntos" }: { temas: PainelTema[
           </TableHeader>
           <TableBody>
             {linhas.map((t) => {
-              const taxa = pct(t.respondidas, t.pedem);
+              const taxa = pct(t.respondidas, t.pedem_encerradas);
               return (
                 <TableRow key={t.tema}>
                   <TableCell className="whitespace-nowrap pl-4 font-medium">{TEMA_ROTULO[t.tema] ?? t.tema}</TableCell>

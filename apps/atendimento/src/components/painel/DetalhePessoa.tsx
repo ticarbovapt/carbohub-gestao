@@ -196,7 +196,7 @@ export function DetalhePessoaSheet({ p, pessoa, numero, ver, agora, numeros, onF
               <Numero rotulo="Dias ativos" valor={fmtNum(a.dias_ativos)} />
               <Numero rotulo="Em atendimento agora" valor={fmtNum(a.em_atendimento_agora)} />
               <Numero rotulo="Resolvidas" valor={fmtNum(a.resolvidas)} />
-              <Numero rotulo="Reabertas" valor={fmtNum(a.reabertas)} />
+              <Numero rotulo="Reabertas" valor={a.resolvidas_maduras ? `${fmtNum(a.reabertas)} · ${fmtPct(pct(a.reabertas_maduras, a.resolvidas_maduras))}` : fmtNum(a.reabertas)} />
               <Numero rotulo="Fechadas sem resposta" valor={fmtNum(a.fechadas_sem_resposta)} tom={a.fechadas_sem_resposta > 0 ? "ruim" : undefined} />
               <Numero rotulo="Notas internas" valor={fmtNum(a.notas)} />
             </div>

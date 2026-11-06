@@ -142,23 +142,26 @@ export function Indicadores({ p, ver }: { p: PainelAtendimento; ver: Ver }) {
   const histNoPeriodo = hist && hist > p.periodo.de ? `desde ${fmtData(hist)}` : undefined;
   const histCobreAnterior = !hist || hist <= p.periodo.ant_de;
 
-  const taxa = pct(a.respondidas, a.pedem), taxaAnt = b ? pct(b.respondidas, b.pedem) : null;
-  const sla = pct(a.dentro_meta, a.pedem), slaAnt = b ? pct(b.dentro_meta, b.pedem) : null;
-  const fcr = pct(a.fcr, a.atendimentos_respondidos), fcrAnt = b ? pct(b.fcr, b.atendimentos_respondidos) : null;
+  // ⚠️ Bases das taxas (do banco, revisadas em 06/11): a que ainda espera não
+  // entra na taxa de resposta; o SLA conta a que espera e já estourou a meta;
+  // FCR e reabertura só julgam o que já tem 7 dias.
+  const taxa = pct(a.respondidas, a.pedem_encerradas), taxaAnt = b ? pct(b.respondidas, b.pedem_encerradas) : null;
+  const sla = pct(a.dentro_meta, a.sla_base), slaAnt = b ? pct(b.dentro_meta, b.sla_base) : null;
+  const fcr = pct(a.fcr, a.fcr_base), fcrAnt = b ? pct(b.fcr, b.fcr_base) : null;
 
   const tmpr = util ? a.tmpr_util_mediana : a.tmpr_mediana;
   const tmprAnt = b ? (util ? b.tmpr_util_mediana : b.tmpr_mediana) : null;
   const tmr = util ? a.tmr_util_mediana : a.tmr_mediana;
   const tmrAnt = b ? (util ? b.tmr_util_mediana : b.tmr_mediana) : null;
 
-  const reab = pct(p.atividade.reabertas, p.atividade.resolvidas);
+  const reab = pct(p.atividade.reabertas_maduras, p.atividade.resolvidas_maduras);
 
   return (
     <div className="grid grid-cols-1 gap-2 min-[440px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
       <Kpi
         titulo="Taxa de resposta" valor={fmtPct(taxa)}
         meta={taxa != null ? { ok: taxa >= c.meta_taxa_resposta_pct, texto: `meta ${c.meta_taxa_resposta_pct}%` } : null}
-        detalhe={`${fmtNum(a.respondidas)} de ${fmtNum(a.pedem)} respondidas`}
+        detalhe={<>{fmtNum(a.respondidas)} de {fmtNum(a.pedem_encerradas)} respondidas{a.aguardando > 0 && <> · {fmtNum(a.aguardando)} esperando</>}</>}
         variacao={variacaoPp(taxa, taxaAnt)}
       />
       <Kpi
@@ -181,7 +184,7 @@ export function Indicadores({ p, ver }: { p: PainelAtendimento; ver: Ver }) {
       <Kpi
         titulo={`Dentro da meta (SLA ${c.meta_resposta_min} min)`} valor={fmtPct(sla)}
         meta={sla != null ? { ok: sla >= c.meta_sla_pct, texto: `meta ${c.meta_sla_pct}%` } : null}
-        detalhe={`${fmtNum(a.dentro_meta)} de ${fmtNum(a.pedem)} que pediam`}
+        detalhe={`${fmtNum(a.dentro_meta)} de ${fmtNum(a.sla_base)} em até ${c.meta_resposta_min} min`}
         variacao={variacaoPp(sla, slaAnt)}
       />
       <Kpi
@@ -192,7 +195,7 @@ export function Indicadores({ p, ver }: { p: PainelAtendimento; ver: Ver }) {
       />
       <Kpi
         titulo="Resolvidos no 1º contato (FCR)" valor={fmtPct(fcr)}
-        detalhe={`${fmtNum(a.fcr)} de ${fmtNum(a.atendimentos_respondidos)} atendimentos`}
+        detalhe={`${fmtNum(a.fcr)} de ${fmtNum(a.fcr_base)} atendimentos com 7+ dias`}
         variacao={variacaoPp(fcr, fcrAnt)}
       />
       <Kpi
@@ -207,7 +210,7 @@ export function Indicadores({ p, ver }: { p: PainelAtendimento; ver: Ver }) {
       />
       <Kpi
         titulo="Reabertas" valor={fmtPct(reab)} marca={histNoPeriodo}
-        detalhe={`${fmtNum(p.atividade.reabertas)} de ${fmtNum(p.atividade.resolvidas)} resolvidas`}
+        detalhe={`${fmtNum(p.atividade.reabertas_maduras)} de ${fmtNum(p.atividade.resolvidas_maduras)} resolvidas há 7+ dias · ${fmtNum(p.atividade.resolvidas)} no período`}
       />
       <Kpi
         titulo="Pediam resposta" valor={fmtNum(a.pedem)}

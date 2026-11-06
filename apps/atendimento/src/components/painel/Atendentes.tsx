@@ -59,7 +59,16 @@ export function Atendentes({ p, ver, agora, onPessoa }: { p: PainelAtendimento; 
     { chave: "conversas", rotulo: "Conversas", valor: (a) => a.conversas, render: (a) => fmtNum(a.conversas), maiorPrimeiro: true },
     { chave: "dias", rotulo: "Dias ativos", valor: (a) => a.dias_ativos, render: (a) => fmtNum(a.dias_ativos), maiorPrimeiro: true },
     { chave: "resolvidas", rotulo: "Resolvidas", valor: (a) => a.resolvidas, render: (a) => fmtNum(a.resolvidas), maiorPrimeiro: true },
-    { chave: "reabertas", rotulo: "Reabertas", valor: (a) => a.reabertas, render: (a) => fmtNum(a.reabertas), maiorPrimeiro: true },
+    {
+      chave: "reabertas", rotulo: "Reabertas", titulo: "Das resolvidas há 7+ dias, quantas o cliente reabriu",
+      valor: (a) => pct(a.reabertas_maduras, a.resolvidas_maduras), maiorPrimeiro: true,
+      render: (a) => (
+        <span className="whitespace-nowrap">
+          {fmtNum(a.reabertas)}
+          {a.resolvidas_maduras > 0 && <span className="ml-1 text-[11px] text-muted-foreground">({fmtPct(pct(a.reabertas_maduras, a.resolvidas_maduras))})</span>}
+        </span>
+      ),
+    },
     {
       chave: "fechadas", rotulo: "Fechadas s/ resposta", valor: (a) => a.fechadas_sem_resposta, maiorPrimeiro: true,
       render: (a) => a.fechadas_sem_resposta > 0
