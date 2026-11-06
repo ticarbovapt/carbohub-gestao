@@ -3,6 +3,7 @@ import {
   jsonBancario, lerJsonBancario, linhaParaBarras, formatarLinha, negociacao11, partesCnpj,
   montarHibrido, multaEJuros, lerRegistroHibrido, errosDoBanco, faltasDoPagador, textoBanco,
   lerConsulta, dataDDMMAAAA, tituloInexistente, corpoConsulta, corpoBaixa, baixaAceita,
+  enderecoDoXmlNfe, urlXmlConfiavel,
 } from "../../../supabase/functions/_shared/bradescoCobranca";
 
 // As linhas abaixo são as que o SANDBOX do Bradesco devolveu em 06/11/2026 —
@@ -175,5 +176,28 @@ describe("consulta e baixa", () => {
     expect(baixaAceita(200, r)).toBe(true);
     expect(baixaAceita(412, r)).toBe(false);
     expect(baixaAceita(200, { mensagem: "outra coisa" })).toBe(false);
+  });
+});
+
+describe("endereço do pagador pelo XML da NF-e", () => {
+  const xml = `<?xml version="1.0"?><nfeProc><NFe><infNFe><emit><enderEmit><xLgr>EMITENTE</xLgr><CEP>59000000</CEP></enderEmit></emit>
+    <dest><CNPJ>48828205000196</CNPJ><xNome>CRF ALIMENTOS</xNome><enderDest><xLgr>RUA DAS FLORES &amp; CIA</xLgr><nro>120</nro>
+    <xCpl>SALA 2</xCpl><xBairro>CENTRO</xBairro><cMun>2408102</cMun><xMun>Natal</xMun><UF>rn</UF><CEP>59025-000</CEP>
+    <cPais>1058</cPais><fone>8432110000</fone></enderDest><indIEDest>9</indIEDest><email>fin@crf.com.br; outro@crf.com.br</email></dest>
+    </infNFe></NFe></nfeProc>`;
+  it("lê o DESTINATÁRIO, não o emitente", () => {
+    expect(enderecoDoXmlNfe(xml)).toEqual({
+      cep: "59025000", logradouro: "RUA DAS FLORES & CIA", numero: "120", complemento: "SALA 2",
+      bairro: "CENTRO", cidade: "Natal", uf: "RN", email: "fin@crf.com.br", fone: "8432110000",
+    });
+  });
+  it("sem CEP não devolve meio endereço", () => {
+    expect(enderecoDoXmlNfe(xml.replace(/<CEP>59025-000<\/CEP>/, ""))).toBeNull();
+  });
+  it("só baixa XML do Bling, por https", () => {
+    expect(urlXmlConfiavel("https://www.bling.com.br/relatorios/nfe.xml.php?chaveAcesso=1")).toBe(true);
+    expect(urlXmlConfiavel("http://www.bling.com.br/x")).toBe(false);
+    expect(urlXmlConfiavel("https://bling.com.br.evil.com/x")).toBe(false);
+    expect(urlXmlConfiavel(null)).toBe(false);
   });
 });

@@ -13,7 +13,7 @@ import { DatePickerInput } from "@/components/ui/date-picker-input";
 import { dataBR, hojeISO } from "@/lib/datas";
 import { partesDoEndereco } from "@/hooks/useNfseEmissao";
 import {
-  ehVivo, registrarEmail, useBoleto, useBoletoPreparo, useCobranca,
+  ehVivo, enderecoDaNf, registrarEmail, useBoleto, useBoletoPreparo, useCobranca,
   type FinBoleto, type PagadorTela, type RefTitulo,
 } from "@/hooks/useBoletos";
 import { formatarDoc, formatarLinha, gerarBoletoPdf, nossoNumeroImpresso } from "@/lib/boletoPdf";
@@ -78,23 +78,49 @@ function EmitirBoleto({ alvo, onEmitido, onClose }: { alvo: AlvoBoleto; onEmitid
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setF((p) => (p ? { ...p, [k]: v } : p));
   const hoje = hojeISO();
 
+  // De onde veio o endereço (mostrado em cinza sob o título da seção).
+  const [origem, setOrigem] = useState<string | null>(null);
+  const [buscandoNf, setBuscandoNf] = useState(false);
+
+  // Endereço, em ordem: último boleto do cliente → NF do Bling (JSON) → XML da
+  // NF (pela função) → pedido do sistema. A pessoa só confere.
   useEffect(() => {
     if (!data || f) return;
-    const s = data.sugestao ?? {};
-    const doPedido = s.origem === "pedido";
-    const end = doPedido ? partesDoEndereco(s.endereco ?? null) : null;
+    let vivo = true;
     const venc = data.titulo.vencimento && data.titulo.vencimento >= hoje ? data.titulo.vencimento : hoje;
-    setF({
-      cep: dig(s.cep),
-      logradouro: (doPedido ? end?.lgr : s.logradouro) ?? "",
-      numero: (doPedido ? end?.nro : s.numero) ?? "",
-      complemento: (doPedido ? "" : s.complemento) ?? "",
-      bairro: (doPedido ? end?.bairro || s.bairro : s.bairro) ?? "",
-      cidade: s.cidade ?? "", uf: (s.uf ?? "").toUpperCase(),
-      email: s.email ?? "", fone: dig(s.fone),
-      documento: data.titulo.documento ? "" : dig(s.documento),
-      vencimento: venc,
-    });
+    const montar = (s: Record<string, string | null> | null | undefined, doPedido: boolean): Form => {
+      const x = s ?? {};
+      const end = doPedido ? partesDoEndereco(x.endereco ?? null) : null;
+      return {
+        cep: dig(x.cep),
+        logradouro: (doPedido ? end?.lgr : x.logradouro) ?? "",
+        numero: (doPedido ? end?.nro : x.numero) ?? "",
+        complemento: (doPedido ? "" : x.complemento) ?? "",
+        bairro: (doPedido ? end?.bairro || x.bairro : x.bairro) ?? "",
+        cidade: x.cidade ?? "", uf: (x.uf ?? "").toUpperCase(),
+        email: x.email ?? "", fone: dig(x.fone),
+        documento: data.titulo.documento ? "" : dig(x.documento),
+        vencimento: venc,
+      };
+    };
+    const rotulo = (s: Record<string, string | null>) =>
+      s.origem === "boleto" ? "Endereço do último boleto do cliente"
+        : s.origem === "nf" ? `Endereço da NF ${s.nf ?? ""}`.trim()
+        : s.origem === "pedido" ? `Endereço de entrega do pedido ${s.pedido ?? ""}`.trim() : null;
+
+    if (data.sugestao) { setF(montar(data.sugestao, false)); setOrigem(rotulo(data.sugestao)); return; }
+    if (data.nf_xml) {
+      setBuscandoNf(true);
+      enderecoDaNf(alvo.ref).then((r) => {
+        if (!vivo) return;
+        if (r) { setF(montar(r.endereco, false)); setOrigem(`Endereço da NF ${r.nf}`); }
+        else if (data.pedido) { setF(montar(data.pedido, true)); setOrigem(rotulo(data.pedido)); }
+        else setF(montar(null, false));
+      }).finally(() => vivo && setBuscandoNf(false));
+      return () => { vivo = false; };
+    }
+    if (data.pedido) { setF(montar(data.pedido, true)); setOrigem(rotulo(data.pedido)); return; }
+    setF(montar(null, false));
   }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function buscarCep() {
@@ -152,7 +178,7 @@ function EmitirBoleto({ alvo, onEmitido, onClose }: { alvo: AlvoBoleto; onEmitid
       </DialogHeader>
 
       {isLoading || (!f && !error) ? (
-        <p className="py-10 text-center text-sm text-muted-foreground"><Loader2 className="mr-2 inline h-4 w-4 animate-spin" />Carregando…</p>
+        <p className="py-10 text-center text-sm text-muted-foreground"><Loader2 className="mr-2 inline h-4 w-4 animate-spin" />{buscandoNf ? "Buscando o endereço na NF do Bling…" : "Carregando…"}</p>
       ) : error ? (
         <Aviso cor="destructive">{(error as Error).message}</Aviso>
       ) : !t || !f ? null : !t.aberto ? (
@@ -183,7 +209,7 @@ function EmitirBoleto({ alvo, onEmitido, onClose }: { alvo: AlvoBoleto; onEmitid
             )}
           </Secao>
 
-          <Secao titulo="Endereço do pagador">
+          <Secao titulo="Endereço do pagador" nota={origem}>
             {!t.documento && (
               <Campo r="CPF/CNPJ" largo>
                 <Input value={f.documento} onChange={(e) => set("documento", dig(e.target.value).slice(0, 14))} inputMode="numeric" />
@@ -427,10 +453,12 @@ function Resumo({ r, v, forte, largo }: { r: string; v: ReactNode; forte?: boole
   );
 }
 
-function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
+function Secao({ titulo, nota, children }: { titulo: string; nota?: string | null; children: ReactNode }) {
   return (
     <div>
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{titulo}</p>
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        {titulo}{nota && <span className="ml-2 font-normal normal-case tracking-normal">· {nota}</span>}
+      </p>
       <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2">{children}</div>
     </div>
   );
