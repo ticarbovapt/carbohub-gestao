@@ -52,7 +52,7 @@ export function Excecoes({ p, numeros, onPessoa }: { p: PainelAtendimento; numer
                 const espera = (new Date(f.fechada_em).getTime() - new Date(f.desde).getTime()) / 60000;
                 return (
                   <li key={`${f.numero_id}:${f.wa_id}:${f.fechada_em}`}
-                    className="grid gap-2 rounded-lg border p-3 lg:grid-cols-[minmax(0,14rem)_minmax(0,1fr)_minmax(0,13rem)_auto] lg:items-center lg:gap-4">
+                    className="grid gap-2 rounded-lg border p-3 lg:grid-cols-[minmax(0,14rem)_minmax(0,1fr)_minmax(0,16rem)_auto] lg:items-center lg:gap-4">
                     <div className="flex min-w-0 flex-col gap-1">
                       <p className="truncate text-sm font-semibold">{f.nome || fmtFone(f.wa_id)}</p>
                       <div className="flex flex-wrap items-center gap-1.5">
@@ -66,8 +66,8 @@ export function Excecoes({ p, numeros, onPessoa }: { p: PainelAtendimento; numer
                       <span className="font-semibold text-orange-700 dark:text-orange-400">
                         {f.como === "resolvido" ? "Marcou resolvido" : "Marcou aguardando"} · {f.por_nome ?? "sem registro de quem"}
                       </span>
-                      <span className="text-muted-foreground">escreveu {fmtDataHora(f.desde)} · fechou {fmtDataHora(f.fechada_em)}</span>
-                      <span className="text-muted-foreground">{fmtMin(espera)} depois, sem resposta</span>
+                      <span className="text-muted-foreground">escreveu {fmtDataHora(f.desde)}</span>
+                      <span className="text-muted-foreground">fechou {fmtDataHora(f.fechada_em)} · {fmtMin(espera)} depois</span>
                     </div>
                     <div className="flex lg:justify-end"><AbrirConversa numeroId={f.numero_id} waId={f.wa_id} /></div>
                   </li>

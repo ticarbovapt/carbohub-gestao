@@ -69,10 +69,10 @@ export function GraficoDiario({ p, ver }: { p: PainelAtendimento; ver: Ver }) {
     <Secao titulo="Por dia" acoes={<Legenda itens={SERIES.map((s) => ({ rotulo: s.rotulo, cor: s.cor }))} />}>
       <div className="h-56">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={dados} margin={{ top: 4, right: 8, left: -18, bottom: 0 }} barCategoryGap="18%">
+          <BarChart data={dados} margin={{ top: 4, right: 8, left: 0, bottom: 0 }} barCategoryGap="18%">
             <CartesianGrid vertical={false} stroke={GRADE} strokeOpacity={0.6} />
             <XAxis dataKey="rotulo" tick={EIXO} tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={14} />
-            <YAxis tick={EIXO} tickLine={false} axisLine={false} allowDecimals={false} width={44} />
+            <YAxis tick={EIXO} tickLine={false} axisLine={false} allowDecimals={false} width={48} />
             <Tooltip
               cursor={{ fill: "hsl(var(--muted))", fillOpacity: 0.5 }}
               content={({ active, payload }) => {
@@ -108,10 +108,10 @@ export function GraficoDiario({ p, ver }: { p: PainelAtendimento; ver: Ver }) {
       </div>
       <div className="h-32">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={dados} margin={{ top: 6, right: 8, left: -18, bottom: 0 }}>
+          <LineChart data={dados} margin={{ top: 6, right: 8, left: 0, bottom: 0 }}>
             <CartesianGrid vertical={false} stroke={GRADE} strokeOpacity={0.6} />
             <XAxis dataKey="rotulo" tick={EIXO} tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={14} />
-            <YAxis tick={EIXO} tickLine={false} axisLine={false} width={44} tickFormatter={(v: number) => fmtMin(v).replace(" min", "m")} />
+            <YAxis tick={EIXO} tickLine={false} axisLine={false} width={48} tickFormatter={(v: number) => (v < 1 ? "0" : fmtMin(v))} />
             {meta != null && <ReferenceLine y={meta} stroke="hsl(var(--muted-foreground))" strokeDasharray="4 4" />}
             <Tooltip
               content={({ active, payload }) => {
@@ -244,7 +244,6 @@ export function PorNumero({ p, ver, agora, onNumero }: { p: PainelAtendimento; v
 
 export function TabelaTemas({ temas, titulo = "Assuntos" }: { temas: PainelTema[]; titulo?: string }) {
   const linhas = [...temas].sort((a, b) => b.pedem - a.pedem);
-  const max = Math.max(1, ...linhas.map((t) => t.pedem));
   return (
     <Secao titulo={titulo} corpo="p-0">
       {linhas.length === 0 ? <Vazio>Nada no período.</Vazio> : (
@@ -255,7 +254,7 @@ export function TabelaTemas({ temas, titulo = "Assuntos" }: { temas: PainelTema[
               <TableHead className="text-right">Pediam</TableHead>
               <TableHead className="w-[30%] min-w-[120px]">Respondidas</TableHead>
               <TableHead className="text-right">Sem resposta</TableHead>
-              <TableHead className="pr-4 text-right">Mediana</TableHead>
+              <TableHead className="pr-4 text-right">Mediana corrida</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -267,7 +266,7 @@ export function TabelaTemas({ temas, titulo = "Assuntos" }: { temas: PainelTema[
                   <TableCell className="text-right tabular-nums">{fmtNum(t.pedem)}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      <div className="h-2 flex-1 rounded-full bg-muted" style={{ maxWidth: `${(t.pedem / max) * 100}%` }}>
+                      <div className="h-2 flex-1 rounded-full bg-muted">
                         <div className="h-2 rounded-full" style={{ width: `${taxa ?? 0}%`, backgroundColor: COR_DESFECHO.respondida }} />
                       </div>
                       <span className="w-9 shrink-0 text-right text-xs tabular-nums text-muted-foreground">{fmtPct(taxa)}</span>

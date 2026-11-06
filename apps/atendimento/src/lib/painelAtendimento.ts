@@ -56,11 +56,15 @@ export function variacaoPp(atual: number | null, anterior: number | null, menorM
 }
 
 /** Para TEMPOS e CONTAGENS: variação relativa em %. */
-export function variacaoRel(atual: number | null | undefined, anterior: number | null | undefined, menorMelhor = false): Variacao | null {
+export function variacaoRel(
+  atual: number | null | undefined, anterior: number | null | undefined, menorMelhor = false,
+  fmt: (n: number) => string = (n) => n.toLocaleString("pt-BR"),
+): Variacao | null {
   if (atual == null || anterior == null) return null;
-  if (anterior === 0) {
-    if (atual === 0) return { texto: "estável", tom: "neutro", sobe: null };
-    return { texto: "antes 0", tom: menorMelhor ? "ruim" : "bom", sobe: true };
+  // Base zero (ou quase): porcentagem não diz nada — mostra o valor de antes.
+  if (anterior === 0 || (anterior < 1 && fmt(anterior) === fmt(0))) {
+    if (fmt(atual) === fmt(anterior)) return { texto: "estável", tom: "neutro", sobe: null };
+    return { texto: `antes ${fmt(anterior)}`, tom: (atual > anterior) === menorMelhor ? "ruim" : "bom", sobe: atual > anterior };
   }
   const r = ((atual - anterior) / anterior) * 100;
   if (Math.abs(r) < 2) return { texto: "estável", tom: "neutro", sobe: null };

@@ -15,9 +15,15 @@ type Col = {
   valor: (a: PainelAtendente) => number | string | null;
   render: (a: PainelAtendente) => ReactNode;
   alinhar?: "esq" | "dir";
+  /** Some abaixo de 1536 px (o detalhe da pessoa tem o número). */
+  secundaria?: boolean;
   /** Para ordenar: true = o MAIOR vem primeiro no primeiro clique. */
   maiorPrimeiro?: boolean;
 };
+
+// A cobrança vem primeiro (tempo, meta, fechou sem responder); volume depois.
+const ORDEM_COLS = ["respondidas", "mediana", "p90", "sla", "fechadas", "resolvidas", "reabertas",
+  "mensagens", "conversas", "dias", "notas", "agora", "ultima", "horario"];
 
 export const ativo = (a: PainelAtendente) =>
   a.respondidas + a.mensagens + a.resolvidas + a.reabertas + a.fechadas_sem_resposta + a.notas + a.em_atendimento_agora > 0;
@@ -27,7 +33,7 @@ export function Atendentes({ p, ver, agora, onPessoa }: { p: PainelAtendimento; 
   const [ordem, setOrdem] = useState<{ col: string; desc: boolean }>({ col: "respondidas", desc: true });
   const [mostrarInativos, setMostrarInativos] = useState(false);
 
-  const cols: Col[] = useMemo(() => [
+  const cols: Col[] = useMemo(() => ([
     { chave: "respondidas", rotulo: "Respondidas", valor: (a) => a.respondidas, render: (a) => fmtNum(a.respondidas), maiorPrimeiro: true },
     {
       chave: "mediana", rotulo: "Mediana", titulo: util ? "Tempo de resposta, horário útil" : "Tempo de resposta, corrido",
@@ -56,8 +62,8 @@ export function Atendentes({ p, ver, agora, onPessoa }: { p: PainelAtendimento; 
     { chave: "mensagens", rotulo: "Mensagens", valor: (a) => a.mensagens, render: (a) => (
       <>{fmtNum(a.mensagens)}{a.falharam > 0 && <span className="ml-1 text-[11px] text-red-600 dark:text-red-400" title="Falharam no envio">({a.falharam} ✕)</span>}</>
     ), maiorPrimeiro: true },
-    { chave: "conversas", rotulo: "Conversas", valor: (a) => a.conversas, render: (a) => fmtNum(a.conversas), maiorPrimeiro: true },
-    { chave: "dias", rotulo: "Dias ativos", valor: (a) => a.dias_ativos, render: (a) => fmtNum(a.dias_ativos), maiorPrimeiro: true },
+    { chave: "conversas", secundaria: true, rotulo: "Conversas", valor: (a) => a.conversas, render: (a) => fmtNum(a.conversas), maiorPrimeiro: true },
+    { chave: "dias", rotulo: "Dias", titulo: "Dias com mensagem no período", valor: (a) => a.dias_ativos, render: (a) => fmtNum(a.dias_ativos), maiorPrimeiro: true },
     { chave: "resolvidas", rotulo: "Resolvidas", valor: (a) => a.resolvidas, render: (a) => fmtNum(a.resolvidas), maiorPrimeiro: true },
     {
       chave: "reabertas", rotulo: "Reabertas", titulo: "Das resolvidas há 7+ dias, quantas o cliente reabriu",
@@ -70,23 +76,24 @@ export function Atendentes({ p, ver, agora, onPessoa }: { p: PainelAtendimento; 
       ),
     },
     {
-      chave: "fechadas", rotulo: "Fechadas s/ resposta", valor: (a) => a.fechadas_sem_resposta, maiorPrimeiro: true,
+      chave: "fechadas", rotulo: "Fechou sem responder", titulo: "Marcou resolvido/aguardando sem ter respondido", valor: (a) => a.fechadas_sem_resposta, maiorPrimeiro: true,
       render: (a) => a.fechadas_sem_resposta > 0
         ? <span className="inline-flex rounded-full bg-orange-500/15 px-2 py-0.5 font-semibold text-orange-700 dark:text-orange-400">{fmtNum(a.fechadas_sem_resposta)}</span>
         : "0",
     },
-    { chave: "notas", rotulo: "Notas", valor: (a) => a.notas, render: (a) => fmtNum(a.notas), maiorPrimeiro: true },
+    { chave: "notas", secundaria: true, rotulo: "Notas", valor: (a) => a.notas, render: (a) => fmtNum(a.notas), maiorPrimeiro: true },
     { chave: "agora", rotulo: "Agora", titulo: "Em atendimento agora", valor: (a) => a.em_atendimento_agora, render: (a) => fmtNum(a.em_atendimento_agora), maiorPrimeiro: true },
     {
-      chave: "ultima", rotulo: "Última resposta", alinhar: "esq", valor: (a) => a.ultima_resposta_em, maiorPrimeiro: true,
+      chave: "ultima", rotulo: "Última", titulo: "Última resposta", alinhar: "esq", valor: (a) => a.ultima_resposta_em, maiorPrimeiro: true,
       render: (a) => <span className="whitespace-nowrap text-xs text-muted-foreground" title={fmtDataHora(a.ultima_resposta_em)}>{haQuanto(a.ultima_resposta_em, agora)}</span>,
     },
     {
-      chave: "horario", rotulo: "Horário", alinhar: "esq", titulo: "Primeira e última mensagem do dia (no período)",
+      chave: "horario", secundaria: true, rotulo: "Horário", alinhar: "esq", titulo: "Primeira e última mensagem do dia (no período)",
       valor: (a) => a.primeira_hora,
       render: (a) => <span className="whitespace-nowrap text-xs text-muted-foreground">{a.primeira_hora ? `${hhmm(a.primeira_hora)}–${hhmm(a.ultima_hora)}` : "—"}</span>,
     },
-  ], [util, agora, p.config.meta_resposta_min, p.config.meta_sla_pct]);
+  ] as Col[]).sort((x, y) => ORDEM_COLS.indexOf(x.chave) - ORDEM_COLS.indexOf(y.chave)),
+  [util, agora, p.config.meta_resposta_min, p.config.meta_sla_pct]);
 
   const ordenar = (lista: PainelAtendente[]) => {
     const col = cols.find((c) => c.chave === ordem.col);
@@ -116,16 +123,16 @@ export function Atendentes({ p, ver, agora, onPessoa }: { p: PainelAtendimento; 
     <div className="space-y-4">
       <Secao titulo={`Quem atendeu · ${ativos.length}`} corpo="p-0">
         {ativos.length === 0 ? <Vazio>Ninguém atendeu no período.</Vazio> : (
-          <Table>
+          <Table className="[&_td]:px-2.5 [&_th]:px-2.5">
             <TableHeader>
               <TableRow>
-                <TableHead className="sticky left-0 z-10 bg-card pl-4">
+                <TableHead className="sticky left-0 z-10 bg-card !pl-4">
                   <button type="button" onClick={() => clicar("nome")} className="inline-flex items-center gap-1 hover:text-foreground">
                     Pessoa <Seta c="nome" />
                   </button>
                 </TableHead>
                 {cols.map((c) => (
-                  <TableHead key={c.chave} className={cn("whitespace-nowrap", c.alinhar === "esq" ? "text-left" : "text-right", c.chave === "horario" && "pr-4")}>
+                  <TableHead key={c.chave} className={cn("whitespace-nowrap", c.secundaria && "hidden 2xl:table-cell", c.alinhar === "esq" ? "text-left" : "text-right", (c.chave === "horario" || c.chave === "ultima") && "!pr-4")}>
                     <button type="button" title={c.titulo} onClick={() => clicar(c.chave, c.maiorPrimeiro)}
                       className={cn("inline-flex items-center gap-1 hover:text-foreground", ordem.col === c.chave && "text-foreground")}>
                       {c.rotulo} <Seta c={c.chave} />
@@ -142,11 +149,11 @@ export function Atendentes({ p, ver, agora, onPessoa }: { p: PainelAtendimento; 
                   onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onPessoa(a.chave); } }}
                   className="group cursor-pointer"
                 >
-                  <TableCell className="sticky left-0 z-10 bg-card pl-4 font-medium group-hover:bg-muted">
+                  <TableCell className="sticky left-0 z-10 bg-card !pl-4 font-medium group-hover:bg-muted">
                     <span className="whitespace-nowrap underline-offset-2 group-hover:underline">{a.nome ?? "Sem nome"}</span>
                   </TableCell>
                   {cols.map((c) => (
-                    <TableCell key={c.chave} className={cn("tabular-nums", c.alinhar === "esq" ? "text-left" : "text-right", c.chave === "horario" && "pr-4")}>
+                    <TableCell key={c.chave} className={cn("tabular-nums", c.secundaria && "hidden 2xl:table-cell", c.alinhar === "esq" ? "text-left" : "text-right", (c.chave === "horario" || c.chave === "ultima") && "!pr-4")}>
                       {c.render(a)}
                     </TableCell>
                   ))}

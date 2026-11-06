@@ -61,7 +61,7 @@ function Esqueleto() {
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 2xl:grid-cols-6">
         {Array.from({ length: 6 }, (_, i) => <Skeleton key={i} className="h-[84px] rounded-xl" />)}
       </div>
-      <div className="grid grid-cols-1 gap-2 min-[440px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-3 xl:grid-cols-5">
         {Array.from({ length: 10 }, (_, i) => <Skeleton key={i} className="h-[118px] rounded-xl" />)}
       </div>
       <Skeleton className="h-10 w-full max-w-xl" />

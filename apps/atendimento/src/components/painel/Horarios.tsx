@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { PainelAtendimento, PainelCelula } from "@/hooks/usePainelAtendimento";
@@ -51,6 +51,12 @@ function Mapa({ p }: { p: PainelAtendimento }) {
   const horas = useMemo(() => [...horasDoExpediente(p.config)].sort((a, b) => a - b), [p.config]);
   const hIni = horas[0], hFim = horas[horas.length - 1];
   const blocos = blocosDeDias(p.config.dias);
+  // No celular o mapa rola de lado: abre já no começo do expediente, não na madrugada.
+  const rolagem = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = rolagem.current;
+    if (el && hIni != null && el.scrollWidth > el.clientWidth) el.scrollLeft = ((hIni - 1) / 24) * (el.scrollWidth - 40);
+  }, [hIni, p.heatmap.length]);
 
   // Totais por hora e por dia — a borda do mapa, para ler o pico sem somar de cabeça.
   const totalHora = useMemo(() => Array.from({ length: 24 }, (_, h) =>
@@ -65,7 +71,7 @@ function Mapa({ p }: { p: PainelAtendimento }) {
     >
       {p.heatmap.length === 0 ? <Vazio>Nada no período.</Vazio> : (
         <TooltipProvider delayDuration={80}>
-          <div className="overflow-x-auto pb-1">
+          <div ref={rolagem} className="overflow-x-auto pb-1">
             <div
               className="relative grid min-w-[640px] gap-[2px]"
               style={{ gridTemplateColumns: "2.5rem repeat(24, minmax(0, 1fr))", gridTemplateRows: "auto repeat(7, 1.75rem) auto" }}

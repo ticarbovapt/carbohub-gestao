@@ -45,7 +45,7 @@ export function FaixaAgora({ p, irPara }: { p: PainelAtendimento; irPara: (aba: 
   const a = p.agora;
   const tomEsperando = a.janela_ate_2h > 0 ? "vermelho" : a.janela_ate_6h > 0 ? "ambar" : "neutro";
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 2xl:grid-cols-6">
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
       <Bloco
         titulo="Esperando resposta" icone={MessageSquareOff} tom={a.esperando > 0 ? tomEsperando : "neutro"}
         valor={fmtNum(a.esperando)}
@@ -112,7 +112,7 @@ function Kpi({ titulo, valor, detalhe, n, variacao, meta, marca }: {
     <div className="flex min-w-0 flex-col gap-1.5 rounded-xl border bg-card p-3.5 shadow-sm">
       <div className="flex items-start justify-between gap-2">
         <span className="text-xs font-medium text-muted-foreground">{titulo}</span>
-        {marca && <span className="shrink-0 text-[11px] text-muted-foreground">{marca}</span>}
+        {marca && <span className="hidden shrink-0 text-[11px] text-muted-foreground sm:inline">{marca}</span>}
       </div>
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
         <span className="text-2xl font-bold tabular-nums leading-none">{valor}</span>
@@ -157,7 +157,7 @@ export function Indicadores({ p, ver }: { p: PainelAtendimento; ver: Ver }) {
   const reab = pct(p.atividade.reabertas_maduras, p.atividade.resolvidas_maduras);
 
   return (
-    <div className="grid grid-cols-1 gap-2 min-[440px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+    <div className="grid grid-cols-2 gap-2 lg:grid-cols-3 xl:grid-cols-5">
       <Kpi
         titulo="Taxa de resposta" valor={fmtPct(taxa)}
         meta={taxa != null ? { ok: taxa >= c.meta_taxa_resposta_pct, texto: `meta ${c.meta_taxa_resposta_pct}%` } : null}
@@ -170,7 +170,7 @@ export function Indicadores({ p, ver }: { p: PainelAtendimento; ver: Ver }) {
         detalhe={util
           ? `mediana · p90 ${fmtMin(a.tmpr_util_p90)}`
           : `mediana · p90 ${fmtMin(a.tmpr_p90)} · média ${fmtMin(a.tmpr_media)}`}
-        variacao={variacaoRel(tmpr, tmprAnt, true)}
+        variacao={variacaoRel(tmpr, tmprAnt, true, fmtMin)}
         n={`n ${fmtNum(a.atendimentos_respondidos ?? a.respondidas)}`}
       />
       <Kpi
@@ -178,7 +178,7 @@ export function Indicadores({ p, ver }: { p: PainelAtendimento; ver: Ver }) {
         detalhe={util
           ? `mediana de toda rodada · p90 ${fmtMin(a.tmr_util_p90)}`
           : `mediana de toda rodada · p90 ${fmtMin(a.tmr_p90)} · média ${fmtMin(a.tmr_media)}`}
-        variacao={variacaoRel(tmr, tmrAnt, true)}
+        variacao={variacaoRel(tmr, tmrAnt, true, fmtMin)}
         n={`n ${fmtNum(a.respondidas)}`}
       />
       <Kpi
@@ -190,7 +190,7 @@ export function Indicadores({ p, ver }: { p: PainelAtendimento; ver: Ver }) {
       <Kpi
         titulo="Duração do atendimento (TMA)" marca="corrido" valor={fmtMin(a.tma_mediana)}
         detalhe={`${a.msgs_por_atendimento != null ? a.msgs_por_atendimento.toLocaleString("pt-BR") : "—"} mensagens por atendimento · p90 ${fmtMin(a.tma_p90)}`}
-        variacao={neutro(variacaoRel(a.tma_mediana, b?.tma_mediana))}
+        variacao={neutro(variacaoRel(a.tma_mediana, b?.tma_mediana, false, fmtMin))}
         n={`n ${fmtNum(a.atendimentos_respondidos)}`}
       />
       <Kpi

@@ -118,7 +118,7 @@ export function FilaAgora({ p, agora, numeros, assunto, setAssunto, soRisco, set
 
   const chave = `${assunto}|${soRisco}`;
   const fatiaFila = useFatia(fila, 30, chave);
-  const fatiaPerd = useFatia(perdidas, 20, chave);
+  const fatiaPerd = useFatia(perdidas, 10, chave);
 
   const refPerdidas = useRef<HTMLDivElement>(null);
   useEffect(() => {
