@@ -2745,8 +2745,9 @@ apps/atendimento/src/components/painel/Assuntos.tsx   (?aba=assuntos&grupo=&topi
    não errada. Medido local com os índices de produção: ~0,35 s (30 dias), ~0,85 s com 4×.
 6. ⚠️ **Isto CORRIGE o "pede resposta" das RODADAS** (20261148): resposta
    automática, "chegou tudo certo", "ainda tenho 4 frascos" e "comprei no ML"
-   contavam como esperando resposta. A `carbo_atendimento_rodadas` foi trocada
-   (BLOCO 3, só se o corpo no banco for o da 20261148). ⚠️ A tela de Conversas
+   contavam como esperando resposta. A `carbo_atendimento_rodadas` ganhou
+   a troca em TRÊS trechos do texto VIVO (BLOCO 3). ⚠️ A 1ª versão conferia o
+   md5 do corpo inteiro contra o repo e produção diferia: troque trecho, nunca corpo. ⚠️ A tela de Conversas
    continua com `pareceEncerramento` (só palavras) — divergência ASSUMIDA.
 7. A conta da aba é CLIENTE, não mensagem. `carbo_wa_tema` (os temas grossos
    da fila) continua por palavra: derivá-lo do cadastro seria regex por chamada.

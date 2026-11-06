@@ -48,12 +48,10 @@
 -- ╚═══════════════════════════════════════════════════════════════════════╝
 -- Espera: UMA linha com as quatro colunas TRUE.
 --   painel_instalado = false  → a 20261148 não está no banco; rode-a antes.
---   rodadas_como_no_repo = false → alguém mexeu na função depois da 20261148;
---                         o BLOCO 3 recusa trocar — me mande o resultado.
+--   rodadas_existe = false → a 20261148 está incompleta no banco.
 select
   exists (select 1 from pg_proc where proname = 'carbo_atendimento_painel') as painel_instalado,
-  coalesce((select md5(regexp_replace(prosrc, '\s+', '', 'g')) = 'ca6b6aa1c22bff2a68c9cffe1ceed0ba'
-              from pg_proc where proname = 'carbo_atendimento_rodadas'), false) as rodadas_como_no_repo,
+  exists (select 1 from pg_proc where proname = 'carbo_atendimento_rodadas') as rodadas_existe,
   not exists (select 1 from pg_class where relname = 'carbo_wa_assuntos') as cadastro_ainda_nao_existe,
   exists (select 1 from pg_extension where extname = 'pg_cron') as tem_pg_cron;
 
@@ -526,163 +524,65 @@ grant  execute on function public.carbo_wa_risco(text) to authenticated, service
 -- ╔═══════════════════════════════════════════════════════════════════════╗
 -- ║ BLOCO 3 — as RODADAS passam a usar o "pede" dos assuntos              ║
 -- ╚═══════════════════════════════════════════════════════════════════════╝
--- ⚠️ O corpo é o da 20261148 com UMA troca (o `pede` vem da janela). Ele só é
--- trocado se a função no banco ainda for a da 20261148 — a mesma conferência
--- do BLOCO 0; se alguém a mudou, este bloco ABORTA sem mexer em nada.
--- Espera: "Success. No rows returned".
-do $$
-begin
-  if coalesce((select md5(regexp_replace(prosrc, '\s+', '', 'g')) from pg_proc
-                where proname = 'carbo_atendimento_rodadas'), '') not in
-     ('ca6b6aa1c22bff2a68c9cffe1ceed0ba', 'ef0a83e0e35599875f221624d523e0e5') then
-    raise exception 'carbo_atendimento_rodadas não é a da 20261148 — não troquei. Mande o resultado do BLOCO 0.';
-  end if;
-end $$;
+-- ⚠️ Troca TRÊS trechos no texto VIVO da função (pg_get_functiondef), nunca o
+-- corpo inteiro: a 1ª versão deste bloco comparava o md5 do corpo com o do
+-- repositório e produção diferia (06/11/2026) — reescrever o corpo inteiro
+-- apagaria o que quer que esteja lá e o repo não conhece. Cada trecho tem de
+-- aparecer EXATAMENTE uma vez (por padrão, tolerante a espaço); senão ABORTA
+-- sem mexer e diz quantas vezes achou cada um. O antes vai para
+-- `carbo_backup_funcoes`. Rodar de novo não faz nada.
+-- Espera: NOTICE "trocada: trecho 1: 1 vez(es); …" e `rodadas_usa_assuntos` = true.
+create table if not exists public.carbo_backup_funcoes (
+  feito_em  timestamptz not null default now(),
+  funcao    text not null,
+  definicao text not null
+);
+alter table public.carbo_backup_funcoes enable row level security;
 
-create or replace function public.carbo_atendimento_rodadas(p_desde timestamptz, p_numero text)
-returns table (
-  numero_id text, wa_id text, idx bigint, ep bigint,
-  inicio timestamptz, inicio_pede timestamptz, ultimo_cliente_em timestamptz, ultimo_pede_em timestamptz,
-  proxima_em timestamptz, pede boolean, n_msgs bigint, n_pede bigint,
-  textos text, ultimo_texto text, ultimo_tipo text,
-  respondido_em timestamptz, resp_pessoa text, resp_nome text,
-  n_humanos bigint, ultimo_humano_em timestamptz,
-  mark_em timestamptz, mark_status text, mark_por text, mark_por_nome text,
-  desfecho text, primeira_do_ep boolean, respondida_depois boolean
-)
-language sql stable set search_path = public as $$
-  with jan as (
+do $$
+declare
+  v_def text;
+  v_novo text;
+  r record;
+  v_n int;
+  v_rel text := '';
+begin
+  v_def := pg_get_functiondef('public.carbo_atendimento_rodadas(timestamptz,text)'::regprocedure);
+  if position('carbo_wa_assuntos_janela' in v_def) > 0 then
+    raise notice 'carbo_atendimento_rodadas já usa os assuntos — nada a fazer.';
+    return;
+  end if;
+  v_novo := v_def;
+  for r in
+    select * from (values
+      (1, $p$with\s+msgs\s+as\s+\($p$,
+          $s$with jan as (
     select j.wamid, j.pede from public.carbo_wa_assuntos_janela(p_desde, null, p_numero) j
   ),
-  msgs as (
-    select m.numero_id, m.wa_id, m.wamid, m.ocorrido_em, m.tipo, m.texto,
-           case when m.direcao = 'entrada' then 'cliente' else 'humano' end as quem,
-           coalesce(m.enviado_por::text, 'nome:' || m.enviado_por_nome) as pessoa,
-           coalesce(pr.full_name, m.enviado_por_nome) as pessoa_nome,
-           -- ⚠️ Desde a 20261149 o "pede" passa pelos ASSUNTOS: resposta automática,
-           -- "chegou tudo certo", "ainda tenho", "já comprei no ML" não esperam
-           -- resposta. Mensagem ainda sem cache cai na regra de palavras.
-           m.direcao = 'entrada' and coalesce(jan.pede, public.carbo_wa_pede_resposta(m.tipo, m.texto)) as pede
-      from public.carbo_wa_mensagens m
-      left join public.profiles pr on pr.id = m.enviado_por
-      left join jan on jan.wamid = m.wamid
-     where m.ocorrido_em >= p_desde
-       and (p_numero is null or m.numero_id = p_numero)
-       and (m.direcao = 'entrada'
-            -- ⚠️ Só GENTE encerra rodada: aviso automático não é atendimento,
-            -- e resposta que falhou não chegou ao cliente.
-            or ((m.enviado_por is not null or m.enviado_por_nome is not null)
-                and coalesce(m.status, '') <> 'falhou'))
-  ),
-  -- ⚠️ Ordem: instante, e no EMPATE a mensagem de gente vem antes — senão uma
-  -- resposta e uma pergunta no mesmo segundo fariam a resposta "responder" a
-  -- pergunta que chegou junto, e o desempate seria o wamid (aleatório).
-  seq as (
-    select s.*,
-           count(*) filter (where s.quem = 'humano')
-             over (partition by s.numero_id, s.wa_id order by s.ocorrido_em, (s.quem = 'cliente'), s.wamid
-                   rows between unbounded preceding and current row) as n_humano,
-           lag(s.ocorrido_em)
-             over (partition by s.numero_id, s.wa_id order by s.ocorrido_em, (s.quem = 'cliente'), s.wamid) as anterior_em
-      from msgs s
-  ),
-  seq2 as (
-    select s.*,
-           sum(case when s.anterior_em is null or s.ocorrido_em - s.anterior_em > interval '24 hours' then 1 else 0 end)
-             over (partition by s.numero_id, s.wa_id order by s.ocorrido_em, (s.quem = 'cliente'), s.wamid
-                   rows between unbounded preceding and current row) as ep_n
-      from seq s
-  ),
-  -- A qual rodada cada mensagem de gente responde: a última aberta antes dela
-  -- (n_humano e ep_n só crescem, então o maior valor de cliente até ali é ela).
-  -- ⚠️ O episódio é o da RODADA, não o da resposta: resposta dada mais de 24 h
-  -- depois (por modelo da Meta) cai num episódio novo, e juntando pelo dela a
-  -- rodada virava "perdida" e a demora sumia do tempo de resposta.
-  seq3 as (
-    select s.*,
-           max(case when s.quem = 'cliente' then s.n_humano end)
-             over (partition by s.numero_id, s.wa_id order by s.ocorrido_em, (s.quem = 'cliente'), s.wamid
-                   rows between unbounded preceding and current row) as idx_resp,
-           max(case when s.quem = 'cliente' then s.ep_n end)
-             over (partition by s.numero_id, s.wa_id order by s.ocorrido_em, (s.quem = 'cliente'), s.wamid
-                   rows between unbounded preceding and current row) as ep_resp
-      from seq2 s
-  ),
-  rod as (
-    select s.numero_id, s.wa_id, s.n_humano as idx, s.ep_n as ep,
-           min(s.ocorrido_em) as inicio,
-           min(s.ocorrido_em) filter (where s.pede) as inicio_pede,
-           max(s.ocorrido_em) as ultimo_cliente_em,
-           max(s.ocorrido_em) filter (where s.pede) as ultimo_pede_em,
-           bool_or(s.pede) as pede,
-           count(*) as n_msgs,
-           count(*) filter (where s.pede) as n_pede,
-           left(string_agg(coalesce(s.texto, ''), ' · ' order by s.ocorrido_em) filter (where s.pede), 2000) as textos,
-           (array_agg(s.texto order by s.ocorrido_em desc))[1] as ultimo_texto,
-           (array_agg(s.tipo  order by s.ocorrido_em desc))[1] as ultimo_tipo
-      from seq3 s
-     where s.quem = 'cliente'
-     group by 1, 2, 3, 4
-  ),
-  hum as (
-    select s.numero_id, s.wa_id, s.idx_resp as idx, s.ep_resp as ep,
-           min(s.ocorrido_em) as respondido_em,
-           (array_agg(s.pessoa order by s.ocorrido_em))[1] as resp_pessoa,
-           (array_agg(s.pessoa_nome order by s.ocorrido_em))[1] as resp_nome,
-           count(*) as n_humanos,
-           max(s.ocorrido_em) as ultimo_humano_em
-      from seq3 s
-     where s.quem = 'humano' and s.idx_resp is not null
-     group by 1, 2, 3, 4
-  ),
-  junta as (
-    select r.*, h.respondido_em, h.resp_pessoa, h.resp_nome,
-           coalesce(h.n_humanos, 0) as n_humanos, h.ultimo_humano_em,
-           lead(r.inicio) over (partition by r.numero_id, r.wa_id order by r.inicio) as proxima_em,
-           -- Alguma rodada DEPOIS desta foi respondida? (quem voltou e foi
-           -- atendido não é mais trabalho — sem laço sobre a tabela inteira.)
-           max(h.respondido_em) over (partition by r.numero_id, r.wa_id order by r.inicio
-                                      rows between 1 following and unbounded following) is not null as respondida_depois
-      from rod r
-      left join hum h on h.numero_id = r.numero_id and h.wa_id = r.wa_id
-                     and h.idx = r.idx and h.ep = r.ep
-  )
-  select j.numero_id, j.wa_id, j.idx, j.ep, j.inicio, j.inicio_pede, j.ultimo_cliente_em, j.ultimo_pede_em,
-         j.proxima_em, j.pede, j.n_msgs, j.n_pede, j.textos, j.ultimo_texto, j.ultimo_tipo,
-         j.respondido_em, j.resp_pessoa, j.resp_nome, j.n_humanos, j.ultimo_humano_em,
-         mk.em, mk.status, mk.por, mk.por_nome,
-         case
-           when not j.pede then 'nao_pede'
-           when j.respondido_em is not null then 'respondida'
-           when mk.em is not null then 'fechada_sem_resposta'
-           when j.ultimo_cliente_em + interval '24 hours' > now() then 'aguardando'
-           else 'perdida'
-         end as desfecho,
-         j.pede and j.inicio = min(j.inicio) filter (where j.pede)
-                                 over (partition by j.numero_id, j.wa_id, j.ep) as primeira_do_ep,
-         j.respondida_depois
-    from junta j
-    -- A marca que fechou a rodada sem resposta: uma DECISÃO resolvido/aguardando
-    -- depois da última mensagem que PEDE (um 👍 do cliente depois não a anula)
-    -- e antes da próxima rodada.
-    -- ⚠️ Pelo `em` (relógio do SERVIDOR), nunca pelo `desde`, que vem do
-    -- navegador: PC 2 min atrasado fazia a marca cair antes da mensagem.
-    left join lateral (
-      select h.em, h.status, h.por::text as por,
-             coalesce(h.por_nome, pr.full_name) as por_nome
-        from public.carbo_wa_atendimento_hist h
-        left join public.profiles pr on pr.id = h.por
-       where j.respondido_em is null and j.pede
-         and h.numero_id = j.numero_id and h.wa_id = j.wa_id
-         and h.marca
-         and h.status in ('resolvido', 'aguardando')
-         and h.em >= j.ultimo_pede_em
-         and (j.proxima_em is null or h.em < j.proxima_em)
-       order by h.em
-       limit 1
-    ) mk on true;
-$$;
-revoke execute on function public.carbo_atendimento_rodadas(timestamptz, text) from anon, public, authenticated;
+  msgs as ($s$),
+      (2, $p$m\.direcao\s*=\s*'entrada'\s+and\s+public\.carbo_wa_pede_resposta\(\s*m\.tipo\s*,\s*m\.texto\s*\)\s+as\s+pede$p$,
+          $s$m.direcao = 'entrada' and coalesce(jan.pede, public.carbo_wa_pede_resposta(m.tipo, m.texto)) as pede$s$),
+      (3, $p$left\s+join\s+public\.profiles\s+pr\s+on\s+pr\.id\s*=\s*m\.enviado_por$p$,
+          $s$left join public.profiles pr on pr.id = m.enviado_por
+      left join jan on jan.wamid = m.wamid$s$)
+    ) t(ordem, pat, por)
+    order by ordem
+  loop
+    select count(*) into v_n from regexp_matches(v_def, r.pat, 'g');
+    v_rel := v_rel || format(' trecho %s: %s vez(es);', r.ordem, v_n);
+    if v_n = 1 then
+      v_novo := regexp_replace(v_novo, r.pat, r.por);
+    end if;
+  end loop;
+  if v_rel <> ' trecho 1: 1 vez(es); trecho 2: 1 vez(es); trecho 3: 1 vez(es);' then
+    raise exception 'Nada foi alterado. Esperava cada trecho UMA vez no texto vivo:%', v_rel;
+  end if;
+  insert into public.carbo_backup_funcoes(funcao, definicao) values ('public.carbo_atendimento_rodadas(timestamptz,text)', v_def);
+  execute v_novo;   -- create or replace, MESMA assinatura: os grants ficam
+  raise notice 'carbo_atendimento_rodadas trocada:%', v_rel;
+end $$;
+
+select position('carbo_wa_assuntos_janela' in pg_get_functiondef('public.carbo_atendimento_rodadas(timestamptz,text)'::regprocedure)) > 0 as rodadas_usa_assuntos;
 
 
 -- ╔═══════════════════════════════════════════════════════════════════════╗
