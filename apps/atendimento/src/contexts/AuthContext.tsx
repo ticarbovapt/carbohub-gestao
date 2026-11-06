@@ -19,6 +19,9 @@ interface AuthContextType {
   /** Alias de canAdmin. Existe para o /vender ser idêntico em todos os apps —
    *  o Vender canônico (CRM) usa este nome. Mesma expressão, não duplique a regra. */
   isGestor: boolean;
+  /** O mapa de funções (de onde sai o `isGestor`) já chegou. Antes disso
+   *  `isGestor` é false por AUSÊNCIA, não por decisão — tela de gestor espera. */
+  acessoPronto: boolean;
   /** Gate de ENTRADA no app de Atendimento: precisa da flag carbo_atendimento
    *  liberada no Admin (profiles.allowed_interfaces). */
   hasAtendimentoInterface: boolean;
@@ -34,6 +37,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [fnMap, setFnMap] = useState<FnAccessMap>({});
+  const [acessoPronto, setAcessoPronto] = useState(false);
   const [isLoading, setLoading] = useState(true);
 
   // Mapa de níveis por função (a flag "gestor" que o Admin controla na Estrutura).
@@ -48,7 +52,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           m[fnKey(f.department, f.function_key)] = f.access_level;
         }
         setFnMap(m);
-      });
+        setAcessoPronto(true);
+      }, () => setAcessoPronto(true));
   }, []);
 
   const loadIdentity = async (userId: string) => {
@@ -118,6 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user, session, profile,
       canAdmin: isManager(profile, fnMap),
       isGestor: isManager(profile, fnMap),
+      acessoPronto,
       // Sem perfil em `profiles` NÃO entra: o portal de lojas e o de licenciados
       // usam a MESMA tabela, e `profile == null` (usuário sem cadastro interno)
       // tem de cair no bloqueio junto com a flag ausente — não basta testar a lista.
