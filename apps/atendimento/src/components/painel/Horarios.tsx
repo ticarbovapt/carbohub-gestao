@@ -4,7 +4,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import type { PainelAtendimento, PainelCelula } from "@/hooks/usePainelAtendimento";
 import { DIAS_CURTOS, corDaEtiqueta, fmtMin, fmtNum, fmtPct, hhmm, horasDoExpediente, pct } from "@/lib/painelAtendimento";
 import { Bolinha, Pilula, Secao, Vazio } from "./comum";
-import { TabelaTemas } from "./VisaoGeral";
 
 type Leitura = "demanda" | "sem_resposta" | "tempo" | "mensagens";
 
@@ -155,7 +154,6 @@ export function Horarios({ p }: { p: PainelAtendimento }) {
     <div className="space-y-4">
       <Mapa p={p} />
       <div className="grid gap-4 lg:grid-cols-3">
-        <div className="min-w-0 lg:col-span-2"><TabelaTemas temas={p.temas} /></div>
         <Secao titulo="Etiquetas">
           {etiquetas.length === 0 ? <Vazio>Nenhuma etiqueta no período.</Vazio> : (
             <ul className="space-y-1.5">

@@ -5,9 +5,9 @@ import {
 import { AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import type { PainelAtendimento, PainelFaixa, PainelTema } from "@/hooks/usePainelAtendimento";
+import type { PainelAtendimento, PainelFaixa } from "@/hooks/usePainelAtendimento";
 import {
-  COR_DESFECHO, FAIXA_ROTULO, FAIXA_TETO, TEMA_ROTULO, fmtData, fmtDataHora, fmtMin, fmtNum, fmtPct, haQuanto,
+  COR_DESFECHO, FAIXA_ROTULO, FAIXA_TETO, fmtData, fmtDataHora, fmtMin, fmtNum, fmtPct, haQuanto,
   minutosDesde, pct,
 } from "@/lib/painelAtendimento";
 import { Bolinha, Secao, Vazio } from "./comum";
@@ -242,48 +242,6 @@ export function PorNumero({ p, ver, agora, onNumero }: { p: PainelAtendimento; v
   );
 }
 
-export function TabelaTemas({ temas, titulo = "Assuntos" }: { temas: PainelTema[]; titulo?: string }) {
-  const linhas = [...temas].sort((a, b) => b.pedem - a.pedem);
-  return (
-    <Secao titulo={titulo} corpo="p-0">
-      {linhas.length === 0 ? <Vazio>Nada no período.</Vazio> : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="pl-4">Assunto</TableHead>
-              <TableHead className="text-right">Pediam</TableHead>
-              <TableHead className="w-[30%] min-w-[120px]">Respondidas</TableHead>
-              <TableHead className="text-right">Sem resposta</TableHead>
-              <TableHead className="pr-4 text-right">Mediana corrida</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {linhas.map((t) => {
-              const taxa = pct(t.respondidas, t.pedem_encerradas);
-              return (
-                <TableRow key={t.tema}>
-                  <TableCell className="whitespace-nowrap pl-4 font-medium">{TEMA_ROTULO[t.tema] ?? t.tema}</TableCell>
-                  <TableCell className="text-right tabular-nums">{fmtNum(t.pedem)}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <div className="h-2 flex-1 rounded-full bg-muted">
-                        <div className="h-2 rounded-full" style={{ width: `${taxa ?? 0}%`, backgroundColor: COR_DESFECHO.respondida }} />
-                      </div>
-                      <span className="w-9 shrink-0 text-right text-xs tabular-nums text-muted-foreground">{fmtPct(taxa)}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className={cn("text-right tabular-nums", t.sem_resposta > 0 && "font-medium text-red-600 dark:text-red-400")}>{fmtNum(t.sem_resposta)}</TableCell>
-                  <TableCell className="pr-4 text-right tabular-nums">{fmtMin(t.tmr_mediana)}</TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      )}
-    </Secao>
-  );
-}
-
 export function VisaoGeral({ p, ver, agora, onNumero }: { p: PainelAtendimento; ver: Ver; agora: number; onNumero: (id: string) => void }) {
   return (
     <div className="space-y-4">
@@ -292,7 +250,6 @@ export function VisaoGeral({ p, ver, agora, onNumero }: { p: PainelAtendimento; 
         <Faixas p={p} ver={ver} />
       </div>
       <PorNumero p={p} ver={ver} agora={agora} onNumero={onNumero} />
-      <TabelaTemas temas={p.temas} />
     </div>
   );
 }

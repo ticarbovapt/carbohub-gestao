@@ -2709,6 +2709,49 @@ apps/atendimento/src/hooks/usePainelAtendimento.ts · pages/PainelAtendimento.ts
    - "nada", "ate" e "foi" saíram da lista de agradecimento ("até agora nada",
      "chegou nada"), e a resposta automática fraca exige DUAS frases.
 
+### Assuntos do atendimento — aba "Assuntos" do /painel (06/11/2026)
+Pedido do dono do processo: saber o que os clientes falam (reclamação dividida
+em "não recebeu", "não funcionou"…, elogio, dúvida), para mensurar problema e
+achar elogio rápido. A lista NÃO foi inventada: saiu da leitura das 2.286
+mensagens de cliente de 22/08 a 06/11 (os três números).
+
+```
+supabase/migrations/20261149000000_assuntos_do_atendimento.sql
+  carbo_wa_assunto_grupos / carbo_wa_assuntos   CADASTRO (6 grupos, ~40 assuntos, regex por assunto)
+  carbo_wa_texto_chave(text)        a normalização que as regras leem
+  carbo_wa_assuntos_calcular(...)   classifica um CONJUNTO (interna)
+  carbo_wa_msg_assunto + _versao    o CACHE; cron `atendimento-assuntos-classificar` (17 * * * *)
+  carbo_wa_assuntos_janela(...)     a leitura: cache + o que falta, calculado na hora
+  carbo_atendimento_assuntos(de,ate,numero)            a aba (jsonb)
+  carbo_atendimento_assunto_clientes(de,ate,filtro,…)  quem falou (paginado)
+apps/atendimento/src/components/painel/Assuntos.tsx   (?aba=assuntos&grupo=&topico=)
+```
+
+1. ⚠️ **Assunto é CADASTRO**: regra nova/corrigida = UPDATE em
+   `carbo_wa_assuntos.padrao`, sem deploy. O gatilho RECUSA expressão inválida
+   e sobe a versão; o cache se refaz no cron seguinte.
+2. ⚠️ **Classifique REGRA POR REGRA, nunca mensagem por mensagem.** O Postgres
+   guarda só 32 regex compiladas: percorrer ~40 regras por mensagem recompila
+   todas, toda vez — 34 s nas 2.286; regra por regra (`cross join lateral …
+   offset 0`) 0,9 s. Sem o `offset 0` o planejador inverte e volta aos 34 s.
+3. **UM assunto por grupo** (vence a menor `ordem`), vários grupos por
+   mensagem. `exclusivo` (resposta automática de outra empresa) vale sozinho;
+   `so_se_vazio` (cumprimento, "ok obrigado", pedido genérico de ajuda) só
+   quando nada mais casou; `suprime` tira assunto/grupo (toda reclamação tira
+   o elogio; as de produto e entrega tiram "onde está o pedido").
+4. ⚠️ **"ml" é mililitro.** Mercado Livre só com preposição (`no|pelo|via ml`):
+   "10 ml" era lido como compra no Mercado Livre.
+5. ⚠️ **O cache ACELERA, nunca decide**: cron parado deixa a aba mais lenta,
+   não errada. Medido local com os índices de produção: ~0,35 s (30 dias), ~0,85 s com 4×.
+6. ⚠️ **Isto CORRIGE o "pede resposta" das RODADAS** (20261148): resposta
+   automática, "chegou tudo certo", "ainda tenho 4 frascos" e "comprei no ML"
+   contavam como esperando resposta. A `carbo_atendimento_rodadas` foi trocada
+   (BLOCO 3, só se o corpo no banco for o da 20261148). ⚠️ A tela de Conversas
+   continua com `pareceEncerramento` (só palavras) — divergência ASSUMIDA.
+7. A conta da aba é CLIENTE, não mensagem. `carbo_wa_tema` (os temas grossos
+   da fila) continua por palavra: derivá-lo do cadastro seria regex por chamada.
+   A tabela "Assuntos" antiga (por tema) saiu da Visão geral e de Horários.
+
 ### Segredo de função: FECHE quando ele não existe
 Padrão obrigatório em toda edge function chamada por máquina:
 
