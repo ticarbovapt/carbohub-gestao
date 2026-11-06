@@ -24,6 +24,8 @@
 // (supabase/consultas/bradesco_teste_sandbox.sql).
 // ═══════════════════════════════════════════════════════════════════════════
 
+import { SANDBOX_REGISTRO_HIBRIDO } from "../_shared/bradescoSandbox.ts";
+
 const MARCA = "bradesco-teste";
 const BASE = "https://openapisandbox.prebanco.com.br";
 // const BASE = "https://openapi.bradesco.com.br";   // PRODUÇÃO — não descomentar sem decisão
@@ -79,30 +81,8 @@ const CORPO_COMUM = {
   listaMsgs: [{ mensagem: "$$.*$$" }, { mensagem: "$$.*$$" }],
 };
 
-const CORPO_HIBRIDO = {
-  ctitloCobrCdent: 0, registrarTitulo: 1, nroCpfCnpjBenef: 68542653, codUsuario: "APISERVIC",
-  filCpfCnpjBenef: "1018", tipoAcesso: 2, digCpfCnpjBenef: 38, cpssoaJuridContr: "", ctpoContrNegoc: "",
-  cidtfdProdCobr: 9, nseqContrNegoc: "", cnegocCobr: 111111111111111111n, filler: "", eNseqContrNegoc: "",
-  tipoRegistro: 1, codigoBanco: 237, cprodtServcOper: "", demisTitloCobr: "17.12.2024",
-  ctitloCliCdent: "TESTEBIA", dvctoTitloCobr: "20.02.2025", cidtfdTpoVcto: "", vnmnalTitloCobr: 6000,
-  cindcdEconmMoeda: 9, cespceTitloCobr: 2, qmoedaNegocTitlo: 0, ctpoProteTitlo: 0, cindcdAceitSacdo: "N",
-  ctpoPrzProte: 0, ctpoPrzDecurs: 0, ctpoProteDecurs: 0, cctrlPartcTitlo: 0, cindcdPgtoParcial: "N",
-  cformaEmisPplta: "02", qtdePgtoParcial: 0, qtdDecurPrz: "0", codNegativacao: "0", diasNegativacao: "0",
-  ptxJuroVcto: 0, filler1: "", vdiaJuroMora: 0, pmultaAplicVcto: 0, qdiaInicJuro: 0, vmultaAtrsoPgto: 0,
-  pdescBonifPgto01: 0, qdiaInicMulta: 0, vdescBonifPgto01: 0, pdescBonifPgto02: 0, dlimDescBonif1: "",
-  vdescBonifPgto02: 0, pdescBonifPgto03: 0, dlimDescBonif2: "", vdescBonifPgto03: 0, ctpoPrzCobr: 0,
-  dlimDescBonif3: "", pdescBonifPgto: 0, dlimBonifPgto: "", vdescBonifPgto: 0, vabtmtTitloCobr: 0,
-  filler2: "", viofPgtoTitlo: 0, isacdoTitloCobr: "TESTE EMPRESA PGIT", enroLogdrSacdo: "TESTE",
-  elogdrSacdoTitlo: "TESTE", ecomplLogdrSacdo: "TESTE", ccepSacdoTitlo: 6332, ebairoLogdrSacdo: "TESTE",
-  ccomplCepSacdo: 130, imunSacdoTitlo: "TESTE", indCpfCnpjSacdo: 1, csglUfSacdo: "SP", renderEletrSacdo: "",
-  cdddFoneSacdo: 0, nroCpfCnpjSacdo: 38453450803, bancoDeb: 0, cfoneSacdoTitlo: 0, agenciaDebDv: 0,
-  agenciaDeb: 0, bancoCentProt: 0, contaDeb: 0, isacdrAvalsTitlo: "", agenciaDvCentPr: 0,
-  enroLogdrSacdr: "0", elogdrSacdrAvals: "", ecomplLogdrSacdr: "", ccomplCepSacdr: 0, ebairoLogdrSacdr: "",
-  csglUfSacdr: "", ccepSacdrTitlo: 0, imunSacdrAvals: "", indCpfCnpjSacdr: 0, renderEletrSacdr: "",
-  nroCpfCnpjSacdr: 0, cdddFoneSacdr: 0, filler3: "0", cfoneSacdrTitlo: 0, iconcPgtoSpi: "", fase: "1",
-  cindcdCobrMisto: "S", ialiasAdsaoCta: "", ilinkGeracQrcd: "", caliasAdsaoCta: "", wqrcdPdraoMercd: "",
-  validadeAposVencimento: "", filler4: "", idLoc: "",
-};
+// O corpo do híbrido é o MESMO que a `bradesco-cobranca` usa no sandbox.
+const CORPO_HIBRIDO = SANDBOX_REGISTRO_HIBRIDO;
 
 type Resp = { status: number | null; ms: number; corpo: unknown; erro?: string; alpn?: string };
 
