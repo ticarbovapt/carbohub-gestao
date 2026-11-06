@@ -209,6 +209,10 @@ jobs:
           # SANDBOX, URL fixa. Não entra em cron; chamado pelo SQL Editor com o
           # X-Cron-Secret (supabase/consultas/bradesco_teste_sandbox.sql).
           dep bradesco-teste --no-verify-jwt
+          # Bradesco: boleto híbrido a partir do contas a receber (Finanças).
+          # Chamada pelo NAVEGADOR, por gente logada — por isso SEM
+          # --no-verify-jwt; confere o app do Finanças por dentro.
+          dep bradesco-cobranca
           # NFS-e: a EMISSÃO do CarboVAPT (Finanças → Faturamento). Chamada pelo
           # NAVEGADOR, por gente logada — por isso SEM --no-verify-jwt; a função
           # ainda confere o app do Finanças por dentro.
