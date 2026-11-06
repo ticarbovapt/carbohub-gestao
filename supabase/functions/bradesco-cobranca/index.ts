@@ -268,16 +268,19 @@ async function tokenBling(admin: any, conta: 1 | 2): Promise<string | null> {
 
 async function contatoDoBling(admin: any, conta: 1 | 2, contatoId: number) {
   const token = await tokenBling(admin, conta);
-  if (!token) return null;
+  if (!token) return { motivo: `o acesso ao Bling ${conta} está sendo renovado; tente de novo em 1 minuto` };
   try {
     const r = await fetch(`${BLING_API}/contatos/${contatoId}`, {
       headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
       signal: AbortSignal.timeout(8000),
     });
-    if (!r.ok) return null;
+    if (!r.ok) return { motivo: `o Bling ${conta} não devolveu o cadastro do cliente (${r.status})` };
     const j = await r.json().catch(() => null);
-    return enderecoDoContatoBling(j?.data ?? j);
-  } catch { return null; }
+    const e = enderecoDoContatoBling(j?.data ?? j);
+    return e ? { endereco: e } : { motivo: "o cadastro do cliente no Bling está sem CEP" };
+  } catch (e) {
+    return { motivo: `o Bling ${conta} não respondeu (${String(e).slice(0, 80)})` };
+  }
 }
 
 async function enderecoDaNf(admin: any, b: Json) {
@@ -295,9 +298,11 @@ async function enderecoDaNf(admin: any, b: Json) {
   }
 
   // O cadastro do cliente no Bling — pelo contato do PRÓPRIO título.
+  let motivo = "o título não tem o contato do Bling";
   if (t.contato_id && (t.conta === 1 || t.conta === 2)) {
-    const e = await contatoDoBling(admin, t.conta, Number(t.contato_id));
-    if (e) return { ok: true, endereco: e, origem: "Cadastro do cliente no Bling" };
+    const c = await contatoDoBling(admin, t.conta, Number(t.contato_id));
+    if ("endereco" in c && c.endereco) return { ok: true, endereco: c.endereco, origem: "Cadastro do cliente no Bling" };
+    motivo = (c as { motivo: string }).motivo;
   }
 
   let tentadas = 0;
@@ -311,5 +316,6 @@ async function enderecoDaNf(admin: any, b: Json) {
       if (e) return { ok: true, endereco: e, origem: `Endereço da NF ${n.numero}` };
     } catch { /* tenta a próxima nota */ }
   }
-  return { ok: false, erro: "Não achei o endereço do cliente no Bling (nem no cadastro, nem nas NFs)." };
+  const nfTxt = nfs.length ? `${nfs.length} NF(s) sem endereço legível` : "nenhuma NF com este CPF/CNPJ";
+  return { ok: false, erro: `Endereço não encontrado: ${motivo}; ${nfTxt}.` };
 }

@@ -81,6 +81,8 @@ function EmitirBoleto({ alvo, onEmitido, onClose }: { alvo: AlvoBoleto; onEmitid
   // De onde veio o endereço (mostrado em cinza sob o título da seção).
   const [origem, setOrigem] = useState<string | null>(null);
   const [buscandoNf, setBuscandoNf] = useState(false);
+  // Nada no Bling: a tela diz por quê (o lugar de corrigir é o cadastro do cliente lá).
+  const [semEndereco, setSemEndereco] = useState<string | null>(null);
 
   // Endereço, em ordem: último boleto do cliente → NF do Bling (JSON) → XML da
   // NF (pela função) → pedido do sistema. A pessoa só confere.
@@ -113,9 +115,9 @@ function EmitirBoleto({ alvo, onEmitido, onClose }: { alvo: AlvoBoleto; onEmitid
     setBuscandoNf(true);
     enderecoDaNf(alvo.ref).then((r) => {
       if (!vivo) return;
-      if (r) { setF(montar(r.endereco, false)); setOrigem(r.origem); }
+      if ("endereco" in r) { setF(montar(r.endereco, false)); setOrigem(r.origem); }
       else if (data.pedido) { setF(montar(data.pedido, true)); setOrigem(rotulo(data.pedido)); }
-      else setF(montar(null, false));
+      else { setF(montar(null, false)); setSemEndereco(r.erro); }
     }).finally(() => vivo && setBuscandoNf(false));
     return () => { vivo = false; };
   }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -206,6 +208,7 @@ function EmitirBoleto({ alvo, onEmitido, onClose }: { alvo: AlvoBoleto; onEmitid
             )}
           </Secao>
 
+          {semEndereco && <Aviso cor="warning">{semEndereco} Confira o endereço no cadastro do cliente no Bling.</Aviso>}
           <Secao titulo="Endereço do pagador" nota={origem}>
             {!t.documento && (
               <Campo r="CPF/CNPJ" largo>

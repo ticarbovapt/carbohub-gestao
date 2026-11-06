@@ -169,14 +169,16 @@ export function useCobranca() {
   });
 }
 
-/** O endereço do pagador lido do XML da NF do Bling (pela função — a tela não baixa XML). */
 /**
  * O endereço do pagador lido no Bling pela função: NF, CADASTRO do contato
  * (endereço de cobrança) ou XML da NF. A tela não baixa nada sozinha.
  */
-export async function enderecoDaNf(ref: RefTitulo): Promise<{ endereco: Record<string, string | null>; origem: string } | null> {
+export async function enderecoDaNf(ref: RefTitulo): Promise<
+  { endereco: Record<string, string | null>; origem: string } | { erro: string }
+> {
   const { data, error } = await supabase.functions.invoke("bradesco-cobranca", { body: { acao: "endereco_nf", ...ref } });
-  if (error || !(data as any)?.ok) return null;
+  if (error) return { erro: await erroDaFuncao(error) };
+  if (!(data as any)?.ok) return { erro: (data as any)?.erro ?? "Não achei o endereço do cliente no Bling." };
   return { endereco: (data as any).endereco, origem: (data as any).origem ?? "Bling" };
 }
 
