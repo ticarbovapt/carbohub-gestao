@@ -3862,6 +3862,63 @@ criar · excluir · ensaio), `lib/contaPagarBling.ts`,
    ⚠️ `receivables` tem índice único PARCIAL em `bling_id`: o título nasce por
    INSERT, nunca upsert por ele.
 
+### Boleto Bradesco (híbrido: boleto + Pix) no contas a receber — SANDBOX (06/11/2026)
+Pedido do dono do processo: emitir boleto pelo sistema (matriz e filial, cada
+uma com a sua carteira), multa 2% e juros 1% a.m., e enviar por e-mail; hoje
+sai à mão pelo Net Empresa. Fases: 1 conexão ✅ · 2 emissão ✅ · 3 tela ✅ ·
+4 baixa automática (liquidados + webhook) · Pix avulso depois.
+
+```
+supabase/functions/bradesco-cobranca      emitir · consultar · cancelar (navegador, JWT, app do Finanças)
+supabase/functions/bradesco-teste         a sonda da fase 1 (SQL Editor, X-Cron-Secret)
+supabase/functions/_shared/bradescoCobranca.ts  REGRAS puras (src/test/bradesco, 28 testes)
+supabase/functions/_shared/bradescoApi.ts       rede: mTLS, token de 1 h guardado
+supabase/functions/_shared/bradescoSandbox.ts   os corpos FIXOS que o sandbox aceita
+supabase/migrations/20261150000000_boleto_bradesco.sql
+apps/financas … components/financeiro/Boleto.tsx · hooks/useBoletos.ts · lib/boletoPdf.ts
+docs/bradesco/                            o manual lido do portal + as collections do sandbox
+```
+
+1. ⚠️ **O boleto PENDURA no título, nunca cria título**: matriz →
+   `receivables`, filial → `bling2_contas_receber` (pelo `bling_id`). Criar
+   título junto duplicaria o contas a receber que o Bling já tem.
+2. ⚠️ **Inteiro de 18 dígitos não cabe no JavaScript.** A negociação
+   (`cnegocCobr` = agência 4 + zeros 7 + conta 7) passa de 2^53: medido no 1º
+   teste, `111111111111111111` saiu `…100`, e a resposta voltou arredondada
+   também. `jsonBancario` (bigint sai como número) e `lerJsonBancario` (16+
+   dígitos viram texto antes do parse); os corpos vão ao banco como TEXTO e
+   viram jsonb no Postgres.
+3. ⚠️ **O sandbox responde por CENÁRIO FIXO**: qualquer dado nosso volta 422.
+   No sandbox a função manda o corpo do cenário "Sucesso" e guarda ao lado o que
+   montou com o título real (`fin_boletos.corpo_montado`) — é ELE que se confere.
+   Quem decide o ambiente é a CARTEIRA ativa (`fin_cobranca_carteiras`), nunca a
+   requisição. Produção = cadastrar a carteira de verdade + secrets
+   `BRADESCO_CERT_PEM/KEY_PEM/CLIENT_ID/CLIENT_SECRET` (o A1 da empresa), e é
+   decisão do dono do processo.
+4. ⚠️ **O nosso número é NOSSO no híbrido** (o banco não gera) e tem de ser
+   único por carteira + negociação, inclusive contra o Net Empresa: em produção
+   o contador (`nosso_numero_ultimo`) começa acima do maior já usado. Colisão
+   volta como erro 69 e o clique seguinte usa o próximo.
+5. ⚠️ **Um boleto vivo por título é ÍNDICE** (`enviando`/`registrado`/
+   `indeterminado`/`pago`). `indeterminado` = o banco PODE ter registrado: só a
+   consulta o libera (título inexistente ⇒ `falha`). `enviando` parado há 5 min
+   vale como `indeterminado` na consulta — na reserva a recusa desfaria a
+   conversão (medido no Postgres local).
+6. **Multa e juros vão em VALOR (centavos)**, não em percentual: o manual
+   escreve o formato do percentual de três jeitos e não diz se `ptxJuroVcto` é
+   ao mês ou ao dia. Juros do dia = valor × 1% ÷ 30, truncado.
+7. **O PDF é nosso** (o Bradesco não devolve PDF): ficha de compensação +
+   QR do Pix. O código de barras (44) sai da LINHA, com os quatro dígitos
+   conferidos — lido por leitor (zbar) no teste, bate dígito a dígito. ⚠️ A
+   linha do HÍBRIDO do sandbox é fictícia (R$ 0,00) e o dígito geral não fecha:
+   lá o PDF sai sem as barras e diz por quê.
+8. ⚠️ `cindcdEconmMoeda: 9` é o que o sandbox aceitou; o manual escreve "Fixo
+   = 00006". Conferir no 1º registro de produção pela consulta.
+9. PENDENTE (fase 4): pago pela consulta só marca o BOLETO; a baixa do título
+   (e o envio ao Bling) vem com a lista de liquidados/webhook, via
+   `fin_banco_eventos` + `fin_banco_conciliar` (que hoje casa por `receivables`
+   e terá de olhar `fin_boletos`). Documentação do Finanças: quando for a produção.
+
 ### App novo no hub — os QUATRO lugares que precisam aprender a interface
 Criar a pasta do app é a parte fácil. O que faz um app existir é a flag em
 `profiles.allowed_interfaces` (ex.: `carbo_atendimento`) ser reconhecida em

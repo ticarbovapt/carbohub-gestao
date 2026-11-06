@@ -49,6 +49,7 @@ create table if not exists public.fin_cobranca_carteiras (
   ambiente            text not null check (ambiente in ('sandbox','producao')),
   banco               text not null default '237',
   cnpj                text not null check (cnpj ~ '^\d{14}$'),
+  beneficiario_nome   text,                                            -- o que sai no boleto
   carteira            int  not null default 9,
   negociacao          text not null check (negociacao ~ '^\d{18}$'),   -- agência 4 + zeros 7 + conta 7
   especie             int  not null default 2,                         -- 2 = DM
@@ -104,6 +105,8 @@ create table if not exists public.fin_boletos (
   valor_pago         numeric(14,2),
   cancelado_em       timestamptz,
   cancelado_por      uuid,
+  email_para         text,
+  email_enviado_em   timestamptz,
   criado_por         uuid,
   criado_em          timestamptz not null default now(),
   enviado_em         timestamptz not null default now(),
@@ -112,6 +115,11 @@ create table if not exists public.fin_boletos (
   check (num_nonnulls(receivable_id, bling2_conta_id) = 1),
   unique (carteira_id, nosso_numero)
 );
+-- ⚠️ `if not exists` acima não acrescenta coluna a tabela que já existe.
+alter table public.fin_cobranca_carteiras add column if not exists beneficiario_nome text;
+alter table public.fin_boletos add column if not exists email_para text;
+alter table public.fin_boletos add column if not exists email_enviado_em timestamptz;
+
 create index if not exists fin_boletos_receivable_idx on public.fin_boletos (receivable_id);
 create index if not exists fin_boletos_bling2_idx     on public.fin_boletos (bling2_conta_id);
 create index if not exists fin_boletos_status_idx     on public.fin_boletos (status, vencimento);
@@ -156,6 +164,93 @@ grant select on public.fin_cobranca_carteiras, public.fin_boletos to authenticat
 -- BLOCO 2 — as funções (SÓ service_role). Espera: "Success. No rows returned".
 -- ════════════════════════════════════════════════════════════════════════════
 
+-- ── O TÍTULO: uma regra só para "o que é este título" ────────────────────────
+-- Usada pela reserva (com trava) e pelo pré-preenchimento da tela (sem trava).
+-- Duas cópias desta resolução seriam a tela mostrando um valor e o boleto
+-- saindo com outro.
+create or replace function public.fin_boleto_titulo(p_receivable uuid, p_bling2 bigint, p_travar boolean default false)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_r       jsonb;
+  v_b       record;
+  v_empresa text;
+  v_valor   numeric(14,2);
+  v_nome    text;
+  v_doc     text;
+  v_numero  text;
+  v_venc    date;
+  v_aberto  boolean;
+  v_sit     text;
+begin
+  if num_nonnulls(p_receivable, p_bling2) <> 1 then
+    raise exception 'Informe UM título: da matriz (receivables) ou da filial (Bling 2).';
+  end if;
+
+  if p_receivable is not null then
+    -- ⚠️ `to_jsonb(r)`: coluna ausente em produção vira nulo, nunca erro.
+    if p_travar then
+      select to_jsonb(r) into v_r from public.receivables r where r.id = p_receivable for update;
+    else
+      select to_jsonb(r) into v_r from public.receivables r where r.id = p_receivable;
+    end if;
+    if v_r is null then raise exception 'Título não encontrado.'; end if;
+    v_sit     := v_r->>'status';
+    v_aberto  := coalesce(v_sit,'') in ('programado','atrasado');
+    v_empresa := coalesce(nullif(v_r->>'empresa',''), 'matriz');
+    v_valor   := (v_r->>'amount')::numeric;
+    v_nome    := nullif(btrim(coalesce(v_r->>'customer_name','')), '');
+    v_doc     := nullif(regexp_replace(coalesce(v_r->>'documento',''), '\D', '', 'g'), '');
+    v_numero  := coalesce(nullif(v_r->>'bling_numero',''), nullif(v_r->>'nf_numero',''));
+    v_venc    := (v_r->>'due_date')::date;
+    -- Título do Bling 1: o saldo (parcial) e o contato estão no espelho.
+    if (v_r->>'bling_id') is not null and to_regclass('public.bling_contas_receber') is not null then
+      select * into v_b from public.bling_contas_receber where bling_id = (v_r->>'bling_id')::bigint;
+      if found then
+        if v_b.situacao::text = '3' and coalesce(v_b.saldo, 0) > 0 then v_valor := v_b.saldo; end if;
+        v_nome   := coalesce(v_nome, nullif(btrim(coalesce(v_b.contato_nome,'')), ''));
+        v_doc    := coalesce(v_doc, nullif(regexp_replace(coalesce(v_b.contato_documento,''), '\D', '', 'g'), ''));
+        v_numero := coalesce(v_numero, nullif(v_b.numero, ''));
+      end if;
+    end if;
+  else
+    if p_travar then
+      select c.*, nullif(regexp_replace(coalesce(k.cpf_cnpj,''), '\D', '', 'g'), '') as doc_contato
+        into v_b
+        from public.bling2_contas_receber c
+        left join public.bling2_contacts k on k.bling_id = c.cliente_id
+       where c.bling_id = p_bling2
+       for update of c;
+    else
+      select c.*, nullif(regexp_replace(coalesce(k.cpf_cnpj,''), '\D', '', 'g'), '') as doc_contato
+        into v_b
+        from public.bling2_contas_receber c
+        left join public.bling2_contacts k on k.bling_id = c.cliente_id
+       where c.bling_id = p_bling2;
+    end if;
+    if not found then raise exception 'Título da filial não encontrado.'; end if;
+    v_sit     := v_b.situacao::text;
+    v_aberto  := coalesce(v_sit, '') in ('1','3');
+    v_empresa := 'filial';
+    v_valor   := coalesce(nullif(v_b.saldo, 0), v_b.valor);
+    v_nome    := nullif(btrim(coalesce(v_b.cliente,'')), '');
+    v_doc     := v_b.doc_contato;
+    v_numero  := nullif(v_b.numero, '');
+    v_venc    := v_b.vencimento;
+  end if;
+
+  return jsonb_build_object(
+    'empresa', v_empresa, 'valor', v_valor, 'nome', v_nome, 'documento', v_doc,
+    'numero', v_numero, 'vencimento', v_venc, 'aberto', v_aberto, 'situacao', v_sit,
+    'order_id', v_r->>'order_id');
+end;
+$$;
+revoke execute on function public.fin_boleto_titulo(uuid, bigint, boolean) from public, anon, authenticated;
+grant  execute on function public.fin_boleto_titulo(uuid, bigint, boolean) to service_role;
+
 -- ── Reserva: trava o título, confere, numera ─────────────────────────────────
 -- ⚠️ VALOR, NOME e o título vêm do BANCO, nunca do corpo da requisição. A tela
 -- manda o endereço do pagador (o Bling não guarda), o vencimento e — só quando
@@ -174,76 +269,33 @@ set search_path = public
 as $$
 declare
   v_hoje     date := (now() at time zone 'America/Sao_Paulo')::date;
-  v_empresa  text;
-  v_valor    numeric(14,2);
-  v_nome     text;
+  v_t        jsonb;
   v_doc      text;
   v_numero   text;
-  v_r        jsonb;
-  v_b        record;
   v_c        record;
   v_n        bigint;
   v_id       uuid;
   v_pag      jsonb;
 begin
-  if num_nonnulls(p_receivable, p_bling2) <> 1 then
-    raise exception 'Informe UM título: da matriz (receivables) ou da filial (Bling 2).';
-  end if;
   if p_vencimento is null or p_vencimento < v_hoje then
     raise exception 'Vencimento não pode ser anterior a hoje (o Pix do boleto exige).';
   end if;
 
-  if p_receivable is not null then
-    -- ⚠️ `to_jsonb(r)`: coluna ausente em produção vira nulo, nunca erro.
-    select to_jsonb(r) into v_r from public.receivables r where r.id = p_receivable for update;
-    if v_r is null then raise exception 'Título não encontrado.'; end if;
-    if coalesce(v_r->>'status','') not in ('programado','atrasado') then
-      raise exception 'Título não está em aberto (situação: %).', v_r->>'status';
-    end if;
-    v_empresa := coalesce(nullif(v_r->>'empresa',''), 'matriz');
-    v_valor   := (v_r->>'amount')::numeric;
-    v_nome    := nullif(btrim(coalesce(v_r->>'customer_name','')), '');
-    v_doc     := nullif(regexp_replace(coalesce(v_r->>'documento',''), '\D', '', 'g'), '');
-    v_numero  := coalesce(nullif(v_r->>'bling_numero',''), nullif(v_r->>'nf_numero',''));
-    -- Título do Bling 1: o saldo e o contato estão no espelho.
-    if (v_r->>'bling_id') is not null and to_regclass('public.bling_contas_receber') is not null then
-      select * into v_b from public.bling_contas_receber where bling_id = (v_r->>'bling_id')::bigint;
-      if found then
-        if v_b.situacao::text = '3' and coalesce(v_b.saldo, 0) > 0 then v_valor := v_b.saldo; end if;
-        v_nome   := coalesce(v_nome, nullif(btrim(coalesce(v_b.contato_nome,'')), ''));
-        v_doc    := coalesce(v_doc, nullif(regexp_replace(coalesce(v_b.contato_documento,''), '\D', '', 'g'), ''));
-        v_numero := coalesce(v_numero, nullif(v_b.numero, ''));
-      end if;
-    end if;
-  else
-    select c.*, nullif(regexp_replace(coalesce(k.cpf_cnpj,''), '\D', '', 'g'), '') as doc_contato
-      into v_b
-      from public.bling2_contas_receber c
-      left join public.bling2_contacts k on k.bling_id = c.cliente_id
-     where c.bling_id = p_bling2
-     for update of c;
-    if not found then raise exception 'Título da filial não encontrado.'; end if;
-    if coalesce(v_b.situacao::text, '') not in ('1','3') then
-      raise exception 'Título da filial não está em aberto no Bling (situação %).', v_b.situacao;
-    end if;
-    v_empresa := 'filial';
-    v_valor   := coalesce(nullif(v_b.saldo, 0), v_b.valor);
-    v_nome    := nullif(btrim(coalesce(v_b.cliente,'')), '');
-    v_doc     := v_b.doc_contato;
-    v_numero  := nullif(v_b.numero, '');
+  v_t := public.fin_boleto_titulo(p_receivable, p_bling2, true);
+  if not (v_t->>'aberto')::boolean then
+    raise exception 'Título não está em aberto (situação: %).', v_t->>'situacao';
   end if;
-
-  if coalesce(v_valor, 0) <= 0 then raise exception 'Título sem valor em aberto.'; end if;
-  if v_nome is null then raise exception 'O título não tem o nome do cliente.'; end if;
+  if coalesce((v_t->>'valor')::numeric, 0) <= 0 then raise exception 'Título sem valor em aberto.'; end if;
+  if v_t->>'nome' is null then raise exception 'O título não tem o nome do cliente.'; end if;
   -- Documento: o do título; só sem ele vale o que a tela digitou.
-  v_doc := coalesce(v_doc, nullif(regexp_replace(coalesce(p_pagador->>'documento',''), '\D', '', 'g'), ''));
+  v_doc := coalesce(v_t->>'documento', nullif(regexp_replace(coalesce(p_pagador->>'documento',''), '\D', '', 'g'), ''));
   if v_doc is null or length(v_doc) not in (11, 14) then
     raise exception 'O título não tem CPF/CNPJ do cliente: informe na tela.';
   end if;
 
-  select * into v_c from public.fin_cobranca_carteiras where empresa = v_empresa and ativo for update;
+  select * into v_c from public.fin_cobranca_carteiras where empresa = v_t->>'empresa' and ativo for update;
   if not found then
-    raise exception 'Não há carteira de cobrança ativa para a %.', v_empresa;
+    raise exception 'Não há carteira de cobrança ativa para a %.', v_t->>'empresa';
   end if;
 
   if exists (select 1 from public.fin_boletos
@@ -257,21 +309,21 @@ begin
    where id = v_c.id
   returning nosso_numero_ultimo into v_n;
 
-  v_pag := coalesce(p_pagador, '{}'::jsonb) || jsonb_build_object('nome', v_nome, 'documento', v_doc);
+  v_numero := left(coalesce(v_t->>'numero', 'CH' || v_n::text), 25);
+  v_pag := coalesce(p_pagador, '{}'::jsonb) || jsonb_build_object('nome', v_t->>'nome', 'documento', v_doc);
 
   insert into public.fin_boletos
     (carteira_id, ambiente, empresa, receivable_id, bling2_conta_id, nosso_numero, seu_numero,
      valor, emissao, vencimento, pagador, criado_por)
   values
-    (v_c.id, v_c.ambiente, v_empresa, p_receivable, p_bling2, v_n,
-     left(coalesce(v_numero, 'CH' || v_n::text), 25),
-     v_valor, v_hoje, p_vencimento, v_pag, p_user)
+    (v_c.id, v_c.ambiente, v_t->>'empresa', p_receivable, p_bling2, v_n, v_numero,
+     (v_t->>'valor')::numeric, v_hoje, p_vencimento, v_pag, p_user)
   returning id into v_id;
 
   return jsonb_build_object(
-    'id', v_id, 'ambiente', v_c.ambiente, 'empresa', v_empresa,
-    'nosso_numero', v_n, 'seu_numero', left(coalesce(v_numero, 'CH' || v_n::text), 25),
-    'valor', v_valor, 'emissao', v_hoje, 'vencimento', p_vencimento, 'pagador', v_pag,
+    'id', v_id, 'ambiente', v_c.ambiente, 'empresa', v_t->>'empresa',
+    'nosso_numero', v_n, 'seu_numero', v_numero,
+    'valor', (v_t->>'valor')::numeric, 'emissao', v_hoje, 'vencimento', p_vencimento, 'pagador', v_pag,
     'carteira', jsonb_build_object(
       'cnpj', v_c.cnpj, 'carteira', v_c.carteira, 'negociacao', v_c.negociacao,
       'especie', v_c.especie, 'multa_pct', v_c.multa_pct, 'juros_mes_pct', v_c.juros_mes_pct));
@@ -390,6 +442,83 @@ $$;
 revoke execute on function public.fin_boleto_atualizar(uuid, text, text, jsonb, uuid) from public, anon, authenticated;
 grant  execute on function public.fin_boleto_atualizar(uuid, text, text, jsonb, uuid) to service_role;
 
+-- ── Pré-preenchimento da TELA (quem tem o Finanças) ─────────────────────────
+-- O título, a carteira e uma SUGESTÃO de endereço — a pessoa confere e corrige.
+-- Sugestão, em ordem: o último boleto do mesmo CPF/CNPJ (endereço que alguém já
+-- conferiu), o pedido do título, o pedido mais recente do mesmo documento.
+-- ⚠️ No SQL Editor volta "Sem permissão" — sem usuário não há app. Está certo.
+create or replace function public.fin_boleto_preparar(p_receivable uuid, p_bling2 bigint)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_t    jsonb;
+  v_c    record;
+  v_sug  jsonb;
+  v_o    jsonb;
+begin
+  if not coalesce(public.carbo_tem_app(array['carbo_financas']), false) then
+    raise exception 'Sem permissão: boleto é do Finanças.';
+  end if;
+  v_t := public.fin_boleto_titulo(p_receivable, p_bling2, false);
+
+  select pagador into v_sug from public.fin_boletos
+   where pagador->>'documento' = v_t->>'documento' and v_t->>'documento' is not null
+     and status not in ('falha')
+   order by criado_em desc limit 1;
+
+  if v_sug is null then
+    select to_jsonb(o) into v_o from public.carboze_orders o
+     where (v_t->>'order_id' is not null and o.id::text = v_t->>'order_id')
+        or (v_t->>'documento' is not null and regexp_replace(coalesce(o.cnpj,''), '\D', '', 'g') = v_t->>'documento')
+     order by (o.id::text = coalesce(v_t->>'order_id','')) desc, o.created_at desc
+     limit 1;
+    if v_o is not null then
+      v_sug := jsonb_build_object(
+        'origem', 'pedido', 'pedido', v_o->>'order_number',
+        'endereco', v_o->>'delivery_address', 'bairro', v_o->>'delivery_neighborhood',
+        'cidade', v_o->>'delivery_city', 'uf', v_o->>'delivery_state', 'cep', v_o->>'delivery_zip',
+        'email', v_o->>'customer_email', 'fone', v_o->>'customer_phone');
+    end if;
+  else
+    v_sug := v_sug || jsonb_build_object('origem', 'boleto');
+  end if;
+
+  select ambiente, multa_pct, juros_mes_pct into v_c
+    from public.fin_cobranca_carteiras where empresa = v_t->>'empresa' and ativo;
+
+  return jsonb_build_object(
+    'titulo', v_t,
+    'carteira', case when v_c.ambiente is null then null else
+      jsonb_build_object('ambiente', v_c.ambiente, 'multa_pct', v_c.multa_pct, 'juros_mes_pct', v_c.juros_mes_pct) end,
+    'sugestao', v_sug);
+end;
+$$;
+revoke execute on function public.fin_boleto_preparar(uuid, bigint) from public, anon;
+grant  execute on function public.fin_boleto_preparar(uuid, bigint) to authenticated, service_role;
+
+-- ── O e-mail ao cliente saiu (a tela chama DEPOIS de o send-email aceitar) ───
+create or replace function public.fin_boleto_email_registrar(p_id uuid, p_para text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not coalesce(public.carbo_tem_app(array['carbo_financas']), false) then
+    raise exception 'Sem permissão: boleto é do Finanças.';
+  end if;
+  update public.fin_boletos
+     set email_para = left(p_para, 300), email_enviado_em = now(), atualizado_em = now()
+   where id = p_id and status in ('registrado','pago');
+  if not found then raise exception 'Boleto não está registrado.'; end if;
+end;
+$$;
+revoke execute on function public.fin_boleto_email_registrar(uuid, text) from public, anon;
+grant  execute on function public.fin_boleto_email_registrar(uuid, text) to authenticated, service_role;
+
 notify pgrst, 'reload schema';
 
 
@@ -399,8 +528,8 @@ notify pgrst, 'reload schema';
 -- (68.542.653/1018-38, negociação 1111…), e por isso as duas empresas apontam
 -- para eles. Espera: 2 linhas, ambiente sandbox, ativo true.
 -- ════════════════════════════════════════════════════════════════════════════
-insert into public.fin_cobranca_carteiras (empresa, ambiente, cnpj, carteira, negociacao, especie, ativo, observacao)
-select e, 'sandbox', '68542653101838', 9, '111111111111111111', 2, true, 'Sandbox do Bradesco (beneficiário e negociação de teste)'
+insert into public.fin_cobranca_carteiras (empresa, ambiente, cnpj, beneficiario_nome, carteira, negociacao, especie, ativo, observacao)
+select e, 'sandbox', '68542653101838', 'EMPRESA DE TESTE (SANDBOX BRADESCO)', 9, '111111111111111111', 2, true, 'Sandbox do Bradesco (beneficiário e negociação de teste)'
   from unnest(array['matriz','filial']) e
  where not exists (select 1 from public.fin_cobranca_carteiras where empresa = e and ambiente = 'sandbox');
 
@@ -409,16 +538,18 @@ select empresa, ambiente, cnpj, carteira, negociacao, multa_pct, juros_mes_pct, 
 
 
 -- ════════════════════════════════════════════════════════════════════════════
--- BLOCO 4 — CONFERÊNCIA. Espera: tabelas 2 · funcoes 3 · os três `auth_*`
--- FALSE (authenticated não executa) · policies 2 · carteiras_ativas 2.
+-- BLOCO 4 — CONFERÊNCIA. Espera: tabelas 2 · funcoes 6 · os três `auth_*`
+-- FALSE (authenticated não executa) · `auth_preparar` TRUE · policies 2 ·
+-- carteiras_ativas 2.
 -- ════════════════════════════════════════════════════════════════════════════
 select
   (select count(*) from pg_class where relnamespace = 'public'::regnamespace
      and relname in ('fin_cobranca_carteiras','fin_boletos'))                         as tabelas,
   (select count(*) from pg_proc where pronamespace = 'public'::regnamespace
-     and proname in ('fin_boleto_reservar','fin_boleto_concluir','fin_boleto_atualizar')) as funcoes,
+     and proname in ('fin_boleto_titulo','fin_boleto_reservar','fin_boleto_concluir','fin_boleto_atualizar','fin_boleto_preparar','fin_boleto_email_registrar')) as funcoes,
   has_function_privilege('authenticated', 'public.fin_boleto_reservar(uuid, uuid, bigint, date, jsonb)', 'execute') as auth_reservar,
   has_function_privilege('authenticated', 'public.fin_boleto_concluir(uuid, text, int, text, text, text, jsonb, text)', 'execute') as auth_concluir,
   has_function_privilege('authenticated', 'public.fin_boleto_atualizar(uuid, text, text, jsonb, uuid)', 'execute') as auth_atualizar,
+  has_function_privilege('authenticated', 'public.fin_boleto_preparar(uuid, bigint)', 'execute') as auth_preparar,
   (select count(*) from pg_policies where tablename in ('fin_boletos','fin_cobranca_carteiras')) as policies,
   (select count(*) from public.fin_cobranca_carteiras where ativo)                     as carteiras_ativas;

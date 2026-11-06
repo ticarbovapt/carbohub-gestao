@@ -23,6 +23,8 @@ import { BaixaNoBling } from "@/components/financeiro/BaixaNoBling";
 import { toast } from "@/hooks/use-toast";
 import { useBaixaBlingConfig, vaiAoBling, enviarAoBling, avisarBaixaNoBling } from "@/lib/blingBaixa";
 import { NovaConta, type ContaCriada } from "@/components/financeiro/NovaConta";
+import { BoletoDialogo, ChipBoleto, itemBoleto, type AlvoBoleto } from "@/components/financeiro/Boleto";
+import { useBoletosDosTitulos } from "@/hooks/useBoletos";
 import { chamarContasPagar, useContaPagarConfig } from "@/lib/contaPagarBling";
 import { paraConta, type Bling2Conta } from "@/hooks/useBling2Contas";
 import {
@@ -198,6 +200,10 @@ function RecebiveisMatriz({ seletor, botaoNova, abrirBaixa, onBaixaAberta }: {
   });
   const rows = paged?.rows ?? [];
   const total = paged?.count ?? 0;
+  // Boleto Bradesco de cada título da PÁGINA (sem a tabela ainda, vem vazio).
+  const { data: boletos } = useBoletosDosTitulos("receivable_id", rows.map((r) => r.id));
+  const [alvoBoleto, setAlvoBoleto] = useState<AlvoBoleto | null>(null);
+  const abrirBoleto = (r: Receivable) => setAlvoBoleto({ ref: { receivable_id: r.id }, boleto: boletos?.get(r.id) ?? null });
   // Situação e saldo do Bling 1: é ele que sabe da baixa PARCIAL.
   const { data: espelho } = useEspelhoMatriz("receber", rows.map((r) => r.bling_id));
   const saldoDe = (r: Receivable) => {
@@ -417,6 +423,7 @@ function RecebiveisMatriz({ seletor, botaoNova, abrirBaixa, onBaixaAberta }: {
                     </CarboTableCell>
                     <CarboTableCell className="py-3">
                       <div className="flex items-center justify-end gap-1">
+                        <ChipBoleto b={boletos?.get(r.id)} onClick={() => abrirBoleto(r)} />
                         {r.status === "recebido" ? (
                           <>
                             <BaixaNoBling
@@ -432,7 +439,10 @@ function RecebiveisMatriz({ seletor, botaoNova, abrirBaixa, onBaixaAberta }: {
                             <Button variant="outline" size="sm" className="h-8 px-3" onClick={() => setReceiving(r)}>
                               Receber
                             </Button>
-                            <MenuAcoes itens={[{ l: "Cancelar título", onClick: () => cancelar(r), perigo: true }]} />
+                            <MenuAcoes itens={[
+                              itemBoleto(boletos?.get(r.id), () => abrirBoleto(r)),
+                              { l: "Cancelar título", onClick: () => cancelar(r), perigo: true },
+                            ]} />
                           </>
                         )}
                       </div>
@@ -447,6 +457,8 @@ function RecebiveisMatriz({ seletor, botaoNova, abrirBaixa, onBaixaAberta }: {
         <Paginacao page={page} pageSize={pageSize} total={total} onPage={setPage}
           onPageSize={(n) => { setPageSize(n); setPaginaUrl(null); }} />
       </div>
+
+      <BoletoDialogo alvo={alvoBoleto} onClose={() => setAlvoBoleto(null)} />
 
       {/* Baixa: conta (banco), data, juros/multa/desconto/tarifa e o valor de fato */}
       <DialogoBaixa
