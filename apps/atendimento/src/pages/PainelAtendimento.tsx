@@ -19,6 +19,7 @@ import { Atendentes } from "@/components/painel/Atendentes";
 import { DetalhePessoaSheet } from "@/components/painel/DetalhePessoa";
 import { Excecoes } from "@/components/painel/Excecoes";
 import { Horarios } from "@/components/painel/Horarios";
+import { Assuntos } from "@/components/painel/Assuntos";
 import { ConfigDialog } from "@/components/painel/ConfigDialog";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -28,20 +29,22 @@ import { ConfigDialog } from "@/components/painel/ConfigDialog";
 // (migração 20261148). Aqui só se divide para taxa, formata e desenha.
 //
 // O estado mora na URL (F5 e link mandado no chat abrem a MESMA tela):
-//   ?aba=fila|atendentes|excecoes|horarios   (ausente = visão geral)
+//   ?aba=fila|assuntos|atendentes|excecoes|horarios   (ausente = visão geral)
 //   ?de=&ate=                                 (ausente = últimos 30 dias)
 //   ?numero=<phone_number_id>                 (ausente = todos)
 //   ?pessoa=<chave>                           o detalhe aberto
 //   ?ver=corrido                              (ausente = horário útil)
 //   ?assunto=&risco=1                         filtros da fila
+//   ?grupo=&topico=                           aba Assuntos (grupo; quem falou de um assunto)
 // ─────────────────────────────────────────────────────────────────────────────
 
 const ABAS: { id: Aba; rotulo: string }[] = [
   { id: "geral", rotulo: "Visão geral" },
   { id: "fila", rotulo: "Fila agora" },
+  { id: "assuntos", rotulo: "Assuntos" },
   { id: "atendentes", rotulo: "Atendentes" },
   { id: "excecoes", rotulo: "Exceções" },
-  { id: "horarios", rotulo: "Horários e assuntos" },
+  { id: "horarios", rotulo: "Horários" },
 ];
 const DIA = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -100,6 +103,8 @@ function Painel() {
   const ver: Ver = verUrl === "corrido" ? "corrido" : "util";
   const [assunto, setAssunto] = useParamUrl("assunto", "", { replace: true });
   const [riscoUrl, setRisco] = useParamUrl("risco", "", { replace: true });
+  const [grupoAssunto, setGrupoAssunto] = useParamUrl("grupo", "");
+  const [topico, setTopico] = useParamUrl("topico", "");
 
   const [configAberta, setConfigAberta] = useState(false);
   const [focarPerdidas, setFocarPerdidas] = useState(0);
@@ -210,6 +215,14 @@ function Painel() {
                   soRisco={riscoUrl === "1"} setSoRisco={(v) => setRisco(v ? "1" : "")}
                   focarPerdidas={focarPerdidas}
                 />
+              </TabsContent>
+              <TabsContent value="assuntos" className="mt-0">
+                {aba === "assuntos" && (
+                  <Assuntos
+                    de={de} ate={ate} numero={numero || null} numeros={numeros} agora={agora}
+                    grupo={grupoAssunto} setGrupo={setGrupoAssunto} topico={topico} setTopico={setTopico}
+                  />
+                )}
               </TabsContent>
               <TabsContent value="atendentes" className="mt-0">
                 <Atendentes p={p} ver={ver} agora={agora} onPessoa={setPessoa} />

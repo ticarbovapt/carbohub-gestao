@@ -9,7 +9,7 @@ import {
 import { VariacaoChip } from "./comum";
 
 export type Ver = "util" | "corrido";
-export type Aba = "geral" | "fila" | "atendentes" | "excecoes" | "horarios";
+export type Aba = "geral" | "fila" | "assuntos" | "atendentes" | "excecoes" | "horarios";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // "Agora" — o trabalho parado neste instante. Não depende do período.

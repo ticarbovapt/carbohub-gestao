@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -227,5 +227,99 @@ export function useSalvarConfigAtendimento() {
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["painel-atendimento"] }),
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Aba ASSUNTOS (migração 20261149): o que os clientes falam, medido.
+// ⚠️ A classificação é do BANCO (`carbo_wa_assuntos`, cadastro): a tela não
+// decide assunto nenhum — só desenha o que veio agregado.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AssuntoGrupo {
+  codigo: string; rotulo: string; ordem: number; cor: string;
+  clientes: number; mensagens: number; clientes_ant: number;
+}
+
+export interface AssuntoLinha {
+  codigo: string; grupo: string; rotulo: string; ordem: number;
+  /** Sozinho, o assunto pede resposta? ("Chegou tudo certo" não pede.) */
+  pede: boolean;
+  automatico: boolean;
+  clientes: number; mensagens: number; clientes_ant: number; mensagens_ant: number;
+  /** Clientes cuja ÚLTIMA mensagem do assunto ninguém da equipe respondeu. */
+  sem_resposta: number;
+  respondidos: number;
+  com_risco: number;
+  resposta_mediana_min: number | null;
+}
+
+export interface AssuntoDestaque {
+  numero_id: string; wa_id: string; nome: string | null; ocorrido_em: string;
+  texto: string; assuntos: string[]; respondido?: boolean;
+}
+
+export interface PainelAssuntos {
+  gerado_em: string;
+  periodo: { de: string; ate: string; ant_de: string; ant_ate: string; dias: number };
+  balde: "dia" | "semana";
+  baldes: string[];
+  versao: number;
+  grupos: AssuntoGrupo[];
+  assuntos: AssuntoLinha[];
+  serie: { balde: string; codigo: string; clientes: number }[];
+  serie_grupo?: { balde: string; grupo: string; clientes: number }[];
+  por_numero: { numero_id: string; grupo: string; clientes: number }[];
+  totais: {
+    mensagens: number; mensagens_ant: number; clientes: number; clientes_ant: number;
+    automaticas: number; sem_assunto: number; com_risco: number; pedem: number;
+  };
+  elogios: AssuntoDestaque[];
+  riscos: AssuntoDestaque[];
+}
+
+export interface ClienteDoAssunto {
+  numero_id: string; wa_id: string; nome: string | null;
+  primeira_em: string; ultima_em: string; n: number; risco: boolean;
+  mensagens: { em: string; tipo: string; texto: string; assuntos: string[] }[];
+  respondido_depois: boolean;
+}
+
+export function useAssuntosAtendimento(de: string, ate: string, numero: string | null, ativo = true) {
+  return useQuery({
+    queryKey: ["painel-atendimento-assuntos", de, ate, numero],
+    enabled: ativo && !!de && !!ate,
+    // Assunto muda devagar: 5 min basta (e a classificação nova entra de hora em hora).
+    refetchInterval: 5 * 60_000,
+    staleTime: 60_000,
+    retry: (n, e) => lerErroDoPainel(e).tipo === "outro" && n < 2,
+    queryFn: async (): Promise<PainelAssuntos> => {
+      const { data, error } = await db.rpc("carbo_atendimento_assuntos", { p_de: de, p_ate: ate, p_numero: numero });
+      if (error) throw error;
+      return data as PainelAssuntos;
+    },
+  });
+}
+
+const POR_PAGINA = 30;
+
+/** Quem falou de um assunto. `filtro` = código | "_nenhum" | "grupo:<código>" | "risco". Paginado. */
+export function useClientesDoAssunto(de: string, ate: string, filtro: string | null, numero: string | null) {
+  return useInfiniteQuery({
+    queryKey: ["painel-atendimento-assunto-clientes", de, ate, filtro, numero],
+    enabled: !!filtro && !!de && !!ate,
+    staleTime: 60_000,
+    initialPageParam: 0,
+    queryFn: async ({ pageParam }): Promise<{ total: number; itens: ClienteDoAssunto[] }> => {
+      const { data, error } = await db.rpc("carbo_atendimento_assunto_clientes", {
+        p_de: de, p_ate: ate, p_filtro: filtro, p_numero: numero, p_limite: POR_PAGINA, p_offset: pageParam,
+      });
+      if (error) throw error;
+      return data as { total: number; itens: ClienteDoAssunto[] };
+    },
+    getNextPageParam: (ultima, todas) => {
+      const lidos = todas.reduce((s, p) => s + p.itens.length, 0);
+      return lidos < ultima.total && ultima.itens.length > 0 ? lidos : undefined;
+    },
   });
 }
