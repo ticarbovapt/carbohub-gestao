@@ -177,3 +177,10 @@ export const COR_DESFECHO = {
 } as const;
 
 export const ACENTO = "#9333EA";
+
+/** A cor da etiqueta é CHAVE da paleta fechada das Conversas (`COR_TAG`), não hex. */
+const COR_ETIQUETA: Record<string, string> = {
+  cinza: "#94A3B8", verde: "#10B981", azul: "#0EA5E9", ambar: "#F59E0B", vermelho: "#EF4444", roxo: "#8B5CF6",
+};
+export const corDaEtiqueta = (cor: string | null | undefined) =>
+  cor?.startsWith("#") ? cor : COR_ETIQUETA[cor ?? ""] ?? COR_ETIQUETA.cinza;
