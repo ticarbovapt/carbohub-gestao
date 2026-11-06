@@ -2633,6 +2633,64 @@ de 30 dias (4.494 conversas) em 0,6 s.
    minuto nenhum aviso sai. Timeout ATRASA (a fila é estado), mas etapa curta
    some.
 
+### Painel do atendimento — a tela do GESTOR no Atendimento (06/11/2026)
+Pedido do dono do processo: TMA, TMPR etc. *"para gestores acompanharem … e
+poderem cobrar quem atende"*. Medido no dia anterior: ~15 de cada 100
+mensagens que pediam resposta tinham resposta; Loja e Clube sem resposta havia
+4 semanas, e nenhuma tela mostrava.
+
+```
+supabase/migrations/20261148000000_painel_do_atendimento.sql
+  carbo_atendimento_gestor()        carbo_is_gestor E o app (= isGestor da tela)
+  carbo_atendimento_config          horário de atendimento e metas (CADASTRO, linha única)
+  carbo_wa_atendimento_hist         histórico de status (gatilho em carbo_wa_atendimento)
+  carbo_wa_pede_resposta(tipo,txt)  "ok"/👍/resposta automática do cliente NÃO pedem
+  carbo_wa_tema / carbo_wa_risco    assunto e risco (Procon, golpe…) por palavra-chave
+  carbo_minutos_uteis(...)          tempo só dentro do horário de atendimento
+  carbo_atendimento_rodadas(...)    a BASE (interna, sem execute para authenticated)
+  carbo_atendimento_painel(de,ate,numero)       jsonb, tudo agregado
+  carbo_atendimento_pessoa(de,ate,pessoa,numero) o detalhe para cobrar
+apps/atendimento/src/hooks/usePainelAtendimento.ts · pages/PainelAtendimento.tsx  (/painel)
+```
+
+1. ⚠️ **O cálculo mora no BANCO, a tela só divide e formata.** É o número que
+   o gestor cobra; duas definições de "respondida" dariam duas cobranças.
+2. **As definições** (cabeçalho da migração): RODADA = mensagens do cliente
+   desde a última resposta de GENTE (aviso automático não encerra; silêncio de
+   24 h encerra). TMR = toda rodada que pede; TMPR = só a 1ª de cada
+   atendimento (episódio sem silêncio > 24 h); TMA = 1ª mensagem do cliente →
+   última resposta de gente, com "mensagens por atendimento" ao lado (em
+   assíncrono o TMA não mede esforço). Mediana e p90 sempre; tempo corrido E
+   útil (`carbo_atendimento_config`). FCR = 1 rodada, respondida, cliente não
+   voltou pedindo nada em 7 dias.
+3. ⚠️ **"Fechada sem resposta" é métrica PRÓPRIA**: rodada que pedia, ninguém
+   escreveu, alguém marcou resolvido/aguardando. Sem ela, fechar sem responder
+   MELHORA o tempo de resposta (a armadilha da Intercom). SLA = dentro da meta
+   ÷ que PEDEM (não ÷ respondidas), pelo mesmo motivo.
+4. ⚠️ **`carbo_wa_pede_resposta` é ESPELHO de `pareceEncerramento`**
+   (`apps/atendimento/src/lib/conversas.ts`): a mesma lista de palavras e de
+   emoji. Mudou uma, mude a outra (há teste em
+   `src/test/whatsapp-meta/conversas.test.ts`). É SUBTRATIVA — sobrou palavra,
+   pede. ⚠️ "dia/tarde/noite" e "sem/problema/avaria/entrega" ficam FORA da
+   lista: "Bom dia" abre conversa, "sem entrega"/"avaria" são reclamação. A
+   resposta automática do WhatsApp Business do CLIENTE ("agradece seu
+   contato. Como podemos ajudar?") só existe no SQL.
+5. ⚠️ **O histórico de quem resolveu começa em 06/11/2026.**
+   `carbo_wa_atendimento` só guardava o estado ATUAL; o gatilho passou a
+   gravar cada troca (erro nele vira WARNING, nunca derruba o clique). Antes
+   disso só há o `retrato` (o estado de cada conversa no dia) e as linhas de
+   `carbo_wa_resolvidas`. Reabertas/resolvidas por pessoa leem só `origem =
+   'tela'`; a tela diz "desde 06/11".
+6. ⚠️ **`numero_id = numero_id`, nunca `is not distinct from`**: com ele o
+   lateral do histórico virou seq scan por rodada (0,94 s → 0,35 s medido).
+   `numero_id` é NOT NULL nas duas tabelas.
+7. ⚠️ **No SQL Editor as funções do painel RECUSAM** (sem usuário não há
+   gestor) — está certo. Confira pela base:
+   `carbo_atendimento_rodadas(now() - interval '30 days', null)`.
+8. Medido num Postgres local com 4× o volume real (13 mil mensagens): 1,4 s
+   para 30 dias; no volume real ~0,4 s. A tela relê de minuto em minuto (é a
+   fila de AGORA), uma consulta por gestor, nunca por time.
+
 ### Segredo de função: FECHE quando ele não existe
 Padrão obrigatório em toda edge function chamada por máquina:
 
