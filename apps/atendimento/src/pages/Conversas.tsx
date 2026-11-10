@@ -1532,7 +1532,9 @@ function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false }: {
 
   const enviar = () => {
     const t = texto.trim();
-    if (!t) return;
+    // ⚠️ `isPending`: com o Enter enviando, dois toques rápidos mandariam a
+    // mesma mensagem duas vezes ao cliente — o botão já travava, o Enter não.
+    if (!t || responder.isPending) return;
     responder.mutate({ wa_id: c.wa_id, numero_id: c.numero_id, texto: t }, {
       onSuccess: () => { setTexto(""); toast.success("Enviada"); },
       onError: (e) => toast.error((e as Error).message),
@@ -2021,7 +2023,21 @@ function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false }: {
                     }
                   }
                 }
-                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); enviar(); }
+                /* Enter envia, Shift+Enter quebra linha (o jeito do WhatsApp
+                   Web). ⚠️ Três exceções, e nenhuma é enfeite:
+                   - `isComposing`: o Enter que confirma acento/sugestão do
+                     teclado não pode mandar a frase pela metade;
+                   - tela de TOQUE: no celular o Enter do teclado é a única
+                     forma de quebrar linha — lá quem envia é o botão;
+                   - Ctrl/⌘+Enter continua enviando, para quem já tinha o
+                     costume. */
+                if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
+                if (e.metaKey || e.ctrlKey) { e.preventDefault(); enviar(); return; }
+                if (e.shiftKey || e.altKey || telaDeToque()) return;
+                /* Com a barra `/` aberta e nenhuma resposta casando, o campo
+                   tem só o atalho escrito: o Enter não pode mandá-lo. */
+                if (barraAberta) { e.preventDefault(); return; }
+                e.preventDefault(); enviar();
               }}
             />
             <div className="mt-1.5 flex flex-wrap items-center justify-end gap-x-2 gap-y-1.5 border-t pt-1.5 sm:justify-between">
@@ -2104,7 +2120,7 @@ function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false }: {
                 {/* ⚠️ O atalho de envio mora AQUI, no `title`, e não mais na
                     barra de dicas: é nesta tecla que a pessoa olha quando se
                     pergunta como manda. */}
-                <Button size="sm" className="h-8 gap-1.5" title="Enviar — ⌘/Ctrl + Enter"
+                <Button size="sm" className="h-8 gap-1.5" title="Enviar — Enter (Shift + Enter quebra linha)"
                         disabled={!texto.trim() || responder.isPending} onClick={enviar}>
                   {responder.isPending
                     ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -3244,6 +3260,12 @@ function PainelContato({ c, meuId, onVerPedido }: {
       </CarboCardContent>
     </CarboCard>
   );
+}
+
+/** Aparelho cujo ponteiro principal é o dedo (celular, tablet): lá o Enter do
+ *  teclado quebra linha e quem envia é o botão. */
+function telaDeToque(): boolean {
+  try { return window.matchMedia("(pointer: coarse)").matches; } catch { return false; }
 }
 
 export default function Conversas() {

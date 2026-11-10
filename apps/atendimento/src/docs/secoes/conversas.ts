@@ -150,7 +150,7 @@ export const SECOES_CONVERSAS: Secao[] = [
           { n: 11, titulo: "Recado interno", texto: "Anotação do time, com moldura tracejada laranja e “só o time vê”. Fica no ponto da conversa em que foi escrita, com o autor e a hora. Nunca vai para o cliente." },
           { n: 12, titulo: "Responder", texto: "Aba para escrever ao cliente." },
           { n: 13, titulo: "Recado interno", texto: "Aba para escrever um recado para o time em vez de para o cliente." },
-          { n: 14, titulo: "Campo de resposta", texto: "Escreva a mensagem. Ctrl + Enter (⌘ + Enter no Mac) envia. Digite / para usar uma resposta pronta e cole um print com Ctrl + V para enviá-lo como foto." },
+          { n: 14, titulo: "Campo de resposta", texto: "Escreva a mensagem. Enter envia e Shift + Enter quebra linha (no celular, o Enter quebra linha e quem envia é o botão). Digite / para usar uma resposta pronta e cole um print com Ctrl + V para enviá-lo como foto." },
           { n: 15, titulo: "Respostas rápidas", texto: "Abre as frases prontas do time para usar, criar ou apagar. Veja “Respostas rápidas”, abaixo." },
           { n: 16, titulo: "Enviar foto ou documento", texto: "Escolhe uma imagem (JPG ou PNG), PDF ou texto. Antes de sair, aparece uma prévia para conferir, com campo para legenda." },
           { n: 17, titulo: "Gravar áudio", texto: "Grava um áudio pelo microfone. Ao parar, você ouve antes de enviar e pode descartar." },
