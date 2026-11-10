@@ -12,6 +12,7 @@ import Conversas from "./pages/Conversas";
 import EsteiraOnline from "./pages/EsteiraOnline";
 import MensagensCliente from "./pages/MensagensCliente";
 import PainelAtendimento from "./pages/PainelAtendimento";
+import MaquinaVendas from "./pages/MaquinaVendas";
 import { isCarbohubDomain, goToHubLogin } from "@/lib/sso";
 import { PaginaNaoEncontrada, IrPara } from "@carbo/shell";
 
@@ -47,6 +48,7 @@ export default function App() {
         <Route path="/ecommerce/esteira" element={<EsteiraOnline />} />
         <Route path="/ecommerce/mensagens" element={<MensagensCliente />} />
         <Route path="/painel" element={<PainelAtendimento />} />
+        <Route path="/maquina-de-vendas" element={<MaquinaVendas />} />
         <Route path="/perfil" element={<Profile />} />
         <Route path="/documentacao" element={<Documentacao />} />
         {/* Rota inexistente: diz que não existe, em vez de cair na home calado. */}

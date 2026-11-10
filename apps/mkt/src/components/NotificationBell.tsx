@@ -26,6 +26,9 @@ const TYPE_CONFIG: Record<string, { Icon: React.ElementType; label: string; colo
   mkt_mencao:             { Icon: AtSign,        label: "Menção",         color: "text-violet-500",  bg: "bg-violet-500/10" },
   mkt_seguindo:           { Icon: Eye,           label: "Seguindo",       color: "text-sky-500",     bg: "bg-sky-500/10" },
   mkt_prazo:              { Icon: CalendarClock, label: "Prazo",          color: "text-amber-600",   bg: "bg-amber-500/10" },
+  mv_agenda:              { Icon: CalendarClock, label: "Agenda",         color: "text-blue-600",    bg: "bg-blue-500/10" },
+  mv_lembrete:            { Icon: CalendarClock, label: "Lembrete",       color: "text-blue-600",    bg: "bg-blue-500/10" },
+  mv_followup:            { Icon: Clock,         label: "Retomar",        color: "text-amber-600",   bg: "bg-amber-500/10" },
   mkt_quadro:             { Icon: UserPlus,      label: "Quadro",         color: "text-emerald-600", bg: "bg-emerald-500/10" },
   academy_acesso:         { Icon: GraduationCap, label: "Carbo Academy",  color: "text-fuchsia-500", bg: "bg-fuchsia-500/10" },
   academy_liberado:       { Icon: GraduationCap, label: "Curso liberado", color: "text-emerald-600", bg: "bg-emerald-500/10" },
@@ -130,6 +133,14 @@ export function NotificationBell() {
       const caminho = `/quadros/${n.reference_id}`;
       if (window.location.hostname.startsWith("mkt.")) navigate(caminho);
       else window.location.href = `https://mkt.carbohub.com.br${caminho}`;
+      return;
+    }
+    // Máquina de Vendas: o lead mora no app do Atendimento.
+    if (n.reference_type === "mv_lead" && n.reference_id) {
+      setOpen(false);
+      const caminho = `/maquina-de-vendas?lead=${n.reference_id}`;
+      if (window.location.hostname.startsWith("atendimento.")) navigate(caminho);
+      else window.location.href = `https://atendimento.carbohub.com.br${caminho}`;
       return;
     }
     if (n.reference_type === "mkt_card" && n.reference_id) {

@@ -1,6 +1,6 @@
 import { useMemo, useState, useRef } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
-import { MessagesSquare, LayoutDashboard, MessageCircle, PackageSearch, Send, BookOpen, Gauge } from "lucide-react";
+import { MessagesSquare, LayoutDashboard, MessageCircle, PackageSearch, Send, BookOpen, Gauge, KanbanSquare } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAccessPing } from "@/hooks/useAccessPing";
@@ -51,6 +51,11 @@ export function Layout() {
     { items: [
         { to: "/", label: "Visão geral", icon: LayoutDashboard, end: true },
         { to: "/chat", label: "Carbo Chat", icon: MessagesSquare, badge: <ChatBadge /> },
+    ] },
+    // Pipeline das descarbonizações vendidas pela Máquina de Vendas (substitui o
+    // Notion) — com a agenda do técnico que executa.
+    { label: "Descarbonização", items: [
+        { to: "/maquina-de-vendas", label: "Máquina de Vendas", icon: KanbanSquare },
     ] },
     { label: "Cliente", items: [
         // A tela de Conversas do WhatsApp, portada do admin/ops em 28/08/2026.
