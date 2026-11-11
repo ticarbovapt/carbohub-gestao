@@ -281,6 +281,54 @@ export function useAddPayment() {
   });
 }
 
+/**
+ * Exclui um fechamento gerado por engano. A memória (`commission_statement_items`)
+ * sai junto pela FK em cascata, e o vendedor/período fica livre para gerar de novo
+ * (o índice único `uq_commission_statement_periodo` impedia).
+ *
+ * ⚠️ Só sem pagamento lançado — e a condição vai NO DELETE (`amount_paid = 0`),
+ * não só na tela: a cascata também apagaria `commission_payments`, e o registro
+ * de dinheiro que saiu sumiria calado. Com pagamento, exclua os pagamentos antes
+ * (na Memória). Zero linhas apagadas = tinha pagamento (ou sem permissão): a tela
+ * diz, nunca finge que excluiu.
+ */
+export function useDeleteStatement() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await db.from("commission_statements")
+        .delete().eq("id", id).eq("amount_paid", 0).select("id");
+      if (error) throw error;
+      if (!data?.length) {
+        throw new Error("Este fechamento tem pagamento lançado. Exclua os pagamentos na Memória antes.");
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["commission_statements"] });
+      toast.success("Comissão excluída");
+    },
+    onError: (e: Error) => toast.error("Não foi possível excluir: " + e.message),
+  });
+}
+
+/** Exclui um pagamento lançado errado — o trigger recalcula pago, saldo e status. */
+export function useDeletePayment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (p: { id: string; statement_id: string }) => {
+      const { data, error } = await db.from("commission_payments").delete().eq("id", p.id).select("id");
+      if (error) throw error;
+      if (!data?.length) throw new Error("Pagamento não encontrado ou sem permissão.");
+    },
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ["commission_statements"] });
+      qc.invalidateQueries({ queryKey: ["commission_payments", vars.statement_id] });
+      toast.success("Pagamento excluído");
+    },
+    onError: (e: Error) => toast.error("Não foi possível excluir o pagamento: " + e.message),
+  });
+}
+
 // ─── Números das NFs que formam a base ───────────────────────────────────────
 // A comissão chama de "faturado" o pedido com `bling_nf_id` (conta 1 — ver
 // `crm_comissao_detalhe`), então o número sai de `bling_nfe` por esse id. A

@@ -349,10 +349,19 @@ export const SECOES_VENDAS: Secao[] = [
           { n: 1, titulo: "Totais", texto: "Comissões geradas, total devido e total pago. Com filtro ligado, os cartões somam só o que está filtrado e dizem isso no título." },
           { n: 2, titulo: "Vendedor", texto: "Filtra por vendedor." },
           { n: 3, titulo: "Status", texto: "Aberto, Parcial ou Pago." },
-          { n: 4, titulo: "Ordenar por", texto: "Período, vendedor, maior devido ou maior saldo." },
-          { n: 5, titulo: "Status da comissão", texto: "Aberto = nada pago; Parcial = parte paga; Pago = quitada." },
-          { n: 6, titulo: "Memória", texto: "A composição da comissão e as notas que entraram, congeladas no dia em que foi gerada." },
-          { n: 7, titulo: "Registrar pagamento", texto: "Lança um pagamento (pode ser parcial). Comissão quitada mostra “Quitado”." },
+          { n: 4, titulo: "Ordenar por", texto: "Maior devido, maior saldo ou vendedor — dentro de cada período." },
+          { n: 5, titulo: "Período", texto: "As comissões ficam agrupadas por período, o mais recente em cima, com a quantidade, o devido e o saldo do grupo." },
+          { n: 6, titulo: "Status da comissão", texto: "Aberto = nada pago; Parcial = parte paga; Pago = quitada." },
+          { n: 7, titulo: "Pagar", texto: "Lança um pagamento (pode ser parcial). Some quando a comissão está quitada." },
+          { n: 8, titulo: "Mais ações", texto: "Memória de cálculo e Excluir. Clicar no nome do vendedor também abre a memória." },
+        ],
+      },
+      {
+        titulo: "Excluir uma comissão gerada errado",
+        print: { chave: "comissao-menu", legenda: "O menu ⋯ da linha." },
+        itens: [
+          { n: 1, titulo: "Memória de cálculo", texto: "Abre a composição e as notas da comissão." },
+          { n: 2, titulo: "Excluir", texto: "Pede confirmação e apaga a comissão com a memória de cálculo. O período fica livre para gerar de novo na aba Calcular. Comissão com pagamento lançado não se exclui: primeiro exclua os pagamentos na memória (a lixeira ao lado de cada um), e o valor volta para o saldo." },
         ],
       },
       {
@@ -373,6 +382,7 @@ export const SECOES_VENDAS: Secao[] = [
           { n: 1, titulo: "Composição", texto: "Cada base com o seu percentual e o valor da comissão." },
           { n: 2, titulo: "Pedidos e notas", texto: "Os pedidos faturados que entraram, com o número da NF." },
           { n: 3, titulo: "Total", texto: "Quantidade de notas (NF e NFS-e) e a soma. Fechamento gerado antes de 30/10/2026 não lista a descarbonização: ela aparece só na composição." },
+          { n: 4, titulo: "Pagamentos lançados", texto: "Data, forma e valor de cada pagamento. A lixeira exclui um pagamento lançado errado, com confirmação, e o valor volta para o saldo." },
         ],
       },
       {

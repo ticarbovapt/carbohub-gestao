@@ -210,9 +210,10 @@ const st = (id: string, v: { id: string; full_name: string }, ini: string, fim: 
 };
 const fimMesAnt = (() => { const d = new Date(hoje.getFullYear(), hoje.getMonth(), 0); return `${ym(d)}-${String(d.getDate()).padStart(2, "0")}`; })();
 const statements = [
-  st("s1", U.colab, `${MES_ANT}-01`, fimMesAnt, 5430, 4200, 3, 5, 0),
+  st("s1", U.colab, `${MES_ANT}-01`, fimMesAnt, 5430, 4200, 3, 5, 100),
   st("s2", U.vend2, `${MES_ANT}-01`, fimMesAnt, 12300, 0, 3, 5, 200),
   st("s3", U.closer, `${MES_ANT}-01`, fimMesAnt, 9800, 1400, 2.5, 5, 315),
+  st("s4", U.vend2, `${ym(hoje)}-01`, `${ym(hoje)}-10`, 4100, 0, 3, 5, 0),
 ];
 
 // ── Pedidos de Venda (carboze_orders_secure) ─────────────────────────────────
@@ -250,7 +251,9 @@ export const FX: Record<string, unknown> = {
   commission_statement_items: porRota(() => pedComissao.slice(0, 3).map((p, i) => ({
     id: `i${i}`, statement_id: "s1", order_id: p.id, order_number: p.order_number, customer_name: p.customer_name, sale_date: p.sale_date, total: p.total,
   }))),
-  commission_payments: porRota(() => []),
+  commission_payments: porRota(() => [
+    { id: "p1", statement_id: "s1", amount: 100, paid_at: `${fimMesAnt}T15:00:00.000Z`, method: "PIX", notes: "adiantamento", paid_by: null, created_at: `${fimMesAnt}T15:00:00.000Z` },
+  ]),
   licensees: porRota(() => []),
   "fn:bling-sync": blingSync,
 };
