@@ -1,6 +1,8 @@
-import { useMemo, useState, useEffect } from "react";
+import { Fragment, useMemo, useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Percent, DollarSign, Wallet, Receipt, CheckCircle2, FileText, Download, Loader2 } from "lucide-react";
+import { Percent, DollarSign, Wallet, Receipt, CheckCircle2, FileText, Download, Loader2, Trash2 } from "lucide-react";
+import { confirmar } from "@carbo/shell";
+import { MenuAcoes } from "@/components/financeiro/ContasUI";
 import { useNfeLinks } from "@/hooks/useNfeLinks";
 import { toast } from "sonner";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
@@ -22,6 +24,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { AlertCircle } from "lucide-react";
 import {
   useComissaoAgregado, useComissaoDescarb, useCommissionStatements, useCreateStatement, useAddPayment,
+  useDeleteStatement, useDeletePayment,
   useCommissionRules, useUpsertCommissionRule, useStatementItems, useStatementPayments,
   type CommissionStatement,
   useNfsDaComissao, useNfsDosFechamentos, type NfDaBase,
@@ -33,6 +36,15 @@ const fmtDate = (s: string) => { const d = (s || "").slice(0, 10).split("-"); re
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const monthStart = () => { const d = new Date(); return iso(new Date(d.getFullYear(), d.getMonth(), 1)); };
 const monthEnd = () => { const d = new Date(); return iso(new Date(d.getFullYear(), d.getMonth() + 1, 0)); };
+const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+/** Mês inteiro vira "Outubro de 2026"; qualquer outro intervalo, as duas datas. */
+function rotuloPeriodo(ini: string, fim: string): string {
+  const [ai, mi, di] = ini.slice(0, 10).split("-").map(Number);
+  const [af, mf, df] = fim.slice(0, 10).split("-").map(Number);
+  const ultimo = new Date(af, mf, 0).getDate();
+  if (ai === af && mi === mf && di === 1 && df === ultimo) return `${MESES[mi - 1]} de ${ai}`;
+  return `${fmtDate(ini)} – ${fmtDate(fim)}`;
+}
 
 /* ─── O estado da tela mora na URL ──────────────────────────────────────────
  *
@@ -78,16 +90,16 @@ const PARAM_PG_ORDEM = "pg_ordem";
 const PARAM_MEMORIA = "memoria";
 
 const ORDENS = {
-  periodo: { label: "Período (mais recente)", cmp: (a: CommissionStatement, b: CommissionStatement) => b.period_start.localeCompare(a.period_start) },
-  vendedor: { label: "Vendedor (A-Z)", cmp: (a: CommissionStatement, b: CommissionStatement) => (a.vendedor_name ?? "").localeCompare(b.vendedor_name ?? "", "pt-BR") },
+  // Os períodos são GRUPOS (mais recente primeiro); a ordem vale DENTRO de cada um.
   devido: { label: "Maior devido", cmp: (a: CommissionStatement, b: CommissionStatement) => Number(b.amount_due) - Number(a.amount_due) },
+  vendedor: { label: "Vendedor (A-Z)", cmp: (a: CommissionStatement, b: CommissionStatement) => (a.vendedor_name ?? "").localeCompare(b.vendedor_name ?? "", "pt-BR") },
   saldo: { label: "Maior saldo", cmp: (a: CommissionStatement, b: CommissionStatement) => (Number(b.amount_due) - Number(b.amount_paid)) - (Number(a.amount_due) - Number(a.amount_paid)) },
 } as const;
 type Ordem = keyof typeof ORDENS;
 
 function lerOrdem(sp: URLSearchParams): Ordem {
   const v = (sp.get(PARAM_PG_ORDEM) ?? "") as Ordem;
-  return v in ORDENS ? v : "periodo";
+  return v in ORDENS ? v : "devido";
 }
 
 /** `YYYY-MM-DD` ou o padrão. Data inválida na URL não vira consulta. */
@@ -546,6 +558,41 @@ function PagamentosTab() {
     return [...lista].sort(ORDENS[ordem].cmp);
   }, [statements, vendFiltro, statusFiltro, ordem]);
 
+  // Um grupo por PERÍODO, o mais recente primeiro; dentro dele, a ordem escolhida.
+  const grupos = useMemo(() => {
+    const m = new Map<string, CommissionStatement[]>();
+    for (const x of visiveis) {
+      const k = `${x.period_start}|${x.period_end}`;
+      if (!m.has(k)) m.set(k, []);
+      m.get(k)!.push(x);
+    }
+    return [...m.entries()]
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .map(([k, itens]) => {
+        const [ini, fim] = k.split("|");
+        return {
+          k, ini, fim, itens,
+          devido: itens.reduce((t, x) => t + Number(x.amount_due), 0),
+          saldo: itens.reduce((t, x) => t + Math.max(0, Number(x.amount_due) - Number(x.amount_paid)), 0),
+        };
+      });
+  }, [visiveis]);
+
+  const excluir = useDeleteStatement();
+  const pedirExclusao = async (s: CommissionStatement) => {
+    if (Number(s.amount_paid) > 0) {
+      toast.error("Esta comissão tem pagamento lançado. Exclua os pagamentos na Memória antes.");
+      setParam(PARAM_MEMORIA, s.id);
+      return;
+    }
+    const ok = await confirmar({
+      titulo: `Excluir a comissão de ${s.vendedor_name || "vendedor"}?`,
+      mensagem: `${rotuloPeriodo(s.period_start, s.period_end)} · ${brl(s.amount_due)}. O fechamento e a memória de cálculo saem, e o período pode ser gerado de novo na aba Calcular.`,
+      confirmar: "Excluir", perigo: true,
+    });
+    if (ok) excluir.mutate(s.id);
+  };
+
   /**
    * ⚠️ Os KPIs somam o que está FILTRADO, não a tabela inteira.
    * Cabeçalho que ignora o filtro faz o número de cima brigar com as linhas de
@@ -587,7 +634,7 @@ function PagamentosTab() {
           </div>
           <div className="flex-1 min-w-[200px]">
             <Label className="text-xs text-muted-foreground">Ordenar por</Label>
-            <Select value={ordem} onValueChange={(v) => setParam(PARAM_PG_ORDEM, v === "periodo" ? null : v)}>
+            <Select value={ordem} onValueChange={(v) => setParam(PARAM_PG_ORDEM, v === "devido" ? null : v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 {Object.entries(ORDENS).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
@@ -610,65 +657,86 @@ function PagamentosTab() {
                sido essa pessoa que o escolheu. */
             <CarboEmptyState icon={Wallet} title="Nada com esse filtro" />
           ) : (
-            <CarboTable className="min-w-[900px]">
+            <CarboTable className="min-w-[860px]">
               <CarboTableHeader>
                 <CarboTableRow>
                   <CarboTableHead>Vendedor</CarboTableHead>
-                  <CarboTableHead>Período</CarboTableHead>
                   <CarboTableHead className="text-right">Base</CarboTableHead>
                   <CarboTableHead className="text-center">%</CarboTableHead>
                   <CarboTableHead className="text-right">Devido</CarboTableHead>
                   <CarboTableHead className="text-right">Pago</CarboTableHead>
                   <CarboTableHead className="text-right">Saldo</CarboTableHead>
                   <CarboTableHead>Status</CarboTableHead>
-                  <CarboTableHead className="text-right">Ação</CarboTableHead>
+                  <CarboTableHead className="w-[150px]" />
                 </CarboTableRow>
               </CarboTableHeader>
               <CarboTableBody>
-                {visiveis.map((s) => {
-                  const saldo = Math.max(0, Number(s.amount_due) - Number(s.amount_paid));
-                  const st = STATUS[s.status] ?? STATUS.aberto;
-                  return (
-                    <CarboTableRow key={s.id}>
-                      <CarboTableCell className="font-medium">{s.vendedor_name || "—"}</CarboTableCell>
-                      <CarboTableCell className="whitespace-nowrap">{fmtDate(s.period_start)} – {fmtDate(s.period_end)}</CarboTableCell>
-                      <CarboTableCell className="text-right">
-                        {brl(s.base_sales)}
-                        {Number(s.base_descarb) > 0 && (
-                          <span className="block text-[11px] text-muted-foreground">
-                            NF {brl(s.base_produto)} · descarb. {brl(s.base_descarb)}
+                {grupos.map((g) => (
+                  <Fragment key={g.k}>
+                    <CarboTableRow className="bg-muted/40 hover:bg-muted/40">
+                      <CarboTableCell colSpan={8} className="py-2">
+                        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                          <span className="font-semibold">{rotuloPeriodo(g.ini, g.fim)}</span>
+                          <span className="text-xs text-muted-foreground tabular-nums">
+                            {g.itens.length} {g.itens.length === 1 ? "comissão" : "comissões"} · devido {brl(g.devido)} · saldo{" "}
+                            <strong className="text-foreground">{brl(g.saldo)}</strong>
                           </span>
-                        )}
-                        <BotaoNfs titulo={`${s.vendedor_name || "vendedor"} · ${fmtDate(s.period_start)} – ${fmtDate(s.period_end)}`}
-                          nfs={nfsFech?.porFechamento.get(s.id)} carregando={loadingNfsFech} />
-                        {Number(s.base_descarb) > 0 && (
-                          <BotaoNfses titulo={`${s.vendedor_name || "vendedor"} · ${fmtDate(s.period_start)} – ${fmtDate(s.period_end)}`}
-                            nfses={nfsFech?.nfsePorFechamento.get(s.id)} carregando={loadingNfsFech} />
-                        )}
-                      </CarboTableCell>
-                      <CarboTableCell className="text-center">
-                        {Number(s.rate_pct)}%
-                        {Number(s.base_descarb) > 0 && (
-                          <span className="block text-[11px] text-muted-foreground">
-                            {Number(s.rate_descarb_pct)}% descarb.
-                          </span>
-                        )}
-                      </CarboTableCell>
-                      <CarboTableCell className="text-right font-medium">{brl(s.amount_due)}</CarboTableCell>
-                      <CarboTableCell className="text-right">{brl(s.amount_paid)}</CarboTableCell>
-                      <CarboTableCell className="text-right font-medium">{brl(saldo)}</CarboTableCell>
-                      <CarboTableCell><CarboBadge variant={st.variant}>{st.label}</CarboBadge></CarboTableCell>
-                      <CarboTableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <CarboButton size="sm" variant="ghost" onClick={() => setParam(PARAM_MEMORIA, s.id)}>Memória</CarboButton>
-                          <CarboButton size="sm" variant={s.status === "pago" ? "outline" : "default"} disabled={s.status === "pago"} onClick={() => setPaying(s)}>
-                            {s.status === "pago" ? "Quitado" : "Registrar pagamento"}
-                          </CarboButton>
                         </div>
                       </CarboTableCell>
                     </CarboTableRow>
-                  );
-                })}
+                    {g.itens.map((s) => {
+                      const saldo = Math.max(0, Number(s.amount_due) - Number(s.amount_paid));
+                      const st = STATUS[s.status] ?? STATUS.aberto;
+                      const tituloNf = `${s.vendedor_name || "vendedor"} · ${fmtDate(s.period_start)} – ${fmtDate(s.period_end)}`;
+                      return (
+                        <CarboTableRow key={s.id}>
+                          <CarboTableCell className="font-medium">
+                            <button type="button" className="text-left hover:underline" onClick={() => setParam(PARAM_MEMORIA, s.id)}>
+                              {s.vendedor_name || "—"}
+                            </button>
+                          </CarboTableCell>
+                          <CarboTableCell className="text-right">
+                            <span className="tabular-nums">{brl(s.base_sales)}</span>
+                            {Number(s.base_descarb) > 0 && (
+                              <span className="block text-[11px] text-muted-foreground">
+                                NF {brl(s.base_produto)} · descarb. {brl(s.base_descarb)}
+                              </span>
+                            )}
+                            <span className="flex flex-wrap justify-end gap-1">
+                              <BotaoNfs titulo={tituloNf} nfs={nfsFech?.porFechamento.get(s.id)} carregando={loadingNfsFech} />
+                              {Number(s.base_descarb) > 0 && (
+                                <BotaoNfses titulo={tituloNf} nfses={nfsFech?.nfsePorFechamento.get(s.id)} carregando={loadingNfsFech} />
+                              )}
+                            </span>
+                          </CarboTableCell>
+                          <CarboTableCell className="text-center tabular-nums">
+                            {Number(s.rate_pct)}%
+                            {Number(s.base_descarb) > 0 && (
+                              <span className="block text-[11px] text-muted-foreground">
+                                {Number(s.rate_descarb_pct)}% descarb.
+                              </span>
+                            )}
+                          </CarboTableCell>
+                          <CarboTableCell className="text-right font-medium tabular-nums">{brl(s.amount_due)}</CarboTableCell>
+                          <CarboTableCell className="text-right tabular-nums">{brl(s.amount_paid)}</CarboTableCell>
+                          <CarboTableCell className="text-right font-medium tabular-nums">{brl(saldo)}</CarboTableCell>
+                          <CarboTableCell><CarboBadge variant={st.variant}>{st.label}</CarboBadge></CarboTableCell>
+                          <CarboTableCell>
+                            <div className="flex items-center justify-end gap-1">
+                              {s.status !== "pago" && (
+                                <CarboButton size="sm" onClick={() => setPaying(s)}>Pagar</CarboButton>
+                              )}
+                              <MenuAcoes itens={[
+                                { l: "Memória de cálculo", onClick: () => setParam(PARAM_MEMORIA, s.id) },
+                                { l: "Excluir", onClick: () => pedirExclusao(s), perigo: true, disabled: excluir.isPending },
+                              ]} />
+                            </div>
+                          </CarboTableCell>
+                        </CarboTableRow>
+                      );
+                    })}
+                  </Fragment>
+                ))}
               </CarboTableBody>
             </CarboTable>
           )}
@@ -829,6 +897,7 @@ function MemoriaDialog({ st, onClose }: { st: CommissionStatement | null; onClos
   // lugar nenhum — dado que ninguém vê não serve para conferir nada.
   const { data: pagamentos = [] } = useStatementPayments(st?.id ?? null);
   const { data: nfsMem } = useNfsDosFechamentos(st ? [st.id] : []);
+  const delPag = useDeletePayment();
   if (!st) return null;
   const soma = items.reduce((s, i) => s + Number(i.total), 0);
   return (
@@ -877,7 +946,21 @@ function MemoriaDialog({ st, onClose }: { st: CommissionStatement | null; onClos
                       {p.notes ? ` · ${p.notes}` : ""}
                     </span>
                   </span>
-                  <strong className="tabular-nums shrink-0">{brl(Number(p.amount))}</strong>
+                  <span className="flex shrink-0 items-center gap-1">
+                    <strong className="tabular-nums">{brl(Number(p.amount))}</strong>
+                    <button type="button" aria-label="Excluir pagamento" disabled={delPag.isPending}
+                      className="rounded p-1 text-muted-foreground hover:text-destructive disabled:opacity-50"
+                      onClick={async () => {
+                        const ok = await confirmar({
+                          titulo: "Excluir este pagamento?",
+                          mensagem: `${brl(Number(p.amount))} de ${fmtDate(p.paid_at)}. O valor volta para o saldo da comissão.`,
+                          confirmar: "Excluir", perigo: true,
+                        });
+                        if (ok) delPag.mutate({ id: p.id, statement_id: st.id });
+                      }}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </span>
                 </div>
               ))}
             </div>
