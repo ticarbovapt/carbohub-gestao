@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CheckCircle2, XCircle, Send, PackagePlus, Ban, Search } from "lucide-react";
+import { CheckCircle2, XCircle, Send, PackagePlus, Ban, Search, MessageSquare } from "lucide-react";
 import { useParamUrl, confirmar, pedirTexto } from "@carbo/shell";
 import { toast } from "sonner";
 import { CarboBadge } from "@/components/ui/carbo-badge";
@@ -7,7 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { usePurchaseRequests, useApprovePurchaseRequest, usePodeAutoaprovar } from "@/hooks/usePurchasing";
+import {
+  usePurchaseRequests, useApprovePurchaseRequest, usePodeAutoaprovar,
+  useComentariosRC, useComentarRC,
+} from "@/hooks/usePurchasing";
+import { Textarea } from "@/components/ui/textarea";
 import { useEnviarParaAprovacao, useCancelarRequisicao, podeCancelarRequisicao } from "@/hooks/useRequisicaoAcoes";
 import { PurchaseRequestForm } from "./PurchaseRequestForm";
 import {
@@ -158,6 +162,10 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
 
   const [selectedRC, setSelectedRC] = useState<PurchaseRequest | null>(null);
   const [gerarOC, setGerarOC] = useState<PurchaseRequest | null>(null);
+  /** O que está sendo escrito na caixa de observação da RC aberta. */
+  const [obs, setObs] = useState("");
+  const { data: comentarios = [] } = useComentariosRC(selectedRC?.id);
+  const comentar = useComentarRC();
 
   // Cotações da RC aberta — o total NEGOCIADO, que é o que importa pra aprovar.
   const { data: selQuotes = [] } = useQuotes(selectedRC?.id ?? null);
@@ -172,11 +180,21 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
 
   // Aprovar confirma UMA vez: o rodapé do detalhe já mostra estimado × cotado ×
   // itens sem cotação, que é exatamente o que a segunda confirmação repetia.
+  // ⚠️ A observação vai JUNTO com a decisão, na mesma chamada: o banco grava
+  // as duas na mesma transação. Comentar numa chamada e aprovar noutra deixa
+  // a porta aberta para a aprovação existir sem o porquê.
   const aprovar = (rc: PurchaseRequest) =>
-    approveRC.mutate({ id: rc.id, approved: true }, { onSuccess: () => setSelectedRC(null) });
+    approveRC.mutate(
+      { id: rc.id, approved: true, observacao: obs.trim() || undefined },
+      { onSuccess: () => setSelectedRC(null) },
+    );
 
   const rejeitar = async (rc: PurchaseRequest) => {
-    const motivo = await pedirTexto({
+    // ⚠️ Se já escreveu na caixa, é ESSE o motivo — não se pede duas vezes o
+    // mesmo texto. E ele vai para `rejection_reason`, onde o solicitante já
+    // lê hoje, em vez de virar um comentário que repetiria a mesma frase.
+    const digitado = obs.trim();
+    const motivo = digitado || await pedirTexto({
       titulo: `Rejeitar a ${rc.rc_number}?`,
       rotulo: "Motivo *",
       placeholder: "O solicitante vai ler isto.",
@@ -418,7 +436,10 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
       </CarboTable>
 
       {/* Detalhe */}
-      <Dialog open={!!sel} onOpenChange={(o) => !o && setSelectedRC(null)}>
+      {/* ⚠️ A caixa zera ao FECHAR: observação digitada numa RC não pode
+          reaparecer na próxima que se abrir — seria texto de um pedido indo
+          parar na decisão de outro. */}
+      <Dialog open={!!sel} onOpenChange={(o) => { if (!o) { setSelectedRC(null); setObs(""); } }}>
         <DialogContent className="sm:max-w-2xl max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex flex-wrap items-center gap-2">
@@ -508,6 +529,76 @@ export function PurchaseRequestsList({ showNewForm, onCloseForm }: PurchaseReque
                   <p className="text-sm font-medium text-destructive">Motivo da Rejeição</p>
                   <p className="text-sm mt-1 whitespace-pre-wrap">{sel.rejection_reason}</p>
                 </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Observações e comentários ─────────────────────────────────
+              O que se diz ANTES de decidir. A RC tinha texto livre só na ponta
+              de quem pede (justificativa) e na de quem recusa (motivo); o meio
+              — "pede cotação antes", "fecha com o fornecedor X" — acontecia no
+              WhatsApp e não chegava junto com a requisição. */}
+          {sel && (
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+                <MessageSquare className="h-3.5 w-3.5" /> Observações e comentários
+              </p>
+
+              {comentarios.length > 0 && (
+                <div className="space-y-2">
+                  {comentarios.map((c) => (
+                    <div key={c.id} className="rounded-lg bg-muted/50 p-3">
+                      <p className="text-xs text-muted-foreground">
+                        <strong className="text-foreground">{pessoaPorId.get(c.autor)?.full_name ?? "—"}</strong>
+                        {" · "}{dataBR(c.criado_em)}
+                        {/* O comentário que veio junto da decisão fica marcado:
+                            "comentei no meio do caminho" e "foi isto que eu
+                            disse ao aprovar" não são a mesma coisa. */}
+                        {c.decisao && (
+                          <CarboBadge variant={c.decisao === "aprovada" ? "success" : "destructive"} className="ml-1.5 text-[10px]">
+                            ao {c.decisao === "aprovada" ? "aprovar" : "rejeitar"}
+                          </CarboBadge>
+                        )}
+                      </p>
+                      <p className="text-sm mt-1 whitespace-pre-wrap">{c.texto}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {podeMexer && (
+                <>
+                  <Textarea
+                    value={obs}
+                    onChange={(e) => setObs(e.target.value)}
+                    rows={2}
+                    placeholder={sel.status === "aguardando_aprovacao"
+                      ? "Observação para esta decisão, ou um recado para quem pediu…"
+                      : "Deixe uma observação…"}
+                  />
+                  <div className="flex items-center justify-between gap-2">
+                    {/* ⚠️ O aviso existe porque o texto tem DOIS destinos
+                        possíveis, e qual deles é depende do botão. Sem isto,
+                        quem escreve e clica em Aprovar não sabe se o que
+                        digitou foi junto. */}
+                    <p className="text-[11px] text-muted-foreground">
+                      {sel.status === "aguardando_aprovacao"
+                        ? "Vai junto com a decisão ao aprovar ou rejeitar."
+                        : "Fica registrado com seu nome."}
+                    </p>
+                    <Button
+                      variant="outline" size="sm"
+                      disabled={!obs.trim() || comentar.isPending}
+                      onClick={() => comentar.mutate({ id: sel.id, texto: obs.trim() }, { onSuccess: () => setObs("") })}
+                    >
+                      Comentar sem decidir
+                    </Button>
+                  </div>
+                </>
+              )}
+
+              {!podeMexer && comentarios.length === 0 && (
+                <p className="text-xs text-muted-foreground">Nenhuma observação.</p>
               )}
             </div>
           )}

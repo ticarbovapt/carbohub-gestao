@@ -145,8 +145,35 @@ export function useApprovePurchaseRequest() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, approved, rejection_reason }: { id: string; approved: boolean; rejection_reason?: string }) =>
-      rpcCompras("fin_rc_decidir", { p_id: id, p_aprovar: approved, p_motivo: rejection_reason ?? null }),
+    mutationFn: async ({ id, approved, rejection_reason, observacao }: { id: string; approved: boolean; rejection_reason?: string; observacao?: string }) => {
+      // ⚠️ A observação vai NA MESMA chamada da decisão, não numa segunda.
+      // Aprovar e comentar em duas chamadas deixaria a porta aberta para a
+      // aprovação gravar e o comentário falhar — e aí fica no banco uma
+      // decisão sem o porquê, que é o estado que este campo existe para
+      // impedir. O banco grava as duas na mesma transação.
+      const base = { p_id: id, p_aprovar: approved, p_motivo: rejection_reason ?? null };
+      const texto = observacao?.trim();
+      if (!texto) return rpcCompras("fin_rc_decidir", base);
+      try {
+        return await rpcCompras("fin_rc_decidir", { ...base, p_observacao: texto });
+      } catch (e: any) {
+        // ⚠️ ORDEM DE DEPLOY. O PostgREST escolhe a função pelos NOMES dos
+        // argumentos: contra um banco que ainda não recebeu a migração das
+        // observações, mandar `p_observacao` não acha função nenhuma e a
+        // APROVAÇÃO quebraria — por causa de um campo de texto.
+        //
+        // Então aqui a decisão passa mesmo assim, sem a observação, e quem
+        // clicou fica sabendo. Perder o comentário é contornável; não
+        // conseguir aprovar, não.
+        if (!/não recebeu a atualização|PGRST202|does not exist/i.test(String(e?.message ?? ""))) throw e;
+        const r = await rpcCompras("fin_rc_decidir", base);
+        toast({
+          title: approved ? "RC aprovada, sem a observação" : "RC rejeitada, sem a observação",
+          description: "O banco ainda não recebeu a migração das observações (20261148). A decisão foi gravada; o texto, não.",
+        });
+        return r;
+      }
+    },
     onSuccess: (_, variables) => {
       toast({ title: variables.approved ? "RC aprovada" : "RC rejeitada" });
     },
@@ -156,6 +183,62 @@ export function useApprovePurchaseRequest() {
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["purchase-requests"] });
       queryClient.invalidateQueries({ queryKey: ["purchasing-badges"] });
+    },
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A CONVERSA da requisição — o que se diz ANTES de decidir
+//
+// A RC tinha um campo de texto por etapa: `justification` (de quem pede) e
+// `rejection_reason` (de quem recusa). Faltava o meio: "pede cotação antes",
+// "fecha com o fornecedor X", "aprovo, mas só metade deste lote". Sem lugar
+// para isso, a conversa ia para o WhatsApp e a RC chegava na aprovação sem o
+// contexto que a explicava.
+//
+// ⚠️ São LINHAS, com autor e instante, não um campo "observação do aprovador":
+// aquele guardaria só a última frase do último a falar. O fluxo é de ida e
+// volta — quem lançou responde quem perguntou, e a decisão vem depois.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ComentarioRC {
+  id: string;
+  request_id: string;
+  autor: string;
+  texto: string;
+  /** Preenchido quando o comentário acompanhou a decisão. */
+  decisao: "aprovada" | "rejeitada" | null;
+  criado_em: string;
+}
+
+export function useComentariosRC(requestId?: string | null) {
+  return useQuery({
+    queryKey: ["rc-comentarios", requestId],
+    enabled: !!requestId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("purchase_request_comments" as any)
+        .select("id, request_id, autor, texto, decisao, criado_em")
+        .eq("request_id", requestId!)
+        .order("criado_em", { ascending: true });
+      // Banco sem a migração ainda: a seção aparece vazia em vez de derrubar
+      // o modal inteiro da requisição.
+      if (error) return [] as ComentarioRC[];
+      return (data ?? []) as unknown as ComentarioRC[];
+    },
+  });
+}
+
+export function useComentarRC() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, texto }: { id: string; texto: string }) =>
+      rpcCompras("fin_rc_comentar", { p_id: id, p_texto: texto }),
+    onError: (err: any) => {
+      toast({ title: "Não deu para comentar", description: err.message, variant: "destructive" });
+    },
+    onSettled: (_d, _e, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["rc-comentarios", variables?.id] });
     },
   });
 }
