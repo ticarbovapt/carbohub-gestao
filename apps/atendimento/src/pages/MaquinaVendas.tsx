@@ -60,7 +60,7 @@ function CardLead({ l, nomeDe, onAbrir, onAvancar, arrastavel }: {
       className="group cursor-pointer rounded-lg border bg-card p-2.5 text-sm shadow-sm transition-colors hover:border-primary/50"
     >
       <div className="flex items-start gap-2">
-        <span className="min-w-0 flex-1 font-medium leading-tight">{l.nome}</span>
+        <span className="min-w-0 flex-1 font-medium leading-tight">{l.nome}{l.origem === "landing" && <span className="ml-1.5 rounded bg-violet-500/10 px-1 py-px align-middle text-[10px] font-medium text-violet-600">Landing</span>}</span>
         {l.valor != null && <span className="shrink-0 text-xs font-semibold tabular-nums">{fmtBRL(l.valor)}</span>}
       </div>
       {(l.modelo || l.cidade) && (
@@ -214,7 +214,7 @@ function Lista({ leads, nomeDe, abrir }: { leads: MvLead[]; nomeDe: (id: string 
                 <span className="flex min-w-0 items-center gap-2.5">
                   <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: COR_ETAPA[l.etapa] }} title={ROTULO_ETAPA[l.etapa]} />
                   <span className="min-w-0">
-                    <span className="block truncate font-medium">{l.nome}</span>
+                    <span className="block truncate font-medium">{l.nome}{l.origem === "landing" && <span className="ml-1.5 rounded bg-violet-500/10 px-1 py-px align-middle text-[10px] font-medium text-violet-600">Landing</span>}</span>
                     <span className="block truncate text-xs text-muted-foreground">
                       {[l.modelo, l.cidade && `${l.cidade}${l.uf ? "/" + l.uf : ""}`, `desde ${fmtDia(l.primeiro_contato_em)}`].filter(Boolean).join(" · ")}
                     </span>

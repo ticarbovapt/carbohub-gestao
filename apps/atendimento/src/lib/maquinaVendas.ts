@@ -34,6 +34,9 @@ export interface MvLead {
   local_execucao: string | null;
   order_id: string | null;
   arquivado_em: string | null;
+  origem: "manual" | "landing";
+  email: string | null;
+  utm: Record<string, string> | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -213,12 +216,19 @@ export function resumir(leads: MvLead[], agora = new Date()): Resumo {
 export function chave(t: string): string {
   return t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 }
+/** "instagram · nov" — de onde veio o lead da landing (UTM), sem jargão. */
+export function origemDoLead(l: Pick<MvLead, "origem" | "utm">): string | null {
+  if (l.origem !== "landing") return null;
+  const u = l.utm ?? {};
+  return [u.utm_source, u.utm_campaign].filter(Boolean).join(" · ") || null;
+}
+
 export function casaBusca(l: MvLead, busca: string): boolean {
   const b = chave(busca.trim());
   if (!b) return true;
   const digitos = busca.replace(/\D/g, "");
   if (digitos.length >= 4 && (l.whatsapp ?? "").replace(/\D/g, "").includes(digitos)) return true;
-  return chave([l.nome, l.cidade, l.uf, l.modelo, l.parceiro, l.tomador_decisao].filter(Boolean).join(" ")).includes(b);
+  return chave([l.nome, l.email, l.cidade, l.uf, l.modelo, l.parceiro, l.tomador_decisao].filter(Boolean).join(" ")).includes(b);
 }
 
 /** Avançar uma etapa (o botão do card). Perdido/executado não avançam. */

@@ -14,14 +14,14 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useMvAtualizar, useMvCriar, useMvEventos } from "@/hooks/useMaquinaVendas";
 import {
   COR_ETAPA, ETAPAS, ROTULO_ETAPA, faltaParaEtapa, fmtQuando, hoje, isoParaLocal, linkGoogleAgenda,
-  linkWhatsapp, localParaIso, type Etapa, type MvEvento, type MvLead, type PagoPara, type Pessoa,
+  linkWhatsapp, localParaIso, origemDoLead, type Etapa, type MvEvento, type MvLead, type PagoPara, type Pessoa,
 } from "@/lib/maquinaVendas";
 
 // O painel do lead: o mesmo para criar (`lead = null`) e editar. Grava só no
 // "Salvar" — rascunho local, para não disparar aviso ao técnico a cada tecla.
 
 type Rascunho = {
-  nome: string; whatsapp: string; link_chat: string; cidade: string; uf: string; modelo: string;
+  nome: string; email: string; whatsapp: string; link_chat: string; cidade: string; uf: string; modelo: string;
   veiculos: string; valor: string; etapa: Etapa; motivo_perda: string; anotacoes: string;
   tomador_decisao: string; parceiro: string; pago_para: PagoPara | ""; primeiro_contato_em: string;
   ultimo_contato_em: string; proximo_contato_em: string; fechamento_em: string; pos_venda_nf: boolean;
@@ -32,7 +32,7 @@ const NENHUM = "__nenhum";
 
 function deLead(l: MvLead | null, eu: string | undefined, etapa?: Etapa): Rascunho {
   return {
-    nome: l?.nome ?? "", whatsapp: l?.whatsapp ?? "", link_chat: l?.link_chat ?? "",
+    nome: l?.nome ?? "", email: l?.email ?? "", whatsapp: l?.whatsapp ?? "", link_chat: l?.link_chat ?? "",
     cidade: l?.cidade ?? "", uf: l?.uf ?? "", modelo: l?.modelo ?? "",
     veiculos: l?.veiculos != null ? String(l.veiculos) : "",
     valor: l?.valor != null ? String(l.valor).replace(".", ",") : "",
@@ -56,7 +56,7 @@ function numero(s: string): number | null {
 
 function paraCampos(r: Rascunho) {
   return {
-    nome: r.nome.trim(), whatsapp: nulo(r.whatsapp), link_chat: nulo(r.link_chat), cidade: nulo(r.cidade),
+    nome: r.nome.trim(), email: nulo(r.email.toLowerCase()), whatsapp: nulo(r.whatsapp), link_chat: nulo(r.link_chat), cidade: nulo(r.cidade),
     uf: nulo(r.uf.toUpperCase()), modelo: nulo(r.modelo), veiculos: numero(r.veiculos), valor: numero(r.valor),
     etapa: r.etapa, motivo_perda: r.etapa === "perdido" ? nulo(r.motivo_perda) : null, anotacoes: nulo(r.anotacoes),
     tomador_decisao: nulo(r.tomador_decisao), parceiro: nulo(r.parceiro), pago_para: r.pago_para || null,
@@ -160,6 +160,12 @@ export function LeadPainel({ aberto, lead, etapaInicial, pessoas, onFechar, onCr
       <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-xl">
         <SheetHeader className="border-b px-5 py-4 pr-12">
           <SheetTitle className="truncate">{lead ? lead.nome : "Novo lead"}</SheetTitle>
+          {lead?.origem === "landing" && (
+            <p className="text-xs text-muted-foreground">
+              <span className="mr-1.5 rounded bg-violet-500/10 px-1.5 py-px font-medium text-violet-600">Landing</span>
+              {[origemDoLead(lead), lead.utm?.recebido_em && fmtQuando(lead.utm.recebido_em)].filter(Boolean).join(" · ")}
+            </p>
+          )}
           <div className="flex flex-wrap gap-1.5">
             {ETAPAS.map((e) => (
               <button key={e.id} type="button" onClick={() => mudarEtapa(e.id)}
@@ -186,6 +192,7 @@ export function LeadPainel({ aberto, lead, etapaInicial, pessoas, onFechar, onCr
                 {/^https?:\/\//.test(r.link_chat) && <Button asChild size="icon" variant="outline" className="shrink-0"><a href={r.link_chat} target="_blank" rel="noreferrer" title="Abrir conversa"><ExternalLink className="h-4 w-4" /></a></Button>}
               </div>
             </Campo>
+            <Campo rotulo="E-mail" className="col-span-2"><Input value={r.email} type="email" onChange={(e) => set("email", e.target.value)} /></Campo>
             <Campo rotulo="Cidade"><Input value={r.cidade} onChange={(e) => set("cidade", e.target.value)} /></Campo>
             <Campo rotulo="UF"><Input value={r.uf} maxLength={2} onChange={(e) => set("uf", e.target.value.toUpperCase().replace(/[^A-Z]/g, ""))} /></Campo>
             <Campo rotulo="Veículo"><Input value={r.modelo} onChange={(e) => set("modelo", e.target.value)} placeholder="Hilux 2019" /></Campo>

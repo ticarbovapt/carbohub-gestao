@@ -29,6 +29,7 @@ const TYPE_CONFIG: Record<string, { Icon: React.ElementType; label: string; colo
   mv_agenda:              { Icon: CalendarClock, label: "Agenda",         color: "text-blue-600",    bg: "bg-blue-500/10" },
   mv_lembrete:            { Icon: CalendarClock, label: "Lembrete",       color: "text-blue-600",    bg: "bg-blue-500/10" },
   mv_followup:            { Icon: Clock,         label: "Retomar",        color: "text-amber-600",   bg: "bg-amber-500/10" },
+  mv_novo_lead:           { Icon: UserPlus,      label: "Lead",           color: "text-violet-600",  bg: "bg-violet-500/10" },
   mkt_quadro:             { Icon: UserPlus,      label: "Quadro",         color: "text-emerald-600", bg: "bg-emerald-500/10" },
   academy_acesso:         { Icon: GraduationCap, label: "Carbo Academy",  color: "text-fuchsia-500", bg: "bg-fuchsia-500/10" },
   academy_liberado:       { Icon: GraduationCap, label: "Curso liberado", color: "text-emerald-600", bg: "bg-emerald-500/10" },
