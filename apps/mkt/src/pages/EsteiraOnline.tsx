@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import {
   Truck, Package, FileText, CheckCircle2, ShoppingCart, Copy, XCircle, Loader2, MapPin, Phone,
@@ -1421,6 +1421,44 @@ function ColunasRecolhidas<T extends { total: number }>({ cols, porColuna, abert
   );
 }
 
+/* ── Busca por TELEFONE ───────────────────────────────────────────────
+ * Colar "(84) 99999-1234" ou "+55 84 9 9999-1234" não achava nada: a busca
+ * não olhava o telefone, e o texto formatado não casa com nenhum campo.
+ * Compara só DÍGITOS. Com 8 ou mais, casa pelos últimos 8 — o 9º dígito e o
+ * 55 variam entre o que o cliente cola e o que a plataforma gravou (a mesma
+ * frouxidão de `carbo_fone_chave`). Menos de 4 dígitos não é telefone. */
+function casaFone(busca: string, fone: string | null | undefined): boolean {
+  const q = busca.replace(/\D/g, "");
+  if (q.length < 4 || !fone) return false;
+  const f = fone.replace(/\D/g, "");
+  if (!f) return false;
+  return q.length >= 8 ? f.includes(q.slice(-8)) : f.includes(q);
+}
+
+/* ── O campo de busca escreve na URL DEPOIS de parar de digitar ─────────
+ * Antes, cada tecla regravava `?busca=` e refiltrava o quadro inteiro — a
+ * URL andava e a tela vinha atrás. O texto fica no campo (estado próprio,
+ * só ele redesenha) e vai à URL 300 ms depois da última tecla; colar é uma
+ * troca só. Voltar/link que mude a URL por fora atualiza o campo. */
+function BuscaAdiada({ valor, onChange, placeholder }: {
+  valor: string; onChange: (v: string) => void; placeholder: string;
+}) {
+  const [txt, setTxt] = useState(valor);
+  const enviado = useRef(valor);
+  useEffect(() => {
+    if (valor !== enviado.current) { enviado.current = valor; setTxt(valor); }
+  }, [valor]);
+  useEffect(() => {
+    if (txt === enviado.current) return;
+    const t = setTimeout(() => { enviado.current = txt; onChange(txt); }, 300);
+    return () => clearTimeout(t);
+  }, [txt, onChange]);
+  return (
+    <Input value={txt} onChange={(e) => setTxt(e.target.value)}
+           placeholder={placeholder} className="h-9 pl-8" />
+  );
+}
+
 export default function EsteiraOnline() {
   /* ── Período: o seletor ÚNICO do sistema (`PeriodoFiltro`) ─────────────
    *
@@ -1587,6 +1625,7 @@ export default function EsteiraOnline() {
     const t = busca.trim().toLowerCase();
     if (t) {
       r = r.filter((x) =>
+        casaFone(t, x.cliente_fone) ||
         (x.cliente ?? "").toLowerCase().includes(t) ||
         (x.rastreio ?? "").toLowerCase().includes(t) ||
         (x.nf_numero ?? "").toLowerCase().includes(t) ||
@@ -1687,6 +1726,7 @@ export default function EsteiraOnline() {
     const t = busca.trim().toLowerCase();
     if (t) {
       r = r.filter((x) =>
+        casaFone(t, x.cliente_fone) ||
         (x.cliente ?? "").toLowerCase().includes(t) ||
         (x.pedido_loja ?? "").toLowerCase().includes(t));
     }
@@ -1884,8 +1924,8 @@ export default function EsteiraOnline() {
       <div className={`flex flex-wrap items-center gap-2 ${pipeline !== "entrega" ? "hidden" : ""}`}>
         <div className="relative max-w-xs flex-1">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input value={busca} onChange={(e) => setBusca(e.target.value)}
-                 placeholder="Cliente, nº CZ, rastreio, NF, cidade…" className="h-9 pl-8" />
+          <BuscaAdiada valor={busca} onChange={setBusca}
+                       placeholder="Cliente, telefone, nº CZ, rastreio, NF, cidade…" />
         </div>
         <Select value={canal} onValueChange={setCanal}>
           <SelectTrigger className="h-9 w-44"><SelectValue /></SelectTrigger>
