@@ -153,53 +153,82 @@ function Quadro({ leads, nomeDe, abrir, novo, mover }: {
   );
 }
 
+const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+const rotuloMes = (ym: string) => `${MESES[Number(ym.slice(5, 7)) - 1]} de ${ym.slice(0, 4)}`;
+
+/** A UMA informação que importa agora, conforme a etapa — no lugar de cinco colunas meio vazias. */
+function Situacao({ l }: { l: MvLead }) {
+  if (l.etapa === "agendado" || (l.etapa === "orcado" && l.agendado_para)) {
+    return l.agendado_para
+      ? <span className="inline-flex items-center gap-1 font-medium text-blue-600"><CalendarDays className="h-3.5 w-3.5" />{fmtDia(diaDe(l.agendado_para))} às {fmtHora(l.agendado_para)}</span>
+      : <span className="text-amber-600">Sem data</span>;
+  }
+  if (l.etapa === "executado") {
+    return (
+      <span className="inline-flex items-center gap-1.5">
+        {l.pago_para && <span className="rounded bg-muted px-1.5 py-px text-xs font-medium">{ROTULO_PAGO[l.pago_para]}</span>}
+        {!l.pos_venda_nf && <span className="text-xs font-medium text-amber-600">sem NF</span>}
+      </span>
+    );
+  }
+  if (l.etapa === "perdido") return <span className="truncate text-muted-foreground">{l.motivo_perda ?? "—"}</span>;
+  const d = diasSemContato(l);
+  return (
+    <span className={cn("inline-flex items-center gap-1", estaParado(l) ? "font-medium text-amber-600" : "text-muted-foreground")}>
+      <Clock className="h-3.5 w-3.5" />{d === 0 ? "Contato hoje" : `${d} ${d === 1 ? "dia" : "dias"} sem contato`}
+    </span>
+  );
+}
+
 function Lista({ leads, nomeDe, abrir }: { leads: MvLead[]; nomeDe: (id: string | null) => string | null; abrir: (id: string) => void }) {
   const [limite, setLimite] = useState(150);
   const grupos = useMemo(() => {
     const m = new Map<string, MvLead[]>();
-    for (const l of leads.slice(0, limite)) {
-      const k = l.primeiro_contato_em;
+    const ordenados = [...leads].sort((a, b) => b.primeiro_contato_em.localeCompare(a.primeiro_contato_em));
+    for (const l of ordenados.slice(0, limite)) {
+      const k = l.primeiro_contato_em.slice(0, 7);
       if (!m.has(k)) m.set(k, []);
       m.get(k)!.push(l);
     }
-    return [...m.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+    return [...m.entries()];
   }, [leads, limite]);
 
   if (!leads.length) return <p className="py-16 text-center text-sm text-muted-foreground">Nenhum lead.</p>;
+  const colunas = "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 lg:grid-cols-[minmax(0,1.6fr)_8.5rem_minmax(0,1.2fr)_7rem_1.5rem]";
   return (
-    <div className="overflow-x-auto rounded-xl border">
-      <table className="w-full min-w-[960px] text-sm">
-        <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
-          <tr>
-            <th className="px-3 py-2 font-medium">Nome</th><th className="px-3 py-2 font-medium">Etapa</th>
-            <th className="px-3 py-2 font-medium">Veículo</th><th className="px-3 py-2 text-right font-medium">Valor</th>
-            <th className="px-3 py-2 font-medium">Cidade</th><th className="px-3 py-2 font-medium">Parceiro</th>
-            <th className="px-3 py-2 font-medium">Execução</th><th className="px-3 py-2 font-medium">Sem contato</th>
-            <th className="px-3 py-2 font-medium">Responsável</th><th className="px-3 py-2 font-medium">NF</th>
-          </tr>
-        </thead>
-        {grupos.map(([dia, ls]) => (
-          <tbody key={dia}>
-            <tr className="bg-muted/20"><td colSpan={10} className="px-3 py-1.5 text-xs font-semibold">
-              {fmtDia(dia, true)} <span className="font-normal text-muted-foreground">· {ls.length} · {fmtBRL(ls.reduce((s, l) => s + (l.valor ?? 0), 0))}</span>
-            </td></tr>
-            {ls.map((l) => (
-              <tr key={l.id} onClick={() => abrir(l.id)} className="cursor-pointer border-t hover:bg-muted/30">
-                <td className="px-3 py-2 font-medium">{l.nome}</td>
-                <td className="px-3 py-2"><span className="inline-flex items-center gap-1.5 text-xs"><span className="h-2 w-2 rounded-full" style={{ background: COR_ETAPA[l.etapa] }} />{ROTULO_ETAPA[l.etapa]}</span></td>
-                <td className="px-3 py-2 text-muted-foreground">{l.modelo ?? "—"}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{fmtBRL(l.valor)}</td>
-                <td className="px-3 py-2 text-muted-foreground">{l.cidade ? `${l.cidade}${l.uf ? "/" + l.uf : ""}` : "—"}</td>
-                <td className="px-3 py-2 text-muted-foreground">{l.parceiro ?? "—"}</td>
-                <td className="px-3 py-2 tabular-nums">{l.agendado_para ? `${fmtDia(diaDe(l.agendado_para))} ${fmtHora(l.agendado_para)}` : "—"}</td>
-                <td className={cn("px-3 py-2 tabular-nums", estaParado(l) && "font-medium text-amber-600")}>{diasSemContato(l)}d</td>
-                <td className="px-3 py-2 text-muted-foreground">{nomeDe(l.responsavel_id) ?? "—"}</td>
-                <td className="px-3 py-2">{l.pos_venda_nf ? "✓" : ""}</td>
-              </tr>
-            ))}
-          </tbody>
-        ))}
-      </table>
+    <div className="overflow-hidden rounded-xl border bg-card">
+      <div className={cn(colunas, "border-b px-4 py-2 text-xs text-muted-foreground max-lg:hidden")}>
+        <span>Lead</span><span>Etapa</span><span>Situação</span><span className="text-right">Valor</span><span />
+      </div>
+      {grupos.map(([mes, ls]) => (
+        <section key={mes}>
+          <div className="flex items-baseline gap-2 bg-muted/40 px-4 py-1.5 text-xs">
+            <span className="font-semibold">{rotuloMes(mes)}</span>
+            <span className="text-muted-foreground">{ls.length} {ls.length === 1 ? "lead" : "leads"} · {fmtBRL(ls.reduce((s, l) => s + (l.valor ?? 0), 0))}</span>
+          </div>
+          {ls.map((l) => {
+            const resp = nomeDe(l.responsavel_id);
+            return (
+              <button key={l.id} type="button" onClick={() => abrir(l.id)}
+                className={cn(colunas, "w-full border-t px-4 py-2.5 text-left text-sm first:border-t-0 hover:bg-muted/40")}>
+                <span className="flex min-w-0 items-center gap-2.5">
+                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: COR_ETAPA[l.etapa] }} title={ROTULO_ETAPA[l.etapa]} />
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium">{l.nome}</span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {[l.modelo, l.cidade && `${l.cidade}${l.uf ? "/" + l.uf : ""}`, `desde ${fmtDia(l.primeiro_contato_em)}`].filter(Boolean).join(" · ")}
+                    </span>
+                  </span>
+                </span>
+                <span className="text-xs text-muted-foreground max-lg:hidden">{ROTULO_ETAPA[l.etapa]}</span>
+                <span className="min-w-0 truncate text-xs max-lg:order-last max-lg:col-span-2 max-lg:pl-[18px] lg:text-sm"><Situacao l={l} /></span>
+                <span className="text-right font-medium tabular-nums">{l.valor != null ? fmtBRL(l.valor) : <span className="text-muted-foreground">—</span>}</span>
+                <span className="max-lg:hidden">{resp && <Iniciais nome={resp} />}</span>
+              </button>
+            );
+          })}
+        </section>
+      ))}
       {leads.length > limite && (
         <div className="border-t p-2 text-center"><Button variant="ghost" size="sm" onClick={() => setLimite((n) => n + 150)}>Mostrar mais</Button></div>
       )}
