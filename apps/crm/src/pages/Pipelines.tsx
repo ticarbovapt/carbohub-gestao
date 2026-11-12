@@ -1,3 +1,4 @@
+import { FiltrosCelular, FAIXA_KPI_CELULAR } from "@/components/FiltrosCelular";
 import { useState, useMemo, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useParamUrl } from "@carbo/shell";
@@ -472,50 +473,9 @@ export default function Pipelines() {
     };
   }, [allLeads]);
 
-  return (
-    <div className="p-4 md:p-6">
-      <div className="space-y-4">
-        <CarboPageHeader
-          title={isAll ? "Todos os funis" : (FUNNEL_CONFIG[ft]?.name ?? "Funil de Vendas")}
-          icon={KanbanSquare}
-          actions={<CarboButton onClick={() => { setFormStage(undefined); setIsFormOpen(true); }}><Plus className="h-4 w-4 mr-1" /> Novo Lead</CarboButton>}
-        />
-
-        {/* KPIs */}
-        {isAll ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <CarboKPI title="Total Leads" value={allKpis.total} icon={Users} iconColor="blue" loading={l2} />
-            <CarboKPI title="Quentes" value={allKpis.hot} icon={Flame} iconColor="warning" loading={l2} />
-            <CarboKPI title="Sem Atividade >3d" value={allKpis.stale} icon={AlertTriangle} iconColor="warning" loading={l2} />
-            <CarboKPI title="Funis" value={FUNNELS.length} icon={KanbanSquare} iconColor="green" />
-          </div>
-        ) : (
-          <div className={`grid grid-cols-2 gap-3 ${MOSTRA_QUENTES_E_TENTATIVAS ? "md:grid-cols-3 xl:grid-cols-5" : "md:grid-cols-3"}`}>
-            <CarboKPI title="Total Leads" value={stats?.total || 0} icon={Users} iconColor="blue" loading={!stats} />
-            {MOSTRA_QUENTES_E_TENTATIVAS && <CarboKPI title="Quentes" value={stats?.hot || 0} icon={Flame} iconColor="warning" loading={!stats} />}
-            <CarboKPI title="Sem Atividade >3d" value={stats?.stale || 0} icon={AlertTriangle} iconColor="warning" loading={!stats} />
-            <CarboKPI title="Pipeline (R$)" value={new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(stats?.totalRevenue || 0)} icon={TrendingUp} iconColor="green" loading={!stats} />
-            {MOSTRA_QUENTES_E_TENTATIVAS && <CarboKPI title="Média Tentativas" value={stats?.avgAttempts || 0} icon={Users} iconColor="blue" loading={!stats} />}
-          </div>
-        )}
-
-        {/* Seletor de funil — botões, um por pipeline, com contagem de leads */}
-        <div className="flex flex-wrap items-center gap-2">
-          {/* "Todos" com uma pipeline só seria a mesma pipeline duas vezes. */}
-          {FUNNELS.length > 1 && (
-            <FunnelTab active={isAll} onClick={() => setFunil("todos")} icon="🗂️" label="Todos" count={allLeads.length} loading={l2} />
-          )}
-          {FUNNELS.map((f) => (
-            <FunnelTab key={f.id} active={funil === f.id} onClick={() => setFunil(f.id)}
-              icon={f.icon} label={f.shortName} count={countByFunnel[f.id] ?? 0} color={f.color} loading={l2} />
-          ))}
-        </div>
-
-        {/* SITUAÇÃO — "o que exige a minha atenção agora?". É uma pergunta
-            diferente de "em que etapa está?", por isso filtro e não coluna.
-            Contagens sobre o funil inteiro, sem os outros filtros: o chip
-            precisa mostrar quanto existe, senão o usuário não sabe se vale
-            clicar. */}
+  // Filtros: no computador ficam na tela; no celular, atrás do botão "Filtros"
+  // (`FiltrosCelular`). Os MESMOS elementos nos dois lugares — um só estado.
+  const blocoSituacao = (
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-[11px] text-muted-foreground mr-1">Situação:</span>
           {([
@@ -536,10 +496,8 @@ export default function Pipelines() {
             );
           })}
         </div>
-
-        {/* Segmento — o que o lead É. Substitui as pipelines por tipo: o
-            vendedor filtra sem precisar trocar de quadro. */}
-        {USA_SEGMENTO && (<div className="flex flex-wrap items-center gap-1.5">
+  );
+  const blocoSegmento = (<div className="flex flex-wrap items-center gap-1.5">
           <span className="text-[11px] text-muted-foreground mr-1">Segmento:</span>
           {SEGMENTS.filter((sg) => (countBySegment[sg.id] ?? 0) > 0 || segFilter.includes(sg.id)).map((sg) => {
             const on = segFilter.includes(sg.id);
@@ -558,25 +516,18 @@ export default function Pipelines() {
               limpar
             </button>
           )}
-        </div>)}
-
-        {/* Filtros */}
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex-1 max-w-sm">
-            <CarboSearchInput placeholder="Buscar por nome, CNPJ, cidade..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
-          </div>
-          {!isAll && (
-            <Select value={stageFilter} onValueChange={setStageFilter}>
-              <SelectTrigger className="w-44 h-9 text-xs"><SelectValue placeholder="Estágio" /></SelectTrigger>
+        </div>
+  );
+  const blocoEstagio = (<Select value={stageFilter} onValueChange={setStageFilter}>
+              <SelectTrigger className="w-full md:w-44 h-9 text-xs"><SelectValue placeholder="Estágio" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos Estágios</SelectItem>
                 {stages.map((s) => <SelectItem key={s.id} value={s.id}>{s.icon} {s.label}</SelectItem>)}
               </SelectContent>
             </Select>
-          )}
-          {isGestor && (
-            <Select value={vendedorFilter} onValueChange={setVendedorFilter}>
-              <SelectTrigger className="w-48 h-9 text-xs"><span className="flex items-center gap-1.5"><Users className="h-3.5 w-3.5" /><SelectValue placeholder="Vendedor" /></span></SelectTrigger>
+  );
+  const blocoVendedor = (<Select value={vendedorFilter} onValueChange={setVendedorFilter}>
+              <SelectTrigger className="w-full md:w-48 h-9 text-xs"><span className="flex items-center gap-1.5"><Users className="h-3.5 w-3.5" /><SelectValue placeholder="Vendedor" /></span></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os vendedores</SelectItem>
                 {vendedoresDir.map((v) => (
@@ -589,7 +540,73 @@ export default function Pipelines() {
                 ))}
               </SelectContent>
             </Select>
+  );
+  const filtrosLigados = (situacao !== "all" ? 1 : 0) + segFilter.length
+    + (!isAll && stageFilter !== "all" ? 1 : 0) + (isGestor && vendedorFilter !== "all" ? 1 : 0);
+
+  return (
+    <div className="p-4 md:p-6">
+      <div className="space-y-4">
+        <CarboPageHeader
+          title={isAll ? "Todos os funis" : (FUNNEL_CONFIG[ft]?.name ?? "Funil de Vendas")}
+          icon={KanbanSquare}
+          actions={<CarboButton onClick={() => { setFormStage(undefined); setIsFormOpen(true); }}><Plus className="h-4 w-4 mr-1" /> Novo Lead</CarboButton>}
+        />
+
+        {/* KPIs */}
+        {isAll ? (
+          <div className={`${FAIXA_KPI_CELULAR} md:grid md:grid-cols-4 md:gap-3`}>
+            <CarboKPI title="Total Leads" value={allKpis.total} icon={Users} iconColor="blue" loading={l2} />
+            <CarboKPI title="Quentes" value={allKpis.hot} icon={Flame} iconColor="warning" loading={l2} />
+            <CarboKPI title="Sem Atividade >3d" value={allKpis.stale} icon={AlertTriangle} iconColor="warning" loading={l2} />
+            <CarboKPI title="Funis" value={FUNNELS.length} icon={KanbanSquare} iconColor="green" />
+          </div>
+        ) : (
+          <div className={`${FAIXA_KPI_CELULAR} md:grid md:gap-3 ${MOSTRA_QUENTES_E_TENTATIVAS ? "md:grid-cols-3 xl:grid-cols-5" : "md:grid-cols-3"}`}>
+            <CarboKPI title="Total Leads" value={stats?.total || 0} icon={Users} iconColor="blue" loading={!stats} />
+            {MOSTRA_QUENTES_E_TENTATIVAS && <CarboKPI title="Quentes" value={stats?.hot || 0} icon={Flame} iconColor="warning" loading={!stats} />}
+            <CarboKPI title="Sem Atividade >3d" value={stats?.stale || 0} icon={AlertTriangle} iconColor="warning" loading={!stats} />
+            <CarboKPI title="Pipeline (R$)" value={new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(stats?.totalRevenue || 0)} icon={TrendingUp} iconColor="green" loading={!stats} />
+            {MOSTRA_QUENTES_E_TENTATIVAS && <CarboKPI title="Média Tentativas" value={stats?.avgAttempts || 0} icon={Users} iconColor="blue" loading={!stats} />}
+          </div>
+        )}
+
+        {/* Seletor de funil — botões, um por pipeline, com contagem de leads */}
+        <div className="-mx-4 flex items-center gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:flex-wrap md:overflow-visible md:px-0 md:pb-0 [&>*]:shrink-0">
+          {/* "Todos" com uma pipeline só seria a mesma pipeline duas vezes. */}
+          {FUNNELS.length > 1 && (
+            <FunnelTab active={isAll} onClick={() => setFunil("todos")} icon="🗂️" label="Todos" count={allLeads.length} loading={l2} />
           )}
+          {FUNNELS.map((f) => (
+            <FunnelTab key={f.id} active={funil === f.id} onClick={() => setFunil(f.id)}
+              icon={f.icon} label={f.shortName} count={countByFunnel[f.id] ?? 0} color={f.color} loading={l2} />
+          ))}
+        </div>
+
+        {/* SITUAÇÃO — "o que exige a minha atenção agora?". É uma pergunta
+            diferente de "em que etapa está?", por isso filtro e não coluna.
+            Contagens sobre o funil inteiro, sem os outros filtros: o chip
+            precisa mostrar quanto existe, senão o usuário não sabe se vale
+            clicar. */}
+        <div className="hidden md:block">{blocoSituacao}</div>
+
+        {/* Segmento — o que o lead É. Substitui as pipelines por tipo: o
+            vendedor filtra sem precisar trocar de quadro. */}
+        {USA_SEGMENTO && <div className="hidden md:block">{blocoSegmento}</div>}
+
+        {/* Filtros */}
+        <div className="flex flex-wrap items-center gap-2 md:gap-3">
+          <div className="min-w-0 basis-full md:basis-auto md:flex-1 md:max-w-sm">
+            <CarboSearchInput placeholder="Buscar por nome, CNPJ, cidade..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+          </div>
+          <FiltrosCelular ativos={filtrosLigados}>
+            {!isAll && <div className="space-y-1.5"><p className="text-xs text-muted-foreground">Estágio</p>{blocoEstagio}</div>}
+            {isGestor && <div className="space-y-1.5"><p className="text-xs text-muted-foreground">Vendedor</p>{blocoVendedor}</div>}
+            {blocoSituacao}
+            {USA_SEGMENTO && blocoSegmento}
+          </FiltrosCelular>
+          {!isAll && <div className="hidden md:block">{blocoEstagio}</div>}
+          {isGestor && <div className="hidden md:block">{blocoVendedor}</div>}
           {!isAll && (
             <div className="flex gap-1 border rounded-lg p-0.5">
               <Button variant={viewMode === "kanban" ? "default" : "ghost"} size="sm" className="h-7" onClick={() => setViewMode("kanban")}><LayoutGrid className="h-3 w-3" /></Button>

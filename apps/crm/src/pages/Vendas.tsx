@@ -1,3 +1,4 @@
+import { FiltrosCelular, FAIXA_KPI_CELULAR } from "@/components/FiltrosCelular";
 import { useState, useMemo, Fragment } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format, startOfMonth, parseISO } from "date-fns";
@@ -684,266 +685,9 @@ export default function Vendas() {
     entrou: "Veio de meses anteriores", orcamento: "Em orçamento", cancelado: "Canceladas",
   };
 
-  return (
-    <div className="p-4 md:p-6">
-      {/* ⚠️ 1500px, o mesmo teto do `CRM.tsx` e do `Pdvs.tsx` — as telas de
-          lista irmãs neste app. Estava em `max-w-6xl` (1152px), o mais estreito
-          de todas, e a coluna de ações ("Editar / Confirmar") saía cortada
-          enquanto sobrava margem vazia dos dois lados. O `p-4 md:p-6` de fora é
-          quem dá as bordas; teto e borda são coisas diferentes. */}
-      <div className="space-y-5 max-w-[1500px] mx-auto">
-        {/* Header */}
-        <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3">
-          <h1 className="text-2xl font-bold flex items-center gap-2"><ShoppingBag className="h-6 w-6 text-carbo-green" /> Vendas e Orçamentos</h1>
-          <div className="flex flex-col items-end gap-2 shrink-0">
-            <PeriodoFiltro value={periodo} onChange={mudarPeriodo} className="justify-end" />
-          </div>
-        </div>
-
-        {/* KPIs — o mês inteiro em uma equação que fecha:
-              Total vendido = Total faturado + Aguardando faturamento
-            e o que está "Aguardando" É o backlog que transborda para o mês que
-            vem. Orçamento e Cancelada ficam de fora da conta de propósito:
-            orçamento ainda não é venda, cancelada deixou de ser.
-            Para colaborador (vê só o próprio), a query já limita ao vendedor. */}
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-          <CarboCard padding="none" onClick={() => toggleKpi("vendido")}
-            className={`cursor-pointer transition ${kpiFilter === "vendido" ? "ring-2 ring-violet-400/60" : "hover:bg-muted/20"}`}>
-            <CarboCardContent className="p-3 text-center">
-              <p className="text-lg 2xl:text-xl font-bold text-violet-400 tabular-nums">{fmtBRL(totalVendido)}</p>
-              <p className="text-xs text-muted-foreground">Total vendido</p>
-              <p className="text-[10px] text-muted-foreground/70 mt-0.5">{vendidas.length} venda(s) no período</p>
-            </CarboCardContent>
-          </CarboCard>
-          <CarboCard padding="none" onClick={() => toggleKpi("faturado")}
-            className={`cursor-pointer transition ${kpiFilter === "faturado" ? "ring-2 ring-carbo-green/60" : "hover:bg-muted/20"}`}>
-            <CarboCardContent className="p-3 text-center">
-              <p className="text-lg 2xl:text-xl font-bold text-carbo-green tabular-nums">{fmtBRL(totalFaturado)}</p>
-              <p className="text-xs text-muted-foreground">Total faturado</p>
-              <p className="text-[10px] text-muted-foreground/70 mt-0.5">{faturadas.length} venda(s) faturada(s)</p>
-            </CarboCardContent>
-          </CarboCard>
-          <CarboCard padding="none" onClick={() => toggleKpi("aguardando")}
-            className={`cursor-pointer transition ${kpiFilter === "aguardando" ? "ring-2 ring-amber-400/60" : "hover:bg-muted/20"}`}>
-            <CarboCardContent className="p-3 text-center">
-              <p className="text-lg 2xl:text-xl font-bold text-amber-400 tabular-nums">{fmtBRL(totalAguardando)}</p>
-              <p className="text-xs text-muted-foreground">Aguardando faturamento</p>
-              {/* É esta linha que responde "quanto transborda": o card sozinho
-                  dá o valor, mas é a fração do vendido que diz se o mês fechou
-                  o próprio caixa ou empurrou metade para o seguinte. */}
-              <p className="text-[10px] text-muted-foreground/70 mt-0.5">
-                {aguardando.length} venda(s) a faturar
-                {totalVendido > 0 && ` · ${pctBacklog.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}% do vendido`}
-              </p>
-            </CarboCardContent>
-          </CarboCard>
-          <CarboCard padding="none" onClick={() => toggleKpi("entrou")}
-            className={`cursor-pointer transition ${kpiFilter === "entrou" ? "ring-2 ring-cyan-400/60" : "hover:bg-muted/20"}`}>
-            <CarboCardContent className="p-3 text-center">
-              <p className="text-lg 2xl:text-xl font-bold text-cyan-400 tabular-nums">{fmtBRL(totalVeioAntes)}</p>
-              <p className="text-xs text-muted-foreground">Veio de meses anteriores</p>
-              <p className="text-[10px] text-muted-foreground/70 mt-0.5">
-                {veioAntes.length} venda(s) transbordada(s)
-                {totalVendido > 0 && ` · ${pctVeioAntes.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}% do vendido`}
-              </p>
-            </CarboCardContent>
-          </CarboCard>
-          <CarboCard padding="none" onClick={() => toggleKpi("orcamento")}
-            className={`cursor-pointer transition ${kpiFilter === "orcamento" ? "ring-2 ring-sky-400/60" : "hover:bg-muted/20"}`}>
-            <CarboCardContent className="p-3 text-center">
-              <p className="text-lg 2xl:text-xl font-bold text-sky-400 tabular-nums">{fmtBRL(totalOrcamento)}</p>
-              <p className="text-xs text-muted-foreground">Em orçamento</p>
-              <p className="text-[10px] text-muted-foreground/70 mt-0.5">{quotes.length} orçamento(s)</p>
-            </CarboCardContent>
-          </CarboCard>
-          <CarboCard padding="none" onClick={() => toggleKpi("cancelado")}
-            className={`cursor-pointer transition ${kpiFilter === "cancelado" ? "ring-2 ring-red-400/60" : "hover:bg-muted/20"}`}>
-            <CarboCardContent className="p-3 text-center">
-              <p className="text-2xl font-bold text-red-400 tabular-nums">{cancelled}</p>
-              <p className="text-xs text-muted-foreground">Canceladas</p>
-            </CarboCardContent>
-          </CarboCard>
-        </div>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground -mt-2">
-          {kpiFilter && (
-            <span className="flex items-center gap-2">
-              Filtrando por <strong className="text-foreground">{KPI_LABEL[kpiFilter]}</strong> ({tableRows.length})
-              <button className="inline-flex items-center gap-1 text-primary hover:underline" onClick={() => setKpiFilter(null)}>
-                <X className="h-3 w-3" /> limpar
-              </button>
-            </span>
-          )}
-
-          {/* ⚠️ O chip aparece mesmo com zero Bling no recorte, de propósito:
-              é ele que explica por que o total desta tela pode não bater com
-              outra. Escondido quando não há nada escondido, a pessoa procuraria
-              a diferença no lugar errado. */}
-          <label className="flex cursor-pointer items-center gap-1.5 select-none">
-            <input
-              type="checkbox"
-              className="h-3.5 w-3.5 accent-current cursor-pointer"
-              checked={ocultarBling}
-              onChange={(e) => setOcultarBling(e.target.checked)}
-            />
-            <span>
-              Ocultar pedidos Bling
-              {blingNoRecorte.length > 0 && (
-                <strong className="text-foreground">
-                  {" "}({blingNoRecorte.length} · {fmtBRL(blingNoRecorte.reduce((s, v) => s + v.total, 0))})
-                </strong>
-              )}
-            </span>
-          </label>
-        </div>
-
-        {/* ── Unidade de negócio ──
-            Botões, não um <select>: são quatro, combinam entre si (dá para ver
-            Revenda + Consumo juntos) e cada um carrega a contagem — coisas que
-            um select de escolha única não faz. */}
-        <div className="flex flex-wrap items-center gap-2 -mt-1">
-          <span className="text-xs text-muted-foreground">Unidade de negócio:</span>
-          {SEGMENTOS.map((s) => {
-            const Icone = s.icone;
-            const ativo = segsAtivos.has(s.id);
-            const qtd = contagemPorSeg.get(s.id) ?? 0;
-            return (
-              <button
-                key={s.id}
-                onClick={() => alternarSeg(s.id)}
-                disabled={qtd === 0 && !ativo}
-                title={qtd === 0 ? `Nenhum pedido em ${s.label} neste período` : `Filtrar por ${s.label}`}
-                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition
-                  ${ativo ? `${s.bg} border-current ${s.cor} font-medium` : "border-border text-muted-foreground hover:bg-muted/40"}
-                  ${qtd === 0 && !ativo ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
-              >
-                <Icone className="h-3.5 w-3.5" />
-                {s.label}
-                <span className="tabular-nums opacity-70">{qtd}</span>
-              </button>
-            );
-          })}
-          {segsAtivos.size > 0 && (
-            <button className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-              onClick={() => setSegsAtivos(new Set())}>
-              <X className="h-3 w-3" /> limpar
-            </button>
-          )}
-        </div>
-
-        {/* ── Produto × Serviço ──
-            Linha própria, e combina com a de cima: Revenda + Serviço filtra os
-            dois ao mesmo tempo. "Serviço" é a linha com `kind=service` (hoje,
-            toda descarbonização). */}
-        <div className="flex flex-wrap items-center gap-2 -mt-1">
-          <span className="text-xs text-muted-foreground">Tipo:</span>
-          {TIPOS.map((t) => {
-            const Icone = t.icone;
-            const ativo = tiposAtivos.has(t.id);
-            const qtd = contagemPorTipo.get(t.id) ?? 0;
-            return (
-              <button
-                key={t.id}
-                onClick={() => alternarTipo(t.id)}
-                disabled={qtd === 0 && !ativo}
-                title={t.id === "misto"
-                  ? "Produto e serviço"
-                  : qtd === 0 ? `Nenhum pedido de ${t.label} neste período` : `Filtrar por ${t.label}`}
-                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition
-                  ${ativo ? `${t.bg} border-current ${t.cor} font-medium` : "border-border text-muted-foreground hover:bg-muted/40"}
-                  ${qtd === 0 && !ativo ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
-              >
-                <Icone className="h-3.5 w-3.5" />
-                {t.label}
-                <span className="tabular-nums opacity-70">{qtd}</span>
-              </button>
-            );
-          })}
-          {tiposAtivos.size > 0 && (
-            <button className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-              onClick={() => setTiposAtivos(new Set())}>
-              <X className="h-3 w-3" /> limpar
-            </button>
-          )}
-        </div>
-
-        {/* Filtros */}
-        <div className="flex gap-2 flex-wrap">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Buscar cliente, CNPJ, pedido…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8" />
-          </div>
-          {isHead && (
-            <Select value={vendedorFilter} onValueChange={setVendedor}>
-              <SelectTrigger className="w-[220px]"><SelectValue placeholder="Todos os vendedores" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">Todos os vendedores</SelectItem>
-                {VENDEDORES.map((m) => (
-                  <SelectItem key={m.id} value={m.id}>
-                    <span className="flex items-center gap-2">
-                      {m.name}
-                      {m.avulso
-                        ? <span className="text-[10px] font-semibold text-amber-500 border border-amber-500/30 rounded px-1">Avulso</span>
-                        : <span className="text-[10px] font-semibold text-carbo-green border border-carbo-green/30 rounded px-1">Vendedor</span>}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-        </div>
-
-        {/* Busca ativa: os filtros de período e vendedor ficam de fora, e isso
-            precisa estar ESCRITO — senão o KPI muda e parece defeito. */}
-        {buscaAtiva && (
-          <div className="flex items-start gap-2 rounded-lg border border-carbo-green/30 bg-carbo-green/[0.06] px-3 py-2 text-xs">
-            <Search className="h-3.5 w-3.5 shrink-0 mt-0.5 text-carbo-green" />
-            <span className="text-muted-foreground">
-              Buscando <b className="text-foreground">"{search.trim()}"</b> em todo o histórico, sem filtro de período e vendedor.
-              {" "}
-              <button type="button" onClick={() => setSearch("")}
-                className="font-semibold text-carbo-green hover:underline">
-                Limpar busca
-              </button>
-            </span>
-          </div>
-        )}
-
-        {/* Tabela */}
-        {isLoading ? (
-          <CarboCard><CarboCardContent className="py-16 text-center text-muted-foreground">Carregando…</CarboCardContent></CarboCard>
-        ) : tableRows.length === 0 ? (
-          <CarboCard><CarboCardContent className="py-16 text-center space-y-3"><TrendingUp className="h-12 w-12 mx-auto text-muted-foreground/30" /><p className="text-muted-foreground">{buscaAtiva ? "Nada encontrado no histórico para essa busca." : "Nenhum registro encontrado neste período."}</p></CarboCardContent></CarboCard>
-        ) : (
-          <CarboCard padding="none">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[960px] text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/30">
-                    {isHead && (
-                      <th className="w-10 p-3">
-                        <Checkbox checked={tableRows.length > 0 && selectedIds.size === tableRows.length}
-                          onCheckedChange={(c) => { if (c) setSelectedIds(new Set(tableRows.map((v) => v.id))); else setSelectedIds(new Set()); }}
-                          aria-label="Selecionar todos" />
-                      </th>
-                    )}
-                    <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Status</th>
-                    <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Pedido</th>
-                    <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Data</th>
-                    <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Cliente</th>
-                    <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Cidade/UF</th>
-                    {/* ⚠️ "Vendedor" e "Criado por" são perguntas DIFERENTES e
-                        andam juntas: a primeira é de quem é a venda (e a
-                        comissão), a segunda é quem digitou. Elas coincidem na
-                        maioria das linhas — e é justamente por isso que a
-                        divergência precisa aparecer, em vez de ser presumida. */}
-                    {isHead && <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Vendedor</th>}
-                    {isHead && <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide whitespace-nowrap">Criado por</th>}
-                    <th className="text-right p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Total</th>
-                    <th className="text-right p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide whitespace-nowrap">Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {tableRows.map((venda) => {
+  // Uma venda montada uma vez e desenhada de dois jeitos: linha da tabela
+  // (computador) e cartão (celular). Ações e detalhe são os MESMOS nos dois.
+  const montar = (venda: (typeof tableRows)[number]) => {
                     const isQuote = venda.status === "quote";
                     // Financeiro defensivo: pedidos antigos podem não ter subtotal/discount.
                     const itemsBruto = venda.items.reduce((s, it) => s + num(it.quantity) * num(it.unit_price), 0);
@@ -962,110 +706,13 @@ export default function Vendas() {
                     const criadorDiferente = !!criadorNome && !!vendedorNome && criadorNome !== vendedorNome;
                     const buyerNotes = venda.buyer_notes && venda.buyer_notes !== venda.notes ? venda.buyer_notes : null;
                     const generalNotes = venda.general_notes && venda.general_notes !== venda.notes && venda.general_notes !== venda.buyer_notes ? venda.general_notes : null;
-                    return (
-                      <Fragment key={venda.id}>
-                        <tr
-                          className={`border-b transition-colors cursor-pointer hover:bg-muted/20 ${isQuote ? "bg-amber-500/3 border-l-2 border-l-amber-500/30" : estaCancelada(venda) ? "opacity-50" : ""} ${expandedId === venda.id ? "bg-muted/20" : ""} ${selectedIds.has(venda.id) ? "bg-carbo-green/5" : ""}`}
-                          onClick={() => setExpandedId(expandedId === venda.id ? null : venda.id)}
-                        >
-                          {isHead && (
-                            <td className="p-3" onClick={(e) => e.stopPropagation()}>
-                              <Checkbox checked={selectedIds.has(venda.id)}
-                                onCheckedChange={(c) => setSelectedIds((prev) => { const next = new Set(prev); if (c) next.add(venda.id); else next.delete(venda.id); return next; })}
-                                aria-label={`Selecionar ${venda.order_number}`} />
-                            </td>
-                          )}
-                          <td className="p-3 whitespace-nowrap">{(() => { const b = statusBadge(venda); return <CarboBadge variant={b.variant} size="sm">{b.label}</CarboBadge>; })()}</td>
-                          {/* Número + as duas marcas do pedido: unidade de
-                              negócio e recorrência. Ficam aqui, coladas no
-                              número, porque é a coluna que o olho procura
-                              primeiro ao varrer a lista. */}
-                          <td className="p-3 font-mono text-xs font-medium">
-                            <span className="inline-flex items-center gap-1.5">
-                              {venda.order_number}
-                              {(() => {
-                                const s = SEGMENTOS.find((x) => x.id === segmentoDe(venda))!;
-                                const Icone = s.icone;
-                                return (
-                                  <span className="inline-flex shrink-0" title={`Unidade de negócio: ${s.label}`} aria-label={s.label}>
-                                    <Icone className={`h-3.5 w-3.5 ${s.cor}`} />
-                                  </span>
-                                );
-                              })()}
-                              {ehRecorrente(venda) && (
-                                <span
-                                  className="inline-flex items-center rounded bg-teal-500/15 p-0.5 text-teal-400"
-                                  title="Pedido recorrente"
-                                  aria-label="Pedido recorrente"
-                                >
-                                  <Repeat className="h-3 w-3" />
-                                </span>
-                              )}
-                            </span>
-                          </td>
-                          {/* ⚠️ TRÊS casos, e cada um tem uma marca — ou marca
-                              nenhuma. A distinção é o ponto:
-
-                              ↩ mês (ciano) = venda fechada num mês e faturada
-                                  no seguinte. É o transbordo de verdade.
-                              ✱ (âmbar)     = `sale_date` corrigida à mão; pode
-                                  ser dentro do mesmo mês, não diz nada de caixa.
-                              recorrente    = NADA aqui. A data dela sempre
-                                  difere da criação, porque quem a move é o
-                                  agendador — não é correção nem transbordo. A
-                                  marca dela é o 🔄 na coluna PEDIDO.
-
-                              Sem o corte da recorrência, outubro mostrava ↩ em
-                              oito linhas e o card dizia 98% de transbordo, num
-                              mês cujo transbordo real era zero. */}
-                          <td className="p-3 text-muted-foreground whitespace-nowrap">
-                            {fmtDate(effectiveDate(venda))}
-                            {veioDeMesAnterior(venda) ? (
-                              <span
-                                className="ml-1.5 rounded bg-cyan-500/15 px-1 py-0.5 text-[9px] font-semibold uppercase text-cyan-400"
-                                title={`Vendido em ${mesOrigemCurto(venda)} e faturado neste mês — transbordo`}
-                              >
-                                ↩ {mesOrigemCurto(venda)}
-                              </span>
-                            ) : (
-                              !ehRecorrente(venda) &&
-                              venda.sale_date && venda.sale_date !== venda.created_at.substring(0, 10) && (
-                                <span className="ml-1 text-[10px] text-amber-500 font-medium" title="Data da venda corrigida">✱</span>
-                              )
-                            )}
-                          </td>
-                          <td className="p-3 font-medium max-w-[180px] truncate">{venda.customer_name}</td>
-                          <td className="p-3 text-muted-foreground whitespace-nowrap">{[venda.delivery_city, venda.delivery_state].filter(Boolean).join("/") || "—"}</td>
-                          {isHead && (
-                            <td className="p-3 text-muted-foreground">
-                              <span>{(venda.vendedor_id && nomeById[venda.vendedor_id]) || venda.vendedor_name || "—"}</span>
-                            </td>
-                          )}
-                          {isHead && (
-                            <td className="p-3 text-muted-foreground">
-                              {criadorNome ? (
-                                <span className={criadorDiferente ? "font-medium text-amber-500" : undefined}
-                                  title={criadorDiferente
-                                    ? "Lançada por uma pessoa e atribuída a outra"
-                                    : "Quem lançou é o próprio vendedor"}>
-                                  {criadorNome}
-                                </span>
-                              ) : (
-                                // ⚠️ "—" e não o nome do vendedor: venda anterior a
-                                // 22/09/2026 não tem criador gravado, e chutar que foi
-                                // ele apagaria exatamente o que esta coluna mostra.
-                                <span title="Não registrado">—</span>
-                              )}
-                            </td>
-                          )}
-                          <td className="p-3 text-right font-bold tabular-nums">{fmtBRL(venda.total)}</td>
-                          <td className="p-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+    const acoes = (
                             <div className="flex items-center justify-end gap-1.5">
                               {isQuote ? (
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>
                                     <button className="h-8 px-2.5 inline-flex items-center gap-1 rounded-md text-xs font-medium whitespace-nowrap bg-carbo-green/10 text-carbo-green hover:bg-carbo-green/20 border border-carbo-green/30 transition-colors" title="Editar ou converter o orçamento">
-                                      <span className="hidden sm:inline">Editar / Converter</span><span className="sm:hidden">Ações</span>
+                                      <span className="hidden sm:inline">Editar / Converter</span><span className="sm:hidden" data-curto>Ações</span>
                                       <ChevronDown className="h-3 w-3" />
                                     </button>
                                   </DropdownMenuTrigger>
@@ -1121,17 +768,8 @@ export default function Vendas() {
                                 </>
                               )}
                             </div>
-                          </td>
-                        </tr>
-                        {expandedId === venda.id && (
-                          <tr className="border-b bg-muted/10">
-                            {/* ⚠️ +1 no ramo `isHead`: entrou a coluna "Criado por".
-                                colSpan errado não dá erro — desalinha a faixa de
-                                detalhe e some com a borda da última coluna. */}
-                            <td colSpan={isHead ? 10 : 7} className="p-0">
-                              {/* No celular a tabela rola de lado (min-w); o detalhe fica PRESO à
-                                  parte visível (sticky + largura da tela), senão seria lido arrastando. */}
-                              <div className="sticky left-0 w-[calc(100vw-2rem)] px-4 py-4 space-y-4 md:w-auto md:px-6">
+    );
+    const detalhe = (<>
                               {/* Cliente */}
                               <div>
                                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Cliente</p>
@@ -1355,6 +993,446 @@ export default function Vendas() {
                                   </Button>
                                 </div>
                               )}
+                              </>);
+    return { isQuote, itemsBruto, itemsDesc, subtotalDet, descontoDet, percentDet, vendedorNome, criadorNome, criadorDiferente, buyerNotes, generalNotes, acoes, detalhe };
+  };
+
+  // Filtros: no computador ficam na tela; no celular, atrás do botão "Filtros"
+  // (`FiltrosCelular`). Os MESMOS elementos nos dois lugares — um só estado.
+  const blocoBling = (
+          <label className="flex cursor-pointer items-center gap-1.5 select-none">
+            <input
+              type="checkbox"
+              className="h-3.5 w-3.5 accent-current cursor-pointer"
+              checked={ocultarBling}
+              onChange={(e) => setOcultarBling(e.target.checked)}
+            />
+            <span>
+              Ocultar pedidos Bling
+              {blingNoRecorte.length > 0 && (
+                <strong className="text-foreground">
+                  {" "}({blingNoRecorte.length} · {fmtBRL(blingNoRecorte.reduce((s, v) => s + v.total, 0))})
+                </strong>
+              )}
+            </span>
+          </label>
+  );
+  const blocoUnidade = (
+        <div className="flex flex-wrap items-center gap-2 -mt-1">
+          <span className="text-xs text-muted-foreground">Unidade de negócio:</span>
+          {SEGMENTOS.map((s) => {
+            const Icone = s.icone;
+            const ativo = segsAtivos.has(s.id);
+            const qtd = contagemPorSeg.get(s.id) ?? 0;
+            return (
+              <button
+                key={s.id}
+                onClick={() => alternarSeg(s.id)}
+                disabled={qtd === 0 && !ativo}
+                title={qtd === 0 ? `Nenhum pedido em ${s.label} neste período` : `Filtrar por ${s.label}`}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition
+                  ${ativo ? `${s.bg} border-current ${s.cor} font-medium` : "border-border text-muted-foreground hover:bg-muted/40"}
+                  ${qtd === 0 && !ativo ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
+              >
+                <Icone className="h-3.5 w-3.5" />
+                {s.label}
+                <span className="tabular-nums opacity-70">{qtd}</span>
+              </button>
+            );
+          })}
+          {segsAtivos.size > 0 && (
+            <button className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+              onClick={() => setSegsAtivos(new Set())}>
+              <X className="h-3 w-3" /> limpar
+            </button>
+          )}
+        </div>
+  );
+  const blocoTipo = (
+        <div className="flex flex-wrap items-center gap-2 -mt-1">
+          <span className="text-xs text-muted-foreground">Tipo:</span>
+          {TIPOS.map((t) => {
+            const Icone = t.icone;
+            const ativo = tiposAtivos.has(t.id);
+            const qtd = contagemPorTipo.get(t.id) ?? 0;
+            return (
+              <button
+                key={t.id}
+                onClick={() => alternarTipo(t.id)}
+                disabled={qtd === 0 && !ativo}
+                title={t.id === "misto"
+                  ? "Produto e serviço"
+                  : qtd === 0 ? `Nenhum pedido de ${t.label} neste período` : `Filtrar por ${t.label}`}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition
+                  ${ativo ? `${t.bg} border-current ${t.cor} font-medium` : "border-border text-muted-foreground hover:bg-muted/40"}
+                  ${qtd === 0 && !ativo ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
+              >
+                <Icone className="h-3.5 w-3.5" />
+                {t.label}
+                <span className="tabular-nums opacity-70">{qtd}</span>
+              </button>
+            );
+          })}
+          {tiposAtivos.size > 0 && (
+            <button className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+              onClick={() => setTiposAtivos(new Set())}>
+              <X className="h-3 w-3" /> limpar
+            </button>
+          )}
+        </div>
+  );
+  const blocoVendedor = (<Select value={vendedorFilter} onValueChange={setVendedor}>
+              <SelectTrigger className="w-full md:w-[220px]"><SelectValue placeholder="Todos os vendedores" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">Todos os vendedores</SelectItem>
+                {VENDEDORES.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>
+                    <span className="flex items-center gap-2">
+                      {m.name}
+                      {m.avulso
+                        ? <span className="text-[10px] font-semibold text-amber-500 border border-amber-500/30 rounded px-1">Avulso</span>
+                        : <span className="text-[10px] font-semibold text-carbo-green border border-carbo-green/30 rounded px-1">Vendedor</span>}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+  );
+  const filtrosLigados = segsAtivos.size + tiposAtivos.size
+    + (vendedorFilter !== "__all__" ? 1 : 0) + (ocultarBling ? 0 : 1);
+
+  return (
+    <div className="p-4 md:p-6">
+      {/* ⚠️ 1500px, o mesmo teto do `CRM.tsx` e do `Pdvs.tsx` — as telas de
+          lista irmãs neste app. Estava em `max-w-6xl` (1152px), o mais estreito
+          de todas, e a coluna de ações ("Editar / Confirmar") saía cortada
+          enquanto sobrava margem vazia dos dois lados. O `p-4 md:p-6` de fora é
+          quem dá as bordas; teto e borda são coisas diferentes. */}
+      <div className="space-y-5 max-w-[1500px] mx-auto">
+        {/* Header */}
+        <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3">
+          <h1 className="text-2xl font-bold flex items-center gap-2"><ShoppingBag className="h-6 w-6 text-carbo-green" /> Vendas e Orçamentos</h1>
+          <div className="flex flex-col items-stretch gap-2 shrink-0 lg:items-end">
+            <PeriodoFiltro value={periodo} onChange={mudarPeriodo} className="lg:justify-end" />
+          </div>
+        </div>
+
+        {/* KPIs — o mês inteiro em uma equação que fecha:
+              Total vendido = Total faturado + Aguardando faturamento
+            e o que está "Aguardando" É o backlog que transborda para o mês que
+            vem. Orçamento e Cancelada ficam de fora da conta de propósito:
+            orçamento ainda não é venda, cancelada deixou de ser.
+            Para colaborador (vê só o próprio), a query já limita ao vendedor. */}
+        <div className={`${FAIXA_KPI_CELULAR} md:grid md:grid-cols-3 xl:grid-cols-6 md:gap-3`}>
+          <CarboCard padding="none" onClick={() => toggleKpi("vendido")}
+            className={`cursor-pointer transition ${kpiFilter === "vendido" ? "ring-2 ring-violet-400/60" : "hover:bg-muted/20"}`}>
+            <CarboCardContent className="p-3 text-center">
+              <p className="text-lg 2xl:text-xl font-bold text-violet-400 tabular-nums">{fmtBRL(totalVendido)}</p>
+              <p className="text-xs text-muted-foreground">Total vendido</p>
+              <p className="text-[10px] text-muted-foreground/70 mt-0.5">{vendidas.length} venda(s) no período</p>
+            </CarboCardContent>
+          </CarboCard>
+          <CarboCard padding="none" onClick={() => toggleKpi("faturado")}
+            className={`cursor-pointer transition ${kpiFilter === "faturado" ? "ring-2 ring-carbo-green/60" : "hover:bg-muted/20"}`}>
+            <CarboCardContent className="p-3 text-center">
+              <p className="text-lg 2xl:text-xl font-bold text-carbo-green tabular-nums">{fmtBRL(totalFaturado)}</p>
+              <p className="text-xs text-muted-foreground">Total faturado</p>
+              <p className="text-[10px] text-muted-foreground/70 mt-0.5">{faturadas.length} venda(s) faturada(s)</p>
+            </CarboCardContent>
+          </CarboCard>
+          <CarboCard padding="none" onClick={() => toggleKpi("aguardando")}
+            className={`cursor-pointer transition ${kpiFilter === "aguardando" ? "ring-2 ring-amber-400/60" : "hover:bg-muted/20"}`}>
+            <CarboCardContent className="p-3 text-center">
+              <p className="text-lg 2xl:text-xl font-bold text-amber-400 tabular-nums">{fmtBRL(totalAguardando)}</p>
+              <p className="text-xs text-muted-foreground">Aguardando faturamento</p>
+              {/* É esta linha que responde "quanto transborda": o card sozinho
+                  dá o valor, mas é a fração do vendido que diz se o mês fechou
+                  o próprio caixa ou empurrou metade para o seguinte. */}
+              <p className="text-[10px] text-muted-foreground/70 mt-0.5">
+                {aguardando.length} venda(s) a faturar
+                {totalVendido > 0 && ` · ${pctBacklog.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}% do vendido`}
+              </p>
+            </CarboCardContent>
+          </CarboCard>
+          <CarboCard padding="none" onClick={() => toggleKpi("entrou")}
+            className={`cursor-pointer transition ${kpiFilter === "entrou" ? "ring-2 ring-cyan-400/60" : "hover:bg-muted/20"}`}>
+            <CarboCardContent className="p-3 text-center">
+              <p className="text-lg 2xl:text-xl font-bold text-cyan-400 tabular-nums">{fmtBRL(totalVeioAntes)}</p>
+              <p className="text-xs text-muted-foreground">Veio de meses anteriores</p>
+              <p className="text-[10px] text-muted-foreground/70 mt-0.5">
+                {veioAntes.length} venda(s) transbordada(s)
+                {totalVendido > 0 && ` · ${pctVeioAntes.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}% do vendido`}
+              </p>
+            </CarboCardContent>
+          </CarboCard>
+          <CarboCard padding="none" onClick={() => toggleKpi("orcamento")}
+            className={`cursor-pointer transition ${kpiFilter === "orcamento" ? "ring-2 ring-sky-400/60" : "hover:bg-muted/20"}`}>
+            <CarboCardContent className="p-3 text-center">
+              <p className="text-lg 2xl:text-xl font-bold text-sky-400 tabular-nums">{fmtBRL(totalOrcamento)}</p>
+              <p className="text-xs text-muted-foreground">Em orçamento</p>
+              <p className="text-[10px] text-muted-foreground/70 mt-0.5">{quotes.length} orçamento(s)</p>
+            </CarboCardContent>
+          </CarboCard>
+          <CarboCard padding="none" onClick={() => toggleKpi("cancelado")}
+            className={`cursor-pointer transition ${kpiFilter === "cancelado" ? "ring-2 ring-red-400/60" : "hover:bg-muted/20"}`}>
+            <CarboCardContent className="p-3 text-center">
+              <p className="text-2xl font-bold text-red-400 tabular-nums">{cancelled}</p>
+              <p className="text-xs text-muted-foreground">Canceladas</p>
+            </CarboCardContent>
+          </CarboCard>
+        </div>
+        <div className={`${kpiFilter ? "flex" : "hidden md:flex"} flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground -mt-2`}>
+          {kpiFilter && (
+            <span className="flex items-center gap-2">
+              Filtrando por <strong className="text-foreground">{KPI_LABEL[kpiFilter]}</strong> ({tableRows.length})
+              <button className="inline-flex items-center gap-1 text-primary hover:underline" onClick={() => setKpiFilter(null)}>
+                <X className="h-3 w-3" /> limpar
+              </button>
+            </span>
+          )}
+
+          {/* ⚠️ O chip aparece mesmo com zero Bling no recorte, de propósito:
+              é ele que explica por que o total desta tela pode não bater com
+              outra. Escondido quando não há nada escondido, a pessoa procuraria
+              a diferença no lugar errado. */}
+          <span className="hidden md:inline-flex">{blocoBling}</span>
+        </div>
+
+        {/* ── Unidade de negócio ──
+            Botões, não um <select>: são quatro, combinam entre si (dá para ver
+            Revenda + Consumo juntos) e cada um carrega a contagem — coisas que
+            um select de escolha única não faz. */}
+        <div className="hidden md:block">{blocoUnidade}</div>
+
+        {/* ── Produto × Serviço ──
+            Linha própria, e combina com a de cima: Revenda + Serviço filtra os
+            dois ao mesmo tempo. "Serviço" é a linha com `kind=service` (hoje,
+            toda descarbonização). */}
+        <div className="hidden md:block">{blocoTipo}</div>
+
+        {/* Filtros */}
+        <div className="flex gap-2 md:flex-wrap">
+          <div className="relative flex-1 min-w-0 md:min-w-[200px]">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input placeholder="Buscar cliente, CNPJ, pedido…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8" />
+          </div>
+          <FiltrosCelular ativos={filtrosLigados}>
+            {isHead && <div className="space-y-1.5"><p className="text-xs text-muted-foreground">Vendedor</p>{blocoVendedor}</div>}
+            {blocoUnidade}
+            {blocoTipo}
+            <div className="text-sm">{blocoBling}</div>
+          </FiltrosCelular>
+          {isHead && <div className="hidden md:block">{blocoVendedor}</div>}
+        </div>
+
+        {/* Busca ativa: os filtros de período e vendedor ficam de fora, e isso
+            precisa estar ESCRITO — senão o KPI muda e parece defeito. */}
+        {buscaAtiva && (
+          <div className="flex items-start gap-2 rounded-lg border border-carbo-green/30 bg-carbo-green/[0.06] px-3 py-2 text-xs">
+            <Search className="h-3.5 w-3.5 shrink-0 mt-0.5 text-carbo-green" />
+            <span className="text-muted-foreground">
+              Buscando <b className="text-foreground">"{search.trim()}"</b> em todo o histórico, sem filtro de período e vendedor.
+              {" "}
+              <button type="button" onClick={() => setSearch("")}
+                className="font-semibold text-carbo-green hover:underline">
+                Limpar busca
+              </button>
+            </span>
+          </div>
+        )}
+
+        {/* Tabela */}
+        {isLoading ? (
+          <CarboCard><CarboCardContent className="py-16 text-center text-muted-foreground">Carregando…</CarboCardContent></CarboCard>
+        ) : tableRows.length === 0 ? (
+          <CarboCard><CarboCardContent className="py-16 text-center space-y-3"><TrendingUp className="h-12 w-12 mx-auto text-muted-foreground/30" /><p className="text-muted-foreground">{buscaAtiva ? "Nada encontrado no histórico para essa busca." : "Nenhum registro encontrado neste período."}</p></CarboCardContent></CarboCard>
+        ) : (
+          <>
+          {/* Celular: um cartão por venda — cliente e valor em destaque, as
+              ações embaixo e o mesmo detalhe da tabela ao tocar. */}
+          <div className="space-y-2 md:hidden">
+            {tableRows.map((venda) => {
+              const m = montar(venda);
+              const aberto = expandedId === venda.id;
+              const b = statusBadge(venda);
+              const cidade = [venda.delivery_city, venda.delivery_state].filter(Boolean).join("/");
+              return (
+                <CarboCard key={venda.id} padding="none"
+                  className={`overflow-hidden ${m.isQuote ? "border-l-2 border-l-amber-500/50" : ""} ${estaCancelada(venda) ? "opacity-60" : ""} ${selectedIds.has(venda.id) ? "ring-1 ring-carbo-green/50" : ""}`}>
+                  <button type="button" className="w-full p-3 text-left" onClick={() => setExpandedId(aberto ? null : venda.id)}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold">{venda.customer_name}</p>
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                          <span className="font-mono">{venda.order_number}</span>
+                          {" · "}{fmtDate(effectiveDate(venda))}
+                          {cidade && ` · ${cidade}`}
+                        </p>
+                        {isHead && m.vendedorNome && <p className="truncate text-xs text-muted-foreground">{m.vendedorNome}</p>}
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="font-bold tabular-nums">{fmtBRL(venda.total)}</p>
+                        <span className="mt-1 inline-block"><CarboBadge variant={b.variant} size="sm">{b.label}</CarboBadge></span>
+                      </div>
+                    </div>
+                  </button>
+                  <div className="flex items-center justify-between gap-2 border-t border-border/60 px-3 py-2">
+                    {isHead ? (
+                      <Checkbox checked={selectedIds.has(venda.id)}
+                        onCheckedChange={(c) => setSelectedIds((prev) => { const next = new Set(prev); if (c) next.add(venda.id); else next.delete(venda.id); return next; })}
+                        aria-label={`Selecionar ${venda.order_number}`} />
+                    ) : <span />}
+                    {/* No cartão há espaço: os botões mostram o texto que a tabela esconde no celular. */}
+                    <div className="[&_span.hidden]:!inline [&_[data-curto]]:!hidden">{m.acoes}</div>
+                  </div>
+                  {aberto && <div className="space-y-4 border-t border-border/60 bg-muted/10 px-3 py-3">{m.detalhe}</div>}
+                </CarboCard>
+              );
+            })}
+          </div>
+          <CarboCard padding="none" className="hidden md:block">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[960px] text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/30">
+                    {isHead && (
+                      <th className="w-10 p-3">
+                        <Checkbox checked={tableRows.length > 0 && selectedIds.size === tableRows.length}
+                          onCheckedChange={(c) => { if (c) setSelectedIds(new Set(tableRows.map((v) => v.id))); else setSelectedIds(new Set()); }}
+                          aria-label="Selecionar todos" />
+                      </th>
+                    )}
+                    <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Status</th>
+                    <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Pedido</th>
+                    <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Data</th>
+                    <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Cliente</th>
+                    <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Cidade/UF</th>
+                    {/* ⚠️ "Vendedor" e "Criado por" são perguntas DIFERENTES e
+                        andam juntas: a primeira é de quem é a venda (e a
+                        comissão), a segunda é quem digitou. Elas coincidem na
+                        maioria das linhas — e é justamente por isso que a
+                        divergência precisa aparecer, em vez de ser presumida. */}
+                    {isHead && <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Vendedor</th>}
+                    {isHead && <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide whitespace-nowrap">Criado por</th>}
+                    <th className="text-right p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Total</th>
+                    <th className="text-right p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide whitespace-nowrap">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tableRows.map((venda) => {
+                    const { isQuote, itemsBruto, itemsDesc, subtotalDet, descontoDet, percentDet, vendedorNome, criadorNome, criadorDiferente, buyerNotes, generalNotes, acoes, detalhe } = montar(venda);
+                    return (
+                      <Fragment key={venda.id}>
+                        <tr
+                          className={`border-b transition-colors cursor-pointer hover:bg-muted/20 ${isQuote ? "bg-amber-500/3 border-l-2 border-l-amber-500/30" : estaCancelada(venda) ? "opacity-50" : ""} ${expandedId === venda.id ? "bg-muted/20" : ""} ${selectedIds.has(venda.id) ? "bg-carbo-green/5" : ""}`}
+                          onClick={() => setExpandedId(expandedId === venda.id ? null : venda.id)}
+                        >
+                          {isHead && (
+                            <td className="p-3" onClick={(e) => e.stopPropagation()}>
+                              <Checkbox checked={selectedIds.has(venda.id)}
+                                onCheckedChange={(c) => setSelectedIds((prev) => { const next = new Set(prev); if (c) next.add(venda.id); else next.delete(venda.id); return next; })}
+                                aria-label={`Selecionar ${venda.order_number}`} />
+                            </td>
+                          )}
+                          <td className="p-3 whitespace-nowrap">{(() => { const b = statusBadge(venda); return <CarboBadge variant={b.variant} size="sm">{b.label}</CarboBadge>; })()}</td>
+                          {/* Número + as duas marcas do pedido: unidade de
+                              negócio e recorrência. Ficam aqui, coladas no
+                              número, porque é a coluna que o olho procura
+                              primeiro ao varrer a lista. */}
+                          <td className="p-3 font-mono text-xs font-medium">
+                            <span className="inline-flex items-center gap-1.5">
+                              {venda.order_number}
+                              {(() => {
+                                const s = SEGMENTOS.find((x) => x.id === segmentoDe(venda))!;
+                                const Icone = s.icone;
+                                return (
+                                  <span className="inline-flex shrink-0" title={`Unidade de negócio: ${s.label}`} aria-label={s.label}>
+                                    <Icone className={`h-3.5 w-3.5 ${s.cor}`} />
+                                  </span>
+                                );
+                              })()}
+                              {ehRecorrente(venda) && (
+                                <span
+                                  className="inline-flex items-center rounded bg-teal-500/15 p-0.5 text-teal-400"
+                                  title="Pedido recorrente"
+                                  aria-label="Pedido recorrente"
+                                >
+                                  <Repeat className="h-3 w-3" />
+                                </span>
+                              )}
+                            </span>
+                          </td>
+                          {/* ⚠️ TRÊS casos, e cada um tem uma marca — ou marca
+                              nenhuma. A distinção é o ponto:
+
+                              ↩ mês (ciano) = venda fechada num mês e faturada
+                                  no seguinte. É o transbordo de verdade.
+                              ✱ (âmbar)     = `sale_date` corrigida à mão; pode
+                                  ser dentro do mesmo mês, não diz nada de caixa.
+                              recorrente    = NADA aqui. A data dela sempre
+                                  difere da criação, porque quem a move é o
+                                  agendador — não é correção nem transbordo. A
+                                  marca dela é o 🔄 na coluna PEDIDO.
+
+                              Sem o corte da recorrência, outubro mostrava ↩ em
+                              oito linhas e o card dizia 98% de transbordo, num
+                              mês cujo transbordo real era zero. */}
+                          <td className="p-3 text-muted-foreground whitespace-nowrap">
+                            {fmtDate(effectiveDate(venda))}
+                            {veioDeMesAnterior(venda) ? (
+                              <span
+                                className="ml-1.5 rounded bg-cyan-500/15 px-1 py-0.5 text-[9px] font-semibold uppercase text-cyan-400"
+                                title={`Vendido em ${mesOrigemCurto(venda)} e faturado neste mês — transbordo`}
+                              >
+                                ↩ {mesOrigemCurto(venda)}
+                              </span>
+                            ) : (
+                              !ehRecorrente(venda) &&
+                              venda.sale_date && venda.sale_date !== venda.created_at.substring(0, 10) && (
+                                <span className="ml-1 text-[10px] text-amber-500 font-medium" title="Data da venda corrigida">✱</span>
+                              )
+                            )}
+                          </td>
+                          <td className="p-3 font-medium max-w-[180px] truncate">{venda.customer_name}</td>
+                          <td className="p-3 text-muted-foreground whitespace-nowrap">{[venda.delivery_city, venda.delivery_state].filter(Boolean).join("/") || "—"}</td>
+                          {isHead && (
+                            <td className="p-3 text-muted-foreground">
+                              <span>{(venda.vendedor_id && nomeById[venda.vendedor_id]) || venda.vendedor_name || "—"}</span>
+                            </td>
+                          )}
+                          {isHead && (
+                            <td className="p-3 text-muted-foreground">
+                              {criadorNome ? (
+                                <span className={criadorDiferente ? "font-medium text-amber-500" : undefined}
+                                  title={criadorDiferente
+                                    ? "Lançada por uma pessoa e atribuída a outra"
+                                    : "Quem lançou é o próprio vendedor"}>
+                                  {criadorNome}
+                                </span>
+                              ) : (
+                                // ⚠️ "—" e não o nome do vendedor: venda anterior a
+                                // 22/09/2026 não tem criador gravado, e chutar que foi
+                                // ele apagaria exatamente o que esta coluna mostra.
+                                <span title="Não registrado">—</span>
+                              )}
+                            </td>
+                          )}
+                          <td className="p-3 text-right font-bold tabular-nums">{fmtBRL(venda.total)}</td>
+                          <td className="p-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                            {acoes}
+                          
+                          </td>
+                        </tr>
+                        {expandedId === venda.id && (
+                          <tr className="border-b bg-muted/10">
+                            {/* ⚠️ +1 no ramo `isHead`: entrou a coluna "Criado por".
+                                colSpan errado não dá erro — desalinha a faixa de
+                                detalhe e some com a borda da última coluna. */}
+                            <td colSpan={isHead ? 10 : 7} className="p-0">
+                              {/* No celular a tabela rola de lado (min-w); o detalhe fica PRESO à
+                                  parte visível (sticky + largura da tela), senão seria lido arrastando. */}
+                              <div className="sticky left-0 w-[calc(100vw-2rem)] px-4 py-4 space-y-4 md:w-auto md:px-6">
+                              {detalhe}
                               </div>
                             </td>
                           </tr>
@@ -1366,6 +1444,7 @@ export default function Vendas() {
               </table>
             </div>
           </CarboCard>
+          </>
         )}
       </div>
 
