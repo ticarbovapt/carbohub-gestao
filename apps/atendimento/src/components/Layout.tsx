@@ -79,7 +79,7 @@ export function Layout() {
   return (
     <ChatProvider supabase={supabase} currentUser={chatUser} navigate={navigate}
       loadCallEngine={() => import("@carbo/call").then((m) => m.loadCall())}>
-    <div className="h-screen supports-[height:100dvh]:h-dvh overflow-hidden bg-background flex flex-col">
+    <div className="h-screen supports-[height:100dvh]:h-dvh overflow-hidden bg-background flex flex-col pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
       <TopBar appName="Carbo Atendimento" appKey="atendimento" onMenu={handleMenu} />
       {/* ⚠️ ABAIXO do TopBar, em FLUXO — nunca `fixed`. O Layout é
           `h-screen flex flex-col`, entao ela ocupa a propria altura e o corpo

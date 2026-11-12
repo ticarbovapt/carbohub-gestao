@@ -762,3 +762,13 @@
   fill: hsl(var(--muted-foreground));
   fill-opacity: 0.15;
 }
+
+/* ── App na tela inicial (iPhone/Android) ─────────────────────────────────────
+ * Comportamento de app, não de site: sem zoom por toque duplo (touch-action),
+ * sem o "flash" cinza ao tocar, sem o iOS aumentar a fonte sozinho ao girar, e
+ * sem o "elástico" da página inteira — quem rola é o <main>, não o body. */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body { overscroll-behavior: none; -webkit-tap-highlight-color: transparent; }
+a, button, input, select, textarea, label, [role="button"], [role="tab"], [role="menuitem"], [role="option"] {
+  touch-action: manipulation;
+}

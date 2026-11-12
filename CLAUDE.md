@@ -1623,6 +1623,18 @@ copia o bloco.
 relê o cookie ao voltar ao foco. `localStorage` fica de reserva (localhost).
 ⚠️ App novo copia o arquivo; Hub e portais (outros repos) ainda não leem o cookie.
 
+### App na tela inicial do celular — os OITO (12/11/2026)
+Pedido do dono do processo: o time usa os apps pelo ícone da tela inicial
+(Safari → "Adicionar à Tela de Início") e o celular dava zoom ao tocar em
+campo. Nos oito, igual: `index.html` com `maximum-scale=1, viewport-fit=cover`,
+barra de status `black` (com `black-translucent` o cabeçalho ficava por baixo
+do relógio), a div raiz do Layout com `env(safe-area-inset-*)` e o bloco "App
+na tela inicial" no fim do `index.css` (`touch-action: manipulation`, sem tap
+highlight, sem overscroll do body). O Sales (piloto) também é retrato no
+manifesto; os outros ficam `any` (quadro e tabela se usam deitado).
+⚠️ O iPhone só lê isso AO CRIAR o ícone: quem já tinha o ícone precisa apagar e
+adicionar de novo. ⚠️ App novo copia os três pedaços.
+
 ### Comportamento de app "natural" — mora no `packages/shell` (08/10/2026)
 Pedido do dono do processo: polimento básico nos oito apps. Tudo o que vale
 para todos mora num lugar só:
