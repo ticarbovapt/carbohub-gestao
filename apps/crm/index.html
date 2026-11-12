@@ -7,8 +7,17 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#0B1220" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- App na tela inicial do iPhone (12/11/2026):
+         - status bar "black": a tela começa ABAIXO do relógio. Com "black-translucent"
+           o cabeçalho ficava por baixo da hora e da bateria;
+         - maximum-scale=1: tocar num campo não dá zoom na tela (o iOS ampliava
+           todo input com fonte < 16px e a pessoa tinha de desfazer o zoom para clicar);
+         - viewport-fit=cover + `env(safe-area-inset-*)` no Layout: nada fica
+           atrás da barra de gestos do iPhone. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <meta name="apple-mobile-web-app-title" content="Carbo Sales" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
     <title>Carbo CRM</title>
   </head>
   <body>
