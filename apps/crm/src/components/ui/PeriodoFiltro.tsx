@@ -82,7 +82,7 @@ export function PeriodoFiltro({
   return (
     <div className={`flex flex-wrap items-center gap-1.5 ${className}`}>
       <Select value={atalho} onValueChange={(v) => escolher(v as AtalhoPeriodo)}>
-        <SelectTrigger className="h-9 w-full text-sm sm:w-48"><SelectValue /></SelectTrigger>
+        <SelectTrigger className="h-9 min-w-0 flex-1 text-sm sm:w-48 sm:flex-none"><SelectValue /></SelectTrigger>
         <SelectContent>
           {opcoes.map((o) => <SelectItem key={o} value={o}>{ROTULO[o]}</SelectItem>)}
         </SelectContent>
@@ -90,7 +90,7 @@ export function PeriodoFiltro({
 
       {atalho === "mes" && (
         <Select value={mes} onValueChange={(ym) => onChange(intervaloDoAtalho("mes", ym))}>
-          <SelectTrigger className="h-9 w-full text-sm sm:w-32"><SelectValue placeholder="Mês" /></SelectTrigger>
+          <SelectTrigger className="h-9 min-w-0 flex-1 text-sm sm:w-32 sm:flex-none"><SelectValue placeholder="Mês" /></SelectTrigger>
           <SelectContent>
             {meses.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
           </SelectContent>
