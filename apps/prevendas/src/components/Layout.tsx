@@ -5,7 +5,7 @@ import { TopBar } from "@/components/TopBar";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAccessPing } from "@/hooks/useAccessPing";
 import { useLiveNotifications } from "@/hooks/useLiveNotifications";
-import { Sidebar, type ShellNavSection, StatusTarja, usePaginaAtual } from "@carbo/shell";
+import { Sidebar, type ShellNavSection, StatusTarja, NovaVersao, usePaginaAtual } from "@carbo/shell";
 import logoCarbo from "@/assets/logo-carbo.png";
 import { HUB_URL } from "@/lib/sso";
 import { supabase } from "@/integrations/supabase/client";
@@ -67,6 +67,7 @@ export function Layout() {
           `h-screen flex flex-col`, entao ela ocupa a propria altura e o corpo
           encolhe sozinho. A primeira versao era sobreposta e cobria o cabecalho. */}
       <StatusTarja supabase={supabase} app="prevendas" statusUrl="https://carbohub.com.br/status" />
+      <NovaVersao />
 
       <div className="flex flex-1 min-h-0">
         <Sidebar

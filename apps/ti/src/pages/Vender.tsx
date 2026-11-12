@@ -1422,7 +1422,7 @@ export default function Vender() {
             </div>
             <div className="space-y-1.5">
               <Label>Telefone</Label>
-              <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(00) 00000-0000" />
+              <Input type="tel" inputMode="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(00) 00000-0000" />
             </div>
             <div className="flex items-start justify-between gap-3 rounded-xl border p-3">
               <p className="text-sm font-medium">É Licenciado?</p>

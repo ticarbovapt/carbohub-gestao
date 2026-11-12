@@ -786,3 +786,13 @@ body { overscroll-behavior: none; -webkit-tap-highlight-color: transparent; }
 a, button, input, select, textarea, label, [role="button"], [role="tab"], [role="menuitem"], [role="option"] {
   touch-action: manipulation;
 }
+
+/* No toque não existe "passar o mouse": botão que só aparece no hover
+ * (excluir notificação, tirar anexo, lápis do cartão…) ficava INVISÍVEL no
+ * celular. Em tela de toque, o que o hover revelaria já aparece. */
+@media (hover: none) {
+  .group .group-hover\:opacity-100 { opacity: 1; }
+  .group .group-hover\:visible { visibility: visible; }
+  .group .group-hover\:flex { display: flex; }
+  .group .group-hover\:block { display: block; }
+}

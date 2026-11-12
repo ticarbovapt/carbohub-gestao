@@ -6,10 +6,11 @@ import {
   CalendarCheck, PackageCheck, BookOpen,
 } from "lucide-react";
 import { ChatBadge, ChatProvider } from "@carbo/chat";
-import { Sidebar, type ShellNavSection, StatusTarja, usePaginaAtual } from "@carbo/shell";
+import { Sidebar, type ShellNavSection, StatusTarja, NovaVersao, usePaginaAtual } from "@carbo/shell";
 import { supabase } from "@/integrations/supabase/client";
 import { useMemo } from "react";
 import { TopBar } from "@/components/TopBar";
+import { BarraInferior } from "@/components/BarraInferior";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAccessPing } from "@/hooks/useAccessPing";
 import { useLiveNotifications } from "@/hooks/useLiveNotifications";
@@ -89,6 +90,7 @@ export function SalesShell() {
           `h-screen flex flex-col`, entao ela ocupa a propria altura e o corpo
           encolhe sozinho. A primeira versao era sobreposta e cobria o cabecalho. */}
       <StatusTarja supabase={supabase} app="crm" statusUrl="https://carbohub.com.br/status" />
+      <NovaVersao />
 
       <div className="flex flex-1 min-h-0">
         <Sidebar
@@ -104,6 +106,7 @@ export function SalesShell() {
           <Outlet />
         </main>
       </div>
+      <BarraInferior onMais={() => setMobileOpen(true)} />
     </div>
     </ChatProvider>
   );

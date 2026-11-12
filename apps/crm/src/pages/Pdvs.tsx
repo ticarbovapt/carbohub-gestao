@@ -635,7 +635,7 @@ export default function Pdvs() {
               </div>
               <div className="space-y-1.5">
                 <Label>Telefone</Label>
-                <Input value={form.contact_phone ?? ""} onChange={(e) => set({ contact_phone: e.target.value })} />
+                <Input type="tel" inputMode="tel" value={form.contact_phone ?? ""} onChange={(e) => set({ contact_phone: e.target.value })} />
               </div>
               <div className="space-y-1.5">
                 <Label>E-mail</Label>
