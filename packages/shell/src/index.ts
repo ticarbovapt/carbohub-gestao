@@ -10,6 +10,7 @@ export {
 export type { AppKey, EcoApp, SwitcherApp, Identity, SwitcherProfile } from "./apps";
 export type { AppSwitcherProps } from "./AppSwitcher";
 export { StatusTarja } from "./StatusTarja";
+export { NovaVersao } from "./NovaVersao";
 export type { StatusTarjaProps, StatusAviso, StatusSeveridade } from "./StatusTarja";
 export { cn } from "./cn";
 export { lerSemTeto, lerPorIdsSemTeto, fetchQueAcusaTeto, TETO_POSTGREST } from "./leitura";
