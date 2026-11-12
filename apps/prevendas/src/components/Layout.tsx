@@ -61,7 +61,7 @@ export function Layout() {
   // rota e sem `ChatProvider`. Quem conversa com o time usa o chat dos outros
   // apps; aviso de chat que chegar aqui cai no `/chat`, que volta à home.
   return (
-    <div className="h-screen supports-[height:100dvh]:h-dvh overflow-hidden bg-background flex flex-col">
+    <div className="h-screen supports-[height:100dvh]:h-dvh overflow-hidden bg-background flex flex-col pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
       <TopBar appName="Carbo Pré-Vendas" appKey="prevendas" onMenu={handleMenu} />
       {/* ⚠️ ABAIXO do TopBar, em FLUXO — nunca `fixed`. O Layout é
           `h-screen flex flex-col`, entao ela ocupa a propria altura e o corpo

@@ -1097,3 +1097,13 @@
 .mkt-editor hr { border: 0; border-top: 1px solid hsl(var(--border)); margin: 0.9rem 0; }
 .mkt-editor a { color: hsl(var(--accent)); text-decoration: underline; text-underline-offset: 2px; word-break: break-word; }
 .mkt-editor p.is-editor-empty:first-child::before { content: attr(data-placeholder); color: hsl(var(--muted-foreground)); float: left; height: 0; pointer-events: none; }
+
+/* ── App na tela inicial (iPhone/Android) ─────────────────────────────────────
+ * Comportamento de app, não de site: sem zoom por toque duplo (touch-action),
+ * sem o "flash" cinza ao tocar, sem o iOS aumentar a fonte sozinho ao girar, e
+ * sem o "elástico" da página inteira — quem rola é o <main>, não o body. */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body { overscroll-behavior: none; -webkit-tap-highlight-color: transparent; }
+a, button, input, select, textarea, label, [role="button"], [role="tab"], [role="menuitem"], [role="option"] {
+  touch-action: manipulation;
+}
