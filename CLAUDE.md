@@ -2239,6 +2239,26 @@ mais seria anunciado, e não há nada de errado com ele). O congelamento em
 que vier. Na recompra ele olha a **entrega**, não a data do pedido — a régua
 conta 30 dias dali, e cortar por data de pedido esvaziaria o ramo para sempre.
 
+### ⚠️ 667 cards parados em "Etiqueta" já entregues: o espelho só via 500 (13/11/2026)
+Não era a view: era de onde ela lê o "postado"/"entregue". O
+`melhor-envio-envios` lia as 500 etiquetas MAIS RECENTES do ME (~5 dias), e
+o `posted_at`/`delivered_at` de etiqueta mais velha nunca chegava ao espelho;
+o `rastreio-sync` fazia `.limit(500)` SEM ordem na esteira e pegava os 60
+primeiros — sempre o mesmo pedaço. Teto calado nas duas, a doença conhecida.
+1. **Reconferência** (`melhor-envio-envios`): todo envio EM ABERTO no espelho
+   que a listagem da rodada não trouxe é reconsultado pelo
+   `/shipment/tracking` (lotes de 100, 300 por rodada, os de `atualizado_em`
+   mais antigo primeiro — a fila RODA). Só PREENCHE carimbo, nunca apaga.
+   `?ensaio=1` mostra o que mudaria.
+2. **`rastreio-sync`**: lê todos os abertos dos últimos 60 dias (paginado,
+   ordem estável) e prioriza quem nunca foi consultado, depois o
+   `consultado_em` mais antigo.
+3. ⚠️ Destravar move centenas de cards de uma vez: o freio (`20261153`
+   BLOCO 1, `ignorado` para em_transito/saiu_entrega/entregue em card com
+   etiqueta de > 3 dias) roda ANTES do deploy.
+4. ⚠️ A view junta `rastreio_envios` só pelo código do BLING: card cujo código
+   veio só do ME anda pelo `me.*` (o espelho), nunca pelo `rastreio_envios`.
+
 ### Melhor Envio — a etiqueta que nunca voltou para o Bling
 Etiqueta comprada DIRETO no painel do Melhor Envio não volta para o Bling: o
 card ficava em "NF emitida" com a encomenda já a caminho (79 pedidos assim). O

@@ -40,7 +40,7 @@ import { getMelhorEnvioToken, MELHOR_ENVIO_BASE, MELHOR_ENVIO_UA } from "../_sha
 // ⚠️ A extração de campos mora num módulo PURO (sem Deno, sem fetch) porque é
 // nela que estão os campos que eu não confirmei contra a API — e é ela que os
 // testes cobrem. Dentro do Deno.serve, testá-la exigiria subir uma função.
-import { paraLinha } from "../_shared/melhorEnvioParse.ts";
+import { paraLinha, data as dataME, txt } from "../_shared/melhorEnvioParse.ts";
 
 // deno-lint-ignore-file no-explicit-any
 
@@ -59,6 +59,104 @@ const MAX_PAGINAS = 10;          // teto: 500 envios por rodada
 const PAUSA_MS = 350;
 
 const dormir = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// ── RECONFERÊNCIA: o envio que saiu da listagem continua andando ─────────────
+//
+// ⚠️ A listagem lê as 500 etiquetas MAIS RECENTES (10 × 50). Com ~100 envios
+// por dia isso cobre 4–5 dias: etiqueta gerada há uma semana já não aparece
+// nela, e o `posted_at`/`delivered_at` que chega DEPOIS nunca era gravado. A
+// esteira lê esses carimbos daqui (`melhorenvio_envio_vigente`), então o card
+// ficava em "Etiqueta" com o cliente já com o produto na mão — 667 em 13/11/2026.
+//
+// Aqui: todo envio ainda EM ABERTO no espelho (gerado, sem entrega, sem
+// cancelamento, sem vencimento) que a listagem desta rodada não trouxe é
+// reconsultado pelo `/shipment/tracking`, em lotes. Os mais antigos de conferir
+// primeiro (`atualizado_em`), então a fila roda: com 300 por rodada de 15 min,
+// mil envios abertos são vistos todos em ~1 h.
+//
+// ⚠️ Só PREENCHE carimbo, nunca apaga: resposta sem o campo não é "deixou de
+// ser postado". Mesma regra do `coalesce(planilha, banco)`.
+const RECONFERIR_MAX = 300;
+const LOTE_TRACKING = 100;
+const CARIMBOS = [
+  ["postado_em", "posted_at"],
+  ["entregue_em", "delivered_at"],
+  ["cancelado_em", "canceled_at"],
+  ["expirado_em", "expired_at"],
+] as const;
+
+async function reconferir(
+  cabecalhos: Record<string, string>, base: string, vistos: Set<string>, ensaio: boolean,
+) {
+  const res = {
+    em_aberto_lidos: 0, consultados: 0, mudaram: 0,
+    postados: 0, entregues: 0, cancelados: 0, vencidos: 0,
+    erro: null as string | null,
+  };
+  // Janela DECLARADA e ordenada (os mais antigos de conferir): não é lista
+  // que se mostra como "tudo" — o resto vem nas rodadas seguintes.
+  const { data, error } = await supabase
+    .from("melhorenvio_envios")
+    .select("me_id,status_me,postado_em,entregue_em,cancelado_em,expirado_em")
+    .not("gerado_em", "is", null)
+    .is("entregue_em", null).is("cancelado_em", null).is("expirado_em", null)
+    .order("atualizado_em", { ascending: true }).order("me_id")
+    .limit(RECONFERIR_MAX + vistos.size);
+  if (error) { res.erro = `leitura: ${error.message}`; return res; }
+  const alvos = (data ?? []).filter((r) => !vistos.has(String(r.me_id))).slice(0, RECONFERIR_MAX);
+  res.em_aberto_lidos = alvos.length;
+
+  const agora = new Date().toISOString();
+  for (let i = 0; i < alvos.length; i += LOTE_TRACKING) {
+    const lote = alvos.slice(i, i + LOTE_TRACKING);
+    const r = await fetch(`${base}/api/v2/me/shipment/tracking`, {
+      method: "POST", headers: cabecalhos,
+      body: JSON.stringify({ orders: lote.map((l) => String(l.me_id)) }),
+    });
+    if (!r.ok) {
+      // 429/5xx: para aqui e tenta na próxima rodada. Quem não foi consultado
+      // não ganha `atualizado_em`, então continua no topo da fila.
+      res.erro = `tracking HTTP ${r.status}: ${(await r.text().catch(() => "")).slice(0, 300)}`;
+      break;
+    }
+    const bruto = (await r.json().catch(() => ({}))) as Record<string, any>;
+    for (const atual of lote) {
+      const d = bruto?.[String(atual.me_id)];
+      if (!d) {
+        // O ME não devolveu este id: anda a vez dele mesmo assim, senão o
+        // mesmo envio mudo ocuparia o topo da fila para sempre.
+        if (!ensaio) {
+          await supabase.from("melhorenvio_envios")
+            .update({ atualizado_em: agora }).eq("me_id", atual.me_id);
+        }
+        continue;
+      }
+      res.consultados++;
+      const patch: Record<string, string | null> = {};
+      for (const [coluna, campo] of CARIMBOS) {
+        const novo = dataME(d?.[campo]);
+        if (novo && !(atual as any)[coluna]) patch[coluna] = novo;
+      }
+      const status = txt(d?.status);
+      if (status && status !== atual.status_me) patch.status_me = status;
+      if (Object.keys(patch).length) {
+        res.mudaram++;
+        if (patch.postado_em) res.postados++;
+        if (patch.entregue_em) res.entregues++;
+        if (patch.cancelado_em) res.cancelados++;
+        if (patch.expirado_em) res.vencidos++;
+      }
+      if (ensaio) continue;
+      // `atualizado_em` anda SEMPRE: é ele que faz a fila girar. Sem isso os
+      // mesmos 300 (os parados de verdade) voltariam toda rodada.
+      const { error: e } = await supabase.from("melhorenvio_envios")
+        .update({ ...patch, atualizado_em: agora }).eq("me_id", atual.me_id);
+      if (e) { res.erro = `gravação: ${e.message}`; return res; }
+    }
+    await dormir(PAUSA_MS);
+  }
+  return res;
+}
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body, null, 2), {
@@ -156,9 +254,13 @@ Deno.serve(async (req: Request) => {
     ...(erro ? { aviso: erro } : {}),
   };
 
+  const vistos = new Set(linhas.map((l) => l.me_id));
+
   if (ensaio) {
     return json({
       ...resumo,
+      // O que a reconferência MUDARIA, sem gravar nada.
+      reconferencia: await reconferir(cabecalhos, base, vistos, true),
       // Sem o `raw` nos primeiros, para a resposta ser legível...
       amostra: linhas.slice(0, 5).map(({ raw: _r, ...l }) => l),
       // ...mas UM payload inteiro, que é o que permite achar o nome real de um
@@ -187,6 +289,10 @@ Deno.serve(async (req: Request) => {
 
   if (error) return json({ ...resumo, ok: false, error: error.message }, 500);
 
-  console.log("[melhor-envio-envios]", JSON.stringify(resumo));
-  return json(resumo);
+  // Depois do upsert, e nunca no lugar dele: a reconferência só cuida de quem
+  // a listagem desta rodada NÃO trouxe.
+  const reconferencia = await reconferir(cabecalhos, base, vistos, false);
+  const saida = { ...resumo, reconferencia };
+  console.log("[melhor-envio-envios]", JSON.stringify(saida));
+  return json(saida);
 });
