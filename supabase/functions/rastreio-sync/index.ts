@@ -297,30 +297,48 @@ async function montarFila(alvos?: string[]): Promise<ItemFila[]> {
   // ⚠️ No modo alvo, os filtros de etapa NÃO se aplicam. Um aviso sobre envio
   // já entregue é justamente o que fecha o ciclo, e descartá-lo por causa do
   // filtro da rotina deixaria o card parado em "em trânsito" para sempre.
-  let consulta = supabase
-    .from("bling2_esteira")
-    .select("bling_id,rastreio,nf_chave,transportadora,servico,canal,etapa")
-    .not("rastreio", "is", null);
-  consulta = alvos?.length
-    ? consulta.in("rastreio", alvos)
-    : consulta.neq("etapa", "cancelado").neq("etapa", "entregue");
-  const { data: esteira, error } = await consulta.limit(500);
-  if (error) throw new Error(`esteira: ${error.message}`);
+  // ⚠️ Era `.limit(500)` SEM ordem, e a fila pegava os 60 primeiros. Com mais
+  // de mil cards abertos (etiqueta + em trânsito), o banco devolvia sempre o
+  // MESMO pedaço e os mesmos 60 eram reconsultados de 5 em 5 min — o resto
+  // nunca entrava, e o card ficava em "Etiqueta" com o produto entregue (667
+  // em 13/11/2026). Hoje lê TODOS os abertos (paginado, ordem estável) e a
+  // fila escolhe: quem nunca foi consultado primeiro, depois quem foi
+  // consultado há mais tempo. A fila RODA.
+  const montar = () => {
+    const c = supabase
+      .from("bling2_esteira")
+      .select("bling_id,rastreio,nf_chave,transportadora,servico,canal,etapa")
+      .not("rastreio", "is", null);
+    // ⚠️ JANELA de 60 dias na rotina: cada página recalcula a view inteira, e
+    // card aberto há mais de dois meses não vai voltar a andar pelo rastreio.
+    return (alvos?.length
+      ? c.in("rastreio", alvos)
+      : c.neq("etapa", "cancelado").neq("etapa", "entregue")
+          .gte("data_pedido", new Date(Date.now() - 60 * 86400_000).toISOString().slice(0, 10))
+    ).order("bling_id");
+  };
+  const esteira = await lerSemTeto<Record<string, any>>(montar)
+    .catch((e) => { throw new Error(`esteira: ${(e as Error).message}`); });
 
   // ⚠️ TODAS as linhas, paginado: o PostgREST corta em 1.000 calado, e com o
   // mapa cortado o envio já conhecido parecia novo — entregue voltava à fila e
   // a repescagem gastava as vagas dela com código que já tem linha.
   const jaTemos = await lerSemTeto<Record<string, string | null>>(() => supabase
     .from("rastreio_envios")
-    .select("codigo,fonte_id,status")
+    .select("codigo,fonte_id,status,consultado_em")
     .order("codigo"));
-  const conhecidos = new Map<string, { fonte_id: string | null; status: string | null }>(
+  const conhecidos = new Map<string, { fonte_id: string | null; status: string | null; consultado_em: string | null }>(
     (jaTemos ?? []).map((r: Record<string, string | null>) =>
-      [String(r.codigo), { fonte_id: r.fonte_id, status: r.status }]),
+      [String(r.codigo), { fonte_id: r.fonte_id, status: r.status, consultado_em: r.consultado_em }]),
   );
+  // Nunca consultado ("") vem antes de qualquer data; entre os consultados,
+  // o mais antigo primeiro.
+  const vezDe = (o: Record<string, any>) =>
+    conhecidos.get(String(o.rastreio ?? "").trim())?.consultado_em ?? "";
+  esteira.sort((a, b) => vezDe(a).localeCompare(vezDe(b)));
 
   const fila: ItemFila[] = [];
-  for (const o of esteira ?? []) {
+  for (const o of esteira) {
     const codigo = String(o.rastreio ?? "").trim();
     if (!codigo) continue;
     // Mercado Envios é do `ecommerce-sync`. O canal é o nome da loja no Bling.
