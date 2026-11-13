@@ -1,6 +1,6 @@
 import { useMemo, useState, useRef } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
-import { MessagesSquare, LayoutDashboard, MessageCircle, PackageSearch, Send, BookOpen, Gauge } from "lucide-react";
+import { MessagesSquare, LayoutDashboard, MessageCircle, PackageSearch, PackageX, Send, BookOpen, Gauge } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAccessPing } from "@/hooks/useAccessPing";
@@ -60,6 +60,7 @@ export function Layout() {
         // celular do cliente.
         { to: "/conversas", label: "Conversas", icon: MessageCircle },
         { to: "/ecommerce/esteira", label: "Esteira do On-line", icon: PackageSearch },
+        { to: "/pendencias", label: "Pendências de entrega", icon: PackageX },
         { to: "/ecommerce/mensagens", label: "Mensagens ao Cliente", icon: Send },
     ] },
     // Só para quem tem a flag de gestor — a tela recusa os outros de todo jeito

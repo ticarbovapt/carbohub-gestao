@@ -8,7 +8,8 @@ import * as esteira from "./fx_esteira";
 import * as conversas from "./fx_conversas";
 import * as painel from "./fx_painel";
 import * as assuntos from "./fx_assuntos";
+import * as pendencias from "./fx_pendencias";
 
-const AREAS = [comercial, esteira, conversas, painel, assuntos] as { FX?: Record<string, unknown>; RPC_FX?: Record<string, unknown> }[];
+const AREAS = [comercial, esteira, conversas, painel, assuntos, pendencias] as { FX?: Record<string, unknown>; RPC_FX?: Record<string, unknown> }[];
 export const FX_AREAS: Record<string, unknown> = Object.assign({}, ...AREAS.map((a) => a.FX ?? {}));
 export const RPC_AREAS: Record<string, unknown> = Object.assign({}, ...AREAS.map((a) => a.RPC_FX ?? {}));
