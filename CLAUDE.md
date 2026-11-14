@@ -2239,6 +2239,23 @@ mais seria anunciado, e não há nada de errado com ele). O congelamento em
 que vier. Na recompra ele olha a **entrega**, não a data do pedido — a régua
 conta 30 dias dali, e cortar por data de pedido esvaziaria o ramo para sempre.
 
+### Reforma da Esteira — FOTO antes, plano em `docs/esteira/README.md` (14/11/2026)
+Pedido do dono do processo: revisar a esteira inteira com rollback garantido.
+O mapa das peças, os riscos priorizados (P1…P9), a ordem das fases e o
+rollback moram em `docs/esteira/README.md`; o raio-x (só leitura) em
+`supabase/consultas/esteira_raio_x.sql`.
+1. ⚠️ **Nada da reforma vai ao ar antes da foto** (`20261155`,
+   `carbo_foto_esteira_tirar('antes-reforma-2026-11-14')`): ela guarda o TEXTO
+   VIVO das views (núcleo + dependentes, com reloptions e grants), das funções,
+   de TODOS os crons e das linhas de config de mensagens.
+2. **Volta**: `carbo_foto_esteira_restaurar(foto)` = ENSAIO (desfaz no fim);
+   `(foto, false)` = de verdade, tudo ou nada. Cron novo é DESLIGADO, nunca
+   apagado. View nova em cima das da foto BLOQUEIA a volta (sem cascade).
+3. ⚠️ A tabela guarda o comando dos crons (com o `CRON_SECRET`): RLS sem
+   policy e sem grant. Não abra.
+4. Código: `main` antes da reforma = `84cbe4d9`; cada fase é um PR, e voltar é
+   reverter o PR.
+
 ### ⚠️ 667 cards parados em "Etiqueta" já entregues: o espelho só via 500 (13/11/2026)
 Não era a view: era de onde ela lê o "postado"/"entregue". O
 `melhor-envio-envios` lia as 500 etiquetas MAIS RECENTES do ME (~5 dias), e
