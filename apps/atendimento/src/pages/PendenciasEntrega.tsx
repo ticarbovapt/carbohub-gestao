@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   AlertTriangle, Download, ExternalLink, Loader2, MessageCircle, PackageSearch, PackageX, Search,
@@ -45,6 +45,20 @@ function dia(iso: string | null | undefined) {
   const [a, m, d] = iso.slice(0, 10).split("-");
   return `${d}/${m}/${a.slice(2)}`;
 }
+
+/** O domingo da semana do dia ("AAAA-MM-DD"), em texto, sem fuso. */
+function domingoDe(iso: string) {
+  const [a, m, d] = iso.slice(0, 10).split("-").map(Number);
+  const t = new Date(Date.UTC(a, m - 1, d));
+  t.setUTCDate(t.getUTCDate() - t.getUTCDay());
+  return t.toISOString().slice(0, 10);
+}
+function maisDias(iso: string, n: number) {
+  const [a, m, d] = iso.split("-").map(Number);
+  return new Date(Date.UTC(a, m - 1, d + n)).toISOString().slice(0, 10);
+}
+/** "26/10 – 01/11" (domingo a sábado). */
+const rotuloSemana = (domingo: string) => `${dia(domingo).slice(0, 5)} – ${dia(maisDias(domingo, 6)).slice(0, 5)}`;
 
 function diasDesde(iso: string | null) {
   if (!iso) return null;
@@ -99,7 +113,7 @@ function Ha({ p }: { p: Pendencia }) {
 
 // ── A planilha ───────────────────────────────────────────────────────────────
 function baixarPlanilha(itens: Pendencia[], nome: string) {
-  const cab = ["Pedido", "Nº loja", "Canal", "Data do pedido", "Cliente", "Telefone", "Cidade", "UF", "Valor",
+  const cab = ["Semana", "Pedido", "Nº loja", "Canal", "Data do pedido", "Cliente", "Telefone", "Cidade", "UF", "Valor",
     "Problema", "Desde", "Etapa na esteira", "Transportadora", "Rastreio", "NF", "Situação", "Observação",
     "Atualizado por", "Atualizado em"];
   const cel = (v: unknown) => {
@@ -107,7 +121,7 @@ function baixarPlanilha(itens: Pendencia[], nome: string) {
     return /[;"\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   const linhas = itens.map((p) => [
-    p.pedido_codigo ?? p.pedido_numero, p.pedido_loja, p.canal, dia(p.data_pedido), p.cliente, p.cliente_fone,
+    rotuloSemana(domingoDe(p.data_pedido)), p.pedido_codigo ?? p.pedido_numero, p.pedido_loja, p.canal, dia(p.data_pedido), p.cliente, p.cliente_fone,
     p.cidade, p.uf, p.total != null ? p.total.toFixed(2).replace(".", ",") : "",
     ROTULO_PROBLEMA[p.problema], dia(p.desde), ETAPA_ROTULO[p.etapa] ?? p.etapa, p.transportadora, p.rastreio,
     p.nf_numero, ROTULO_SITUACAO[p.trato?.situacao ?? "aberto"], p.trato?.observacao,
@@ -235,6 +249,8 @@ export default function PendenciasEntrega() {
   const [canal, setCanal] = useParamUrl("canal", "");
   const [busca, setBusca] = useParamUrl("busca", "", { replace: true });
   const [pedidoUrl, setPedido] = useParamUrl("pedido", "");
+  // Só na aba "Antes": a semana (o domingo) que se está tratando.
+  const [semanaUrl, setSemana] = useParamUrl("semana", "");
   const [mostrar, setMostrar] = useState(POR_PAGINA);
 
   // A busca escreve na URL só quando a pessoa para de digitar.
@@ -245,7 +261,7 @@ export default function PendenciasEntrega() {
     const t = setTimeout(() => setBusca(buscaLocal), 300);
     return () => clearTimeout(t);
   }, [buscaLocal]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { setMostrar(POR_PAGINA); }, [aba, problema, situacao, canal, busca]);
+  useEffect(() => { setMostrar(POR_PAGINA); }, [aba, problema, situacao, canal, busca, semanaUrl]);
 
   const corte = d ? dia(d.corte).slice(0, 5) : "06/11";
   const daAba = useMemo(
@@ -262,23 +278,56 @@ export default function PendenciasEntrega() {
   }, [d]);
   const passaSituacao = (p: Pendencia) =>
     situacao === "todos" ? true : situacao === "tratados" ? ehFinal(p.trato?.situacao) : !ehFinal(p.trato?.situacao);
-  const passaResto = (p: Pendencia) => (!canal || p.canal === canal) && casa(p, busca);
+  const semana = aba === "antes" && /^\d{4}-\d{2}-\d{2}$/.test(semanaUrl) ? semanaUrl : "";
+  const passaResto = (p: Pendencia) =>
+    (!canal || p.canal === canal) && (!semana || domingoDe(p.data_pedido) === semana) && casa(p, busca);
+  // As semanas da aba "Antes", da mais recente para a mais antiga, com quantos
+  // estão em aberto e quantos ao todo.
+  const semanas = useMemo(() => {
+    if (aba !== "antes") return [];
+    const m = new Map<string, { abertos: number; total: number }>();
+    for (const p of daAba) {
+      const k = domingoDe(p.data_pedido);
+      const s = m.get(k) ?? { abertos: 0, total: 0 };
+      s.total++;
+      if (!ehFinal(p.trato?.situacao)) s.abertos++;
+      m.set(k, s);
+    }
+    return [...m.entries()].sort((a, b) => b[0].localeCompare(a[0])).map(([domingo, s]) => ({ domingo, ...s }));
+  }, [daAba, aba]);
 
   // Cada pílula conta com os OUTROS filtros aplicados e o dela solto.
   const contaProblema = useMemo(() => {
     const m = new Map<Problema, number>();
     for (const p of daAba) if (passaSituacao(p) && passaResto(p)) m.set(p.problema, (m.get(p.problema) ?? 0) + 1);
     return m;
-  }, [daAba, situacao, canal, busca]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [daAba, situacao, canal, busca, semana]); // eslint-disable-line react-hooks/exhaustive-deps
   const canais = useMemo(() => [...new Set(daAba.map((p) => p.canal).filter(Boolean))].sort() as string[], [daAba]);
 
-  const lista = useMemo(
-    () => daAba.filter((p) => (!problema || p.problema === problema) && passaSituacao(p) && passaResto(p)),
-    [daAba, problema, situacao, canal, busca], // eslint-disable-line react-hooks/exhaustive-deps
-  );
+  const lista = useMemo(() => {
+    const l = daAba.filter((p) => (!problema || p.problema === problema) && passaSituacao(p) && passaResto(p));
+    // Na aba "Antes" a lista vem por SEMANA, da mais recente para a mais
+    // antiga; dentro da semana, por data do pedido.
+    if (aba === "antes") {
+      l.sort((a, b) => domingoDe(b.data_pedido).localeCompare(domingoDe(a.data_pedido))
+        || a.data_pedido.localeCompare(b.data_pedido) || a.bling_id - b.bling_id);
+    }
+    return l;
+  }, [daAba, aba, problema, situacao, canal, busca, semana]); // eslint-disable-line react-hooks/exhaustive-deps
+  // O cabeçalho de semana sai antes do 1º pedido de cada semana da página.
+  const cabecalhoDe = (p: Pendencia, i: number, pagina: Pendencia[]) => {
+    if (aba !== "antes") return null;
+    const k = domingoDe(p.data_pedido);
+    if (i > 0 && domingoDe(pagina[i - 1].data_pedido) === k) return null;
+    const s = semanas.find((x) => x.domingo === k);
+    const n = lista.filter((x) => domingoDe(x.data_pedido) === k).length;
+    return { k, rotulo: `Semana ${rotuloSemana(k)}`, n, abertos: s?.abertos ?? 0, total: s?.total ?? 0 };
+  };
   const aberto = pedidoUrl ? (d?.itens ?? []).find((p) => String(p.bling_id) === pedidoUrl) ?? null : null;
 
-  const nomeArquivo = `pendencias-${aba === "antes" ? "antes" : "a-partir"}-de-${corte.replace("/", "-")}-${new Date().toISOString().slice(0, 10)}.csv`;
+  const nomeArquivo = semana
+    ? `pendencias-semana-${semana}.csv`
+    : `pendencias-${aba === "antes" ? "antes" : "a-partir"}-de-${corte.replace("/", "-")}-${new Date().toISOString().slice(0, 10)}.csv`;
 
   return (
     <div className="p-4 md:p-6">
@@ -301,7 +350,7 @@ export default function PendenciasEntrega() {
 
         <div role="tablist" className="inline-flex h-10 rounded-lg border p-1">
           {(["antes", "novos"] as const).map((a) => (
-            <button key={a} role="tab" type="button" aria-selected={aba === a} onClick={() => { setAba(a); setProblema(""); }}
+            <button key={a} role="tab" type="button" aria-selected={aba === a} onClick={() => { setAba(a); setProblema(""); setSemana(""); }}
               className={cn("inline-flex items-center gap-2 rounded-md px-3 text-sm font-medium transition-colors",
                 aba === a ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground")}>
               {a === "antes" ? `Antes de ${corte}` : `A partir de ${corte}`}
@@ -364,6 +413,24 @@ export default function PendenciasEntrega() {
                 <Input value={buscaLocal} onChange={(e) => setBuscaLocal(e.target.value)}
                   placeholder="Cliente, telefone, pedido, rastreio, NF…" className="h-9 pl-8" />
               </div>
+              {aba === "antes" && semanas.length > 0 && (
+                <Select value={semana || "todas"} onValueChange={(v) => setSemana(v === "todas" ? "" : v)}>
+                  <SelectTrigger className="h-9 min-w-0 basis-full sm:w-64 sm:basis-auto sm:flex-none"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todas">Todas as semanas</SelectItem>
+                    {semanas.map((w) => (
+                      <SelectItem key={w.domingo} value={w.domingo}>
+                        <span className="flex w-full items-center justify-between gap-3">
+                          <span>{rotuloSemana(w.domingo)}</span>
+                          <span className="tabular-nums text-muted-foreground">
+                            {w.abertos ? `${w.abertos} em aberto` : "tudo tratado"}
+                          </span>
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               <Select value={situacao} onValueChange={setSituacao}>
                 <SelectTrigger className="h-9 min-w-0 flex-1 sm:w-48 sm:flex-none"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -392,8 +459,19 @@ export default function PendenciasEntrega() {
               <>
                 {/* Celular: cards */}
                 <div className="divide-y rounded-xl border md:hidden">
-                  {lista.slice(0, mostrar).map((p) => (
-                    <button key={p.bling_id} type="button" onClick={() => setPedido(String(p.bling_id))}
+                  {lista.slice(0, mostrar).map((p, i, pagina) => {
+                    const cab = cabecalhoDe(p, i, pagina);
+                    return (
+                    <Fragment key={p.bling_id}>
+                    {cab && (
+                      <div className="flex items-baseline justify-between gap-2 bg-muted/50 px-3 py-2">
+                        <span className="text-sm font-semibold">{cab.rotulo}</span>
+                        <span className="text-xs tabular-nums text-muted-foreground">
+                          {cab.total - cab.abertos} de {cab.total} tratados
+                        </span>
+                      </div>
+                    )}
+                    <button type="button" onClick={() => setPedido(String(p.bling_id))}
                       className="block w-full space-y-1.5 p-3 text-left hover:bg-muted/50">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
@@ -409,7 +487,9 @@ export default function PendenciasEntrega() {
                       </div>
                       {p.trato?.observacao && <p className="line-clamp-2 text-xs text-muted-foreground">{p.trato.observacao}</p>}
                     </button>
-                  ))}
+                    </Fragment>
+                    );
+                  })}
                 </div>
 
                 {/* Desktop: tabela */}
@@ -426,8 +506,21 @@ export default function PendenciasEntrega() {
                       </tr>
                     </thead>
                     <tbody className="divide-y">
-                      {lista.slice(0, mostrar).map((p) => (
-                        <tr key={p.bling_id} className="cursor-pointer hover:bg-muted/40" onClick={() => setPedido(String(p.bling_id))}>
+                      {lista.slice(0, mostrar).map((p, i, pagina) => {
+                        const cab = cabecalhoDe(p, i, pagina);
+                        return (
+                        <Fragment key={p.bling_id}>
+                        {cab && (
+                          <tr className="bg-muted/50">
+                            <td colSpan={6} className="px-3 py-2">
+                              <span className="font-semibold">{cab.rotulo}</span>
+                              <span className="ml-3 text-xs tabular-nums text-muted-foreground">
+                                {cab.n} {cab.n === 1 ? "pedido" : "pedidos"} · {cab.total - cab.abertos} de {cab.total} tratados
+                              </span>
+                            </td>
+                          </tr>
+                        )}
+                        <tr className="cursor-pointer hover:bg-muted/40" onClick={() => setPedido(String(p.bling_id))}>
                           <td className="px-3 py-2 align-top">
                             <p className="font-medium">{p.pedido_codigo ?? p.pedido_numero ?? `#${Math.abs(p.bling_id)}`}</p>
                             <p className="text-xs text-muted-foreground">{p.canal} · {dia(p.data_pedido)} · {brl(p.total)}</p>
@@ -456,7 +549,9 @@ export default function PendenciasEntrega() {
                             </Button>
                           </td>
                         </tr>
-                      ))}
+                        </Fragment>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
