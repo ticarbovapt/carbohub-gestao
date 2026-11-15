@@ -31,6 +31,28 @@ cada fase mede o "antes".
 
 ---
 
+## 0b. O raio-x (15/11/2026) — e o que ele mudou na ordem
+
+```
+(a) esteira        4.823 cards; 724 entregues com > 60 dias, 38 com > 120   peso morto pequeno
+(b) carbo_msg_fila 14.303 ms   (limite do whatsapp-meta: 8 s)               ⚠️ URGENTE
+(c) timeouts 24 h  360 de 1.998 respostas                                    ⚠️ URGENTE
+(d) vínculo ME     766 de 766 confirmados                                    P3 não existe hoje
+(e) ML             as duas contas ativas, sem erro                           P4 quieto
+(f) reconferência  0 sem conferir há 2 h, de 789 abertos                     a de 13/11 gira
+(g) rastreio       bling 709 · plataforma 178 · melhorenvio 108             P7 = 108 cards
+```
+
+O tempo da fila NÃO era a esteira (568 ms) nem a recompra (641 ms): eram os
+três ramos de carrinho, ~4,3 s cada, todos no mesmo passo — o
+`tem_mais_novo` ("existe carrinho mais novo da mesma pessoa"), que varria
+todo carrinho aberto mais novo com `regexp_replace` por linha (custo ao
+quadrado). Corrigido na `20261156` (dois índices por expressão + o `exists`
+em duas metades), medido local: 8,7 s → 31 ms, as mesmas colunas.
+Isso passou na frente da Fase 1: com a fila em timeout, nenhum aviso sai.
+
+---
+
 ## 1. As peças (o que existe hoje e NÃO se joga fora)
 
 ```
