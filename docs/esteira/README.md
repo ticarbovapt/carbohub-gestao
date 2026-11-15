@@ -51,6 +51,12 @@ quadrado). Corrigido na `20261156` (dois índices por expressão + o `exists`
 em duas metades), medido local: 8,7 s → 31 ms, as mesmas colunas.
 Isso passou na frente da Fase 1: com a fila em timeout, nenhum aviso sai.
 
+✅ **Aplicada em 15/11/2026 às 17h29: a fila foi de 14.303 ms para 1.477 ms**
+em produção. Cada ramo de carrinho caiu de ~4.340 ms para ~30 ms, e os dois
+índices novos aparecem no plano. O que sobra é a esteira (~600 ms) e a
+recompra (~720 ms), que relê a esteira inteira para achar os entregues — é o
+próximo candidato, sem pressa: 1,5 s está longe dos 8 s.
+
 ---
 
 ## 1. As peças (o que existe hoje e NÃO se joga fora)
