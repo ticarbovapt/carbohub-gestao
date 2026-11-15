@@ -2263,6 +2263,8 @@ rollback moram em `docs/esteira/README.md`; o raio-x (só leitura) em
    view, letra a letra) + `exists (e-mail) OR exists (telefone)` — junto, o
    planejador ignora os índices. Busca nova de "mesma pessoa" em tabela que
    cresce: uma `exists` por chave, cada uma com índice.
+   ✅ Aplicada em 15/11 (17h29): fila 14.303 ms → **1.477 ms**, cada ramo de
+   carrinho ~30 ms. O resto é esteira (~600 ms) + recompra (~720 ms).
 
 ### ⚠️ 667 cards parados em "Etiqueta" já entregues: o espelho só via 500 (13/11/2026)
 Não era a view: era de onde ela lê o "postado"/"entregue". O
