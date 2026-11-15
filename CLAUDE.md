@@ -2255,6 +2255,14 @@ rollback moram em `docs/esteira/README.md`; o raio-x (só leitura) em
    policy e sem grant. Não abra.
 4. Código: `main` antes da reforma = `84cbe4d9`; cada fase é um PR, e voltar é
    reverter o PR.
+5. ⚠️ **A fila levava 14 s (raio-x de 15/11) e eram os CARRINHOS**: o
+   `tem_mais_novo` da `carbo_carrinho_pipeline` era um `exists (e-mail OR
+   telefone)` que o planejador resolvia pelo índice de DATA, rodando
+   `regexp_replace` em cada carrinho mais novo — custo ao quadrado, 4,3 s por
+   ramo, três ramos. `20261156`: índices por expressão (as MESMAS expressões da
+   view, letra a letra) + `exists (e-mail) OR exists (telefone)` — junto, o
+   planejador ignora os índices. Busca nova de "mesma pessoa" em tabela que
+   cresce: uma `exists` por chave, cada uma com índice.
 
 ### ⚠️ 667 cards parados em "Etiqueta" já entregues: o espelho só via 500 (13/11/2026)
 Não era a view: era de onde ela lê o "postado"/"entregue". O
