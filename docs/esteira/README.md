@@ -9,6 +9,28 @@ tem a sua volta escrita antes de ir ao ar**.
 
 ---
 
+## 0. A foto de partida (14/11/2026)
+
+`carbo_foto_esteira_tirar('antes-reforma-2026-11-14')` guardou **11 views,
+16 funções, 48 crons e 5 tabelas de config**; o ensaio do restaurar logo depois
+voltou vazio (a volta está provada).
+
+```
+cards por etapa no instante da foto      13/11 (antes da reconferência)
+entregue     3.605                        3.036
+etiqueta       602                          677
+em_transito    385                          703
+confirmado      71
+nf_emitida      42
+cancelado      105
+```
+
+A reconferência do Melhor Envio (13/11) já tinha levado ~570 cards a
+"entregue" e tirado ~320 de "em trânsito" antes da foto. É deste retrato que
+cada fase mede o "antes".
+
+---
+
 ## 1. As peças (o que existe hoje e NÃO se joga fora)
 
 ```
