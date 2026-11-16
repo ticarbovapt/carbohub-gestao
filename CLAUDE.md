@@ -2287,6 +2287,14 @@ rollback moram em `docs/esteira/README.md`; o raio-x (só leitura) em
    detecção do robô — sem isso só a varredura de 30 min a pega. ⚠️ Cron parado =
    esteira congelada: olhe `carbo_esteira_estado.ultima_leitura`. Rollback: bloco
    R da migração.
+   ⚠️ **`synced_at` NÃO é "mudou"** (`20261158`, medido em produção: ~622
+   cartões recalculados POR MINUTO, o `bling2-sync-incremental` regrava ~500
+   pedidos e ~520 notas sem alterar nada). Para pedido e nota da filial o robô
+   compara a IMPRESSÃO dos campos que o cartão lê (`carbo_esteira_hash_fonte`,
+   guardada em `carbo_esteira_hash`) e só enfileira quem mudou. ⚠️ Campo novo do
+   pedido/nota que mude o cartão entra NA FUNÇÃO da impressão — senão só a
+   varredura de 30 min o vê. Testado a 100×: 50 mil linhas regravadas sem mudança
+   = 0 detectados; mudança real é vista.
 
 ### ⚠️ 667 cards parados em "Etiqueta" já entregues: o espelho só via 500 (13/11/2026)
 Não era a view: era de onde ela lê o "postado"/"entregue". O
