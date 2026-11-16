@@ -1,0 +1,1 @@
+-- @executar supabase/consultas/ping_robos.sql

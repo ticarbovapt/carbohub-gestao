@@ -1,15 +1,19 @@
 name: sql-supabase
 
-# Roda UM arquivo .sql do repositório no banco de produção, pela API de gerenciamento
-# do Supabase, com o mesmo SUPABASE_ACCESS_TOKEN que já faz o deploy das funções.
-# Disparo manual (workflow_dispatch), só a partir da `main`, só arquivos de
-# supabase/{aplicar,migrations,consultas}. O arquivo inteiro vai numa chamada só, que
-# o Postgres executa como UMA transação: falhou, nada muda.
+# SQL no banco de produção SEM colar no SQL Editor.
+#   · push na `main` que ADICIONA arquivo em supabase/aplicar/ → roda cada um, em ordem
+#     de nome, uma única vez (só arquivo ADICIONADO roda; editar um já rodado não repete);
+#   · disparo manual (workflow_dispatch) de qualquer arquivo permitido.
+# Cada arquivo vai numa chamada só = UMA transação: falhou, nada muda e o job fica
+# vermelho. Usa o mesmo SUPABASE_ACCESS_TOKEN que já faz o deploy das funções.
 #
-# ⚠️ RAISE NOTICE não volta pela API — quem quer ver resultado termina o arquivo com um
-# SELECT. ⚠️ O log mostra o resultado: nunca consulte segredo (token, CRON_SECRET).
+# ⚠️ RAISE NOTICE não volta pela API — termine o arquivo com um SELECT para ver
+# resultado. ⚠️ O log mostra o resultado: nunca consulte segredo (token, CRON_SECRET).
 
 on:
+  push:
+    branches: [main]
+    paths: ['supabase/aplicar/**']
   workflow_dispatch:
     inputs:
       arquivo:
@@ -28,25 +32,26 @@ jobs:
   rodar:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - name: Rodar o arquivo no banco
+        with:
+          fetch-depth: 0
+      - name: Rodar
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
-          ARQUIVO: ${{ inputs.arquivo }}
+          MANUAL: ${{ inputs.arquivo }}
+          ANTES: ${{ github.event.before }}
+          DEPOIS: ${{ github.sha }}
         run: |
           set -euo pipefail
-          [[ "$ARQUIVO" =~ ^supabase/(aplicar|migrations|consultas)/[A-Za-z0-9_.-]+\.sql$ ]] \
-            || { echo "caminho recusado: $ARQUIVO"; exit 1; }
-          [ -f "$ARQUIVO" ] || { echo "arquivo não existe: $ARQUIVO"; exit 1; }
-          echo "arquivo: $ARQUIVO"; md5sum "$ARQUIVO"; wc -c < "$ARQUIVO"
-          jq -Rs '{query: .}' "$ARQUIVO" > corpo.json
-          code=$(curl -sS -o resposta.json -w '%{http_code}' --max-time 1000 -X POST \
-            "https://api.supabase.com/v1/projects/${SUPABASE_PROJECT_ID}/database/query" \
-            -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
-            -H "Content-Type: application/json" --data @corpo.json)
-          echo "HTTP $code"
-          (head -c 200000 resposta.json | jq .) 2>/dev/null || head -c 200000 resposta.json
-          [ "$code" -lt 300 ]
+          if [ -n "${MANUAL:-}" ]; then
+            .github/scripts/rodar-sql.sh "$MANUAL"
+            exit 0
+          fi
+          if [[ "$ANTES" =~ ^0+$ ]]; then ANTES="$(git rev-list --max-parents=0 "$DEPOIS" | tail -1)"; fi
+          mapfile -t novos < <(git diff --name-only --diff-filter=A "$ANTES" "$DEPOIS" -- supabase/aplicar | sort)
+          if [ "${#novos[@]}" -eq 0 ]; then echo "nenhum arquivo novo em supabase/aplicar"; exit 0; fi
+          printf 'a rodar, em ordem:\n'; printf ' - %s\n' "${novos[@]}"
+          for f in "${novos[@]}"; do .github/scripts/rodar-sql.sh "$f"; done
