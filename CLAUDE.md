@@ -2265,6 +2265,14 @@ rollback moram em `docs/esteira/README.md`; o raio-x (só leitura) em
    cresce: uma `exists` por chave, cada uma com índice.
    ✅ Aplicada em 15/11 (17h29): fila 14.303 ms → **1.477 ms**, cada ramo de
    carrinho ~30 ms. O resto é esteira (~600 ms) + recompra (~720 ms).
+   Zero timeouts confirmado em 16/11 (2 h, faixas de 10 min).
+6. **Fase 1 (16/11, só tela, os três apps da Esteira):** o quadro relê a cada
+   60 s (era 10 s) e ao voltar à aba; pedido encerrado na Pendências
+   (resolvido/reembolsado/sem_solucao em `carbo_entrega_trato`) sai do quadro
+   e volta pelo botão "Tratados" (`?tratados=1`). ⚠️ Entregue nunca sai, e
+   leitura que falha MOSTRA tudo. ⚠️ A lista de situações finais é a MESMA do
+   `SITUACOES` de `usePendenciasEntrega` (Atendimento) — mudou lá, mude no
+   `SITUACOES_TRATADAS` do hook da Esteira.
 
 ### ⚠️ 667 cards parados em "Etiqueta" já entregues: o espelho só via 500 (13/11/2026)
 Não era a view: era de onde ela lê o "postado"/"entregue". O

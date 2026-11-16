@@ -92,8 +92,18 @@ const ANTIGOS = [
   }),
   ped(8002, "Mirela Santos", "PayT", "Recife", "PE", 149.5, 38, "nf_emitida", comNF("000233", 37)),
 ];
+// Encerrado na Pendências de entrega: sai do quadro e volta pelo botão
+// "Tratados" (`carbo_entrega_trato`). Criado DEPOIS dos outros para não mudar
+// a numeração fictícia de nenhum pedido dos prints antigos.
+const TRATADOS = [
+  ped(9014, "Luciana Moura", "Nuvemshop", "Natal", "RN", 149.5, 11, "etiqueta", {
+    ...comNF("000419", 10), transportadora: "Jadlog", servico: ".Package", rastreio: "ME2600EXEMPLO7BR",
+    me_situacao: "vencido", me_tem_ativo: false,
+  }),
+];
+const TRATO = [{ bling_id: 9014, situacao: "resolvido" }];
 let leituras = 0;
-const esteira = () => (leituras++ % 2 === 0 ? [...ESTEIRA, ...ANTIGOS] : ANTIGOS);
+const esteira = () => (leituras++ % 2 === 0 ? [...ESTEIRA, ...TRATADOS, ...ANTIGOS] : ANTIGOS);
 
 // ── Rastreio dos códigos ────────────────────────────────────────────────────
 const ev = (m: number, descricao: string, cidade: string, uf: string) => ({ ocorrido_em: min(m), descricao, status: null, cidade, uf });
@@ -284,5 +294,6 @@ export const FX: Record<string, unknown> = {
   carbo_msg_templates: TEMPLATES,
   carbo_wa_numeros: NUMEROS,
   carbo_msg_fila: [{ bling_id: 9005 }, { bling_id: 9009 }, { bling_id: 9012 }],
+  carbo_entrega_trato: TRATO,
 };
 export const RPC_FX: Record<string, unknown> = {};

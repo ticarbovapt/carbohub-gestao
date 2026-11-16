@@ -62,12 +62,15 @@ async function lerPorIds<T>(
  * dia isto precisar mudar, mude para as duas — por isso é uma constante, e não
  * um número solto em cada `useQuery`.
  *
- * 10 s é escolha do dono do processo: a esteira fica aberta numa tela da
- * logística o dia inteiro, e o card mudando de coluna é o próprio sinal de que
- * a operação andou. Custo: duas consultas por pessoa a cada 10 s, ambas sobre
- * views indexadas e com teto de 1000 linhas.
+ * ⚠️ 60 s desde 16/11/2026 (era 10 s — reforma da Esteira, P2 em
+ * `docs/esteira/README.md`). Cada leitura do quadro recalcula a
+ * `bling2_esteira` inteira, e cinco abas abertas davam 30 leituras por minuto
+ * da MESMA view que a fila do WhatsApp lê — com as fontes andando a cada
+ * 1–15 min, 10 s não trazia dado mais novo, só custo. O "ao vivo" de quem
+ * olha vem de reler ao VOLTAR à aba (`refetchOnWindowFocus`), e aba em segundo
+ * plano não relê (padrão do React Query). Mudou aqui, vale para as duas.
  */
-const RECARGA_MS = 10_000;
+const RECARGA_MS = 60_000;
 
 export type EtapaEsteira =
   | "confirmado" | "nf_emitida" | "etiqueta" | "em_transito" | "entregue" | "cancelado";
@@ -201,10 +204,9 @@ export function useEsteiraOnline(de: string, ate: string) {
       // (comportamento de antes), nunca esvaziar a tela.
       return (data ?? []).filter((r: EsteiraRow) => r.e_online !== false) as EsteiraRow[];
     },
-    // A esteira anda sozinha e agora é ao vivo: sync de 1 min, ponte de 2 min,
-    // disparo de mensagem de 1 min. Um painel que recarrega mais devagar que a
-    // operação que ele mostra atrasa a decisão de quem está olhando.
+    // Ver RECARGA_MS: de minuto em minuto, e na hora ao voltar à aba.
     refetchInterval: RECARGA_MS,
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -442,6 +444,46 @@ export function useEcommerceAguardando() {
     // Mesmo relógio do quadro — ver RECARGA_MS. Foi a diferença entre os dois
     // que fazia o card sumir na travessia.
     refetchInterval: RECARGA_MS,
+    refetchOnWindowFocus: true,
+  });
+}
+
+/* ─── Tratado na tela de Pendências ────────────────────────────────────────
+ *
+ * Pedido que o atendimento marcou Resolvido / Reembolsado / Sem solução em
+ * Pendências de entrega (`carbo_entrega_trato`, app Atendimento) SAI do quadro
+ * — reforma da Esteira, P8. Ele não vai andar mais e já tem dono; deixá-lo na
+ * coluna fazia "precisam de atenção" contar caso encerrado.
+ *
+ * ⚠️ Só a TELA esconde. A view, a fila do WhatsApp e a Pendências ("Tratados")
+ * não mudam, e o botão "Tratados" do quadro mostra de volta.
+ * ⚠️ Entregue NÃO sai: entrega é fato, e a coluna conta entregas.
+ * ⚠️ Falha de leitura (ou a tabela ainda não existir) devolve VAZIO = mostra
+ * tudo, como era antes. Aqui esconder por engano é o lado perigoso.
+ * ⚠️ A lista de situações é a MESMA de "Tratados" na Pendências
+ * (`usePendenciasEntrega`) — mudou lá, mude aqui.
+ */
+export const SITUACOES_TRATADAS = ["resolvido", "reembolsado", "sem_solucao"] as const;
+
+export function useTratadosNaPendencia() {
+  return useQuery({
+    queryKey: ["esteira-tratados-pendencia"],
+    queryFn: async (): Promise<Set<number>> => {
+      try {
+        const data = await lerTudo<{ bling_id: number }>((ini, fim) => (supabase as any)
+          .from("carbo_entrega_trato")
+          .select("bling_id")
+          .in("situacao", SITUACOES_TRATADAS as unknown as string[])
+          .order("bling_id")
+          .range(ini, fim));
+        return new Set(data.map((r) => Number(r.bling_id)));
+      } catch (e) {
+        console.warn("[esteira] tratados da Pendências não lidos — mostrando todos:", e);
+        return new Set<number>();
+      }
+    },
+    refetchInterval: RECARGA_MS,
+    refetchOnWindowFocus: true,
   });
 }
 
