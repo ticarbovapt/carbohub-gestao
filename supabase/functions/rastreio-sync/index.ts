@@ -47,19 +47,20 @@ let TOKEN = "";
 const AMBIENTE = Deno.env.get("MELHOR_ENVIO_ENV") ?? "sandbox";
 const BASE = MELHOR_ENVIO_BASE();
 
-// Teto por rodada (escala de 100×, 16/11/2026). Era 60 — 17 mil consultas/dia,
-// que não acompanha o volume em trânsito: a fila levaria dias para dar a volta
-// e o cliente veria o trajeto atrasado. O custo real NÃO é mais o teto:
-//   · o rastreio é consultado em LOTES de 50 códigos (uma chamada por lote);
-//   · a fila vem pronta do banco (`carbo_rastreio_fila`), sem ler a esteira;
-//   · a gravação roda em grupos de 10 em paralelo;
-//   · um ORÇAMENTO DE TEMPO (ORCAMENTO_MS) corta a rodada antes de a função
-//     ser morta — quem sobra volta na próxima, porque não ganha `consultado_em`
-//     (a fila RODA). Cota fixa de ontem vira orçamento medido de hoje.
-// `RASTREIO_TETO` (secret) sobe ou desce o número sem deploy de código.
+// SEM COTA FIXA (16/11/2026, dono do processo: pedido que não está entregue
+// TEM de ser visto, é assim que se sabe se deu problema). A rodada não tem um
+// número de envios: ela repete "peça ao banco os N mais atrasados → consulte →
+// grave" enquanto houver fila e tempo. `TETO` é só o tamanho de CADA rodada
+// interna (secret `RASTREIO_TETO`); o que limita é o ORÇAMENTO DE TEMPO — a
+// função é morta aos ~150 s — e quem sobrar ganha prioridade na execução
+// seguinte, porque não ganha `consultado_em`. Cada execução devolve o retrato
+// da fila (`fila_aberta`, `nunca_consultados`, `mais_antigo`): é a medida de
+// "estamos vendo todo mundo?".
 const TETO = Math.min(Math.max(Number(Deno.env.get("RASTREIO_TETO") ?? "300") || 300, 20), 1000);
 const LOTE_TRACKING = 50;
 const ORCAMENTO_MS = 100_000;
+const FOLGA_RODADA_MS = 20_000;   // não começa rodada nova com menos que isto
+const MAX_RODADAS = 200;
 
 
 const cabecalhos = () => ({
@@ -297,7 +298,9 @@ interface ItemFila {
 // resposta da função: número que não aparece é número em que ninguém confia.
 let reprocessados = 0;
 
-async function montarFila(alvos?: string[]): Promise<ItemFila[]> {
+let statsDaFila: Record<string, unknown> | null = null;
+
+async function montarFila(alvos?: string[], excluir: string[] = []): Promise<ItemFila[]> {
   // Com `alvos`, a fila é EXATAMENTE aqueles códigos — é assim que o webhook
   // pede para atualizar o que acabou de mudar. Sem eles, a fila é a rotina.
   //
@@ -347,9 +350,10 @@ async function montarFila(alvos?: string[]): Promise<ItemFila[]> {
   // deve ser consultado: nunca consultado primeiro, depois o mais antigo (a
   // fila RODA), mais a repescagem de entregues que nunca tiveram trajeto.
   const { data: sorteio, error: erroFila } = await supabase.rpc("carbo_rastreio_fila", {
-    p_limite: TETO, p_repescagem: 20,
+    p_limite: TETO, p_repescagem: 20, p_excluir: excluir, p_stats: excluir.length === 0,
   });
   if (erroFila) throw new Error(`fila: ${erroFila.message}`);
+  if (sorteio?.stats) statsDaFila = sorteio.stats;
   for (const o of (sorteio?.fila ?? [])) fila.push(paraItem(o));
   const repescados = (sorteio?.repescagem ?? []).length;
   for (const o of (sorteio?.repescagem ?? [])) fila.push(paraItem(o));
@@ -373,6 +377,8 @@ async function montarFila(alvos?: string[]): Promise<ItemFila[]> {
   // dizer por quê — e eu não olhava o erro da consulta, exatamente o descuido
   // que passei o dia corrigindo em outros lugares. Coluna real, filtro simples,
   // e o resultado aparece na resposta da função.
+  // Só na primeira rodada da execução: nas seguintes seria repetir os mesmos 30.
+  if (excluir.length) return fila;
   const { data: pendentes, error: erroPendentes } = await supabase
     .from("rastreio_envios")
     .select("codigo,fonte_id,bling_id,transportadora,servico")
@@ -501,32 +507,26 @@ Deno.serve(async (req: Request) => {
 
     const alvos = (url.searchParams.get("codigos") ?? "")
       .split(",").map((c) => c.trim()).filter(Boolean);
-    const fila = await montarFila(alvos);
-    if (!fila.length) {
-      // "Nada a rastrear" e "não conheço este código" são coisas MUITO
-      // diferentes, e a mesma frase para as duas me fez caçar um bug que não
-      // existia: o código do teste simplesmente não estava no sistema, e a
-      // resposta parecia falha de filtro.
-      return json({
-        ok: true, fila: 0, alvos,
-        nota: alvos.length
-          ? "código(s) desconhecido(s): não estão na esteira nem em rastreio_envios"
-          : "nada a rastrear na rotina",
-      });
-    }
-
+    // ── RODADAS dentro da execução ──────────────────────────────────────────
+    // Modo alvo (webhook): UMA rodada, os códigos pedidos. Rotina: repete
+    // enquanto o banco devolver gente e houver tempo; cada rodada exclui o que
+    // já viu, então nunca gira em círculo sobre quem falhou sem julgamento.
+    let listagemDaExecucao: Awaited<ReturnType<typeof mapearPedidosME>> | null = null;
+    const rodada = async (fila: ItemFila[]) => {
     // Uma listagem só resolve todos os que ainda não têm id — e se todo mundo
     // já tem `fonte_id`, nem essa chamada acontece.
     const precisaDescobrir = fila.some((f) => !f.fonte_id);
-    const listagem = precisaDescobrir
-      ? await mapearPedidosME()
+    // A listagem custa 10 chamadas: uma vez por EXECUÇÃO, não por rodada.
+    if (precisaDescobrir && !listagemDaExecucao) listagemDaExecucao = await mapearPedidosME();
+    const listagem = precisaDescobrir && listagemDaExecucao
+      ? listagemDaExecucao
       : { mapa: new Map<string, string>(), extras: new Map<string, InfoEnvioME>() };
     const porCodigo = listagem.mapa;
 
     // Teto de buscas individuais: cada uma é uma chamada HTTP, e a rodada
     // inteira tem que caber no tempo da edge function. Quem sobrar hoje é
     // pego na próxima hora — e como o id fica guardado, a fila só encolhe.
-    let buscasRestantes = 40;
+    let buscasRestantes = 100;
 
     const porId = new Map<string, ItemFila>();
     // ⚠️ Adiados NÃO são erro: são os que a rodada não teve orçamento (ou fôlego
@@ -566,7 +566,7 @@ Deno.serve(async (req: Request) => {
       porId.set(id, { ...item, fonte_id: id });
     }
     if (adiados) console.log(`[rastreio-sync] adiados sem julgar: ${adiados}`);
-    if (!porId.size) return json({ ok: true, fila: fila.length, rastreados: 0, nota: "nenhum pedido casou no Melhor Envio" });
+    if (!porId.size) return { gravados: 0, novos: 0, semHistorico: 0, cortadosPorTempo: 0, adiados };
 
     // Tracking em LOTES (uma chamada por 50 códigos), e a gravação em grupos
     // de 10. Estourou o orçamento de tempo ⇒ para: quem não foi gravado não
@@ -577,6 +577,7 @@ Deno.serve(async (req: Request) => {
       if (Date.now() - inicioDaRodada > ORCAMENTO_MS) { cortadosPorTempo = tudo.length - i; break; }
       const lote = tudo.slice(i, i + LOTE_TRACKING);
       const bruto = await consultarRastreio(lote.map(([id]) => id));
+      await new Promise((r) => setTimeout(r, 250));   // respiro: o ME limita por minuto
       for (let j = 0; j < lote.length; j += 10) {
         await Promise.all(lote.slice(j, j + 10).map(async ([id, item]) => {
       const d = (bruto as Record<string, unknown>)[id];
@@ -638,11 +639,44 @@ Deno.serve(async (req: Request) => {
       }
     }
     if (cortadosPorTempo) console.log(`[rastreio-sync] orçamento de tempo esgotado: ${cortadosPorTempo} ficam para a próxima rodada`);
+    return { gravados, novos, semHistorico, cortadosPorTempo, adiados };
+    };
 
+    const excluir = new Set<string>();
+    const tot = { fila: 0, gravados: 0, novos: 0, semHistorico: 0, cortadosPorTempo: 0, adiados: 0, rodadas: 0 };
+    for (;;) {
+      const fila = await montarFila(alvos, [...excluir]);
+      if (!fila.length) {
+        if (tot.rodadas === 0) {
+          // "Nada a rastrear" e "não conheço este código" são coisas MUITO
+          // diferentes, e a mesma frase para as duas me fez caçar um bug que
+          // não existia: o código do teste simplesmente não estava no sistema.
+          return json({
+            ok: true, fila: 0, alvos, fila_aberta: statsDaFila,
+            nota: alvos.length
+              ? "código(s) desconhecido(s): não estão na esteira nem em rastreio_envios"
+              : "nada a rastrear na rotina",
+          });
+        }
+        break;
+      }
+      for (const f of fila) excluir.add(f.codigo);
+      const r = await rodada(fila);
+      tot.rodadas++; tot.fila += fila.length; tot.gravados += r.gravados; tot.novos += r.novos;
+      tot.semHistorico += r.semHistorico; tot.cortadosPorTempo += r.cortadosPorTempo; tot.adiados += r.adiados;
+      if (alvos.length) break;
+      if (r.cortadosPorTempo) break;
+      if (tot.rodadas >= MAX_RODADAS) break;
+      if (Date.now() - inicioDaRodada > ORCAMENTO_MS - FOLGA_RODADA_MS) break;
+    }
+
+    const parouPorTempo = !alvos.length && Date.now() - inicioDaRodada > ORCAMENTO_MS - FOLGA_RODADA_MS;
     return json({
-      ok: true, fila: fila.length, reprocessados,
-      rastreados: gravados, eventos_novos: novos, sem_historico: semHistorico,
-      cortados_por_tempo: cortadosPorTempo, teto: TETO,
+      ok: true, fila: tot.fila, rodadas: tot.rodadas, reprocessados,
+      rastreados: tot.gravados, eventos_novos: tot.novos, sem_historico: tot.semHistorico,
+      adiados_sem_julgar: tot.adiados, cortados_por_tempo: tot.cortadosPorTempo,
+      parou_por_tempo: parouPorTempo, tamanho_da_rodada: TETO,
+      fila_aberta: statsDaFila,
     });
   } catch (e) {
     console.error("[rastreio-sync]", e);
