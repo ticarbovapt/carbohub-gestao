@@ -57,6 +57,23 @@ em produção. Cada ramo de carrinho caiu de ~4.340 ms para ~30 ms, e os dois
 recompra (~720 ms), que relê a esteira inteira para achar os entregues — é o
 próximo candidato, sem pressa: 1,5 s está longe dos 8 s.
 
+✅ **Confirmado em 16/11/2026**: zero `statement timeout` em
+`net._http_response` em todas as faixas de 10 min de 22:50 a 00:50 UTC
+(~54 respostas por faixa). Antes eram ~15 por hora.
+
+## 0c. Fase 1 — só tela (16/11/2026)
+
+- **P2:** `RECARGA_MS` 10 s → **60 s** (o quadro e o "Pago" juntos), mais
+  `refetchOnWindowFocus` — voltar à aba relê na hora; aba em segundo plano
+  não relê. Cinco abas abertas: de 30 para 5 leituras da view por minuto.
+- **P8:** pedido marcado Resolvido / Reembolsado / Sem solução na Pendências
+  (`carbo_entrega_trato`) SAI do quadro, dos números do topo e dos "travados
+  de antes do período". Entregue nunca sai. Botão **Tratados N** (só aparece
+  quando há algum; `?tratados=1`) traz de volta, com o selo "tratado na
+  Pendências". Leitura que falha = mostra tudo (como antes).
+- Cópia idêntica em admin · mkt · atendimento (hook, página, documentação e
+  prints). Nenhum SQL. **Volta:** reverter o PR.
+
 ---
 
 ## 1. As peças (o que existe hoje e NÃO se joga fora)

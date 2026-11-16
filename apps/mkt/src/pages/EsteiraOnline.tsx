@@ -4,7 +4,7 @@ import {
   Truck, Package, FileText, CheckCircle2, ShoppingCart, Copy, XCircle, Loader2, MapPin, Phone,
   CalendarClock, ExternalLink, MessageSquare, AlertTriangle, Clock, Box, User, Hash, Search,
   Settings2, Link2, BellRing, BellOff, ShoppingBag, Mail, Timer, ChevronsLeftRight, ChevronsRightLeft,
-  PhoneOff,
+  PhoneOff, ClipboardCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { QuadroRolavel, useParamUrl, intervaloDoAtalho, type AtalhoPeriodo } from "@carbo/shell";
@@ -17,7 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import {
   useEsteiraOnline,
   useEsteiraParados, useRastreios, useEcommerceAguardando, useFontesSaude,
-  useAvisosDoPedido, useRecompraPipeline, useRecompraConfig, useEnviosRecompra, colunaRecompraNaTela, useEnviosCarrinho, colunaCarrinhoNaTela, useCarrinhoRespostas, type RespostaCarrinho, useNaoContatarLista, useEsteiraTravadosAntigos,
+  useAvisosDoPedido, useRecompraPipeline, useRecompraConfig, useEnviosRecompra, colunaRecompraNaTela, useEnviosCarrinho, colunaCarrinhoNaTela, useCarrinhoRespostas, type RespostaCarrinho, useNaoContatarLista, useEsteiraTravadosAntigos, useTratadosNaPendencia,
   useCarrinhoPipeline, useCarrinhoConfig,
   ETAPAS, COLUNAS_RECOMPRA, COLUNAS_RECOMPRA_RECOLHIDAS, COLUNAS_CARRINHO, COLUNAS_CARRINHO_RECOLHIDAS,
   type EsteiraRow, type EtapaEsteira, type RastreioCard, type AguardandoRow,
@@ -491,8 +491,10 @@ function ChipAviso({ sinal }: { sinal: Sinal }) {
 // processo: "parece confuso"): quem e quanto · canal, cidade e idade · UM
 // alerta e onde está · conferência (transportadora, NF, rastreio) em cinza. O
 // canal voltou a ser chip — curto e na linha que já existia, sem custar altura.
-function Card({ row, rastreio, cor, sinal, parada, onClick }: {
+function Card({ row, rastreio, cor, sinal, parada, onClick, tratado }: {
   row: EsteiraRow; rastreio?: RastreioCard; cor: string; sinal: Sinal;
+  // Encerrado na Pendências — só chega aqui com o botão "Tratados" ligado.
+  tratado?: boolean;
   // ⚠️ Vem da view `carbo_esteira_parados`, não de conta feita aqui. A mesma
   // linha alimenta o alerta do sininho — recalcular no navegador criaria duas
   // verdades sobre o mesmo pedido, e a que o time veria não seria a que
@@ -552,6 +554,13 @@ function Card({ row, rastreio, cor, sinal, parada, onClick }: {
           </span>
         )}
       </div>
+
+      {/* Linha própria: na linha do canal ele empurrava a idade para fora do card. */}
+      {tratado && (
+        <div className="mt-1.5 text-[10px] leading-4">
+          <span className="rounded bg-emerald-500/10 px-1 font-medium text-emerald-500">tratado na Pendências</span>
+        </div>
+      )}
 
       {/* 3. UM alerta (o mais grave) e onde a encomenda está. */}
       {(principal || evento || emPreparacao || (rastreio && !atrasado)) && (
@@ -1566,7 +1575,18 @@ export default function EsteiraOnline() {
   const { data: aguardando } = useEcommerceAguardando();
   const { data: parados = new Map<number, ParadoRow>() } = useEsteiraParados();
   // Pedido travado ANTES do período escolhido. Ver useEsteiraTravadosAntigos.
-  const { data: travadosAntigos = [] } = useEsteiraTravadosAntigos(de);
+  const { data: travadosTodos = [] } = useEsteiraTravadosAntigos(de);
+  // Tratado na Pendências sai do quadro (ver useTratadosNaPendencia); `?tratados=1`
+  // os mostra de volta.
+  const { data: tratados } = useTratadosNaPendencia();
+  const [tratadosUrl, setTratadosUrl] = useParamUrl("tratados", "", { replace: true });
+  const mostrarTratados = tratadosUrl === "1";
+  const ehTratado = (r: EsteiraRow) => r.etapa !== "entregue" && !!tratados?.has(r.bling_id);
+  const travadosAntigos = useMemo(
+    () => (mostrarTratados ? travadosTodos : travadosTodos.filter((r) => !ehTratado(r))),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [travadosTodos, tratados, mostrarTratados],
+  );
   const { data: recompra = [] } = useRecompraPipeline();
   const { data: enviosRecompra } = useEnviosRecompra();
   // Recolhidas por padrão — elas existem para TIRAR ruído do quadro.
@@ -1619,7 +1639,7 @@ export default function EsteiraOnline() {
     [data],
   );
 
-  const linhas = useMemo(() => {
+  const filtradas = useMemo(() => {
     let r = data ?? [];
     if (canal !== "all") r = r.filter((x) => x.canal === canal);
     const t = busca.trim().toLowerCase();
@@ -1657,6 +1677,19 @@ export default function EsteiraOnline() {
     }
     return r;
   }, [data, canal, busca, filtroAviso, avisos]);
+
+  // Contado com os OUTROS filtros aplicados: o número do botão é o que ele
+  // devolveria ao quadro.
+  const tratadosOcultos = useMemo(
+    () => filtradas.filter(ehTratado).length,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filtradas, tratados],
+  );
+  const linhas = useMemo(
+    () => (mostrarTratados ? filtradas : filtradas.filter((r) => !ehTratado(r))),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filtradas, tratados, mostrarTratados],
+  );
 
   // Os mesmos filtros da tela valem para a coluna "Pago" — uma busca que
   // esconde o pedido em cinco colunas e o deixa visível na sexta seria só
@@ -1955,6 +1988,16 @@ export default function EsteiraOnline() {
             <span className="ml-0.5 rounded bg-background/20 px-1 tabular-nums">{problemas}</span>
           )}
         </Button>
+        {(tratadosOcultos > 0 || mostrarTratados) && (
+          <Button size="sm" variant={mostrarTratados ? "default" : "outline"}
+                  className="h-9 gap-1.5" onClick={() => setTratadosUrl(mostrarTratados ? null : "1")}>
+            <ClipboardCheck className="h-3.5 w-3.5" />
+            Tratados
+            {tratadosOcultos > 0 && (
+              <span className="ml-0.5 rounded bg-background/20 px-1 tabular-nums">{tratadosOcultos}</span>
+            )}
+          </Button>
+        )}
       </div>
 
       {/* ⚠️ Fonte parada vem ANTES de tudo, inclusive do quadro.
@@ -2218,7 +2261,7 @@ export default function EsteiraOnline() {
 
                 <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain p-2">
                   {cards.map((r) => (
-                    <Card key={r.bling_id} row={r} rastreio={rastreioDe(r.rastreio)} parada={parados.get(r.bling_id)}
+                    <Card key={r.bling_id} row={r} rastreio={rastreioDe(r.rastreio)} parada={parados.get(r.bling_id)} tratado={mostrarTratados && ehTratado(r)}
                           cor={etapa.color} sinal={sinalDe(r)} onClick={() => abrirCard(r)} />
                   ))}
                   {cards.length === 0 && (
@@ -2264,7 +2307,7 @@ export default function EsteiraOnline() {
           </summary>
           <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3 xl:grid-cols-4">
             {travadosAntigos.slice(0, 40).map((r) => (
-              <Card key={r.bling_id} row={r} rastreio={rastreioDe(r.rastreio)} parada={parados.get(r.bling_id)}
+              <Card key={r.bling_id} row={r} rastreio={rastreioDe(r.rastreio)} parada={parados.get(r.bling_id)} tratado={mostrarTratados && ehTratado(r)}
                     cor={ETAPAS.find((e) => e.key === r.etapa)?.color ?? "#64748b"}
                     sinal={null} onClick={() => abrirCard(r)} />
             ))}
@@ -2288,7 +2331,7 @@ export default function EsteiraOnline() {
           </summary>
           <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3 xl:grid-cols-5">
             {cancelados.map((r) => (
-              <Card key={r.bling_id} row={r} rastreio={rastreioDe(r.rastreio)} parada={parados.get(r.bling_id)}
+              <Card key={r.bling_id} row={r} rastreio={rastreioDe(r.rastreio)} parada={parados.get(r.bling_id)} tratado={mostrarTratados && ehTratado(r)}
                     cor="#ef4444" sinal={null} onClick={() => abrirCard(r)} />
             ))}
           </div>
