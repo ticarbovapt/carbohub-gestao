@@ -76,8 +76,17 @@ const dormir = (ms: number) => new Promise((r) => setTimeout(r, ms));
 //
 // ⚠️ Só PREENCHE carimbo, nunca apaga: resposta sem o campo não é "deixou de
 // ser postado". Mesma regra do `coalesce(planilha, banco)`.
-const RECONFERIR_MAX = 300;
+//
+// ⚠️ ESCALA DE 100× (16/11/2026): o teto era 300 por rodada (29 mil/dia) com a
+// fila inteira lida em UMA consulta — e o PostgREST corta em 1.000 calado, então
+// subir o número sem paginar não subiria nada. Hoje: teto 1.500 (secret
+// `RECONFERIR_MAX` ajusta sem deploy), leitura PAGINADA em ordem estável,
+// gravação em grupos de 10 e um ORÇAMENTO DE TEMPO — estourou, para, e quem não
+// foi gravado não ganha `atualizado_em` (continua no topo). A cota deixa de
+// ser um número chutado e vira o que cabe na função.
+const RECONFERIR_MAX = Math.min(Math.max(Number(Deno.env.get("RECONFERIR_MAX") ?? "1500") || 1500, 50), 5000);
 const LOTE_TRACKING = 100;
+const ORCAMENTO_MS = 100_000;
 const CARIMBOS = [
   ["postado_em", "posted_at"],
   ["entregue_em", "delivered_at"],
@@ -95,19 +104,30 @@ async function reconferir(
   };
   // Janela DECLARADA e ordenada (os mais antigos de conferir): não é lista
   // que se mostra como "tudo" — o resto vem nas rodadas seguintes.
-  const { data, error } = await supabase
-    .from("melhorenvio_envios")
-    .select("me_id,status_me,postado_em,entregue_em,cancelado_em,expirado_em")
-    .not("gerado_em", "is", null)
-    .is("entregue_em", null).is("cancelado_em", null).is("expirado_em", null)
-    .order("atualizado_em", { ascending: true }).order("me_id")
-    .limit(RECONFERIR_MAX + vistos.size);
-  if (error) { res.erro = `leitura: ${error.message}`; return res; }
-  const alvos = (data ?? []).filter((r) => !vistos.has(String(r.me_id))).slice(0, RECONFERIR_MAX);
+  // Paginado (1.000 por página, ordem estável): o corte calado do PostgREST
+  // faria um teto > 1.000 devolver 1.000 sem avisar.
+  const alvos: any[] = [];
+  for (let de = 0; alvos.length < RECONFERIR_MAX; de += 1000) {
+    const { data, error } = await supabase
+      .from("melhorenvio_envios")
+      .select("me_id,status_me,postado_em,entregue_em,cancelado_em,expirado_em")
+      .not("gerado_em", "is", null)
+      .is("entregue_em", null).is("cancelado_em", null).is("expirado_em", null)
+      .order("atualizado_em", { ascending: true }).order("me_id")
+      .range(de, de + 999);
+    if (error) { res.erro = `leitura: ${error.message}`; return res; }
+    for (const r of data ?? []) {
+      if (!vistos.has(String(r.me_id))) alvos.push(r);
+      if (alvos.length >= RECONFERIR_MAX) break;
+    }
+    if ((data ?? []).length < 1000) break;
+  }
   res.em_aberto_lidos = alvos.length;
 
   const agora = new Date().toISOString();
+  const inicio = Date.now();
   for (let i = 0; i < alvos.length; i += LOTE_TRACKING) {
+    if (Date.now() - inicio > ORCAMENTO_MS) break;
     const lote = alvos.slice(i, i + LOTE_TRACKING);
     const r = await fetch(`${base}/api/v2/me/shipment/tracking`, {
       method: "POST", headers: cabecalhos,
@@ -120,7 +140,7 @@ async function reconferir(
       break;
     }
     const bruto = (await r.json().catch(() => ({}))) as Record<string, any>;
-    for (const atual of lote) {
+    const um = async (atual: any) => {
       const d = bruto?.[String(atual.me_id)];
       if (!d) {
         // O ME não devolveu este id: anda a vez dele mesmo assim, senão o
@@ -129,7 +149,7 @@ async function reconferir(
           await supabase.from("melhorenvio_envios")
             .update({ atualizado_em: agora }).eq("me_id", atual.me_id);
         }
-        continue;
+        return;
       }
       res.consultados++;
       const patch: Record<string, string | null> = {};
@@ -146,12 +166,16 @@ async function reconferir(
         if (patch.cancelado_em) res.cancelados++;
         if (patch.expirado_em) res.vencidos++;
       }
-      if (ensaio) continue;
+      if (ensaio) return;
       // `atualizado_em` anda SEMPRE: é ele que faz a fila girar. Sem isso os
       // mesmos 300 (os parados de verdade) voltariam toda rodada.
       const { error: e } = await supabase.from("melhorenvio_envios")
         .update({ ...patch, atualizado_em: agora }).eq("me_id", atual.me_id);
-      if (e) { res.erro = `gravação: ${e.message}`; return res; }
+      if (e) { res.erro = `gravação: ${e.message}`; }
+    };
+    for (let j = 0; j < lote.length; j += 10) {
+      await Promise.all(lote.slice(j, j + 10).map(um));
+      if (res.erro) return res;
     }
     await dormir(PAUSA_MS);
   }

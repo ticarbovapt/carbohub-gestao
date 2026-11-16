@@ -47,13 +47,20 @@ let TOKEN = "";
 const AMBIENTE = Deno.env.get("MELHOR_ENVIO_ENV") ?? "sandbox";
 const BASE = MELHOR_ENVIO_BASE();
 
-// Teto por rodada. ⚠️ O comentário antigo dizia "o cron roda de hora em hora" —
-// não roda mais desde a 20260880: são */5. A conta de custo de API que
-// justificou este 60 foi feita para 24 rodadas/dia e hoje são 288. O número
-// continua defensável (cabe no tempo da função), mas a JUSTIFICATIVA mudou, e
-// comentário que explica um mundo que não existe mais manda o próximo
-// diagnóstico para o lugar errado.
-const TETO = 60;
+// Teto por rodada (escala de 100×, 16/11/2026). Era 60 — 17 mil consultas/dia,
+// que não acompanha o volume em trânsito: a fila levaria dias para dar a volta
+// e o cliente veria o trajeto atrasado. O custo real NÃO é mais o teto:
+//   · o rastreio é consultado em LOTES de 50 códigos (uma chamada por lote);
+//   · a fila vem pronta do banco (`carbo_rastreio_fila`), sem ler a esteira;
+//   · a gravação roda em grupos de 10 em paralelo;
+//   · um ORÇAMENTO DE TEMPO (ORCAMENTO_MS) corta a rodada antes de a função
+//     ser morta — quem sobra volta na próxima, porque não ganha `consultado_em`
+//     (a fila RODA). Cota fixa de ontem vira orçamento medido de hoje.
+// `RASTREIO_TETO` (secret) sobe ou desce o número sem deploy de código.
+const TETO = Math.min(Math.max(Number(Deno.env.get("RASTREIO_TETO") ?? "300") || 300, 20), 1000);
+const LOTE_TRACKING = 50;
+const ORCAMENTO_MS = 100_000;
+
 
 const cabecalhos = () => ({
   "Authorization": `Bearer ${TOKEN}`,
@@ -297,177 +304,55 @@ async function montarFila(alvos?: string[]): Promise<ItemFila[]> {
   // ⚠️ No modo alvo, os filtros de etapa NÃO se aplicam. Um aviso sobre envio
   // já entregue é justamente o que fecha o ciclo, e descartá-lo por causa do
   // filtro da rotina deixaria o card parado em "em trânsito" para sempre.
-  // ⚠️ Era `.limit(500)` SEM ordem, e a fila pegava os 60 primeiros. Com mais
-  // de mil cards abertos (etiqueta + em trânsito), o banco devolvia sempre o
-  // MESMO pedaço e os mesmos 60 eram reconsultados de 5 em 5 min — o resto
-  // nunca entrava, e o card ficava em "Etiqueta" com o produto entregue (667
-  // em 13/11/2026). Hoje lê TODOS os abertos (paginado, ordem estável) e a
-  // fila escolhe: quem nunca foi consultado primeiro, depois quem foi
-  // consultado há mais tempo. A fila RODA.
-  const montar = () => {
-    const c = supabase
+  const fila: ItemFila[] = [];
+  const paraItem = (o: Record<string, any>): ItemFila => ({
+    codigo: String(o.codigo ?? "").trim(),
+    bling_id: o.bling_id ?? null,
+    nf_chave: o.nf_chave ?? null,
+    transportadora: o.transportadora ?? null,
+    servico: o.servico ?? null,
+    fonte_id: o.fonte_id ?? null,
+  });
+
+  if (alvos?.length) {
+    const esteira = await lerSemTeto<Record<string, any>>(() => supabase
       .from("bling2_esteira")
       .select("bling_id,rastreio,nf_chave,transportadora,servico,canal,etapa")
-      .not("rastreio", "is", null);
-    // ⚠️ JANELA de 60 dias na rotina: cada página recalcula a view inteira, e
-    // card aberto há mais de dois meses não vai voltar a andar pelo rastreio.
-    return (alvos?.length
-      ? c.in("rastreio", alvos)
-      : c.neq("etapa", "cancelado").neq("etapa", "entregue")
-          .gte("data_pedido", new Date(Date.now() - 60 * 86400_000).toISOString().slice(0, 10))
-    ).order("bling_id");
-  };
-  const esteira = await lerSemTeto<Record<string, any>>(montar)
-    .catch((e) => { throw new Error(`esteira: ${(e as Error).message}`); });
-
-  // ⚠️ TODAS as linhas, paginado: o PostgREST corta em 1.000 calado, e com o
-  // mapa cortado o envio já conhecido parecia novo — entregue voltava à fila e
-  // a repescagem gastava as vagas dela com código que já tem linha.
-  const jaTemos = await lerSemTeto<Record<string, string | null>>(() => supabase
-    .from("rastreio_envios")
-    .select("codigo,fonte_id,status,consultado_em")
-    .order("codigo"));
-  const conhecidos = new Map<string, { fonte_id: string | null; status: string | null; consultado_em: string | null }>(
-    (jaTemos ?? []).map((r: Record<string, string | null>) =>
-      [String(r.codigo), { fonte_id: r.fonte_id, status: r.status, consultado_em: r.consultado_em }]),
-  );
-  // Nunca consultado ("") vem antes de qualquer data; entre os consultados,
-  // o mais antigo primeiro.
-  const vezDe = (o: Record<string, any>) =>
-    conhecidos.get(String(o.rastreio ?? "").trim())?.consultado_em ?? "";
-  esteira.sort((a, b) => vezDe(a).localeCompare(vezDe(b)));
-
-  const fila: ItemFila[] = [];
-  for (const o of esteira) {
-    const codigo = String(o.rastreio ?? "").trim();
-    if (!codigo) continue;
-    // Mercado Envios é do `ecommerce-sync`. O canal é o nome da loja no Bling.
-    if (/mercado\s*livre|mercadolivre|meli/i.test(String(o.canal ?? ""))) continue;
-    if (/amazon/i.test(String(o.canal ?? ""))) continue;
-    // ⚠️ Shopee tem logística própria (SPX / Shopee Xpress) e não passa pelo
-    // Melhor Envio. Sem este corte, o código dela entra na fila, é procurado
-    // lá, não é encontrado, e grava um erro no card — de hora em hora, para
-    // sempre. É o mesmo caso da Mandaê logo abaixo, e o mesmo custo: uma
-    // mensagem de erro que não é erro, que ensina a equipe a ignorar o sinal.
-    //
-    // Entrou ANTES da primeira venda da Shopee chegar a ter rastreio, e não
-    // depois de alguém estranhar o card vermelho.
-    if (/shopee/i.test(String(o.canal ?? ""))) continue;
-    // Mandaê tem API própria e não passa pelo Melhor Envio. Sem este corte
-    // ela entra na fila toda hora, gasta uma busca e falha — 48 chamadas por
-    // dia que nunca podem dar certo, e um erro no card que não é erro.
-    if (/mandae|mandaê/i.test(String(o.transportadora ?? ""))) continue;
-    const conhecido = conhecidos.get(codigo);
-    // ⚠️ "Já entregue, pula" vale para a ROTINA — reconsultar 130 entregues de
-    // hora em hora é desperdício. NÃO vale no modo alvo: ali alguém pediu
-    // explicitamente por este código, e o aviso mais comum do webhook é
-    // justamente o da entrega. Eu já tinha tirado o filtro equivalente da
-    // consulta à esteira e deixei este no laço — o resultado foi `fila: 0`
-    // para um envio que existe, com cara de "nada a fazer".
-    if (!alvos?.length && conhecido?.status === "entregue") continue;
-    fila.push({
-      codigo,
-      bling_id: o.bling_id ?? null,
-      nf_chave: o.nf_chave ?? null,
-      transportadora: o.transportadora ?? null,
-      servico: o.servico ?? null,
-      fonte_id: conhecido?.fonte_id ?? null,
-    });
-    if (fila.length >= TETO) break;
+      .not("rastreio", "is", null)
+      .in("rastreio", alvos)
+      .order("bling_id"))
+      .catch((e) => { throw new Error(`esteira: ${(e as Error).message}`); });
+    const { data: conhecidosAlvo } = await supabase
+      .from("rastreio_envios").select("codigo,fonte_id").in("codigo", alvos);
+    const idDe = new Map((conhecidosAlvo ?? []).map((r: any) => [String(r.codigo), r.fonte_id as string | null]));
+    const vistos = new Set<string>();
+    for (const o of esteira) {
+      const codigo = String(o.rastreio ?? "").trim();
+      if (!codigo || vistos.has(codigo)) continue;
+      // Os mesmos cortes de canal da rotina (o banco aplica os mesmos na fila).
+      if (/mercado\s*livre|mercadolivre|meli|amazon|shopee/i.test(String(o.canal ?? ""))) continue;
+      if (/mandae|mandaê/i.test(String(o.transportadora ?? ""))) continue;
+      vistos.add(codigo);
+      fila.push(paraItem({ ...o, codigo, fonte_id: idDe.get(codigo) ?? null }));
+    }
+    reprocessados = 0;
+    return fila;
   }
 
-  // No modo alvo não há auto-cura: o pedido é pontual e a resposta tem que
-  // ser rápida — o Melhor Envio está esperando o 200.
-  if (alvos?.length) { reprocessados = 0; return fila; }
-
-  // ── Repescagem: entregue que NUNCA teve trajeto ─────────────────────────
+  // ── Rotina: a FILA é escolhida no BANCO (`carbo_rastreio_fila`, 20261164) ──
   //
-  // ⚠️ O buraco de entrada, não de manutenção.
-  //
-  // A esteira marca `entregue` a partir do `me.entregue_em` — o carimbo do
-  // Melhor Envio — sem depender de evento de transportadora. Quando o ME
-  // informa a entrega antes de o rastreio ter criado a linha, o pedido NASCE
-  // entregue: nunca existiu rodada em que ele estivesse numa etapa anterior,
-  // então ele jamais entrou na fila acima (que exclui entregue), e
-  // `rastreio_envios` nunca ganhou linha.
-  //
-  // Medido em 25/08/2026: 233 envios entregues segundo o ME, 140 SEM LINHA
-  // NENHUMA — e ZERO com linha e sem status. Quando a linha existe, o sync
-  // sempre consegue o trajeto; o buraco era só a entrada.
-  //
-  // Custo para o cliente: ele clica no link de rastreio e não vê trajeto
-  // nenhum, porque não há histórico gravado.
-  //
-  // ⚠️ CONSULTA SEPARADA E LIMITADA, não `.neq("etapa","entregue")` removido
-  // da principal. A consulta de cima tem `.limit(500)` sem ordenação — com os
-  // entregues dentro dela, eles empurrariam para fora os cards ATIVOS, que são
-  // os que têm prazo. Aqui eles entram por uma porta própria, com teto próprio,
-  // e drenam em algumas rodadas sem disputar espaço com quem está em trânsito.
-  const REPESCAGEM = 20;
-  // ⚠️ A fatia tem de conter a POPULAÇÃO INTEIRA, não uma amostra.
-  //
-  // A primeira versão pedia `.limit(200)`. O limite é aplicado no BANCO, antes
-  // do filtro `conhecidos.has(codigo)`, que roda aqui em JS — então pular quem
-  // já tem linha NÃO libera vaga na fatia. Quando os 200 trazidos estivessem
-  // todos resolvidos, a repescagem devolveria 0 para sempre e o resto ficaria
-  // inalcançável. E `LIMIT` sem `ORDER BY` no Postgres não tem ordem definida:
-  // qual pedaço da população cabia dependia do plano do momento.
-  //
-  // Com ordem explícita e teto folgado, o filtro em JS enxerga todo mundo.
-  //
-  // ⚠️ E `.limit(2000)` NÃO trazia 2.000: o PostgREST corta em 1.000 calado, e
-  // o alarme abaixo (que compara com 2.000) nunca podia disparar. Agora a
-  // varredura é paginada e traz a população inteira DA JANELA.
-  //
-  // ⚠️ A janela de 30 dias é o que impede o custo de crescer para sempre: cada
-  // página recalcula a `bling2_esteira` inteira (a etapa é um CASE, o filtro
-  // não desce para as tabelas), a cada 5 minutos. Trajeto serve a quem ainda
-  // vai clicar no link de rastreio; entregue de dois meses atrás sem trajeto
-  // não justifica recalcular a esteira de 5 em 5 minutos.
-  const LIMITE_VARREDURA = 2000;
-  const desde = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
-  const entregues = await lerSemTeto<any>(() => supabase
-    .from("bling2_esteira")
-    .select("bling_id,rastreio,nf_chave,transportadora,servico,canal,data_pedido")
-    .eq("etapa", "entregue")
-    .not("rastreio", "is", null)
-    .gte("data_pedido", desde)
-    .order("data_pedido", { ascending: false })
-    .order("bling_id"));
-  if (entregues.length >= LIMITE_VARREDURA) {
-    console.error(
-      `[rastreio-sync] ⚠️ repescagem varreu ${entregues.length} entregues (≥ ${LIMITE_VARREDURA}). ` +
-      `A população cresceu — vale filtrar no banco em vez de varrer tudo.`,
-    );
-  }
-
-  // ⚠️ Um mesmo código pode aparecer em dois cards (pedido desdobrado em duas
-  // notas com a mesma etiqueta). Sem este conjunto ele entraria duas vezes na
-  // mesma rodada e gastaria duas buscas para gravar a mesma linha.
-  const repescadosAgora = new Set<string>();
-  let repescados = 0;
-  for (const o of entregues ?? []) {
-    if (repescados >= REPESCAGEM) break;
-    const codigo = String(o.rastreio ?? "").trim();
-    if (!codigo || conhecidos.has(codigo)) continue;   // já tem linha: não mexe
-    if (repescadosAgora.has(codigo)) continue;
-    // Os mesmos cortes de canal da fila principal. Sem eles, um entregue da
-    // Shopee entraria aqui e falharia de rodada em rodada, para sempre.
-    if (/mercado\s*livre|mercadolivre|meli/i.test(String(o.canal ?? ""))) continue;
-    if (/amazon/i.test(String(o.canal ?? ""))) continue;
-    if (/shopee/i.test(String(o.canal ?? ""))) continue;
-    if (/mandae|mandaê/i.test(String(o.transportadora ?? ""))) continue;
-    fila.push({
-      codigo,
-      bling_id: o.bling_id ?? null,
-      nf_chave: o.nf_chave ?? null,
-      transportadora: o.transportadora ?? null,
-      servico: o.servico ?? null,
-      fonte_id: null,
-    });
-    repescadosAgora.add(codigo);
-    repescados += 1;
-  }
+  // ⚠️ Antes esta função lia TODOS os cards abertos e TODO o `rastreio_envios`
+  // para escolher 60 — custo proporcional ao volume, a cada 5 min. A 100× eram
+  // dezenas de milhares de linhas por rodada. Agora o banco devolve só quem
+  // deve ser consultado: nunca consultado primeiro, depois o mais antigo (a
+  // fila RODA), mais a repescagem de entregues que nunca tiveram trajeto.
+  const { data: sorteio, error: erroFila } = await supabase.rpc("carbo_rastreio_fila", {
+    p_limite: TETO, p_repescagem: 20,
+  });
+  if (erroFila) throw new Error(`fila: ${erroFila.message}`);
+  for (const o of (sorteio?.fila ?? [])) fila.push(paraItem(o));
+  const repescados = (sorteio?.repescagem ?? []).length;
+  for (const o of (sorteio?.repescagem ?? [])) fila.push(paraItem(o));
   if (repescados) console.log(`[rastreio-sync] repescagem: ${repescados} entregue(s) sem trajeto`);
 
   // ── Auto-cura ────────────────────────────────────────────────────────────
@@ -524,6 +409,8 @@ async function montarFila(alvos?: string[]): Promise<ItemFila[]> {
 // ─── Handler ─────────────────────────────────────────────────────────────────
 
 Deno.serve(async (req: Request) => {
+  // Por REQUISIÇÃO, nunca de módulo: a instância da função vive entre chamadas.
+  const inicioDaRodada = Date.now();
   const url = new URL(req.url);
 
   // O segredo vale pelo header (é assim que o pg_cron manda) OU pela query.
@@ -639,7 +526,7 @@ Deno.serve(async (req: Request) => {
     // Teto de buscas individuais: cada uma é uma chamada HTTP, e a rodada
     // inteira tem que caber no tempo da edge function. Quem sobrar hoje é
     // pego na próxima hora — e como o id fica guardado, a fila só encolhe.
-    let buscasRestantes = 15;
+    let buscasRestantes = 40;
 
     const porId = new Map<string, ItemFila>();
     // ⚠️ Adiados NÃO são erro: são os que a rodada não teve orçamento (ou fôlego
@@ -681,12 +568,19 @@ Deno.serve(async (req: Request) => {
     if (adiados) console.log(`[rastreio-sync] adiados sem julgar: ${adiados}`);
     if (!porId.size) return json({ ok: true, fila: fila.length, rastreados: 0, nota: "nenhum pedido casou no Melhor Envio" });
 
-    const bruto = await consultarRastreio([...porId.keys()]);
-
-    let gravados = 0, novos = 0, semHistorico = 0;
-    for (const [id, item] of porId) {
+    // Tracking em LOTES (uma chamada por 50 códigos), e a gravação em grupos
+    // de 10. Estourou o orçamento de tempo ⇒ para: quem não foi gravado não
+    // ganha `consultado_em` e é o primeiro da próxima rodada.
+    const tudo = [...porId.entries()];
+    let gravados = 0, novos = 0, semHistorico = 0, cortadosPorTempo = 0;
+    for (let i = 0; i < tudo.length; i += LOTE_TRACKING) {
+      if (Date.now() - inicioDaRodada > ORCAMENTO_MS) { cortadosPorTempo = tudo.length - i; break; }
+      const lote = tudo.slice(i, i + LOTE_TRACKING);
+      const bruto = await consultarRastreio(lote.map(([id]) => id));
+      for (let j = 0; j < lote.length; j += 10) {
+        await Promise.all(lote.slice(j, j + 10).map(async ([id, item]) => {
       const d = (bruto as Record<string, unknown>)[id];
-      if (!d) continue;
+      if (!d) return;
       // deno-lint-ignore no-explicit-any
       const dd = d as any;
 
@@ -740,11 +634,15 @@ Deno.serve(async (req: Request) => {
         raw: dd,
       }, eventos);
       if (r.ok) { gravados++; novos += r.novos; }
+        }));
+      }
     }
+    if (cortadosPorTempo) console.log(`[rastreio-sync] orçamento de tempo esgotado: ${cortadosPorTempo} ficam para a próxima rodada`);
 
     return json({
       ok: true, fila: fila.length, reprocessados,
       rastreados: gravados, eventos_novos: novos, sem_historico: semHistorico,
+      cortados_por_tempo: cortadosPorTempo, teto: TETO,
     });
   } catch (e) {
     console.error("[rastreio-sync]", e);

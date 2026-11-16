@@ -2310,6 +2310,24 @@ rollback moram em `docs/esteira/README.md`; o raio-x (só leitura) em
    documento anda — o robô enfileira pelo cartão recente (até 30 dias), e uma
    varredura relê as linhas não vistas há 24 h. O alarme (`carbo_esteira_vigiar`)
    vigia os dois robôs.
+   ✅ **Os robôs que falam com serviço EXTERNO também escalam** (16/11/2026,
+   `20261164`/`20261165`): cota fixa por rodada virou ORÇAMENTO DE TEMPO.
+   `rastreio-sync` escolhe a fila NO BANCO (`carbo_rastreio_fila`: nunca
+   consultado primeiro, depois o mais antigo, + repescagem; antes baixava a
+   esteira e todo o `rastreio_envios` a cada 5 min), consulta o tracking em
+   lotes de 50 e grava em grupos de 10 (teto 300, secret `RASTREIO_TETO`);
+   `melhor-envio-envios` reconfere até 1.500 por rodada, LENDO paginado (teto >
+   1.000 sem paginar devolveria 1.000 calado; secret `RECONFERIR_MAX`);
+   `bling2-sync` order_details usa 2 operários (~2,5 chamadas/s, abaixo dos 3/s
+   do Bling) até 400 por rodada (`ORDER_DETAILS_TETO`) e índice parcial da fila;
+   `ecommerce-sync` PAGINA o `/orders/search` do ML (50 por página, teto de 60
+   páginas) e só avança o checkpoint se leu tudo, espaça 8 s as duas contas
+   (429 é limite por aplicação) e consulta envios 3 por vez.
+   ⚠️ Todos param ao estourar o tempo (`inicioDaRodada` é POR REQUISIÇÃO, nunca
+   de módulo: a instância vive entre chamadas) e quem sobra não ganha carimbo,
+   então volta no topo da próxima. ⚠️ O que NÃO é nosso e limita a 100×: cota
+   diária da API do Bling, limites do Melhor Envio e do ML, faixa de envios da
+   Meta e disco/CPU do banco — medir com volume real.
 
 ### ⚠️ 667 cards parados em "Etiqueta" já entregues: o espelho só via 500 (13/11/2026)
 Não era a view: era de onde ela lê o "postado"/"entregue". O
