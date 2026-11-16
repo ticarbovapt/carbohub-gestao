@@ -2300,6 +2300,16 @@ rollback moram em `docs/esteira/README.md`; o raio-x (só leitura) em
    > 15 min ou agendamento sumido/desligado ⇒ aviso SÓ ao TI (`carbo_ti`), a cada
    hora enquanto durar e UM "normalizada" quando acaba. Roda no mesmo pg_cron que
    vigia: se o pg_cron inteiro cair, quem cobre é a tarja de status.
+   ✅ **A recompra também é TABELA** (`20261160`): `carbo_recompra_base` (uma linha por
+   pedido entregue) mantida por `carbo_recompra_atualizar()` (cron
+   `carbo-recompra-atualizar-1min`); `carbo_recompra_pipeline` virou `select` dela
+   (mesmo nome e colunas) e só `dias_desde_entrega`/`coluna` — que dependem de
+   HOJE — são calculados na leitura. A regra mora na view antiga
+   `carbo_recompra_calc` + `carbo_recompra_calcular(ids)`. A 100× (local): coluna
+   "ofertar" 4,2 s → 54 ms. ⚠️ "recomprou" muda quando OUTRO pedido do mesmo
+   documento anda — o robô enfileira pelo cartão recente (até 30 dias), e uma
+   varredura relê as linhas não vistas há 24 h. O alarme (`carbo_esteira_vigiar`)
+   vigia os dois robôs.
 
 ### ⚠️ 667 cards parados em "Etiqueta" já entregues: o espelho só via 500 (13/11/2026)
 Não era a view: era de onde ela lê o "postado"/"entregue". O
