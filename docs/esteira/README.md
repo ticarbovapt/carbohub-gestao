@@ -61,6 +61,52 @@ próximo candidato, sem pressa: 1,5 s está longe dos 8 s.
 `net._http_response` em todas as faixas de 10 min de 22:50 a 00:50 UTC
 (~54 respostas por faixa). Antes eram ~15 por hora.
 
+## 0d. Escala de 100× — a esteira em tabela (16/11/2026)
+
+Pedido do dono do processo: a esteira tem de aguentar **100× as vendas de hoje,
+sem limitador**. Medido num Postgres local com os índices REAIS de produção
+(raio-x C/D/E de 16/11) e os dados multiplicados (a máquina local foi ~5× mais
+rápida que a do Supabase no volume de hoje: 130 ms contra 670 ms):
+
+```
+                               1×       10×      100×     depois (100×)
+ler a bling2_esteira         0,13 s    3,3 s    17,5 s    0,065 s
+cartões em andamento          —         —        —        0,041 s
+recompra                     0,15 s    1,1 s    21   s    1,0 s   ← próximo
+recalcular 500 cartões        —         —        —        ~1 s
+rodada do robô sem mudança    —         —        —        6 ms
+```
+
+A view lia o histórico INTEIRO a cada leitura (hash join com seq scan em tudo;
+nada limita por data) e a fila a lê por três caminhos por minuto: estourava os
+8 s por volta de 5× o volume de hoje, não de 100×. Hoje 76% dos cartões
+(3.620 de 4.891) estão entregues e não mudam mais.
+
+**O desenho** (`20261157_esteira_em_tabela.sql`): `carbo_esteira_cards` (um
+cartão por pedido, mesmas colunas); `bling2_esteira` continua com o MESMO nome
+e as MESMAS colunas, agora um `select` da tabela (`create or replace view`
+mantém o objeto, então fila, recompra, parados e telas não mudam);
+`carbo_esteira_atualizar()` (cron 1 min) recalcula SÓ o que mudou, lendo a
+coluna de alteração de cada fonte (pedido, nota, etiqueta, rastreio, loja, CZ,
+contato, e o Bling 1) e chamando `carbo_esteira_calcular(ids)` — a MESMA
+definição da view, montada do TEXTO VIVO com cinco trocas que exigem uma
+ocorrência cada. Varredura de segurança: cartão em andamento sem recálculo há
+30 min volta à fila.
+
+1. ⚠️ **A etapa não depende do relógio** (`melhorenvio_situacao` é immutable e a
+   view não usa `now()`): cartão só muda quando uma fonte muda. É isso que
+   torna a detecção exata.
+2. ⚠️ **Latência nova**: o card agora anda até ~1–2 min depois da fonte (antes,
+   na hora). As fontes andam a cada 1–15 min, então pesa pouco.
+3. ⚠️ **O robô é um ponto único**: cron parado = esteira congelada, calada.
+   `carbo_esteira_estado.ultima_leitura` e `carbo_esteira_atualizacao_log` dizem
+   quando; o ALARME dele é o primeiro item da Fase 5 (P6).
+4. A migração só troca a view depois de conferir a tabela contra a view antiga
+   (aborta se divergir além de 0,5%) e guarda o texto antigo em
+   `carbo_backup_viewdef`. Sem freio de `ignorado`: o conteúdo é idêntico no
+   instante da troca.
+5. Falta no 100×: a recompra (1 s local) vira tabela pelo mesmo robô.
+
 ## 0c. Fase 1 — só tela (16/11/2026)
 
 - **P2:** `RECARGA_MS` 10 s → **60 s** (o quadro e o "Pago" juntos), mais
