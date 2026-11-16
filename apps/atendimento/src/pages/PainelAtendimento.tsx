@@ -53,7 +53,7 @@ function AcessoRestrito() {
     <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 p-6 text-center">
       <span className="flex h-12 w-12 items-center justify-center rounded-full bg-muted"><Lock className="h-5 w-5 text-muted-foreground" /></span>
       <h1 className="text-lg font-semibold">Acesso restrito</h1>
-      <p className="max-w-sm text-sm text-muted-foreground">O painel do atendimento é só para gestores.</p>
+      <p className="max-w-sm text-sm text-muted-foreground">Você não tem acesso ao Carbo Atendimento.</p>
     </div>
   );
 }
@@ -106,6 +106,8 @@ function Painel() {
   const [grupoAssunto, setGrupoAssunto] = useParamUrl("grupo", "");
   const [topico, setTopico] = useParamUrl("topico", "");
 
+  // Só o gestor ALTERA horário e metas (o botão e o diálogo); todos veem os números.
+  const { isGestor } = useAuth();
   const [configAberta, setConfigAberta] = useState(false);
   const [focarPerdidas, setFocarPerdidas] = useState(0);
   const agora = useAgora();
@@ -139,7 +141,7 @@ function Painel() {
                   Atualizado às {fmtHora(p.gerado_em)}
                 </span>
               )}
-              {p && (
+              {p && isGestor && (
                 <Button variant="outline" size="sm" onClick={() => setConfigAberta(true)}>
                   <Settings2 className="mr-1.5 h-4 w-4" /> Horário e metas
                 </Button>
@@ -241,7 +243,7 @@ function Painel() {
                 onFechar={() => setPessoa("")}
               />
             )}
-            <ConfigDialog aberto={configAberta} onAberto={setConfigAberta} config={p.config} />
+            {isGestor && <ConfigDialog aberto={configAberta} onAberto={setConfigAberta} config={p.config} />}
           </>
         )}
       </div>
@@ -250,13 +252,5 @@ function Painel() {
 }
 
 export default function PainelAtendimento() {
-  const { isGestor, acessoPronto } = useAuth();
-  // ⚠️ `isGestor` é false até o mapa de funções chegar: esperar, senão o
-  // gestor veria "Acesso restrito" piscar a cada F5. Quem não é gestor não
-  // chega a consultar o banco.
-  if (!acessoPronto) {
-    return <div className="flex min-h-[60vh] items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
-  }
-  if (!isGestor) return <AcessoRestrito />;
   return <Painel />;
 }

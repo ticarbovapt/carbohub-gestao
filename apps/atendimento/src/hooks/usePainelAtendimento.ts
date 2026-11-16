@@ -171,7 +171,7 @@ export function lerErroDoPainel(e: unknown): { tipo: "sem_funcao" | "sem_permiss
   if (code === "PGRST202" || code === "42883" || /could not find the function/i.test(msg)) {
     return { tipo: "sem_funcao", mensagem: msg };
   }
-  if (code === "42501" || /somente gestores/i.test(msg)) return { tipo: "sem_permissao", mensagem: msg };
+  if (code === "42501" || /somente gestores|só quem tem o carbo atendimento/i.test(msg)) return { tipo: "sem_permissao", mensagem: msg };
   return { tipo: "outro", mensagem: msg };
 }
 
