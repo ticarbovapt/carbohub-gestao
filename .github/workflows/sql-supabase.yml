@@ -1,0 +1,52 @@
+name: sql-supabase
+
+# Roda UM arquivo .sql do repositório no banco de produção, pela API de gerenciamento
+# do Supabase, com o mesmo SUPABASE_ACCESS_TOKEN que já faz o deploy das funções.
+# Disparo manual (workflow_dispatch), só a partir da `main`, só arquivos de
+# supabase/{aplicar,migrations,consultas}. O arquivo inteiro vai numa chamada só, que
+# o Postgres executa como UMA transação: falhou, nada muda.
+#
+# ⚠️ RAISE NOTICE não volta pela API — quem quer ver resultado termina o arquivo com um
+# SELECT. ⚠️ O log mostra o resultado: nunca consulte segredo (token, CRON_SECRET).
+
+on:
+  workflow_dispatch:
+    inputs:
+      arquivo:
+        description: 'Caminho do .sql (supabase/aplicar|migrations|consultas/…)'
+        required: true
+        type: string
+
+concurrency:
+  group: sql-supabase
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  rodar:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rodar o arquivo no banco
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+          ARQUIVO: ${{ inputs.arquivo }}
+        run: |
+          set -euo pipefail
+          [[ "$ARQUIVO" =~ ^supabase/(aplicar|migrations|consultas)/[A-Za-z0-9_.-]+\.sql$ ]] \
+            || { echo "caminho recusado: $ARQUIVO"; exit 1; }
+          [ -f "$ARQUIVO" ] || { echo "arquivo não existe: $ARQUIVO"; exit 1; }
+          echo "arquivo: $ARQUIVO"; md5sum "$ARQUIVO"; wc -c < "$ARQUIVO"
+          jq -Rs '{query: .}' "$ARQUIVO" > corpo.json
+          code=$(curl -sS -o resposta.json -w '%{http_code}' --max-time 1000 -X POST \
+            "https://api.supabase.com/v1/projects/${SUPABASE_PROJECT_ID}/database/query" \
+            -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+            -H "Content-Type: application/json" --data @corpo.json)
+          echo "HTTP $code"
+          (head -c 200000 resposta.json | jq .) 2>/dev/null || head -c 200000 resposta.json
+          [ "$code" -lt 300 ]
