@@ -1,7 +1,8 @@
 import type { Secao } from "../tipos";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Painel do atendimento (/painel) e a aba Assuntos — telas SÓ do gestor.
+// Painel do atendimento (/painel) e a aba Assuntos — para todo mundo que tem o app
+// (16/11/2026); só ALTERAR horário e metas é do gestor.
 //
 // ⚠️ O `n` de cada item é o número do marcador no print (`chave`) — medido pelo
 // harness em docs-prints/shots_painel.mjs. Mudou a tela, refaça o print e
@@ -15,13 +16,12 @@ export const SECOES_PAINEL: Secao[] = [
     id: "painel",
     titulo: "Painel do atendimento",
     rota: "/painel",
-    papel: "gestor",
     resumo:
-      "Os números do atendimento pelo WhatsApp oficial, para acompanhar o time e cobrar: quem está esperando resposta agora, quanto tempo o cliente espera, quantas conversas foram fechadas sem resposta e o que cada pessoa fez no período. Só o gestor vê esta tela.",
+      "Os números do atendimento pelo WhatsApp oficial, para acompanhar o time e cobrar: quem está esperando resposta agora, quanto tempo o cliente espera, quantas conversas foram fechadas sem resposta e o que cada pessoa fez no período. Todo mundo que tem o Carbo Atendimento vê esta tela.",
     regras: {
-      colaborador: ["O colaborador não vê esta tela: ela não está no menu dele, e o endereço mostra “Acesso restrito”."],
+      colaborador: ["Aparece no menu, em Acompanhamento, e como primeiro atalho do Início, igual para todos.", "Os números de cada pessoa do time aparecem para todos. O botão “Horário e metas” só aparece para o gestor: horário e metas do time são dele."],
       gestor: [
-        "Só aparece para gestor (no menu, em Gestão, e como primeiro atalho do Início).",
+        "Aparece no menu, em Acompanhamento, e como primeiro atalho do Início, igual para todos. Só você altera o horário e as metas.",
         "Todas as contas são feitas no banco, com a mesma regra para todo mundo: o número que você vê é o mesmo que outro gestor vê.",
         "A tela se atualiza sozinha a cada minuto — a fila é a de AGORA.",
         "Aba, período, número, pessoa aberta e filtros ficam no endereço: dá para mandar o link de uma visão exata para alguém.",
@@ -187,11 +187,10 @@ export const SECOES_PAINEL: Secao[] = [
     id: "painel-assuntos",
     titulo: "Painel do atendimento — Assuntos",
     rota: "/painel?aba=assuntos",
-    papel: "gestor",
     resumo:
       "Do que os clientes falam no WhatsApp: reclamações (separadas em atraso, não recebeu, veio errado, não funcionou…), dúvidas, pedido e entrega, comercial e elogios. Serve para medir problema — quantos clientes reclamaram de atraso este mês — e para achar elogio rápido.",
     regras: {
-      colaborador: ["O colaborador não vê esta aba: o painel inteiro é só do gestor."],
+      colaborador: ["Esta aba é igual para todos que têm o app."],
       gestor: [
         "Conta CLIENTES, não mensagens: quem mandou cinco mensagens de atraso é um cliente com atraso. O número de mensagens aparece ao lado.",
         "O assunto é lido pelas palavras da mensagem do cliente. É uma leitura, não uma certeza: mensagem curta ou ambígua pode cair em “Outros” ou no assunto vizinho.",

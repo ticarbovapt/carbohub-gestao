@@ -22,7 +22,7 @@ export function Layout() {
   const toggleCollapsed = () => setCollapsed((c) => { const n = !c; try { localStorage.setItem("carbo:sidebar:collapsed", n ? "1" : "0"); } catch {} return n; });
   useAccessPing("carbo_atendimento");
   useLiveNotifications();
-  const { user, profile, isGestor } = useAuth();
+  const { user, profile } = useAuth();
   const chatUser = useMemo(
     () => ({ id: user?.id ?? "", full_name: profile?.full_name ?? null, avatar_url: (profile as { avatar_url?: string | null })?.avatar_url ?? null }),
     [user?.id, profile?.full_name, profile],
@@ -63,11 +63,11 @@ export function Layout() {
         { to: "/pendencias", label: "Pendências de entrega", icon: PackageX },
         { to: "/ecommerce/mensagens", label: "Mensagens ao Cliente", icon: Send },
     ] },
-    // Só para quem tem a flag de gestor — a tela recusa os outros de todo jeito
-    // (e o banco também: `carbo_atendimento_gestor()`).
-    ...(isGestor ? [{ label: "Gestão", items: [
+    // Para todo mundo que tem o app (decisão do dono do processo, 16/11/2026). Só ALTERAR
+    // horário e metas continua do gestor — dentro da tela e no banco.
+    { label: "Acompanhamento", items: [
         { to: "/painel", label: "Painel do atendimento", icon: Gauge },
-    ] }] : []),
+    ] },
     { label: "Ajuda", items: [
         { to: "/documentacao", label: "Documentação", icon: BookOpen },
     ] },

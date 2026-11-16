@@ -51,7 +51,7 @@ export const SECOES_BASE: Secao[] = [
         itens: [
           { n: 1, titulo: "Logo", texto: "Volta para o Hub (carbohub.com.br). Com o botão do meio do mouse, abre em outra guia." },
           { n: 2, titulo: "Menu", texto: "Visão geral e Carbo Chat; Cliente (Conversas, Esteira do On-line, Mensagens ao Cliente). A tela em que você está fica destacada." },
-          { papel: "gestor", titulo: "Gestão (só gestor)", texto: "Entre Cliente e Ajuda, o gestor tem a seção Gestão, com o Painel do atendimento." },
+          { titulo: "Acompanhamento", texto: "Entre Cliente e Ajuda fica a seção Acompanhamento, com o Painel do atendimento. É igual para todos que têm o app." },
           { n: 3, titulo: "Documentação", texto: "Esta página." },
           { n: 4, titulo: "Recolher menu", texto: "Deixa a barra lateral só com os ícones. No celular o menu abre pelo botão ☰ do topo." },
           { n: 5, titulo: "Trocar de sistema", texto: "Lista os sistemas liberados para você e o Início (o Hub)." },

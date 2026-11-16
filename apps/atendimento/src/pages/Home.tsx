@@ -27,9 +27,9 @@ const ATALHOS: Atalho[] = [
 ];
 
 export default function Home() {
-  const { profile, isGestor } = useAuth();
-  // O painel do gestor entra primeiro, e só para quem pode abri-lo.
-  const atalhos = isGestor ? [{ to: "/painel", label: "Painel do atendimento", icon: Gauge }, ...ATALHOS] : ATALHOS;
+  const { profile } = useAuth();
+  // O painel do atendimento entra primeiro, para todo mundo que tem o app.
+  const atalhos = [{ to: "/painel", label: "Painel do atendimento", icon: Gauge }, ...ATALHOS];
   const primeiroNome = (profile?.full_name ?? "").split(" ")[0];
 
   return (

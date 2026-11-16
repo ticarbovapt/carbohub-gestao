@@ -2738,6 +2738,12 @@ de 30 dias (4.494 conversas) em 0,6 s.
    some.
 
 ### Painel do atendimento — a tela do GESTOR no Atendimento (06/11/2026)
+⚠️ **Desde 16/11/2026 (dono do processo) o painel e a aba Assuntos valem para QUEM TEM O APP**,
+não só gestor (`20261162`: `carbo_atendimento_painel_pode()` nas quatro consultas de leitura;
+menu "Acompanhamento", atalho no Início). ⚠️ Isso inclui os números POR PESSOA: quem atende
+vê os colegas. **ALTERAR horário e metas continua só do gestor** (`carbo_atendimento_gestor()`
+em `carbo_atendimento_config_definir`, e o botão só aparece para `isGestor`). O texto abaixo
+que diz "gestor" descreve a origem da tela.
 Pedido do dono do processo: TMA, TMPR etc. *"para gestores acompanharem … e
 poderem cobrar quem atende"*. Medido no dia anterior: ~15 de cada 100
 mensagens que pediam resposta tinham resposta; Loja e Clube sem resposta havia
@@ -4231,8 +4237,12 @@ de gastos e o banco de teste de cada PR rodaria as 715 migrações do zero e fal
    migração entra lá. Quem cola SQL no painel desfaz, calado, o que o deploy espera. Por isso
    o banco anota TODA mudança de ESTRUTURA (`20261161`: gatilhos de evento
    `carbo_ddl_fim`/`carbo_ddl_queda` → `carbo_ddl_log`, com programa, hora e o TEXTO do
-   comando) e `carbo_ddl_vigiar()` (cron 10 min) avisa o TI do que não vem de um programa
-   cadastrado em `carbo_ddl_origens_ok` (o deploy). ⚠️ Responde O QUÊ e QUANDO, nunca QUEM:
+   comando) e `carbo_ddl_vigiar()` (cron 10 min) avisa o TI do que não é o deploy. ⚠️ O deploy
+   chega com `application_name` VAZIO e o SQL Editor como `supabase/dashboard-query-editor`
+   (medido em 16/11): por isso DDL sem nome só é do deploy se uma VERSÃO NOVA apareceu no
+   histórico desde a última rodada (`20261163`); DDL com nome avisa sempre, salvo em
+   `carbo_ddl_origens_ok`. Cadastrar o vazio como origem esperada silenciaria qualquer
+   conexão sem nome. ⚠️ Responde O QUÊ e QUANDO, nunca QUEM:
    todos entram pela mesma conta do painel. ⚠️ Só vê DDL: `update`/`delete` de dados e
    `cron.schedule` escapam. ⚠️ O gatilho de evento NUNCA pode derrubar um DDL (corpo inteiro
    em `exception when others then null`). Cuidado ao mexer: erro ali trava toda mudança.
