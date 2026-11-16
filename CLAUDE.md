@@ -4201,6 +4201,33 @@ Após o deploy, informar que a nova tela aparece no `/role-matrix` no grupo corr
 - Sempre criar arquivo em `supabase/migrations/` com timestamp sequencial
 - Passar o SQL para o usuário rodar no Supabase SQL Editor quando necessário
 
+### Migrações vão ao banco pelo MERGE — integração GitHub ↔ Supabase (16/11/2026)
+Arquivo novo em `supabase/migrations/` mergeado na `main` é aplicado em produção pelo
+Supabase (Integrations → GitHub: repositório `carbohub-gestao`, diretório `.`, **Deploy to
+production** em `main`). **Automatic branching fica DESLIGADO**: o custo não entra no teto
+de gastos e o banco de teste de cada PR rodaria as 715 migrações do zero e falharia.
+1. ⚠️ **Versão = 14 dígitos ÚNICOS**: `AAAAMMDDHHMMSS_descricao.sql`. O Supabase identifica
+   a migração pelo prefixo; prefixo curto (`20260405_`) ou repetido quebra o deploy. 33
+   arquivos antigos foram renomeados por isso (já aplicados à mão — nada mudou no banco).
+2. **Cada arquivo roda como UMA transação**: falhou, nada muda e o erro aparece no PR.
+3. ⚠️ **Roda SEM ninguém ler resultado.** Bloco de medição/ensaio que precisa de LEITURA
+   antes de seguir NÃO entra em `migrations/` — vai em `supabase/consultas/` e o usuário
+   cola no SQL Editor. Migração que muda dado tem de ABORTAR sozinha quando a conferência
+   diverge (o padrão da `20261157`: compara, e só troca se fechar). `RAISE NOTICE` não é
+   leitura: ninguém vê.
+4. ⚠️ **PROIBIDO aplicar pelo painel, pelo assistente de IA do painel ou por MCP.** Cada
+   um cria uma versão no histórico SEM arquivo, e o Supabase recusa o próximo deploy
+   (a limpeza de 16/11 achou 85 dessas, de 04/05 a 04/11, sem arquivo em nenhum dos 4
+   repos). Aconteceu mesmo assim: a linha entra no repo com o MESMO prefixo, ou sai do
+   histórico (`supabase_migrations.schema_migrations`) com backup.
+5. **Só o gestao.** A integração liga UM repositório por projeto: as migrações do controle,
+   licenciados e produtos (mesmo projeto Supabase) continuam manuais.
+6. Histórico: baseline de 714 versões (`supabase/consultas/baseline_historico_migracoes.sql`)
+   e as 91 sem arquivo foram copiadas para `public.carbo_backup_historico_migracoes`
+   (`limpar_historico_migracoes.sql`). A primeira migração aplicada pela integração é a
+   `20261160` (recompra em tabela).
+7. Edge functions continuam pelo `deploy-functions.yml` (push em `main`), não por aqui.
+
 ### ⚠️ ENTREGAR SQL É MANDAR OS BLOCOS, NÃO AVISAR QUE ELES EXISTEM
 O Claude **não tem acesso ao banco** — não há connection string, `.env` nem
 service role neste ambiente. Quem roda é sempre o usuário, colando no SQL
