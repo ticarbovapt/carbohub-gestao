@@ -2295,6 +2295,11 @@ rollback moram em `docs/esteira/README.md`; o raio-x (só leitura) em
    pedido/nota que mude o cartão entra NA FUNÇÃO da impressão — senão só a
    varredura de 30 min o vê. Testado a 100×: 50 mil linhas regravadas sem mudança
    = 0 detectados; mudança real é vista.
+   ⚠️ **O ALARME do robô** (`20261159`, `carbo_esteira_vigiar`, cron
+   `carbo-esteira-vigiar-10min`): robô sem ler há > 5 min, cartão esperando há
+   > 15 min ou agendamento sumido/desligado ⇒ aviso SÓ ao TI (`carbo_ti`), a cada
+   hora enquanto durar e UM "normalizada" quando acaba. Roda no mesmo pg_cron que
+   vigia: se o pg_cron inteiro cair, quem cobre é a tarja de status.
 
 ### ⚠️ 667 cards parados em "Etiqueta" já entregues: o espelho só via 500 (13/11/2026)
 Não era a view: era de onde ela lê o "postado"/"entregue". O
