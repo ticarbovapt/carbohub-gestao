@@ -2273,6 +2273,20 @@ rollback moram em `docs/esteira/README.md`; o raio-x (só leitura) em
    leitura que falha MOSTRA tudo. ⚠️ A lista de situações finais é a MESMA do
    `SITUACOES` de `usePendenciasEntrega` (Atendimento) — mudou lá, mude no
    `SITUACOES_TRATADAS` do hook da Esteira.
+7. ⚠️ **ESCALA DE 100× (16/11, `20261157`): a esteira é TABELA.** A view lia o
+   histórico inteiro a cada leitura: 0,13 s a 1× → 17,5 s a 100× no teste local,
+   e a fila (8 s) estourava por volta de 5×. Hoje `carbo_esteira_cards` guarda os
+   cartões e `bling2_esteira` é um `select` dela (mesmo nome, mesmas colunas, mesmo
+   objeto — fila/recompra/parados/telas não mudam). `carbo_esteira_atualizar()`
+   (cron `carbo-esteira-atualizar-1min`) recalcula SÓ o que mudou, pela coluna de
+   alteração de cada fonte, via `carbo_esteira_calcular(ids)` (a definição da view
+   montada do TEXTO VIVO). ⚠️ Mexeu na regra da esteira? A regra mora na VIEW
+   ANTIGA `bling2_esteira_calc` + na função: refaça a função pelo mesmo caminho
+   (texto vivo + trocas) e confira tabela × `bling2_esteira_calc` (zero nos dois
+   sentidos). ⚠️ Fonte NOVA que mude o cartão precisa de coluna de alteração na
+   detecção do robô — sem isso só a varredura de 30 min a pega. ⚠️ Cron parado =
+   esteira congelada: olhe `carbo_esteira_estado.ultima_leitura`. Rollback: bloco
+   R da migração.
 
 ### ⚠️ 667 cards parados em "Etiqueta" já entregues: o espelho só via 500 (13/11/2026)
 Não era a view: era de onde ela lê o "postado"/"entregue". O
