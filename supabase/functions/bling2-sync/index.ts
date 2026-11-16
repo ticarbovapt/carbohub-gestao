@@ -811,13 +811,18 @@ async function syncOrdersRecente(admin: Admin, token: string, logId: string): Pr
 // ── Itens dos pedidos (detalhe, 1 chamada por pedido) ──────────────────────
 
 async function syncOrderDetails(admin: Admin, token: string, logId: string): Promise<SyncResult> {
-  // ── TETO: 60, não 200 ───────────────────────────────────────────────────
-  // Cada pedido é uma chamada + 350ms de pausa, mas o custo real é ~1s por
-  // causa da latência da própria API. 200 × 1s estoura os 150s do edge
-  // function e a rodada morre no meio, deixando o log preso em `running` —
-  // mesma conta errada que já derrubou a etapa de NF-e. 60 ≈ 70s, com folga.
-  // O que sobra vai na próxima rodada do cron.
-  const TETO = 60;
+  // ── ORÇAMENTO DE TEMPO, não cota fixa (escala de 100×, 16/11/2026) ────────
+  // Era TETO = 60 por rodada de 10 min (8.640/dia) com UM pedido por vez: a
+  // 100× entram ~7.000 pedidos/dia e a fila não esvaziaria. Hoje DOIS operários
+  // puxam da mesma fila (2 × 1 chamada a cada 350 ms ≈ 2,5/s, abaixo dos 3/s
+  // do Bling) e param quando o orçamento de tempo acaba (a função morre aos
+  // 150 s e deixa o log preso em `running` — a conta errada que já derrubou a
+  // etapa de NF-e). O que sobra vai na próxima rodada. `ORDER_DETAILS_TETO`
+  // (secret) ajusta o máximo sem deploy.
+  const TETO = Math.min(Math.max(Number(Deno.env.get("ORDER_DETAILS_TETO") ?? "400") || 400, 20), 1000);
+  const ORCAMENTO_MS = 100_000;
+  const OPERARIOS = 2;
+  const inicio = Date.now();
   // ⚠️ A fila olha DUAS ausências, não uma.
   //
   // Era só `items is null` — "pedido que ainda não foi detalhado". Isso deixa
@@ -838,8 +843,11 @@ async function syncOrderDetails(admin: Admin, token: string, logId: string): Pro
     return { synced: 0, failed: 0 };
   }
 
-  let synced = 0, failed = 0;
-  for (const p of pedidos) {
+  let synced = 0, failed = 0, proximo = 0;
+  const operario = async () => {
+    while (Date.now() - inicio < ORCAMENTO_MS) {
+      const p = pedidos[proximo++];
+      if (!p) return;
     try {
       const detail = await blingFetch(token, `/pedidos/vendas/${p.bling_id}`, 1, 1);
       const d = detail.data || {};
@@ -867,7 +875,9 @@ async function syncOrderDetails(admin: Admin, token: string, logId: string): Pro
       failed++;
     }
     await sleep(RATE_MS);
-  }
+    }
+  };
+  await Promise.all(Array.from({ length: OPERARIOS }, operario));
 
   const { count: faltando } = await admin
     .from("bling2_orders").select("id", { count: "exact", head: true })

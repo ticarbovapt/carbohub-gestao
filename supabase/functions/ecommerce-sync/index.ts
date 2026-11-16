@@ -116,41 +116,67 @@ async function pullMercadoLivre(conta: ContaML = "mercadolivre"): Promise<Record
   //
   // `order.date_last_updated.from` traz de volta todo pedido que MUDOU desde o
   // checkpoint, que é exatamente quando há algo novo para gravar.
-  const url = `https://api.mercadolibre.com/orders/search?seller=${sellerId}`
+  const base = `https://api.mercadolibre.com/orders/search?seller=${sellerId}`
     + `&sort=date_desc&order.date_last_updated.from=${since.toISOString()}`;
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
-  if (!res.ok) {
-    // ⚠️ Registra o erro NA CONTA, não só no console.
-    //
-    // Antes daqui saía um `return []` mudo — e como o `marcarSync` fica no fim
-    // desta função, a conta ficava com `last_synced_at` nulo E `last_error`
-    // nulo. Ou seja: "nunca tentou" e "tentou e a API recusou" tinham a MESMA
-    // cara, e a única forma de distinguir era abrir o log da Edge Function.
-    //
-    // Isso quase custou um diagnóstico errado em 21/09/2026, no primeiro dia
-    // do Full: os dois nulos pareciam falha de integração quando a conta
-    // simplesmente ainda não tinha tido um ciclo de sync.
-    //
-    // `p_fatal: false` de propósito: 429, 500 e blip de rede não são motivo
-    // para exigir OAuth manual. Só `invalid_grant` é, e quem decide isso é o
-    // getMlToken.
-    const corpo = await res.text().catch(() => "");
-    console.error(`[${conta}] API error`, res.status, corpo.slice(0, 200));
+  // ⚠️ PAGINADO (escala de 100×, 16/11/2026). Era UMA chamada sem `offset`:
+  // o teto de 50 do ML cortava o excedente em silêncio, e como o checkpoint
+  // avançava, a janela perdida não era relida. Agora lê `paging.total` páginas
+  // de 50 (teto de 60 páginas = 3.000 pedidos por rodada). Estourou o teto ⇒
+  // NÃO avança o checkpoint (a próxima rodada relê a mesma janela; o upsert é
+  // idempotente) e o erro fica escrito na conta — "cortou" não pode parecer
+  // "leu tudo".
+  const POR_PAGINA = 50, MAX_PAGINAS = 60;
+  const resultados: Record<string, unknown>[] = [];
+  let total = 0;
+  for (let pagina = 0; pagina < MAX_PAGINAS; pagina++) {
+    const res = await fetch(`${base}&limit=${POR_PAGINA}&offset=${pagina * POR_PAGINA}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!res.ok) {
+      // ⚠️ Registra o erro NA CONTA, não só no console. Antes daqui saía um
+      // `return []` mudo — "nunca tentou" e "tentou e a API recusou" tinham a
+      // MESMA cara (quase custou um diagnóstico errado em 21/09/2026).
+      // `p_fatal: false`: 429, 500 e blip de rede não pedem OAuth manual. Só
+      // `invalid_grant` pede, e quem decide isso é o getMlToken.
+      // Falhou no MEIO da paginação: o que veio fica sem gravar e o checkpoint
+      // não anda — a rodada seguinte relê tudo.
+      const corpo = await res.text().catch(() => "");
+      console.error(`[${conta}] API error`, res.status, corpo.slice(0, 200));
+      await supabase.rpc("ml_conta_marcar_erro", {
+        p_seller_id: Number(sellerId),
+        p_erro: `orders/search ${res.status} (página ${pagina + 1}): ${corpo.slice(0, 300)}`,
+        p_fatal: false,
+      });
+      return [];
+    }
+    const j = await res.json() as { results: Record<string, unknown>[]; paging?: { total?: number } };
+    resultados.push(...(j.results ?? []));
+    total = Number(j.paging?.total ?? resultados.length);
+    if (!(j.results ?? []).length || resultados.length >= total) break;
+  }
+  if (resultados.length < total) {
+    console.error(`[${conta}] ⚠️ ${total} pedidos na janela, lidos ${resultados.length} (teto de páginas)`);
     await supabase.rpc("ml_conta_marcar_erro", {
       p_seller_id: Number(sellerId),
-      p_erro: `orders/search ${res.status}: ${corpo.slice(0, 300)}`,
+      p_erro: `orders/search: ${total} pedidos na janela e o teto de ${MAX_PAGINAS} páginas leu ${resultados.length}`,
       p_fatal: false,
     });
-    return [];
   }
-  const json = await res.json() as { results: Record<string, unknown>[] };
+  const json = { results: resultados };
+  const lidoInteiro = resultados.length >= total;
 
   // Status do envio, um por pedido (não por item: o envio é do pedido inteiro).
+  // Três por vez e com respiro: o limite do ML é POR APLICAÇÃO (as duas contas
+  // dividem), e rajada aqui é o que dá 429 `local_rate_limited` na outra.
   const envioPorPedido = new Map<string, string | null>();
-  for (const order of (json.results ?? [])) {
-    const shippingId = (order.shipping as Record<string, unknown>)?.id;
-    envioPorPedido.set(String(order.id), await fetchMLShipmentStatus(accessToken, shippingId));
-  }
+  const fila = [...(json.results ?? [])];
+  const operario = async () => {
+    for (let order = fila.shift(); order; order = fila.shift()) {
+      const shippingId = (order.shipping as Record<string, unknown>)?.id;
+      envioPorPedido.set(String(order.id), await fetchMLShipmentStatus(accessToken, shippingId));
+      await new Promise((r) => setTimeout(r, 150));
+    }
+  };
+  await Promise.all([operario(), operario(), operario()]);
 
   const rows = (json.results ?? []).flatMap((order) => {
     const items = order.order_items as Record<string, unknown>[] ?? [];
@@ -190,10 +216,12 @@ async function pullMercadoLivre(conta: ContaML = "mercadolivre"): Promise<Record
   // Gravado nos DOIS lugares enquanto a reserva existir: se alguem voltar para
   // system_tokens, o checkpoint nao anda para tras e a rodada seguinte nao
   // rele 48 h de pedidos.
-  await marcarSync(supabase as never, Number(creds.sellerId));
-  await supabase.from("system_tokens")
-    .update({ last_synced_at: new Date().toISOString() })
-    .eq("id", conta);
+  if (lidoInteiro) {
+    await marcarSync(supabase as never, Number(creds.sellerId));
+    await supabase.from("system_tokens")
+      .update({ last_synced_at: new Date().toISOString() })
+      .eq("id", conta);
+  }
 
   return rows;
 }
@@ -866,6 +894,10 @@ Deno.serve(async (req: Request) => {
   const results: Record<string, number | string> = {};
 
   for (const [platform, pull] of Object.entries(pullers)) {
+    // ⚠️ ESPAÇA as duas contas do ML: o `local_rate_limited` (429) é limite por
+    // APLICAÇÃO, e a segunda conta batia ~1 s depois da primeira, em cima das
+    // chamadas de envio dela. Espaçar, nunca insistir com retry.
+    if (platform === "mercadolivre_full") await new Promise((r) => setTimeout(r, 8000));
     try {
       const orders = await pull(since);
       if (orders.length === 0) { results[platform] = 0; continue; }
