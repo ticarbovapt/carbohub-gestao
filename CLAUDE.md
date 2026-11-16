@@ -4227,6 +4227,15 @@ de gastos e o banco de teste de cada PR rodaria as 715 migrações do zero e fal
    (`limpar_historico_migracoes.sql`). A primeira migração aplicada pela integração é a
    `20261160` (recompra em tabela).
 7. Edge functions continuam pelo `deploy-functions.yml` (push em `main`), não por aqui.
+8. ⚠️ **SQL Editor NÃO deixa rastro no histórico de migrações** — só o que passa pelo fluxo de
+   migração entra lá. Quem cola SQL no painel desfaz, calado, o que o deploy espera. Por isso
+   o banco anota TODA mudança de ESTRUTURA (`20261161`: gatilhos de evento
+   `carbo_ddl_fim`/`carbo_ddl_queda` → `carbo_ddl_log`, com programa, hora e o TEXTO do
+   comando) e `carbo_ddl_vigiar()` (cron 10 min) avisa o TI do que não vem de um programa
+   cadastrado em `carbo_ddl_origens_ok` (o deploy). ⚠️ Responde O QUÊ e QUANDO, nunca QUEM:
+   todos entram pela mesma conta do painel. ⚠️ Só vê DDL: `update`/`delete` de dados e
+   `cron.schedule` escapam. ⚠️ O gatilho de evento NUNCA pode derrubar um DDL (corpo inteiro
+   em `exception when others then null`). Cuidado ao mexer: erro ali trava toda mudança.
 
 ### ⚠️ ENTREGAR SQL É MANDAR OS BLOCOS, NÃO AVISAR QUE ELES EXISTEM
 O Claude **não tem acesso ao banco** — não há connection string, `.env` nem
