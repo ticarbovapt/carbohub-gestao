@@ -84,7 +84,9 @@ const dormir = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // gravação em grupos de 10 e um ORÇAMENTO DE TEMPO — estourou, para, e quem não
 // foi gravado não ganha `atualizado_em` (continua no topo). A cota deixa de
 // ser um número chutado e vira o que cabe na função.
-const RECONFERIR_MAX = Math.min(Math.max(Number(Deno.env.get("RECONFERIR_MAX") ?? "1500") || 1500, 50), 5000);
+// Sem cota prática (dono do processo, 16/11/2026: envio não entregue TEM de ser
+// visto): o teto é só uma trava de sanidade; quem manda é o ORÇAMENTO DE TEMPO.
+const RECONFERIR_MAX = Math.min(Math.max(Number(Deno.env.get("RECONFERIR_MAX") ?? "20000") || 20000, 50), 50000);
 const LOTE_TRACKING = 100;
 const ORCAMENTO_MS = 100_000;
 const CARIMBOS = [

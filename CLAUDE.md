@@ -2314,10 +2314,18 @@ rollback moram em `docs/esteira/README.md`; o raio-x (só leitura) em
    `20261164`/`20261165`): cota fixa por rodada virou ORÇAMENTO DE TEMPO.
    `rastreio-sync` escolhe a fila NO BANCO (`carbo_rastreio_fila`: nunca
    consultado primeiro, depois o mais antigo, + repescagem; antes baixava a
-   esteira e todo o `rastreio_envios` a cada 5 min), consulta o tracking em
-   lotes de 50 e grava em grupos de 10 (teto 300, secret `RASTREIO_TETO`);
-   `melhor-envio-envios` reconfere até 1.500 por rodada, LENDO paginado (teto >
-   1.000 sem paginar devolveria 1.000 calado; secret `RECONFERIR_MAX`);
+   esteira e todo o `rastreio_envios` a cada 5 min) e **NÃO TEM COTA**
+   (`20261166`, dono do processo: *"se não está entregue, precisamos ver o
+   rastreio para saber se deu problema"*): repete rodadas de 300 (consulta em
+   lotes de 50, grava em grupos de 10) até a fila acabar ou o tempo (100 s)
+   estourar, e cada rodada exclui o que já viu (`p_excluir`), então quem falha
+   sem julgamento não gira em círculo. A resposta traz `fila_aberta`
+   (abertos · `nunca_consultados` · `mais_antigo`): é a medida de "estamos
+   vendo todo mundo?" — `mais_antigo` de horas atrás ou `parou_por_tempo`
+   repetido é sinal de que falta capacidade, não de que sobra;
+   `melhor-envio-envios` reconfere por tempo (teto de sanidade 20.000), LENDO
+   paginado (teto > 1.000 sem paginar devolveria 1.000 calado; secret
+   `RECONFERIR_MAX`);
    `bling2-sync` order_details usa 2 operários (~2,5 chamadas/s, abaixo dos 3/s
    do Bling) até 400 por rodada (`ORDER_DETAILS_TETO`) e índice parcial da fila;
    `ecommerce-sync` PAGINA o `/orders/search` do ML (50 por página, teto de 60
