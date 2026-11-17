@@ -244,6 +244,11 @@ export function useFilaMsg() {
   return useQuery({
     queryKey: ["msg-fila"],
     queryFn: async (): Promise<number> => {
+      // ⚠️ Pela FUNÇÃO (20261167): contar a fila como usuário logado passa pela
+      // RLS e estoura o limite da API — o número aparecia como 0.
+      const r = await (supabase as any).rpc("carbo_msg_fila_contar");
+      if (!r.error) return Number(r.data ?? 0);
+      if (!/could not find the function|PGRST202|42883/i.test(r.error.message ?? "")) throw r.error;
       const { count, error } = await (supabase as any)
         .from("carbo_msg_fila").select("bling_id", { count: "exact", head: true });
       if (error) throw error;

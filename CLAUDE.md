@@ -2695,6 +2695,33 @@ o corpo como JSON e o `FormData` chegaria vazio do outro lado.
    `carbo_wa_contatos`. A lista de interfaces é a mesma do `notify_time_interno`
    — duas listas divergem, e divergir aqui ABRE acesso em vez de fechar.
 
+### ⚠️ MEDIR A TELA COMO O USUÁRIO LOGADO: sob RLS o índice por expressão não vale (17/11/2026)
+O quadro de **Recuperação de carrinho** apareceu ZERADO (7 colunas, "0 sem telefone")
+enquanto a régua enviava centenas de mensagens/dia e a view tinha 1.720 carrinhos.
+`explain analyze` COMO `authenticated`: **17.861 ms** na `carbo_carrinho_pipeline`
+contra o limite de **8 s** da API — a tela recebia erro e o hook o devolvia como lista
+vazia (`data: carrinhos = []`).
+1. ⚠️ **Com RLS, o Postgres só usa em índice condição LEAKPROOF**, e `lower`, `trim`,
+   `regexp_replace` não são. Os índices por expressão da `20261156` (e-mail/telefone da
+   "mesma pessoa") só valem para service role e dono — foi com o dono que eu os medi
+   (a fila 14 s → 1,5 s), e a TELA nunca foi medida. Cada um dos 6 subplans voltou ao
+   índice de data (`Rows Removed by Filter: 600+`) × ~1.500 carrinhos. Reproduzido num
+   Postgres 16 local: 6 ms como dono, 726 ms sob RLS. **Toda otimização de view lida pela
+   tela se mede como `authenticated`** (BLOCO 10 de `supabase/consultas/carrinho_raio_x.sql`:
+   o `sub` do usuário é buscado ANTES do `set local role`, que não lê `auth.users`).
+2. ⚠️ **View do dono por cima de view `security_invoker` NÃO escapa da RLS** (testado: o
+   plano segue com o filtro da policy). Função `SECURITY DEFINER` escapa.
+3. `20261167`: a tela lê por `carbo_carrinho_quadro(de, ate)` (jsonb em páginas, ordem
+   estável, guarda `carbo_e_time_interno()` que LEVANTA 42501 — nunca devolve vazio) e o
+   "na fila" de Mensagens ao cliente por `carbo_msg_fila_contar()` (contar a fila como
+   usuário passava pelos três ramos de carrinho e aparecia como 0). A função LÊ a view
+   viva: a regra do carrinho continua num lugar só. A view e a `carbo_msg_fila` NÃO foram
+   tocadas (elas decidem quem recebe WhatsApp). Front sem a função cai na view.
+4. ⚠️ **Falha de leitura APARECE**: o quadro de carrinho agora mostra o erro. Hook com
+   `data = []` por padrão e sem `error` é o "falha vira nada" de sempre.
+5. ⚠️ **Pendente, medido**: ~15–20% das mensagens de carrinho saem `falhou` (16/11: 28 de
+   ~190). O motivo está em `carbo_msg_envios.resposta` — ainda não lido.
+
 ### ⚠️ Conversas e Esteira a 500 vendas/semana: o teto e o índice (19/10/2026)
 Queixa do dono do processo: *"demora para abrir"* e *"diz que foi enviada
 mensagem mas o cara não aparece aqui quando pesquisa"* (Deividi Rodrigues: NF
