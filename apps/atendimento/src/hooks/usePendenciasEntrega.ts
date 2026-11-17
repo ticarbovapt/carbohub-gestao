@@ -80,6 +80,20 @@ export interface Pendencia {
   nf_numero: string | null;
   antes_do_corte: boolean;
   trato: Trato | null;
+  /** O caso que a lista mostra: o aberto; sem aberto, o mais recente (20261173). */
+  caso?: CasoResumo | null;
+  casos_n?: number;
+}
+
+export interface CasoResumo {
+  id: string;
+  tipo: string;
+  passo: string;
+  status: "aberto" | "encerrado";
+  desfecho: string | null;
+  valor: number | null;
+  aberto_em: string;
+  atualizado_em: string;
 }
 
 export interface PosVenda {
@@ -91,6 +105,8 @@ export interface PosVenda {
   primeiro: string | null;
   /** Problemas sem trato final, no histórico todo — o selo das abas. */
   abertos: { antes: number; novos: number };
+  /** Pedidos com caso aberto, de qualquer data (ausente antes da 20261173). */
+  casos_abertos?: { antes: number; novos: number };
   /** Onde estão os problemas em aberto: o domingo da semana. */
   semanas: { semana: string; antes: boolean; n: number }[];
   itens: Pendencia[];
@@ -106,10 +122,14 @@ export function lerErro(e: any): ErroPendencias {
   return { tipo: "outro", mensagem: msg };
 }
 
-/** A página da tela: um período (semana, mês ou intervalo). Nulo = nada a ler. */
-export function usePosVenda(periodo: { de: string; ate: string } | null) {
+/** A página da tela: um período (semana, mês ou intervalo), ou "casos" (os
+ *  pedidos com caso aberto, de qualquer data). Nulo = nada a ler. */
+export function usePosVenda(periodo: { de: string; ate: string } | "casos" | null) {
+  const casos = periodo === "casos";
+  const de = periodo && periodo !== "casos" ? periodo.de : null;
+  const ate = periodo && periodo !== "casos" ? periodo.ate : null;
   return useQuery({
-    queryKey: ["posvenda", periodo?.de ?? null, periodo?.ate ?? null],
+    queryKey: ["posvenda", casos ? "casos" : de, ate],
     enabled: !!periodo,
     staleTime: 60_000,
     refetchInterval: 5 * 60_000,
@@ -118,7 +138,7 @@ export function usePosVenda(periodo: { de: string; ate: string } | null) {
     placeholderData: (anterior) => anterior,
     retry: (n, e: any) => n < 1 && lerErro(e).tipo === "outro",
     queryFn: async (): Promise<PosVenda> => {
-      const { data, error } = await db.rpc("carbo_posvenda", { p_de: periodo!.de, p_ate: periodo!.ate });
+      const { data, error } = await db.rpc("carbo_posvenda", casos ? { p_so_casos: true } : { p_de: de, p_ate: ate });
       if (error) throw error;
       return data as PosVenda;
     },
