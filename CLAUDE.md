@@ -2333,7 +2333,13 @@ rollback moram em `docs/esteira/README.md`; o raio-x (só leitura) em
    (429 é limite por aplicação) e consulta envios 3 por vez.
    ⚠️ Todos param ao estourar o tempo (`inicioDaRodada` é POR REQUISIÇÃO, nunca
    de módulo: a instância vive entre chamadas) e quem sobra não ganha carimbo,
-   então volta no topo da próxima. ⚠️ O que NÃO é nosso e limita a 100×: cota
+   então volta no topo da próxima. ⚠️ **A TELA também escala** (17/11/2026): cada coluna dos quatro quadros (entrega, recompra,
+   carrinho e as recolhidas) desenha no máximo 60 cards e oferece "Mostrar mais N · faltam M"
+   (`Cortada`, `EsteiraOnline.tsx`, idêntico nos três apps). Contagem e valor do cabeçalho
+   seguem somando TODOS; só o desenho é cortado. Testado no Chromium com 303 cards numa coluna.
+   ⚠️ Ainda lê todas as linhas da janela para contar (`lerTudo`): a 100× o próximo passo é
+   agregar a contagem no banco.
+   ⚠️ O que NÃO é nosso e limita a 100×: cota
    diária da API do Bling, limites do Melhor Envio e do ML, faixa de envios da
    Meta e disco/CPU do banco — medir com volume real.
 
