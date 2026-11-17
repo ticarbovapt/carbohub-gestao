@@ -53,8 +53,8 @@ select * from public.carbo_esteira_estado;
 
 -- BLOCO 7 — os alarmes do TI das últimas 24 h (o que o vigia já viu).
 -- ESPERADO: vazio, ou só avisos já resolvidos ("normalizada").
-select created_at, title, left(coalesce(message, ''), 140) as mensagem
+select created_at, type, title, left(coalesce(body, ''), 140) as mensagem
   from public.notifications
  where created_at > now() - interval '24 hours'
-   and (title ilike '%esteira%' or title ilike '%robô%' or title ilike '%fila%' or title ilike '%DDL%' or title ilike '%vigia%')
+   and (type like 'esteira%' or type like 'ddl%' or title ilike '%esteira%' or title ilike '%DDL%' or title ilike '%fila%')
  order by created_at desc limit 20;
