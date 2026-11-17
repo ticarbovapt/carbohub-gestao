@@ -2825,6 +2825,25 @@ Livre); navegar SEMANA A SEMANA (domingo a sábado) pelas setas ‹ semana › (
    sem_solucao), que é o que a Esteira lê para "Tratados"; a observação escrita à mão não é tocada.
    ⚠️ "Arrependimento: produto aberto sem defeito ⇒ recusa" segue o fluxo do dono do processo
    (consumível aberto não volta à venda) — o art. 49 não traz essa exceção por escrito.
+7. **Reclamação do WhatsApp na linha + Painel do pós-venda** (`20261174`, pedido do dono do
+   processo: "se o cliente reclamar lá, a linha já fica sinalizada"). `carbo_posvenda_reclamacoes`
+   (interna) junta as mensagens do cliente com assunto do grupo `reclamacao` (a MESMA
+   classificação do painel do atendimento, `carbo_wa_assuntos_janela`) ao pedido pela chave do
+   telefone (`carbo_fone_chave`), escolhendo o pedido mais recente ANTES da mensagem; o que não
+   casa conta como "sem pedido". ⚠️ `pendente` = reclamou e não há caso aberto, ou o último caso
+   foi cancelado, ou foi encerrado ANTES da última reclamação (voltou a reclamar).
+   - `carbo_posvenda` ganhou `p_so_casos` e `p_pedido` (abre UM pedido fora do período — o diálogo
+     de "Casos abertos" e os links do painel); a assinatura de 4 argumentos foi APAGADA (sobrecarga
+     = `function is not unique`). Filtro `?reclamou=todas|pendente` na tela.
+   - No caso, os tipos que casam com o assunto da reclamação vêm primeiro (`TIPO_DO_ASSUNTO` em
+     `posvendaCasos.ts`). Assunto novo de reclamação: mapear ali, senão não sugere nada.
+   - Conversas: cartão "Pós-venda" no painel lateral (`carbo_posvenda_do_cliente`, pedidos do
+     telefone com o caso de cada um).
+   - `/pos-venda/acompanhamento` (`carbo_posvenda_painel(de, ate, corte)`, jsonb, agregado no
+     banco): casos abertos/vencidos agora, abertos e encerrados no período, tempo até resolver
+     (mediana/p90), no prazo de 30 dias (só vícios: faltante, avaria, defeito, errado — a MESMA
+     lista do `prazoDias`), reembolsado, casos por tipo × desfecho, reclamações por assunto,
+     reclamações SEM caso (a lista de trabalho) e quem tratou. Mês ou período na URL.
 
 ### ⚠️ Conversas e Esteira a 500 vendas/semana: o teto e o índice (19/10/2026)
 Queixa do dono do processo: *"demora para abrir"* e *"diz que foi enviada

@@ -111,3 +111,15 @@ describe("ajudantes", () => {
     expect(prazoDoCaso("arrependimento", aberto)).toBeNull();
   });
 });
+
+describe("assunto do WhatsApp → tipo sugerido", () => {
+  it("todo tipo sugerido existe", async () => {
+    const { TIPO_DO_ASSUNTO } = await import("../../../apps/atendimento/src/lib/posvendaCasos");
+    for (const t of Object.values(TIPO_DO_ASSUNTO)) expect(FLUXO[t]).toBeDefined();
+  });
+  it("sem repetir e na ordem", async () => {
+    const { tiposSugeridos } = await import("../../../apps/atendimento/src/lib/posvendaCasos");
+    expect(tiposSugeridos(["avaria", "embalagem", "ameaca", "faltou_item"])).toEqual(["avaria", "faltante"]);
+    expect(tiposSugeridos(["ameaca"])).toEqual([]);
+  });
+});

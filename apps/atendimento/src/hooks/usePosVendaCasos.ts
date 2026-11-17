@@ -89,6 +89,8 @@ function useMutacaoCaso<V>(fn: (v: V) => Promise<void>, blingId: number) {
       qc.invalidateQueries({ queryKey: ["posvenda_casos", blingId] });
       qc.invalidateQueries({ queryKey: ["posvenda"] });
       qc.invalidateQueries({ queryKey: ["entrega_trato_hist", blingId] });
+      qc.invalidateQueries({ queryKey: ["posvenda_cliente"] });
+      qc.invalidateQueries({ queryKey: ["posvenda_painel"] });
     },
   });
 }
@@ -144,4 +146,30 @@ export function mensagemDoErro(e: any): string {
   if (code === "PGRST202" || code === "42883") return "Os casos ainda não foram instalados no banco.";
   if (code === "42501") return "Sem acesso.";
   return String(e?.message ?? e ?? "Erro desconhecido");
+}
+
+export interface PedidoDoCliente {
+  bling_id: number;
+  pedido_codigo: string | null;
+  pedido_numero: string | null;
+  canal: string | null;
+  data_pedido: string;
+  total: number | null;
+  etapa: string;
+  caso: { id: string; tipo: string; passo: string; status: "aberto" | "encerrado"; desfecho: string | null; aberto_em: string } | null;
+}
+
+/** Os pedidos do telefone da conversa (os 10 mais recentes), com o caso de cada um (20261174). */
+export function usePosVendaDoCliente(waId: string | null) {
+  return useQuery({
+    queryKey: ["posvenda_cliente", waId],
+    enabled: !!waId,
+    staleTime: 60_000,
+    retry: (n, e: any) => n < 1 && !["PGRST202", "42883", "42501"].includes(e?.code ?? ""),
+    queryFn: async (): Promise<PedidoDoCliente[]> => {
+      const { data, error } = await db.rpc("carbo_posvenda_do_cliente", { p_wa_id: waId });
+      if (error) throw error;
+      return (data ?? []) as PedidoDoCliente[];
+    },
+  });
 }
