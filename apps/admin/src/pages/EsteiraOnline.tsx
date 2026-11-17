@@ -1364,6 +1364,30 @@ function LinhaDeErro({ erro }: { erro: EnvioMsg }) {
 // monitor de 1366/1440. ⚠️ A contagem fica sempre à vista no trilho: esconder
 // quem não pode ser avisado faria a régua parecer melhor do que é.
 type ColDef = { key: string; label: string; descricao: string; color: string };
+/* ⚠️ Cada coluna desenha no máximo `PASSO_COLUNA` cards e oferece "Mostrar mais".
+   A contagem e o valor do cabeçalho seguem somando TODOS (vêm do array inteiro): só o
+   DESENHO é cortado. A 100× do volume uma coluna passa de milhares de cards, e o
+   navegador gastaria segundos para desenhar o que ninguém rola. Cada coluna monta a
+   sua instância, então o "quanto já mostrei" é por coluna. */
+const PASSO_COLUNA = 60;
+function Cortada<T>({ itens, render }: { itens: T[]; render: (r: T) => React.ReactNode }) {
+  const [mostrando, setMostrando] = useState(PASSO_COLUNA);
+  const vistos = itens.length > mostrando ? itens.slice(0, mostrando) : itens;
+  const resto = itens.length - vistos.length;
+  return (
+    <>
+      {vistos.map((r) => render(r))}
+      {resto > 0 && (
+        <button type="button"
+                className="w-full rounded-md border border-dashed py-1.5 text-[11px] font-medium text-muted-foreground hover:bg-muted/50"
+                onClick={() => setMostrando((n) => n + PASSO_COLUNA)}>
+          Mostrar mais {Math.min(resto, PASSO_COLUNA)} · faltam {resto}
+        </button>
+      )}
+    </>
+  );
+}
+
 function ColunasRecolhidas<T extends { total: number }>({ cols, porColuna, abertas, alternar, chave, card }: {
   cols: ColDef[];
   porColuna: Map<any, T[]>;
@@ -1400,7 +1424,7 @@ function ColunasRecolhidas<T extends { total: number }>({ cols, porColuna, abert
               )}
             </div>
             <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain p-2">
-              {cards.map((r) => <Fragment key={chave(r)}>{card(r, col)}</Fragment>)}
+              <Cortada itens={cards} render={(r) => <Fragment key={chave(r)}>{card(r, col)}</Fragment>} />
               {cards.length === 0 && (
                 <p className="px-2 py-4 text-center text-[11px] text-muted-foreground/60">ninguém aqui</p>
               )}
@@ -2075,10 +2099,10 @@ export default function EsteiraOnline() {
                     )}
                   </div>
                   <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain p-2">
-                    {cards.map((r) => (
+                    <Cortada itens={cards} render={(r) => (
                       <CardCarrinho key={r.checkout_id} row={r} cor={col.color}
                                     resposta={col.key === "respondeu" ? respostasCarrinho?.get(r.checkout_id) : undefined} />
-                    ))}
+                    )} />
                     {cards.length === 0 && (
                       <p className="px-2 py-4 text-center text-[11px] text-muted-foreground/60">ninguém aqui</p>
                     )}
@@ -2122,9 +2146,9 @@ export default function EsteiraOnline() {
                     )}
                   </div>
                   <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain p-2">
-                    {cards.map((r) => (
+                    <Cortada itens={cards} render={(r) => (
                       <CardRecompra key={r.bling_id} row={r} cor={col.color} />
-                    ))}
+                    )} />
                     {cards.length === 0 && (
                       <p className="px-2 py-4 text-center text-[11px] text-muted-foreground/60">ninguém aqui</p>
                     )}
@@ -2265,10 +2289,10 @@ export default function EsteiraOnline() {
                 </div>
 
                 <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain p-2">
-                  {cards.map((r) => (
+                  <Cortada itens={cards} render={(r) => (
                     <Card key={r.bling_id} row={r} rastreio={rastreioDe(r.rastreio)} parada={parados.get(r.bling_id)} tratado={mostrarTratados && ehTratado(r)}
                           cor={etapa.color} sinal={sinalDe(r)} onClick={() => abrirCard(r)} />
-                  ))}
+                  )} />
                   {cards.length === 0 && (
                     <p className="px-2 py-4 text-center text-[11px] text-muted-foreground/60">sem pedidos</p>
                   )}
