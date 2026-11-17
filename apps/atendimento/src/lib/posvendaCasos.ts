@@ -127,6 +127,9 @@ const MSG = {
   aberto:
     "Olá, {nome}. Como o produto do pedido {pedido} foi aberto e não apresenta defeito, não conseguimos aceitar a devolução por " +
     "desistência: por ser consumível, depois de aberto ele não pode voltar à venda. Se notar qualquer problema no produto, nos avise que analisamos.",
+  fotosArrependimento:
+    "Olá, {nome}! Recebemos o seu pedido de devolução do pedido {pedido}. Para darmos andamento, pode nos enviar fotos " +
+    "da embalagem e do produto, mostrando se o lacre está intacto?",
   reembolsoPago:
     "Olá, {nome}! O reembolso de {valor} referente ao pedido {pedido} foi feito. Segue o comprovante. " +
     "Qualquer dúvida, estamos à disposição.",
@@ -367,7 +370,7 @@ export const FLUXOS: Fluxo[] = [
         opcoes: [{ id: "orientado", rotulo: "Cliente orientado", proximo: "chegou" }] },
       { id: "prazo", titulo: "Pediu até 7 dias depois de receber?", cdc: "Art. 49",
         opcoes: [
-          { id: "sim", rotulo: "Sim, dentro do prazo", proximo: "estado", tom: "sim" },
+          { id: "sim", rotulo: "Sim, dentro do prazo", proximo: "fotos", tom: "sim" },
           { id: "nao", rotulo: "Não, depois de 7 dias", proximo: "fora_prazo", tom: "nao" },
         ] },
       { id: "fora_prazo", titulo: "O cliente relata algum defeito?", cdc: "Art. 18",
@@ -376,7 +379,9 @@ export const FLUXOS: Fluxo[] = [
           { id: "nao", rotulo: "Não", proximo: "recusa_prazo", tom: "nao" },
         ] },
       recusa("recusa_prazo", MSG.foraDoPrazo),
-      { id: "estado", titulo: "O produto está lacrado, sem uso?",
+      { id: "fotos", titulo: "Pedir fotos da embalagem e do produto", mensagem: MSG.fotosArrependimento,
+        opcoes: [{ id: "recebidas", rotulo: "Fotos recebidas", proximo: "estado" }] },
+      { id: "estado", titulo: "As fotos mostram o produto lacrado, sem uso?",
         opcoes: [
           { id: "sim", rotulo: "Sim, lacrado", proximo: "reversa", tom: "sim" },
           { id: "nao", rotulo: "Não, foi aberto", proximo: "aberto", tom: "nao" },
@@ -393,8 +398,9 @@ export const FLUXOS: Fluxo[] = [
       { id: "chegou", titulo: "O produto voltou à LogHouse?",
         opcoes: [{ id: "recebido", rotulo: "Recebido", proximo: "conferir" }] },
       { id: "conferir", titulo: "Chegou como o cliente informou?",
+        texto: "Confira com as fotos que o cliente mandou.",
         opcoes: [
-          { id: "sim", rotulo: "Sim", proximo: "reembolso_integral", tom: "sim" },
+          { id: "sim", rotulo: "Sim", proximo: "escolha", tom: "sim" },
           { id: "nao", rotulo: "Não", proximo: "reavaliar", tom: "nao" },
         ] },
       { id: "reavaliar", titulo: "Reavaliar o caso",
@@ -404,6 +410,13 @@ export const FLUXOS: Fluxo[] = [
           { id: "parcial", rotulo: "Reembolso parcial", proximo: "reembolso_parcial" },
           { id: "recusar", rotulo: "Recusar", proximo: "recusa_conferencia", tom: "nao" },
         ] },
+      { id: "escolha", titulo: "Reembolso ou troca?", cdc: "Art. 49",
+        texto: "Pela lei, a desistência devolve o dinheiro; trocar por outro produto só se o cliente preferir.",
+        opcoes: [
+          { id: "integral", rotulo: "Reembolso integral", proximo: "reembolso_integral" },
+          { id: "troca", rotulo: "Trocar por outro produto", proximo: "troca" },
+        ] },
+      enviar("troca", "Enviar o produto escolhido", "troca", "Se tiver diferença de preço, combine com o cliente antes."),
       recusa("recusa_conferencia"),
       ...reembolso("parcial"),
       ...reembolso("integral", "Art. 49, parágrafo único", "Tudo o que foi pago, frete incluído, sem demora. Quem paga é o Financeiro."),
