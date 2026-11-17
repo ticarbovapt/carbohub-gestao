@@ -2780,6 +2780,12 @@ com `OR` o Postgres não faz join por hash e compara tudo contra tudo. Local, me
 3. ⚠️ Migração que só ajusta TEMPO não aborta quando o job não é o esperado: WARNING e segue
    (uma migração que aborta TRAVA as seguintes). Só aborta se o comando reescrito perder o
    segredo ou a URL.
+4. ⚠️ **Job HTTP SEM `timeout_milliseconds` no comando vale 5 s** (padrão do `net.http_post`):
+   `bling-nfe-sync` (:00) e `vindi-sync-15min` (:00/:15/:30/:45) eram os ~50 `Timeout of 5000 ms`
+   do pg_net (`20261171`: 150 s e 60 s, acrescentados ao texto vivo depois do `body :=`). O
+   timeout só decide até quando o cron ESPERA a resposta; a função roda do mesmo jeito. Job com
+   `url` nulo em `cron.job` é SQL puro e não entra. Job HTTP novo nasce com timeout explícito.
+   ⚠️ `vindi-sync` não está na lista `dep` do deploy — nunca sobe pelo push.
 
 ### ⚠️ Conversas e Esteira a 500 vendas/semana: o teto e o índice (19/10/2026)
 Queixa do dono do processo: *"demora para abrir"* e *"diz que foi enviada
