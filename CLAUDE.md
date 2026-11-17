@@ -2722,6 +2722,24 @@ vazia (`data: carrinhos = []`).
 5. ⚠️ **Pendente, medido**: ~15–20% das mensagens de carrinho saem `falhou` (16/11: 28 de
    ~190). O motivo está em `carbo_msg_envios.resposta` — ainda não lido.
 
+### Vigia das FONTES da esteira + medição das telas (17/11/2026)
+`20261168`, `carbo_esteira_vigiar_fontes()` (cron `carbo-esteira-vigiar-fontes-10min`, 9-59/10):
+irmão do vigia do robô (`20261159`), avisa SÓ o TI (1×/h enquanto durar, 1× "normalizada").
+Cobre o que o `pg_cron` marca `succeeded` mesmo falhando: rastreio (mudo > 20 min, HTTP ≠ 200,
+ou 3 rodadas seguidas com `parou_por_tempo`), sync do carrinho (> 45 min sem gravar), fila
+estourando o tempo (≥ 3 em 30 min), `whatsapp-meta` mudo (> 10 min), taxa de `falhou` > 40% com
+≥ 30 envios em 2 h (o normal é 10–15%: 131049/131026/130472 são decisão da Meta), `ecommerce-sync`
+e a conexão do Bling 2. Lê `net._http_response`, nunca `cron.job_run_details`.
+1. ⚠️ **Sem evidência não alarma**: tabela do pg_net vazia ⇒ nenhuma verificação de "não responde".
+2. ⚠️ **O `whatsapp-meta` tem DUAS respostas normais**: a rodada (`segurados`/`enviados`) e a fila
+   VAZIA (`nada a avisar pela Meta`, linha 388) — só a primeira daria alarme toda madrugada. O teste
+   local pegou isso. Mudou o corpo de resposta de uma função vigiada, mude o vigia.
+3. ⚠️ **`a or b` em plpgsql NÃO garante curto-circuito**: `not found or r.created < …` lê `r` sem
+   preenchimento, dá erro, e o bloco `exception when others` o engole — o alarme sumiria calado.
+4. `supabase/consultas/esteira_como_usuario.sql` mede CADA leitura da tela como `authenticated` com
+   o limite de 8 s (medido em 17/11: todas ok, a mais lenta é a coluna "Pago", 1,8 s para 24 linhas).
+   Rode de tempos em tempos e ao mexer em view lida pela tela.
+
 ### ⚠️ Conversas e Esteira a 500 vendas/semana: o teto e o índice (19/10/2026)
 Queixa do dono do processo: *"demora para abrir"* e *"diz que foi enviada
 mensagem mas o cara não aparece aqui quando pesquisa"* (Deividi Rodrigues: NF
