@@ -168,3 +168,22 @@ describe("assunto do WhatsApp → tipo sugerido", () => {
     expect(tiposSugeridos(["ameaca"])).toEqual([]);
   });
 });
+
+describe("arrependimento segue o fluxo do dono do processo", () => {
+  const prox = (passo: string, opcao: string) =>
+    passoDe("arrependimento", passo)!.opcoes.find((o) => o.id === opcao)!;
+  it("dentro do prazo pede fotos ANTES de decidir se está lacrado", () => {
+    expect(prox("prazo", "sim").proximo).toBe("fotos");
+    expect(prox("fotos", "recebidas").proximo).toBe("estado");
+  });
+  it("produto conferido: o cliente escolhe reembolso ou troca", () => {
+    expect(prox("conferir", "sim").proximo).toBe("escolha");
+    expect(prox("escolha", "integral").proximo).toBe("reembolso_integral");
+    expect(prox("escolha", "troca").proximo).toBe("troca");
+    expect(prox("troca", "enviado").desfecho).toBe("troca");
+  });
+  it("aberto e sem defeito continua recusado; com defeito vira caso de defeito", () => {
+    expect(prox("aberto", "nao").proximo).toBe("recusa_aberto");
+    expect(prox("aberto", "sim").mudaPara).toBe("defeito");
+  });
+});

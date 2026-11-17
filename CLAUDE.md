@@ -2865,6 +2865,11 @@ Livre); navegar SEMANA A SEMANA (domingo a sábado) pelas setas ‹ semana › (
    Teste ponta a ponta: `supabase/consultas/posvenda_teste_reembolso.sql` (pedido e reclamação
    FICTÍCIOS, bling_id -9900000000001, telefone com DDD 00; BLOCO 1 cria/reseta, BLOCO 2 apaga).
 
+9. **Fluxogramas** (`docs/posvenda/fluxos/*.png`, 17/11/2026, pedido do dono do processo): um por
+   tipo de caso + visão geral + reembolso, GERADOS do `posvendaCasos.ts` por
+   `node docs/posvenda/gerar-fluxos.mjs` (graphviz). ⚠️ Roteiro mudou ⇒ rode de novo na MESMA tarefa;
+   o gerador recusa passo que ficou fora do desenho. O arrependimento ganhou "Pedir fotos" antes de
+   julgar o lacre e "Reembolso ou troca?" depois de conferir — como no diagrama do dono do processo.
 ### ⚠️ Conversas e Esteira a 500 vendas/semana: o teto e o índice (19/10/2026)
 Queixa do dono do processo: *"demora para abrir"* e *"diz que foi enviada
 mensagem mas o cara não aparece aqui quando pesquisa"* (Deividi Rodrigues: NF
