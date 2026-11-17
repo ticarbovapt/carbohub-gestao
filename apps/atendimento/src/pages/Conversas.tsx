@@ -20,6 +20,7 @@ import { Detalhe } from "@/pages/EsteiraOnline";
 import { useEsteiraPedido, useAvisosDoPedido, useRastreios } from "@/hooks/useEsteiraOnline";
 import { useTemplatesMsg } from "@/hooks/useMensagensCliente";
 import { CHECKOUTS } from "@/lib/checkouts";
+import PosVendaDoCliente from "@/components/posvenda/PosVendaDoCliente";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -3251,6 +3252,9 @@ function PainelContato({ c, meuId, onVerPedido }: {
               linha do número: o título ocupava uma linha inteira para rotular um
               único elemento que já traz o ícone de caixa. */}
           {pedidoDaConversa(c) != null && <CompraOriginal c={c} onVerPedido={onVerPedido} />}
+
+          {/* ── Pós-venda: os pedidos deste telefone e o caso de cada um ──── */}
+          <PosVendaDoCliente waId={c.wa_id} />
 
           {/* ── Os links de checkout ────────────────────────────────────────
               DEPOIS do pedido, e a ordem é a do atendimento: primeiro se vê o

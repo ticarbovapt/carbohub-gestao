@@ -83,6 +83,20 @@ export interface Pendencia {
   /** O caso que a lista mostra: o aberto; sem aberto, o mais recente (20261173). */
   caso?: CasoResumo | null;
   casos_n?: number;
+  /** O que o cliente reclamou no WhatsApp (assuntos do painel), ligado pelo telefone (20261174). */
+  reclamacao?: Reclamacao | null;
+}
+
+export interface Reclamacao {
+  n: number;
+  primeira_em: string;
+  ultima_em: string;
+  assuntos: { codigo: string; rotulo: string }[];
+  trecho: string | null;
+  wa_id: string | null;
+  numero_id: string | null;
+  /** Ninguém está tratando: sem caso aberto, e o último caso fechou antes dela. */
+  pendente: boolean;
 }
 
 export interface CasoResumo {
@@ -94,6 +108,7 @@ export interface CasoResumo {
   valor: number | null;
   aberto_em: string;
   atualizado_em: string;
+  encerrado_em?: string | null;
 }
 
 export interface PosVenda {
@@ -141,6 +156,21 @@ export function usePosVenda(periodo: { de: string; ate: string } | "casos" | nul
       const { data, error } = await db.rpc("carbo_posvenda", casos ? { p_so_casos: true } : { p_de: de, p_ate: ate });
       if (error) throw error;
       return data as PosVenda;
+    },
+  });
+}
+
+/** UM pedido, de qualquer data — o link das Conversas e do painel abre aqui. */
+export function usePosVendaPedido(blingId: number | null) {
+  return useQuery({
+    queryKey: ["posvenda", "pedido", blingId],
+    enabled: blingId != null,
+    staleTime: 30_000,
+    retry: (n, e: any) => n < 1 && lerErro(e).tipo === "outro",
+    queryFn: async (): Promise<Pendencia | null> => {
+      const { data, error } = await db.rpc("carbo_posvenda", { p_pedido: blingId });
+      if (error) throw error;
+      return ((data as PosVenda)?.itens ?? [])[0] ?? null;
     },
   });
 }

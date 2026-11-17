@@ -459,6 +459,27 @@ export const FLUXOS: Fluxo[] = [
 
 export const FLUXO: Record<TipoCaso, Fluxo> = Object.fromEntries(FLUXOS.map((f) => [f.tipo, f])) as Record<TipoCaso, Fluxo>;
 
+/**
+ * O tipo de caso que cada assunto de RECLAMAÇÃO do painel do atendimento
+ * sugere (`carbo_wa_assuntos`, 20261149). Só sugere: quem atende escolhe.
+ * Assunto sem tipo claro (pagamento, cobra resposta, ameaça) não sugere nada.
+ */
+export const TIPO_DO_ASSUNTO: Record<string, TipoCaso> = {
+  faltou_item: "faltante",
+  produto_diferente: "errado",
+  avaria: "avaria",
+  embalagem: "avaria",
+  entrega_falhou: "nao_recebido",
+  nao_funcionou: "defeito",
+  atraso: "atraso",
+  rastreio: "atraso",
+  cancelamento: "arrependimento",
+};
+
+export function tiposSugeridos(codigos: string[]): TipoCaso[] {
+  return [...new Set(codigos.map((c) => TIPO_DO_ASSUNTO[c]).filter(Boolean))] as TipoCaso[];
+}
+
 /** O passo de um caso; nulo quando o roteiro mudou e o id sumiu. */
 export function passoDe(tipo: string, passo: string): Passo | null {
   const f = FLUXO[tipo as TipoCaso];

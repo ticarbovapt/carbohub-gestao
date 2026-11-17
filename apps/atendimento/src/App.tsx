@@ -13,6 +13,7 @@ import EsteiraOnline from "./pages/EsteiraOnline";
 import MensagensCliente from "./pages/MensagensCliente";
 import PainelAtendimento from "./pages/PainelAtendimento";
 import PendenciasEntrega from "./pages/PendenciasEntrega";
+import PosVendaPainel from "./pages/PosVendaPainel";
 import { isCarbohubDomain, goToHubLogin } from "@/lib/sso";
 import { PaginaNaoEncontrada, IrPara } from "@carbo/shell";
 
@@ -48,6 +49,7 @@ export default function App() {
         <Route path="/ecommerce/esteira" element={<EsteiraOnline />} />
         <Route path="/ecommerce/mensagens" element={<MensagensCliente />} />
         <Route path="/pos-venda" element={<PendenciasEntrega />} />
+        <Route path="/pos-venda/acompanhamento" element={<PosVendaPainel />} />
         <Route path="/pendencias" element={<IrPara para="/pos-venda" />} />
         <Route path="/painel" element={<PainelAtendimento />} />
         <Route path="/perfil" element={<Profile />} />

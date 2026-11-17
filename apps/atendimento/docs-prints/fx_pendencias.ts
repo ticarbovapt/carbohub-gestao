@@ -47,6 +47,21 @@ const OK: P[] = Array.from({ length: 70 }, (_, k) => ped({
   entregue_em: k % 4 && k % 9 ? ts(Math.max(0, (k % 35) - 3)) : null, previsao: k % 4 === 0 ? dia(-2) : null,
 }));
 const TODOS = [...ITENS, ...OK].map((p) => ({ ...p, antes_do_corte: String(p.data_pedido) < "2026-11-06" }));
+// Reclamações do WhatsApp (assuntos do painel do atendimento), por pedido.
+const RECL: Record<number, P> = {
+  900006: { n: 2, primeira_em: ts(3), ultima_em: ts(1), trecho: "Chegou a caixa mas faltou um frasco, só vieram 4. Vou no Procon se não resolverem.",
+            wa_id: "5584991047514", numero_id: "1255756280958635", assuntos: [{ codigo: "faltou_item", rotulo: "Veio faltando ou veio errado" }, { codigo: "ameaca", rotulo: "Ameaça (Procon, Reclame Aqui, polícia, redes)" }] },
+  900002: { n: 1, primeira_em: ts(4), ultima_em: ts(4), trecho: "Diz que foi entregue mas não recebi nada",
+            wa_id: "5584991015838", numero_id: "1255756280958635", assuntos: [{ codigo: "entrega_falhou", rotulo: "Consta entregue e não recebeu" }] },
+  900003: { n: 1, primeira_em: ts(2), ultima_em: ts(2), trecho: "Já faz 20 dias e não chegou",
+            wa_id: "5584991023757", numero_id: "1255756280958635", assuntos: [{ codigo: "atraso", rotulo: "Atraso, ainda não chegou" }] },
+};
+const comReclamacao = (p: P) => {
+  const r = RECL[p.bling_id as number];
+  if (!r) return { reclamacao: null };
+  const c = casoDe(p.bling_id).caso;
+  return { reclamacao: { ...r, pendente: c?.status !== "aberto" && (!c || c.desfecho === "cancelado" || String(c.encerrado_em) < String(r.ultima_em)) } };
+};
 const domingo = (iso: string) => { const t = new Date(iso + "T12:00:00Z"); t.setUTCDate(t.getUTCDate() - t.getUTCDay()); return t.toISOString().slice(0, 10); };
 
 // ── Casos (20261173): guardados em memória, com a MESMA lógica das funções ──
@@ -119,7 +134,42 @@ export const RPC_FX: Record<string, unknown> = {
     hist({ caso_id: c.id, acao: "nota", tipo: c.tipo, passo: c.passo, nota: a.p_nota });
     return null;
   },
-  carbo_posvenda: (a: { p_de: string; p_ate: string; p_so_casos?: boolean }) => {
+  carbo_posvenda_do_cliente: () => TODOS.slice(0, 3).map((p) => ({ ...p, caso: casoDe(p.bling_id).caso })),
+  carbo_posvenda_painel: (a: { p_de: string; p_ate: string }) => ({
+    gerado_em: new Date().toISOString(), de: a.p_de, ate: a.p_ate,
+    agora: { abertos: 14, vencidos: 2, mais_antigo: ts(34), por_tipo: [{ tipo: "faltante", n: 5 }, { tipo: "nao_recebido", n: 4 }] },
+    periodo: {
+      abertos: 37, encerrados: 29, reembolsado: 1284.6, horas_mediana: 52, horas_p90: 190, no_prazo: 17, base_prazo: 18,
+      por_tipo: [
+        { tipo: "faltante", abertos: 12, encerrados: 10, reembolsado: 312.4, horas_mediana: 30, desfechos: [{ desfecho: "reenvio", n: 6 }, { desfecho: "reembolso_parcial", n: 3 }, { desfecho: "recusado", n: 1 }] },
+        { tipo: "nao_recebido", abertos: 9, encerrados: 7, reembolsado: 449, horas_mediana: 96, desfechos: [{ desfecho: "resolvido", n: 3 }, { desfecho: "reenvio", n: 2 }, { desfecho: "reembolso_integral", n: 2 }] },
+        { tipo: "avaria", abertos: 6, encerrados: 5, reembolsado: 299, horas_mediana: 26, desfechos: [{ desfecho: "troca", n: 3 }, { desfecho: "reembolso_integral", n: 2 }] },
+        { tipo: "atraso", abertos: 5, encerrados: 4, reembolsado: 0, horas_mediana: 70, desfechos: [{ desfecho: "resolvido", n: 4 }] },
+        { tipo: "arrependimento", abertos: 3, encerrados: 2, reembolsado: 224.2, horas_mediana: 140, desfechos: [{ desfecho: "reembolso_integral", n: 1 }, { desfecho: "recusado", n: 1 }] },
+        { tipo: "defeito", abertos: 2, encerrados: 1, reembolsado: 0, horas_mediana: 48, desfechos: [{ desfecho: "troca", n: 1 }] },
+      ],
+      desfechos: [{ desfecho: "reenvio", n: 8, valor: 0 }, { desfecho: "resolvido", n: 7, valor: 0 }, { desfecho: "reembolso_integral", n: 5, valor: 972.2 },
+        { desfecho: "troca", n: 4, valor: 0 }, { desfecho: "reembolso_parcial", n: 3, valor: 312.4 }, { desfecho: "recusado", n: 2, valor: 0 }],
+      semanas: [0, 1, 2, 3, 4].map((k) => ({ semana: dia(35 - k * 7), abertos: [6, 9, 8, 7, 7][k], encerrados: [4, 6, 7, 6, 6][k] })),
+      pessoas: [{ nome: "Ana Souza", abriu: 18, passos: 74, encerrou: 15 }, { nome: "Bruno Lima", abriu: 12, passos: 51, encerrou: 10 }, { nome: "Marina Alves", abriu: 7, passos: 22, encerrou: 4 }],
+    },
+    reclamacoes: {
+      mensagens: 96, clientes: 58, pedidos: 49, com_caso: 37, sem_pedido: 6, ameacas: 3,
+      por_assunto: [
+        { codigo: "atraso", rotulo: "Atraso, ainda não chegou", clientes: 19, pedidos: 17, com_caso: 12 },
+        { codigo: "faltou_item", rotulo: "Veio faltando ou veio errado", clientes: 14, pedidos: 13, com_caso: 12 },
+        { codigo: "entrega_falhou", rotulo: "Consta entregue e não recebeu", clientes: 11, pedidos: 10, com_caso: 8 },
+        { codigo: "avaria", rotulo: "Chegou violado, vazando ou amassado", clientes: 7, pedidos: 6, com_caso: 6 },
+        { codigo: "nao_funcionou", rotulo: "Não funcionou ou piorou", clientes: 5, pedidos: 4, com_caso: 2 },
+        { codigo: "ameaca", rotulo: "Ameaça (Procon, Reclame Aqui, polícia, redes)", clientes: 3, pedidos: 3, com_caso: 2 },
+      ],
+      sem_caso: [900006, 900003].map((id) => { const p = TODOS.find((x) => x.bling_id === id)!; const r = RECL[id];
+        return { bling_id: id, pedido_codigo: p.pedido_codigo, pedido_numero: p.pedido_numero, cliente: p.cliente, canal: p.canal,
+          data_pedido: p.data_pedido, antes_do_corte: p.antes_do_corte, n: r.n, ultima_em: r.ultima_em, assuntos: (r.assuntos as P[]).map((x) => x.rotulo) }; }),
+      sem_caso_total: 12,
+    },
+  }),
+  carbo_posvenda: (a: { p_de: string; p_ate: string; p_so_casos?: boolean; p_pedido?: number }) => {
     const abertos = TODOS.filter((p) => p.problema && !(p.trato as P | null)?.situacao?.toString().match(/resolvido|reembolsado|sem_solucao/));
     const sem = new Map<string, { semana: string; antes: boolean; n: number }>();
     for (const p of abertos) {
@@ -136,9 +186,10 @@ export const RPC_FX: Record<string, unknown> = {
         antes: TODOS.filter((p) => p.antes_do_corte && casoDe(p.bling_id).caso?.status === "aberto").length,
         novos: TODOS.filter((p) => !p.antes_do_corte && casoDe(p.bling_id).caso?.status === "aberto").length,
       },
-      itens: TODOS.filter((p) => a.p_so_casos ? casoDe(p.bling_id).caso?.status === "aberto"
+      itens: TODOS.filter((p) => a.p_pedido != null ? p.bling_id === a.p_pedido
+          : a.p_so_casos ? casoDe(p.bling_id).caso?.status === "aberto"
           : String(p.data_pedido) >= a.p_de && String(p.data_pedido) <= a.p_ate)
-        .map((p) => ({ ...p, ...casoDe(p.bling_id) }))
+        .map((p) => ({ ...p, ...casoDe(p.bling_id), ...comReclamacao(p) }))
         .sort((x, y) => String(x.data_pedido).localeCompare(String(y.data_pedido))),
     };
   },

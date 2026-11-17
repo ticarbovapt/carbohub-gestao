@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  DESFECHOS, FLUXO, FLUXOS, faltando, lerValor, passoDe, prazoDoCaso, preencherMensagem, rotuloDesfecho, rotuloTipo,
+  DESFECHOS, FLUXO, FLUXOS, faltando, tiposSugeridos, lerValor, passoDe, prazoDoCaso, preencherMensagem, rotuloDesfecho, rotuloTipo,
   type Desfecho, type Opcao, type Passo, type TipoCaso,
 } from "@/lib/posvendaCasos";
 import {
@@ -230,11 +230,14 @@ function PassoAtual({ caso, passo, p }: { caso: Caso; passo: Passo; p: Pendencia
 function AbrirCaso({ p }: { p: Pendencia }) {
   const abrir = useAbrirCaso(p.bling_id);
   const [qual, setQual] = useState<TipoCaso | null>(null);
+  // O que o cliente reclamou no WhatsApp SUGERE o tipo (vem primeiro, marcado).
+  const sugeridos = tiposSugeridos((p.reclamacao?.assuntos ?? []).map((a) => a.codigo));
+  const ordem = [...FLUXOS].sort((a, b) => Number(sugeridos.includes(b.tipo)) - Number(sugeridos.includes(a.tipo)));
   return (
     <div className="space-y-2">
       <p className="text-sm font-semibold">Abrir caso</p>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-        {FLUXOS.map((f) => (
+        {ordem.map((f) => (
           <button key={f.tipo} type="button" disabled={abrir.isPending}
             onClick={() => {
               setQual(f.tipo);
@@ -243,7 +246,8 @@ function AbrirCaso({ p }: { p: Pendencia }) {
                 onSettled: () => setQual(null),
               });
             }}
-            className="flex items-start gap-2 rounded-lg border p-2.5 text-left transition-colors hover:bg-muted disabled:opacity-60">
+            className={cn("flex items-start gap-2 rounded-lg border p-2.5 text-left transition-colors hover:bg-muted disabled:opacity-60",
+              sugeridos.includes(f.tipo) && "border-red-500/50 bg-red-500/[0.04]")}>
             <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: f.cor }} />
             <span className="min-w-0">
               <span className="flex items-center gap-1.5 text-sm font-medium">
@@ -251,6 +255,11 @@ function AbrirCaso({ p }: { p: Pendencia }) {
                 {qual === f.tipo && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               </span>
               <span className="block text-xs text-muted-foreground">{f.resumo}{f.cdc ? ` · CDC ${f.cdc}` : ""}</span>
+              {sugeridos.includes(f.tipo) && (
+                <span className="mt-1 inline-block whitespace-nowrap rounded-full bg-red-500/15 px-1.5 text-[11px] font-semibold text-red-700 dark:text-red-400">
+                  o cliente reclamou disso
+                </span>
+              )}
             </span>
           </button>
         ))}

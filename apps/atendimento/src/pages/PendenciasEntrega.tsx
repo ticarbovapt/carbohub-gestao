@@ -1,7 +1,8 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  AlertTriangle, ChevronLeft, ChevronRight, Download, ExternalLink, Loader2, MessageCircle, PackageSearch, Search,
+  AlertTriangle, BarChart3, ChevronLeft, ChevronRight, Download, ExternalLink, Loader2, MessageCircle, MessageSquareWarning,
+  PackageSearch, Search,
 } from "lucide-react";
 import { useParamUrl } from "@carbo/shell";
 import { cn } from "@/lib/utils";
@@ -16,7 +17,7 @@ import CasoPosVenda, { ChipDesfecho, ChipTipo, PrazoCaso } from "@/components/po
 import { FLUXOS, passoDe, rotuloDesfecho, rotuloTipo } from "@/lib/posvendaCasos";
 import {
   COR_PROBLEMA, ETAPA_ROTULO, PROBLEMAS, ROTULO_PROBLEMA, ROTULO_SITUACAO,
-  ehFinal, lerErro, useHistoricoTrato, usePosVenda,
+  ehFinal, lerErro, useHistoricoTrato, usePosVenda, usePosVendaPedido,
   type Pendencia, type Problema, type SituacaoTrato,
 } from "@/hooks/usePendenciasEntrega";
 
@@ -149,6 +150,22 @@ function ChipEtapa({ p }: { p: Pendencia }) {
   );
 }
 
+/** O cliente reclamou no WhatsApp (assuntos do painel do atendimento). Vermelho
+ *  quando ninguém está tratando; cinza quando já há caso para ela. */
+function ChipReclamou({ p }: { p: Pendencia }) {
+  const r = p.reclamacao;
+  if (!r) return null;
+  const assunto = r.assuntos[0]?.rotulo ?? "Reclamação";
+  return (
+    <span title={r.trecho ?? undefined}
+      className={cn("inline-flex max-w-full items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
+        r.pendente ? "bg-red-500/15 text-red-700 dark:text-red-400" : "bg-muted text-muted-foreground")}>
+      <MessageSquareWarning className="h-3 w-3 shrink-0" />
+      <span className="truncate">Reclamou: {assunto}{r.assuntos.length > 1 ? ` +${r.assuntos.length - 1}` : ""}</span>
+    </span>
+  );
+}
+
 /** O que o pedido é agora: o problema, ou a etapa com a data que importa. */
 function Situacao({ p }: { p: Pendencia }) {
   if (p.problema) {
@@ -168,6 +185,15 @@ function Situacao({ p }: { p: Pendencia }) {
     <>
       <ChipEtapa p={p} />
       {nota && <div className="mt-0.5 text-xs text-muted-foreground">{nota}</div>}
+    </>
+  );
+}
+
+function SituacaoComReclamacao({ p }: { p: Pendencia }) {
+  return (
+    <>
+      <Situacao p={p} />
+      {p.reclamacao && <div className="mt-1"><ChipReclamou p={p} /></div>}
     </>
   );
 }
@@ -269,6 +295,36 @@ function DialogoPedido({ p, onFechar }: { p: Pendencia; onFechar: () => void }) 
           )}
         </div>
 
+        {p.reclamacao && (
+          <div className={cn("space-y-1.5 rounded-lg border p-3",
+            p.reclamacao.pendente ? "border-red-500/40 bg-red-500/[0.05]" : "")}>
+            <div className="flex flex-wrap items-center gap-2">
+              <MessageSquareWarning className={cn("h-4 w-4", p.reclamacao.pendente ? "text-red-600 dark:text-red-400" : "text-muted-foreground")} />
+              <span className="text-sm font-semibold">
+                Reclamou no WhatsApp{p.reclamacao.n > 1 ? ` · ${p.reclamacao.n} mensagens` : ""}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {new Date(p.reclamacao.ultima_em).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
+              </span>
+              {p.reclamacao.wa_id && (
+                <Button asChild variant="outline" size="sm" className="ml-auto h-7 px-2 text-xs">
+                  <Link to={`/conversas?numero=${p.reclamacao.numero_id ?? ""}&de=${p.reclamacao.wa_id}`}>
+                    <MessageCircle className="mr-1 h-3.5 w-3.5" />Abrir conversa
+                  </Link>
+                </Button>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {p.reclamacao.assuntos.map((a) => (
+                <span key={a.codigo} className="rounded-full bg-muted px-2 py-0.5 text-xs">{a.rotulo}</span>
+              ))}
+            </div>
+            {p.reclamacao.trecho && (
+              <p className="whitespace-pre-wrap break-words text-sm text-muted-foreground">“{p.reclamacao.trecho}”</p>
+            )}
+          </div>
+        )}
+
         <div className="border-t pt-3">
           <CasoPosVenda p={p} />
         </div>
@@ -351,6 +407,7 @@ export default function PendenciasEntrega() {
   const tratativa = tratativaUrl === "abertas" || tratativaUrl === "encerradas" ? tratativaUrl : "todas";
   const [canal, setCanal] = useParamUrl("canal", "");
   const [casoTipo, setCasoTipo] = useParamUrl("caso", "");
+  const [reclamou, setReclamou] = useParamUrl("reclamou", "");
   const [busca, setBusca] = useParamUrl("busca", "", { replace: true });
   const [pedidoUrl, setPedido] = useParamUrl("pedido", "");
   const [mostrar, setMostrar] = useState(POR_PAGINA);
@@ -413,7 +470,7 @@ export default function PendenciasEntrega() {
     setAba(a === "antes" ? "" : a); setDe(""); setAte(""); setProblema(""); setStatus("");
   };
 
-  useEffect(() => { setMostrar(POR_PAGINA); }, [aba, modo, status, problema, tratativa, casoTipo, canal, busca, janela.de, janela.ate]);
+  useEffect(() => { setMostrar(POR_PAGINA); }, [aba, modo, status, problema, tratativa, casoTipo, reclamou, canal, busca, janela.de, janela.ate]);
 
   // ── A lista ──
   const daAba = useMemo(
@@ -426,7 +483,10 @@ export default function PendenciasEntrega() {
     tratativa === "todas" ? true : tratativa === "encerradas" ? ehFinal(p.trato?.situacao) : !ehFinal(p.trato?.situacao);
   const passaCaso = (p: Pendencia) =>
     !casoTipo ? true : casoTipo === "sem" ? !p.caso : p.caso?.tipo === casoTipo;
-  const passaResto = (p: Pendencia) => passaTratativa(p) && passaCaso(p) && (!canal || p.canal === canal) && casa(p, busca);
+  const passaReclamou = (p: Pendencia) =>
+    !reclamou ? true : reclamou === "pendente" ? !!p.reclamacao?.pendente : !!p.reclamacao;
+  const passaResto = (p: Pendencia) => passaTratativa(p) && passaCaso(p) && passaReclamou(p)
+    && (!canal || p.canal === canal) && casa(p, busca);
   // Cada contagem usa os OUTROS filtros e solta o dela.
   const contaStatus = useMemo(() => {
     const m = new Map<Status | "todos", number>();
@@ -435,18 +495,30 @@ export default function PendenciasEntrega() {
       m.set(statusDe(p), (m.get(statusDe(p)) ?? 0) + 1);
     }
     return m;
-  }, [daAba, tratativa, casoTipo, canal, busca]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [daAba, tratativa, casoTipo, reclamou, canal, busca]); // eslint-disable-line react-hooks/exhaustive-deps
+  // O "Reclamou" conta com os outros filtros (status inclusive) e solta o dele.
+  const contaReclamou = useMemo(() => {
+    let todas = 0, pendentes = 0;
+    for (const p of daAba) {
+      if (!p.reclamacao || !(passaTratativa(p) && passaCaso(p) && (!canal || p.canal === canal) && casa(p, busca))) continue;
+      if (status && statusDe(p) !== status) continue;
+      if (problema && p.problema !== problema) continue;
+      todas++;
+      if (p.reclamacao.pendente) pendentes++;
+    }
+    return { todas, pendentes };
+  }, [daAba, status, problema, tratativa, casoTipo, canal, busca]); // eslint-disable-line react-hooks/exhaustive-deps
   const contaProblema = useMemo(() => {
     const m = new Map<Problema, number>();
     for (const p of daAba) if (p.problema && passaResto(p)) m.set(p.problema, (m.get(p.problema) ?? 0) + 1);
     return m;
-  }, [daAba, tratativa, casoTipo, canal, busca]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [daAba, tratativa, casoTipo, reclamou, canal, busca]); // eslint-disable-line react-hooks/exhaustive-deps
   const canais = useMemo(() => [...new Set(daAba.map((p) => p.canal).filter(Boolean))].sort() as string[], [daAba]);
 
   const lista = useMemo(
     () => daAba.filter((p) => (!status || statusDe(p) === status)
       && (!problema || p.problema === problema) && passaResto(p)),
-    [daAba, status, problema, tratativa, casoTipo, canal, busca], // eslint-disable-line react-hooks/exhaustive-deps
+    [daAba, status, problema, tratativa, casoTipo, reclamou, canal, busca], // eslint-disable-line react-hooks/exhaustive-deps
   );
   // Fora da semana, a lista vem com um cabeçalho por semana.
   const agrupa = modo === "mes" || modo === "periodo";
@@ -462,7 +534,11 @@ export default function PendenciasEntrega() {
   const achado = pedidoUrl ? (d?.itens ?? []).find((p) => String(p.bling_id) === pedidoUrl) ?? null : null;
   const [ultimoAberto, setUltimoAberto] = useState<Pendencia | null>(null);
   useEffect(() => { if (achado) setUltimoAberto(achado); }, [achado]);
-  const aberto = achado ?? (pedidoUrl && ultimoAberto && String(ultimoAberto.bling_id) === pedidoUrl ? ultimoAberto : null);
+  const doUltimo = pedidoUrl && ultimoAberto && String(ultimoAberto.bling_id) === pedidoUrl ? ultimoAberto : null;
+  // Pedido fora da lista (link das Conversas, do painel, de outra semana): lê só ele.
+  const idAvulso = pedidoUrl && d && !achado && /^-?\d+$/.test(pedidoUrl) ? Number(pedidoUrl) : null;
+  const avulso = usePosVendaPedido(idAvulso);
+  const aberto = achado ?? doUltimo ?? (idAvulso != null ? avulso.data ?? null : null);
   const carregandoOutro = q.isPlaceholderData || (q.isFetching && !q.isRefetching);
 
   const corteCurto = diaMes(corte);
@@ -479,6 +555,9 @@ export default function PendenciasEntrega() {
           icon={PackageSearch}
           actions={d && (
             <>
+              <Button asChild variant="outline" size="sm">
+                <Link to="/pos-venda/acompanhamento"><BarChart3 className="mr-1.5 h-4 w-4" />Acompanhamento</Link>
+              </Button>
               <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
                 {q.isFetching && <Loader2 className="h-3 w-3 animate-spin" />}
                 Atualizado às {new Date(d.gerado_em).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
@@ -592,6 +671,25 @@ export default function PendenciasEntrega() {
                   </button>
                 );
               })}
+              {(contaReclamou.todas > 0 || reclamou) && (
+                <>
+                  <span className="mx-1 hidden w-px self-stretch bg-border md:block" />
+                  {([["todas", "Reclamou no WhatsApp", contaReclamou.todas], ["pendente", "Reclamou, sem caso", contaReclamou.pendentes]] as const)
+                    .map(([id, rotulo, n]) => {
+                      const ativo = reclamou === id;
+                      return (
+                        <button key={id} type="button" aria-pressed={ativo} onClick={() => setReclamou(ativo ? "" : id)}
+                          className={cn("inline-flex shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors",
+                            ativo ? "border-transparent bg-red-600 text-white" : "hover:bg-muted",
+                            !ativo && id === "pendente" && n > 0 && "border-red-500/40 text-red-700 dark:text-red-400")}>
+                          <MessageSquareWarning className="h-3.5 w-3.5" />
+                          {rotulo}
+                          <span className="font-semibold tabular-nums">{n}</span>
+                        </button>
+                      );
+                    })}
+                </>
+              )}
             </div>
 
             {status === "problema" && (
@@ -680,7 +778,7 @@ export default function PendenciasEntrega() {
                               </p>
                             </div>
                           </div>
-                          <div className="flex flex-wrap items-center gap-2"><Situacao p={p} /></div>
+                          <div className="flex flex-wrap items-center gap-2"><Situacao p={p} /><ChipReclamou p={p} /></div>
                           <Tratativa p={p} />
                         </button>
                       </Fragment>
@@ -727,7 +825,7 @@ export default function PendenciasEntrega() {
                                   {p.cliente_fone ?? "sem telefone"}{p.cidade ? ` · ${p.cidade}/${p.uf ?? ""}` : ""}
                                 </p>
                               </td>
-                              <td className="px-3 py-2 align-top"><Situacao p={p} /></td>
+                              <td className="max-w-[16rem] px-3 py-2 align-top"><SituacaoComReclamacao p={p} /></td>
                               <td className="max-w-[14rem] px-3 py-2 align-top">
                                 <p className="truncate">{p.transportadora ?? "—"}</p>
                                 <p className="truncate font-mono text-xs text-muted-foreground">{p.rastreio ?? ""}</p>

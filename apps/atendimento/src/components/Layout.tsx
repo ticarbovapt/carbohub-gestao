@@ -1,6 +1,6 @@
 import { useMemo, useState, useRef } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
-import { MessagesSquare, LayoutDashboard, MessageCircle, PackageSearch, PackageX, Send, BookOpen, Gauge } from "lucide-react";
+import { MessagesSquare, LayoutDashboard, MessageCircle, PackageSearch, PackageX, Send, BookOpen, Gauge, BarChart3 } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAccessPing } from "@/hooks/useAccessPing";
@@ -60,13 +60,14 @@ export function Layout() {
         // celular do cliente.
         { to: "/conversas", label: "Conversas", icon: MessageCircle },
         { to: "/ecommerce/esteira", label: "Esteira do On-line", icon: PackageSearch },
-        { to: "/pos-venda", label: "Pós-venda", icon: PackageX },
+        { to: "/pos-venda", label: "Pós-venda", icon: PackageX, end: true },
         { to: "/ecommerce/mensagens", label: "Mensagens ao Cliente", icon: Send },
     ] },
     // Para todo mundo que tem o app (decisão do dono do processo, 16/11/2026). Só ALTERAR
     // horário e metas continua do gestor — dentro da tela e no banco.
     { label: "Acompanhamento", items: [
         { to: "/painel", label: "Painel do atendimento", icon: Gauge },
+        { to: "/pos-venda/acompanhamento", label: "Painel do pós-venda", icon: BarChart3 },
     ] },
     { label: "Ajuda", items: [
         { to: "/documentacao", label: "Documentação", icon: BookOpen },
