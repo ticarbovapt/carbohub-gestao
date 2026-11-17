@@ -2740,6 +2740,30 @@ e a conexão do Bling 2. Lê `net._http_response`, nunca `cron.job_run_details`.
    o limite de 8 s (medido em 17/11: todas ok, a mais lenta é a coluna "Pago", 1,8 s para 24 linhas).
    Rode de tempos em tempos e ao mexer em view lida pela tela.
 
+### ⚠️ A coluna "Pago" era produto cartesiano: pedidos × pedidos do Bling (17/11/2026)
+`ecommerce_aguardando_bling` levava 2,3 s para 24 linhas (como usuário). Plano:
+`Nested Loop Anti Join … Rows Removed by Join Filter: 6.403.254` (3.041 pedidos × 3.875 do Bling 2).
+A causa era UM `NOT EXISTS` com `OR` dentro (`numero_loja = pedido OR (PayT E transação ∈ array)`):
+com `OR` o Postgres não faz join por hash e compara tudo contra tudo. Local, mesmos dados:
+1× 221 ms → 15 ms · 10× 12,5 s → 281 ms · 100× (horas) → 2,1 s. `20261169`.
+1. ⚠️ **`NOT (A OR B)` escreve-se `NOT A AND NOT B`**, cada um por IGUALDADE; `NOT EXISTS` por chave
+   vira hash anti join. Filtro que só depende da CHAVE do agrupamento (o número do pedido) entra
+   ANTES do `group by`: o grupo entra ou sai inteiro, e o agrupamento pesado roda só sobre o que
+   ainda espera o Bling (24 de 3.041).
+2. ⚠️ **`array && array` NÃO usa hash**: a 1ª versão cruzava as transações do pedido com um array de
+   ~50 mil do Bling e gastou 8 s de 10 só nesse filtro (o plano mostrava os nós de baixo em < 1 s e
+   o `Hash Right Join` do topo em 8 s). "Alguma transação do pedido está no Bling" é um JOIN das
+   linhas do pedido com o conjunto de transações — o array do pedido deixou de existir. Meça com
+   `explain (analyze, timing on)` e olhe o nó que gasta o tempo PRÓPRIO, não só o total.
+3. ⚠️ **A identidade continua sem filtro de status** (a lição da `20260975`): o conjunto PayT lê
+   todas as linhas do pedido, canceladas inclusive.
+4. ⚠️ A migração confere o texto vivo (tolerando `public.`), guarda o antes em `carbo_backup_viewdef`,
+   escreve a view por inteiro com nomes qualificados e ABORTA se a impressão digital de TODAS as
+   colunas (menos `minutos_parado`, que anda com o relógio) mudar. Testada em 21 sorteios de dados
+   sintéticos + bordas (Bling vazio, `order_id` nulo, PayT com 2 transações por carrinho).
+5. ⚠️ **Teste de equivalência: não compare `minutos_parado`** — ele depende de `now()` e faz toda
+   linha parecer diferente (me custou uma falsa discrepância de 42 linhas).
+
 ### ⚠️ Conversas e Esteira a 500 vendas/semana: o teto e o índice (19/10/2026)
 Queixa do dono do processo: *"demora para abrir"* e *"diz que foi enviada
 mensagem mas o cara não aparece aqui quando pesquisa"* (Deividi Rodrigues: NF
