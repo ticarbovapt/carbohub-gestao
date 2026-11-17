@@ -2797,7 +2797,7 @@ com `OR` o Postgres não faz join por hash e compara tudo contra tudo. Local, me
 `atendimento…/pos-venda` (o `/pendencias` antigo redireciona), `carbo_posvenda(de, ate, corte)`
 (`20261172`). Pedido do dono do processo: todo pedido aparece, MESMO entregue ("depois de
 entregue pode ter problema também"), MENOS o ML Full (logística e pós-venda são do Mercado
-Livre); navegar SEMANA A SEMANA (domingo a sábado) clicando, nas duas abas (antes/a partir de
+Livre); navegar SEMANA A SEMANA (domingo a sábado) pelas setas ‹ semana › (sem faixa de chips: o dono do processo recusou), nas duas abas (antes/a partir de
 06/11), com Mês e Período como alternativa.
 1. ⚠️ **Full = cadastro**: ramo do Bling 1 cuja loja tem `bling_lojas.plataforma_fatura`, nunca
    `canal = 'ML Full'` (texto do cadastro).
