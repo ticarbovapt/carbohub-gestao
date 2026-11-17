@@ -858,10 +858,27 @@ export function useCarrinhoRespostas() {
   });
 }
 
+/** ⚠️ O quadro lê pela FUNÇÃO `carbo_carrinho_quadro` (migração 20261167), não
+ *  pela view. Como usuário logado a view levava ~18 s — a RLS impede o uso dos
+ *  índices por expressão — e o limite da API é 8 s: estourava, e o quadro
+ *  aparecia VAZIO com a régua enviando. A função roda como dono e se guarda no
+ *  corpo. Sem ela (front no ar antes do SQL) cai na view, como era. */
+const FUNCAO_AUSENTE = /could not find the function|PGRST202|42883/i;
+
 export function useCarrinhoPipeline() {
   return useQuery({
     queryKey: ["carrinho-pipeline"],
     queryFn: async (): Promise<CarrinhoRow[]> => {
+      try {
+        return await lerTudo<CarrinhoRow>(async (de, ate) => {
+          const { data, error } = await (supabase as any)
+            .rpc("carbo_carrinho_quadro", { p_de: de, p_ate: ate });
+          return { data: (data ?? null) as CarrinhoRow[] | null, error };
+        });
+      } catch (e) {
+        if (!FUNCAO_AUSENTE.test((e as Error).message ?? "")) throw e;
+        console.warn("[esteira] carbo_carrinho_quadro ausente — lendo a view:", (e as Error).message);
+      }
       return await lerTudo<CarrinhoRow>((de, ate) => (supabase as any)
         .from("carbo_carrinho_pipeline")
         .select("*")

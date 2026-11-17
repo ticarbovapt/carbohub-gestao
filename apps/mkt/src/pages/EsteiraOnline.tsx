@@ -1597,7 +1597,7 @@ export default function EsteiraOnline() {
   const alternarColuna = (k: string) =>
     setAbertas((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
   const { data: cfgRecompra } = useRecompraConfig();
-  const { data: carrinhos = [] } = useCarrinhoPipeline();
+  const { data: carrinhos = [], error: erroCarrinhos } = useCarrinhoPipeline();
   const { data: cfgCarrinho } = useCarrinhoConfig();
   const { data: fontes } = useFontesSaude();
   const paradas = (fontes ?? []).filter((f) => f.atrasada);
@@ -2046,6 +2046,11 @@ export default function EsteiraOnline() {
       {/* ── Quadro da recuperação de carrinho ───────────────────────────── */}
       {pipeline === "carrinho" ? (
         <>
+          {erroCarrinhos && (
+            <p className="mb-2 text-sm text-red-500">
+              Não consegui carregar os carrinhos: {(erroCarrinhos as Error).message}
+            </p>
+          )}
           <QuadroRolavel className="flex min-h-0 flex-1 items-start gap-3 overflow-x-auto overscroll-x-contain pb-2 snap-x snap-mandatory sm:snap-none">
             {COLUNAS_CARRINHO.map((col) => {
               const cards = porColunaCarrinho.get(col.key) ?? [];

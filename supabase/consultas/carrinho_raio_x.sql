@@ -42,3 +42,15 @@ select r.created, r.status_code, left(r.content, 300) as corpo
 
 -- BLOCO 9 — a Nuvemshop está conectada?
 select id, (access_token is not null) as tem_token, left(coalesce(updated_at::text,''),19) as atualizado from public.system_tokens where id = 'nuvemshop';
+
+-- BLOCO 10 — a TELA como o usuário logado (rode DEPOIS da migração 20261167).
+-- Troque SEU_EMAIL. ⚠️ O id vem ANTES do `set local role` (authenticated não lê auth.users).
+-- ESPERADO: "Execution Time" abaixo de ~2000 ms (antes: 17.861 ms na view).
+begin;
+select set_config('request.jwt.claims',
+  json_build_object('sub', (select id from auth.users where email = 'SEU_EMAIL'),
+                    'role', 'authenticated')::text, true);
+set local role authenticated;
+set local statement_timeout = '120s';
+explain (analyze, buffers off) select public.carbo_carrinho_quadro(0, 999);
+rollback;
