@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   AlertTriangle, ChevronLeft, ChevronRight, Download, ExternalLink, Loader2, MessageCircle, PackageSearch, Search,
@@ -41,7 +41,6 @@ import {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const POR_PAGINA = 100;
-const MAX_SEMANAS_NA_FAIXA = 1000; // teto de sanidade: a faixa desenha só as que cabem
 const ETAPAS_EM_ANDAMENTO = new Set(["confirmado", "nf_emitida", "etiqueta", "em_transito"]);
 
 const brl = (v: number | null) =>
@@ -321,58 +320,6 @@ function BotaoSeta({ lado, disabled, onClick }: { lado: "antes" | "depois"; disa
   );
 }
 
-/** Largura mínima de uma semana na faixa (rótulo + selo), em px. */
-const LARGURA_SEMANA = 150;
-const VAO_SEMANA = 6;
-
-/**
- * As semanas da aba, clicáveis. Mostra SÓ as que cabem inteiras, centradas na
- * escolhida — sem barra de rolagem e sem semana cortada na borda. As setas ‹ ›
- * andam uma semana; a janela acompanha.
- */
-function FaixaDeSemanas({ semanas, atual, pendencias, onEscolher }: {
-  semanas: string[]; atual: string; pendencias: Map<string, number>; onEscolher: (domingo: string) => void;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [largura, setLargura] = useState(0);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const medir = () => setLargura(el.clientWidth);
-    medir();
-    const ro = new ResizeObserver(medir);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  const cabem = Math.max(1, Math.floor((largura + VAO_SEMANA) / (LARGURA_SEMANA + VAO_SEMANA)));
-  const k = Math.min(cabem, semanas.length);
-  const idx = Math.max(0, semanas.indexOf(atual));
-  const inicio = Math.min(Math.max(0, idx - Math.floor(k / 2)), Math.max(0, semanas.length - k));
-  const visiveis = largura > 0 ? semanas.slice(inicio, inicio + k) : [];
-
-  return (
-    <div ref={ref} className="grid min-w-0 flex-1 overflow-hidden"
-      style={{ gridTemplateColumns: `repeat(${Math.max(k, 1)}, minmax(0, 1fr))`, gap: VAO_SEMANA }}>
-      {visiveis.map((w) => {
-        const n = pendencias.get(w) ?? 0;
-        const ativa = w === atual;
-        return (
-          <button key={w} type="button" aria-current={ativa} onClick={() => onEscolher(w)}
-            className={cn("inline-flex h-9 min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border px-2 text-sm tabular-nums transition-colors",
-              ativa ? "border-primary bg-primary font-medium text-primary-foreground" : "hover:bg-muted")}>
-            {rotuloSemana(w)}
-            {n > 0 && (
-              <span className={cn("rounded-full px-1.5 text-[11px] font-semibold",
-                ativa ? "bg-primary-foreground/20" : "bg-red-500/15 text-red-700 dark:text-red-400")}>{n}</span>
-            )}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 // ── A tela ───────────────────────────────────────────────────────────────────
 export default function PendenciasEntrega() {
   const [abaUrl, setAba] = useParamUrl("aba", "antes");
@@ -447,21 +394,6 @@ export default function PendenciasEntrega() {
   const trocarAba = (a: "antes" | "novos") => {
     setAba(a === "antes" ? "" : a); setDe(""); setAte(""); setProblema(""); setStatus("");
   };
-
-  // As semanas da aba (domingos), em ordem de calendário — a mais antiga à
-  // esquerda, como as setas ‹ ›. A faixa mostra a janela em volta da escolhida.
-  const semanasDaAba = useMemo(() => {
-    const out: string[] = [];
-    let w = domingoDe(limite.ate);
-    const fim = domingoDe(limite.de);
-    while (w >= fim && out.length < MAX_SEMANAS_NA_FAIXA) { out.push(w); w = maisDias(w, -7); }
-    return out.reverse();
-  }, [limite.ate, limite.de]);
-  const pendenciasPorSemana = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const s of d?.semanas ?? []) if (s.antes === (aba === "antes")) m.set(s.semana.slice(0, 10), s.n);
-    return m;
-  }, [d, aba]);
 
   useEffect(() => { setMostrar(POR_PAGINA); }, [aba, status, problema, tratativa, canal, busca, janela.de, janela.ate]);
 
@@ -559,9 +491,11 @@ export default function PendenciasEntrega() {
             ))}
           </div>
           {modo === "semana" && (
-            <div className="flex min-w-0 flex-1 items-center gap-1.5">
+            <div className="flex items-center gap-1.5">
               <BotaoSeta lado="antes" disabled={!temAntes} onClick={() => passo(-1)} />
-              <FaixaDeSemanas semanas={semanasDaAba} atual={janela.de} pendencias={pendenciasPorSemana} onEscolher={setDe} />
+              <span className="min-w-44 text-center text-sm font-semibold tabular-nums">
+                {diaMes(janela.de)} a {diaMes(janela.ate)} de {janela.ate.slice(0, 4)}
+              </span>
               <BotaoSeta lado="depois" disabled={!temDepois} onClick={() => passo(1)} />
             </div>
           )}
