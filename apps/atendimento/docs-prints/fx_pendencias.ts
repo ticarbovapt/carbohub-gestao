@@ -1,3 +1,4 @@
+import { EU as EU_P } from "./pessoas";
 // Fixtures da área "pendencias": a tela /pendencias (Pendências de entrega).
 // Dados FICTÍCIOS (pessoas.ts não tem clientes); as datas andam com o relógio.
 const dia = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
@@ -48,8 +49,77 @@ const OK: P[] = Array.from({ length: 70 }, (_, k) => ped({
 const TODOS = [...ITENS, ...OK].map((p) => ({ ...p, antes_do_corte: String(p.data_pedido) < "2026-11-06" }));
 const domingo = (iso: string) => { const t = new Date(iso + "T12:00:00Z"); t.setUTCDate(t.getUTCDate() - t.getUTCDay()); return t.toISOString().slice(0, 10); };
 
+// ── Casos (20261173): guardados em memória, com a MESMA lógica das funções ──
+type Caso = { id: string; bling_id: number; tipo: string; passo: string; status: string; desfecho: string | null; valor: number | null;
+  aberto_em: string; aberto_por: string | null; atualizado_em: string; encerrado_em: string | null };
+type H = Record<string, unknown> & { id: number; caso_id: string; acao: string };
+const EU = EU_P.id;
+const CASOS: Caso[] = [];
+const HIST: H[] = [];
+let hid = 0;
+const hist = (o: Partial<H> & { caso_id: string; acao: string }) => HIST.push({ id: ++hid, por: EU, em: new Date().toISOString(), ...o } as H);
+const novoCaso = (bling_id: number, tipo: string, passo: string, diasAtras = 0) => {
+  const c: Caso = { id: crypto.randomUUID(), bling_id, tipo, passo, status: "aberto", desfecho: null, valor: null,
+    aberto_em: ts(diasAtras), aberto_por: EU, atualizado_em: ts(diasAtras), encerrado_em: null };
+  CASOS.push(c); hist({ caso_id: c.id, acao: "abriu", tipo, passo, em: ts(diasAtras) }); return c;
+};
+// Um caso andando (Fernanda) e um encerrado (Thiago).
+{
+  const c = novoCaso(900002, "nao_recebido", "comprovante", 2);
+  hist({ caso_id: c.id, acao: "respondeu", tipo: c.tipo, passo: "comprovante", opcao: "conferido", proximo: "vizinhos",
+    campos: { comprovante: "Entregue 14:32, recebido por 'portaria'" }, em: ts(2) });
+  hist({ caso_id: c.id, acao: "respondeu", tipo: c.tipo, passo: "vizinhos", opcao: "pedido", proximo: "achou", em: ts(1) });
+  c.passo = "achou";
+  const e = novoCaso(900009, "atraso", "rastreio", 6);
+  hist({ caso_id: e.id, acao: "respondeu", tipo: e.tipo, passo: "rastreio", opcao: "prazo", proximo: "informar", em: ts(6) });
+  hist({ caso_id: e.id, acao: "respondeu", tipo: e.tipo, passo: "informar", opcao: "informado", proximo: "acompanhar", em: ts(5) });
+  hist({ caso_id: e.id, acao: "respondeu", tipo: e.tipo, passo: "acompanhar", opcao: "sim", desfecho: "resolvido", em: ts(2) });
+  Object.assign(e, { passo: "acompanhar", status: "encerrado", desfecho: "resolvido", encerrado_em: ts(2) });
+}
+const erro = (message: string) => { throw Object.assign(new Error(message), { message }); };
+const casoDe = (bling: unknown) => {
+  const doPedido = CASOS.filter((c) => c.bling_id === bling).sort((a, b) => (a.status === "aberto" ? -1 : 1) - (b.status === "aberto" ? -1 : 1) || b.aberto_em.localeCompare(a.aberto_em));
+  return { caso: doPedido[0] ?? null, casos_n: doPedido.length };
+};
+
 export const RPC_FX: Record<string, unknown> = {
-  carbo_posvenda: (a: { p_de: string; p_ate: string }) => {
+  carbo_posvenda_caso_abrir: (a: { p_bling_id: number; p_tipo: string; p_passo: string }) => {
+    if (CASOS.some((c) => c.bling_id === a.p_bling_id && c.status === "aberto")) erro("Este pedido já tem um caso aberto");
+    return novoCaso(a.p_bling_id, a.p_tipo, a.p_passo).id;
+  },
+  carbo_posvenda_caso_responder: (a: Record<string, any>) => {
+    const c = CASOS.find((x) => x.id === a.p_caso)!;
+    if (c.passo !== a.p_passo) erro("Outra pessoa já respondeu este passo. Atualize a tela.");
+    hist({ caso_id: c.id, acao: a.p_tipo ? "mudou_tipo" : "respondeu", tipo: c.tipo, passo: c.passo, opcao: a.p_opcao,
+      proximo: a.p_proximo, desfecho: a.p_desfecho, valor: a.p_valor, nota: a.p_nota, campos: a.p_campos });
+    if (a.p_tipo) c.tipo = a.p_tipo;
+    if (a.p_proximo) c.passo = a.p_proximo;
+    if (a.p_desfecho) Object.assign(c, { status: "encerrado", desfecho: a.p_desfecho, encerrado_em: new Date().toISOString() });
+    if (a.p_valor != null) c.valor = a.p_valor;
+    c.atualizado_em = new Date().toISOString();
+    return null;
+  },
+  carbo_posvenda_caso_voltar: (a: { p_caso: string }) => {
+    const c = CASOS.find((x) => x.id === a.p_caso)!;
+    const desfeitas = new Set(HIST.filter((h) => h.acao === "voltou").map((h) => h.desfaz));
+    const h = [...HIST].reverse().find((x) => x.caso_id === c.id && ["respondeu", "mudou_tipo", "encerrou"].includes(x.acao) && !desfeitas.has(x.id));
+    if (!h) erro("Não há passo para voltar");
+    Object.assign(c, { tipo: h!.tipo, passo: h!.passo, status: "aberto", desfecho: null, encerrado_em: null });
+    hist({ caso_id: c.id, acao: "voltou", tipo: h!.tipo, passo: h!.passo, desfaz: h!.id });
+    return null;
+  },
+  carbo_posvenda_caso_encerrar: (a: { p_caso: string; p_desfecho: string; p_nota: string | null }) => {
+    const c = CASOS.find((x) => x.id === a.p_caso)!;
+    hist({ caso_id: c.id, acao: "encerrou", tipo: c.tipo, passo: c.passo, desfecho: a.p_desfecho, nota: a.p_nota });
+    Object.assign(c, { status: "encerrado", desfecho: a.p_desfecho, encerrado_em: new Date().toISOString() });
+    return null;
+  },
+  carbo_posvenda_caso_anotar: (a: { p_caso: string; p_nota: string }) => {
+    const c = CASOS.find((x) => x.id === a.p_caso)!;
+    hist({ caso_id: c.id, acao: "nota", tipo: c.tipo, passo: c.passo, nota: a.p_nota });
+    return null;
+  },
+  carbo_posvenda: (a: { p_de: string; p_ate: string; p_so_casos?: boolean }) => {
     const abertos = TODOS.filter((p) => p.problema && !(p.trato as P | null)?.situacao?.toString().match(/resolvido|reembolsado|sem_solucao/));
     const sem = new Map<string, { semana: string; antes: boolean; n: number }>();
     for (const p of abertos) {
@@ -62,13 +132,21 @@ export const RPC_FX: Record<string, unknown> = {
       primeiro: TODOS.map((p) => String(p.data_pedido)).sort()[0],
       abertos: { antes: abertos.filter((p) => p.antes_do_corte).length, novos: abertos.filter((p) => !p.antes_do_corte).length },
       semanas: [...sem.values()],
-      itens: TODOS.filter((p) => String(p.data_pedido) >= a.p_de && String(p.data_pedido) <= a.p_ate)
+      casos_abertos: {
+        antes: TODOS.filter((p) => p.antes_do_corte && casoDe(p.bling_id).caso?.status === "aberto").length,
+        novos: TODOS.filter((p) => !p.antes_do_corte && casoDe(p.bling_id).caso?.status === "aberto").length,
+      },
+      itens: TODOS.filter((p) => a.p_so_casos ? casoDe(p.bling_id).caso?.status === "aberto"
+          : String(p.data_pedido) >= a.p_de && String(p.data_pedido) <= a.p_ate)
+        .map((p) => ({ ...p, ...casoDe(p.bling_id) }))
         .sort((x, y) => String(x.data_pedido).localeCompare(String(y.data_pedido))),
     };
   },
 };
 
 export const FX: Record<string, unknown> = {
+  carbo_posvenda_casos: () => CASOS,
+  carbo_posvenda_caso_hist: () => HIST,
   carbo_entrega_trato_hist: [
     { id: 2, bling_id: 900002, situacao: "em_contato", observacao: "Cliente diz que não recebeu. Pedi foto da caixa de correio.", em: ts(1), por: "11111111-1111-1111-1111-111111111111" },
     { id: 1, bling_id: 900002, situacao: "em_contato", observacao: "Liguei, caixa postal. Mandei mensagem.", em: ts(2), por: "11111111-1111-1111-1111-111111111111" },

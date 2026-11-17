@@ -2810,6 +2810,21 @@ Livre); navegar SEMANA A SEMANA (domingo a sábado) pelas setas ‹ semana › (
    Medido local: 500 mil pedidos, uma semana com 8,7 mil = 2,5 s. Estado na URL
    (`?aba&modo&de&ate&status&problema&tratativa&canal&busca&pedido`).
 5. A semana que atravessa o corte aparece nas duas abas, cada uma com a sua parte.
+6. **CASOS com roteiro do CDC** (`20261173`, pedido do dono do processo): no pedido aberto escolhe-se o
+   TIPO (faltante, avaria, defeito, produto errado, arrependimento, entregue e não recebido, atraso,
+   devolvido ao remetente, outro) e o roteiro guia passo a passo até o desfecho (troca, reenvio,
+   reembolso parcial/integral, recusa justificada). Roteiros em `apps/atendimento/src/lib/posvendaCasos.ts`
+   (PURO, testado em `src/test/posvenda/casos.test.ts`: todo passo alcançável, todo caminho termina);
+   tela em `components/posvenda/CasoPosVenda.tsx`; modo "Casos abertos" (`?modo=casos`) lista os de
+   qualquer data. ⚠️ O banco NÃO conhece a árvore: guarda caso + passo + histórico
+   (`carbo_posvenda_casos`/`_caso_hist`, escrita só pelas funções `carbo_posvenda_caso_*`, que recusam
+   resposta a passo que outra pessoa já respondeu). ⚠️ NUNCA renomeie id de passo/tipo já usado (caso
+   parado nele perderia o passo). ⚠️ Desfecho novo: CHECK da tabela + de-para do gatilho
+   `trg_posvenda_caso_trato` + `DESFECHOS` no código (o teste compara código × lista do banco).
+   ⚠️ O caso MANTÉM a `carbo_entrega_trato` (aberto ⇒ em_contato; encerrado ⇒ reembolsado/resolvido/
+   sem_solucao), que é o que a Esteira lê para "Tratados"; a observação escrita à mão não é tocada.
+   ⚠️ "Arrependimento: produto aberto sem defeito ⇒ recusa" segue o fluxo do dono do processo
+   (consumível aberto não volta à venda) — o art. 49 não traz essa exceção por escrito.
 
 ### ⚠️ Conversas e Esteira a 500 vendas/semana: o teto e o índice (19/10/2026)
 Queixa do dono do processo: *"demora para abrir"* e *"diz que foi enviada
