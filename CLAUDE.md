@@ -2764,6 +2764,23 @@ com `OR` o Postgres não faz join por hash e compara tudo contra tudo. Local, me
 5. ⚠️ **Teste de equivalência: não compare `minutos_parado`** — ele depende de `now()` e faz toda
    linha parecer diferente (me custou uma falsa discrepância de 42 linhas).
 
+### ⚠️ O timeout do cron tem de ser MAIOR que o orçamento do robô (17/11/2026)
+68 respostas do pg_net sem código HTTP em 24 h (`status_code is null`). Duas famílias:
+1. **`HTTP … 60000` (~14)** nos minutos do `rastreio-sync-5min` (:05, :10, :20…) e do
+   `melhor-envio-envios-15min` (:06, :21, :36): as `20261164–66` tiraram a cota e os dois
+   passaram a rodar até 100 s, mas os crons seguiam esperando 60 s. A resposta se PERDE — e
+   é nela que vêm `fila_aberta` e `reconferencia` — e o vigia das fontes confundiria isso com
+   "rastreio mudo". `20261170` leva os dois a 150 s (`cron.alter_job` com `replace` no texto
+   vivo: só o número muda, o comando leva o `CRON_SECRET`). ⚠️ Robô novo com orçamento de tempo:
+   o `timeout_milliseconds` do cron nasce MAIOR, na mesma migração. ⚠️ O `bling2-order-details`
+   não entra: o `bling2-auto-sync` devolve 202 e trabalha em `EdgeRuntime.waitUntil`.
+2. **`DNS time: 5000/60000` (~50)**, quase todos em :00/:15/:30/:45: o pg_net nem resolveu o
+   nome da função — não é lentidão dela. É rajada: no quarto de hora disparam muitos jobs HTTP
+   juntos. Não se conserta no pg_net; espalha-se o minuto dos jobs (a regra do "minuto ímpar").
+3. ⚠️ Migração que só ajusta TEMPO não aborta quando o job não é o esperado: WARNING e segue
+   (uma migração que aborta TRAVA as seguintes). Só aborta se o comando reescrito perder o
+   segredo ou a URL.
+
 ### ⚠️ Conversas e Esteira a 500 vendas/semana: o teto e o índice (19/10/2026)
 Queixa do dono do processo: *"demora para abrir"* e *"diz que foi enviada
 mensagem mas o cara não aparece aqui quando pesquisa"* (Deividi Rodrigues: NF
