@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Check, ChevronDown, ChevronRight, Copy, Loader2, MessageSquarePlus, Undo2, XCircle } from "lucide-react";
+import { Banknote, Check, ChevronDown, ChevronRight, Copy, ExternalLink, Hourglass, Loader2, MessageSquarePlus, Send, Undo2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { confirmar, pedirTexto } from "@carbo/shell";
 import { cn } from "@/lib/utils";
@@ -8,13 +8,14 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  DESFECHOS, FLUXO, FLUXOS, faltando, tiposSugeridos, lerValor, passoDe, prazoDoCaso, preencherMensagem, rotuloDesfecho, rotuloTipo,
-  type Desfecho, type Opcao, type Passo, type TipoCaso,
+  DESFECHOS, FLUXO, FLUXOS, FORMAS_REEMBOLSO, faltando, tiposSugeridos, lerValor, passoDe, prazoDoCaso, preencherMensagem,
+  rotuloDesfecho, rotuloTipo, type Desfecho, type Opcao, type Passo, type TipoCaso,
 } from "@/lib/posvendaCasos";
 import {
-  mensagemDoErro, trilhaValida, useAbrirCaso, useAnotarCaso, useCasosDoPedido, useEncerrarCaso, useResponderCaso,
-  useVoltarCaso, type Caso, type HistCaso,
+  arquivoDoComprovante, linkDoComprovante, mensagemDoErro, trilhaValida, useAbrirCaso, useAnotarCaso, useCasosDoPedido,
+  useEncerrarCaso, useResponderCaso, useSolicitarReembolso, useVoltarCaso, type Caso, type HistCaso, type Reembolso,
 } from "@/hooks/usePosVendaCasos";
+import { useEnviarMidia, useNumeros } from "@/hooks/useConversas";
 import type { Pendencia } from "@/hooks/usePendenciasEntrega";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -69,17 +70,35 @@ export function PrazoCaso({ tipo, abertoEm, className }: { tipo: string; abertoE
   );
 }
 
+/** Onde está o reembolso: com o Financeiro, ou pago e esperando o comprovante ir ao cliente. */
+export function ChipReembolso({ etapa }: { etapa: "financeiro" | "comprovante" }) {
+  return etapa === "financeiro" ? (
+    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-800 dark:text-amber-300">
+      <Hourglass className="h-3 w-3" />Reembolso no Financeiro
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-teal-500/15 px-2 py-0.5 text-xs font-medium text-teal-800 dark:text-teal-300">
+      <Banknote className="h-3 w-3" />Pago · enviar comprovante
+    </span>
+  );
+}
+
+const rotuloForma = (f: string) => FORMAS_REEMBOLSO.find((x) => x.id === f)?.rotulo ?? f;
+
 function CdcBadge({ cdc }: { cdc?: string }) {
   if (!cdc) return null;
   return <span className="whitespace-nowrap rounded border px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">CDC {cdc}</span>;
 }
 
 // ── A trilha: o que já foi respondido ────────────────────────────────────────
+// Campos gravados por passos sem formulário (o pagamento do Financeiro, o envio do comprovante).
+const ROTULO_CAMPO: Record<string, string> = { pago_em: "Pago em", envio: "Enviado por", forma: "Como devolver", dados: "Dados" };
+const ROTULO_OPCAO: Record<string, string> = { pago_financeiro: "Pago pelo Financeiro" };
 function ItemTrilha({ h }: { h: HistCaso }) {
   const passo = h.tipo && h.passo ? passoDe(h.tipo, h.passo) : null;
   const opcao = passo?.opcoes.find((o) => o.id === h.opcao);
   const campos = Object.entries(h.campos ?? {}).filter(([, v]) => String(v ?? "").trim());
-  const rotuloCampo = (id: string) => passo?.campos?.find((c) => c.id === id)?.rotulo ?? id;
+  const rotuloCampo = (id: string) => passo?.campos?.find((c) => c.id === id)?.rotulo ?? ROTULO_CAMPO[id] ?? id;
 
   let titulo: React.ReactNode;
   if (h.acao === "abriu") titulo = <>Caso aberto: <ChipTipo tipo={h.tipo ?? ""} /></>;
@@ -89,7 +108,7 @@ function ItemTrilha({ h }: { h: HistCaso }) {
     <>
       <span className="text-muted-foreground">{passo?.titulo ?? h.passo}</span>
       {" → "}
-      <span className="font-medium">{opcao?.rotulo ?? h.opcao}</span>
+      <span className="font-medium">{opcao?.rotulo ?? ROTULO_OPCAO[h.opcao ?? ""] ?? h.opcao}</span>
       {h.acao === "mudou_tipo" && h.proximo && <span className="text-muted-foreground"> (mudou o tipo)</span>}
     </>
   );
@@ -111,6 +130,7 @@ function ItemTrilha({ h }: { h: HistCaso }) {
 // ── O passo atual ────────────────────────────────────────────────────────────
 function PassoAtual({ caso, passo, p }: { caso: Caso; passo: Passo; p: Pendencia }) {
   const responder = useResponderCaso(p.bling_id);
+  const solicitar = useSolicitarReembolso(p.bling_id);
   const anotar = useAnotarCaso(p.bling_id);
   const [valores, setValores] = useState<Record<string, string>>({});
   const [nota, setNota] = useState("");
@@ -135,6 +155,19 @@ function PassoAtual({ caso, passo, p }: { caso: Caso; passo: Passo; p: Pendencia
     }
     const campos = Object.fromEntries(Object.entries(valores).filter(([, v]) => v.trim()).map(([k, v]) => [k, v.trim()]));
     setEnviando(o.id);
+    // Reembolso: quem atende PEDE; o Financeiro paga (20261175).
+    if (passo.reembolso && o.proximo === passo.reembolso.aguarda) {
+      solicitar.mutate({
+        caso: caso.id, passo: passo.id, opcao: o.id, tipo: passo.reembolso.tipo, valor: valor!,
+        forma: valores.forma, dados: (valores.dados ?? "").trim() || null, nota: nota.trim() || null,
+        aguarda: passo.reembolso.aguarda, depois: passo.reembolso.depois,
+      }, {
+        onSuccess: () => { setValores({}); setNota(""); toast.success("Reembolso enviado ao Financeiro"); },
+        onError: (e) => toast.error("Não foi possível enviar ao Financeiro", { description: mensagemDoErro(e) }),
+        onSettled: () => setEnviando(null),
+      });
+      return;
+    }
     responder.mutate({
       caso: caso.id, passo: passo.id, opcao: o.id,
       proximo: o.mudaPara ? FLUXO[o.mudaPara].inicio : o.proximo ?? null,
@@ -192,7 +225,18 @@ function PassoAtual({ caso, passo, p }: { caso: Caso; passo: Passo; p: Pendencia
       {(passo.campos ?? []).map((c) => (
         <label key={c.id} className="block space-y-1">
           <span className="text-xs font-medium text-muted-foreground">{c.rotulo}{c.obrigatorio ? " *" : ""}</span>
-          {c.tipo === "longo" ? (
+          {c.tipo === "escolha" ? (
+            <div className="flex flex-wrap gap-1.5">
+              {(c.escolhas ?? []).map((e) => (
+                <button key={e.id} type="button"
+                  onClick={() => setValores((v) => ({ ...v, [c.id]: e.id }))}
+                  className={cn("rounded-md border px-2.5 py-1.5 text-sm transition-colors",
+                    valores[c.id] === e.id ? "border-primary bg-primary/10 font-medium text-primary" : "hover:bg-muted")}>
+                  {e.rotulo}
+                </button>
+              ))}
+            </div>
+          ) : c.tipo === "longo" ? (
             <Textarea rows={2} maxLength={2000} value={valores[c.id] ?? ""}
               onChange={(e) => setValores((v) => ({ ...v, [c.id]: e.target.value }))} />
           ) : (
@@ -207,7 +251,7 @@ function PassoAtual({ caso, passo, p }: { caso: Caso; passo: Passo; p: Pendencia
 
       <div className="flex flex-wrap gap-2">
         {passo.opcoes.map((o) => (
-          <Button key={o.id} type="button" disabled={responder.isPending}
+          <Button key={o.id} type="button" disabled={responder.isPending || solicitar.isPending}
             variant={o.tom === "nao" ? "outline" : "default"}
             className={cn("h-auto min-h-9 whitespace-normal text-left", o.tom === "nao" && "border-red-500/40 text-red-700 hover:bg-red-500/10 dark:text-red-400")}
             onClick={() => escolher(o)}>
@@ -221,6 +265,128 @@ function PassoAtual({ caso, passo, p }: { caso: Caso; passo: Passo; p: Pendencia
             <MessageSquarePlus className="mr-1.5 h-4 w-4" />Só anotar
           </Button>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ── Reembolso: esperando o Financeiro ────────────────────────────────────────
+function DadosDoPedido({ r }: { r: Reembolso }) {
+  return (
+    <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-sm">
+      <dt className="text-muted-foreground">Valor</dt><dd className="font-semibold tabular-nums">{brl(Number(r.valor))}</dd>
+      <dt className="text-muted-foreground">Como</dt><dd>{rotuloForma(r.forma)}</dd>
+      {r.dados && (<><dt className="text-muted-foreground">Dados</dt><dd className="whitespace-pre-wrap break-words">{r.dados}</dd></>)}
+      <dt className="text-muted-foreground">Pedido</dt>
+      <dd>{quando(r.solicitado_em)}{r.solicitado_por ? ` · ${r.solicitado_por}` : ""}</dd>
+      {r.nota && (<><dt className="text-muted-foreground">Anotação</dt><dd className="whitespace-pre-wrap break-words">{r.nota}</dd></>)}
+    </dl>
+  );
+}
+
+function EsperaFinanceiro({ r }: { r: Reembolso | null }) {
+  return (
+    <div className="space-y-2 rounded-lg border-2 border-amber-500/40 bg-amber-500/[0.05] p-3">
+      <p className="flex items-center gap-2 font-semibold"><Hourglass className="h-4 w-4 text-amber-600" />Aguardando o Financeiro pagar</p>
+      {r ? <DadosDoPedido r={r} /> : <p className="text-sm text-muted-foreground">Pedido de reembolso não encontrado.</p>}
+      <p className="text-xs text-muted-foreground">Para corrigir ou cancelar o pedido, use Voltar passo.</p>
+    </div>
+  );
+}
+
+/** wa_id da conversa: a da reclamação, ou o telefone do pedido (com 55). */
+function destinoDoCliente(p: Pendencia): string | null {
+  if (p.reclamacao?.wa_id) return p.reclamacao.wa_id;
+  const d = (p.cliente_fone ?? "").replace(/\D/g, "");
+  if (d.length === 10 || d.length === 11) return `55${d}`;
+  if ((d.length === 12 || d.length === 13) && d.startsWith("55")) return d;
+  return null;
+}
+
+function EnviarComprovante({ caso, passo, p, r }: { caso: Caso; passo: Passo; p: Pendencia; r: Reembolso | null }) {
+  const responder = useResponderCaso(p.bling_id);
+  const enviarMidia = useEnviarMidia();
+  const numeros = useNumeros();
+  const [abrindo, setAbrindo] = useState(false);
+  const [enviandoWa, setEnviandoWa] = useState(false);
+
+  const waId = destinoDoCliente(p);
+  const numeroId = p.reclamacao?.numero_id ?? numeros.data?.find((n) => n.funcao === "servico")?.phone_number_id ?? null;
+  const valor = r?.valor_pago ?? r?.valor ?? null;
+  const mensagem = passo.mensagem ? preencherMensagem(passo.mensagem, {
+    nome: p.cliente, pedido: p.pedido_codigo ?? p.pedido_numero, valor: valor != null ? brl(Number(valor)) : null,
+  }) : "";
+  const opcao = passo.opcoes[0];
+
+  const encerrar = (envio: string) => responder.mutate({
+    caso: caso.id, passo: passo.id, opcao: opcao.id, desfecho: opcao.desfecho ?? null, campos: { envio },
+  }, {
+    onSuccess: () => toast.success(`Caso encerrado: ${rotuloDesfecho(opcao.desfecho)}`),
+    onError: (e) => toast.error("Não foi possível encerrar", { description: mensagemDoErro(e) }),
+  });
+
+  const ver = async () => {
+    if (!r?.comprovante_path) return;
+    setAbrindo(true);
+    try { window.open(await linkDoComprovante(r.comprovante_path), "_blank", "noopener"); }
+    catch (e) { toast.error("Não foi possível abrir o comprovante", { description: mensagemDoErro(e) }); }
+    finally { setAbrindo(false); }
+  };
+
+  const enviarWa = async () => {
+    if (!r?.comprovante_path || !waId) return;
+    if (!(await confirmar({ titulo: "Enviar o comprovante ao cliente?", mensagem: "O arquivo vai pelo WhatsApp com a mensagem acima, e o caso é encerrado.", confirmar: "Enviar" }))) return;
+    setEnviandoWa(true);
+    try {
+      const arquivo = await arquivoDoComprovante(r.comprovante_path);
+      await enviarMidia.mutateAsync({ wa_id: waId, arquivo, legenda: mensagem, numero_id: numeroId });
+      encerrar("WhatsApp");
+    } catch (e) {
+      toast.error("Não foi possível enviar pelo WhatsApp", { description: mensagemDoErro(e) });
+    } finally { setEnviandoWa(false); }
+  };
+
+  const copiar = async () => {
+    try { await navigator.clipboard.writeText(mensagem); toast.success("Mensagem copiada"); }
+    catch { toast.error("Não foi possível copiar"); }
+  };
+
+  return (
+    <div className="space-y-3 rounded-lg border-2 border-teal-500/40 bg-teal-500/[0.04] p-3">
+      <p className="flex items-center gap-2 font-semibold"><Banknote className="h-4 w-4 text-teal-600" />{passo.titulo}</p>
+      {r ? (
+        <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-sm">
+          <dt className="text-muted-foreground">Pago</dt>
+          <dd className="font-semibold tabular-nums">{brl(Number(r.valor_pago ?? r.valor))}{r.pago_em ? ` em ${dia(r.pago_em)}` : ""}</dd>
+          <dt className="text-muted-foreground">Por</dt><dd>{r.pago_por ?? "Financeiro"}</dd>
+          <dt className="text-muted-foreground">Como</dt><dd>{rotuloForma(r.forma)}</dd>
+          {r.nota_financeiro && (<><dt className="text-muted-foreground">Financeiro</dt><dd className="whitespace-pre-wrap break-words">{r.nota_financeiro}</dd></>)}
+        </dl>
+      ) : <p className="text-sm text-muted-foreground">Pagamento não encontrado.</p>}
+
+      {mensagem && (
+        <div className="rounded-md bg-muted/60 p-2.5">
+          <p className="whitespace-pre-wrap break-words text-sm">{mensagem}</p>
+          <div className="mt-2 flex justify-end">
+            <Button type="button" variant="outline" size="sm" onClick={copiar}><Copy className="mr-1.5 h-3.5 w-3.5" />Copiar mensagem</Button>
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        {r?.comprovante_path && (
+          <Button type="button" variant="outline" disabled={abrindo} onClick={ver}>
+            {abrindo ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <ExternalLink className="mr-1.5 h-4 w-4" />}Ver comprovante
+          </Button>
+        )}
+        {r?.comprovante_path && waId && (
+          <Button type="button" disabled={enviandoWa || responder.isPending} onClick={enviarWa}>
+            {enviandoWa ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Send className="mr-1.5 h-4 w-4" />}Enviar pelo WhatsApp
+          </Button>
+        )}
+        <Button type="button" variant="outline" disabled={enviandoWa || responder.isPending} onClick={() => encerrar("Outro meio")}>
+          {responder.isPending && !enviandoWa && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}Já enviei por outro meio
+        </Button>
       </div>
     </div>
   );
@@ -269,15 +435,23 @@ function AbrirCaso({ p }: { p: Pendencia }) {
 }
 
 // ── Um caso ──────────────────────────────────────────────────────────────────
-function CasoAberto({ caso, hist, p }: { caso: Caso; hist: HistCaso[]; p: Pendencia }) {
+function CasoAberto({ caso, hist, reembolsos, p }: { caso: Caso; hist: HistCaso[]; reembolsos: Reembolso[]; p: Pendencia }) {
   const voltar = useVoltarCaso(p.bling_id);
   const encerrar = useEncerrarCaso(p.bling_id);
   const passo = passoDe(caso.tipo, caso.passo);
   const trilha = useMemo(() => trilhaValida(hist), [hist]);
-  const podeVoltar = trilha.some((h) => h.acao === "respondeu" || h.acao === "mudou_tipo");
+  // O pagamento do Financeiro não se desfaz daqui (o banco recusa).
+  const ultima = [...trilha].reverse().find((h) => h.acao === "respondeu" || h.acao === "mudou_tipo");
+  const podeVoltar = !!ultima && ultima.opcao !== "pago_financeiro";
+  const noFinanceiro = !!passo?.financeiro;
+  const comprovante = !!passo?.comprovante;
+  const pedidoAberto = reembolsos.find((r) => r.status === "solicitado" && r.passo_aguarda === caso.passo) ?? null;
+  const pago = reembolsos.find((r) => r.status === "pago" && r.passo_depois === caso.passo) ?? null;
 
   const fazerVoltar = async () => {
-    if (!(await confirmar({ titulo: "Voltar um passo?", mensagem: "A última resposta é desfeita e fica no histórico.", confirmar: "Voltar" }))) return;
+    if (!(await confirmar(noFinanceiro
+      ? { titulo: "Cancelar o pedido ao Financeiro?", mensagem: "O reembolso sai da fila do Financeiro e o caso volta ao passo de pedir.", confirmar: "Cancelar pedido", perigo: true }
+      : { titulo: "Voltar um passo?", mensagem: "A última resposta é desfeita e fica no histórico.", confirmar: "Voltar" }))) return;
     voltar.mutate(caso.id, { onError: (e) => toast.error("Não foi possível voltar", { description: mensagemDoErro(e) }) });
   };
   const fazerEncerrar = async (desfecho: "sem_retorno" | "cancelado") => {
@@ -301,16 +475,20 @@ function CasoAberto({ caso, hist, p }: { caso: Caso; hist: HistCaso[]; p: Penden
         <span className="ml-auto flex flex-wrap gap-1">
           {podeVoltar && (
             <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" disabled={voltar.isPending} onClick={fazerVoltar}>
-              <Undo2 className="mr-1 h-3.5 w-3.5" />Voltar passo
+              <Undo2 className="mr-1 h-3.5 w-3.5" />{noFinanceiro ? "Cancelar pedido ao Financeiro" : "Voltar passo"}
             </Button>
           )}
-          <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" disabled={encerrar.isPending} onClick={() => fazerEncerrar("sem_retorno")}>
-            Cliente não respondeu
-          </Button>
-          <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground" disabled={encerrar.isPending}
-            onClick={() => fazerEncerrar("cancelado")}>
-            <XCircle className="mr-1 h-3.5 w-3.5" />Aberto por engano
-          </Button>
+          {!noFinanceiro && !comprovante && (
+            <>
+              <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" disabled={encerrar.isPending} onClick={() => fazerEncerrar("sem_retorno")}>
+                Cliente não respondeu
+              </Button>
+              <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground" disabled={encerrar.isPending}
+                onClick={() => fazerEncerrar("cancelado")}>
+                <XCircle className="mr-1 h-3.5 w-3.5" />Aberto por engano
+              </Button>
+            </>
+          )}
         </span>
       </div>
 
@@ -320,7 +498,11 @@ function CasoAberto({ caso, hist, p }: { caso: Caso; hist: HistCaso[]; p: Penden
         </ol>
       )}
 
-      {passo ? (
+      {passo?.financeiro ? (
+        <EsperaFinanceiro r={pedidoAberto} />
+      ) : passo?.comprovante ? (
+        <EnviarComprovante key={`${caso.tipo}:${caso.passo}`} caso={caso} passo={passo} p={p} r={pago} />
+      ) : passo ? (
         <PassoAtual key={`${caso.tipo}:${caso.passo}`} caso={caso} passo={passo} p={p} />
       ) : (
         <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300">
@@ -377,13 +559,16 @@ export default function CasoPosVenda({ p }: { p: Pendencia }) {
   }
   const casos = q.data?.casos ?? [];
   const hist = q.data?.hist ?? [];
+  const reembolsos = q.data?.reembolsos ?? [];
   const aberto = casos.find((c) => c.status === "aberto") ?? null;
   const encerrados = casos.filter((c) => c.status === "encerrado");
   const doCaso = (id: string) => hist.filter((h) => h.caso_id === id);
 
   return (
     <div className="space-y-4">
-      {aberto ? <CasoAberto caso={aberto} hist={doCaso(aberto.id)} p={p} /> : <AbrirCaso p={p} />}
+      {aberto
+        ? <CasoAberto caso={aberto} hist={doCaso(aberto.id)} reembolsos={reembolsos.filter((r) => r.caso_id === aberto.id)} p={p} />
+        : <AbrirCaso p={p} />}
       {encerrados.length > 0 && (
         <div className="space-y-2">
           <p className="flex items-center gap-1.5 text-sm font-semibold"><Check className="h-4 w-4" />Casos encerrados</p>

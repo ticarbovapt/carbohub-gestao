@@ -1,4 +1,4 @@
-import { LayoutDashboard, Wallet, Package, ClipboardList, Link2, Receipt, Percent, Users, FileSpreadsheet, ShoppingCart, CreditCard, HandCoins, Landmark, RefreshCw, Building2, BarChart3, type LucideIcon } from "lucide-react";
+import { LayoutDashboard, Wallet, Package, ClipboardList, Link2, Receipt, Percent, Users, FileSpreadsheet, ShoppingCart, CreditCard, HandCoins, Landmark, RefreshCw, Building2, BarChart3, Banknote, type LucideIcon } from "lucide-react";
 
 export interface FinNavItem { path: string; label: string; icon: LucideIcon; }
 
@@ -10,6 +10,7 @@ export const FIN_NAV: FinNavItem[] = [
   { path: "/pagar/assinaturas", label: "Assinaturas", icon: RefreshCw },
   { path: "/receber", label: "Contas a receber", icon: HandCoins },
   { path: "/fluxo-caixa", label: "Fluxo de caixa", icon: Landmark },
+  { path: "/reembolsos", label: "Reembolsos", icon: Banknote },
   { path: "/painel-financeiro", label: "Painel financeiro", icon: BarChart3 },
   { path: "/fornecedores", label: "Fornecedores", icon: Building2 },
   { path: "/formas-pagamento", label: "Formas de pagamento", icon: Wallet },

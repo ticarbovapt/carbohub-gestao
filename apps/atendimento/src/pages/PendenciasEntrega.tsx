@@ -13,8 +13,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DatePickerInput } from "@/components/ui/date-picker-input";
-import CasoPosVenda, { ChipDesfecho, ChipTipo, PrazoCaso } from "@/components/posvenda/CasoPosVenda";
-import { FLUXOS, passoDe, rotuloDesfecho, rotuloTipo } from "@/lib/posvendaCasos";
+import CasoPosVenda, { ChipDesfecho, ChipReembolso, ChipTipo, PrazoCaso } from "@/components/posvenda/CasoPosVenda";
+import { FLUXOS, etapaDoReembolso, passoDe, rotuloDesfecho, rotuloTipo } from "@/lib/posvendaCasos";
 import {
   COR_PROBLEMA, ETAPA_ROTULO, PROBLEMAS, ROTULO_PROBLEMA, ROTULO_SITUACAO,
   ehFinal, lerErro, useHistoricoTrato, usePosVenda, usePosVendaPedido,
@@ -363,9 +363,11 @@ function Tratativa({ p }: { p: Pendencia }) {
           <ChipTipo tipo={p.caso.tipo} />
           {!aberto && p.caso.desfecho && <ChipDesfecho desfecho={p.caso.desfecho} />}
         </div>
-        {aberto && (
+        {aberto && (etapaDoReembolso(p.caso.tipo, p.caso.passo) ? (
+          <ChipReembolso etapa={etapaDoReembolso(p.caso.tipo, p.caso.passo)!} />
+        ) : (
           <p className="line-clamp-2 text-xs text-muted-foreground">{passoDe(p.caso.tipo, p.caso.passo)?.titulo ?? p.caso.passo}</p>
-        )}
+        ))}
         {aberto && <PrazoCaso tipo={p.caso.tipo} abertoEm={p.caso.aberto_em} />}
       </div>
     );

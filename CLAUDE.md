@@ -2844,6 +2844,26 @@ Livre); navegar SEMANA A SEMANA (domingo a sábado) pelas setas ‹ semana › (
      (mediana/p90), no prazo de 30 dias (só vícios: faltante, avaria, defeito, errado — a MESMA
      lista do `prazoDias`), reembolsado, casos por tipo × desfecho, reclamações por assunto,
      reclamações SEM caso (a lista de trabalho) e quem tratou. Mês ou período na URL.
+8. **O REEMBOLSO passa pelo Financeiro** (`20261175`, pedido do dono do processo: "o atendente não
+   pode fazer reembolso"). Todo reembolso do roteiro são TRÊS passos (`reembolso()` em
+   `posvendaCasos.ts`): `reembolso_<tipo>` (o atendente pede: valor, Pix/estorno/transferência e os
+   dados) → `reembolso_<tipo>_financeiro` (o caso ESPERA; sem opções) → `reembolso_<tipo>_comprovante`
+   (o atendente manda o comprovante ao cliente — "Enviar pelo WhatsApp" sobe o arquivo pela
+   `whatsapp-midia`, ou "Já enviei por outro meio" — e só aí o caso encerra como reembolso).
+   `carbo_posvenda_reembolsos` + `carbo_posvenda_reembolso_solicitar` (Atendimento) /
+   `_pagar` (Finanças, comprovante OBRIGATÓRIO no bucket privado `posvenda-comprovantes`, pasta do
+   reembolso) / `_devolver` (Finanças, motivo; desfaz o passo de pedir). Tela do Financeiro:
+   `finance…/reembolsos` (`carbo_posvenda_reembolsos_lista`, jsonb paginada).
+   ⚠️ O banco não conhece a árvore: o código diz no pedido onde o caso espera (`passo_aguarda`) e para
+   onde vai quando pago (`passo_depois`). Os ids são CONTRATO — não renomeie.
+   ⚠️ Com pedido esperando o Financeiro, `responder`/`encerrar` recusam; "Voltar passo" CANCELA o pedido
+   não pago; o pagamento (`opcao = pago_financeiro`) não se desfaz pelo Atendimento.
+   ⚠️ Avisos: `posvenda_reembolso` (quem tem `carbo_financas`, aba "financas") e
+   `posvenda_reembolso_pago`/`_devolvido` (quem pediu). O clique vai a `finance…/reembolsos?reembolso=`
+   ou `atendimento…/pos-venda?pedido=` — nos OITO `NotificationBell` e no `destino()` do `carbo-push`.
+   ⚠️ O Finanças é **finance**.carbohub.com.br (não "financas").
+   Teste ponta a ponta: `supabase/consultas/posvenda_teste_reembolso.sql` (pedido e reclamação
+   FICTÍCIOS, bling_id -9900000000001, telefone com DDD 00; BLOCO 1 cria/reseta, BLOCO 2 apaga).
 
 ### ⚠️ Conversas e Esteira a 500 vendas/semana: o teto e o índice (19/10/2026)
 Queixa do dono do processo: *"demora para abrir"* e *"diz que foi enviada

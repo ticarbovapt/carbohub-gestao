@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  FLUXOS, FLUXO, DESFECHOS, passoDe, faltando, lerValor, preencherMensagem, prazoDoCaso,
+  FLUXOS, FLUXO, DESFECHOS, passoDe, faltando, lerValor, preencherMensagem, prazoDoCaso, proximosDe, etapaDoReembolso,
 } from "../../../apps/atendimento/src/lib/posvendaCasos";
 
 // Os desfechos que o banco aceita (CHECK de carbo_posvenda_casos, 20261173).
@@ -32,7 +32,9 @@ describe("roteiros do pós-venda", () => {
 
       it("toda opção leva a algum lugar, e a um só", () => {
         for (const p of f.passos) {
-          expect(p.opcoes.length).toBeGreaterThan(0);
+          // Só o passo do Financeiro não tem opção: quem o move é o banco.
+          if (p.financeiro) expect(p.opcoes).toHaveLength(0);
+          else expect(p.opcoes.length).toBeGreaterThan(0);
           for (const o of p.opcoes) {
             const destinos = [o.proximo, o.desfecho, o.mudaPara].filter(Boolean);
             expect(destinos, `${f.tipo}.${p.id}.${o.id}`).toHaveLength(1);
@@ -53,7 +55,7 @@ describe("roteiros do pós-venda", () => {
           const id = fila.pop()!;
           if (vistos.has(id)) continue;
           vistos.add(id);
-          for (const o of passoDe(f.tipo, id)!.opcoes) if (o.proximo) fila.push(o.proximo);
+          fila.push(...proximosDe(passoDe(f.tipo, id)!));
         }
         expect([...ids].filter((i) => !vistos.has(i))).toEqual([]);
       });
@@ -64,7 +66,9 @@ describe("roteiros do pós-venda", () => {
           if (termina.has(id)) return termina.get(id)!;
           if (pilha.has(id)) return false;
           pilha.add(id);
-          const ok = passoDe(f.tipo, id)!.opcoes.some((o) => o.desfecho || o.mudaPara || (o.proximo && chega(o.proximo, pilha)));
+          const p = passoDe(f.tipo, id)!;
+          const ok = p.opcoes.some((o) => o.desfecho || o.mudaPara || (o.proximo && chega(o.proximo, pilha)))
+            || (!!p.financeiro && chega(p.financeiro.pago, pilha));
           pilha.delete(id);
           termina.set(id, ok);
           return ok;
@@ -75,11 +79,52 @@ describe("roteiros do pós-venda", () => {
   }
 });
 
+describe("reembolso pelo Financeiro (20261175)", () => {
+  it("todo reembolso é pedir → esperar o Financeiro → mandar o comprovante, com ids fixos", () => {
+    let n = 0;
+    for (const f of FLUXOS) {
+      for (const p of f.passos.filter((x) => x.reembolso)) {
+        n++;
+        const r = p.reembolso!;
+        expect(p.id).toBe(`reembolso_${r.tipo}`);
+        expect(r.aguarda).toBe(`${p.id}_financeiro`);
+        expect(r.depois).toBe(`${p.id}_comprovante`);
+        // Uma opção só, e ela leva ao passo de espera (é ele que o banco guarda).
+        expect(p.opcoes.map((o) => o.proximo)).toEqual([r.aguarda]);
+        const aguarda = passoDe(f.tipo, r.aguarda)!;
+        expect(aguarda.financeiro).toEqual({ pago: r.depois, volta: p.id });
+        const comp = passoDe(f.tipo, r.depois)!;
+        expect(comp.comprovante).toBe(true);
+        expect(comp.opcoes.every((o) => o.desfecho === `reembolso_${r.tipo}`)).toBe(true);
+        expect(etapaDoReembolso(f.tipo, r.aguarda)).toBe("financeiro");
+        expect(etapaDoReembolso(f.tipo, r.depois)).toBe("comprovante");
+      }
+    }
+    expect(n).toBeGreaterThanOrEqual(10);
+  });
+
+  it("nenhum passo fora do roteiro do Financeiro encerra como reembolso", () => {
+    for (const f of FLUXOS) for (const p of f.passos) for (const o of p.opcoes) {
+      if (o.desfecho === "reembolso_parcial" || o.desfecho === "reembolso_integral") {
+        expect(p.comprovante, `${f.tipo}.${p.id}`).toBe(true);
+      }
+    }
+  });
+
+  it("os campos do pedido de reembolso", () => {
+    const p = passoDe("faltante", "reembolso_parcial")!;
+    expect(faltando(p, {})).toEqual(["Valor a devolver (R$)", "Como devolver"]);
+    expect(faltando(p, { valor: "12,30", forma: "pix" })).toEqual(["Chave Pix ou dados bancários"]);
+    expect(faltando(p, { valor: "12,30", forma: "pix", dados: "chave@x.com" })).toEqual([]);
+    expect(faltando(p, { valor: "12,30", forma: "estorno" })).toEqual([]);
+  });
+});
+
 describe("ajudantes", () => {
   it("campos obrigatórios faltando", () => {
-    const p = passoDe("faltante", "reembolso_parcial")!;
-    expect(faltando(p, {})).toEqual(["Valor devolvido (R$)"]);
-    expect(faltando(p, { valor: " 12,30 " })).toEqual([]);
+    const p = passoDe("faltante", "conferir")!;
+    expect(faltando(p, {})).toEqual([]);
+    expect(faltando(passoDe("faltante", "transportadora")!, {})).toEqual(["Protocolo da reclamação"]);
   });
 
   it("valor em reais", () => {
