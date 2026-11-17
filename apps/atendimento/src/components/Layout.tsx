@@ -60,7 +60,7 @@ export function Layout() {
         // celular do cliente.
         { to: "/conversas", label: "Conversas", icon: MessageCircle },
         { to: "/ecommerce/esteira", label: "Esteira do On-line", icon: PackageSearch },
-        { to: "/pendencias", label: "Pendências de entrega", icon: PackageX },
+        { to: "/pos-venda", label: "Pós-venda", icon: PackageX },
         { to: "/ecommerce/mensagens", label: "Mensagens ao Cliente", icon: Send },
     ] },
     // Para todo mundo que tem o app (decisão do dono do processo, 16/11/2026). Só ALTERAR

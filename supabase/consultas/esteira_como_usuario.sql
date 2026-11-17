@@ -31,7 +31,7 @@ set local statement_timeout = '8s'; select public._sonda_tmp(9, 'carrinho · res
 set local statement_timeout = '8s'; select public._sonda_tmp(10, 'mensagens · na fila (função)', 'select public.carbo_msg_fila_contar()');
 set local statement_timeout = '8s'; select public._sonda_tmp(11, 'mensagens · templates', 'select * from public.carbo_msg_templates');
 set local statement_timeout = '8s'; select public._sonda_tmp(12, 'fontes de saúde', 'select * from public.fontes_saude');
-set local statement_timeout = '8s'; select public._sonda_tmp(13, 'pendências de entrega', 'select public.carbo_entrega_pendencias()');
+set local statement_timeout = '8s'; select public._sonda_tmp(13, 'pós-venda · semana', 'select public.carbo_posvenda(current_date - extract(dow from current_date)::int, current_date)');
 set local statement_timeout = '8s'; select public._sonda_tmp(14, 'conversas · caixa 30 dias', 'select public.carbo_wa_caixa((select phone_number_id from public.carbo_wa_numeros where funcao = ''servico'' limit 1), 30)');
 set local statement_timeout = '8s'; select public._sonda_tmp(15, 'painel do atendimento 30 d', 'select public.carbo_atendimento_painel(current_date - 30, current_date, null)');
 set local statement_timeout = '8s'; select public._sonda_tmp(16, 'assuntos do atendimento 30 d', 'select public.carbo_atendimento_assuntos(current_date - 30, current_date, null)');
