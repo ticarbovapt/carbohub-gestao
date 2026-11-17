@@ -41,6 +41,9 @@ interface Sub { id: string; endpoint: string; p256dh: string; auth: string; orig
 function destino(i: Item): string {
   if (i.reference_type === "mkt_card" && i.reference_id) return `https://mkt.carbohub.com.br/cartao/${i.reference_id}`;
   if (i.reference_type === "mkt_board" && i.reference_id) return `https://mkt.carbohub.com.br/quadros/${i.reference_id}`;
+  // Reembolso de pós-venda (20261175): a fila do Financeiro, ou o pedido no Atendimento.
+  if (i.reference_type === "posvenda_reembolso" && i.reference_id) return `https://finance.carbohub.com.br/reembolsos?reembolso=${i.reference_id}`;
+  if (i.reference_type === "posvenda_pedido" && i.reference_id) return `https://atendimento.carbohub.com.br/pos-venda?pedido=${i.reference_id}`;
   const t = i.type ?? "";
   if (t === "ecommerce_sale" || t === "ecommerce_disconnected") return "https://admin.carbohub.com.br/ecommerce/vendas-online";
   if (t.startsWith("bug_")) return "https://ti.carbohub.com.br/chamados";

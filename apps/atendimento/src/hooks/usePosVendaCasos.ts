@@ -40,7 +40,30 @@ export interface HistCaso {
   em: string;
 }
 
-export interface CasosDoPedido { casos: Caso[]; hist: HistCaso[] }
+/** O pedido de reembolso ao Financeiro (20261175). */
+export interface Reembolso {
+  id: string;
+  caso_id: string;
+  tipo: "parcial" | "integral";
+  valor: number;
+  forma: "pix" | "estorno" | "transferencia";
+  dados: string | null;
+  nota: string | null;
+  status: "solicitado" | "pago" | "devolvido" | "cancelado";
+  passo_aguarda: string;
+  passo_depois: string;
+  solicitado_por: string | null;
+  solicitado_em: string;
+  pago_por: string | null;
+  pago_em: string | null;
+  valor_pago: number | null;
+  comprovante_path: string | null;
+  nota_financeiro: string | null;
+  devolvido_em: string | null;
+  motivo_devolucao: string | null;
+}
+
+export interface CasosDoPedido { casos: Caso[]; hist: HistCaso[]; reembolsos: Reembolso[] }
 
 export function useCasosDoPedido(blingId: number | null) {
   return useQuery({
@@ -53,13 +76,23 @@ export function useCasosDoPedido(blingId: number | null) {
         .eq("bling_id", blingId).order("aberto_em", { ascending: false }).order("id").limit(50);
       if (error) throw error;
       const lista = (casos ?? []) as Caso[];
-      if (!lista.length) return { casos: [], hist: [] };
-      const { data: hist, error: e2 } = await db.from("carbo_posvenda_caso_hist")
-        .select("id, caso_id, acao, tipo, passo, opcao, proximo, desfecho, valor, nota, campos, desfaz, por, em")
-        .in("caso_id", lista.map((c) => c.id)).order("id", { ascending: true }).limit(900);
-      if (e2) throw e2;
-      const linhas = (hist ?? []) as HistCaso[];
-      const ids = [...new Set(linhas.map((l) => l.por).filter(Boolean))] as string[];
+      if (!lista.length) return { casos: [], hist: [], reembolsos: [] };
+      const ids_casos = lista.map((c) => c.id);
+      const [h, rb] = await Promise.all([
+        db.from("carbo_posvenda_caso_hist")
+          .select("id, caso_id, acao, tipo, passo, opcao, proximo, desfecho, valor, nota, campos, desfaz, por, em")
+          .in("caso_id", ids_casos).order("id", { ascending: true }).limit(900),
+        db.from("carbo_posvenda_reembolsos")
+          .select("id, caso_id, tipo, valor, forma, dados, nota, status, passo_aguarda, passo_depois, solicitado_por, solicitado_em, pago_por, pago_em, valor_pago, comprovante_path, nota_financeiro, devolvido_em, motivo_devolucao")
+          .in("caso_id", ids_casos).order("solicitado_em", { ascending: false }).order("id").limit(100),
+      ]);
+      if (h.error) throw h.error;
+      // Sem a migração 20261175 a tabela não existe: o caso continua abrindo.
+      const reembolsos = (rb.error ? [] : (rb.data ?? [])) as Reembolso[];
+      if (rb.error && !["42P01", "PGRST205"].includes(rb.error.code ?? "")) throw rb.error;
+      const linhas = (h.data ?? []) as HistCaso[];
+      const ids = [...new Set([...linhas.map((l) => l.por), ...reembolsos.flatMap((r) => [r.solicitado_por, r.pago_por])]
+        .filter(Boolean))] as string[];
       const nomes = new Map<string, string>();
       if (ids.length) {
         const { data: ps } = await db.from("profiles").select("id, full_name").in("id", ids);
@@ -67,9 +100,11 @@ export function useCasosDoPedido(blingId: number | null) {
           if (p.full_name) nomes.set(p.id, p.full_name);
         }
       }
+      const nome = (id: string | null) => (id ? nomes.get(id) ?? null : null);
       return {
         casos: lista,
-        hist: linhas.map((l) => ({ ...l, por: l.por ? nomes.get(l.por) ?? null : null })),
+        hist: linhas.map((l) => ({ ...l, por: nome(l.por) })),
+        reembolsos: reembolsos.map((r) => ({ ...r, solicitado_por: nome(r.solicitado_por), pago_por: nome(r.pago_por) })),
       };
     },
   });
@@ -124,6 +159,41 @@ export function useResponderCaso(blingId: number) {
     p_nota: v.nota ?? null, p_campos: v.campos && Object.keys(v.campos).length ? v.campos : null,
     p_valor: v.valor ?? null,
   }), blingId);
+}
+
+export interface PedidoReembolso {
+  caso: string;
+  passo: string;
+  opcao: string;
+  tipo: "parcial" | "integral";
+  valor: number;
+  forma: string;
+  dados: string | null;
+  nota: string | null;
+  aguarda: string;
+  depois: string;
+}
+
+/** O atendente pede o reembolso ao Financeiro (20261175): o caso passa a esperar. */
+export function useSolicitarReembolso(blingId: number) {
+  return useMutacaoCaso((v: PedidoReembolso) => rpc("carbo_posvenda_reembolso_solicitar", {
+    p_caso: v.caso, p_passo: v.passo, p_opcao: v.opcao, p_tipo: v.tipo, p_valor: v.valor,
+    p_forma: v.forma, p_dados: v.dados, p_nota: v.nota, p_aguarda: v.aguarda, p_depois: v.depois,
+  }), blingId);
+}
+
+/** O comprovante do Financeiro (bucket privado): link de 1 h, ou o arquivo para mandar no chat. */
+export async function linkDoComprovante(path: string): Promise<string> {
+  const { data, error } = await (supabase as any).storage.from("posvenda-comprovantes").createSignedUrl(path, 3600);
+  if (error || !data?.signedUrl) throw error ?? new Error("Não foi possível abrir o comprovante");
+  return data.signedUrl as string;
+}
+
+export async function arquivoDoComprovante(path: string): Promise<File> {
+  const { data, error } = await (supabase as any).storage.from("posvenda-comprovantes").download(path);
+  if (error || !data) throw error ?? new Error("Não foi possível baixar o comprovante");
+  const nome = path.split("/").pop() || "comprovante";
+  return new File([data as Blob], nome.replace(/^\d+-/, ""), { type: (data as Blob).type || "application/pdf" });
 }
 
 export function useVoltarCaso(blingId: number) {

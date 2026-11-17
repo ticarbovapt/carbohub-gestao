@@ -61,7 +61,7 @@ export function Layout() {
     // Contas e caixa saíram de dentro de "Compras" (antes "Financeiro &
     // Suprimentos", onze abas numa página só) e são itens do menu (21/10/2026).
     { label: "Contas", items: [
-        item("/pagar", true), item("/pagar/assinaturas"), item("/receber"), item("/fluxo-caixa"),
+        item("/pagar", true), item("/pagar/assinaturas"), item("/receber"), item("/fluxo-caixa"), item("/reembolsos"),
         ...(gestor ? [item("/painel-financeiro")] : []),
     ] },
     { label: "Vendas", items: [item("/faturamento"), item("/comissionamento"), item("/pedidos")] },

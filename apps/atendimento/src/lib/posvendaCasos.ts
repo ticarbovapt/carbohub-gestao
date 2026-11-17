@@ -43,8 +43,10 @@ export const DESFECHOS: Record<Desfecho, { rotulo: string; cor: string }> = {
 export interface Campo {
   id: string;
   rotulo: string;
-  tipo: "texto" | "longo" | "valor";
+  tipo: "texto" | "longo" | "valor" | "escolha";
   obrigatorio?: boolean;
+  /** `escolha`: as opções (o valor gravado é o id). */
+  escolhas?: { id: string; rotulo: string }[];
 }
 
 export interface Opcao {
@@ -69,6 +71,16 @@ export interface Passo {
   mensagem?: string;
   campos?: Campo[];
   opcoes: Opcao[];
+  /**
+   * Passo que PEDE o reembolso ao Financeiro (20261175). Quem atende não faz o
+   * reembolso: a única opção leva ao passo `aguarda`, onde o caso espera até o
+   * Financeiro pagar (com comprovante) ou devolver.
+   */
+  reembolso?: { tipo: "parcial" | "integral"; aguarda: string; depois: string };
+  /** Passo em que o caso ESPERA o Financeiro: sem opções; quem o move é o banco. */
+  financeiro?: { pago: string; volta: string };
+  /** Passo de mandar o comprovante do Financeiro ao cliente. */
+  comprovante?: boolean;
 }
 
 export interface Fluxo {
@@ -115,6 +127,9 @@ const MSG = {
   aberto:
     "Olá, {nome}. Como o produto do pedido {pedido} foi aberto e não apresenta defeito, não conseguimos aceitar a devolução por " +
     "desistência: por ser consumível, depois de aberto ele não pode voltar à venda. Se notar qualquer problema no produto, nos avise que analisamos.",
+  reembolsoPago:
+    "Olá, {nome}! O reembolso de {valor} referente ao pedido {pedido} foi feito. Segue o comprovante. " +
+    "Qualquer dúvida, estamos à disposição.",
   semDefeito:
     "Olá, {nome}. Analisamos o que você nos enviou sobre o pedido {pedido} e não identificamos defeito no produto, porque [motivo]. " +
     "Se quiser, podemos te orientar no uso para ter o melhor resultado.",
@@ -127,18 +142,58 @@ const enviar = (id: string, titulo: string, desfecho: "troca" | "reenvio", texto
   opcoes: [{ id: "enviado", rotulo: "Enviado", desfecho, tom: "sim" }],
 });
 
-const reembolsoParcial = (cdc?: string): Passo => ({
-  id: "reembolso_parcial", titulo: "Fazer o reembolso parcial", cdc,
-  texto: "Devolver o valor do que faltou ou o abatimento combinado.",
-  campos: [{ id: "valor", rotulo: "Valor devolvido (R$)", tipo: "valor", obrigatorio: true }],
-  opcoes: [{ id: "feito", rotulo: "Reembolso feito", desfecho: "reembolso_parcial", tom: "sim" }],
-});
+// ⚠️ O reembolso são TRÊS passos, e o do meio é do Financeiro (20261175):
+//   reembolso_<tipo>              o atendente pede (valor, forma, dados)
+//   reembolso_<tipo>_financeiro   o caso espera; o banco o move quando o
+//                                 Financeiro paga (→ comprovante) ou devolve (← pedir)
+//   reembolso_<tipo>_comprovante  o atendente manda o comprovante ao cliente
+// ⚠️ Os ids são CONTRATO com os pedidos já gravados (`passo_aguarda`/`passo_depois`):
+// não renomeie.
+export const FORMAS_REEMBOLSO = [
+  { id: "pix", rotulo: "Pix" },
+  { id: "estorno", rotulo: "Estorno na plataforma (cartão)" },
+  { id: "transferencia", rotulo: "Transferência bancária" },
+];
 
-const reembolsoIntegral = (cdc?: string, texto = "Devolver tudo o que foi pago, frete incluído."): Passo => ({
-  id: "reembolso_integral", titulo: "Fazer o reembolso integral", cdc, texto,
-  campos: [{ id: "valor", rotulo: "Valor devolvido (R$)", tipo: "valor", obrigatorio: true }],
-  opcoes: [{ id: "feito", rotulo: "Reembolso feito", desfecho: "reembolso_integral", tom: "sim" }],
-});
+const CAMPOS_REEMBOLSO = (rotuloValor: string): Campo[] => [
+  { id: "valor", rotulo: rotuloValor, tipo: "valor", obrigatorio: true },
+  { id: "forma", rotulo: "Como devolver", tipo: "escolha", obrigatorio: true, escolhas: FORMAS_REEMBOLSO },
+  { id: "dados", rotulo: "Chave Pix ou dados bancários (titular, banco, agência, conta)", tipo: "longo" },
+];
+
+const reembolso = (tipo: "parcial" | "integral", cdc?: string, texto?: string): Passo[] => {
+  const id = `reembolso_${tipo}`;
+  const desfecho: Desfecho = tipo === "parcial" ? "reembolso_parcial" : "reembolso_integral";
+  return [
+    {
+      id, cdc,
+      titulo: tipo === "parcial" ? "Pedir o reembolso parcial ao Financeiro" : "Pedir o reembolso integral ao Financeiro",
+      texto: texto ?? (tipo === "parcial"
+        ? "O valor do que faltou ou o abatimento combinado. Quem paga é o Financeiro."
+        : "Tudo o que foi pago, frete incluído. Quem paga é o Financeiro."),
+      campos: CAMPOS_REEMBOLSO(tipo === "parcial" ? "Valor a devolver (R$)" : "Valor a devolver, frete incluído (R$)"),
+      reembolso: { tipo, aguarda: `${id}_financeiro`, depois: `${id}_comprovante` },
+      opcoes: [{ id: "enviar", rotulo: "Enviar ao Financeiro", proximo: `${id}_financeiro`, tom: "sim" }],
+    },
+    {
+      id: `${id}_financeiro`, titulo: "Aguardando o Financeiro pagar",
+      financeiro: { pago: `${id}_comprovante`, volta: id },
+      opcoes: [],
+    },
+    {
+      id: `${id}_comprovante`, titulo: "Enviar o comprovante ao cliente", comprovante: true,
+      mensagem: MSG.reembolsoPago,
+      opcoes: [
+        { id: "enviado", rotulo: "Comprovante enviado", desfecho, tom: "sim" },
+      ],
+    },
+  ];
+};
+
+/** Os passos a que um passo leva: as opções e, no passo do Financeiro, o pagamento. */
+export function proximosDe(p: Passo): string[] {
+  return [...p.opcoes.map((o) => o.proximo).filter(Boolean) as string[], ...(p.financeiro ? [p.financeiro.pago] : [])];
+}
 
 const recusa = (id: string, mensagem?: string): Passo => ({
   id, titulo: "Responder ao cliente, por escrito, com a justificativa", mensagem,
@@ -186,8 +241,8 @@ export const FLUXOS: Fluxo[] = [
           { id: "integral", rotulo: "Desfazer a compra", proximo: "reembolso_integral" },
         ] },
       enviar("reenvio", "Enviar o que faltou, sem custo para o cliente", "reenvio"),
-      reembolsoParcial("Art. 19, III"),
-      reembolsoIntegral("Art. 19, IV"),
+      ...reembolso("parcial", "Art. 19, III"),
+      ...reembolso("integral", "Art. 19, IV"),
     ],
   },
   {
@@ -211,8 +266,8 @@ export const FLUXOS: Fluxo[] = [
           { id: "parcial", rotulo: "Abatimento (fica com o produto)", proximo: "reembolso_parcial" },
         ] },
       enviar("troca", "Enviar o produto novo, sem custo para o cliente", "troca", "O produto danificado não precisa voltar."),
-      reembolsoParcial("Art. 18, § 1º, III"),
-      reembolsoIntegral("Art. 18, § 1º, II"),
+      ...reembolso("parcial", "Art. 18, § 1º, III"),
+      ...reembolso("integral", "Art. 18, § 1º, II"),
     ],
   },
   {
@@ -258,8 +313,8 @@ export const FLUXOS: Fluxo[] = [
           { id: "parcial", rotulo: "Abatimento", proximo: "reembolso_parcial" },
         ] },
       enviar("troca", "Enviar o produto novo, sem custo para o cliente", "troca"),
-      reembolsoParcial("Art. 18, § 1º, III"),
-      reembolsoIntegral("Art. 18, § 1º, II"),
+      ...reembolso("parcial", "Art. 18, § 1º, III"),
+      ...reembolso("integral", "Art. 18, § 1º, II"),
       recusa("recusa", MSG.semDefeito),
     ],
   },
@@ -290,7 +345,7 @@ export const FLUXOS: Fluxo[] = [
       { id: "recolher", titulo: "Gerar etiqueta reversa do produto errado (frete nosso)",
         campos: [{ id: "reversa", rotulo: "Rastreio da reversa", tipo: "texto" }],
         opcoes: [{ id: "enviada", rotulo: "Etiqueta enviada", proximo: "reembolso_integral" }] },
-      reembolsoIntegral("Art. 18, § 1º, II"),
+      ...reembolso("integral", "Art. 18, § 1º, II"),
       recusa("recusa"),
     ],
   },
@@ -304,9 +359,9 @@ export const FLUXOS: Fluxo[] = [
           { id: "caminho", rotulo: "Está a caminho", proximo: "recusar_entrega" },
           { id: "nao_saiu", rotulo: "Ainda não saiu", proximo: "cancelar" },
         ] },
-      { id: "cancelar", titulo: "Cancelar o pedido (Bling e loja) e estornar o pagamento",
-        campos: [{ id: "valor", rotulo: "Valor estornado (R$)", tipo: "valor", obrigatorio: true }],
-        opcoes: [{ id: "feito", rotulo: "Cancelado e estornado", desfecho: "reembolso_integral", tom: "sim" }] },
+      { id: "cancelar", titulo: "Cancelar o pedido no Bling e na loja",
+        texto: "Depois de cancelado, o estorno é pedido ao Financeiro.",
+        opcoes: [{ id: "feito", rotulo: "Pedido cancelado", proximo: "reembolso_integral", tom: "sim" }] },
       { id: "recusar_entrega", titulo: "Orientar o cliente a recusar na entrega",
         texto: "A encomenda volta para nós e o reembolso sai quando ela chegar.",
         opcoes: [{ id: "orientado", rotulo: "Cliente orientado", proximo: "chegou" }] },
@@ -350,8 +405,8 @@ export const FLUXOS: Fluxo[] = [
           { id: "recusar", rotulo: "Recusar", proximo: "recusa_conferencia", tom: "nao" },
         ] },
       recusa("recusa_conferencia"),
-      reembolsoParcial(),
-      reembolsoIntegral("Art. 49, parágrafo único", "Devolver tudo o que foi pago, frete incluído, sem demora."),
+      ...reembolso("parcial"),
+      ...reembolso("integral", "Art. 49, parágrafo único", "Tudo o que foi pago, frete incluído, sem demora. Quem paga é o Financeiro."),
     ],
   },
   {
@@ -385,7 +440,7 @@ export const FLUXOS: Fluxo[] = [
           { id: "integral", rotulo: "Reembolso integral", proximo: "reembolso_integral" },
         ] },
       enviar("reenvio", "Reenviar o pedido, sem custo para o cliente", "reenvio"),
-      reembolsoIntegral("Art. 35, III"),
+      ...reembolso("integral", "Art. 35, III"),
     ],
   },
   {
@@ -417,7 +472,7 @@ export const FLUXOS: Fluxo[] = [
           { id: "integral", rotulo: "Reembolso integral", proximo: "reembolso_integral" },
         ] },
       enviar("reenvio", "Reenviar o pedido, sem custo para o cliente", "reenvio"),
-      reembolsoIntegral("Art. 35, III"),
+      ...reembolso("integral", "Art. 35, III"),
     ],
   },
   {
@@ -440,7 +495,7 @@ export const FLUXOS: Fluxo[] = [
           { id: "nao", rotulo: "Não", proximo: "reembolso_integral", tom: "nao" },
         ] },
       enviar("reenvio", "Reenviar para o endereço confirmado", "reenvio"),
-      reembolsoIntegral(),
+      ...reembolso("integral"),
     ],
   },
   {
@@ -491,7 +546,20 @@ export const rotuloDesfecho = (d: string | null | undefined) => (d && DESFECHOS[
 
 /** Campos obrigatórios que faltam para responder o passo. */
 export function faltando(p: Passo, valores: Record<string, string>): string[] {
-  return (p.campos ?? []).filter((c) => c.obrigatorio && !(valores[c.id] ?? "").trim()).map((c) => c.rotulo);
+  const falta = (p.campos ?? []).filter((c) => c.obrigatorio && !(valores[c.id] ?? "").trim()).map((c) => c.rotulo);
+  // Reembolso: Pix e transferência precisam dos dados; o estorno volta pela plataforma.
+  if (p.reembolso && (valores.forma ?? "") && valores.forma !== "estorno" && !(valores.dados ?? "").trim()) {
+    falta.push("Chave Pix ou dados bancários");
+  }
+  return falta;
+}
+
+/** Em que pé está o reembolso, pelo passo do caso. */
+export function etapaDoReembolso(tipo: string, passo: string): "financeiro" | "comprovante" | null {
+  const p = passoDe(tipo, passo);
+  if (p?.financeiro) return "financeiro";
+  if (p?.comprovante) return "comprovante";
+  return null;
 }
 
 /** "13,50" / "1.234,56" / "13.50" → 13.5. Inválido → null. */
@@ -503,7 +571,10 @@ export function lerValor(s: string): number | null {
   return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : null;
 }
 
-export interface VarsMensagem { nome?: string | null; pedido?: string | null; entregue?: string | null; previsao?: string | null; rastreio?: string | null }
+export interface VarsMensagem {
+  nome?: string | null; pedido?: string | null; entregue?: string | null; previsao?: string | null;
+  rastreio?: string | null; valor?: string | null;
+}
 
 /** Preenche a mensagem; o que não se sabe fica entre colchetes para quem envia completar. */
 export function preencherMensagem(m: string, v: VarsMensagem): string {
@@ -515,6 +586,7 @@ export function preencherMensagem(m: string, v: VarsMensagem): string {
     entregue: v.entregue || "[data da entrega]",
     previsao: v.previsao || "[previsão]",
     rastreio: v.rastreio || "[rastreio]",
+    valor: v.valor || "[valor]",
   };
   // Sem nome, "Olá, {nome}!" vira "Olá!" — nunca "Olá, !".
   const base = nome ? m : m.replace(/Olá, \{nome\}/g, "Olá");

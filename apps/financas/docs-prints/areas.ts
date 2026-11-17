@@ -8,7 +8,8 @@ import * as contas from "./fx_contas";
 import * as vendas from "./fx_vendasfin";
 import * as compras from "./fx_compras";
 import * as config from "./fx_config";
+import * as reembolsos from "./fx_reembolsos";
 
-const AREAS = [comercial, contas, vendas, compras, config] as { FX?: Record<string, unknown>; RPC_FX?: Record<string, unknown> }[];
+const AREAS = [comercial, contas, vendas, compras, config, reembolsos] as { FX?: Record<string, unknown>; RPC_FX?: Record<string, unknown> }[];
 export const FX_AREAS: Record<string, unknown> = Object.assign({}, ...AREAS.map((a) => a.FX ?? {}));
 export const RPC_AREAS: Record<string, unknown> = Object.assign({}, ...AREAS.map((a) => a.RPC_FX ?? {}));

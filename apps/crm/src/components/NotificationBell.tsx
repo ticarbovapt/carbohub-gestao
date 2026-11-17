@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AtSign, Eye, Bell, Bug, Check, CheckCheck, Clock, ListTodo, MessageCircle, Trash2, WifiOff, ShoppingCart, TrendingUp, FileText, Package, CalendarClock, UserPlus, GraduationCap } from "lucide-react";
+import { AtSign, Eye, Bell, Bug, Check, CheckCheck, Clock, ListTodo, MessageCircle, Trash2, WifiOff, ShoppingCart, TrendingUp, FileText, Package, CalendarClock, UserPlus, GraduationCap, Banknote, Undo2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useNotifications, Notification } from "@/hooks/useNotifications";
@@ -27,6 +27,9 @@ const TYPE_CONFIG: Record<string, { Icon: React.ElementType; label: string; colo
   mkt_quadro:             { Icon: UserPlus,      label: "Quadro",         color: "text-emerald-600", bg: "bg-emerald-500/10" },
   academy_acesso:         { Icon: GraduationCap, label: "Carbo Academy",  color: "text-fuchsia-500", bg: "bg-fuchsia-500/10" },
   academy_liberado:       { Icon: GraduationCap, label: "Curso liberado", color: "text-emerald-600", bg: "bg-emerald-500/10" },
+  posvenda_reembolso:     { Icon: Banknote,      label: "Reembolso a pagar", color: "text-amber-600", bg: "bg-amber-500/10" },
+  posvenda_reembolso_pago: { Icon: Banknote,     label: "Reembolso pago", color: "text-emerald-600", bg: "bg-emerald-500/10" },
+  posvenda_reembolso_devolvido: { Icon: Undo2,   label: "Reembolso devolvido", color: "text-destructive", bg: "bg-destructive/10" },
   finance_rc_pendente:    { Icon: FileText,      label: "Requisição",     color: "text-amber-600",   bg: "bg-amber-500/10" },
   finance_oc_nova:        { Icon: Package,       label: "Ordem de compra", color: "text-blue-500",   bg: "bg-blue-500/10" },
 };
@@ -123,6 +126,21 @@ export function NotificationBell() {
     if (n.reference_type === "academy_curso" && n.reference_id) {
       setOpen(false);
       abrirCursoDoAcademy(n.reference_id);
+      return;
+    }
+    // Reembolso de pós-venda (20261175): a fila do Financeiro, ou o pedido no Atendimento.
+    if (n.reference_type === "posvenda_reembolso" && n.reference_id) {
+      setOpen(false);
+      const caminho = `/reembolsos?reembolso=${encodeURIComponent(n.reference_id)}`;
+      if (window.location.hostname.startsWith("finance.")) navigate(caminho);
+      else window.location.href = `https://finance.carbohub.com.br${caminho}`;
+      return;
+    }
+    if (n.reference_type === "posvenda_pedido" && n.reference_id) {
+      setOpen(false);
+      const caminho = `/pos-venda?pedido=${encodeURIComponent(n.reference_id)}`;
+      if (window.location.hostname.startsWith("atendimento.")) navigate(caminho);
+      else window.location.href = `https://atendimento.carbohub.com.br${caminho}`;
       return;
     }
     if (n.reference_type === "mkt_board" && n.reference_id) {

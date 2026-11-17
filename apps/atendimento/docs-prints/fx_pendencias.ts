@@ -92,6 +92,20 @@ const novoCaso = (bling_id: number, tipo: string, passo: string, diasAtras = 0) 
   Object.assign(e, { passo: "acompanhar", status: "encerrado", desfecho: "resolvido", encerrado_em: ts(2) });
 }
 const erro = (message: string) => { throw Object.assign(new Error(message), { message }); };
+
+// ── Reembolsos (20261175): o atendente pede; `__fxPagar()` faz o papel do Financeiro.
+const REEMB: Record<string, unknown>[] = [];
+(globalThis as any).__fxPagar = () => {
+  const r = REEMB.find((x) => x.status === "solicitado") as any;
+  if (!r) return false;
+  const c = CASOS.find((x) => x.id === r.caso_id)!;
+  Object.assign(r, { status: "pago", pago_por: "22222222-2222-2222-2222-222222222222", pago_em: new Date().toISOString().slice(0, 10),
+    valor_pago: r.valor, comprovante_path: `${r.id}/1-comprovante.pdf`, nota_financeiro: "Pix enviado às 14h" });
+  hist({ caso_id: c.id, acao: "respondeu", tipo: c.tipo, passo: c.passo, opcao: "pago_financeiro", proximo: r.passo_depois,
+    valor: r.valor, campos: { pago_em: new Date().toLocaleDateString("pt-BR") }, por: "22222222-2222-2222-2222-222222222222" });
+  c.passo = r.passo_depois;
+  return true;
+};
 const casoDe = (bling: unknown) => {
   const doPedido = CASOS.filter((c) => c.bling_id === bling).sort((a, b) => (a.status === "aberto" ? -1 : 1) - (b.status === "aberto" ? -1 : 1) || b.aberto_em.localeCompare(a.aberto_em));
   return { caso: doPedido[0] ?? null, casos_n: doPedido.length };
@@ -121,6 +135,7 @@ export const RPC_FX: Record<string, unknown> = {
     if (!h) erro("Não há passo para voltar");
     Object.assign(c, { tipo: h!.tipo, passo: h!.passo, status: "aberto", desfecho: null, encerrado_em: null });
     hist({ caso_id: c.id, acao: "voltou", tipo: h!.tipo, passo: h!.passo, desfaz: h!.id });
+    for (const r of REEMB as any[]) if (r.caso_id === c.id && r.status === "solicitado" && r.passo_aguarda !== h!.passo) r.status = "cancelado";
     return null;
   },
   carbo_posvenda_caso_encerrar: (a: { p_caso: string; p_desfecho: string; p_nota: string | null }) => {
@@ -128,6 +143,19 @@ export const RPC_FX: Record<string, unknown> = {
     hist({ caso_id: c.id, acao: "encerrou", tipo: c.tipo, passo: c.passo, desfecho: a.p_desfecho, nota: a.p_nota });
     Object.assign(c, { status: "encerrado", desfecho: a.p_desfecho, encerrado_em: new Date().toISOString() });
     return null;
+  },
+  carbo_posvenda_reembolso_solicitar: (a: Record<string, any>) => {
+    const c = CASOS.find((x) => x.id === a.p_caso)!;
+    if (c.passo !== a.p_passo) erro("Outra pessoa já respondeu este passo. Atualize a tela.");
+    const id = crypto.randomUUID();
+    REEMB.push({ id, caso_id: c.id, tipo: a.p_tipo, valor: a.p_valor, forma: a.p_forma, dados: a.p_dados, nota: a.p_nota,
+      status: "solicitado", passo_aguarda: a.p_aguarda, passo_depois: a.p_depois, solicitado_por: EU,
+      solicitado_em: new Date().toISOString(), pago_por: null, pago_em: null, valor_pago: null, comprovante_path: null,
+      nota_financeiro: null, devolvido_em: null, motivo_devolucao: null });
+    hist({ caso_id: c.id, acao: "respondeu", tipo: c.tipo, passo: c.passo, opcao: a.p_opcao, proximo: a.p_aguarda, valor: a.p_valor,
+      nota: a.p_nota, campos: { forma: a.p_forma === "pix" ? "Pix" : a.p_forma, ...(a.p_dados ? { dados: a.p_dados } : {}) } });
+    c.passo = a.p_aguarda; c.valor = a.p_valor;
+    return id;
   },
   carbo_posvenda_caso_anotar: (a: { p_caso: string; p_nota: string }) => {
     const c = CASOS.find((x) => x.id === a.p_caso)!;
@@ -198,6 +226,7 @@ export const RPC_FX: Record<string, unknown> = {
 export const FX: Record<string, unknown> = {
   carbo_posvenda_casos: () => CASOS,
   carbo_posvenda_caso_hist: () => HIST,
+  carbo_posvenda_reembolsos: () => REEMB,
   carbo_entrega_trato_hist: [
     { id: 2, bling_id: 900002, situacao: "em_contato", observacao: "Cliente diz que não recebeu. Pedi foto da caixa de correio.", em: ts(1), por: "11111111-1111-1111-1111-111111111111" },
     { id: 1, bling_id: 900002, situacao: "em_contato", observacao: "Liguei, caixa postal. Mandei mensagem.", em: ts(2), por: "11111111-1111-1111-1111-111111111111" },
