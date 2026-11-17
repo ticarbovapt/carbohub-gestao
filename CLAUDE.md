@@ -2793,6 +2793,24 @@ com `OR` o Postgres não faz join por hash e compara tudo contra tudo. Local, me
    `url` nulo em `cron.job` é SQL puro e não entra. Job HTTP novo nasce com timeout explícito.
    ⚠️ `vindi-sync` não está na lista `dep` do deploy — nunca sobe pelo push.
 
+### Pós-venda (ex-Pendências de entrega) — TODO pedido, semana a semana (17/11/2026)
+`atendimento…/pos-venda` (o `/pendencias` antigo redireciona), `carbo_posvenda(de, ate, corte)`
+(`20261172`). Pedido do dono do processo: todo pedido aparece, MESMO entregue ("depois de
+entregue pode ter problema também"), MENOS o ML Full (logística e pós-venda são do Mercado
+Livre); navegar SEMANA A SEMANA (domingo a sábado) clicando, nas duas abas (antes/a partir de
+06/11), com Mês e Período como alternativa.
+1. ⚠️ **Full = cadastro**: ramo do Bling 1 cuja loja tem `bling_lojas.plataforma_fatura`, nunca
+   `canal = 'ML Full'` (texto do cadastro).
+2. ⚠️ **O julgamento de problema é CÓPIA da `carbo_entrega_pendencias`** (20261154), que continua
+   no banco e a tela não usa mais. Mudou a régua, mude nas duas.
+3. O rastreio casa pelo código do Bling OU pelo da transportadora (o do ME) — antes, card cujo
+   código veio só do ME não tinha previsão nem "problema na transportadora" (P7).
+4. **O período é a página**: a função devolve o período (teto 400 dias) + o resumo do histórico
+   (selo das abas = problemas sem trato final; `semanas` = onde estão, para a faixa marcar).
+   Medido local: 500 mil pedidos, uma semana com 8,7 mil = 2,5 s. Estado na URL
+   (`?aba&modo&de&ate&status&problema&tratativa&canal&busca&pedido`).
+5. A semana que atravessa o corte aparece nas duas abas, cada uma com a sua parte.
+
 ### ⚠️ Conversas e Esteira a 500 vendas/semana: o teto e o índice (19/10/2026)
 Queixa do dono do processo: *"demora para abrir"* e *"diz que foi enviada
 mensagem mas o cara não aparece aqui quando pesquisa"* (Deividi Rodrigues: NF

@@ -47,7 +47,8 @@ export default function App() {
             O Ops já usa este mesmo truque em `/ecommerce/mensagens`. */}
         <Route path="/ecommerce/esteira" element={<EsteiraOnline />} />
         <Route path="/ecommerce/mensagens" element={<MensagensCliente />} />
-        <Route path="/pendencias" element={<PendenciasEntrega />} />
+        <Route path="/pos-venda" element={<PendenciasEntrega />} />
+        <Route path="/pendencias" element={<IrPara para="/pos-venda" />} />
         <Route path="/painel" element={<PainelAtendimento />} />
         <Route path="/perfil" element={<Profile />} />
         <Route path="/documentacao" element={<Documentacao />} />

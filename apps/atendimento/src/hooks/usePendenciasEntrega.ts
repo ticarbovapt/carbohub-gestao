@@ -2,10 +2,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Pendências de entrega (`/pendencias`, 13/11/2026). Quem decide o que é
-// problema é `carbo_entrega_pendencias()` (migração 20261154): a tela só
-// filtra, conta e desenha. O trato (`carbo_entrega_trato`) é anotação de quem
-// atende — não move card da esteira.
+// Pós-venda (`/pos-venda`, ex-Pendências de entrega). Desde 17/11/2026 a tela
+// lê `carbo_posvenda(de, ate)` (20261172): TODO pedido do período — entregue e
+// cancelado inclusive —, menos o ML Full. Quem decide o que é problema continua
+// sendo o banco (a MESMA régua da `carbo_entrega_pendencias`, 20261154); a tela
+// só filtra, conta e desenha. O trato (`carbo_entrega_trato`) é anotação de
+// quem atende — não move card da esteira.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const db = supabase as unknown as { from: (t: string) => any; rpc: (fn: string, args?: any) => any };
@@ -43,6 +45,7 @@ export const ehFinal = (s: SituacaoTrato | null | undefined) => !!s && SITUACOES
 
 export const ETAPA_ROTULO: Record<string, string> = {
   confirmado: "Confirmado", nf_emitida: "NF emitida", etiqueta: "Etiqueta", em_transito: "Em trânsito",
+  entregue: "Entregue", cancelado: "Cancelado",
 };
 
 export interface Trato {
@@ -65,9 +68,11 @@ export interface Pendencia {
   cidade: string | null;
   uf: string | null;
   etapa: string;
-  problema: Problema;
+  /** Nulo = sem problema (inclusive entregue e cancelado). */
+  problema: Problema | null;
   desde: string | null;
   previsao: string | null;
+  entregue_em?: string | null;
   rastreio_status: string | null;
   transportadora: string | null;
   rastreio: string | null;
@@ -77,9 +82,17 @@ export interface Pendencia {
   trato: Trato | null;
 }
 
-export interface Pendencias {
+export interface PosVenda {
   gerado_em: string;
   corte: string;
+  de: string;
+  ate: string;
+  /** Dia do pedido mais antigo (o limite do "‹"). */
+  primeiro: string | null;
+  /** Problemas sem trato final, no histórico todo — o selo das abas. */
+  abertos: { antes: number; novos: number };
+  /** Onde estão os problemas em aberto: o domingo da semana. */
+  semanas: { semana: string; antes: boolean; n: number }[];
   itens: Pendencia[];
 }
 
@@ -93,18 +106,21 @@ export function lerErro(e: any): ErroPendencias {
   return { tipo: "outro", mensagem: msg };
 }
 
-export function usePendenciasEntrega() {
+/** A página da tela: um período (semana, mês ou intervalo). Nulo = nada a ler. */
+export function usePosVenda(periodo: { de: string; ate: string } | null) {
   return useQuery({
-    queryKey: ["entrega_pendencias"],
+    queryKey: ["posvenda", periodo?.de ?? null, periodo?.ate ?? null],
+    enabled: !!periodo,
     staleTime: 60_000,
     refetchInterval: 5 * 60_000,
-    // A lista lê a esteira inteira: reler no foco custaria uma esteira por aba.
     refetchOnWindowFocus: false,
+    // Trocar de semana não esvazia a tela: a anterior fica até a nova chegar.
+    placeholderData: (anterior) => anterior,
     retry: (n, e: any) => n < 1 && lerErro(e).tipo === "outro",
-    queryFn: async (): Promise<Pendencias> => {
-      const { data, error } = await db.rpc("carbo_entrega_pendencias");
+    queryFn: async (): Promise<PosVenda> => {
+      const { data, error } = await db.rpc("carbo_posvenda", { p_de: periodo!.de, p_ate: periodo!.ate });
       if (error) throw error;
-      return data as Pendencias;
+      return data as PosVenda;
     },
   });
 }
@@ -144,24 +160,22 @@ export function useSalvarTrato() {
         .upsert({ bling_id: v.bling_id, situacao: v.situacao, observacao: v.observacao }, { onConflict: "bling_id" });
       if (error) throw error;
     },
-    // Muda a lista NO CLIQUE; a releitura da esteira vem depois, em segundo plano.
+    // Muda a lista NO CLIQUE; a releitura vem depois, em segundo plano.
     onMutate: async (v) => {
-      await qc.cancelQueries({ queryKey: ["entrega_pendencias"] });
-      const antes = qc.getQueryData<Pendencias>(["entrega_pendencias"]);
-      if (antes) {
-        qc.setQueryData<Pendencias>(["entrega_pendencias"], {
-          ...antes,
-          itens: antes.itens.map((i) => i.bling_id !== v.bling_id ? i : {
-            ...i,
-            trato: { situacao: v.situacao, observacao: v.observacao, em: new Date().toISOString(), por: i.trato?.por ?? null },
-          }),
-        });
-      }
+      await qc.cancelQueries({ queryKey: ["posvenda"] });
+      const antes = qc.getQueriesData<PosVenda>({ queryKey: ["posvenda"] });
+      qc.setQueriesData<PosVenda>({ queryKey: ["posvenda"] }, (d) => d && ({
+        ...d,
+        itens: d.itens.map((i) => i.bling_id !== v.bling_id ? i : {
+          ...i,
+          trato: { situacao: v.situacao, observacao: v.observacao, em: new Date().toISOString(), por: i.trato?.por ?? null },
+        }),
+      }));
       return { antes };
     },
-    onError: (_e, _v, ctx) => { if (ctx?.antes) qc.setQueryData(["entrega_pendencias"], ctx.antes); },
+    onError: (_e, _v, ctx) => { for (const [k, d] of ctx?.antes ?? []) qc.setQueryData(k, d); },
     onSettled: (_d, _e, v) => {
-      qc.invalidateQueries({ queryKey: ["entrega_pendencias"] });
+      qc.invalidateQueries({ queryKey: ["posvenda"] });
       qc.invalidateQueries({ queryKey: ["entrega_trato_hist", v.bling_id] });
     },
   });
