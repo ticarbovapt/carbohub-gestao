@@ -2908,6 +2908,11 @@ Livre); navegar SEMANA A SEMANA (domingo a sábado) pelas setas ‹ semana › (
    PASSO atual com "O caso está aqui" (`?tipo=&passo=`): o `gerar-pptx` grava `passos`
    (tipo → passo → slide) e a caixa de cada passo em cada slide; no slide do reembolso os passos
    do roteiro apontam para as caixas dele ("pedir", "aviso", "comprovante").
+12. **A lista do `/pos-venda` também** (18/11/2026): a tabela com botão "Tratar" virou linhas
+   clicáveis num cartão (cliente · situação · entrega · caso · valor, `LinhaPedido` + `GRADE`),
+   com o cabeçalho de semana como faixa dentro da lista; aba, modo e período numa barra só
+   (`Segmentos`, o controle dos Reembolsos — no celular rola de lado, não quebra). Só TELA:
+   filtros, contagens e URL não mudaram. Mudou o desenho de um, confira o outro.
 ### ⚠️ Conversas e Esteira a 500 vendas/semana: o teto e o índice (19/10/2026)
 Queixa do dono do processo: *"demora para abrir"* e *"diz que foi enviada
 mensagem mas o cara não aparece aqui quando pesquisa"* (Deividi Rodrigues: NF
