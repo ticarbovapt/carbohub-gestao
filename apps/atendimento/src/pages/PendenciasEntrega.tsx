@@ -424,6 +424,63 @@ function Tratativa({ p }: { p: Pendencia }) {
   );
 }
 
+// ── A linha da lista (o mesmo desenho dos Reembolsos do Finanças) ────────────
+const GRADE = "lg:grid-cols-[minmax(0,1.8fr)_minmax(0,1.4fr)_minmax(0,1.1fr)_minmax(0,1.5fr)_7rem_1rem]";
+
+function LinhaPedido({ p, onAbrir }: { p: Pendencia; onAbrir: () => void }) {
+  const codigo = p.pedido_codigo ?? p.pedido_numero ?? `#${Math.abs(p.bling_id)}`;
+  const temTrato = !!(p.caso || p.trato);
+  return (
+    <button type="button" onClick={onAbrir}
+      className={cn("grid w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 gap-y-2 px-4 py-3 text-left transition-colors hover:bg-muted/40 lg:items-center", GRADE)}>
+      <span className="min-w-0">
+        <span className="block truncate font-medium">{p.cliente ?? "Cliente"}</span>
+        <span className="block truncate text-xs text-muted-foreground">
+          {[codigo, p.canal, dia(p.data_pedido)].filter(Boolean).join(" · ")}
+        </span>
+      </span>
+      <span className="flex items-center justify-end gap-1 lg:order-5 lg:block lg:text-right">
+        <span className="text-sm font-medium tabular-nums">{brl(p.total)}</span>
+        <ChevronRight className="h-4 w-4 text-muted-foreground lg:hidden" />
+      </span>
+      <span className="col-span-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 lg:order-2 lg:col-span-1 lg:block">
+        <SituacaoComReclamacao p={p} />
+      </span>
+      <span className="hidden min-w-0 lg:order-3 lg:block">
+        <span className="block truncate text-sm">{p.transportadora ?? "—"}</span>
+        {p.rastreio && <span className="block truncate font-mono text-xs text-muted-foreground">{p.rastreio}</span>}
+      </span>
+      <span className={cn("col-span-2 min-w-0 lg:order-4 lg:col-span-1 lg:block", !temTrato && "hidden")}>
+        <Tratativa p={p} />
+      </span>
+      <ChevronRight className="hidden h-4 w-4 text-muted-foreground lg:order-6 lg:block" />
+    </button>
+  );
+}
+
+/** Abas e modos: o controle segmentado dos Reembolsos. */
+function Segmentos<T extends string>({ itens, ativo, onTrocar }: {
+  itens: { id: T; rotulo: string; n?: number; alerta?: boolean }[]; ativo: T; onTrocar: (id: T) => void;
+}) {
+  return (
+    <div role="tablist" className="inline-flex max-w-full shrink-0 self-start overflow-x-auto rounded-lg border bg-muted/40 p-1">
+      {itens.map((it) => (
+        <button key={it.id} role="tab" type="button" aria-selected={ativo === it.id} onClick={() => onTrocar(it.id)}
+          className={cn("inline-flex items-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm transition-colors",
+            ativo === it.id ? "bg-background font-medium text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>
+          {it.rotulo}
+          {it.n != null && it.n > 0 && (
+            <span className={cn("ml-1.5 rounded-full px-1.5 text-xs tabular-nums",
+              it.alerta ? "bg-destructive/15 text-destructive" : "bg-primary/15 text-primary")}>
+              {it.n}
+            </span>
+          )}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // ── O seletor de período ─────────────────────────────────────────────────────
 type Modo = "semana" | "mes" | "periodo" | "casos";
 
@@ -614,39 +671,16 @@ export default function PendenciasEntrega() {
           )}
         />
 
-        <div role="tablist" className="inline-flex h-10 rounded-lg border p-1">
-          {(["antes", "novos"] as const).map((a) => (
-            <button key={a} role="tab" type="button" aria-selected={aba === a} onClick={() => trocarAba(a)}
-              className={cn("inline-flex items-center gap-2 rounded-md px-3 text-sm font-medium transition-colors",
-                aba === a ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground")}>
-              {a === "antes" ? `Antes de ${corteCurto}` : `A partir de ${corteCurto}`}
-              {d && (
-                <span className={cn("rounded-full px-1.5 text-[11px] font-semibold tabular-nums",
-                  d.abertos[a] > 0 ? "bg-red-500/15 text-red-700 dark:text-red-400" : "bg-foreground/10")}>
-                  {d.abertos[a]}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-
-        {/* O período: semana a semana (padrão), mês a mês ou intervalo livre */}
-        <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-          <div role="tablist" className="inline-flex h-9 shrink-0 self-start rounded-md border p-0.5">
-            {([["semana", "Semana"], ["mes", "Mês"], ["periodo", "Período"], ["casos", "Casos abertos"]] as const).map(([m, r]) => {
-              const n = m === "casos" ? d?.casos_abertos?.[aba] : undefined;
-              return (
-                <button key={m} role="tab" type="button" aria-selected={modo === m} onClick={() => trocarModo(m)}
-                  className={cn("inline-flex items-center gap-1.5 whitespace-nowrap rounded px-3 text-sm font-medium transition-colors",
-                    modo === m ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground")}>
-                  {r}
-                  {n != null && n > 0 && (
-                    <span className="rounded-full bg-primary/15 px-1.5 text-[11px] font-semibold tabular-nums text-primary">{n}</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
+        {/* A aba (antes/a partir do corte), o modo e o período, numa barra só */}
+        <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap lg:items-center">
+          <Segmentos ativo={aba} onTrocar={trocarAba}
+            itens={(["antes", "novos"] as const).map((a) => ({
+              id: a, rotulo: a === "antes" ? `Antes de ${corteCurto}` : `A partir de ${corteCurto}`,
+              n: d?.abertos[a], alerta: true,
+            }))} />
+          <Segmentos ativo={modo} onTrocar={trocarModo}
+            itens={([["semana", "Semana"], ["mes", "Mês"], ["periodo", "Período"], ["casos", "Casos abertos"]] as const)
+              .map(([m, r]) => ({ id: m, rotulo: r, n: m === "casos" ? d?.casos_abertos?.[aba] : undefined }))} />
           {modo === "semana" && (
             <div className="flex items-center gap-1.5">
               <BotaoSeta lado="antes" disabled={!temAntes} onClick={() => passo(-1)} />
@@ -687,9 +721,8 @@ export default function PendenciasEntrega() {
             {aba === "antes" ? `${rotuloJanela} é depois de ${corteCurto}.` : `${rotuloJanela} é antes de ${corteCurto}.`}
           </div>
         ) : !d ? (
-          <div className="space-y-3">
-            <Skeleton className="h-9 w-full max-w-3xl" />
-            {Array.from({ length: 8 }, (_, i) => <Skeleton key={i} className="h-14 w-full" />)}
+          <div className="space-y-2 rounded-xl border bg-card p-4">
+            {Array.from({ length: 8 }, (_, i) => <Skeleton key={i} className="h-12 w-full" />)}
           </div>
         ) : (
           <>
@@ -737,7 +770,7 @@ export default function PendenciasEntrega() {
               )}
             </div>
 
-            {status === "problema" && (
+            {status === "problema" && (contaProblema.size > 0 || !!problema) && (
               <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:flex-wrap md:px-0">
                 {PROBLEMAS.map((pr) => {
                   const n = contaProblema.get(pr.id) ?? 0;
@@ -793,111 +826,41 @@ export default function PendenciasEntrega() {
               </span>
             </div>
 
-            {!lista.length ? (
-              <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-                {modo === "casos" ? "Nenhum caso aberto." : "Nenhum pedido aqui."}
+            <div className={cn("overflow-hidden rounded-xl border bg-card transition-opacity", carregandoOutro && "opacity-50")}>
+              <div className={cn("hidden gap-x-4 border-b bg-muted/40 px-4 py-2 text-xs font-medium text-muted-foreground lg:grid", GRADE)}>
+                <span>Cliente</span><span>Situação</span><span>Entrega</span><span>Caso</span><span className="text-right">Valor</span><span />
               </div>
-            ) : (
-              <div className={cn("space-y-4 transition-opacity", carregandoOutro && "opacity-50")}>
-                {/* Celular: cards */}
-                <div className="divide-y rounded-xl border md:hidden">
+              {!lista.length ? (
+                <p className="px-4 py-14 text-center text-sm text-muted-foreground">
+                  {busca ? "Nada encontrado." : modo === "casos" ? "Nenhum caso aberto." : "Nenhum pedido aqui."}
+                </p>
+              ) : (
+                <div className="divide-y">
                   {lista.slice(0, mostrar).map((p, i, pagina) => {
                     const cab = cabecalhoDe(p, i, pagina);
                     return (
                       <Fragment key={p.bling_id}>
                         {cab && (
-                          <div className="flex items-baseline justify-between gap-2 bg-muted/50 px-3 py-2">
+                          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 bg-muted/30 px-4 py-2">
                             <span className="text-sm font-semibold">{cab.rotulo}</span>
                             <span className="text-xs tabular-nums text-muted-foreground">
                               {cab.n} {cab.n === 1 ? "pedido" : "pedidos"}{cab.problemas ? ` · ${cab.problemas} com problema` : ""}
                             </span>
                           </div>
                         )}
-                        <button type="button" onClick={() => setPedido(String(p.bling_id))}
-                          className="block w-full space-y-1.5 p-3 text-left hover:bg-muted/50">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <p className="truncate font-medium">{p.cliente ?? "—"}</p>
-                              <p className="truncate text-xs text-muted-foreground">
-                                {p.pedido_codigo ?? p.pedido_numero} · {p.canal} · {dia(p.data_pedido)}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex flex-wrap items-center gap-2"><Situacao p={p} /><ChipReclamou p={p} /></div>
-                          <Tratativa p={p} />
-                        </button>
+                        <LinhaPedido p={p} onAbrir={() => setPedido(String(p.bling_id))} />
                       </Fragment>
                     );
                   })}
                 </div>
+              )}
+            </div>
 
-                {/* Desktop: tabela */}
-                <div className="hidden overflow-x-auto rounded-xl border md:block">
-                  <table className="w-full text-sm">
-                    <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
-                      <tr>
-                        <th className="px-3 py-2 font-medium">Pedido</th>
-                        <th className="px-3 py-2 font-medium">Cliente</th>
-                        <th className="px-3 py-2 font-medium">Situação</th>
-                        <th className="px-3 py-2 font-medium">Rastreio</th>
-                        <th className="px-3 py-2 font-medium">Tratativa</th>
-                        <th className="px-3 py-2" />
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y">
-                      {lista.slice(0, mostrar).map((p, i, pagina) => {
-                        const cab = cabecalhoDe(p, i, pagina);
-                        return (
-                          <Fragment key={p.bling_id}>
-                            {cab && (
-                              <tr className="bg-muted/50">
-                                <td colSpan={6} className="px-3 py-2">
-                                  <span className="font-semibold">{cab.rotulo}</span>
-                                  <span className="ml-3 text-xs tabular-nums text-muted-foreground">
-                                    {cab.n} {cab.n === 1 ? "pedido" : "pedidos"}{cab.problemas ? ` · ${cab.problemas} com problema` : ""}
-                                  </span>
-                                </td>
-                              </tr>
-                            )}
-                            <tr className="cursor-pointer hover:bg-muted/40" onClick={() => setPedido(String(p.bling_id))}>
-                              <td className="px-3 py-2 align-top">
-                                <p className="font-medium">{p.pedido_codigo ?? p.pedido_numero ?? `#${Math.abs(p.bling_id)}`}</p>
-                                <p className="text-xs text-muted-foreground">{p.canal} · {dia(p.data_pedido)} · {brl(p.total)}</p>
-                              </td>
-                              <td className="max-w-[16rem] px-3 py-2 align-top">
-                                <p className="truncate">{p.cliente ?? "—"}</p>
-                                <p className="truncate text-xs text-muted-foreground">
-                                  {p.cliente_fone ?? "sem telefone"}{p.cidade ? ` · ${p.cidade}/${p.uf ?? ""}` : ""}
-                                </p>
-                              </td>
-                              <td className="max-w-[16rem] px-3 py-2 align-top"><SituacaoComReclamacao p={p} /></td>
-                              <td className="max-w-[14rem] px-3 py-2 align-top">
-                                <p className="truncate">{p.transportadora ?? "—"}</p>
-                                <p className="truncate font-mono text-xs text-muted-foreground">{p.rastreio ?? ""}</p>
-                              </td>
-                              <td className="max-w-[18rem] px-3 py-2 align-top">
-                                <Tratativa p={p} />
-                              </td>
-                              <td className="px-3 py-2 text-right align-top">
-                                <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); setPedido(String(p.bling_id)); }}>
-                                  {p.caso?.status === "aberto" ? "Continuar" : "Tratar"}
-                                </Button>
-                              </td>
-                            </tr>
-                          </Fragment>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-
-                {lista.length > mostrar && (
-                  <div className="flex justify-center">
-                    <Button variant="outline" onClick={() => setMostrar((n) => n + POR_PAGINA)}>
-                      Mostrar mais ({lista.length - mostrar})
-                    </Button>
-                  </div>
-                )}
+            {lista.length > mostrar && (
+              <div className="flex justify-center">
+                <Button variant="outline" onClick={() => setMostrar((n) => n + POR_PAGINA)}>
+                  Mostrar mais ({lista.length - mostrar})
+                </Button>
               </div>
             )}
           </>
