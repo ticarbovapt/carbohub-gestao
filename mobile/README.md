@@ -60,6 +60,11 @@ pelo app TestFlight.
 ⚠️ O número do build é o `run_number` do workflow: sobe sozinho a cada rodada.
 ⚠️ Versão nova na loja = mudar o campo "versão" (1.0.1, 1.1.0…).
 
+## Publicar na loja (revisão da Apple)
+
+A ficha pronta para colar — textos, links, privacidade, nota para o revisor,
+conta de demonstração e os prints — está em `mobile/sales/loja/LOJA.md`.
+
 ## App novo (os outros do Hub)
 
 Copiar `mobile/sales` para `mobile/<app>`, trocar em `capacitor.config.json`
