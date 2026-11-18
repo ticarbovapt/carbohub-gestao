@@ -1,0 +1,16 @@
+{
+  "appId": "br.com.carbohub.sales",
+  "appName": "Carbo Sales",
+  "webDir": "www",
+  "server": {
+    "url": "https://sales.carbohub.com.br",
+    "allowNavigation": ["carbohub.com.br", "*.carbohub.com.br"],
+    "errorPath": "offline.html"
+  },
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#0B1220",
+    "appendUserAgent": "CarboHubApp/1 (sales)",
+    "scheme": "Carbo Sales"
+  }
+}

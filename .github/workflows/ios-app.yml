@@ -1,0 +1,162 @@
+# Apps de iPhone do CarboHub (mobile/<app>) — ver mobile/README.md.
+#
+#   verificar   todo PR que mexe em mobile/: compila para o simulador, SEM
+#               assinatura e SEM segredo nenhum. Prova que o projeto compila.
+#   testflight  só à mão (Actions → "App iPhone" → Run workflow, enviar = sim):
+#               assina com a chave da App Store Connect e manda o build para o
+#               TestFlight. Cada envio é um build novo (número = run_number).
+#
+# ⚠️ Os segredos ficam no GitHub (Settings → Secrets → Actions), nunca aqui:
+#   APPLE_TEAM_ID   ASC_KEY_ID   ASC_ISSUER_ID   ASC_KEY_P8 (conteúdo do .p8)
+# ⚠️ Minuto de Mac custa 10× o de Linux no GitHub: o teste só roda quando
+#    mobile/ muda, e o envio só quando alguém pede.
+name: App iPhone
+
+on:
+  pull_request:
+    paths:
+      - "mobile/**"
+      - ".github/workflows/ios-app.yml"
+  workflow_dispatch:
+    inputs:
+      app:
+        description: "Qual app (pasta em mobile/)"
+        type: choice
+        options: [sales]
+        default: sales
+      versao:
+        description: "Versão que aparece na loja (ex.: 1.0.0)"
+        type: string
+        default: "1.0.0"
+      enviar:
+        description: "Enviar para o TestFlight?"
+        type: boolean
+        default: false
+
+concurrency:
+  group: ios-${{ github.ref }}-${{ inputs.app || 'sales' }}
+  cancel-in-progress: false
+
+jobs:
+  verificar:
+    if: github.event_name == 'pull_request' || inputs.enviar != true
+    runs-on: macos-15
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: mobile/${{ inputs.app || 'sales' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npx cap sync ios
+      - name: Compilar para o simulador (sem assinatura)
+        run: |
+          xcodebuild -version
+          xcodebuild build \
+            -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            CODE_SIGNING_ALLOWED=NO > "$RUNNER_TEMP/xcode.log" 2>&1 || {
+            grep -E "error:|ERROR|Error Domain" "$RUNNER_TEMP/xcode.log" | head -n 60
+            tail -n 60 "$RUNNER_TEMP/xcode.log"
+            exit 1
+          }
+          tail -n 15 "$RUNNER_TEMP/xcode.log"
+
+  testflight:
+    if: github.event_name == 'workflow_dispatch' && inputs.enviar == true
+    runs-on: macos-15
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: mobile/${{ inputs.app }}
+    env:
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Conferir os segredos
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          falta=""
+          [ -n "$APPLE_TEAM_ID" ] || falta="$falta APPLE_TEAM_ID"
+          [ -n "$ASC_KEY_ID" ]    || falta="$falta ASC_KEY_ID"
+          [ -n "$ASC_ISSUER_ID" ] || falta="$falta ASC_ISSUER_ID"
+          [ -n "$ASC_KEY_P8" ]    || falta="$falta ASC_KEY_P8"
+          if [ -n "$falta" ]; then
+            echo "::error::Faltam segredos no GitHub (Settings → Secrets → Actions):$falta"
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/asc"
+          printf '%s\n' "$ASC_KEY_P8" > "$RUNNER_TEMP/asc/AuthKey_${ASC_KEY_ID}.p8"
+          chmod 600 "$RUNNER_TEMP/asc/AuthKey_${ASC_KEY_ID}.p8"
+
+      - run: npm ci
+      - run: npx cap sync ios
+
+      - name: Gerar o arquivo (archive) assinado
+        run: |
+          xcodebuild -version
+          xcodebuild archive \
+            -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey_${ASC_KEY_ID}.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CODE_SIGN_STYLE=Automatic \
+            MARKETING_VERSION="${{ inputs.versao }}" \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}" > "$RUNNER_TEMP/xcode.log" 2>&1 || {
+            grep -E "error:|ERROR|Error Domain" "$RUNNER_TEMP/xcode.log" | head -n 60
+            tail -n 60 "$RUNNER_TEMP/xcode.log"
+            exit 1
+          }
+          tail -n 15 "$RUNNER_TEMP/xcode.log"
+
+      - name: Enviar para a App Store Connect (TestFlight)
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>${APPLE_TEAM_ID}</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>uploadSymbols</key><true/>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+          </dict>
+          </plist>
+          PLIST
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey_${ASC_KEY_ID}.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" > "$RUNNER_TEMP/xcode.log" 2>&1 || {
+            grep -E "error:|ERROR|Error Domain" "$RUNNER_TEMP/xcode.log" | head -n 60
+            tail -n 60 "$RUNNER_TEMP/xcode.log"
+            exit 1
+          }
+          tail -n 15 "$RUNNER_TEMP/xcode.log"
+          echo "### Enviado: ${{ inputs.app }} ${{ inputs.versao }} (build ${{ github.run_number }})" >> "$GITHUB_STEP_SUMMARY"
+          echo "Aparece no TestFlight depois que a Apple processar (5 a 30 min)." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Apagar a chave
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/asc"

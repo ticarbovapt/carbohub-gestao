@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<title>Carbo Sales</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { height: 100%; margin: 0; background: #0B1220; color: #E5E7EB;
+    font: 16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  main { min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 14px; padding: 24px; padding-top: max(24px, env(safe-area-inset-top)); text-align: center; box-sizing: border-box; }
+  h1 { font-size: 19px; font-weight: 600; margin: 0; }
+  p { margin: 0; color: #9CA3AF; font-size: 15px; max-width: 320px; }
+  button { margin-top: 8px; border: 0; border-radius: 10px; padding: 12px 22px; font: inherit; font-weight: 600;
+    color: #0B1220; background: #3DDC6B; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Sem conexão</h1>
+  <p>Não foi possível abrir o Carbo Sales. Confira a internet do celular.</p>
+  <button type="button" onclick="location.replace('https://sales.carbohub.com.br/')">Tentar de novo</button>
+</main>
+<script>
+  // Volta sozinho quando a rede voltar.
+  window.addEventListener("online", function () { location.replace("https://sales.carbohub.com.br/"); });
+</script>
+</body>
+</html>

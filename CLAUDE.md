@@ -1635,6 +1635,22 @@ manifesto; os outros ficam `any` (quadro e tabela se usam deitado).
 ⚠️ O iPhone só lê isso AO CRIAR o ícone: quem já tinha o ícone precisa apagar e
 adicionar de novo. ⚠️ App novo copia os três pedaços.
 
+### App de iPhone na App Store — `mobile/` (18/11/2026)
+Pedido do dono do processo: os apps na App Store (a conta da empresa já tem
+outros), começando pelo Sales e depois o Hub inteiro. `mobile/<app>` é uma casca
+Capacitor 7 (SPM) que abre o SITE (`server.url`), com projeto e lockfile
+PRÓPRIOS — o `apps/crm` não foi tocado. Passo a passo e limites em
+`mobile/README.md`; build no Mac do GitHub (`.github/workflows/ios-app.yml`:
+compila em todo PR de `mobile/`, envia ao TestFlight só à mão).
+1. ⚠️ **Site no ar = app atualizado.** Build novo só muda a parte nativa.
+2. ⚠️ **Sem push com o app fechado** (WKWebView não tem Web Push): é a fase 2
+   (APNs no `carbo-push`). E `target=_blank` sai para o Safari, sem login.
+3. ⚠️ **Download é NATIVO** (`CarboViewController.swift`): o Capacitor mandava o
+   `blob:` do PDF/CSV para o Safari, que não abre — no app, nada acontecia.
+4. ⚠️ **Permissão do iPhone sem texto no `Info.plist` FECHA o app** no instante
+   em que o site pede (câmera/fotos do RTM, localização do check-in, microfone
+   da chamada). Recurso novo do navegador no site ⇒ confira o `Info.plist`.
+
 ### Comportamento de app "natural" — mora no `packages/shell` (08/10/2026)
 Pedido do dono do processo: polimento básico nos oito apps. Tudo o que vale
 para todos mora num lugar só:
