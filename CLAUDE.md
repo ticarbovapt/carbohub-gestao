@@ -2878,6 +2878,23 @@ Livre); navegar SEMANA A SEMANA (domingo a sábado) pelas setas ‹ semana › (
    ⚠️ A seta casa com a nossa pelo `id` da aresta, nunca pela ordem do json: na ordem, o "Não" ia
    para a seta do "Sim". Passo novo num fluxo dividido: ponha-o numa das `PARTES` (o gerador
    RECUSA passo que não está em nenhuma).
+   **Os fluxos DENTRO dos apps** (18/11/2026): `atendimento…/pos-venda/fluxos` (menu, "Fluxos" ao
+   abrir caso e "Ver o fluxo deste caso" no ⋯ do caso → `?tipo=`) e `finance…/reembolsos/fluxos`
+   (botão "Fluxo do reembolso"). `pages/FluxosPosVenda.tsx` e `lib/fluxosPosVenda.ts` são
+   IDÊNTICOS nos dois apps: um JPG por slide em `public/fluxos-posvenda/`, os conectores "→ pág. N"
+   viram `<Link>` por cima da imagem (`?pagina=N`, setas do teclado), e o .pptx para baixar.
+   ⚠️ Tudo GERADO: `node docs/posvenda/gerar-pptx.mjs && node docs/posvenda/publicar-nos-apps.mjs`
+   (soffice + pdftoppm). Roteiro mudou ⇒ os DOIS na mesma tarefa, senão a tela mostra o fluxo de
+   ontem. O `gerar-pptx` grava `fluxos-pos-venda.json` (título e conectores de cada slide, em
+   polegadas) — conector desenhado sem passar pelo `anotar()` não fica clicável no app.
+10. **O pedido aberto é uma tela de chamado** (18/11/2026, queixa do dono do processo: "feio e
+   esquisito, precisa ser mais profissional"): cabeçalho fixo, o CASO no centro (cabeça com ícone
+   do tipo, linha do tempo e o PASSO ATUAL em cartão com as ações no rodapé) e uma coluna com
+   cliente, reclamação, pedido, entrega e anotações. Ações que não são o passo (cliente não
+   respondeu, aberto por engano, ver o fluxo) moram no ⋯; "Voltar passo" fica à vista. Histórico
+   com mais de 4 itens mostra os 3 últimos ("Mostrar N passos anteriores"). Caso encerrado vem
+   ANTES de "Abrir novo caso". ⚠️ Campo `escolha` do roteiro é GRUPO, nunca `<label>`: o label
+   rotulava o primeiro botão e clicar no rótulo marcava "Pix".
 ### ⚠️ Conversas e Esteira a 500 vendas/semana: o teto e o índice (19/10/2026)
 Queixa do dono do processo: *"demora para abrir"* e *"diz que foi enviada
 mensagem mas o cara não aparece aqui quando pesquisa"* (Deividi Rodrigues: NF

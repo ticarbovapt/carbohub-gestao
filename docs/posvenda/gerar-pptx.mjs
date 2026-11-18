@@ -306,7 +306,13 @@ function textoDoNo(n, s, corTitulo = COR.texto) {
   return runs;
 }
 
-function desenhar(pres, slide, pag) {
+// O que a tela do app (`/pos-venda/fluxos`) precisa saber de cada slide: o
+// título e onde ficam os conectores clicáveis, em polegadas (13,333 × 7,5).
+const MAPA = new Map(); // slide → { titulo, links: [{ x, y, w, h, slide }] }
+const anotar = (num, link) => { if (!MAPA.has(num)) MAPA.set(num, { titulo: "", links: [] }); if (link) MAPA.get(num).links.push(link); };
+const r3 = (v) => Math.round(v * 1000) / 1000;
+
+function desenhar(pres, slide, pag, num) {
   const L = melhorLayout(pag);
   const s = L.escala;
   if (s < ESCALA_MIN) console.warn(`⚠ ${pag.titulo}: escala ${s.toFixed(2)} — considere dividir (PARTES)`);
@@ -370,6 +376,7 @@ function desenhar(pres, slide, pag) {
     });
     // Conector clicável: uma forma transparente por cima de tudo.
     if (n.slide) {
+      anotar(num, { x: r3(x), y: r3(y), w: r3(w), h: r3(h), slide: n.slide });
       slide.addShape(pres.ShapeType.rect, {
         x, y, w, h, fill: { color: "FFFFFF", transparency: 100 }, line: { type: "none" },
         hyperlink: { slide: n.slide, tooltip: `Ir para a página ${n.slide}` }, objectName: `link ${n.id} → pág. ${n.slide}`,
@@ -398,6 +405,7 @@ pres.title = "Pós-venda · fluxos de atendimento";
 pres.theme = { headFontFace: FONTE, bodyFontFace: FONTE };
 
 function cabecalho(slide, titulo, sub, num, cor) {
+  anotar(num); MAPA.get(num).titulo = titulo; if (sub) MAPA.get(num).sub = sub;
   slide.background = { color: "FFFFFF" };
   slide.addText(titulo, { x: 0.45, y: 0.3, w: 10.5, h: 0.55, margin: 0, isTextBox: true, fontFace: FONTE, fontSize: 26, bold: true, color: hex(cor ?? COR.texto) });
   if (sub) slide.addText(sub, { x: 0.45, y: 0.82, w: 11.5, h: 0.3, margin: 0, isTextBox: true, fontFace: FONTE, fontSize: 12, color: COR.cinza });
@@ -418,6 +426,7 @@ function cabecalho(slide, titulo, sub, num, cor) {
   itens.forEach((it, i) => {
     const col = i < 7 ? 0 : 1, lin = i < 7 ? i : i - 7;
     const x = 0.45 + col * 4.35, y = 1.45 + lin * 0.76;
+    anotar(1, { x: r3(x), y: r3(y), w: 4.05, h: 0.64, slide: it.s });
     slide.addText([
       { text: it.t, options: { bold: true, color: hex(it.c), fontSize: 15, hyperlink: { slide: it.s, tooltip: `Ir para a página ${it.s}` }, breakLine: true } },
       { text: `pág. ${it.s}${it.cdc ? ` · CDC ${it.cdc}` : ""}`, options: { color: COR.cinza, fontSize: 11 } },
@@ -467,7 +476,7 @@ function cabecalho(slide, titulo, sub, num, cor) {
   ];
   const slide = pres.addSlide();
   cabecalho(slide, "Qual fluxo seguir", "O sistema lê a reclamação no WhatsApp e sugere o tipo; quem atende confirma ao abrir o caso.", 2);
-  desenhar(pres, slide, { nos, arestas, titulo: "Visão geral", direcoes: ["LR"], nodesep: 0.1, ranksep: 0.6 });
+  desenhar(pres, slide, { nos, arestas, titulo: "Visão geral", direcoes: ["LR"], nodesep: 0.1, ranksep: 0.6 }, 2);
 }
 
 // 3… — os fluxos
@@ -476,7 +485,7 @@ ORDEM.forEach((t, i) => {
   for (const pag of paginasDoFluxo(FLUXO[t], i + 1, slideDe)) {
     const slide = pres.addSlide();
     cabecalho(slide, pag.titulo, pag.sub, pag.slide, pag.cor);
-    const r = desenhar(pres, slide, pag);
+    const r = desenhar(pres, slide, pag, pag.slide);
     relatorio.push(`pág. ${pag.slide}  ${pag.titulo}  escala ${r.s.toFixed(2)} ${r.d}×${r.k}`);
   }
 });
@@ -506,11 +515,18 @@ ORDEM.forEach((t, i) => {
   const slide = pres.addSlide();
   cabecalho(slide, "Reembolso pelo Financeiro", "Quem atende não faz reembolso: pede ao Financeiro, que paga com comprovante; o caso volta para avisar o cliente.", SLIDE_REEMBOLSO, "#0D9488");
   // "fin" desenha como ação na cor do Financeiro.
-  const s = desenhar(pres, slide, { nos: nos.map((n) => n.tipo === "fin" ? { ...n, tipo: "acao", fin: true } : n), arestas, titulo: "Reembolso", colunas: [1] });
+  const s = desenhar(pres, slide, { nos: nos.map((n) => n.tipo === "fin" ? { ...n, tipo: "acao", fin: true } : n), arestas, titulo: "Reembolso", colunas: [1] }, SLIDE_REEMBOLSO);
   relatorio.push(`pág. ${SLIDE_REEMBOLSO}  Reembolso  escala ${s.s.toFixed(2)} ${s.d}×${s.k}`);
 }
 
 await pres.writeFile({ fileName: SAIDA });
+// O mapa para a tela do app: título e conectores de cada slide, e a primeira
+// página de cada tipo (o "Ver o fluxo deste caso" abre direto nela).
+writeFileSync(SAIDA.replace(/\.pptx$/, ".json"), JSON.stringify({
+  largura: 13.333, altura: 7.5, reembolso: SLIDE_REEMBOLSO,
+  tipos: Object.fromEntries([...slidesDoTipo].map(([t, ns]) => [t, ns[0]])),
+  slides: [...MAPA].sort((a, b) => a[0] - b[0]).map(([n, v]) => ({ n, ...v })),
+}, null, 1) + "\n");
 // Pastas dentro do zip fazem o arquivo falhar ao abrir no OneDrive/SharePoint.
 try { execFileSync("zip", ["-dq", SAIDA, "*/"]); } catch { /* sem pastas: nada a tirar */ }
 rmSync(tmp, { recursive: true, force: true });

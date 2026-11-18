@@ -6,6 +6,7 @@ import Chat from "./pages/Chat";
 import Compras from "./pages/Compras";
 import Recebiveis from "./pages/Recebiveis";
 import Reembolsos from "./pages/Reembolsos";
+import FluxosPosVenda from "./pages/FluxosPosVenda";
 import FluxoCaixa from "./pages/FluxoCaixa";
 import { ContasPagar, Assinaturas, Fornecedores, FormasPagamento, PainelFinanceiro } from "./pages/TelasFinanceiras";
 import Suprimentos from "./pages/Suprimentos";
@@ -67,6 +68,7 @@ export default function App() {
         <Route path="/receber" element={<Recebiveis />} />
         <Route path="/fluxo-caixa" element={<FluxoCaixa />} />
         <Route path="/reembolsos" element={<Reembolsos />} />
+        <Route path="/reembolsos/fluxos" element={<FluxosPosVenda voltar={{ para: "/reembolsos", rotulo: "Reembolsos" }} />} />
         {/* Slug = nome do menu (29/10/2026): o prefixo `/cadastros` era o nome do
             GRUPO do menu e não distinguia nada. Os antigos redirecionam abaixo. */}
         <Route path="/fornecedores" element={<Fornecedores />} />

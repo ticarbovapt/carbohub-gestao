@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Banknote, Copy, ExternalLink, Loader2, Paperclip, Undo2 } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Banknote, Copy, ExternalLink, GitBranch, Loader2, Paperclip, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { pedirTexto, useParamUrl } from "@carbo/shell";
 import { cn } from "@/lib/utils";
@@ -13,6 +14,7 @@ import { DatePickerInput } from "@/components/ui/date-picker-input";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Paginacao, brl } from "@/components/financeiro/ContasUI";
 import { dataBR, dataHoraBR, hojeISO } from "@/lib/datas";
+import { FLUXOS_SLIDES } from "@/lib/fluxosPosVenda";
 import {
   linkDoComprovante, mensagemDoErro, useDevolverReembolso, usePagarReembolso, useReembolsos,
   type ReembolsoFin, type StatusReembolso,
@@ -36,6 +38,12 @@ const TIPO_CASO: Record<string, string> = {
   faltante: "Produto faltante", avaria: "Avaria / vazamento", defeito: "Defeito", errado: "Produto errado",
   arrependimento: "Arrependimento", nao_recebido: "Entregue e não recebido", atraso: "Atraso / extravio",
   devolvido: "Devolvido ao remetente", outro: "Outro assunto",
+};
+const SITUACAO: Record<StatusReembolso, { rotulo: string; classe: string }> = {
+  solicitado: { rotulo: "A pagar", classe: "bg-amber-500/15 text-amber-800 dark:text-amber-300" },
+  pago:       { rotulo: "Pago", classe: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" },
+  devolvido:  { rotulo: "Devolvido", classe: "bg-red-500/15 text-red-700 dark:text-red-400" },
+  cancelado:  { rotulo: "Cancelado", classe: "bg-muted text-muted-foreground" },
 };
 const TIPOS_ACEITOS = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
 const LIMITE = 10 * 1024 * 1024;
@@ -169,31 +177,35 @@ function Cartao({ r, destaque, onPagar }: { r: ReembolsoFin; destaque: boolean; 
   };
 
   const pedido = r.pedido_codigo ?? r.pedido_numero ?? r.pedido_loja ?? String(r.bling_id);
+  const situacao = SITUACAO[r.status];
   return (
-    <div ref={ref} className={cn("space-y-3 rounded-xl border bg-card p-4", destaque && "ring-2 ring-carbo-green/60")}>
-      <div className="flex items-start justify-between gap-3">
+    <div ref={ref} className={cn("flex flex-col overflow-hidden rounded-xl border bg-card shadow-sm", destaque && "ring-2 ring-carbo-green/60")}>
+      <div className="flex items-start justify-between gap-3 border-b px-4 py-3">
         <div className="min-w-0 flex-1">
-          <p className="font-semibold">{r.cliente ?? "Cliente"}</p>
-          <p className="text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="font-semibold">{r.cliente ?? "Cliente"}</p>
+            <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", situacao.classe)}>{situacao.rotulo}</span>
+          </div>
+          <p className="mt-0.5 text-xs text-muted-foreground">
             {pedido}{r.canal ? ` · ${r.canal}` : ""}{r.data_pedido ? ` · ${dataBR(r.data_pedido)}` : ""}
             {r.total != null ? ` · pedido de ${brl(Number(r.total))}` : ""}{r.nf_numero ? ` · NF ${r.nf_numero}` : ""}
           </p>
         </div>
         <div className="shrink-0 text-right">
-          <p className="text-xl font-semibold tabular-nums">{brl(Number(r.status === "pago" ? r.valor_pago ?? r.valor : r.valor))}</p>
+          <p className="text-xl font-semibold tabular-nums leading-tight">{brl(Number(r.status === "pago" ? r.valor_pago ?? r.valor : r.valor))}</p>
           <p className="text-xs text-muted-foreground">Reembolso {r.tipo} · {TIPO_CASO[r.caso_tipo] ?? r.caso_tipo}</p>
         </div>
       </div>
 
-      <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
-        <dt className="text-muted-foreground">Como</dt><dd>{FORMA[r.forma] ?? r.forma}</dd>
+      <dl className="grid flex-1 grid-cols-[auto_minmax(0,1fr)] content-start gap-x-4 gap-y-1.5 px-4 py-3 text-sm">
+        <dt className="text-muted-foreground">Como</dt><dd className="font-medium">{FORMA[r.forma] ?? r.forma}</dd>
         {r.dados && (
           <>
             <dt className="text-muted-foreground">Dados</dt>
             <dd className="whitespace-pre-wrap break-words">{r.dados}<Copiar texto={r.dados} /></dd>
           </>
         )}
-        <dt className="text-muted-foreground">Pedido</dt>
+        <dt className="text-muted-foreground">Pedido em</dt>
         <dd>{dataHoraBR(r.solicitado_em)}{r.solicitado_por ? ` · ${r.solicitado_por}` : ""}</dd>
         {r.nota && (<><dt className="text-muted-foreground">Atendimento</dt><dd className="whitespace-pre-wrap break-words">{r.nota}</dd></>)}
         {r.status === "pago" && (
@@ -219,17 +231,17 @@ function Cartao({ r, destaque, onPagar }: { r: ReembolsoFin; destaque: boolean; 
         )}
       </dl>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2 border-t bg-muted/30 px-4 py-2.5">
         {r.status === "solicitado" && (
           <>
             <Button size="sm" onClick={onPagar}><Banknote className="mr-1.5 h-4 w-4" />Confirmar pagamento</Button>
-            <Button size="sm" variant="outline" disabled={devolver.isPending} onClick={fazerDevolver}>
+            <Button size="sm" variant="outline" className="bg-background" disabled={devolver.isPending} onClick={fazerDevolver}>
               {devolver.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Undo2 className="mr-1.5 h-4 w-4" />}Devolver
             </Button>
           </>
         )}
         {r.comprovante_path && <VerComprovante path={r.comprovante_path} />}
-        <Button asChild size="sm" variant="ghost">
+        <Button asChild size="sm" variant="ghost" className="ml-auto">
           <a href={`https://atendimento.carbohub.com.br/pos-venda?pedido=${r.bling_id}`} target="_blank" rel="noreferrer">
             <ExternalLink className="mr-1.5 h-3.5 w-3.5" />Ver no Atendimento
           </a>
@@ -254,7 +266,12 @@ export default function Reembolsos() {
 
   return (
     <div className="space-y-4">
-      <CarboPageHeader title="Reembolsos" icon={Banknote} />
+      <CarboPageHeader title="Reembolsos" icon={Banknote}
+        actions={(
+          <Button asChild variant="outline">
+            <Link to={`/reembolsos/fluxos?pagina=${FLUXOS_SLIDES.reembolso}`}><GitBranch className="mr-2 h-4 w-4" />Fluxo do reembolso</Link>
+          </Button>
+        )} />
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="inline-flex flex-wrap rounded-lg border bg-muted/40 p-1">
