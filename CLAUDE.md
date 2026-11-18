@@ -2870,6 +2870,14 @@ Livre); navegar SEMANA A SEMANA (domingo a sábado) pelas setas ‹ semana › (
    `node docs/posvenda/gerar-fluxos.mjs` (graphviz). ⚠️ Roteiro mudou ⇒ rode de novo na MESMA tarefa;
    o gerador recusa passo que ficou fora do desenho. O arrependimento ganhou "Pedir fotos" antes de
    julgar o lacre e "Reembolso ou troca?" depois de conferir — como no diagrama do dono do processo.
+   **O PowerPoint** (`docs/posvenda/fluxos-pos-venda.pptx`, 18/11/2026): um slide por fluxo, SEM
+   rolagem, em colunas de cima para baixo; o que se repete vira conector CLICÁVEL "→ pág. N"
+   (o reembolso tem slide próprio; "vira caso de X" aponta o slide de X). Gerado do MESMO arquivo por
+   `node docs/posvenda/gerar-pptx.mjs` (graphviz mede, pptxgenjs desenha formas editáveis; `npm ci`
+   em `docs/posvenda`). Fluxo que não cabe é dividido em `PARTES` (Defeito 2, Arrependimento 3).
+   ⚠️ A seta casa com a nossa pelo `id` da aresta, nunca pela ordem do json: na ordem, o "Não" ia
+   para a seta do "Sim". Passo novo num fluxo dividido: ponha-o numa das `PARTES` (o gerador
+   RECUSA passo que não está em nenhuma).
 ### ⚠️ Conversas e Esteira a 500 vendas/semana: o teto e o índice (19/10/2026)
 Queixa do dono do processo: *"demora para abrir"* e *"diz que foi enviada
 mensagem mas o cara não aparece aqui quando pesquisa"* (Deividi Rodrigues: NF
