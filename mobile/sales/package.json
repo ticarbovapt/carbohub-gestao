@@ -1,0 +1,16 @@
+{
+  "name": "carbo-sales-ios",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Carbo Sales para iPhone — casca nativa (Capacitor) que abre sales.carbohub.com.br",
+  "scripts": {
+    "sync": "cap sync ios"
+  },
+  "dependencies": {
+    "@capacitor/core": "7.6.10",
+    "@capacitor/ios": "7.6.10"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "7.6.10"
+  }
+}
