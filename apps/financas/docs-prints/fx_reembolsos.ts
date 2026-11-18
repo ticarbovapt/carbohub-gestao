@@ -24,10 +24,26 @@ const ITENS = [
 ];
 
 export const RPC_FX: Record<string, unknown> = {
-  carbo_posvenda_reembolsos_lista: (a: { p_status: string | null }) => {
-    const itens = ITENS.filter((r) => !a.p_status || r.status === a.p_status);
+  // A MESMA regra da função (20261176): p_id abre um só, em qualquer situação; p_busca procura.
+  carbo_posvenda_reembolsos_lista: (a: { p_status: string | null; p_id?: string | null; p_busca?: string | null }) => {
+    const q = (a.p_busca ?? "").trim().toLowerCase();
+    const dig = q.replace(/\D/g, "");
+    let itens = a.p_id ? ITENS.filter((r) => r.id === a.p_id) : ITENS.filter((r) => !a.p_status || r.status === a.p_status);
+    if (q) itens = itens.filter((r) => [r.cliente, r.pedido_codigo, r.nf_numero].join(" ").toLowerCase().includes(q)
+      || (dig.length >= 4 && (r.cliente_fone ?? "").includes(dig.slice(-8))));
     const contagem: Record<string, number> = {};
     for (const r of ITENS) contagem[r.status] = (contagem[r.status] ?? 0) + 1;
     return { itens, total: itens.length, contagem };
+  },
+  carbo_posvenda_reembolso_pagar: (a: { p_id: string; p_valor: number; p_pago_em: string; p_comprovante: string; p_nota: string | null }) => {
+    const r = ITENS.find((x) => x.id === a.p_id) as any;
+    Object.assign(r, { status: "pago", valor_pago: a.p_valor, pago_em: a.p_pago_em, comprovante_path: a.p_comprovante,
+      nota_financeiro: a.p_nota, pago_por: "Rafael Costa", pago_registrado_em: new Date().toISOString() });
+    return null;
+  },
+  carbo_posvenda_reembolso_devolver: (a: { p_id: string; p_motivo: string }) => {
+    const r = ITENS.find((x) => x.id === a.p_id) as any;
+    Object.assign(r, { status: "devolvido", motivo_devolucao: a.p_motivo, devolvido_em: new Date().toISOString(), devolvido_por: "Rafael Costa" });
+    return null;
   },
 };

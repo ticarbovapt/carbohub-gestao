@@ -2895,6 +2895,19 @@ Livre); navegar SEMANA A SEMANA (domingo a sábado) pelas setas ‹ semana › (
    com mais de 4 itens mostra os 3 últimos ("Mostrar N passos anteriores"). Caso encerrado vem
    ANTES de "Abrir novo caso". ⚠️ Campo `escolha` do roteiro é GRUPO, nunca `<label>`: o label
    rotulava o primeiro botão e clicar no rótulo marcava "Pix".
+11. **Reembolsos do Finanças no MESMO desenho** (18/11/2026): lista em linhas (cliente, caso,
+   forma, data, valor, situação), busca (`?busca=`: cliente, pedido, NF, telefone) e o reembolso
+   aberto como chamado — "Pagar e confirmar" (dados para pagar com copiar, valor, data,
+   comprovante, observação; Confirmar/Devolver no rodapé) + linha do tempo, e ao lado cliente,
+   pedido e o caso ("Abrir" no Atendimento).
+   **O clique vai ao lugar CERTO** (pedido do dono do processo): `?reembolso=<id>` abre aquele
+   reembolso em QUALQUER aba (`carbo_posvenda_reembolsos_lista` ganhou `p_id` e `p_busca`,
+   `20261176`; a de 3 argumentos foi APAGADA — sobrecarga dá `function is not unique`; sem a
+   migração o hook cai na assinatura antiga). O caso esperando o Financeiro e o do comprovante
+   têm "Ver no Finanças" para o reembolso exato. "Ver o fluxo deste caso" abre a PÁGINA DO
+   PASSO atual com "O caso está aqui" (`?tipo=&passo=`): o `gerar-pptx` grava `passos`
+   (tipo → passo → slide) e a caixa de cada passo em cada slide; no slide do reembolso os passos
+   do roteiro apontam para as caixas dele ("pedir", "aviso", "comprovante").
 ### ⚠️ Conversas e Esteira a 500 vendas/semana: o teto e o índice (19/10/2026)
 Queixa do dono do processo: *"demora para abrir"* e *"diz que foi enviada
 mensagem mas o cara não aparece aqui quando pesquisa"* (Deividi Rodrigues: NF
