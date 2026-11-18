@@ -14,6 +14,7 @@ import MensagensCliente from "./pages/MensagensCliente";
 import PainelAtendimento from "./pages/PainelAtendimento";
 import PendenciasEntrega from "./pages/PendenciasEntrega";
 import PosVendaPainel from "./pages/PosVendaPainel";
+import FluxosPosVenda from "./pages/FluxosPosVenda";
 import { isCarbohubDomain, goToHubLogin } from "@/lib/sso";
 import { PaginaNaoEncontrada, IrPara } from "@carbo/shell";
 
@@ -50,6 +51,7 @@ export default function App() {
         <Route path="/ecommerce/mensagens" element={<MensagensCliente />} />
         <Route path="/pos-venda" element={<PendenciasEntrega />} />
         <Route path="/pos-venda/acompanhamento" element={<PosVendaPainel />} />
+        <Route path="/pos-venda/fluxos" element={<div className="p-4 md:p-6"><FluxosPosVenda voltar={{ para: "/pos-venda", rotulo: "Pós-venda" }} /></div>} />
         <Route path="/pendencias" element={<IrPara para="/pos-venda" />} />
         <Route path="/painel" element={<PainelAtendimento />} />
         <Route path="/perfil" element={<Profile />} />

@@ -1,6 +1,6 @@
 import { useMemo, useState, useRef } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
-import { MessagesSquare, LayoutDashboard, MessageCircle, PackageSearch, PackageX, Send, BookOpen, Gauge, BarChart3 } from "lucide-react";
+import { MessagesSquare, LayoutDashboard, MessageCircle, PackageSearch, PackageX, Send, BookOpen, Gauge, BarChart3, GitBranch } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAccessPing } from "@/hooks/useAccessPing";
@@ -61,6 +61,7 @@ export function Layout() {
         { to: "/conversas", label: "Conversas", icon: MessageCircle },
         { to: "/ecommerce/esteira", label: "Esteira do On-line", icon: PackageSearch },
         { to: "/pos-venda", label: "Pós-venda", icon: PackageX, end: true },
+        { to: "/pos-venda/fluxos", label: "Fluxos do pós-venda", icon: GitBranch },
         { to: "/ecommerce/mensagens", label: "Mensagens ao Cliente", icon: Send },
     ] },
     // Para todo mundo que tem o app (decisão do dono do processo, 16/11/2026). Só ALTERAR

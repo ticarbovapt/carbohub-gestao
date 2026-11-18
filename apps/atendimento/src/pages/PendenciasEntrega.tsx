@@ -240,114 +240,157 @@ function baixarPlanilha(itens: Pendencia[], nome: string) {
   setTimeout(() => URL.revokeObjectURL(a.href), 5_000);
 }
 
-// ── O pedido aberto: dados, atalhos e o CASO ─────────────────────────────────
-function DialogoPedido({ p, onFechar }: { p: Pendencia; onFechar: () => void }) {
+// ── O pedido aberto: o CASO no centro, os dados do pedido ao lado ────────────
+/** "84991015838" → "(84) 99101-5838". */
+function foneBonito(f: string | null) {
+  const d = digitos(f).replace(/^55(?=\d{10,11}$)/, "");
+  if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return f;
+}
+
+function Bloco({ titulo, children, acao }: { titulo: string; children: React.ReactNode; acao?: React.ReactNode }) {
+  return (
+    <section className="space-y-2.5">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{titulo}</h3>
+        {acao}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function Linha({ rotulo, children }: { rotulo: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 text-sm">
+      <dt className="shrink-0 text-muted-foreground">{rotulo}</dt>
+      <dd className="min-w-0 text-right break-words">{children}</dd>
+    </div>
+  );
+}
+
+function LateralDoPedido({ p }: { p: Pendencia }) {
   const hist = useHistoricoTrato(p.bling_id);
   // A tratativa antiga só mostra o que alguém ESCREVEU; as trocas automáticas
   // feitas pelo caso já estão no histórico do caso.
   const notasAntigas = (hist.data ?? []).filter((h) => h.observacao);
   const fone = digitos(p.cliente_fone);
+  const r = p.reclamacao;
+  return (
+    <div className="space-y-6">
+      <Bloco titulo="Cliente"
+        acao={fone.length >= 8 && (
+          <Button asChild variant="ghost" size="sm" className="-my-1 h-7 px-2 text-xs">
+            <Link to={`/conversas?busca=${fone.slice(-8)}`}><MessageCircle className="mr-1 h-3.5 w-3.5" />Conversa</Link>
+          </Button>
+        )}>
+        <div>
+          <p className="font-medium leading-snug">{p.cliente ?? "—"}</p>
+          <p className="text-sm text-muted-foreground">
+            {p.cliente_fone ? foneBonito(p.cliente_fone) : <span className="text-amber-700 dark:text-amber-400">sem telefone</span>}
+          </p>
+          <p className="text-sm text-muted-foreground">{[p.cidade, p.uf].filter(Boolean).join(" / ") || "—"}</p>
+        </div>
+      </Bloco>
+
+      {r && (
+        <Bloco titulo="Reclamação no WhatsApp"
+          acao={r.wa_id && (
+            <Button asChild variant="ghost" size="sm" className="-my-1 h-7 px-2 text-xs">
+              <Link to={`/conversas?numero=${r.numero_id ?? ""}&de=${r.wa_id}`}><MessageCircle className="mr-1 h-3.5 w-3.5" />Abrir</Link>
+            </Button>
+          )}>
+          <div className={cn("space-y-2 rounded-lg border p-3",
+            r.pendente ? "border-red-500/30 bg-red-500/[0.04]" : "bg-background")}>
+            {r.trecho && <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">“{r.trecho}”</p>}
+            <div className="flex flex-wrap gap-1">
+              {r.assuntos.map((a) => (
+                <span key={a.codigo} className="rounded-md bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">{a.rotulo}</span>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {r.n > 1 ? `${r.n} mensagens · última ` : ""}
+              {new Date(r.ultima_em).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
+            </p>
+          </div>
+        </Bloco>
+      )}
+
+      <Bloco titulo="Pedido"
+        acao={(
+          <Button asChild variant="ghost" size="sm" className="-my-1 h-7 px-2 text-xs">
+            <Link to={`/ecommerce/esteira?pedido=${p.bling_id}`}><PackageSearch className="mr-1 h-3.5 w-3.5" />Esteira</Link>
+          </Button>
+        )}>
+        <dl className="space-y-1.5">
+          <Linha rotulo="Data">{dia(p.data_pedido)}</Linha>
+          <Linha rotulo="Canal">{p.canal ?? "—"}</Linha>
+          <Linha rotulo="Valor"><span className="tabular-nums">{brl(p.total)}</span></Linha>
+          {p.nf_numero && <Linha rotulo="Nota fiscal">{p.nf_numero}</Linha>}
+          <Linha rotulo="Etapa">{ETAPA_ROTULO[p.etapa] ?? p.etapa}</Linha>
+        </dl>
+      </Bloco>
+
+      <Bloco titulo="Entrega"
+        acao={p.url_rastreio && (
+          <Button asChild variant="ghost" size="sm" className="-my-1 h-7 px-2 text-xs">
+            <a href={p.url_rastreio} target="_blank" rel="noreferrer"><ExternalLink className="mr-1 h-3.5 w-3.5" />Rastrear</a>
+          </Button>
+        )}>
+        <dl className="space-y-1.5">
+          <Linha rotulo="Transportadora">{p.transportadora ?? "—"}</Linha>
+          {p.rastreio && <Linha rotulo="Rastreio"><span className="font-mono text-xs">{p.rastreio}</span></Linha>}
+          {p.previsao && <Linha rotulo="Previsão">{dia(p.previsao)}</Linha>}
+          {p.entregue_em && <Linha rotulo="Entregue em">{dia(p.entregue_em)}</Linha>}
+          {p.rastreio_status && <Linha rotulo="Transportadora diz">{p.rastreio_status}</Linha>}
+        </dl>
+      </Bloco>
+
+      {notasAntigas.length > 0 && (
+        <Bloco titulo="Anotações anteriores">
+          <ul className="space-y-3">
+            {notasAntigas.map((h) => (
+              <li key={h.id} className="space-y-1 text-sm">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <ChipSituacao s={h.situacao} />
+                  <span className="text-[11px] text-muted-foreground">
+                    {new Date(h.em).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
+                    {h.por ? ` · ${h.por}` : ""}
+                  </span>
+                </div>
+                <p className="whitespace-pre-wrap break-words text-muted-foreground">{h.observacao}</p>
+              </li>
+            ))}
+          </ul>
+        </Bloco>
+      )}
+    </div>
+  );
+}
+
+function DialogoPedido({ p, onFechar }: { p: Pendencia; onFechar: () => void }) {
   return (
     <Dialog open onOpenChange={(o) => !o && onFechar()}>
-      <DialogContent className="sm:max-w-3xl">
-        <DialogHeader>
-          <DialogTitle className="flex flex-wrap items-center gap-2">
+      <DialogContent className="flex flex-col gap-0 overflow-hidden p-0 outline-none sm:max-w-6xl lg:h-[min(920px,calc(100dvh-2rem))]">
+        <DialogHeader className="shrink-0 space-y-1 border-b px-5 py-4 pr-12 text-left sm:px-6">
+          <DialogTitle className="flex flex-wrap items-center gap-2 text-lg">
             {p.pedido_codigo ?? p.pedido_numero ?? `#${Math.abs(p.bling_id)}`}
             {p.problema ? <ChipProblema p={p.problema} /> : <ChipEtapa p={p} />}
+            {p.reclamacao && <ChipReclamou p={p} />}
           </DialogTitle>
+          <p className="text-sm text-muted-foreground">
+            {[p.cliente, p.canal, dia(p.data_pedido), brl(p.total)].filter(Boolean).join(" · ")}
+          </p>
         </DialogHeader>
-
-        <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-sm lg:grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)]">
-          <dt className="text-muted-foreground">Cliente</dt>
-          <dd className="truncate">{p.cliente ?? "—"}</dd>
-          <dt className="text-muted-foreground">Telefone</dt>
-          <dd>{p.cliente_fone ?? <span className="text-amber-700 dark:text-amber-400">sem telefone</span>}</dd>
-          <dt className="text-muted-foreground">Pedido</dt>
-          <dd>{dia(p.data_pedido)} · {p.canal ?? "—"} · {brl(p.total)}</dd>
-          <dt className="text-muted-foreground">Entrega</dt>
-          <dd className="truncate">{[p.cidade, p.uf].filter(Boolean).join(" / ") || "—"}</dd>
-          <dt className="text-muted-foreground">Esteira</dt>
-          <dd>
-            {ETAPA_ROTULO[p.etapa] ?? p.etapa}{p.nf_numero ? ` · NF ${p.nf_numero}` : ""}
-            {p.entregue_em ? ` · entregue em ${dia(p.entregue_em)}` : ""}
-          </dd>
-          <dt className="text-muted-foreground">Rastreio</dt>
-          <dd className="truncate">
-            {p.transportadora ?? "—"}{p.rastreio ? ` · ${p.rastreio}` : ""}
-            {p.previsao ? ` · previsão ${dia(p.previsao)}` : ""}
-            {p.rastreio_status ? ` · ${p.rastreio_status}` : ""}
-          </dd>
-        </dl>
-
-        <div className="flex flex-wrap gap-2">
-          <Button asChild variant="outline" size="sm">
-            <Link to={`/ecommerce/esteira?pedido=${p.bling_id}`}><PackageSearch className="mr-1.5 h-4 w-4" />Ver na esteira</Link>
-          </Button>
-          {fone.length >= 8 && (
-            <Button asChild variant="outline" size="sm">
-              <Link to={`/conversas?busca=${fone.slice(-8)}`}><MessageCircle className="mr-1.5 h-4 w-4" />Conversa</Link>
-            </Button>
-          )}
-          {p.url_rastreio && (
-            <Button asChild variant="outline" size="sm">
-              <a href={p.url_rastreio} target="_blank" rel="noreferrer"><ExternalLink className="mr-1.5 h-4 w-4" />Rastreio</a>
-            </Button>
-          )}
-        </div>
-
-        {p.reclamacao && (
-          <div className={cn("space-y-1.5 rounded-lg border p-3",
-            p.reclamacao.pendente ? "border-red-500/40 bg-red-500/[0.05]" : "")}>
-            <div className="flex flex-wrap items-center gap-2">
-              <MessageSquareWarning className={cn("h-4 w-4", p.reclamacao.pendente ? "text-red-600 dark:text-red-400" : "text-muted-foreground")} />
-              <span className="text-sm font-semibold">
-                Reclamou no WhatsApp{p.reclamacao.n > 1 ? ` · ${p.reclamacao.n} mensagens` : ""}
-              </span>
-              <span className="text-xs text-muted-foreground">
-                {new Date(p.reclamacao.ultima_em).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
-              </span>
-              {p.reclamacao.wa_id && (
-                <Button asChild variant="outline" size="sm" className="ml-auto h-7 px-2 text-xs">
-                  <Link to={`/conversas?numero=${p.reclamacao.numero_id ?? ""}&de=${p.reclamacao.wa_id}`}>
-                    <MessageCircle className="mr-1 h-3.5 w-3.5" />Abrir conversa
-                  </Link>
-                </Button>
-              )}
-            </div>
-            <div className="flex flex-wrap gap-1">
-              {p.reclamacao.assuntos.map((a) => (
-                <span key={a.codigo} className="rounded-full bg-muted px-2 py-0.5 text-xs">{a.rotulo}</span>
-              ))}
-            </div>
-            {p.reclamacao.trecho && (
-              <p className="whitespace-pre-wrap break-words text-sm text-muted-foreground">“{p.reclamacao.trecho}”</p>
-            )}
+        <div className="min-h-0 flex-1 overflow-y-auto lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:overflow-hidden">
+          <div className="min-w-0 p-5 sm:p-6 lg:overflow-y-auto">
+            <CasoPosVenda p={p} />
           </div>
-        )}
-
-        <div className="border-t pt-3">
-          <CasoPosVenda p={p} />
+          <aside className="border-t bg-muted/30 p-5 sm:p-6 lg:overflow-y-auto lg:border-l lg:border-t-0">
+            <LateralDoPedido p={p} />
+          </aside>
         </div>
-
-        {notasAntigas.length > 0 && (
-          <div className="space-y-2 border-t pt-3">
-            <p className="text-sm font-semibold">Anotações anteriores</p>
-            <div className="max-h-40 space-y-2 overflow-y-auto">
-              {notasAntigas.map((h) => (
-                <div key={h.id} className="text-sm">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <ChipSituacao s={h.situacao} />
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(h.em).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
-                      {h.por ? ` · ${h.por}` : ""}
-                    </span>
-                  </div>
-                  <p className="mt-1 whitespace-pre-wrap break-words text-muted-foreground">{h.observacao}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </DialogContent>
     </Dialog>
   );
