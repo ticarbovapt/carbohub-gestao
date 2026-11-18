@@ -1,0 +1,8 @@
+{
+  "private": true,
+  "name": "posvenda-fluxos",
+  "description": "Gera os fluxogramas (PNG) e o PowerPoint do pós-venda a partir dos roteiros",
+  "dependencies": {
+    "pptxgenjs": "3.12.0"
+  }
+}
