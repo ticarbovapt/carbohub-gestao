@@ -374,6 +374,10 @@ function desenhar(pres, slide, pag, num) {
       x: x + recuo, y, w: w - (n.tipo === "link" ? 0.25 * s : 0), h, margin: 0, isTextBox: true, fontFace: FONTE,
       align: "center", valign: "middle", objectName: `texto ${n.id}`,
     });
+    // Onde cada PASSO do roteiro cai: o app marca o passo em que o caso está.
+    if (num && (n.tipo === "acao" || n.tipo === "decisao")) {
+      anotar(num); (MAPA.get(num).passos ??= {})[n.id] = { x: r3(x), y: r3(y), w: r3(w), h: r3(h) };
+    }
     // Conector clicável: uma forma transparente por cima de tudo.
     if (n.slide) {
       anotar(num, { x: r3(x), y: r3(y), w: r3(w), h: r3(h), slide: n.slide });
@@ -520,11 +524,28 @@ ORDEM.forEach((t, i) => {
 }
 
 await pres.writeFile({ fileName: SAIDA });
+// O slide do reembolso desenha caixas PRÓPRIAS ("pedir", "aviso"…): os passos
+// do roteiro apontam para elas, senão o app não marcaria onde o caso está.
+{
+  const p = MAPA.get(SLIDE_REEMBOLSO)?.passos ?? {};
+  for (const t of ["parcial", "integral"]) {
+    if (p.pedir) p[`reembolso_${t}`] = p.pedir;
+    if (p.aviso) p[`reembolso_${t}_financeiro`] = p.aviso;
+    if (p.comprovante) p[`reembolso_${t}_comprovante`] = p.comprovante;
+  }
+}
 // O mapa para a tela do app: título e conectores de cada slide, e a primeira
 // página de cada tipo (o "Ver o fluxo deste caso" abre direto nela).
 writeFileSync(SAIDA.replace(/\.pptx$/, ".json"), JSON.stringify({
   largura: 13.333, altura: 7.5, reembolso: SLIDE_REEMBOLSO,
   tipos: Object.fromEntries([...slidesDoTipo].map(([t, ns]) => [t, ns[0]])),
+  // Em que slide mora cada passo (o reembolso tem slide próprio; "outro" fica na visão geral).
+  passos: Object.fromEntries(FLUXOS.map((f) => {
+    const parteDe = new Map();
+    (PARTES[f.tipo] ?? [{ ids: f.passos.map((p) => p.id) }]).forEach((p, i) => p.ids.forEach((id) => parteDe.set(id, i)));
+    return [f.tipo, Object.fromEntries(f.passos.map((p) => [p.id,
+      /^reembolso_(parcial|integral)/.test(p.id) ? SLIDE_REEMBOLSO : slideDe(f.tipo, parteDe.get(p.id) ?? 0)]))];
+  })),
   slides: [...MAPA].sort((a, b) => a[0] - b[0]).map(([n, v]) => ({ n, ...v })),
 }, null, 1) + "\n");
 // Pastas dentro do zip fazem o arquivo falhar ao abrir no OneDrive/SharePoint.

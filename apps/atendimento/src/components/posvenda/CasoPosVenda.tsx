@@ -389,9 +389,21 @@ function DadosDoPedido({ r }: { r: Reembolso }) {
   );
 }
 
+/** O mesmo reembolso, aberto na tela do Financeiro (em qualquer aba). */
+const noFinancas = (id: string) => `https://finance.carbohub.com.br/reembolsos?reembolso=${id}`;
+
+function VerNoFinancas({ id }: { id: string }) {
+  return (
+    <Button asChild variant="outline" size="sm" className="bg-background">
+      <a href={noFinancas(id)} target="_blank" rel="noreferrer"><ExternalLink className="mr-1.5 h-3.5 w-3.5" />Ver no Finanças</a>
+    </Button>
+  );
+}
+
 function EsperaFinanceiro({ r }: { r: Reembolso | null }) {
   return (
-    <CartaoPasso tom="espera" titulo="Aguardando o Financeiro pagar" icone={<Hourglass className="h-4 w-4 text-amber-600" />}>
+    <CartaoPasso tom="espera" titulo="Aguardando o Financeiro pagar" icone={<Hourglass className="h-4 w-4 text-amber-600" />}
+      rodape={r ? <VerNoFinancas id={r.id} /> : undefined}>
       {r ? <DadosDoPedido r={r} /> : <p className="text-sm text-muted-foreground">Pedido de reembolso não encontrado.</p>}
     </CartaoPasso>
   );
@@ -461,6 +473,7 @@ function EnviarComprovante({ caso, passo, p, r }: { caso: Caso; passo: Passo; p:
           <Button type="button" variant="outline" className="bg-background" disabled={enviandoWa || responder.isPending} onClick={() => encerrar("Outro meio")}>
             {responder.isPending && !enviandoWa && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}Já enviei por outro meio
           </Button>
+          {r && <span className="ml-auto"><VerNoFinancas id={r.id} /></span>}
         </>
       )}>
       {r ? (
@@ -603,7 +616,8 @@ function CasoAberto({ caso, hist, reembolsos, p }: { caso: Caso; hist: HistCaso[
     });
   };
 
-  const paginaDoFluxo = `/pos-venda/fluxos?tipo=${caso.tipo}`;
+  // Abre a página do fluxo em que o PASSO ATUAL está desenhado, marcado.
+  const paginaDoFluxo = `/pos-venda/fluxos?tipo=${encodeURIComponent(caso.tipo)}&passo=${encodeURIComponent(caso.passo)}`;
   const acoes = (
     <div className="flex shrink-0 items-center gap-1">
       {podeVoltar && (

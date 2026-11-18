@@ -29,12 +29,15 @@ if (imagens.length !== MAPA.slides.length) throw new Error(`${imagens.length} im
 const modulo = `// GERADO por docs/posvenda/publicar-nos-apps.mjs — não editar.
 // Os slides de docs/posvenda/fluxos-pos-venda.pptx: título e conectores
 // clicáveis (em polegadas, slide de ${MAPA.largura} × ${MAPA.altura}).
-export interface LinkDoSlide { x: number; y: number; w: number; h: number; slide: number }
-export interface SlideDoFluxo { n: number; titulo: string; sub?: string; links: LinkDoSlide[] }
+export interface Caixa { x: number; y: number; w: number; h: number }
+export interface LinkDoSlide extends Caixa { slide: number }
+export interface SlideDoFluxo { n: number; titulo: string; sub?: string; links: LinkDoSlide[]; passos?: Record<string, Caixa> }
 
 export const FLUXOS_SLIDES = ${JSON.stringify(MAPA, null, 1)} as {
   largura: number; altura: number; reembolso: number;
   tipos: Record<string, number>;
+  /** tipo → passo → slide em que ele está desenhado. */
+  passos: Record<string, Record<string, number>>;
   slides: SlideDoFluxo[];
 };
 `;

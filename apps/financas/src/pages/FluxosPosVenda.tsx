@@ -17,7 +17,8 @@ import { FLUXOS_SLIDES } from "@/lib/fluxosPosVenda";
 // Imagens e mapa são GERADOS dos roteiros (`lib/posvendaCasos.ts`):
 // `node docs/posvenda/gerar-pptx.mjs && node docs/posvenda/publicar-nos-apps.mjs`.
 //
-// Estado na URL: ?pagina=N · ?tipo=<tipo do caso> (abre a 1ª página dele).
+// Estado na URL: ?pagina=N · ?tipo=<tipo do caso> (abre a 1ª página dele) ·
+// ?passo=<id do passo> (abre a página do passo e o marca: "O caso está aqui").
 // ─────────────────────────────────────────────────────────────────────────────
 
 const { slides, tipos, largura, altura } = FLUXOS_SLIDES;
@@ -28,11 +29,16 @@ export default function FluxosPosVenda({ voltar }: { voltar: { para: string; rot
   const navigate = useNavigate();
   const [paginaUrl, setPagina] = useParamUrl("pagina", "");
   const [tipo] = useParamUrl("tipo", "");
+  // ?passo= marca onde o caso está, e abre na página em que ele está desenhado.
+  const [passo] = useParamUrl("passo", "");
   const lida = Number(paginaUrl);
-  const pagina = lida >= 1 && lida <= TOTAL ? lida : tipos[tipo] ?? 1;
+  const pagina = lida >= 1 && lida <= TOTAL ? lida : FLUXOS_SLIDES.passos[tipo]?.[passo] ?? tipos[tipo] ?? 1;
   const slide = slides[pagina - 1];
+  const aqui = passo ? slide.passos?.[passo] : undefined;
 
-  const ir = (n: number) => { if (n >= 1 && n <= TOTAL) navigate(`?pagina=${n}`); };
+  // O passo marcado segue na URL ao trocar de página: voltar a ela marca de novo.
+  const urlDa = (n: number) => `?pagina=${n}${passo ? `&passo=${encodeURIComponent(passo)}` : ""}`;
+  const ir = (n: number) => { if (n >= 1 && n <= TOTAL) navigate(urlDa(n)); };
 
   useEffect(() => {
     const tecla = (e: KeyboardEvent) => {
@@ -98,14 +104,22 @@ export default function FluxosPosVenda({ voltar }: { voltar: { para: string; rot
           <img key={pagina} src={`/fluxos-posvenda/pagina-${pagina}.jpg`} alt={slide.titulo}
             className="absolute inset-0 h-full w-full select-none" draggable={false} />
           {slide.links.map((l, i) => (
-            <Link key={i} to={`?pagina=${l.slide}`} aria-label={`Ir para a página ${l.slide}`}
+            <Link key={i} to={urlDa(l.slide)} aria-label={`Ir para a página ${l.slide}`}
               title={`${slides[l.slide - 1]?.titulo ?? ""} · pág. ${l.slide}`}
               className={cn("absolute rounded-md transition-colors hover:bg-primary/10 hover:ring-2 hover:ring-primary/60",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary")}
               style={{ left: pct(l.x, largura), top: pct(l.y, altura), width: pct(l.w, largura), height: pct(l.h, altura) }} />
           ))}
+          {aqui && (
+            <div className="pointer-events-none absolute rounded-md ring-4 ring-amber-500 ring-offset-2 animate-pulse"
+              style={{ left: pct(aqui.x, largura), top: pct(aqui.y, altura), width: pct(aqui.w, largura), height: pct(aqui.h, altura) }}>
+              <span className="absolute -top-7 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-amber-500 px-2 py-0.5 text-xs font-semibold text-white shadow">
+                O caso está aqui
+              </span>
+            </div>
+          )}
           {pagina !== 1 && (
-            <Link to="?pagina=1" aria-label="Índice" title="Índice"
+            <Link to={urlDa(1)} aria-label="Índice" title="Índice"
               className="absolute rounded hover:bg-primary/10"
               style={{ left: pct(11.2, largura), top: pct(0.3, altura), width: pct(1.68, largura), height: pct(0.36, altura) }} />
           )}

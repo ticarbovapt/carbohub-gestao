@@ -57,17 +57,46 @@ export interface FilaReembolsos {
   contagem: Partial<Record<StatusReembolso, number>>;
 }
 
-export function useReembolsos(status: StatusReembolso | null, pagina: number, porPagina: number) {
+// Sem a 20261176 a função não conhece p_id/p_busca (PGRST202): a tela segue
+// com a assinatura antiga — a busca não filtra e o reembolso é procurado na fila.
+const semParametroNovo = (e: any) => ["PGRST202", "42883"].includes(e?.code ?? "");
+
+async function lerLista(args: Record<string, unknown>): Promise<FilaReembolsos> {
+  const { data, error } = await db.rpc("carbo_posvenda_reembolsos_lista", args);
+  if (error) throw error;
+  return data as FilaReembolsos;
+}
+
+export function useReembolsos(status: StatusReembolso | null, pagina: number, porPagina: number, busca = "") {
   return useQuery({
-    queryKey: ["posvenda_reembolsos", status, pagina, porPagina],
+    queryKey: ["posvenda_reembolsos", status, pagina, porPagina, busca],
     placeholderData: (anterior) => anterior,
     refetchInterval: 120_000,
     queryFn: async (): Promise<FilaReembolsos> => {
-      const { data, error } = await db.rpc("carbo_posvenda_reembolsos_lista", {
-        p_status: status, p_limite: porPagina, p_offset: pagina * porPagina,
-      });
-      if (error) throw error;
-      return data as FilaReembolsos;
+      const base = { p_status: status, p_limite: porPagina, p_offset: pagina * porPagina };
+      if (!busca.trim()) return lerLista(base);
+      try { return await lerLista({ ...base, p_busca: busca.trim() }); }
+      catch (e) { if (semParametroNovo(e)) return lerLista(base); throw e; }
+    },
+  });
+}
+
+/** UM reembolso, em qualquer situação — o que o `?reembolso=` abre. */
+export function useReembolso(id: string | null, inicial: ReembolsoFin | null = null) {
+  return useQuery({
+    queryKey: ["posvenda_reembolsos", "um", id],
+    enabled: !!id,
+    initialData: inicial ?? undefined,
+    queryFn: async (): Promise<ReembolsoFin | null> => {
+      try {
+        const r = await lerLista({ p_status: null, p_limite: 1, p_offset: 0, p_id: id });
+        return r.itens[0] ?? null;
+      } catch (e) {
+        if (!semParametroNovo(e)) throw e;
+        // Reserva: procura nos 200 mais recentes de todas as situações.
+        const r = await lerLista({ p_status: null, p_limite: 200, p_offset: 0 });
+        return r.itens.find((x) => x.id === id) ?? null;
+      }
     },
   });
 }
