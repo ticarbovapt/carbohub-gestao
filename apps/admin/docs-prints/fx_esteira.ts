@@ -206,6 +206,7 @@ const RECOMPRA = [
   rec(7017, "Bruno Assis", "Nuvemshop", "Fortaleza", "CE", 59.9, 36, "dia_6", { fluxo: "sache", passo: 6, dia_da_regua: 6, d1_em: dias(5) }),
   rec(7018, "Clara Mota", "Nuvemshop", "Natal", "RN", 149.5, 52, "dia_7", { fluxo: "frasco", passo: 7, dia_da_regua: 7, d1_em: dias(6) }),
   rec(7005, "Gustavo Pereira", "PayT", "Natal", "RN", 59.9, 32, "ofertar", { fluxo: "sache" }),
+  rec(7019, "Otávio Lins", "Nuvemshop", "Natal", "RN", 59.9, 34, "respondeu", { fluxo: "sache", passo: 3, d1_em: dias(3), respondeu_em: hrs(5), respondeu_wa_id: "5584998767019", respondeu_numero_id: "1274076859132981" }),
   rec(7006, "Aline Castro", "Nuvemshop", "Teresina", "PI", 269.1, 40, "recomprou", { recomprou: true, fluxo: "frasco" }),
   rec(7007, "Renato Dias", "PayT", "Maceió", "AL", 59.9, 41, "sem_retorno", { fluxo: "sache", passo: 7, d1_em: dias(8) }),
   rec(7008, "Débora Freire", "Nuvemshop", "Natal", "RN", 59.9, 35, "ofertar", { cliente_fone: "84998761234", fluxo: "sache" }),

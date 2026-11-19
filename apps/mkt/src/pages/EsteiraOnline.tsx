@@ -1248,6 +1248,9 @@ function CardRecompra({ row, cor, erro }: { row: RecompraRow; cor: string; erro?
         )}
       </div>
 
+      {row.respondeu_em && row.respondeu_wa_id && (
+        <LinhaDeResposta resposta={{ respondeu_em: row.respondeu_em, wa_id: row.respondeu_wa_id, numero_id: row.respondeu_numero_id ?? null }} />
+      )}
       {erro && <LinhaDeErro erro={erro} />}
     </div>
   );
@@ -1340,7 +1343,7 @@ function CardCarrinho({ row, cor, erro, resposta }: { row: CarrinhoRow; cor: str
 // absoluto: a Esteira também existe no Admin e no Ops, onde um caminho
 // relativo cairia no catch-all e abriria a home. O número vai junto porque a
 // mesma pessoa em dois números nossos são duas conversas.
-function LinhaDeResposta({ resposta }: { resposta: RespostaCarrinho }) {
+function LinhaDeResposta({ resposta }: { resposta: Pick<RespostaCarrinho, "wa_id" | "numero_id" | "respondeu_em"> }) {
   const min = Math.max(0, (Date.now() - new Date(resposta.respondeu_em).getTime()) / 60000);
   const ha = min < 60 ? `há ${Math.max(1, Math.round(min))} min`
            : min < 60 * 48 ? `há ${Math.floor(min / 60)}h`

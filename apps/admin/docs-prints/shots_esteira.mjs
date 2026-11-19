@@ -89,7 +89,7 @@ export const SHOTS = [
     [2, (p) => p.locator("main div.border-red-500\\/40 li").first()],
   ] },
   // ── Régua de recompra ──
-  { chave: "esteira-recompra", papel: "colaborador", url: "/ecommerce/esteira?quadro=recompra", viewport: { width: 3400, height: 1000 }, marcas: [
+  { chave: "esteira-recompra", papel: "colaborador", url: "/ecommerce/esteira?quadro=recompra", viewport: { width: 3700, height: 1000 }, marcas: [
     [1, combo(0)],
     [2, (p) => p.locator("main").getByText(/dias após a entrega · 7 dias/)],
     [3, col("Entregue")],
@@ -98,12 +98,13 @@ export const SHOTS = [
     [6, col("Dia 6")],
     [7, col("Dia 7")],
     [8, (p) => card("Sofia Rangel")(p).locator("span.rounded.bg-muted")],
-    [9, col("Recomprou")],
-    [10, col("Sem retorno")],
-    [11, (p) => p.locator('main button[title^="Sem telefone"]')],
-    [12, (p) => p.locator('main button[title^="Erro ao enviar"]')],
-    [13, (p) => p.locator('main button[title^="Não contatar"]')],
-    [14, (p) => p.locator("summary").filter({ hasText: /entregues antes da régua/ })],
+    [9, col("Respondeu")],
+    [10, col("Recomprou")],
+    [11, col("Não comprou")],
+    [12, (p) => p.locator('main button[title^="Sem telefone"]')],
+    [13, (p) => p.locator('main button[title^="Erro ao enviar"]')],
+    [14, (p) => p.locator('main button[title^="Não contatar"]')],
+    [15, (p) => p.locator("summary").filter({ hasText: /entregues antes da régua/ })],
   ] },
   { chave: "esteira-recolhidas", papel: "colaborador", url: "/ecommerce/esteira?quadro=recompra", viewport: { width: 2700, height: 1000 },
     antes: async (p) => {

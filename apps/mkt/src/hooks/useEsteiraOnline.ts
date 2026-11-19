@@ -541,6 +541,9 @@ export type ColunaRecompra =
   | "entregue" | "ofertar" | "ofertado" | "recomprou" | "sem_retorno" | "historico"
   // A régua de 7 dias (20261177): o último dia que SAIU.
   | "dia_1" | "dia_2" | "dia_3" | "dia_4" | "dia_5" | "dia_6" | "dia_7"
+  // O cliente respondeu (20261178): a régua parou, por 7 dias; depois, sem
+  // recompra, `sem_retorno`.
+  | "respondeu"
   // ⚠️ As duas abaixo NÃO vêm da view: são calculadas na TELA
   // (`colunaRecompraNaTela`). A view alimenta a fila de WhatsApp, e
   // republicá-la para mudar a ARRUMAÇÃO do quadro seria mexer no gatilho por
@@ -571,6 +574,10 @@ export interface RecompraRow {
   d1_em?: string | null;
   /** 1 a 7 enquanto a régua corre (o dia de HOJE na régua, não o último enviado). */
   dia_da_regua?: number | null;
+  /** ⚠️ Da 20261178: a primeira resposta do cliente depois do Dia 1. */
+  respondeu_em?: string | null;
+  respondeu_wa_id?: string | null;
+  respondeu_numero_id?: string | null;
 }
 
 /** O nome curto do fluxo no card. Fluxo novo sem nome aqui aparece cru. */
@@ -588,8 +595,9 @@ export const COLUNAS_RECOMPRA: Array<{ key: ColunaRecompra; label: string; descr
   { key: "dia_5",       label: "Dia 5",            descricao: "sentiu diferença?",               color: "#0ea5e9" },
   { key: "dia_6",       label: "Dia 6",            descricao: "amanhã acaba",                    color: "#6366f1" },
   { key: "dia_7",       label: "Dia 7",            descricao: "último dia",                      color: "#6366f1" },
+  { key: "respondeu",   label: "Respondeu",        descricao: "parou — uma pessoa assume",       color: "#14b8a6" },
   { key: "recomprou",   label: "Recomprou",        descricao: "voltou a comprar após a entrega", color: "#9333ea" },
-  { key: "sem_retorno", label: "Sem retorno",      descricao: "a régua acabou sem compra",       color: "#64748b" },
+  { key: "sem_retorno", label: "Não comprou",      descricao: "a régua acabou sem compra",       color: "#64748b" },
 ];
 
 /** As etapas da régua em `carbo_msg_envios`, na ordem em que saem. A oferta
@@ -622,6 +630,8 @@ const pediuParaParar = (fone: string | null, envio: EnvioMsg | undefined, lista?
 
 export function colunaRecompraNaTela(r: RecompraRow, envio?: EnvioMsg, lista?: Set<string>): ColunaRecompra {
   if (r.coluna === "recomprou" || r.coluna === "historico") return r.coluna;
+  // Respondeu E pediu para parar: o que importa é não mandar mais nada.
+  if (r.coluna === "respondeu") return pediuParaParar(r.cliente_fone, envio, lista) ? "nao_contatar" : "respondeu";
   // ⚠️ Na régua de 7 dias o card fica no DIA, mesmo com falha no passo
   // seguinte: o 131049 (a Meta segurou) é reenviado no dia seguinte, e uma
   // falha definitiva só deixa de mandar o resto — o que já saiu, saiu.

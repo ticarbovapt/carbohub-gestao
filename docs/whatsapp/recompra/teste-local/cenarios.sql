@@ -144,3 +144,45 @@ insert into bling2_orders values (40, '[{"descricao":"Kit 10 Sachês"}]', 40);
 insert into carbo_recompra_base (bling_id, cliente, cliente_fone, total, entregue_em, origem, recomprou) values (40, 'Rita Teste', '(00) 90000-0040', 59.9, now() - interval '33 days', 'rastreio', false);
 insert into carbo_msg_envios (bling_id, etapa, status, enviado_em) values (40, 'recompra_sache_d1', 'lido', date_trunc('hour', now()) + interval '1 hour' - interval '2 days');
 select pg_temp.ok(not exists (select 1 from carbo_recompra_devido where bling_id = 40), 'Dia 2 espera a hora em que o Dia 1 saiu');
+
+-- ── 20261178: o cliente RESPONDEU → a régua para ──
+select pg_temp.ok((select texto from carbo_msg_templates where etapa = 'recompra_sache_d1') !~ 'Zé, do CarboZé 💚$', 'o rodapé saiu do espelho');
+select pg_temp.ok((select texto from carbo_msg_templates where etapa = 'recompra_sache_d1') ~ 'É o Zé, do CarboZé 💚 Pelas', 'o corpo continua inteiro');
+insert into bling2_orders values (50, '[{"descricao":"Kit 10 Sachês"}]', 50), (51, '[{"descricao":"Kit 10 Sachês"}]', 51),
+  (52, '[{"descricao":"Kit 10 Sachês"}]', 52), (53, '[{"descricao":"Kit 10 Sachês"}]', 53), (54, '[{"descricao":"Kit 10 Sachês"}]', 54),
+  (55, '[{"descricao":"Kit 10 Sachês"}]', 55);
+insert into carbo_recompra_base (bling_id, cliente, cliente_fone, total, entregue_em, origem, recomprou) values
+ (50, 'Sara Teste',  '(00) 90000-0050', 59.9, now() - interval '33 days', 'rastreio', false),  -- respondeu ontem
+ (51, 'Tito Teste',  '(00) 90000-0051', 59.9, now() - interval '33 days', 'rastreio', false),  -- falou ANTES do Dia 1
+ (52, 'Uma Teste',   '(00) 90000-0052', 59.9, now() - interval '33 days', 'rastreio', false),  -- falou com OUTRO número
+ (53, 'Vera Teste',  '(00) 90000-0053', 59.9, now() - interval '40 days', 'rastreio', false),  -- respondeu há 8 dias
+ (54, 'Wil Teste',   '(00) 90000-0054', 59.9, now() - interval '33 days', 'rastreio', true),   -- respondeu e recomprou
+ (55, 'Xica Teste',  '(00) 90000-0055', 59.9, now() - interval '40 days', 'rastreio', false);  -- respondeu depois do Dia 7
+insert into carbo_msg_envios (bling_id, etapa, status, enviado_em, wa_id, numero_id) values
+ (50, 'recompra_sache_d1', 'lido', date_trunc('hour', now()) - interval '2 days', '5500900000050', '1274076859132981'),
+ (51, 'recompra_sache_d1', 'lido', date_trunc('hour', now()) - interval '2 days', '5500900000051', '1274076859132981'),
+ (52, 'recompra_sache_d1', 'lido', date_trunc('hour', now()) - interval '2 days', '5500900000052', '1274076859132981'),
+ (53, 'recompra_sache_d1', 'lido', now() - interval '9 days', '5500900000053', '1274076859132981'),
+ (54, 'recompra_sache_d1', 'lido', now() - interval '2 days', '5500900000054', '1274076859132981'),
+ (55, 'recompra_sache_d1', 'lido', now() - interval '8 days', '5500900000055', '1274076859132981');
+insert into carbo_wa_mensagens values
+ ('r50', '5500900000050', '1274076859132981', 'entrada', 'text', 'quero sim', now() - interval '1 day'),
+ ('r51', '5500900000051', '1274076859132981', 'entrada', 'text', 'oi', now() - interval '3 days'),
+ ('r52', '5500900000052', '1255756280958635', 'entrada', 'text', 'cadê meu pedido?', now() - interval '1 day'),
+ ('s52', '5500900000052', '1274076859132981', 'saida',   'text', 'resposta nossa', now() - interval '1 day'),
+ ('r53', '5500900000053', '1274076859132981', 'entrada', 'text', 'não quero', now() - interval '8 days'),
+ ('r54', '5500900000054', '1274076859132981', 'entrada', 'text', 'comprei', now() - interval '1 day'),
+ ('r55', '5500900000055', '1274076859132981', 'entrada', 'text', 'ainda vale?', now() - interval '1 hour');
+select pg_temp.ok((select etapa from carbo_recompra_devido where bling_id = 50) = 'recompra_sache_d2', 'antes do robô: Sara ia receber o Dia 2');
+select pg_temp.ok(carbo_recompra_marcar_respostas() = 4, 'o robô acha 4 respostas (Sara, Vera, Wil, Xica)');
+select pg_temp.ok(carbo_recompra_marcar_respostas() = 0, 'rodar de novo não acha nada novo');
+select pg_temp.ok((select coluna from carbo_recompra_pipeline where bling_id = 50) = 'respondeu', 'Sara: respondeu');
+select pg_temp.ok(not exists (select 1 from carbo_recompra_devido where bling_id = 50), 'Sara: a régua parou');
+select pg_temp.ok(not exists (select 1 from carbo_msg_fila where bling_id = 50), 'Sara: fora da fila');
+select pg_temp.ok((select coluna from carbo_recompra_pipeline where bling_id = 51) = 'dia_1', 'Tito: mensagem de ANTES do Dia 1 não conta');
+select pg_temp.ok((select etapa from carbo_recompra_devido where bling_id = 51) = 'recompra_sache_d2', 'Tito: segue para o Dia 2');
+select pg_temp.ok((select coluna from carbo_recompra_pipeline where bling_id = 52) = 'dia_1', 'Uma: resposta noutro número (ou nossa) não conta');
+select pg_temp.ok((select coluna from carbo_recompra_pipeline where bling_id = 53) = 'sem_retorno', 'Vera: respondeu há 8 dias sem recomprar → não comprou');
+select pg_temp.ok((select coluna from carbo_recompra_pipeline where bling_id = 54) = 'recomprou', 'Wil: recomprar vence o respondeu');
+select pg_temp.ok((select coluna from carbo_recompra_pipeline where bling_id = 55) = 'respondeu', 'Xica: respondeu depois do Dia 7 → respondeu por 7 dias');
+select pg_temp.ok((select respondeu_em is not null from carbo_recompra_pipeline where bling_id = 50), 'a pipeline expõe respondeu_em');

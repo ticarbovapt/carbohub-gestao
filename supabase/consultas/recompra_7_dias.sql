@@ -69,3 +69,15 @@ select chave, motivo, marcado_em
  where marcado_por is null and removido_em is null
  order by marcado_em desc
  limit 50;
+
+
+-- BLOCO 9 — quem RESPONDEU e saiu da régua (20261178). Cada linha é um cliente
+-- que escreveu depois de receber a régua; a coluna diz onde o card está.
+select r.bling_id, p.cliente, p.coluna,
+       to_char(r.respondeu_em at time zone 'America/Sao_Paulo', 'DD/MM HH24:MI') as respondeu,
+       left(m.texto, 80) as o_que_escreveu
+  from public.carbo_recompra_respostas r
+  join public.carbo_recompra_pipeline p using (bling_id)
+  left join public.carbo_wa_mensagens m on m.wamid = r.wamid_resposta
+ order by r.respondeu_em desc
+ limit 50;

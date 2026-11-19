@@ -12,9 +12,7 @@ Por você já ser cliente, sua reposição sai com *20% OFF, já aplicado* no li
 
 👉 {{link_checkout}}
 
-⏳ Vale por 7 dias. Depois disso, volta pro preço cheio.
-
-Zé, do CarboZé 💚$t$),
+⏳ Vale por 7 dias. Depois disso, volta pro preço cheio.$t$),
   ('recompra_sache_d2', 'carboze_recompra_sache_d2', 'Kit 10 Sachês · Dia 2 · Não perder o que já fez', $t$Ô {{primeiro_nome}}, tanque de moto é pequeno. Pouca água ali dentro já é muita coisa. 🏍️
 
 E os primeiros abastecimentos sem CarboZé você nem sente… é justamente aí que mora o problema.
@@ -28,9 +26,7 @@ Você não precisa recomeçar do zero. Só não pode parar agora.
 Sua reposição com 20% OFF já tá pronta:
 👉 {{link_checkout}}
 
-Frete grátis, direto na sua casa.
-
-Zé, do CarboZé 💚$t$),
+Frete grátis, direto na sua casa.$t$),
   ('recompra_sache_d3', 'carboze_recompra_sache_d3', 'Kit 10 Sachês · Dia 3 · Um clique', $t$E aí, {{primeiro_nome}}, sua reposição já tá pronta. É só confirmar. 🙌
 
 Separei o seu Kit Sachês com os 20% de cliente já aplicados no link.
@@ -39,9 +35,7 @@ Você abre, confirma o pagamento e pronto. Leva menos de 1 minuto.
 
 👉 {{link_checkout}}
 
-✅ Kit 10 Sachês por *R$47,92*, com frete grátis, direto na sua casa.
-
-Zé, do CarboZé 💚$t$),
+✅ Kit 10 Sachês por *R$47,92*, com frete grátis, direto na sua casa.$t$),
   ('recompra_sache_d4', 'carboze_recompra_sache_d4', 'Kit 10 Sachês · Dia 4 · Hábito', $t$Fala, {{primeiro_nome}}, quer um jeito de nunca mais esquecer a dose antes da bomba? ⛽
 
 Deixa uns sachês no baú da moto.
@@ -52,9 +46,7 @@ Quem faz isso nunca fica um abastecimento sequer sem CarboZé.
 
 Sua reposição com 20% OFF já tá aqui: 👉 {{link_checkout}}
 
-✅ Kit 10 Sachês por *R$47,92*, com frete grátis.
-
-Zé, do CarboZé 💚$t$),
+✅ Kit 10 Sachês por *R$47,92*, com frete grátis.$t$),
   ('recompra_sache_d5', 'carboze_recompra_sache_d5', 'Kit 10 Sachês · Dia 5 · Sentiu diferença?', $t$Ei {{primeiro_nome}}, você sentiu diferença na sua moto com o CarboZé? 🤔
 
 Se sentiu, você já sabe o que acontece quando continua.
@@ -63,9 +55,7 @@ Se ainda não reparou, faz sentido: o CarboZé age desde o primeiro abasteciment
 
 Pra repor com os seus 20%: 👉 {{link_checkout}}
 
-✅ Kit 10 Sachês por *R$47,92*, com frete grátis.
-
-Zé, do CarboZé 💚$t$),
+✅ Kit 10 Sachês por *R$47,92*, com frete grátis.$t$),
   ('recompra_sache_d6', 'carboze_recompra_sache_d6', 'Kit 10 Sachês · Dia 6 · Prova + amanhã acaba', $t$Ô {{primeiro_nome}}, sabe quem nunca deixa o tanque sem CarboZé? 🚛
 
 Quem vive de rodar.
@@ -78,9 +68,7 @@ Elas medem cada litro na planilha, e já viram o que você também viu: o result
 
 👉 {{link_checkout}}
 
-✅ Kit 10 Sachês por *R$47,92*, com frete grátis.
-
-Zé, do CarboZé 💚$t$),
+✅ Kit 10 Sachês por *R$47,92*, com frete grátis.$t$),
   ('recompra_sache_d7', 'carboze_recompra_sache_d7', 'Kit 10 Sachês · Dia 7 · Último dia', $t$Atenção, {{primeiro_nome}}: hoje é o último dia dos seus 20% OFF. ⏰
 
 À meia-noite o link volta pro preço cheio de R$59,90, e eu não te chamo mais sobre essa reposição.
@@ -91,9 +79,7 @@ Cada abastecimento sem CarboZé é mais água no fundo do tanque da sua moto.
 
 👉 {{link_checkout}}
 
-Ou você trata agora, ou paga depois. ⛽
-
-Zé, do CarboZé 💚$t$),
+Ou você trata agora, ou paga depois. ⛽$t$),
   ('recompra_frasco_d1', 'carboze_recompra_frasco_d1', 'Kit 5 Frascos · Dia 1 · Antes de acabar', $t$Ei {{primeiro_nome}}, seu último frasco de CarboZé já foi pro tanque? ⛽
 
 É o Zé, do CarboZé 💚 Pelas minhas contas, o seu kit tá no fim: são 5 frascos, 500 litros tratados, uns 10 tanques cheios.
@@ -106,9 +92,7 @@ Por você já ser cliente, sua reposição sai com *20% OFF, já aplicado* no li
 
 👉 {{link_checkout}}
 
-⏳ Vale por 7 dias. Depois disso, volta pro preço cheio.
-
-Zé, do CarboZé 💚$t$),
+⏳ Vale por 7 dias. Depois disso, volta pro preço cheio.$t$),
   ('recompra_frasco_d2', 'carboze_recompra_frasco_d2', 'Kit 5 Frascos · Dia 2 · Não perder o que já fez', $t$Ô {{primeiro_nome}}, os primeiros tanques sem CarboZé você nem sente… 🚗
 
 E é exatamente aí que mora o problema.
@@ -124,9 +108,7 @@ Você não precisa recomeçar do zero. Só não pode parar agora.
 Sua reposição com 20% OFF já tá pronta:
 👉 {{link_checkout}}
 
-Frete grátis, direto na sua casa.
-
-Zé, do CarboZé 💚$t$),
+Frete grátis, direto na sua casa.$t$),
   ('recompra_frasco_d3', 'carboze_recompra_frasco_d3', 'Kit 5 Frascos · Dia 3 · Um clique', $t$E aí, {{primeiro_nome}}, sua reposição já tá pronta. É só confirmar. 🙌
 
 Separei o seu Kit Frascos com os 20% de cliente já aplicados no link.
@@ -135,9 +117,7 @@ Você abre, confirma o pagamento e pronto. Leva menos de 1 minuto.
 
 👉 {{link_checkout}}
 
-✅ Kit 5 Frascos por *R$119,60*, com frete grátis, direto na sua casa.
-
-Zé, do CarboZé 💚$t$),
+✅ Kit 5 Frascos por *R$119,60*, com frete grátis, direto na sua casa.$t$),
   ('recompra_frasco_d4', 'carboze_recompra_frasco_d4', 'Kit 5 Frascos · Dia 4 · Hábito', $t$Fala, {{primeiro_nome}}, quer um jeito de nunca mais esquecer a dose antes da bomba? ⛽
 
 Deixa um frasco no porta-luvas.
@@ -148,9 +128,7 @@ Quem faz isso nunca fica um tanque sequer sem CarboZé.
 
 Sua reposição com 20% OFF já tá aqui: 👉 {{link_checkout}}
 
-✅ Kit 5 Frascos por *R$119,60*, com frete grátis.
-
-Zé, do CarboZé 💚$t$),
+✅ Kit 5 Frascos por *R$119,60*, com frete grátis.$t$),
   ('recompra_frasco_d5', 'carboze_recompra_frasco_d5', 'Kit 5 Frascos · Dia 5 · Sentiu diferença?', $t$Ei {{primeiro_nome}}, você sentiu diferença no seu carro com o CarboZé? 🤔
 
 Se sentiu, você já sabe o que acontece quando continua.
@@ -159,9 +137,7 @@ Se ainda não reparou, faz sentido: o CarboZé age desde o primeiro tanque, mas 
 
 Pra repor com os seus 20%: 👉 {{link_checkout}}
 
-✅ Kit 5 Frascos por *R$119,60*, com frete grátis.
-
-Zé, do CarboZé 💚$t$),
+✅ Kit 5 Frascos por *R$119,60*, com frete grátis.$t$),
   ('recompra_frasco_d6', 'carboze_recompra_frasco_d6', 'Kit 5 Frascos · Dia 6 · Prova + amanhã acaba', $t$Ô {{primeiro_nome}}, sabe quem nunca deixa o tanque sem CarboZé? 🚛
 
 Quem tem frota.
@@ -174,9 +150,7 @@ E empresas como Grupo Duarte, Riograndense e MB Limpeza Urbana tratam o combust�
 
 👉 {{link_checkout}}
 
-✅ Kit 5 Frascos por *R$119,60*, com frete grátis.
-
-Zé, do CarboZé 💚$t$),
+✅ Kit 5 Frascos por *R$119,60*, com frete grátis.$t$),
   ('recompra_frasco_d7', 'carboze_recompra_frasco_d7', 'Kit 5 Frascos · Dia 7 · Último dia', $t$Atenção, {{primeiro_nome}}: hoje é o último dia dos seus 20% OFF. ⏰
 
 À meia-noite o link volta pro preço cheio de R$149,50, e eu não te chamo mais sobre essa reposição.
@@ -187,7 +161,5 @@ Cada tanque sem CarboZé é mais água acumulando no fundo do seu tanque.
 
 👉 {{link_checkout}}
 
-Ou você trata agora, ou paga depois. ⛽
-
-Zé, do CarboZé 💚$t$)
+Ou você trata agora, ou paga depois. ⛽$t$)
 )
