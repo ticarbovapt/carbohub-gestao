@@ -12,7 +12,13 @@ import { supabase } from "@/integrations/supabase/client";
 export type EtapaMsg =
   | "confirmado" | "nf_emitida" | "etiqueta" | "em_transito" | "saiu_entrega" | "entregue"
   | "recompra"
+  // A régua de 7 dias (20261177): Sachês e Frascos, Dia 1 a Dia 7.
+  | `recompra_${"sache" | "frasco"}_d${1 | 2 | 3 | 4 | 5 | 6 | 7}`
   | "carrinho_1" | "carrinho_2" | "carrinho_3";
+
+/** As 14 da régua de 7 dias, na ordem em que saem (Sachês, depois Frascos). */
+export const ETAPAS_REGUA_7: EtapaMsg[] = (["sache", "frasco"] as const).flatMap((f) =>
+  ([1, 2, 3, 4, 5, 6, 7] as const).map((d) => `recompra_${f}_d${d}` as EtapaMsg));
 
 /** Uma variável do corpo do template aprovado na Meta.
  *
@@ -111,6 +117,7 @@ export const ORDEM_ETAPAS: EtapaMsg[] =
    // ela: dispara DIAS depois, pela régua da segunda pipeline, contando a
    // partir do carimbo de entrega — não pela etapa da esteira.
    "recompra",
+   ...ETAPAS_REGUA_7,
    // ⚠️ As três de carrinho fecham a lista, e vêm por último apesar de
    // acontecerem ANTES de tudo no tempo do cliente. A ordem aqui é a do fluxo
    // do PEDIDO, e o carrinho abandonado é o fluxo de um pedido que não
@@ -141,8 +148,9 @@ export const GRUPO_DA_ETAPA: Record<EtapaMsg, GrupoMsg> = {
   confirmado: "entrega", nf_emitida: "entrega", etiqueta: "entrega",
   em_transito: "entrega", saiu_entrega: "entrega", entregue: "entrega",
   recompra: "recompra",
+  ...(Object.fromEntries(ETAPAS_REGUA_7.map((e) => [e, "recompra"])) as Record<string, GrupoMsg>),
   carrinho_1: "carrinho", carrinho_2: "carrinho", carrinho_3: "carrinho",
-};
+} as Record<EtapaMsg, GrupoMsg>;
 
 export const GRUPOS: Array<{ id: GrupoMsg; label: string; descricao: string }> = [
   { id: "entrega",  label: "Da venda à entrega", descricao: "avisos de serviço, do pedido à entrega" },
@@ -172,6 +180,7 @@ export const VARIAVEIS: Array<{ chave: string; descricao: string }> = [
   // REMOVIDA em vez de sair em branco.
   { chave: "link_carrinho",  descricao: "Link que restaura o carrinho (só carrinho abandonado)" },
   { chave: "produtos",       descricao: "O que estava no carrinho (só carrinho abandonado)" },
+  { chave: "link_checkout",  descricao: "Checkout com os 20% de cliente (só a régua de recompra)" },
 ];
 
 export function useTemplatesMsg() {

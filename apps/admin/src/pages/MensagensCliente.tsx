@@ -43,11 +43,13 @@ const NOME_ETAPA: Record<EtapaMsg, string> = {
   em_transito:  "Em trânsito",
   saiu_entrega: "Saiu para entrega",
   entregue:     "Entregue",
-  recompra:     "Recompra",
+  recompra:     "Recompra (oferta antiga)",
+  ...(Object.fromEntries((["sache", "frasco"] as const).flatMap((f) =>
+    [1, 2, 3, 4, 5, 6, 7].map((d) => [`recompra_${f}_d${d}`, `${f === "sache" ? "Sachês" : "Frascos"} — Dia ${d}`]))) as Record<string, string>),
   carrinho_1:   "Carrinho — 1ª",
   carrinho_2:   "Carrinho — 2ª",
   carrinho_3:   "Carrinho — 3ª",
-};
+} as Record<EtapaMsg, string>;
 
 /** Etapa que não é coluna da esteira. O aviso explica de onde ela vem, senão
  *  alguém procura essa coluna no quadro e não acha. */

@@ -232,6 +232,12 @@ Deno.serve(async (req: Request) => {
       // clique levar ao que a mensagem diz. `&produtos=`, `&valor=` e `&link=`
       // trocam qualquer um. Valor de exemplo aqui é seguro: este modo nunca
       // grava em `carbo_msg_envios`, então não ocupa a vaga de carrinho nenhum.
+      // A régua de 7 dias pede o link do checkout. Ele mora na reserva da
+      // variável (`carbo_recompra_definir_link`); `&link=` permite treinar
+      // antes de o link estar cadastrado.
+      if (etapaTeste.startsWith("recompra_") && url.searchParams.get("link")) {
+        linhaFalsa.link_checkout = url.searchParams.get("link");
+      }
       if (etapaTeste.startsWith("carrinho_")) {
         linhaFalsa.produtos = url.searchParams.get("produtos") || "CarboZé Kit 5 Frascos 100ml";
         linhaFalsa.valor = url.searchParams.get("valor") || "149";
@@ -452,18 +458,31 @@ Deno.serve(async (req: Request) => {
   // sai a do outro agora e a pendente depois — duas), e não pode bloquear a si
   // mesma (senão a nova tentativa vira "mesma pessoa" e nunca sai).
   const ofertadosRecompra = new Map<string, Set<number>>();
+  /** A etapa que COMEÇA uma régua de recompra: a oferta antiga ou um Dia 1. */
+  const iniciaRegua = (etapa: string) => etapa === "recompra" || /^recompra_[a-z]+_d1$/.test(etapa);
   const marcarOfertado = (fone: string, bling: number) => {
     const s = ofertadosRecompra.get(fone) ?? new Set<number>();
     s.add(bling);
     ofertadosRecompra.set(fone, s);
   };
-  if (numeros.length && (fila as LinhaFila[]).some((l) => l.etapa === "recompra")) {
+  // ⚠️ Desde a régua de 7 dias (20261177) a trava vale para o que COMEÇA uma
+  // régua — a oferta antiga (`recompra`) e o Dia 1 de cada fluxo —, e só
+  // olha os últimos 10 dias (a régua dura 7). Antes ela olhava a vida
+  // inteira, e quem recebeu uma oferta em outubro nunca mais entrava, nem
+  // depois de comprar de novo: o PDF manda "comprou: reinicia o gatilho".
+  // Os Dias 2 a 7 não passam por aqui: eles só existem depois do Dia 1 do
+  // MESMO pedido.
+  if (numeros.length && (fila as LinhaFila[]).some((l) => iniciaRegua(l.etapa))) {
+    const limite = Date.now() - 10 * 86_400_000;
     const { data: jaRecompra } = await supabase
-      .from("carbo_msg_envios").select("telefone, bling_id")
-      .eq("etapa", "recompra").in("telefone", numeros)
+      .from("carbo_msg_envios").select("telefone, bling_id, status, enviado_em, etapa")
+      .or("etapa.eq.recompra,etapa.like.recompra_*_d1").in("telefone", numeros)
       .in("status", ["enviado", "entregue", "lido", "erro", "pendente"]);
     for (const r of jaRecompra ?? []) {
-      if (r.telefone) marcarOfertado(String(r.telefone), Number(r.bling_id));
+      if (!r.telefone || !iniciaRegua(String(r.etapa))) continue;
+      const recente = r.status === "pendente"
+        || (r.enviado_em && new Date(r.enviado_em).getTime() >= limite);
+      if (recente) marcarOfertado(String(r.telefone), Number(r.bling_id));
     }
   }
   const outroPedidoJaOfertado = (fone: string, bling: number) =>
@@ -500,7 +519,8 @@ Deno.serve(async (req: Request) => {
   // um pedido de privacidade, e "não consegui conferir" não autoriza mandar.
   // Inclui o intervalo entre o deploy e a migração 20261053, em que a tabela
   // ainda não existe.
-  const ehComercial = (etapa: string) => etapa === "recompra" || etapa.startsWith("carrinho_");
+  const ehComercial = (etapa: string) =>
+    etapa === "recompra" || etapa.startsWith("recompra_") || etapa.startsWith("carrinho_");
   const naoContatar = new Set<string>();
   let listaNaoContatarOk = true;
   if ((fila as LinhaFila[]).some((l) => ehComercial(l.etapa))) {
@@ -604,7 +624,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    if (l.etapa === "recompra" && normalizado
+    if (iniciaRegua(l.etapa) && normalizado
         && outroPedidoJaOfertado(normalizado, Number(l.bling_id))) {
       if (!ensaio) {
         await supabase.from("carbo_msg_envios").upsert({
@@ -618,7 +638,7 @@ Deno.serve(async (req: Request) => {
                         decisao: "ignorada — a pessoa já recebeu a oferta" });
       continue;
     }
-    if (l.etapa === "recompra" && normalizado) marcarOfertado(normalizado, Number(l.bling_id));
+    if (iniciaRegua(l.etapa) && normalizado) marcarOfertado(normalizado, Number(l.bling_id));
 
     tentativas++;
     if (ensaio) {
