@@ -539,6 +539,8 @@ export function useAvisosDoPedido(blingIds: number[]) {
 
 export type ColunaRecompra =
   | "entregue" | "ofertar" | "ofertado" | "recomprou" | "sem_retorno" | "historico"
+  // A régua de 7 dias (20261177): o último dia que SAIU.
+  | "dia_1" | "dia_2" | "dia_3" | "dia_4" | "dia_5" | "dia_6" | "dia_7"
   // ⚠️ As duas abaixo NÃO vêm da view: são calculadas na TELA
   // (`colunaRecompraNaTela`). A view alimenta a fila de WhatsApp, e
   // republicá-la para mudar a ARRUMAÇÃO do quadro seria mexer no gatilho por
@@ -561,16 +563,40 @@ export interface RecompraRow {
   recomprou: boolean;
   dias_desde_entrega: number;
   coluna: ColunaRecompra;
+  /** ⚠️ Da 20261177 em diante. Opcionais: front no ar antes do SQL recebe a
+   *  view antiga, sem elas, e o quadro tem de continuar de pé. */
+  fluxo?: "sache" | "frasco" | string | null;
+  dias_apos_entrega?: number | null;
+  passo?: number | null;
+  d1_em?: string | null;
+  /** 1 a 7 enquanto a régua corre (o dia de HOJE na régua, não o último enviado). */
+  dia_da_regua?: number | null;
 }
+
+/** O nome curto do fluxo no card. Fluxo novo sem nome aqui aparece cru. */
+export const FLUXO_RECOMPRA: Record<string, string> = { sache: "Sachês", frasco: "Frascos" };
 
 /** As colunas da régua, na ordem do fluxo. `historico` fica fora: não é etapa,
  *  é a base anterior à régua, e vai num bloco separado. */
 export const COLUNAS_RECOMPRA: Array<{ key: ColunaRecompra; label: string; descricao: string; color: string }> = [
   { key: "entregue",    label: "Entregue",         descricao: "descansando até a janela",        color: "#10b981" },
-  { key: "ofertar",     label: "Hora de ofertar",  descricao: "passou a janela, sem oferta",     color: "#f59e0b" },
-  { key: "ofertado",    label: "Ofertado",         descricao: "mensagem enviada, aguardando",    color: "#0ea5e9" },
+  { key: "ofertar",     label: "Hora do Dia 1",    descricao: "passou a janela, Dia 1 na fila",  color: "#f59e0b" },
+  { key: "dia_1",       label: "Dia 1",            descricao: "antes de acabar",                 color: "#0ea5e9" },
+  { key: "dia_2",       label: "Dia 2",            descricao: "não perder o que já fez",         color: "#0ea5e9" },
+  { key: "dia_3",       label: "Dia 3",            descricao: "um clique",                       color: "#0ea5e9" },
+  { key: "dia_4",       label: "Dia 4",            descricao: "hábito",                          color: "#0ea5e9" },
+  { key: "dia_5",       label: "Dia 5",            descricao: "sentiu diferença?",               color: "#0ea5e9" },
+  { key: "dia_6",       label: "Dia 6",            descricao: "amanhã acaba",                    color: "#6366f1" },
+  { key: "dia_7",       label: "Dia 7",            descricao: "último dia",                      color: "#6366f1" },
   { key: "recomprou",   label: "Recomprou",        descricao: "voltou a comprar após a entrega", color: "#9333ea" },
-  { key: "sem_retorno", label: "Sem retorno",      descricao: "não voltou ou anterior à régua",  color: "#64748b" },
+  { key: "sem_retorno", label: "Sem retorno",      descricao: "a régua acabou sem compra",       color: "#64748b" },
+];
+
+/** As etapas da régua em `carbo_msg_envios`, na ordem em que saem. A oferta
+ *  antiga (`recompra`) vem primeiro: um pedido tem uma OU a outra. */
+export const ETAPAS_RECOMPRA: string[] = [
+  "recompra",
+  ...["sache", "frasco"].flatMap((f) => [1, 2, 3, 4, 5, 6, 7].map((d) => `recompra_${f}_d${d}`)),
 ];
 
 /** Colunas que nascem RECOLHIDAS, ao fim do quadro. Quem está nelas nunca vai
@@ -596,12 +622,25 @@ const pediuParaParar = (fone: string | null, envio: EnvioMsg | undefined, lista?
 
 export function colunaRecompraNaTela(r: RecompraRow, envio?: EnvioMsg, lista?: Set<string>): ColunaRecompra {
   if (r.coluna === "recomprou" || r.coluna === "historico") return r.coluna;
-  // Só antes ou no lugar da oferta: quem já foi ofertado e DEPOIS pediu para
-  // parar continua em Ofertado/Sem retorno — a oferta saiu, é fato.
-  if ((r.coluna === "entregue" || r.coluna === "ofertar" || r.coluna === "ofertado")
-      && pediuParaParar(r.cliente_fone, envio, lista)
-      && !(r.coluna === "ofertado" && envio && envio.status !== "ignorado")) return "nao_contatar";
-  if (envio && FALHOU.has(envio.status)) return "erro_envio";
+  // ⚠️ Na régua de 7 dias o card fica no DIA, mesmo com falha no passo
+  // seguinte: o 131049 (a Meta segurou) é reenviado no dia seguinte, e uma
+  // falha definitiva só deixa de mandar o resto — o que já saiu, saiu.
+  if (r.coluna.startsWith("dia_")) {
+    if (pediuParaParar(r.cliente_fone, envio, lista)) return "nao_contatar";
+    return r.coluna;
+  }
+  // Oferta ANTIGA (uma mensagem só): mora no Dia 1, que é o que ela era.
+  if (r.coluna === "ofertado") {
+    return pediuParaParar(r.cliente_fone, envio, lista) && envio?.status === "ignorado" ? "nao_contatar" : "dia_1";
+  }
+  // Antes da oferta: quem pediu para parar não vai receber o Dia 1.
+  if ((r.coluna === "entregue" || r.coluna === "ofertar")
+      && pediuParaParar(r.cliente_fone, envio, lista)) return "nao_contatar";
+  // O Dia 1 que a Meta segurou (131049) volta no dia seguinte: não é erro.
+  if (envio && FALHOU.has(envio.status) && envio.erro_codigo !== 131049) return "erro_envio";
+  // Ignorado por ser a MESMA pessoa de outro pedido já na régua: a régua dela
+  // corre pelo outro card.
+  if (envio?.status === "ignorado" && (envio.motivo ?? "").startsWith("mesma pessoa")) return "sem_retorno";
   const semFone = !(r.cliente_fone ?? "").trim()
     || (envio?.status === "ignorado" && (envio.motivo ?? "").startsWith("telefone"));
   // Só antes da oferta: quem já foi ofertado TINHA telefone, e o card dele conta
@@ -676,7 +715,7 @@ function useEnviosPorEtapa(etapas: string[]) {
   });
 }
 
-export const useEnviosRecompra = () => useEnviosPorEtapa(["recompra"]);
+export const useEnviosRecompra = () => useEnviosPorEtapa(ETAPAS_RECOMPRA);
 export const useEnviosCarrinho = () => useEnviosPorEtapa(["carrinho_1", "carrinho_2", "carrinho_3"]);
 
 export function useRecompraPipeline() {
@@ -694,6 +733,25 @@ export function useRecompraPipeline() {
     // A régua anda em DIAS. Recarregar no ritmo da esteira de entrega (10 s)
     // seria consulta à toa: nada aqui muda de coluna dentro de um minuto.
     refetchInterval: 5 * 60_000,
+  });
+}
+
+/** Os fluxos da régua de 7 dias (Sachês 30 dias, Frascos 45). Antes da
+ *  20261177 a tabela não existe: volta vazio e a tela segue. */
+export interface RecompraFluxo { fluxo: string; rotulo: string; dias_apos_entrega: number; ordem: number }
+
+export function useRecompraFluxos() {
+  return useQuery({
+    queryKey: ["recompra-fluxos"],
+    queryFn: async (): Promise<RecompraFluxo[]> => {
+      const { data, error } = await (supabase as any)
+        .from("carbo_recompra_fluxos")
+        .select("fluxo, rotulo, dias_apos_entrega, ordem")
+        .order("ordem");
+      if (error) { console.warn("[esteira] carbo_recompra_fluxos:", error.message); return []; }
+      return (data ?? []) as RecompraFluxo[];
+    },
+    staleTime: 5 * 60_000,
   });
 }
 

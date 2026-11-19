@@ -17,7 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import {
   useEsteiraOnline,
   useEsteiraParados, useRastreios, useEcommerceAguardando, useFontesSaude,
-  useAvisosDoPedido, useRecompraPipeline, useRecompraConfig, useEnviosRecompra, colunaRecompraNaTela, useEnviosCarrinho, colunaCarrinhoNaTela, useCarrinhoRespostas, type RespostaCarrinho, useNaoContatarLista, useEsteiraTravadosAntigos, useTratadosNaPendencia,
+  useAvisosDoPedido, useRecompraPipeline, useRecompraConfig, useRecompraFluxos, FLUXO_RECOMPRA, useEnviosRecompra, colunaRecompraNaTela, useEnviosCarrinho, colunaCarrinhoNaTela, useCarrinhoRespostas, type RespostaCarrinho, useNaoContatarLista, useEsteiraTravadosAntigos, useTratadosNaPendencia,
   useCarrinhoPipeline, useCarrinhoConfig,
   ETAPAS, COLUNAS_RECOMPRA, COLUNAS_RECOMPRA_RECOLHIDAS, COLUNAS_CARRINHO, COLUNAS_CARRINHO_RECOLHIDAS,
   type EsteiraRow, type EtapaEsteira, type RastreioCard, type AguardandoRow,
@@ -1224,6 +1224,19 @@ function CardRecompra({ row, cor, erro }: { row: RecompraRow; cor: string; erro?
         </span>
       </div>
 
+      {/* O fluxo (Sachês/Frascos) decide qual mensagem sai, e o dia da régua
+          diz quanto falta para o desconto acabar. */}
+      {row.fluxo && (
+        <div className="mt-1 flex items-center gap-1.5 text-[10px] leading-4">
+          <span className="rounded bg-muted px-1.5 py-px font-medium text-muted-foreground">
+            {FLUXO_RECOMPRA[row.fluxo] ?? row.fluxo}
+          </span>
+          {row.dia_da_regua != null && row.dia_da_regua >= 1 && row.dia_da_regua <= 7 && (
+            <span className="tabular-nums text-muted-foreground">dia {row.dia_da_regua} de 7</span>
+          )}
+        </div>
+      )}
+
       <div className="mt-1 flex items-center gap-2 text-[10px] leading-4 text-muted-foreground/70">
         <Phone className="h-3 w-3 shrink-0" />
         <span className="min-w-0 flex-1 truncate">{row.cliente_fone ?? "sem telefone"}</span>
@@ -1621,6 +1634,7 @@ export default function EsteiraOnline() {
   const alternarColuna = (k: string) =>
     setAbertas((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
   const { data: cfgRecompra } = useRecompraConfig();
+  const { data: fluxosRecompra = [] } = useRecompraFluxos();
   const { data: carrinhos = [], error: erroCarrinhos } = useCarrinhoPipeline();
   const { data: cfgCarrinho } = useCarrinhoConfig();
   const { data: fontes } = useFontesSaude();
@@ -1954,7 +1968,12 @@ export default function EsteiraOnline() {
             <SelectItem value="carrinho">Recuperação de carrinho</SelectItem>
           </SelectContent>
         </Select>
-        {pipeline === "recompra" && cfgRecompra && (
+        {pipeline === "recompra" && fluxosRecompra.length > 0 && (
+          <span className="text-[11px] text-muted-foreground">
+            {fluxosRecompra.map((f) => `${f.rotulo} ${f.dias_apos_entrega} dias`).join(" · ")} após a entrega · 7 dias
+          </span>
+        )}
+        {pipeline === "recompra" && fluxosRecompra.length === 0 && cfgRecompra && (
           <span className="text-[11px] text-muted-foreground">
             oferta {cfgRecompra.dias_para_ofertar} dias após a entrega ·
             {" "}desiste {cfgRecompra.dias_para_desistir} dias após a oferta

@@ -6174,6 +6174,59 @@ rodada de 1 min ⇒ cerca de 15 minutos.
 ⚠️ **E alguém precisa atender.** A oferta termina em *"Bora repor?"* sem link —
 quem manda o link é uma pessoa, dentro da janela de 24 h.
 
+### Recompra vira RÉGUA DE 7 DIAS, em dois fluxos (19/11/2026)
+Pedido do dono do processo com o PDF "CarboZé · Recompra no WhatsApp": 14
+templates MARKETING (Sachês e Frascos, Dia 1 a Dia 7), textos EXATOS do PDF.
+Fonte única dos textos: `docs/whatsapp/recompra/textos.mjs` (`gerar.mjs` produz o
+JSON da Meta, o prompt de cadastro e o espelho do banco; ver o README da pasta).
+
+```
+carbo_recompra_fluxos           CADASTRO: frasco (45 dias, padrão) · sache (30 dias)
+carbo_recompra_base.fluxo       sai dos ITENS do pedido no Bling (gatilho no insert)
+carbo_recompra_pipeline         coluna ganha dia_1…dia_7; + fluxo, passo, d1_em, dia_da_regua
+carbo_recompra_devido           o passo que sai HOJE (um por pedido) — a fila lê daqui
+carbo_recompra_definir_link     o link da Payt de cada fluxo (reserva de {{link_checkout}})
+carbo_wa_optout_automatico()    "parar"/"sair"/"não quero mais" e o 131050 → não contatar
+supabase/migrations/20261177000000_recompra_regua_de_7_dias.sql
+supabase/consultas/recompra_7_dias.sql   conferir, cadastrar os links, ligar
+```
+
+1. ⚠️ **Dia 6 e Dia 7 têm dia FIXO** (N = 5 e 6 desde o Dia 1, data de Brasília);
+   2 a 5 escorregam quando a Meta devolve 131049 (reenvio no dia seguinte: a
+   fila aceita de novo o `falhou` 131049 de um dia ANTERIOR). O que não couber
+   antes do Dia 6 não sai. Um passo por dia; do Dia 2 em diante, a partir da HORA
+   em que o Dia 1 saiu. Sem `dias_uteis` (são 7 dias seguidos), janela 9–18.
+2. ⚠️ **Enquanto o Dia 1 de um fluxo não está ligado E APPROVED, o passo 1 sai
+   como a oferta ANTIGA (`recompra`)** — a troca não deixa buraco. Ligou o Dia 1
+   novo, a antiga para sozinha para aquele fluxo.
+3. ⚠️ **Marco zero da régua nova**: `carbo_recompra_config.inicio_regua_7`
+   (nasceu dois dias antes da migração). Pedido cuja entrada (entrega + 30/45) é
+   anterior vai para "Sem retorno" e não recebe nada — sem isso, ligar mandaria
+   o Dia 1 a todo o estoque de "Hora de ofertar". Voltar a data é decisão.
+4. ⚠️ **Sem o link, a fila SEGURA** (`link_checkout` sem `fallback` =
+   obrigatório, "esperando: link_checkout"). Nunca sai mensagem sem link.
+5. **Param a régua**: recompra (robô, pelo CPF no Bling), compra na loja
+   (`ecommerce_orders` pago, mesmo telefone, depois do Dia 1 — "sai na hora",
+   antes do Bling), carrinho aberto do mesmo telefone (PAUSA,
+   `pausa_carrinho_dias` = 4) e "não contatar". ⚠️ As chaves de telefone dessas
+   travas vêm PRÉ-AGRUPADAS em CTE materializado: comparando linha a linha, o
+   teste a 100× foi a 7,9 s (laço aninhado); agrupado, a fila inteira 0,36 s.
+6. ⚠️ **"Pediu para parar" só conta a mensagem INTEIRA** ("parar", "sair",
+   "não quero mais", "me tira da lista"…, `carbo_wa_texto_pede_parar`); "pode
+   parar de mandar o boleto?" não conta. Desmarcar à mão vale contra mensagem
+   antiga; pedido NOVO marca de novo. Cron `wa-optout-automatico-10min`.
+7. ⚠️ **O `whatsapp-meta` trava a mesma PESSOA só no que COMEÇA uma régua**
+   (`recompra` ou um Dia 1) e só olhando 10 dias. Antes olhava a vida inteira:
+   quem recebeu oferta em outubro nunca mais entrava, nem depois de comprar de
+   novo ("comprou: reinicia o gatilho").
+8. A troca na `carbo_msg_fila` é no TEXTO VIVO com trava (o viewdef escreve
+   `'recompra'::text AS text,` — o primeiro teste local abortou por isso, que é
+   o comportamento certo). Teste: `docs/whatsapp/recompra/teste-local/rodar.sh`
+   (40 cenários, migração aplicada duas vezes).
+9. A tela: Esteira (admin·mkt·atendimento, idêntica) com Hora do Dia 1 · Dia 1…7
+   · Recomprou · Sem retorno, chip do kit e "dia N de 7" no card; Mensagens ao
+   cliente lista os 14 na aba Recompra; Conversas nomeia a etapa.
+
 ### ⏸️ Carrinho abandonado pela Meta: pronto e DESLIGADO (05/10/2026)
 A terceira pipeline saiu da Evolution e passou a sair pela Cloud API, pelo
 número da LOJA. Testado com os três templates reais no celular do dono do

@@ -153,6 +153,9 @@ const NOME_ETAPA: Record<string, string> = {
   // elas o balão dizia "automático · carrinho_1", em linguagem de banco — e o
   // filtro de etapa da coluna nem oferecia a opção, porque ele lê ESTAS chaves.
   recompra: "Hora de repor",
+  // A régua de 7 dias (20261177).
+  ...Object.fromEntries((["sache", "frasco"] as const).flatMap((f) =>
+    [1, 2, 3, 4, 5, 6, 7].map((d) => [`recompra_${f}_d${d}`, `Recompra · ${f === "sache" ? "Sachês" : "Frascos"} · Dia ${d}`]))),
   carrinho_1: "Carrinho · 1º lembrete",
   carrinho_2: "Carrinho · 2º lembrete",
   carrinho_3: "Carrinho · última mensagem",
