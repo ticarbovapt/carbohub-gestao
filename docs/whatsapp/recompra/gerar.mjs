@@ -5,11 +5,11 @@
 //
 // ⚠️ Recusa gerar se algum texto quebra uma regra da Meta que derrubaria a
 // aprovação ou o envio: corpo > 1024, 4+ espaços seguidos, tab, variável
-// colada em outra, variável no começo ou no fim do corpo, rodapé > 60.
+// colada em outra, variável no começo ou no fim do corpo.
 import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { TEXTOS, FLUXOS, RODAPE, nomeMeta, etapa } from "./textos.mjs";
+import { TEXTOS, FLUXOS, nomeMeta, etapa } from "./textos.mjs";
 
 const aqui = dirname(fileURLToPath(import.meta.url));
 const LINK = {
@@ -29,7 +29,6 @@ for (const [fluxo, dia, , corpo] of TEXTOS) {
   const outras = (corpo.match(/\{\{[^}]+\}\}/g) || []).filter((v) => v !== "{{primeiro_nome}}" && v !== "{{link_checkout}}");
   if (outras.length) erros.push(`${n}: variável desconhecida ${outras.join(",")}`);
 }
-if ([...RODAPE].length > 60) erros.push("rodapé > 60");
 if (TEXTOS.length !== 14) erros.push(`esperava 14 textos, achei ${TEXTOS.length}`);
 if (erros.length) { console.error(erros.join("\n")); process.exit(1); }
 
@@ -50,14 +49,13 @@ const api = TEXTOS.map(([fluxo, dia, , corpo]) => ({
         ],
       },
     },
-    { type: "FOOTER", text: RODAPE },
   ],
 }));
 writeFileSync(join(aqui, "templates-meta-recompra.json"), JSON.stringify(api, null, 2) + "\n");
 
 // 2. O espelho no banco (o `texto` de conferência, que a tela de Conversas mostra).
 const sql = TEXTOS.map(([fluxo, dia, titulo, corpo]) =>
-  `  ('${etapa(fluxo, dia)}', '${nomeMeta(fluxo, dia)}', '${FLUXOS[fluxo].rotulo} · Dia ${dia} · ${titulo}', $t$${corpo}\n\n${RODAPE}$t$)`,
+  `  ('${etapa(fluxo, dia)}', '${nomeMeta(fluxo, dia)}', '${FLUXOS[fluxo].rotulo} · Dia ${dia} · ${titulo}', $t$${corpo}$t$)`,
 ).join(",\n");
 writeFileSync(join(aqui, "espelho.sql"), `-- GERADO por gerar.mjs — não edite à mão.\n(values\n${sql}\n)\n`);
 
@@ -93,7 +91,7 @@ const prompt = `Você vai cadastrar 14 modelos (templates) de mensagem do WhatsA
 6. Cabeçalho: **nenhum**.
 7. Corpo: cole o texto do bloco **exatamente** como está, com as quebras de linha e as linhas em branco, os emojis e os asteriscos (os asteriscos são o negrito do WhatsApp — não os apague). Não troque palavras, não corrija nada, não acrescente nada.
 8. Exemplos das variáveis (a Meta pede): \`primeiro_nome\` = o exemplo indicado; \`link_checkout\` = o exemplo indicado.
-9. Rodapé: \`${RODAPE}\`
+9. Rodapé: **nenhum**.
 10. Botões: **nenhum**. Não adicione botão de "Parar promoções", de link nem de resposta.
 11. Confira a pré-visualização (o texto tem de bater com o bloco) e clique em **Enviar** / **Enviar para análise**.
 

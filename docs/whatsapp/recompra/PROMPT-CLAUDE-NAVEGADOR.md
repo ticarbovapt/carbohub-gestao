@@ -16,7 +16,7 @@ Você vai cadastrar 14 modelos (templates) de mensagem do WhatsApp no WhatsApp M
 6. Cabeçalho: **nenhum**.
 7. Corpo: cole o texto do bloco **exatamente** como está, com as quebras de linha e as linhas em branco, os emojis e os asteriscos (os asteriscos são o negrito do WhatsApp — não os apague). Não troque palavras, não corrija nada, não acrescente nada.
 8. Exemplos das variáveis (a Meta pede): `primeiro_nome` = o exemplo indicado; `link_checkout` = o exemplo indicado.
-9. Rodapé: `Zé, do CarboZé 💚`
+9. Rodapé: **nenhum**.
 10. Botões: **nenhum**. Não adicione botão de "Parar promoções", de link nem de resposta.
 11. Confira a pré-visualização (o texto tem de bater com o bloco) e clique em **Enviar** / **Enviar para análise**.
 

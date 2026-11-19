@@ -2,9 +2,11 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { montarPayload } from "../../../supabase/functions/_shared/metaTemplate.ts";
 // @ts-expect-error — módulo .mjs sem tipos (a fonte única dos textos)
-import { TEXTOS, RODAPE, nomeMeta, etapa } from "../../../docs/whatsapp/recompra/textos.mjs";
+import { TEXTOS, nomeMeta, etapa } from "../../../docs/whatsapp/recompra/textos.mjs";
 
 const MIGRACAO = readFileSync("supabase/migrations/20261177000000_recompra_regua_de_7_dias.sql", "utf8");
+const SEM_RODAPE = readFileSync("supabase/migrations/20261178000000_recompra_respondeu_para_a_regua.sql", "utf8");
+const ESPELHO = readFileSync("docs/whatsapp/recompra/espelho.sql", "utf8");
 const API = JSON.parse(readFileSync("docs/whatsapp/recompra/templates-meta-recompra.json", "utf8"));
 const PROMPT = readFileSync("docs/whatsapp/recompra/PROMPT-CLAUDE-NAVEGADOR.md", "utf8");
 
@@ -30,17 +32,20 @@ describe("régua de recompra de 7 dias", () => {
       expect(t.language).toBe("pt_BR");
       expect(t.parameter_format).toBe("NAMED");
       expect(t.components[0].text).toBe(corpo);
-      expect(t.components[1]).toEqual({ type: "FOOTER", text: RODAPE });
+      expect(t.components).toHaveLength(1);   // sem rodapé, sem botão
       expect(t.components.some((c: { type: string }) => c.type === "BUTTONS")).toBe(false);
       expect(PROMPT).toContain(corpo);
       expect(MIGRACAO).toContain(`('${etapa(f, d)}', '${nomeMeta(f, d)}'`);
-      expect(MIGRACAO).toContain(`$t$${corpo}\n\n${RODAPE}$t$`);
+      // a 20261177 gravou o corpo + o rodapé antigo; a 20261178 corta o rodapé
+      expect(MIGRACAO).toContain(`$t$${corpo}\n\nZé, do CarboZé 💚$t$`);
+      expect(ESPELHO).toContain(`$t$${corpo}$t$`);
     }
   });
 
-  it("o rodapé é o do PDF e cabe nos 60 caracteres da Meta", () => {
-    expect(RODAPE).toBe("Zé, do CarboZé 💚");
-    expect([...RODAPE].length).toBeLessThanOrEqual(60);
+  it("o rodapé saiu: o JSON e o prompt não o mandam, e o banco corta o espelho", () => {
+    expect(JSON.stringify(API)).not.toContain("FOOTER");
+    expect(PROMPT).toContain("Rodapé: **nenhum**");
+    expect(SEM_RODAPE).toContain("E'\\n\\nZé, do CarboZé 💚'");
   });
 
   it("cada corpo respeita as regras da Meta (1024, sem 4 espaços, variável fora das pontas)", () => {

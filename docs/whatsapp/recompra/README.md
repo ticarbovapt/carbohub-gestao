@@ -14,7 +14,10 @@ teste-local/                    a migração 20261177 testada num Postgres 16 de
 
 Variáveis nomeadas: `{{primeiro_nome}}` (sem nome: "amigo") e `{{link_checkout}}`
 (o checkout da Payt com os 20% — um link por fluxo, cadastrado com
-`carbo_recompra_definir_link`). O PDF escreve `{{1}}` e `{{2}}`; o texto que o
+`carbo_recompra_definir_link`). Sem rodapé e sem botão.
+
+O cliente respondeu (qualquer coisa): a régua para e o card vai para
+"Respondeu" por 7 dias; sem recompra, "Não comprou" (`20261178`). O PDF escreve `{{1}}` e `{{2}}`; o texto que o
 cliente lê é o mesmo.
 
 ## Para ligar

@@ -6222,10 +6222,25 @@ supabase/consultas/recompra_7_dias.sql   conferir, cadastrar os links, ligar
 8. A troca na `carbo_msg_fila` é no TEXTO VIVO com trava (o viewdef escreve
    `'recompra'::text AS text,` — o primeiro teste local abortou por isso, que é
    o comportamento certo). Teste: `docs/whatsapp/recompra/teste-local/rodar.sh`
-   (40 cenários, migração aplicada duas vezes).
+   (55 cenários com a 20261178, cada migração aplicada duas vezes).
 9. A tela: Esteira (admin·mkt·atendimento, idêntica) com Hora do Dia 1 · Dia 1…7
    · Recomprou · Sem retorno, chip do kit e "dia N de 7" no card; Mensagens ao
    cliente lista os 14 na aba Recompra; Conversas nomeia a etapa.
+10. ⭐ **O cliente RESPONDEU ⇒ a régua PARA** (`20261178`, pedido do dono do
+   processo: "independente do que seja a resposta, para não spamar"). Qualquer
+   mensagem do cliente depois do 1º envio, casada por IDENTIDADE (o `wa_id`
+   devolvido pela Meta + o mesmo `numero_id`), vai para
+   `carbo_recompra_respostas` (cron `recompra-respostas-1min`, SQL puro). A
+   pipeline põe o pedido em `respondeu` por 7 dias e depois em `sem_retorno`
+   (na tela: **"Não comprou"**); recomprar vence os dois. Quem PARA é a própria
+   pipeline (a `devido` só tira passo de `ofertar`/`dia_N`) — sem linha
+   `ignorado`, ao contrário do carrinho. O card mostra "respondeu há Xh · abrir
+   conversa". ⚠️ A migração só reescreve a view se a viva for EXATAMENTE a da
+   20261177 (compara `pg_get_viewdef` com uma cópia criada na hora); senão
+   aborta. Volta: desligar o cron e esvaziar a tabela.
+   E o rodapé "Zé, do CarboZé 💚" SAIU dos 14 (dono do processo): `textos.mjs`
+   não tem mais `RODAPE`, e a 20261178 corta o espelho no banco. O envio nunca
+   o mandou — quem mostra rodapé é o template cadastrado na Meta.
 
 ### ⏸️ Carrinho abandonado pela Meta: pronto e DESLIGADO (05/10/2026)
 A terceira pipeline saiu da Evolution e passou a sair pela Cloud API, pelo

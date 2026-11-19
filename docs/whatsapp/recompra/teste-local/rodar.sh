@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Testa a 20261177 num Postgres 16 LOCAL e descartável (nunca no de produção).
+# Testa a 20261177 e a 20261178 num Postgres 16 LOCAL e descartável (nunca no de produção).
 #   PG="psql -h /var/tmp/pgt -p 55432 -U postgres" bash docs/whatsapp/recompra/teste-local/rodar.sh
 # Monta o mínimo (schema.sql), a fila como ela é desde a 20261044 + 20261056, a
 # pipeline da 20261160, aplica a migração DUAS vezes (tem de ser idempotente) e
@@ -27,4 +27,7 @@ $P -f $D/schema.sql 2>/dev/null; $P -f "$T/pipe60.sql"; $P -f "$T/fila44.sql"; $
 M=supabase/migrations/20261177000000_recompra_regua_de_7_dias.sql
 $P -1 -f $M > /dev/null 2>&1 || $P -1 -f $M
 $P -1 -f $M > /dev/null 2>&1 || { echo "a 2ª aplicação falhou (não é idempotente)"; exit 1; }
+M2=supabase/migrations/20261178000000_recompra_respondeu_para_a_regua.sql
+$P -1 -f $M2 > /dev/null 2>&1 || $P -1 -f $M2
+$P -1 -f $M2 > /dev/null 2>&1 || { echo "a 2ª aplicação da 20261178 falhou"; exit 1; }
 $P -f $D/cenarios.sql 2>&1 | grep -E "ok:|FALHOU|ERROR"

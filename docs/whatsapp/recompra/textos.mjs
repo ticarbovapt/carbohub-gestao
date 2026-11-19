@@ -16,7 +16,7 @@
 // espelho do banco tem de acompanhar (é o que a tela de Conversas mostra).
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const RODAPE = "Zé, do CarboZé 💚";
+// Sem rodapé: o "Zé, do CarboZé 💚" saiu dos 14 (dono do processo, 19/11/2026).
 
 export const FLUXOS = {
   sache:  { rotulo: "Kit 10 Sachês", publico: "moto e abastecimentos pequenos", dias: 30,

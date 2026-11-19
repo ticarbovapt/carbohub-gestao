@@ -130,7 +130,7 @@ export const SECOES_ESTEIRA: Secao[] = [
       {
         titulo: "Régua de recompra",
         texto:
-          "Para quem já recebeu: o cliente descansa, e quando o kit deve estar acabando recebe 7 mensagens, uma por dia, com 20% de desconto de cliente no link. Quem comprou o Kit 10 Sachês entra 30 dias depois da entrega; quem comprou o Kit 5 Frascos, 45. A régua para sozinha quando o cliente compra de novo, pede para parar ou está com um carrinho aberto. A coluna é calculada pelo sistema; nenhum card se arrasta.",
+          "Para quem já recebeu: o cliente descansa, e quando o kit deve estar acabando recebe 7 mensagens, uma por dia, com 20% de desconto de cliente no link. Quem comprou o Kit 10 Sachês entra 30 dias depois da entrega; quem comprou o Kit 5 Frascos, 45. A régua para sozinha quando o cliente responde (qualquer resposta), compra de novo, pede para parar ou está com um carrinho aberto. A coluna é calculada pelo sistema; nenhum card se arrasta.",
         print: { chave: "esteira-recompra", legenda: "O quadro da régua de recompra." },
         itens: [
           { n: 1, titulo: "Qual quadro", texto: "“Régua de recompra” escolhido. A busca e os filtros de cima são só do quadro de entrega." },
@@ -141,12 +141,13 @@ export const SECOES_ESTEIRA: Secao[] = [
           { n: 6, titulo: "Dia 6", texto: "“Amanhã acaba”: sai sempre no sexto dia." },
           { n: 7, titulo: "Dia 7", texto: "O último dia do desconto: sai sempre no sétimo dia." },
           { n: 8, titulo: "Kit e dia da régua", texto: "No card: qual kit o cliente comprou (Sachês ou Frascos) e em que dia da régua ele está hoje." },
-          { n: 9, titulo: "Recomprou", texto: "Voltou a comprar depois da entrega. A régua para na hora, e a nova entrega começa outra régua." },
-          { n: 10, titulo: "Sem retorno", texto: "Recebeu as mensagens e não comprou até o fim do sétimo dia." },
-          { n: 11, titulo: "Sem telefone (recolhida)", texto: "Quem não tem como receber a mensagem. A coluna fica fechada para não poluir o quadro, mas o número está sempre à vista. Clique para abrir." },
-          { n: 12, titulo: "Erro ao enviar (recolhida)", texto: "A mensagem saiu e não chegou." },
-          { n: 13, titulo: "Não contatar (recolhida)", texto: "Pediu para não receber ofertas. Não recebe mais nada comercial (os avisos do pedido continuam). Entra aqui quando o cliente escreve só “parar”, “sair”, “não quero mais”, quando desliga as ofertas no WhatsApp ou quando o atendimento marca na conversa." },
-          { n: 14, titulo: "Entregues antes da régua", texto: "Pedidos entregues antes de a régua existir, com data estimada. Ficam fora do envio automático." },
+          { n: 9, titulo: "Respondeu", texto: "O cliente respondeu a uma das mensagens, seja o que for. A régua para na hora e uma pessoa assume a conversa (“abrir conversa” no card). Fica aqui por 7 dias; sem recompra, vai para Não comprou." },
+          { n: 10, titulo: "Recomprou", texto: "Voltou a comprar depois da entrega. A régua para na hora, e a nova entrega começa outra régua." },
+          { n: 11, titulo: "Não comprou", texto: "Recebeu as mensagens e não comprou até o fim do sétimo dia, ou respondeu e não comprou em 7 dias." },
+          { n: 12, titulo: "Sem telefone (recolhida)", texto: "Quem não tem como receber a mensagem. A coluna fica fechada para não poluir o quadro, mas o número está sempre à vista. Clique para abrir." },
+          { n: 13, titulo: "Erro ao enviar (recolhida)", texto: "A mensagem saiu e não chegou." },
+          { n: 14, titulo: "Não contatar (recolhida)", texto: "Pediu para não receber ofertas. Não recebe mais nada comercial (os avisos do pedido continuam). Entra aqui quando o cliente escreve só “parar”, “sair”, “não quero mais”, quando desliga as ofertas no WhatsApp ou quando o atendimento marca na conversa." },
+          { n: 15, titulo: "Entregues antes da régua", texto: "Pedidos entregues antes de a régua existir, com data estimada. Ficam fora do envio automático." },
         ],
       },
       {
