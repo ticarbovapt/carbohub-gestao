@@ -29,3 +29,10 @@ cliente lê é o mesmo.
 
 Texto mudou? Mude em `textos.mjs`, rode `gerar.mjs`, mande aprovar de novo na Meta
 e atualize o `texto` (espelho) no banco.
+
+## Conferir e proteger o número
+
+`supabase/consultas/whatsapp_qualidade_e_modelos.sql`: conferir os 14 modelos
+contra o que a Meta aprovou (sem enviar), ver a nota de cada número, mandar um
+modelo de verdade para o próprio celular e pausar as ofertas na mão. A nota
+AMARELA ou pior pausa as ofertas sozinha (`20261179`).

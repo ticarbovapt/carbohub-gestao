@@ -41,6 +41,10 @@ import {
   type VarTemplate,
 } from "../_shared/metaTemplate.ts";
 import { lerPorIdsSemTeto } from "../_shared/lerTudo.ts";
+import {
+  comercialPausado, conferirTemplate, lerQualidade,
+  type TemplateMeta, type TemplateNosso,
+} from "../_shared/metaQualidade.ts";
 
 // deno-lint-ignore-file no-explicit-any
 
@@ -61,6 +65,10 @@ const TOKEN    = Deno.env.get("WHATSAPP_ACCESS_TOKEN") ?? "";
 // existe para acabar.
 const PHONE_ID_SERVICO = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID") ?? "1255756280958635";
 const VERSAO   = Deno.env.get("WHATSAPP_API_VERSION") ?? "v25.0";
+// A conta (WABA) onde os modelos moram — só a conferência a usa.
+const WABA_ID  = Deno.env.get("WHATSAPP_WABA_ID") ?? "1777955220017913";
+/** De quanto em quanto tempo se relê a nota de cada número na Meta. */
+const QUALIDADE_MIN = 15;
 
 // Teto por rodada. O cron é de 1 minuto; 20 por rodada é muito acima do que a
 // operação gera num dia e segura qualquer surpresa — mesmo teto do kanban-n8n.
@@ -137,6 +145,70 @@ async function enviar(body: Record<string, unknown>, phoneId?: string | null) {
   return ultima;
 }
 
+/** GET na API de gestão da Meta. Nunca lança: devolve o erro. */
+async function graphGet(caminho: string): Promise<{ ok: boolean; status: number; json: any }> {
+  try {
+    const res = await fetch(`https://graph.facebook.com/${VERSAO}/${caminho}`, {
+      headers: { "Authorization": `Bearer ${TOKEN}` },
+    });
+    const corpo = await res.json().catch(() => ({}));
+    return { ok: res.ok, status: res.status, json: corpo };
+  } catch (e) {
+    return { ok: false, status: 0, json: { error: { message: String((e as Error)?.message ?? e) } } };
+  }
+}
+
+interface EstadoNumero {
+  rotulo: string; qualidade: string | null; limite: string | null; erro: string | null;
+  pausado: boolean; motivo: string | null; lida_em: string | null;
+}
+
+// ── A nota de cada número na Meta, e se o COMERCIAL dele está pausado ────────
+//
+// Pedido do dono do processo em 20/11/2026: "garantir a qualidade do número".
+// A Meta dá a cada número uma nota (verde/amarela/vermelha) a partir de
+// bloqueios e denúncias, e é a mensagem de MARKETING que mais pesa. Nota
+// caindo ⇒ limite diário menor ⇒ número bloqueado. A régua para no amarelo
+// (cadastro `pausa_qualidade`), e o aviso ao TI sai da função do banco.
+//
+// ⚠️ Relê a cada 15 min, não a cada rodada (que é de minuto). E leitura que
+// FALHA não pausa nada: só fica registrada (`qualidade_erro`) — ver o
+// comentário de `comercialPausado`. ⚠️ Sem a migração 20261179 a leitura do
+// cadastro falha e o mapa sai vazio: nada pausa, como antes.
+async function estadoDosNumeros(forcar: boolean): Promise<Map<string, EstadoNumero>> {
+  const mapa = new Map<string, EstadoNumero>();
+  const { data: nums, error } = await supabase.from("carbo_wa_numeros")
+    .select("phone_number_id, rotulo, ativo, qualidade, qualidade_limite, qualidade_erro, qualidade_lida_em, pausa_qualidade, comercial_pausado")
+    .eq("ativo", true);
+  if (error) {
+    console.error("[whatsapp-meta] qualidade: cadastro ilegível (a 20261179 está aplicada?):", error.message);
+    return mapa;
+  }
+  for (const n of nums ?? []) {
+    let qualidade = n.qualidade as string | null, limite = n.qualidade_limite as string | null;
+    let erro = n.qualidade_erro as string | null, lidaEm = n.qualidade_lida_em as string | null;
+    const velha = !lidaEm || Date.now() - new Date(lidaEm).getTime() > QUALIDADE_MIN * 60_000;
+    if ((forcar || velha) && TOKEN) {
+      const r = await graphGet(`${n.phone_number_id}?fields=quality_rating,messaging_limit_tier,status`);
+      qualidade = r.ok ? (lerQualidade(r.json?.quality_rating) ?? (String(r.json?.quality_rating ?? "") || null)) : qualidade;
+      limite = r.ok ? (r.json?.messaging_limit_tier ?? null) : limite;
+      erro = r.ok ? null : `meta ${r.json?.error?.code ?? r.status}: ${r.json?.error?.message ?? "sem resposta"}`;
+      lidaEm = new Date().toISOString();
+      const { error: e2 } = await supabase.rpc("carbo_wa_qualidade_registrar", {
+        p_numero_id: n.phone_number_id, p_qualidade: r.ok ? qualidade : null,
+        p_limite: r.ok ? limite : null, p_erro: erro,
+      });
+      if (e2) console.error("[whatsapp-meta] qualidade: não registrei", n.phone_number_id, e2.message);
+    }
+    const p = comercialPausado(qualidade, n.pausa_qualidade, !!n.comercial_pausado);
+    mapa.set(String(n.phone_number_id), {
+      rotulo: String(n.rotulo ?? n.phone_number_id), qualidade, limite, erro,
+      pausado: p.pausado, motivo: p.motivo, lida_em: lidaEm,
+    });
+  }
+  return mapa;
+}
+
 Deno.serve(async (req: Request) => {
   const url = new URL(req.url);
   const informado = req.headers.get("X-Cron-Secret") ?? url.searchParams.get("secret");
@@ -164,6 +236,55 @@ Deno.serve(async (req: Request) => {
   // única coisa aqui que envia sem passar pela `carbo_msg_fila`, e por isso é
   // limitada a ESSE template: mesmo com o segredo em mãos, o mais que se
   // consegue é um "Hello World".
+  // ── `?conferir=1` — os modelos e os números, sem mandar nada ─────────────
+  //
+  // Pedido do dono do processo em 20/11/2026: "ver os modelos certinho para
+  // sair corretamente". Para cada etapa ligada à Meta (ou só as que começam
+  // com `&etapa=`), lê o modelo APROVADO na Meta e compara com o que o envio
+  // vai mandar: status, idioma, variáveis, cabeçalho, botão, rodapé e o texto
+  // do espelho. E relê a nota de cada número. Não envia e não grava nada além
+  // da nota dos números.
+  if (url.searchParams.get("conferir") === "1") {
+    if (!TOKEN) return json({ error: "Falta o secret WHATSAPP_ACCESS_TOKEN." }, 500);
+    const prefixo = url.searchParams.get("etapa") ?? "";
+    const { data: tpls, error: eTpl } = await supabase.from("carbo_msg_templates")
+      .select("etapa, ativo, texto, meta_template_nome, meta_idioma, meta_variaveis, meta_status, meta_botao_url_de, numero_id")
+      .eq("canal_envio", "meta").like("etapa", `${prefixo}%`).order("etapa");
+    if (eTpl) return json({ error: `templates: ${eTpl.message}` }, 500);
+
+    const modelos = [];
+    for (const t of tpls ?? []) {
+      let meta: TemplateMeta | null = null;
+      let erroMeta: string | null = null;
+      if (t.meta_template_nome) {
+        const r = await graphGet(`${WABA_ID}/message_templates?name=${encodeURIComponent(t.meta_template_nome)}`
+          + "&fields=name,status,language,category,parameter_format,quality_score,components&limit=50");
+        if (!r.ok) erroMeta = `meta ${r.json?.error?.code ?? r.status}: ${r.json?.error?.message ?? "sem resposta"}`;
+        meta = ((r.json?.data ?? []) as TemplateMeta[]).find((m) =>
+          m.name === t.meta_template_nome && (!t.meta_idioma || m.language === t.meta_idioma)) ?? null;
+      }
+      const c = conferirTemplate(t as TemplateNosso, meta);
+      if (erroMeta) { c.problemas.unshift(`não consegui ler o modelo na Meta (${erroMeta})`); c.ok = false; }
+      // A régua de recompra precisa do link: sem ele a fila SEGURA (nunca sai
+      // sem link), e isso tem de aparecer aqui, não no dia do envio.
+      if (t.etapa.startsWith("recompra_")) {
+        const m = montarPayload("5500900000001", String(t.meta_template_nome ?? ""), t.meta_idioma ?? "pt_BR",
+          (t.meta_variaveis ?? []) as VarTemplate[], { primeiro_nome: "Ana" }, t.meta_botao_url_de);
+        if (m.faltando.length) { c.problemas.push(`sem valor para ${m.faltando.join(", ")} (cadastre o link)`); c.ok = false; }
+        else c.avisos.push(`sai com o link ${m.valores.link_checkout}`);
+      }
+      modelos.push({ ativo: t.ativo, numero_id: t.numero_id, ...c });
+    }
+    const numeros = await estadoDosNumeros(true);
+    return json({
+      ok: modelos.every((m) => m.ok),
+      modelos_com_problema: modelos.filter((m) => !m.ok).length,
+      modelos: modelos.length,
+      numeros: Object.fromEntries(numeros),
+      detalhe: modelos,
+    });
+  }
+
   const teste = url.searchParams.get("teste");
   if (teste) {
     const numero = normalizarBR(teste);
@@ -385,6 +506,11 @@ Deno.serve(async (req: Request) => {
   const { error: errCodigo } = await supabase.rpc("carbo_gerar_codigos_pedido");
   if (errCodigo) console.error("[whatsapp-meta] código do pedido não gerado:", errCodigo.message);
 
+  // A nota dos números (relida a cada 15 min). Nunca derruba a rodada.
+  let numerosEstado = new Map<string, EstadoNumero>();
+  try { numerosEstado = await estadoDosNumeros(false); }
+  catch (e) { console.error("[whatsapp-meta] qualidade:", (e as Error).message); }
+
   const { data: fila, error } = await supabase
     .from("carbo_msg_fila").select("*")
     .eq("canal_envio", "meta")
@@ -533,6 +659,7 @@ Deno.serve(async (req: Request) => {
     for (const b of bloqueados ?? []) if (b.chave) naoContatar.add(String(b.chave));
   }
   let naoContatados = 0;
+  let pausadosQualidade = 0;
 
   for (const l of fila as LinhaFila[]) {
     if (tentativas >= TETO) break;
@@ -541,6 +668,15 @@ Deno.serve(async (req: Request) => {
 
     if (ehComercial(l.etapa)) {
       if (!listaNaoContatarOk) { segurados++; continue; }
+      // ⚠️ Número com a nota caindo: o comercial ESPERA (não grava nada — a
+      // linha volta na próxima rodada e sai quando a nota voltar). Dia 1 a 5
+      // escorregam; Dia 6 e 7 têm dia FIXO e o que não couber não sai.
+      const est = numerosEstado.get(String((l as any).numero_id ?? ""));
+      if (est?.pausado) {
+        pausadosQualidade++;
+        resultados.push({ bling_id: l.bling_id, etapa: l.etapa, decisao: `pausada — ${est.motivo}` });
+        continue;
+      }
       const chave = chaveDoFone(numero ?? l.telefone);
       if (chave && naoContatar.has(chave)) {
         naoContatados++;
@@ -715,6 +851,7 @@ Deno.serve(async (req: Request) => {
   const resumo = {
     ok: true, ensaio, fila: fila.length,
     enviados, falhas, adiados, segurados, sem_telefone: semFone, nao_contatar: naoContatados,
+    pausado_por_qualidade: pausadosQualidade,
     ...(ensaio ? { faria: resultados } : { resultados }),
   };
   console.log("[whatsapp-meta]", JSON.stringify({ ...resumo, faria: undefined }));
