@@ -6241,6 +6241,26 @@ supabase/consultas/recompra_7_dias.sql   conferir, cadastrar os links, ligar
    E o rodapé "Zé, do CarboZé 💚" SAIU dos 14 (dono do processo): `textos.mjs`
    não tem mais `RODAPE`, e a 20261178 corta o espelho no banco. O envio nunca
    o mandou — quem mostra rodapé é o template cadastrado na Meta.
+11. ⭐ **A NOTA do número na Meta PAUSA o comercial** (`20261179`, pedido do
+   dono do processo: "garantir a qualidade do número"). O `whatsapp-meta` relê
+   a cada 15 min o `quality_rating` de cada número ativo e grava em
+   `carbo_wa_numeros` (`carbo_wa_qualidade_registrar`, histórico em
+   `carbo_wa_qualidade_hist`). Nota em `pausa_qualidade` ou pior (padrão
+   AMARELO) ⇒ recompra e carrinho DAQUELE número esperam na fila, sem gravar
+   nada, até a nota voltar; os avisos do pedido seguem. `comercial_pausado` é a
+   pausa MANUAL. Cada troca de nota avisa SÓ o TI (tipos do vigia da esteira,
+   sem tipo novo). Regra pura em `_shared/metaQualidade.ts` (testada).
+   ⚠️ Leitura que FALHA não pausa (fica em `qualidade_erro`): fechar ali
+   pararia a régua calada toda vez que o token não lesse a nota.
+   ⚠️ Dias 1–5 escorregam com a pausa; Dia 6 e 7 têm dia FIXO e o que não
+   couber não sai.
+   **Conferir os modelos**: `whatsapp-meta?conferir=1[&etapa=recompra_]` lê
+   cada modelo APROVADO na Meta e compara com o que o envio manda (status,
+   idioma, variáveis nomeadas × por número, cabeçalho, botão, rodapé, espelho)
+   — não envia nada. Blocos prontos em
+   `supabase/consultas/whatsapp_qualidade_e_modelos.sql` (conferência, nota
+   dos números, teste real no próprio celular, quando frasco/sachê entram,
+   pausa manual). Teste do banco: `docs/whatsapp/recompra/teste-local/qualidade.sql`.
 
 ### ⏸️ Carrinho abandonado pela Meta: pronto e DESLIGADO (05/10/2026)
 A terceira pipeline saiu da Evolution e passou a sair pela Cloud API, pelo
