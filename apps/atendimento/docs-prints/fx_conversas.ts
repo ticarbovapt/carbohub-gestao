@@ -239,6 +239,10 @@ const resumoDoNumero = (n: unknown) => {
 
 export const RPC_FX: Record<string, unknown> = {
   carbo_wa_caixa_resumo: (a: { p_numero_id?: string }) => resumoDoNumero(a.p_numero_id),
+  carbo_wa_caixa_v2: (a: { p_numero_id?: string }) => {
+    const itens = resumoDoNumero(a.p_numero_id).map((r) => ({ ...r, ativa: true }));
+    return { total: itens.length, ativas: itens.length, quietas_total: 0, itens };
+  },
   carbo_wa_caixa: (a: { p_numero_id?: string }) => doNumero(a.p_numero_id),
   carbo_wa_conversa_mensagens: (a: { p_numero_id?: string; p_wa_id?: string }) =>
     MSGS.filter((m) => m.numero_id === a.p_numero_id && m.wa_id === a.p_wa_id)

@@ -112,6 +112,27 @@ async function semTetoOuNulo(nome: string, montar: () => any): Promise<{ data: a
   }
 }
 
+async function lerCaixaV2(numeroId: string, dias: number, quietas: number, busca: string,
+                          op: OpcoesCaixa): Promise<CaixaDados | null> {
+  const { data, error } = await (supabase as any).rpc("carbo_wa_caixa_v2", {
+    p_numero_id: numeroId, p_dias: dias, p_quietas_limite: quietas,
+    p_busca: busca.length >= 2 ? busca : null,
+    p_responsavel: op.responsavel ?? null, p_tag: op.tag ?? null, p_etapa: op.etapa ?? null,
+  });
+  if (error) {
+    if (error.code === "PGRST202" || /carbo_wa_caixa_v2/.test(error.message ?? "")) return null;
+    throw error;
+  }
+  const itens = ((data?.itens ?? []) as Array<ResumoConversa & { ativa?: boolean }>);
+  const conversas = await conversasDoResumo(itens);
+  return {
+    conversas,
+    total: Number(data?.total ?? conversas.length),
+    quietasTotal: Number(data?.quietas_total ?? 0),
+    quietasCarregadas: itens.filter((i) => i.ativa === false).length,
+  };
+}
+
 async function lerResumo(numeroId: string, dias: number): Promise<Conversa[] | null> {
   const { data, error } = await (supabase as any)
     .rpc("carbo_wa_caixa_resumo", { p_numero_id: numeroId, p_dias: dias });
@@ -119,7 +140,11 @@ async function lerResumo(numeroId: string, dias: number): Promise<Conversa[] | n
     if (error.code === "PGRST202" || /carbo_wa_caixa_resumo/.test(error.message ?? "")) return null;
     throw error;
   }
-  const linhas = (data ?? []) as ResumoConversa[];
+  return conversasDoResumo((data ?? []) as ResumoConversa[]);
+}
+
+/** Linhas do resumo → conversas, com as duas reservas de nome. */
+async function conversasDoResumo(linhas: ResumoConversa[]): Promise<Conversa[]> {
 
   // Os nomes que a view não acha: carrinho (o `bling_id` é o checkout) e, por
   // último, pelo telefone — as mesmas duas reservas do caminho antigo.
@@ -203,10 +228,46 @@ export function useMensagensDaConversa(numeroId: string | null | undefined, waId
   });
 }
 
-export function useConversas(dias = 30, numeroId?: string | null) {
+/** O que a lista recebe (fase 3b): o TRABALHO inteiro + as quietas em página. */
+export interface CaixaDados {
+  conversas: Conversa[];
+  /** Conversas nos `dias` (a aba "Todas"). */
+  total: number;
+  /** Quietas que existem (com a busca/filtros) e quantas vieram. */
+  quietasTotal: number;
+  quietasCarregadas: number;
+}
+
+export interface OpcoesCaixa {
+  /** Quantas quietas trazer (as mais recentes). */
+  quietas?: number;
+  busca?: string;
+  responsavel?: string | null;
+  tag?: string | null;
+  etapa?: string | null;
+}
+
+export function useConversas(dias = 30, numeroId?: string | null, op: OpcoesCaixa = {}) {
+  const quietas = op.quietas ?? 300;
+  const busca = (op.busca ?? "").trim();
   return useQuery({
-    queryKey: ["wa-conversas", dias, numeroId ?? null],
-    queryFn: async (): Promise<Conversa[]> => {
+    queryKey: ["wa-conversas", dias, numeroId ?? null, quietas, busca,
+               op.responsavel ?? null, op.tag ?? null, op.etapa ?? null],
+    // Trocar a busca ou "carregar mais" não esvazia a lista enquanto a nova chega.
+    placeholderData: (anterior) => anterior,
+    queryFn: async (): Promise<CaixaDados> => {
+      // ⚠️ (fase 3b, 20261188) O trabalho inteiro + as quietas em PÁGINA.
+      const v2 = await lerCaixaV2(numeroId as string, dias, quietas, busca, op);
+      if (v2) return v2;
+      const conversas = await lerCaixaInteira(numeroId as string, dias);
+      return { conversas, total: conversas.length, quietasTotal: 0, quietasCarregadas: 0 };
+    },
+    refetchInterval: 30_000,
+    enabled: !!numeroId,
+  });
+}
+
+async function lerCaixaInteira(numeroId: string, dias: number): Promise<Conversa[]> {
       const desde = new Date(Date.now() - dias * 86_400_000).toISOString();
 
       // ⚠️ (23/11/2026, fase 3) A lista sai do RESUMO por conversa
@@ -324,22 +385,8 @@ export function useConversas(dias = 30, numeroId?: string | null) {
 
       return agruparConversas(lista, janelas,
                               resolvidos, atendimentos, tagsPorConversa);
-    },
-    // ⚠️ CONTINUA existindo mesmo com o Realtime abaixo, e não é redundância:
-    // são duas coisas diferentes. O Realtime traz mensagem NOVA; este intervalo
-    // reavalia a passagem do TEMPO — uma conversa respondível vira
-    // não-respondível sozinha, sem evento nenhum, e o botão tem de sumir antes
-    // de alguém escrever para o vazio.
-    //
-    // E é a rede de segurança do Realtime: WebSocket que cai reconecta em
-    // silêncio, e sem o intervalo a tela ficaria parada parecendo vazia.
-    refetchInterval: 30_000,
-    // ⚠️ Sem número escolhido não consulta. Uma consulta sem o filtro voltaria
-    // a misturar as três caixas, e misturar é exatamente o que esta tela
-    // passou a existir para não fazer.
-    enabled: !!numeroId,
-  });
 }
+
 
 /**
  * A conversa ao vivo.

@@ -3501,9 +3501,26 @@ export default function Conversas() {
     setParams(p, { replace: true });
   };
 
-  const { data: conversas, isLoading, error } = useConversas(30, numeroId);
+  /* ⚠️ (fase 3b) A lista traz o TRABALHO inteiro e as "quietas" (resolvidas
+     ou só com aviso) em página: `quietas` cresce com "Carregar mais antigas".
+     Busca e filtros simples também vão ao banco, para achar a quieta que não
+     está carregada. Busca espera a pessoa parar de digitar. */
+  const [limiteQuietas, setLimiteQuietas] = useState(300);
+  const buscaUrl = params.get("busca") ?? "";
+  const [buscaServidor, setBuscaServidor] = useState(buscaUrl);
+  useEffect(() => {
+    const id = setTimeout(() => setBuscaServidor(buscaUrl), 350);
+    return () => clearTimeout(id);
+  }, [buscaUrl]);
+  const pRespC = params.get("responsavel") || null, pTagC = params.get("etiqueta") || null;
+  const pEtapaC = params.get("etapa") || null;
+  useEffect(() => { setLimiteQuietas(300); }, [numeroId, buscaServidor, pRespC, pTagC, pEtapaC]);
+  const { data: caixa, isLoading, error } = useConversas(30, numeroId, {
+    quietas: limiteQuietas, busca: buscaServidor,
+    responsavel: pRespC, tag: pTagC, etapa: pEtapaC,
+  });
 
-  const lista = conversas ?? [];
+  const lista = caixa?.conversas ?? [];
   /* ⚠️ Sem `?de=` (desktop recém-aberto) a tela mostra a primeira da lista —
      mas FIXA nela (23/11/2026). Antes era `lista[0]` a cada render: chegava
      mensagem de outro cliente, a ordem mudava e a conversa trocava no meio da
@@ -3611,12 +3628,13 @@ export default function Conversas() {
   const quantosRecebem = (notificaveis ?? []).filter((p) => p.recebe).length;
 
   const contagens = useMemo(() => ({
-    todas: lista.length,
+    // "Todas" conta no BANCO: as quietas não carregadas também são conversas.
+    todas: Math.max(caixa?.total ?? 0, lista.length),
     pendentes: lista.filter((c) => c.status === "aberto").length,
     minhas: lista.filter((c) => c.responsavel && c.responsavel === meuId).length,
     sem_dono: lista.filter(semDonoDeVerdade).length,
     aberta: lista.filter((c) => janelaAberta(c.janela_ate)).length,
-  }), [lista, meuId]);
+  }), [lista, meuId, caixa?.total]);
 
   /* ⚠️ UMA VEZ SÓ, e depois que a lista chegou. Sem a trava, a contagem sai de
      zero durante o carregamento, a aba seria decidida como "Todas" e trocaria
@@ -4129,6 +4147,15 @@ export default function Conversas() {
                       ] : []),
                     ];
                   })
+                )}
+                {/* ⚠️ (fase 3b) As quietas — resolvidas e as que só receberam
+                    aviso — vêm em página. Elas só aparecem em "Todas". */}
+                {aba === "todas" && (caixa?.quietasTotal ?? 0) > (caixa?.quietasCarregadas ?? 0) && (
+                  <button type="button" onClick={() => setLimiteQuietas((n) => n + 300)}
+                          className="w-full px-3 py-2.5 text-center text-[11px] font-medium
+                                     text-muted-foreground hover:bg-muted/40 hover:text-foreground">
+                    Carregar mais antigas · faltam {(caixa?.quietasTotal ?? 0) - (caixa?.quietasCarregadas ?? 0)}
+                  </button>
                 )}
               </div>
             </CarboCardContent>

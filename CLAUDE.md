@@ -3061,8 +3061,23 @@ webhook com log cru e reprocessamento.
    ⚠️ Mudou a regra da conversa (o que é pendente, nome, pedido)? Mude o
    `agruparConversas` E o `carbo_wa_resumo_calcular`, e rode de novo a
    comparação (o caminho antigo `carbo_wa_caixa` continua no banco).
-   PENDENTE (3b): paginação e contagens no banco — hoje a lista ainda traz
-   todas as conversas de 30 dias (~400 bytes cada).
+   ✅ Em produção (23/11): 4.373 conversas no resumo; a lista medida como o
+   Lorran caiu de 622–2.327 ms (85 mil buffers) para 97 ms (7,7 mil).
+9. **Fase 3b — o TRABALHO inteiro, o resto em página** (`20261188`,
+   `carbo_wa_caixa_v2`): `ativas` = tudo cujo status da tela NÃO é resolvido
+   nem nulo, mais janela aberta e as do próprio usuário — as abas só contam
+   daqui, por isso as contagens não mudam. `quietas` (resolvidas sem mensagem
+   depois, e as que só receberam aviso) vêm das mais recentes, em página de
+   300 ("Carregar mais antigas", só na aba Todas); busca (normalizada como a
+   tela, `carbo_wa_texto_chave_busca`), dono, etiqueta e etapa também filtram
+   as quietas NO BANCO. "Todas" conta no banco (`total`).
+   ⚠️ A régua de "quieta" ESPELHA o `statusEfetivo`. Errar para trazer a mais
+   só custa bytes; para menos, esconde trabalho. Mudou o `statusEfetivo`,
+   confira o `where` da `carbo_wa_caixa_v2`.
+   ⚠️ `coalesce` em cada parte da régua: sem linha de atendimento o status é
+   nulo, e NULL tirava a conversa das DUAS listas (achado no teste local).
+   Testado: 2.000 conversas, nenhuma que pede alguém fora das ativas; conversa
+   só com aviso fica quieta.
 
 ### ⚠️ Conversas e Esteira a 500 vendas/semana: o teto e o índice (19/10/2026)
 Queixa do dono do processo: *"demora para abrir"* e *"diz que foi enviada
