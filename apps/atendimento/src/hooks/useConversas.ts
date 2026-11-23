@@ -450,59 +450,103 @@ export function useResponder() {
  * funcionar: marcar "aguardando" hoje não pode ser desfeito por uma mensagem de
  * ontem que já estava lá.
  */
+/** A função do banco não existe ainda (front antes do SQL): cai na gravação antiga. */
+const semFuncao = (e: any, nome: string) =>
+  e?.code === "PGRST202" || e?.code === "42883" || new RegExp(nome).test(e?.message ?? "");
+
+/**
+ * Status da conversa — pelo BANCO desde 23/11/2026 (`carbo_wa_definir_status`,
+ * 20261186): o `desde` sai do relógio do SERVIDOR (o do navegador podia estar
+ * adiantado e enterrar mensagem nova), e `visto_ate` = a última mensagem do
+ * cliente que a TELA mostrava — se chegou outra depois, o banco recusa em vez
+ * de marcar resolvida uma pergunta que ninguém leu. Assumir também tem trava:
+ * se outra pessoa pegou no meio, recusa e diz quem.
+ */
 export function useDefinirStatus() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ wa_id, status, assumir, numero_id }:
+    mutationFn: async ({ wa_id, status, assumir, numero_id, visto_ate }:
                        { wa_id: string; status: StatusAtendimento; assumir?: boolean;
-                         numero_id?: string | null }) => {
+                         numero_id?: string | null; visto_ate?: string | null }) => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Sessão expirada. Faça login novamente.");
 
+      const { data, error } = await (supabase as any).rpc("carbo_wa_definir_status", {
+        p_numero_id: numero_id, p_wa_id: wa_id, p_status: status,
+        p_assumir: !!assumir, p_visto_ate: visto_ate ?? null,
+      });
+      if (!error) {
+        if (data?.ok === false) {
+          if (data.motivo === "mensagem_nova") {
+            throw new Error("Chegou mensagem nova do cliente — confira antes de marcar.");
+          }
+          if (data.motivo === "ja_tem_dono") {
+            throw new Error(`${data.responsavel_nome ?? "Outra pessoa"} assumiu esta conversa agora há pouco.`);
+          }
+          throw new Error("Não foi possível mudar o status.");
+        }
+        return;
+      }
+      if (!semFuncao(error, "carbo_wa_definir_status")) throw error;
+
+      // ── Reserva: a gravação antiga (sem as travas) ─────────────────────
       const linha: Record<string, unknown> = {
         wa_id, numero_id, status,
         desde: new Date().toISOString(),
         atualizado_em: new Date().toISOString(),
         atualizado_por: session.user.id,
       };
-
-      // Assumir junto com "em atendimento": são a mesma ação na cabeça de quem
-      // clica, e deixar em dois passos produz conversa em atendimento sem dono.
       if (assumir) {
         const { data: perfil } = await (supabase as any)
           .from("profiles").select("full_name").eq("id", session.user.id).maybeSingle();
         linha.responsavel = session.user.id;
         linha.responsavel_nome = perfil?.full_name ?? session.user.email ?? null;
       }
-
-      const { error } = await (supabase as any)
+      const { error: e2 } = await (supabase as any)
         .from("carbo_wa_atendimento").upsert(linha, { onConflict: "numero_id,wa_id" });
-      if (error) throw error;
+      if (e2) throw e2;
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["wa-conversas"] }); },
+    // A recusa também relê: a tela passa a mostrar o dono/mensagem novos.
+    onSettled: () => { qc.invalidateQueries({ queryKey: ["wa-conversas"] }); },
   });
 }
 
-/** Passa a conversa para outra pessoa — ou tira o dono (null). */
+/** Passa a conversa para outra pessoa — ou tira o dono (null).
+ *  ⚠️ Com TRAVA (20261186): `esperado` é o dono que a tela mostrava; se mudou
+ *  no meio, o banco recusa em vez de atropelar quem acabou de pegar. */
 export function useDefinirResponsavel() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ wa_id, user_id, nome, numero_id }:
+    mutationFn: async ({ wa_id, user_id, nome, numero_id, esperado }:
                        { wa_id: string; user_id: string | null; nome: string | null;
-                         numero_id?: string | null }) => {
+                         numero_id?: string | null; esperado?: string | null }) => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Sessão expirada. Faça login novamente.");
 
+      const { data, error } = await (supabase as any).rpc("carbo_wa_definir_responsavel", {
+        p_numero_id: numero_id, p_wa_id: wa_id, p_pessoa: user_id,
+        p_esperado: esperado ?? null, p_forcar: false,
+      });
+      if (!error) {
+        if (data?.ok === false) {
+          throw new Error(data.responsavel_nome
+            ? `A conversa mudou de dono — agora está com ${data.responsavel_nome}.`
+            : "A conversa mudou de dono enquanto você olhava. Confira e tente de novo.");
+        }
+        return;
+      }
+      if (!semFuncao(error, "carbo_wa_definir_responsavel")) throw error;
+
       // ⚠️ NÃO mexe em `desde`: trocar o responsável não é decidir de novo
       // sobre a conversa, e reescrever a data desfaria uma reabertura pendente.
-      const { error } = await (supabase as any).from("carbo_wa_atendimento")
+      const { error: e2 } = await (supabase as any).from("carbo_wa_atendimento")
         .upsert({ wa_id, numero_id, responsavel: user_id, responsavel_nome: nome,
                   atualizado_em: new Date().toISOString(),
                   atualizado_por: session.user.id },
                 { onConflict: "numero_id,wa_id" });
-      if (error) throw error;
+      if (e2) throw e2;
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["wa-conversas"] }); },
+    onSettled: () => { qc.invalidateQueries({ queryKey: ["wa-conversas"] }); },
   });
 }
 
@@ -842,10 +886,11 @@ export function useMidia(media_id: string | null, ligado: boolean) {
       // no cache de HTTP — o `Cache-Control` da função era ignorado e cada F5
       // baixava o mesmo áudio da Meta de novo, gastando duas chamadas ao Graph
       // por escuta. Em GET a mesma URL responde do disco.
+      // ⚠️ Queda de rede chega como "Failed to fetch", em inglês, no balão.
       const res = await fetch(
         `${FUNCTIONS_URL}/whatsapp-midia-baixar?media_id=${encodeURIComponent(media_id!)}`,
         { headers: { "Authorization": `Bearer ${session.access_token}` } },
-      );
+      ).catch(() => { throw new Error("Sem conexão para carregar o arquivo"); });
       if (!res.ok) {
         // A função responde JSON no erro e bytes no sucesso — ler como JSON
         // aqui é o que traz a frase da retenção de 30 dias em vez de "502".

@@ -421,6 +421,9 @@ function Reprodutor({ url }: { url: string }) {
   const [tocando, setTocando] = useState(false);
   const [agora, setAgora] = useState(0);
   const [total, setTotal] = useState(NaN);
+  // ⚠️ O navegador que não toca o formato não diz nada: o player ficava em
+  // "0:00 / --:--" parecendo travado. Falhou, diz e oferece o arquivo.
+  const [falhou, setFalhou] = useState(false);
 
   const duracao = (a: HTMLAudioElement) => {
     if (Number.isFinite(a.duration) && a.duration > 0) setTotal(a.duration);
@@ -450,11 +453,16 @@ function Reprodutor({ url }: { url: string }) {
                className="h-1 w-full cursor-pointer accent-carbo-green"
                aria-label="Posição do áudio" />
         <p className="mt-0.5 text-[10px] leading-none text-muted-foreground">
-          {relogioDoAudio(agora)} / {relogioDoAudio(total)}
+          {falhou
+            ? <a href={url} download className="text-amber-500 underline-offset-2 hover:underline">
+                Este navegador não tocou o áudio · baixar
+              </a>
+            : <>{relogioDoAudio(agora)} / {relogioDoAudio(total)}</>}
         </p>
       </div>
 
       <audio ref={ref} src={url} preload="metadata"
+             onError={() => setFalhou(true)}
              onPlay={() => setTocando(true)}
              onPause={() => setTocando(false)}
              onLoadedMetadata={(e) => duracao(e.currentTarget)}
@@ -518,8 +526,12 @@ function Anexo({ mediaId, tipo, nome, Icone }: {
    * O custo de carregar sozinha é pago uma vez: a busca é GET com cache de um
    * dia no navegador, então reabrir a conversa e dar F5 não rebaixam.
    */
-  const [abrir, setAbrir] = useState(visual);
-  const { data, isFetching, error } = useMidia(mediaId, abrir);
+  // ⚠️ (23/11/2026) Áudio também carrega sozinho: desde o cofre (`wa-midia`)
+  // o arquivo sai do NOSSO storage, sem gastar chamada à Meta, e o cartão
+  // "toque para ouvir" com clipe parecia arquivo para baixar. Documento
+  // continua no clique (abrir = baixar).
+  const [abrir, setAbrir] = useState(visual || som);
+  const { data, isFetching, error, refetch } = useMidia(mediaId, abrir);
 
   // Enquanto a foto vem, um retângulo do tamanho dela evita o pulo do layout
   // que joga a conversa para cima no meio da leitura.
@@ -611,7 +623,7 @@ function Anexo({ mediaId, tipo, nome, Icone }: {
   }
 
   return (
-    <button type="button" onClick={() => setAbrir(true)} disabled={isFetching}
+    <button type="button" onClick={() => (abrir ? void refetch() : setAbrir(true))} disabled={isFetching}
             className="mb-1.5 flex w-full items-center gap-2 rounded-md border border-dashed
                        bg-background/40 px-2 py-1.5 text-left hover:bg-background/70
                        disabled:opacity-60">
@@ -623,8 +635,8 @@ function Anexo({ mediaId, tipo, nome, Icone }: {
         </p>
         <p className={`truncate text-[10px] leading-tight ${
           error ? "text-amber-500" : "text-muted-foreground"}`}>
-          {isFetching ? "baixando…"
-            : error ? (error as Error).message
+          {isFetching ? "carregando…"
+            : error ? `${(error as Error).message} · toque para tentar de novo`
             : som ? "toque para ouvir" : "toque para abrir"}
         </p>
       </div>
@@ -1342,6 +1354,13 @@ function GerenciadorDeRespostas({ lista, aoUsar }: {
   );
 }
 
+/** "Sem responsável" = o cliente ESCREVEU, a conversa não está resolvida e
+ *  ninguém pegou (23/11/2026). Antes contava também a conversa que só recebeu
+ *  aviso automático (status nulo) — eram ~1.860 de 2.364, e a fila real
+ *  sumia no meio delas. */
+const semDonoDeVerdade = (c: Conversa) =>
+  !c.responsavel && c.status !== null && c.status !== "resolvido";
+
 /** Rascunho por conversa (`numero:wa_id`), na memória da aba. */
 const RASCUNHOS = new Map<string, string>();
 
@@ -1740,7 +1759,7 @@ function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false, historic
                 <Button size="sm" variant="outline"
                         className="h-8 gap-1.5 text-emerald-500"
                         disabled={resolver.isPending}
-                        onClick={() => resolver.mutate({ wa_id: c.wa_id, numero_id: c.numero_id, status: "resolvido" }, {
+                        onClick={() => resolver.mutate({ wa_id: c.wa_id, numero_id: c.numero_id, status: "resolvido", visto_ate: c.ultima_entrada_em }, {
                           onSuccess: () => toast.success("Conversa marcada como resolvida"),
                           onError: (e) => toast.error((e as Error).message),
                         })}>
@@ -1807,12 +1826,12 @@ function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false, historic
                           border-emerald-500/20 bg-carbo-green/5 px-2.5 py-1.5">
             <Sparkles className="h-3 w-3 shrink-0 text-emerald-500" />
             <span className="text-[11px] text-muted-foreground">
-              Parece só um agradecimento.
+              {c.sugestao === "automatica" ? "Parece resposta automática." : "Parece só um agradecimento."}
             </span>
             <Button size="sm" variant="ghost"
                     className="ml-auto h-6 gap-1 px-2 text-[11px] text-emerald-500"
                     disabled={resolver.isPending}
-                    onClick={() => resolver.mutate({ wa_id: c.wa_id, numero_id: c.numero_id, status: "resolvido" }, {
+                    onClick={() => resolver.mutate({ wa_id: c.wa_id, numero_id: c.numero_id, status: "resolvido", visto_ate: c.ultima_entrada_em }, {
                       onError: (e) => toast.error((e as Error).message),
                     })}>
               <CheckCheck className="h-3 w-3" /> Resolver
@@ -2591,7 +2610,7 @@ const LinhaDaConversa = memo(function LinhaDaConversa({ c, selecionada, comBusca
             naoRespondida ? "text-foreground/75" : "text-muted-foreground"}`}>
             {c.parece_encerrada && (
               <Sparkles className="h-3 w-3 shrink-0 text-emerald-500"
-                        aria-label="Parece só um agradecimento" />
+                        aria-label={c.sugestao === "automatica" ? "Parece resposta automática" : "Parece só um agradecimento"} />
             )}
             {c.ultima_direcao === "saida" && (
               <span className="shrink-0 text-muted-foreground/60">você:</span>
@@ -2706,7 +2725,7 @@ const LinhaDaConversa = memo(function LinhaDaConversa({ c, selecionada, comBusca
   && a.c.janela_ate === b.c.janela_ate
   && a.c.status === b.c.status
   && a.c.responsavel_nome === b.c.responsavel_nome
-  && a.c.parece_encerrada === b.c.parece_encerrada
+  && a.c.parece_encerrada === b.c.parece_encerrada && a.c.sugestao === b.c.sugestao
   && a.c.tags.map((t) => t.id).join("\u0000") === b.c.tags.map((t) => t.id).join("\u0000"));
 
 /**
@@ -3120,7 +3139,8 @@ function PainelContato({ c, meuId, onVerPedido }: {
                       className="h-9 w-full gap-1.5 text-[11px]"
                       disabled={definirStatus.isPending}
                       onClick={() => definirStatus.mutate(
-                        { wa_id: c.wa_id, numero_id: c.numero_id, status: c.status === "aguardando" ? "aberto" : "aguardando" },
+                        { wa_id: c.wa_id, numero_id: c.numero_id, status: c.status === "aguardando" ? "aberto" : "aguardando",
+                          visto_ate: c.ultima_entrada_em },
                         { onError: (e) => toast.error((e as Error).message) })}>
                 <Clock className="h-3.5 w-3.5" />
                 {c.status === "aguardando" ? "Retomar" : "Aguardando"}
@@ -3129,7 +3149,8 @@ function PainelContato({ c, meuId, onVerPedido }: {
                       className="h-9 w-full gap-1.5 text-[11px]"
                       disabled={definirStatus.isPending}
                       onClick={() => definirStatus.mutate(
-                        { wa_id: c.wa_id, numero_id: c.numero_id, status: c.status === "resolvido" ? "aberto" : "resolvido" },
+                        { wa_id: c.wa_id, numero_id: c.numero_id, status: c.status === "resolvido" ? "aberto" : "resolvido",
+                          visto_ate: c.ultima_entrada_em },
                         { onError: (e) => toast.error((e as Error).message) })}>
                 {c.status === "resolvido"
                   ? <><Undo2 className="h-3.5 w-3.5" /> Reabrir</>
@@ -3165,9 +3186,26 @@ function PainelContato({ c, meuId, onVerPedido }: {
                         title={donoPrimeiroNome
                           ? `Assumir esta conversa de ${c.responsavel_nome}`
                           : "Assumir esta conversa"}
-                        onClick={() => definirStatus.mutate(
-                          { wa_id: c.wa_id, numero_id: c.numero_id, status: "em_atendimento", assumir: true },
-                          { onError: (e) => toast.error((e as Error).message) })}>
+                        onClick={async () => {
+                          // ⚠️ Tirar de OUTRA pessoa pede confirmação e passa
+                          // pela trava do dono (20261186): se ela mudou no meio,
+                          // o banco recusa em vez de atropelar.
+                          if (c.responsavel && c.responsavel !== meuId) {
+                            if (!(await confirmar({
+                              titulo: `Assumir a conversa de ${c.responsavel_nome ?? "outra pessoa"}?`,
+                              confirmar: "Assumir",
+                            }))) return;
+                            const eu = (atendentes ?? []).find((a) => a.user_id === meuId)?.full_name ?? null;
+                            definirResponsavel.mutate(
+                              { wa_id: c.wa_id, numero_id: c.numero_id, user_id: meuId ?? null, nome: eu,
+                                esperado: c.responsavel },
+                              { onError: (e) => toast.error((e as Error).message) });
+                            return;
+                          }
+                          definirStatus.mutate(
+                            { wa_id: c.wa_id, numero_id: c.numero_id, status: "em_atendimento", assumir: true },
+                            { onError: (e) => toast.error((e as Error).message) });
+                        }}>
                   <UserCheck className="h-3.5 w-3.5 shrink-0" />
                   {/* ⚠️ "Assumir esta conversa" NÃO cabe: renderizado, saía
                       "Assumir esta con…" ao lado do `⌄`, que lê como tela
@@ -3209,7 +3247,8 @@ function PainelContato({ c, meuId, onVerPedido }: {
                   onChange={(e) => {
                     const id = e.target.value || null;
                     const nome = (atendentes ?? []).find((a) => a.user_id === id)?.full_name ?? null;
-                    definirResponsavel.mutate({ wa_id: c.wa_id, numero_id: c.numero_id, user_id: id, nome },
+                    definirResponsavel.mutate({ wa_id: c.wa_id, numero_id: c.numero_id, user_id: id, nome,
+                                                esperado: c.responsavel },
                       { onError: (err) => toast.error((err as Error).message) });
                     setVerResponsavel(false);
                   }}
@@ -3553,7 +3592,8 @@ export default function Conversas() {
   const filtros = useMemo<TipoFiltros>(() => ({
     responsavel: pResp, tag: pTag, etapa: pEtapa,
     status: pStatus as TipoFiltros["status"],
-    ordem: pOrdem === "antigas" ? "antigas" : "recentes",
+    // Padrão (23/11/2026): quem espera há mais tempo primeiro.
+    ordem: pOrdem === "antigas" ? "antigas" : pOrdem === "recentes" ? "recentes" : "espera",
   }), [pResp, pTag, pEtapa, pStatus, pOrdem]);
   const setFiltros = (f: TipoFiltros | ((atual: TipoFiltros) => TipoFiltros)) => {
     const n = typeof f === "function" ? f(filtros) : f;
@@ -3562,7 +3602,7 @@ export default function Conversas() {
     const grava = (k: string, v: string | null) => (v ? p.set(k, v) : p.delete(k));
     grava("responsavel", n.responsavel); grava("etiqueta", n.tag);
     grava("etapa", n.etapa); grava("status", n.status);
-    grava("ordem", n.ordem === "antigas" ? "antigas" : null);
+    grava("ordem", n.ordem === "espera" ? null : n.ordem);
     setParams(p, { replace: true });
   };
   const [painelFiltros, setPainelFiltros] = useState(false);
@@ -3574,7 +3614,7 @@ export default function Conversas() {
     todas: lista.length,
     pendentes: lista.filter((c) => c.status === "aberto").length,
     minhas: lista.filter((c) => c.responsavel && c.responsavel === meuId).length,
-    sem_dono: lista.filter((c) => !c.responsavel && c.status !== "resolvido").length,
+    sem_dono: lista.filter(semDonoDeVerdade).length,
     aberta: lista.filter((c) => janelaAberta(c.janela_ate)).length,
   }), [lista, meuId]);
 
@@ -3603,7 +3643,7 @@ export default function Conversas() {
       if (aba === "minhas" && c.responsavel !== meuId) return false;
       // ⚠️ Resolvida sem dono não é trabalho parado: ela sairia como "ninguém
       // pegou" e encheria a aba de conversa encerrada.
-      if (aba === "sem_dono" && (c.responsavel || c.status === "resolvido")) return false;
+      if (aba === "sem_dono" && !semDonoDeVerdade(c)) return false;
       if (aba === "aberta" && !janelaAberta(c.janela_ate)) return false;
       if (!termo) return true;
       // ⚠️ Os DOIS nomes: quem procura pelo que viu no WhatsApp tem de achar,
@@ -3998,6 +4038,7 @@ export default function Conversas() {
                             onChange={(e) => setFiltros((f) => ({ ...f, ordem: e.target.value as TipoFiltros["ordem"] }))}
                             className="w-full rounded-md border border-border/60 bg-muted/40 px-2 py-1.5
                                        text-[11px] outline-none focus:border-carbo-green/40">
+                      <option value="espera">Esperando há mais tempo</option>
                       <option value="recentes">Mais recentes primeiro</option>
                       <option value="antigas">Mais antigas primeiro</option>
                     </select>
