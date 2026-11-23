@@ -2945,7 +2945,9 @@ Livre); navegar SEMANA A SEMANA (domingo a sábado) pelas setas ‹ semana › (
    (tipo → passo → slide) e a caixa de cada passo em cada slide; no slide do reembolso os passos
    do roteiro apontam para as caixas dele ("pedir", "aviso", "comprovante").
 12b. **Três abas: Para tratar · Casos abertos · Todos os pedidos** (23/11/2026, queixa do dono do
-   processo: "muita informação, cheio de botões, confuso"). Abre em **Para tratar** — problema sem caso
+   processo: "muita informação, cheio de botões, confuso"). **Todos os pedidos** é a primeira aba e a
+   padrão (colunas Cliente · Situação+caso · Entrega (transportadora/rastreio) · Valor); páginas de 50
+   numeradas (`?pagina=`), nunca "mostrar mais". **Para tratar** — problema sem caso
    aberto nem tratativa encerrada, ou reclamação do WhatsApp pendente, de QUALQUER data
    (`carbo_posvenda(p_so_atencao)`, `20261181`, reclamações dos últimos 90 dias), com o passivo de antes
    de 06/11 numa segunda lista. A divisão antes/a partir de 06/11 deixou de ser aba. Os 7 chips, o filtro
