@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   AlertTriangle, BarChart3, ChevronLeft, ChevronRight, Download, ExternalLink, Loader2, MessageCircle, MessageSquareWarning,
@@ -27,8 +27,9 @@ import {
 // Pós-venda — `/pos-venda` (ex-`/pendencias`, Pendências de entrega).
 //
 // 23/11/2026, pedido do dono do processo ("muita informação, cheio de botões,
-// confuso"): TRÊS abas, cada uma respondendo uma pergunta.
-//   · Para tratar (padrão) — o que precisa de alguém agora, de qualquer data:
+// confuso"): TRÊS abas, cada uma respondendo uma pergunta. "Todos os pedidos"
+// é a PRIMEIRA e a padrão; as listas vão em páginas de 50 (?pagina=).
+//   · Para tratar — o que precisa de alguém agora, de qualquer data:
 //     problema sem caso aberto nem tratativa encerrada, ou reclamação do
 //     WhatsApp pendente (`carbo_posvenda(p_so_atencao)`, 20261181). O passivo
 //     de antes do corte (06/11) vem numa segunda lista, logo abaixo.
@@ -40,12 +41,12 @@ import {
 // `precisaDeAtencao` daqui é o MESMO critério do banco (20261181) — mudou lá,
 // mude aqui. Tudo menos o ML Full (20261172).
 //
-// Estado na URL: ?aba=tratar|casos|todos · ?modo=semana|mes|periodo · ?de= · ?ate=
+// Estado na URL: ?aba=todos|tratar|casos · ?pagina= · ?modo=semana|mes|periodo · ?de= · ?ate=
 //                ?situacao= · ?caso= · ?canal= · ?busca= · ?pedido=
 // Endereços antigos (?modo=casos, ?aba=antes|novos) continuam abrindo.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const POR_PAGINA = 100;
+const POR_PAGINA = 50;
 const ETAPAS_EM_ANDAMENTO = new Set(["confirmado", "nf_emitida", "etiqueta", "em_transito"]);
 
 const brl = (v: number | null) =>
@@ -455,20 +456,18 @@ function LinhaTodos({ p, onAbrir }: { p: Pendencia; onAbrir: () => void }) {
     <Fila grade={GRADE_TODOS} onAbrir={onAbrir}>
       <Quem p={p} />
       <Valor p={p} className="lg:order-4" />
-      <span className="col-span-2 flex min-w-0 flex-wrap items-center gap-2 lg:order-2 lg:col-span-1">
+      <span className="col-span-2 flex min-w-0 flex-wrap items-center gap-1.5 lg:order-2 lg:col-span-1">
         {p.problema ? <ChipProblema p={p.problema} /> : <ChipEtapa p={p} />}
+        {c && <ChipTipo tipo={c.tipo} />}
+        {c && c.status !== "aberto" && c.desfecho && <ChipDesfecho desfecho={c.desfecho} />}
         {p.reclamacao && (
           <MessageSquareWarning className={cn("h-4 w-4", p.reclamacao.pendente ? "text-red-600" : "text-muted-foreground")}
             aria-label="Reclamou no WhatsApp" />
         )}
       </span>
-      <span className={cn("col-span-2 min-w-0 lg:order-3 lg:col-span-1", !c && "hidden lg:block")}>
-        {c ? (
-          <span className="flex flex-wrap items-center gap-1.5">
-            <ChipTipo tipo={c.tipo} />
-            {c.status !== "aberto" && c.desfecho && <ChipDesfecho desfecho={c.desfecho} />}
-          </span>
-        ) : <span className="text-xs text-muted-foreground">—</span>}
+      <span className="col-span-2 min-w-0 lg:order-3 lg:col-span-1">
+        <span className="block truncate text-sm">{p.transportadora ?? "—"}</span>
+        {p.rastreio && <span className="block truncate font-mono text-xs text-muted-foreground">{p.rastreio}</span>}
       </span>
       <span className="lg:order-5"><Seta /></span>
     </Fila>
@@ -509,17 +508,53 @@ function BotaoSeta({ lado, disabled, onClick }: { lado: "antes" | "depois"; disa
   );
 }
 
-function Lista({ titulo, n, vazio, children }: { titulo?: string; n?: number; vazio: string; children: React.ReactNode[] }) {
+function Lista({ vazio, cabecalho, children }: { vazio: string; cabecalho?: React.ReactNode; children: React.ReactNode[] }) {
   return (
     <div className="overflow-hidden rounded-xl border bg-card">
-      {titulo && (
-        <div className="flex items-baseline justify-between gap-3 border-b bg-muted/30 px-4 py-2">
-          <span className="text-sm font-semibold">{titulo}</span>
-          {n != null && <span className="text-xs tabular-nums text-muted-foreground">{n}</span>}
-        </div>
-      )}
+      {cabecalho}
       {children.length ? <div className="divide-y">{children}</div>
         : <p className="px-4 py-12 text-center text-sm text-muted-foreground">{vazio}</p>}
+    </div>
+  );
+}
+
+/** O cabeçalho de cada coluna (só no computador). */
+function Colunas({ grade, nomes }: { grade: string; nomes: string[] }) {
+  return (
+    <div className={cn("hidden gap-x-4 border-b bg-muted/40 px-4 py-2 text-xs font-medium text-muted-foreground lg:grid", grade)}>
+      {nomes.map((n, i) => <span key={i} className={n === "Valor" ? "text-right" : undefined}>{n}</span>)}
+    </div>
+  );
+}
+
+/** As páginas: 1 … 4 5 6 … 19, com as setas. */
+function paginasVisiveis(atual: number, total: number): (number | "…")[] {
+  const set = new Set([1, total, atual - 1, atual, atual + 1].filter((n) => n >= 1 && n <= total));
+  const ns = [...set].sort((a, b) => a - b);
+  const out: (number | "…")[] = [];
+  ns.forEach((n, i) => { if (i && n - ns[i - 1] > 1) out.push("…"); out.push(n); });
+  return out;
+}
+
+function Paginador({ pagina, total, itens, onTrocar }: { pagina: number; total: number; itens: number; onTrocar: (n: number) => void }) {
+  if (total <= 1) return null;
+  const de = (pagina - 1) * POR_PAGINA + 1;
+  const ate = Math.min(itens, pagina * POR_PAGINA);
+  return (
+    <div className="flex flex-col items-center justify-between gap-2 sm:flex-row">
+      <span className="text-sm tabular-nums text-muted-foreground">{de}–{ate} de {itens}</span>
+      <div className="flex items-center gap-1">
+        <BotaoSeta lado="antes" disabled={pagina <= 1} onClick={() => onTrocar(pagina - 1)} />
+        {paginasVisiveis(pagina, total).map((n, i) => n === "…"
+          ? <span key={`r${i}`} className="px-1 text-sm text-muted-foreground">…</span>
+          : (
+            <Button key={n} variant={n === pagina ? "default" : "ghost"} size="sm" className="h-9 min-w-9 px-2 tabular-nums"
+              aria-current={n === pagina ? "page" : undefined} onClick={() => onTrocar(n)}>
+              {n}
+            </Button>
+          ))}
+        <BotaoSeta lado="depois" disabled={pagina >= total} onClick={() => onTrocar(pagina + 1)} />
+      </div>
     </div>
   );
 }
@@ -534,11 +569,10 @@ const precisaDeAtencao = (p: Pendencia) =>
   !!p.reclamacao?.pendente || (!!p.problema && p.caso?.status !== "aberto" && !ehFinal(p.trato?.situacao));
 
 export default function PendenciasEntrega() {
-  const [abaUrl, setAba] = useParamUrl("aba", "tratar");
+  const [abaUrl, setAba] = useParamUrl("aba", "todos");
   const [modoUrl, setModo] = useParamUrl("modo", "semana");
   // Endereços antigos: ?modo=casos e ?aba=antes|novos continuam abrindo.
-  const aba: Aba = modoUrl === "casos" || abaUrl === "casos" ? "casos"
-    : abaUrl === "todos" || abaUrl === "antes" || abaUrl === "novos" ? "todos" : "tratar";
+  const aba: Aba = modoUrl === "casos" || abaUrl === "casos" ? "casos" : abaUrl === "tratar" ? "tratar" : "todos";
   const modo: Modo = modoUrl === "mes" || modoUrl === "periodo" ? modoUrl : "semana";
   const [deUrl, setDe] = useParamUrl("de", "");
   const [ateUrl, setAte] = useParamUrl("ate", "");
@@ -547,7 +581,7 @@ export default function PendenciasEntrega() {
   const [casoTipo, setCasoTipo] = useParamUrl("caso", "");
   const [busca, setBusca] = useParamUrl("busca", "", { replace: true });
   const [pedidoUrl, setPedido] = useParamUrl("pedido", "");
-  const [mostrar, setMostrar] = useState(POR_PAGINA);
+  const [paginaUrl, setPagina] = useParamUrl("pagina", "");
 
   const [buscaLocal, setBuscaLocal] = useState(busca);
   useEffect(() => { setBuscaLocal(busca); }, [busca]);
@@ -596,9 +630,15 @@ export default function PendenciasEntrega() {
     if (m === "periodo") { setDe(periodo.de); setAte(periodo.ate); } else { setDe(periodo.ate); setAte(""); }
   };
   const trocarAba = (a: Aba) => {
-    setAba(a === "tratar" ? "" : a); setModo(""); setDe(""); setAte(""); setSituacao(""); setCasoTipo(""); setCanal("");
+    setAba(a === "todos" ? "" : a); setModo(""); setDe(""); setAte(""); setSituacao(""); setCasoTipo(""); setCanal("");
   };
-  useEffect(() => { setMostrar(POR_PAGINA); }, [aba, modo, situacao, casoTipo, canal, busca, janela.de, janela.ate]);
+  // Mudou o que se vê ⇒ volta à página 1 (menos na primeira montagem: o link
+  // com ?pagina= tem de abrir naquela página).
+  const montou = useRef(false);
+  useEffect(() => {
+    if (!montou.current) { montou.current = true; return; }
+    setPagina("");
+  }, [aba, modo, situacao, casoTipo, canal, busca, janela.de, janela.ate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── As listas ──
   const tratar = useMemo(() => (qTratar.data?.itens ?? []).filter(precisaDeAtencao)
@@ -636,8 +676,31 @@ export default function PendenciasEntrega() {
   const filtrosAtivos = [situacao, canal, casoTipo].filter(Boolean).length;
 
   // A fila em duas partes: o dia a dia primeiro, o passivo de antes do corte depois.
-  const novos = lista.filter((p) => !p.antes_do_corte);
-  const antigos = lista.filter((p) => p.antes_do_corte);
+  const ordenada = useMemo(() => aba !== "tratar" ? lista
+    : [...lista.filter((p) => !p.antes_do_corte), ...lista.filter((p) => p.antes_do_corte)], [lista, aba]);
+  const nAntigos = aba === "tratar" ? lista.filter((p) => p.antes_do_corte).length : 0;
+  const totalPaginas = Math.max(1, Math.ceil(ordenada.length / POR_PAGINA));
+  const pagina = Math.min(totalPaginas, Math.max(1, Number(paginaUrl) || 1));
+  const daPagina = ordenada.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA);
+  const irPara = (n: number) => {
+    setPagina(n <= 1 ? "" : String(n));
+    document.querySelector("main")?.scrollTo({ top: 0 });
+    window.scrollTo({ top: 0 });
+  };
+  // Na fila, a faixa "A partir de… / Antes de…" abre cada parte, dentro da página.
+  const faixa = (p: Pendencia, i: number) => {
+    if (aba !== "tratar") return null;
+    const anterior = i > 0 ? daPagina[i - 1] : null;
+    if (anterior && anterior.antes_do_corte === p.antes_do_corte) return null;
+    const n = p.antes_do_corte ? nAntigos : ordenada.length - nAntigos;
+    return (
+      <div className="flex items-baseline justify-between gap-3 border-b bg-muted/30 px-4 py-2">
+        <span className="text-sm font-semibold">{p.antes_do_corte ? `Antes de ${corteCurto}` : `A partir de ${corteCurto}`}</span>
+        <span className="text-xs tabular-nums text-muted-foreground">{n}</span>
+      </div>
+    );
+  };
+  const LinhaDaAba = aba === "tratar" ? LinhaTratar : aba === "casos" ? LinhaCaso : LinhaTodos;
 
   return (
     <div className="p-4 md:p-6">
@@ -666,9 +729,9 @@ export default function PendenciasEntrega() {
         />
 
         <Segmentos grande ativo={aba} onTrocar={trocarAba} itens={[
+          { id: "todos", rotulo: "Todos os pedidos", curto: "Todos" },
           { id: "tratar", rotulo: "Para tratar", n: qTratar.data ? tratar.length : undefined, alerta: true },
           { id: "casos", rotulo: "Casos abertos", curto: "Casos", n: qCasos.data ? casos.length : undefined },
-          { id: "todos", rotulo: "Todos os pedidos", curto: "Todos" },
         ]} />
 
         {/* A barra: só a busca nas filas; período e filtros em "Todos os pedidos" */}
@@ -764,34 +827,22 @@ export default function PendenciasEntrega() {
               </p>
             )}
 
-            {aba === "tratar" && (
-              <>
-                <Lista titulo={`A partir de ${corteCurto}`} n={novos.length} vazio={busca ? "Nada encontrado." : "Nada para tratar."}>
-                  {novos.slice(0, mostrar).map((p) => <LinhaTratar key={p.bling_id} p={p} onAbrir={() => abrir(p)} />)}
-                </Lista>
-                {antigos.length > 0 && (
-                  <Lista titulo={`Antes de ${corteCurto}`} n={antigos.length} vazio="">
-                    {antigos.slice(0, mostrar).map((p) => <LinhaTratar key={p.bling_id} p={p} onAbrir={() => abrir(p)} />)}
-                  </Lista>
-                )}
-              </>
-            )}
-            {aba === "casos" && (
-              <Lista vazio={busca ? "Nada encontrado." : "Nenhum caso aberto."}>
-                {lista.slice(0, mostrar).map((p) => <LinhaCaso key={p.bling_id} p={p} onAbrir={() => abrir(p)} />)}
-              </Lista>
-            )}
-            {aba === "todos" && (
-              <Lista vazio={busca || filtrosAtivos ? "Nada encontrado." : "Nenhum pedido neste período."}>
-                {lista.slice(0, mostrar).map((p) => <LinhaTodos key={p.bling_id} p={p} onAbrir={() => abrir(p)} />)}
-              </Lista>
-            )}
+            <Lista
+              vazio={busca || filtrosAtivos ? "Nada encontrado."
+                : aba === "tratar" ? "Nada para tratar." : aba === "casos" ? "Nenhum caso aberto." : "Nenhum pedido neste período."}
+              cabecalho={<Colunas grade={aba === "tratar" ? GRADE_TRATAR : aba === "casos" ? GRADE_CASOS : GRADE_TODOS}
+                nomes={aba === "tratar" ? ["Cliente", "Por que está aqui", "Valor", ""]
+                  : aba === "casos" ? ["Cliente", "Caso", "Prazo", ""]
+                  : ["Cliente", "Situação", "Entrega", "Valor", ""]} />}>
+              {daPagina.map((p, i) => (
+                <div key={p.bling_id}>
+                  {faixa(p, i)}
+                  <LinhaDaAba p={p} onAbrir={() => abrir(p)} />
+                </div>
+              ))}
+            </Lista>
 
-            {Math.max(novos.length, antigos.length, aba === "tratar" ? 0 : lista.length) > mostrar && (
-              <div className="flex justify-center">
-                <Button variant="outline" onClick={() => setMostrar((n) => n + POR_PAGINA)}>Mostrar mais</Button>
-              </div>
-            )}
+            <Paginador pagina={pagina} total={totalPaginas} itens={ordenada.length} onTrocar={irPara} />
           </div>
         )}
 

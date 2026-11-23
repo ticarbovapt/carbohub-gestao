@@ -195,7 +195,7 @@ export default function PosVendaPainel() {
               <Kpi titulo="Reclamações que viraram caso" valor={pct(rec.com_caso, rec.pedidos) == null ? "—" : `${pct(rec.com_caso, rec.pedidos)}%`}
                 detalhe={`${num(rec.com_caso)} de ${num(rec.pedidos)} pedidos`} />
               <Kpi titulo="Reclamações sem caso" valor={num(rec.sem_caso_total)} tom={rec.sem_caso_total > 0 ? "alerta" : undefined}
-                href="/pos-venda"
+                href="/pos-venda?aba=tratar"
                 detalhe={rec.ameacas > 0 ? <span className="font-semibold text-red-600 dark:text-red-400">{num(rec.ameacas)} citaram Procon, Reclame Aqui ou similar</span> : "nenhuma ameaça no período"} />
             </div>
 
