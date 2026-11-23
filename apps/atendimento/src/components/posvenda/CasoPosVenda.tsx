@@ -21,9 +21,13 @@ import {
 } from "@/lib/posvendaCasos";
 import {
   arquivoDoComprovante, linkDoComprovante, mensagemDoErro, trilhaValida, useAbrirCaso, useAnotarCaso, useCasosDoPedido,
-  useEncerrarCaso, useResponderCaso, useSolicitarReembolso, useVoltarCaso, type Caso, type HistCaso, type Reembolso,
+  useAtribuirCaso, useEncerrarCaso, useEstadoCaso, useResponderCaso, useSolicitarReembolso, useVoltarCaso,
+  type Caso, type HistCaso, type Reembolso,
 } from "@/hooks/usePosVendaCasos";
-import { useEnviarMidia, useNumeros } from "@/hooks/useConversas";
+import { useAtendentes, useEnviarMidia, useNumeros } from "@/hooks/useConversas";
+import { useAuth } from "@/contexts/AuthContext";
+import { ESTADOS, ROTULO_ESTADO, estadoDoCaso, type EstadoCaso } from "@/lib/posvendaFila";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { Pendencia } from "@/hooks/usePendenciasEntrega";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -141,13 +145,19 @@ const PontoFeito = () => (
 function ItemTrilha({ h, ultimo }: { h: HistCaso; ultimo?: boolean }) {
   const passo = h.tipo && h.passo ? passoDe(h.tipo, h.passo) : null;
   const opcao = passo?.opcoes.find((o) => o.id === h.opcao);
-  const campos = Object.entries(h.campos ?? {}).filter(([, v]) => String(v ?? "").trim());
+  const campos = h.acao === "atribuiu" || h.acao === "estado" ? []
+    : Object.entries(h.campos ?? {}).filter(([, v]) => String(v ?? "").trim());
   const rotuloCampo = (id: string) => passo?.campos?.find((c) => c.id === id)?.rotulo ?? ROTULO_CAMPO[id] ?? id;
 
   let titulo: React.ReactNode;
   let resposta: React.ReactNode = null;
   if (h.acao === "abriu") titulo = <>Caso aberto como <span className="font-medium">{rotuloTipo(h.tipo ?? "")}</span></>;
   else if (h.acao === "nota") titulo = "Anotação";
+  else if (h.acao === "atribuiu") {
+    titulo = "Responsável";
+    resposta = <>{h.campos?.para || "—"}{h.campos?.de && <span className="font-normal text-muted-foreground"> · antes {h.campos.de}</span>}</>;
+  }
+  else if (h.acao === "estado") { titulo = "Estado"; resposta = ROTULO_ESTADO[h.opcao as EstadoCaso] ?? h.opcao; }
   else if (h.acao === "encerrou") { titulo = "Caso encerrado"; resposta = rotuloDesfecho(h.desfecho); }
   else {
     titulo = passo?.titulo ?? h.passo;
@@ -499,11 +509,14 @@ function EnviarComprovante({ caso, passo, p, r }: { caso: Caso; passo: Passo; p:
 }
 
 // ── Escolher o tipo ──────────────────────────────────────────────────────────
-function AbrirCaso({ p, novo }: { p: Pendencia; novo?: boolean }) {
-  const abrir = useAbrirCaso(p.bling_id);
+/** Escolher o tipo e abrir o caso. Mora aqui e nas Conversas (o pedido do cliente). */
+export function AbrirCaso({ blingId, assuntos = [], novo, onAberto }: {
+  blingId: number; assuntos?: string[]; novo?: boolean; onAberto?: () => void;
+}) {
+  const abrir = useAbrirCaso(blingId);
   const [qual, setQual] = useState<TipoCaso | null>(null);
   // O que o cliente reclamou no WhatsApp SUGERE o tipo (vem primeiro, marcado).
-  const sugeridos = tiposSugeridos((p.reclamacao?.assuntos ?? []).map((a) => a.codigo));
+  const sugeridos = tiposSugeridos(assuntos);
   const ordem = [...FLUXOS].sort((a, b) => Number(sugeridos.includes(b.tipo)) - Number(sugeridos.includes(a.tipo)));
   return (
     <section className="space-y-4">
@@ -524,6 +537,7 @@ function AbrirCaso({ p, novo }: { p: Pendencia; novo?: boolean }) {
               onClick={() => {
                 setQual(f.tipo);
                 abrir.mutate({ tipo: f.tipo, passo: f.inicio }, {
+                  onSuccess: () => onAberto?.(),
                   onError: (e) => toast.error("Não foi possível abrir o caso", { description: mensagemDoErro(e) }),
                   onSettled: () => setQual(null),
                 });
@@ -574,6 +588,53 @@ function CabecaDoCaso({ caso, acoes }: { caso: Caso; acoes?: React.ReactNode }) 
         </p>
       </div>
       {acoes}
+    </div>
+  );
+}
+
+/** Quem cuida do caso e com quem está a bola. */
+function DonoEEstado({ caso, blingId }: { caso: Caso; blingId: number }) {
+  const { user } = useAuth();
+  const atendentes = useAtendentes();
+  const atribuir = useAtribuirCaso(blingId);
+  const mudarEstado = useEstadoCaso(blingId);
+  const est = estadoDoCaso(caso);
+  const comigo = !!user && caso.responsavel === user.id;
+  const pessoas = [...(atendentes.data ?? [])].sort((a, b) => (a.full_name ?? "").localeCompare(b.full_name ?? "", "pt-BR"));
+  if (caso.responsavel && !pessoas.some((x) => x.user_id === caso.responsavel)) {
+    pessoas.unshift({ user_id: caso.responsavel, full_name: caso.responsavel_nome ?? "—" });
+  }
+  const erro = (titulo: string) => (e: unknown) => toast.error(titulo, { description: mensagemDoErro(e) });
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2">
+      <span className="text-xs text-muted-foreground">Responsável</span>
+      <Select value={caso.responsavel ?? ""} disabled={atribuir.isPending}
+        onValueChange={(v) => atribuir.mutate({ caso: caso.id, pessoa: v }, { onError: erro("Não foi possível passar o caso") })}>
+        <SelectTrigger className="h-8 w-auto min-w-40 gap-2 bg-background text-sm">
+          <SelectValue placeholder="Ninguém" />
+        </SelectTrigger>
+        <SelectContent>
+          {pessoas.map((x) => <SelectItem key={x.user_id} value={x.user_id}>{x.full_name ?? "—"}</SelectItem>)}
+        </SelectContent>
+      </Select>
+      {!comigo && (
+        <Button type="button" variant="outline" size="sm" className="h-8" disabled={atribuir.isPending}
+          onClick={() => atribuir.mutate({ caso: caso.id }, { onError: erro("Não foi possível pegar o caso") })}>
+          Pegar
+        </Button>
+      )}
+      <span className="ml-auto text-xs text-muted-foreground">Estado</span>
+      {est === "aguardando_financeiro" ? (
+        <span className="text-sm font-medium">Aguardando Financeiro</span>
+      ) : (
+        <Select value={est} disabled={mudarEstado.isPending}
+          onValueChange={(v) => mudarEstado.mutate({ caso: caso.id, estado: v }, { onError: erro("Não foi possível mudar o estado") })}>
+          <SelectTrigger className="h-8 w-auto min-w-44 gap-2 bg-background text-sm"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {ESTADOS.map((e) => <SelectItem key={e.id} value={e.id}>{e.rotulo}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      )}
     </div>
   );
 }
@@ -655,6 +716,7 @@ function CasoAberto({ caso, hist, reembolsos, p }: { caso: Caso; hist: HistCaso[
   return (
     <section className="space-y-5">
       <CabecaDoCaso caso={caso} acoes={acoes} />
+      <DonoEEstado caso={caso} blingId={p.bling_id} />
 
       <ol className="space-y-0">
         {escondidos > 0 && (
@@ -758,7 +820,8 @@ export default function CasoPosVenda({ p }: { p: Pendencia }) {
           {encerrados.map((c) => <CasoEncerrado key={c.id} caso={c} hist={doCaso(c.id)} p={p} />)}
         </section>
       )}
-      {!aberto && <AbrirCaso p={p} novo={encerrados.length > 0} />}
+      {!aberto && <AbrirCaso blingId={p.bling_id} assuntos={(p.reclamacao?.assuntos ?? []).map((a) => a.codigo)}
+        novo={encerrados.length > 0} />}
     </div>
   );
 }

@@ -2950,10 +2950,30 @@ Livre); navegar SEMANA A SEMANA (domingo a sábado) pelas setas ‹ semana › (
    numeradas (`?pagina=`), nunca "mostrar mais". **Para tratar** — problema sem caso
    aberto nem tratativa encerrada, ou reclamação do WhatsApp pendente, de QUALQUER data
    (`carbo_posvenda(p_so_atencao)`, `20261181`, reclamações dos últimos 90 dias), com o passivo de antes
-   de 06/11 numa segunda lista. A divisão antes/a partir de 06/11 deixou de ser aba. Os 7 chips, o filtro
+   de 06/11 numa segunda lista (saiu na 12c: a fila ordena por prioridade). A divisão antes/a partir de 06/11 deixou de ser aba. Os 7 chips, o filtro
    de tratativa e a coluna Entrega saíram; situação/caso/canal moram no botão "Filtros" de "Todos os
    pedidos"; planilha e Fluxos no ⋯. ⚠️ `precisaDeAtencao` (tela) = a condição do banco — mudou um, mude
    o outro. Links antigos (`?modo=casos`, `?aba=antes|novos`) continuam abrindo.
+12c. **Pós-venda "de verdade"** (23/11/2026, `20261182`, decisões do dono do processo):
+   - **A fila esvazia**: reclamação com mais de 30 dias sem caso vai para "Antigas"
+     (`reclamacao.antiga`, `?antigas=1`); conversa marcada RESOLVIDA depois da reclamação
+     (instante do SERVIDOR, `carbo_wa_atendimento_hist.em`) tira a reclamação da fila
+     (`resolvida_na_conversa`, entra no `pendente` — nos DOIS lugares da função);
+     `sem_resposta` e `embalagem` saíram de `carbo_posvenda_reclamacoes` (o painel do
+     ATENDIMENTO não muda). ⚠️ "Dispensar" da fila NÃO existe (decisão).
+   - **Prazo de 1ª resposta: 24 h úteis** (seg–sex, Brasília), de `aguarda_desde` (1ª
+     reclamação sem resposta de GENTE); `respondida_em` = 1ª resposta humana depois da
+     última. Motivo (risco, não recebeu, avaria, faltou, atraso, cobrança, entrega parada)
+     e prioridade (risco → prazo que vence primeiro → mais antigo). Regras PURAS em
+     `apps/atendimento/src/lib/posvendaFila.ts` (teste `src/test/posvenda/fila.test.ts`).
+   - **O caso tem dono e estado**: `responsavel` (nasce = quem abriu, gatilho
+     `trg_posvenda_caso_dono`; "Pegar"/transferir por `carbo_posvenda_caso_atribuir`) e
+     `estado` (em_atendimento · aguardando_cliente · aguardando_terceiro,
+     `carbo_posvenda_caso_estado`); o caso ANDAR (passo/tipo/status) volta o estado a
+     em_atendimento. "Aguardando Financeiro" é DERIVADO do passo, nunca gravado. Casos
+     abertos filtra por Comigo / Sem responsável / Aguardando… (`?casos=`).
+   - **O caso nasce nas Conversas**: "Abrir caso" no cartão Pós-venda do contato (o mesmo
+     `AbrirCaso` exportado de `CasoPosVenda.tsx`).
 12. **A lista do `/pos-venda` também** (18/11/2026): a tabela com botão "Tratar" virou linhas
    clicáveis num cartão (cliente · situação · entrega · caso · valor, `LinhaPedido` + `GRADE`),
    com o cabeçalho de semana como faixa dentro da lista; aba, modo e período numa barra só
