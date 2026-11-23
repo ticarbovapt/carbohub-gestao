@@ -31,7 +31,14 @@ const modulo = `// GERADO por docs/posvenda/publicar-nos-apps.mjs — não edita
 // clicáveis (em polegadas, slide de ${MAPA.largura} × ${MAPA.altura}).
 export interface Caixa { x: number; y: number; w: number; h: number }
 export interface LinkDoSlide extends Caixa { slide: number }
-export interface SlideDoFluxo { n: number; titulo: string; sub?: string; links: LinkDoSlide[]; passos?: Record<string, Caixa> }
+export interface VaiAoPasso extends Caixa { passo: number }
+export interface SlideDoFluxo {
+  n: number; titulo: string; sub?: string; links: LinkDoSlide[]; passos?: Record<string, Caixa>;
+  /** A caixa de cada passo NUMERADO do slide (o número que aparece no desenho). */
+  caixas?: Record<string, Caixa>;
+  /** Os avisos "→ vá ao passo N": clicar acende a caixa do passo N. */
+  vai?: VaiAoPasso[];
+}
 
 export const FLUXOS_SLIDES = ${JSON.stringify(MAPA, null, 1)} as {
   largura: number; altura: number; reembolso: number;

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, ChevronLeft, ChevronRight, Download, GitBranch, Maximize2 } from "lucide-react";
 import { useParamUrl } from "@carbo/shell";
@@ -19,6 +19,10 @@ import { FLUXOS_SLIDES } from "@/lib/fluxosPosVenda";
 //
 // Estado na URL: ?pagina=N · ?tipo=<tipo do caso> (abre a 1ª página dele) ·
 // ?passo=<id do passo> (abre a página do passo e o marca: "O caso está aqui").
+//
+// "→ vá ao passo N" (23/11/2026): o desenho não puxa linha de volta para cima
+// nem de uma coluna para a outra; escreve o aviso. Passar o mouse ou clicar
+// nele ACENDE a caixa do passo N (`vai`/`caixas` do mapa gerado).
 // ─────────────────────────────────────────────────────────────────────────────
 
 const { slides, tipos, largura, altura } = FLUXOS_SLIDES;
@@ -35,6 +39,17 @@ export default function FluxosPosVenda({ voltar }: { voltar: { para: string; rot
   const pagina = lida >= 1 && lida <= TOTAL ? lida : FLUXOS_SLIDES.passos[tipo]?.[passo] ?? tipos[tipo] ?? 1;
   const slide = slides[pagina - 1];
   const aqui = passo ? slide.passos?.[passo] : undefined;
+  // O passo aceso pelo "vá ao passo N": o clique fixa (some sozinho), o mouse só mostra.
+  const [fixo, setFixo] = useState<number | null>(null);
+  const [mouse, setMouse] = useState<number | null>(null);
+  useEffect(() => { setFixo(null); setMouse(null); }, [pagina]);
+  useEffect(() => {
+    if (fixo == null) return;
+    const t = setTimeout(() => setFixo(null), 4000);
+    return () => clearTimeout(t);
+  }, [fixo]);
+  const aceso = mouse ?? fixo;
+  const caixaAcesa = aceso != null ? slide.caixas?.[String(aceso)] : undefined;
 
   // O passo marcado segue na URL ao trocar de página: voltar a ela marca de novo.
   const urlDa = (n: number) => `?pagina=${n}${passo ? `&passo=${encodeURIComponent(passo)}` : ""}`;
@@ -110,6 +125,22 @@ export default function FluxosPosVenda({ voltar }: { voltar: { para: string; rot
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary")}
               style={{ left: pct(l.x, largura), top: pct(l.y, altura), width: pct(l.w, largura), height: pct(l.h, altura) }} />
           ))}
+          {(slide.vai ?? []).map((v, i) => (
+            <button key={`vai-${i}`} type="button" aria-label={`Mostrar o passo ${v.passo}`}
+              onClick={() => setFixo(v.passo)} onMouseEnter={() => setMouse(v.passo)} onMouseLeave={() => setMouse(null)}
+              onFocus={() => setMouse(v.passo)} onBlur={() => setMouse(null)}
+              className={cn("absolute cursor-pointer rounded-md transition-colors hover:bg-amber-500/10 hover:ring-2 hover:ring-amber-500",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500", aceso === v.passo && "ring-2 ring-amber-500")}
+              style={{ left: pct(v.x, largura), top: pct(v.y, altura), width: pct(v.w, largura), height: pct(v.h, altura) }} />
+          ))}
+          {caixaAcesa && (
+            <div key={`aceso-${aceso}`} className="pointer-events-none absolute rounded-md bg-amber-400/15 ring-4 ring-amber-500 ring-offset-2 animate-pulse"
+              style={{ left: pct(caixaAcesa.x, largura), top: pct(caixaAcesa.y, altura), width: pct(caixaAcesa.w, largura), height: pct(caixaAcesa.h, altura) }}>
+              <span className="absolute -top-7 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-amber-500 px-2 py-0.5 text-xs font-semibold text-white shadow">
+                Passo {aceso}
+              </span>
+            </div>
+          )}
           {aqui && (
             <div className="pointer-events-none absolute rounded-md ring-4 ring-amber-500 ring-offset-2 animate-pulse"
               style={{ left: pct(aqui.x, largura), top: pct(aqui.y, altura), width: pct(aqui.w, largura), height: pct(aqui.h, altura) }}>
