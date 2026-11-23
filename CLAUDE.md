@@ -2944,6 +2944,14 @@ Livre); navegar SEMANA A SEMANA (domingo a sábado) pelas setas ‹ semana › (
    PASSO atual com "O caso está aqui" (`?tipo=&passo=`): o `gerar-pptx` grava `passos`
    (tipo → passo → slide) e a caixa de cada passo em cada slide; no slide do reembolso os passos
    do roteiro apontam para as caixas dele ("pedir", "aviso", "comprovante").
+12b. **Três abas: Para tratar · Casos abertos · Todos os pedidos** (23/11/2026, queixa do dono do
+   processo: "muita informação, cheio de botões, confuso"). Abre em **Para tratar** — problema sem caso
+   aberto nem tratativa encerrada, ou reclamação do WhatsApp pendente, de QUALQUER data
+   (`carbo_posvenda(p_so_atencao)`, `20261181`, reclamações dos últimos 90 dias), com o passivo de antes
+   de 06/11 numa segunda lista. A divisão antes/a partir de 06/11 deixou de ser aba. Os 7 chips, o filtro
+   de tratativa e a coluna Entrega saíram; situação/caso/canal moram no botão "Filtros" de "Todos os
+   pedidos"; planilha e Fluxos no ⋯. ⚠️ `precisaDeAtencao` (tela) = a condição do banco — mudou um, mude
+   o outro. Links antigos (`?modo=casos`, `?aba=antes|novos`) continuam abrindo.
 12. **A lista do `/pos-venda` também** (18/11/2026): a tabela com botão "Tratar" virou linhas
    clicáveis num cartão (cliente · situação · entrega · caso · valor, `LinhaPedido` + `GRADE`),
    com o cabeçalho de semana como faixa dentro da lista; aba, modo e período numa barra só

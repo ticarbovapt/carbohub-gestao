@@ -91,6 +91,12 @@ const novoCaso = (bling_id: number, tipo: string, passo: string, diasAtras = 0) 
   hist({ caso_id: e.id, acao: "respondeu", tipo: e.tipo, passo: "acompanhar", opcao: "sim", desfecho: "resolvido", em: ts(2) });
   Object.assign(e, { passo: "acompanhar", status: "encerrado", desfecho: "resolvido", encerrado_em: ts(2) });
 }
+if ((globalThis as any).localStorage?.getItem("mock-mais-casos")) {
+  novoCaso(900005, "nao_recebido", "vizinhos", 9);
+  novoCaso(900012, "avaria", "fotos", 1);
+  novoCaso(900004, "atraso", "rastreio", 3);
+  novoCaso(900011, "faltante", "conferir", 4);
+}
 const erro = (message: string) => { throw Object.assign(new Error(message), { message }); };
 
 // ── Reembolsos (20261175): o atendente pede; `__fxPagar()` faz o papel do Financeiro.
@@ -197,7 +203,7 @@ export const RPC_FX: Record<string, unknown> = {
       sem_caso_total: 12,
     },
   }),
-  carbo_posvenda: (a: { p_de: string; p_ate: string; p_so_casos?: boolean; p_pedido?: number }) => {
+  carbo_posvenda: (a: { p_de: string; p_ate: string; p_so_casos?: boolean; p_so_atencao?: boolean; p_pedido?: number }) => {
     const abertos = TODOS.filter((p) => p.problema && !(p.trato as P | null)?.situacao?.toString().match(/resolvido|reembolsado|sem_solucao/));
     const sem = new Map<string, { semana: string; antes: boolean; n: number }>();
     for (const p of abertos) {
@@ -216,6 +222,9 @@ export const RPC_FX: Record<string, unknown> = {
       },
       itens: TODOS.filter((p) => a.p_pedido != null ? p.bling_id === a.p_pedido
           : a.p_so_casos ? casoDe(p.bling_id).caso?.status === "aberto"
+          : a.p_so_atencao ? (!!comReclamacao(p).reclamacao?.pendente
+              || (!!p.problema && casoDe(p.bling_id).caso?.status !== "aberto"
+                  && !String((p.trato as P | null)?.situacao ?? "").match(/resolvido|reembolsado|sem_solucao/)))
           : String(p.data_pedido) >= a.p_de && String(p.data_pedido) <= a.p_ate)
         .map((p) => ({ ...p, ...casoDe(p.bling_id), ...comReclamacao(p) }))
         .sort((x, y) => String(x.data_pedido).localeCompare(String(y.data_pedido))),

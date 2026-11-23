@@ -12,7 +12,6 @@ import { ChipDesfecho, ChipTipo } from "@/components/posvenda/CasoPosVenda";
 // ─────────────────────────────────────────────────────────────────────────────
 
 const dia = (iso: string) => { const [a, m, d] = iso.slice(0, 10).split("-"); return `${d}/${m}/${a.slice(2)}`; };
-const CORTE = "2026-11-06";
 
 export default function PosVendaDoCliente({ waId }: { waId: string }) {
   const q = usePosVendaDoCliente(waId);
@@ -33,7 +32,7 @@ export default function PosVendaDoCliente({ waId }: { waId: string }) {
             const aberto = p.caso?.status === "aberto";
             return (
               <li key={p.bling_id}>
-                <Link to={`/pos-venda?${p.data_pedido < CORTE ? "" : "aba=novos&"}pedido=${p.bling_id}`}
+                <Link to={`/pos-venda?pedido=${p.bling_id}`}
                   className="flex items-start gap-2 px-3 py-2 transition-colors hover:bg-carbo-green/5">
                   <span className="min-w-0 flex-1 space-y-1">
                     <span className="block truncate text-[12px]">
