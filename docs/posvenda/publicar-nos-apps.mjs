@@ -38,10 +38,16 @@ export interface SlideDoFluxo {
   caixas?: Record<string, Caixa>;
   /** Os avisos "→ vá ao passo N": clicar acende a caixa do passo N. */
   vai?: VaiAoPasso[];
+  /** Os atalhos de mensagem ("/fotos_produto") desenhados nas caixas: clicar abre a mensagem. */
+  atalhos?: AtalhoNoSlide[];
 }
+export interface AtalhoNoSlide extends Caixa { barra: string }
+export interface MensagemPadrao { titulo: string; texto: string }
 
 export const FLUXOS_SLIDES = ${JSON.stringify(MAPA, null, 1)} as {
   largura: number; altura: number; reembolso: number;
+  /** A mensagem padrão de cada atalho (\`/fotos_produto\` → título e texto). */
+  mensagens: Record<string, MensagemPadrao>;
   tipos: Record<string, number>;
   /** tipo → passo → slide em que ele está desenhado. */
   passos: Record<string, Record<string, number>>;

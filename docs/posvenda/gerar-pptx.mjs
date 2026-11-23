@@ -49,7 +49,7 @@ esbuild.buildSync({
   entryPoints: [join(RAIZ, "apps/atendimento/src/lib/posvendaCasos.ts")],
   outfile: js, format: "esm", bundle: true, platform: "node", logLevel: "silent",
 });
-const { FLUXOS, FLUXO, DESFECHOS } = await import(pathToFileURL(js).href);
+const { FLUXOS, FLUXO, DESFECHOS, ATALHOS, atalhosDoPasso } = await import(pathToFileURL(js).href);
 
 // ── estilo ───────────────────────────────────────────────────────────────────
 const FONTE = "Arial";
@@ -119,12 +119,13 @@ function paginasDoFluxo(f, numero, slideDe) {
       if (ehReembolso(p.id) && p.reembolso) continue;         // idem (vira conector)
 
       const sub = [];
+      const atalhos = atalhosDoPasso(f.tipo, p.id);
       if (p.cdc) sub.push(`CDC ${p.cdc}`);
-      if (p.mensagem) sub.push("mensagem pronta ao cliente");
+      if (p.mensagem && !atalhos.length) sub.push("mensagem pronta ao cliente");
       const obrig = (p.campos ?? []).filter((c) => c.obrigatorio).map((c) => c.rotulo);
       if (obrig.length) sub.push(`registra: ${obrig.join(", ")}`);
       const decisao = p.opcoes.length >= 2;
-      add({ id: p.id, tipo: decisao ? "decisao" : "acao", titulo: p.titulo, sub: decisao ? (p.cdc ? [`CDC ${p.cdc}`] : []) : sub });
+      add({ id: p.id, tipo: decisao ? "decisao" : "acao", titulo: p.titulo, sub: decisao ? (p.cdc ? [`CDC ${p.cdc}`] : []) : sub, atalhos });
 
       for (const o of p.opcoes) {
         const rot = decisao ? o.rotulo : (o.desfecho ? o.rotulo : "");
@@ -210,11 +211,28 @@ function linhasDoNo(n) {
 }
 // ELK: linhas em ângulo reto, rótulo colado na própria linha.
 const PX = 100; // ELK trabalha em "px": 100 por polegada
+// Os atalhos de mensagem ("/fotos_produto") moram no RODAPÉ da caixa, em
+// pílulas que quebram linha. Medidos na escala 1, em polegadas.
+const CHIP = { fs: 9, h: 0.23, gap: 0.06, pad: 0.1, topo: 0.04 };
+const larguraDoChip = (barra) => (barra.length + 1) * CHIP.fs * 0.0080 + 0.16;
+function chipsDoNo(n, larg) {
+  const linhas = [];
+  let atual = [], usado = 0;
+  for (const b of n.atalhos ?? []) {
+    const w = larguraDoChip(b);
+    if (atual.length && usado + CHIP.gap + w > larg - 2 * CHIP.pad) { linhas.push(atual); atual = []; usado = 0; }
+    atual.push({ barra: b, w }); usado += (atual.length > 1 ? CHIP.gap : 0) + w;
+  }
+  if (atual.length) linhas.push(atual);
+  return linhas;
+}
+const alturaDosChips = (linhas) => (linhas.length ? CHIP.topo + linhas.length * CHIP.h + (linhas.length - 1) * CHIP.gap + CHIP.pad : 0);
 function tamanhoDoNo(n) {
   const { titulo, sub } = linhasDoNo(n);
   const ft = n.tipo === "decisao" ? FS.decisao : FS.titulo;
   const larg = { vai: 1.45, decisao: 2.45, fim: 1.9, link: 2.45, entrada: 2.45, inicio: 2.3 }[n.tipo] ?? 2.6;
-  const alt = 0.2 + titulo.length * ft * 1.22 / 72 + sub.length * FS.sub * 1.25 / 72 + (n.tipo === "decisao" ? 0.06 : 0);
+  const alt = 0.2 + titulo.length * ft * 1.22 / 72 + sub.length * FS.sub * 1.25 / 72 + (n.tipo === "decisao" ? 0.06 : 0)
+    + alturaDosChips(chipsDoNo(n, larg));
   return { w: larg, h: n.tipo === "vai" ? 0.34 : Math.max(alt, n.tipo === "fim" ? 0.42 : 0.5) };
 }
 function tamanhoDoRotulo(r) {
@@ -275,10 +293,16 @@ async function melhorLayout(pag) {
   // A camada de cada nó (pela altura no desenho de uma coluna só).
   const ys = [...new Set([...base.porId.values()].map((b) => Math.round(b.cy * 20)))].sort((x, y) => x - y);
   const camada = (id) => ys.indexOf(Math.round(base.porId.get(id).cy * 20));
+  // Onde cortar as colunas: todas as combinações de 1, 2 ou 3 colunas, cortando
+  // entre camadas (o fluxo continua sempre de cima para baixo, coluna a coluna).
+  const cortes = [[]];
+  for (let c = 1; c < ys.length; c++) cortes.push([c]);
+  for (let c1 = 1; c1 < ys.length; c1++) for (let c2 = c1 + 1; c2 < ys.length; c2++) cortes.push([c1, c2]);
   const opcoes = [];
-  for (const k of [1, 2, 3]) {
+  for (const corte of cortes) {
+    const k = corte.length + 1;
     const grupo = new Map();
-    for (const n of pag.nos) grupo.set(n.id, Math.min(k - 1, Math.floor((camada(n.id) * k) / ys.length)));
+    for (const n of pag.nos) grupo.set(n.id, corte.filter((c) => camada(n.id) >= c).length);
     // Fim, conector e "vem de" ficam na coluna de quem os liga.
     for (const n of pag.nos) {
       if (n.tipo === "fim" || n.tipo === "link") {
@@ -317,9 +341,14 @@ async function melhorLayout(pag) {
     opcoes.push({ W, H, larguras: colunas.map((c) => c.W), porId: porIdF, arestas: arestasF, pagFinal: { ...pag, nos, arestas }, d: "DOWN", k: colunas.length,
       escala: Math.min(AREA.w / W, AREA.h / H, 1.15) });
   }
-  // Menos colunas leem mais direto: a menor que já deixa o texto grande o bastante.
+  // Cada "vá ao passo" é um salto que a pessoa tem de fazer com os olhos: entre
+  // as opções com texto grande o bastante, fica a de MENOS saltos (e, no empate,
+  // a de menos colunas).
   const melhor = Math.max(...opcoes.map((o) => o.escala));
-  const L = opcoes.find((o) => o.escala >= Math.min(0.95, melhor * 0.92));
+  const saltos = (o) => o.pagFinal.nos.filter((n) => n.tipo === "vai").length;
+  const boas = opcoes.filter((o) => o.escala >= Math.min(0.85, melhor * 0.9));
+  const L = boas.sort((a, b) => (saltos(a) - saltos(b)) || (a.k - b.k) || (b.escala - a.escala))[0];
+  if (process.env.DEPURAR) console.log(pag.titulo, `→ ${L.k} col · escala ${L.escala.toFixed(2)} · ${saltos(L)} saltos (melhor escala ${melhor.toFixed(2)})`);
   // Número pela ordem de LEITURA: coluna a coluna, de cima para baixo.
   const colDe = (b) => { let x = 0, i = 0; for (const w of L.larguras) { if (b.cx < x + w + GAP / 2) return i; x += w + GAP; i++; } return i; };
   const passos = L.pagFinal.nos.filter(ehPasso).sort((a, b) => {
@@ -408,9 +437,26 @@ async function desenhar(pres, slide, pag, num) {
     // Texto por cima, na caixa que o layout mediu (as formas do PowerPoint
     // têm área de texto menor que o desenho — o losango, a metade).
     const recuo = n.tipo === "link" ? 0.05 * s : 0;
+    const chips = chipsDoNo(n, b.w);
+    const hChips = alturaDosChips(chips) * s;
     slide.addText(textoDoNo(n, s, corTitulo), {
-      x: x + recuo, y, w: w - (n.tipo === "link" ? 0.25 * s : 0), h, margin: 0, isTextBox: true, fontFace: FONTE,
+      x: x + recuo, y, w: w - (n.tipo === "link" ? 0.25 * s : 0), h: h - hChips, margin: 0, isTextBox: true, fontFace: FONTE,
       align: "center", valign: "middle", objectName: `texto ${n.id}`,
+    });
+    // Os atalhos: pílulas centradas no rodapé da caixa. No app, clicar abre a mensagem.
+    chips.forEach((linha, li) => {
+      const total = linha.reduce((t, c) => t + c.w, 0) + CHIP.gap * (linha.length - 1);
+      let cx = x + (w - total * s) / 2;
+      const cy = y + h - hChips + (CHIP.topo + li * (CHIP.h + CHIP.gap)) * s;
+      for (const c of linha) {
+        slide.addText(`/${c.barra}`, {
+          x: cx, y: cy, w: c.w * s, h: CHIP.h * s, margin: 0, shape: pres.ShapeType.roundRect, rectRadius: 0.1 * s,
+          fill: { color: "DCFCE7" }, line: { color: "16A34A", width: 1 }, fontFace: FONTE, fontSize: round1(CHIP.fs * s),
+          bold: true, color: "166534", align: "center", valign: "middle", objectName: `atalho /${c.barra}`,
+        });
+        if (num) { anotar(num); (MAPA.get(num).atalhos ??= []).push({ x: r3(cx), y: r3(cy), w: r3(c.w * s), h: r3(CHIP.h * s), barra: c.barra }); }
+        cx += (c.w + CHIP.gap) * s;
+      }
     });
     if (n.num != null) {
       const d = 0.27 * Math.max(s, 0.8);
@@ -490,18 +536,22 @@ function cabecalho(slide, titulo, sub, num, cor) {
   const leg = [
     [pres.ShapeType.flowChartTerminator, COR.inicio.fundo, COR.inicio.borda, "Início do caso", null],
     [pres.ShapeType.flowChartProcess, COR.acao.fundo, COR.acao.borda, "Ação de quem atende", null],
-    [pres.ShapeType.flowChartDecision, COR.decisao.fundo, COR.decisao.borda, "Decisão", null],
+    [pres.ShapeType.roundRect, COR.decisao.fundo, COR.decisao.borda, "Pergunta (escolha a resposta)", null],
     [pres.ShapeType.flowChartTerminator, "FFFFFF", "059669", "Desfecho do caso", null],
     [pres.ShapeType.homePlate, "FFFFFF", "475569", "Continua em outra página", "dash"],
     [pres.ShapeType.roundRect, "FFFFFF", "475569", "Vem de outra página", "dash"],
+    [pres.ShapeType.roundRect, "FFFFFF", "B45309", "→ vá ao passo N (mesma página)", "dash"],
   ];
   leg.forEach(([forma, fundo, borda, txt, dash], i) => {
-    const y = 1.9 + i * 0.62;
+    const y = 1.85 + i * 0.56;
     slide.addShape(forma, { x: lx, y, w: 0.95, h: 0.45, fill: { color: fundo }, line: { color: borda, width: 1.5, ...(dash ? { dashType: dash } : {}) }, ...(forma === pres.ShapeType.roundRect ? { rectRadius: 0.06 } : {}) });
     slide.addText(txt, { x: lx + 1.1, y, w: 2.4, h: 0.45, margin: 0, isTextBox: true, fontFace: FONTE, fontSize: 12, color: COR.texto, valign: "middle" });
   });
-  slide.addShape(pres.ShapeType.line, { x: lx, y: 5.72, w: 0.95, h: 0, line: { color: COR.nao, width: 1.5, endArrowType: "triangle" } });
-  slide.addText("Seta vermelha = resposta “não”", { x: lx + 1.1, y: 5.55, w: 2.4, h: 0.35, margin: 0, isTextBox: true, fontFace: FONTE, fontSize: 12, color: COR.texto, valign: "middle" });
+  slide.addText("/atalho", { x: lx, y: 5.83, w: 0.95, h: 0.3, margin: 0, shape: pres.ShapeType.roundRect, rectRadius: 0.1,
+    fill: { color: "DCFCE7" }, line: { color: "16A34A", width: 1 }, fontFace: FONTE, fontSize: 10, bold: true, color: "166534", align: "center", valign: "middle" });
+  slide.addText("Mensagem pronta: digite a barra na conversa", { x: lx + 1.1, y: 5.76, w: 2.6, h: 0.45, margin: 0, isTextBox: true, fontFace: FONTE, fontSize: 12, color: COR.texto, valign: "middle" });
+  slide.addShape(pres.ShapeType.line, { x: lx, y: 6.47, w: 0.95, h: 0, line: { color: COR.nao, width: 1.5, endArrowType: "triangle" } });
+  slide.addText("Seta vermelha = resposta “não”", { x: lx + 1.1, y: 6.3, w: 2.4, h: 0.35, margin: 0, isTextBox: true, fontFace: FONTE, fontSize: 12, color: COR.texto, valign: "middle" });
   slide.addText("Gerado dos roteiros do Atendimento (Pós-venda › Tratar): o que está aqui é o que a tela guia.", {
     x: 0.45, y: 7.06, w: 9, h: 0.27, margin: 0, isTextBox: true, fontFace: FONTE, fontSize: 10, color: COR.cinza });
 }
@@ -545,13 +595,13 @@ for (const [i, t] of ORDEM.entries()) {
 {
   const nos = [
     { id: "entra", tipo: "entrada", titulo: "Vem de qualquer fluxo", sub: ["“Reembolso parcial” ou “integral”"], cor: "#0D9488" },
-    { id: "pedir", tipo: "acao", titulo: "Pedir o reembolso ao Financeiro", sub: ["valor · Pix, estorno ou transferência", "chave Pix ou dados bancários", "o caso fica esperando"] },
+    { id: "pedir", tipo: "acao", titulo: "Pedir o reembolso ao Financeiro", sub: ["valor · Pix, estorno ou transferência", "chave Pix ou dados bancários", "o caso fica esperando"], atalhos: ["reembolso_dados"] },
     { id: "aviso", tipo: "fin", titulo: "Financeiro recebe o aviso", sub: ["Finanças › Reembolsos"] },
     { id: "ok", tipo: "decisao", titulo: "Dados e valor conferem?", sub: [] },
     { id: "pagar", tipo: "fin", titulo: "Paga e confirma", sub: ["comprovante obrigatório", "valor pago e data"] },
     { id: "devolver", tipo: "fin", titulo: "Devolve ao atendente", sub: ["com o motivo"] },
     { id: "corrigir", tipo: "acao", titulo: "Corrigir e pedir de novo", sub: ["aviso “Reembolso devolvido”"] },
-    { id: "comprovante", tipo: "acao", titulo: "Enviar o comprovante ao cliente", sub: ["aviso “Reembolso pago”", "mensagem pronta com o valor", "pelo WhatsApp ou por outro meio"] },
+    { id: "comprovante", tipo: "acao", titulo: "Enviar o comprovante ao cliente", sub: ["aviso “Reembolso pago”", "pelo WhatsApp ou por outro meio"], atalhos: ["reembolso_pago"] },
     { id: "fim", tipo: "fim", titulo: "Reembolso feito · caso encerrado", cor: "#0D9488" },
     { id: "voltar", tipo: "acao", titulo: "Voltar o passo antes de pago", sub: ["o pedido ao Financeiro é cancelado"] },
     { id: "fim_canc", tipo: "fim", titulo: "Pedido cancelado", cor: "#94A3B8" },
@@ -585,6 +635,8 @@ await pres.writeFile({ fileName: SAIDA });
 // página de cada tipo (o "Ver o fluxo deste caso" abre direto nela).
 writeFileSync(SAIDA.replace(/\.pptx$/, ".json"), JSON.stringify({
   largura: 13.333, altura: 7.5, reembolso: SLIDE_REEMBOLSO,
+  // As mensagens padrão de cada atalho (`/fotos_produto` → título e texto).
+  mensagens: ATALHOS,
   tipos: Object.fromEntries([...slidesDoTipo].map(([t, ns]) => [t, ns[0]])),
   // Em que slide mora cada passo (o reembolso tem slide próprio; "outro" fica na visão geral).
   passos: Object.fromEntries(FLUXOS.map((f) => {
