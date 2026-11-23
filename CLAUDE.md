@@ -3039,6 +3039,30 @@ webhook com log cru e reprocessamento.
      `whatsapp-responder` e pelo `whatsapp-midia`).
    - Áudio carrega sozinho (vem do cofre); erro tem "tentar de novo"; player
      que não toca diz isso e oferece baixar.
+8. **Fase 3a — a lista lê um RESUMO por conversa** (`20261187`,
+   `carbo_wa_resumo`): uma linha por (número, cliente), recalculada pelos
+   gatilhos em `carbo_wa_mensagens` (insert/edição, NUNCA status) e em
+   `carbo_msg_envios` (quando o aviso SAI), mais a fila + cron
+   `carbo-wa-resumo-1min` (recalcula de novo o tocado nos últimos 3 min —
+   corrida entre transações). `carbo_wa_resumo_calcular` lê a VIEW viva
+   (`carbo_wa_conversas`): a regra de nome/pedido/vínculo continua num lugar só.
+   A lista = `carbo_wa_caixa_resumo` (janela, status, dono e etiquetas só das
+   conversas da lista); a tela monta a conversa com `conversaDoResumo` (a mesma
+   regra do `agruparConversas`; a marca de resolvida é aplicada na leitura, por
+   isso o resumo guarda os INSTANTES das pendentes). Realtime da lista =
+   `carbo_wa_resumo` filtrado pelo número (1,5 s).
+   ⚠️ Medido local (6 mil conversas): lista 654 ms → 61 ms; recalcular um par
+   4–8 ms; carga inicial 1,7 s; equivalência com o caminho antigo: 2.000
+   conversas, ZERO diferenças de campo.
+   ⚠️ O cálculo do par é SQL DINÂMICO com igualdade simples — assim o filtro
+   entra na view (UNION) e usa o índice. `p is null or …` calcularia a view
+   inteira a cada mensagem, dentro da transação do webhook.
+   ⚠️ Os gatilhos nunca derrubam a mensagem (erro = WARNING + fila).
+   ⚠️ Mudou a regra da conversa (o que é pendente, nome, pedido)? Mude o
+   `agruparConversas` E o `carbo_wa_resumo_calcular`, e rode de novo a
+   comparação (o caminho antigo `carbo_wa_caixa` continua no banco).
+   PENDENTE (3b): paginação e contagens no banco — hoje a lista ainda traz
+   todas as conversas de 30 dias (~400 bytes cada).
 
 ### ⚠️ Conversas e Esteira a 500 vendas/semana: o teto e o índice (19/10/2026)
 Queixa do dono do processo: *"demora para abrir"* e *"diz que foi enviada
