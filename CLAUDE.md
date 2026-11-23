@@ -2903,6 +2903,19 @@ Livre); navegar SEMANA A SEMANA (domingo a sábado) pelas setas ‹ semana › (
    (soffice + pdftoppm). Roteiro mudou ⇒ os DOIS na mesma tarefa, senão a tela mostra o fluxo de
    ontem. O `gerar-pptx` grava `fluxos-pos-venda.json` (título e conectores de cada slide, em
    polegadas) — conector desenhado sem passar pelo `anotar()` não fica clicável no app.
+9b. **Desenho dos slides e MENSAGENS PADRÃO** (23/11/2026, pedido do dono do processo: "melhorar a
+   visualização, não mudar os fluxos"). Mesmas páginas e mesmos recortes (`PARTES`); o layout é o ELK
+   (`elkjs`, em `docs/posvenda`, sem graphviz): linhas em ângulo reto, de cima para baixo, em até 3
+   colunas; passos NUMERADOS na ordem de leitura; seta que voltaria para cima ou mudaria de coluna
+   vira "→ vá ao passo N" (no app, clicar/passar o mouse ACENDE o passo: `vai`/`caixas` do mapa).
+   Entre as divisões possíveis fica a de MENOS saltos com texto grande o bastante.
+   Cada passo mostra os ATALHOS de barra da mensagem padrão (`/fotos_produto`…), pílulas verdes no
+   rodapé da caixa; no app, clicar abre a mensagem para copiar. Textos e onde cada um é usado moram em
+   `apps/atendimento/src/lib/posvendaAtalhos.ts` (ATALHOS + ATALHOS_DO_PASSO; o teste recusa atalho
+   usado e não cadastrado, cadastrado e não usado, e variável desconhecida). ⚠️ Os textos de 23/11 são
+   EXEMPLOS: quando chegarem os oficiais, troque SÓ esse arquivo e rode os dois geradores. ⚠️ O campo
+   `mensagem` do passo (a "mensagem pronta" do caso aberto) continua separado — ao trocar pelas
+   oficiais, decida se o caso passa a ler do atalho.
 10. **O pedido aberto é uma tela de chamado** (18/11/2026, queixa do dono do processo: "feio e
    esquisito, precisa ser mais profissional"): cabeçalho fixo, o CASO no centro (cabeça com ícone
    do tipo, linha do tempo e o PASSO ATUAL em cartão com as ações no rodapé) e uma coluna com

@@ -5,7 +5,7 @@
 //
 //   cd docs/posvenda && npm ci            (uma vez: traz o pptxgenjs)
 //   cd apps/atendimento && npm ci         (uma vez: traz o esbuild)
-//   node docs/posvenda/gerar-pptx.mjs     (da raiz; precisa do `dot`, graphviz)
+//   node docs/posvenda/gerar-pptx.mjs     (da raiz)
 //
 // Saída: docs/posvenda/fluxos-pos-venda.pptx
 //
@@ -15,8 +15,16 @@
 //   • "vira caso de Defeito" aponta o slide do Defeito;
 //   • fluxo grande demais para um slide continua no seguinte, com conector
 //     dos dois lados.
-// As formas são as do fluxograma do PowerPoint (terminador, processo, decisão)
-// e tudo é editável: caixa é forma, seta é forma.
+// As formas são as do fluxograma do PowerPoint e tudo é editável: caixa é
+// forma, seta é forma.
+//
+// Desenho (23/11/2026, pedido do dono do processo: "melhorar a visualização,
+// não mudar os fluxos"): layout pelo ELK (`elkjs`), linhas em ÂNGULO RETO de
+// cima para baixo, em até 3 colunas lidas da esquerda para a direita. Os
+// passos são NUMERADOS na ordem de leitura; seta que voltaria para cima ou
+// passaria de uma coluna a outra NÃO é desenhada — vira "→ vá ao passo N"
+// embaixo de quem a solta. No app, esse aviso é clicável e acende o passo
+// (`vai`/`caixas` no .json). Sim = linha verde, Não = vermelha.
 // ─────────────────────────────────────────────────────────────────────────────
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -31,6 +39,8 @@ const SAIDA = join(AQUI, "fluxos-pos-venda.pptx");
 
 const reqAqui = createRequire(join(AQUI, "package.json"));
 const PptxGenJS = reqAqui("pptxgenjs");
+const ELK = reqAqui("elkjs/lib/elk.bundled.js");
+const elk = new ELK();
 const esbuild = createRequire(join(RAIZ, "apps/atendimento/package.json"))("esbuild");
 
 const tmp = mkdtempSync(join(tmpdir(), "pptx-fluxos-"));
@@ -39,7 +49,7 @@ esbuild.buildSync({
   entryPoints: [join(RAIZ, "apps/atendimento/src/lib/posvendaCasos.ts")],
   outfile: js, format: "esm", bundle: true, platform: "node", logLevel: "silent",
 });
-const { FLUXOS, FLUXO, DESFECHOS } = await import(pathToFileURL(js).href);
+const { FLUXOS, FLUXO, DESFECHOS, ATALHOS, atalhosDoPasso } = await import(pathToFileURL(js).href);
 
 // ── estilo ───────────────────────────────────────────────────────────────────
 const FONTE = "Arial";
@@ -69,7 +79,6 @@ function quebra(s, n) {
   if (atual) linhas.push(atual);
   return linhas;
 }
-const escDot = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 // Tamanhos de fonte NA ESCALA 1 (o slide multiplica pela escala da página).
 const FS = { titulo: 11, sub: 8.5, decisao: 10, rotulo: 8.5 };
@@ -110,12 +119,13 @@ function paginasDoFluxo(f, numero, slideDe) {
       if (ehReembolso(p.id) && p.reembolso) continue;         // idem (vira conector)
 
       const sub = [];
+      const atalhos = atalhosDoPasso(f.tipo, p.id);
       if (p.cdc) sub.push(`CDC ${p.cdc}`);
-      if (p.mensagem) sub.push("mensagem pronta ao cliente");
+      if (p.mensagem && !atalhos.length) sub.push("mensagem pronta ao cliente");
       const obrig = (p.campos ?? []).filter((c) => c.obrigatorio).map((c) => c.rotulo);
       if (obrig.length) sub.push(`registra: ${obrig.join(", ")}`);
       const decisao = p.opcoes.length >= 2;
-      add({ id: p.id, tipo: decisao ? "decisao" : "acao", titulo: p.titulo, sub: decisao ? (p.cdc ? [`CDC ${p.cdc}`] : []) : sub });
+      add({ id: p.id, tipo: decisao ? "decisao" : "acao", titulo: p.titulo, sub: decisao ? (p.cdc ? [`CDC ${p.cdc}`] : []) : sub, atalhos });
 
       for (const o of p.opcoes) {
         const rot = decisao ? o.rotulo : (o.desfecho ? o.rotulo : "");
@@ -134,7 +144,7 @@ function paginasDoFluxo(f, numero, slideDe) {
           const alvo = f.passos.find((q) => q.id === o.proximo);
           para = linkPara(`parte_${o.proximo}`, `Continua: ${alvo.titulo}`, slideDe(f.tipo, parteDe.get(o.proximo)), f.cor);
         } else para = o.proximo;
-        arestas.push({ de: p.id, para, rotulo: rot, nao });
+        arestas.push({ de: p.id, para, rotulo: rot, nao, sim: o.tom === "sim" });
       }
     }
 
@@ -189,108 +199,166 @@ const PARTES = {
 };
 
 
-// ── layout pelo graphviz ─────────────────────────────────────────────────────
-// As linhas de cada caixa são quebradas UMA vez e usadas pelo graphviz (que
+// ── layout ───────────────────────────────────────────────────────────────────
+// As linhas de cada caixa são quebradas UMA vez e usadas pelo layout (que
 // mede) e pelo slide (que desenha): o texto cabe porque é o mesmo texto.
 function linhasDoNo(n) {
-  const largura = n.tipo === "decisao" ? 17 : n.tipo === "fim" ? 22 : 26;
+  const largura = n.tipo === "decisao" ? 28 : n.tipo === "fim" ? 24 : 30;
   return {
     titulo: quebra(n.titulo, largura),
-    sub: (n.sub ?? []).flatMap((s) => quebra(s, n.tipo === "decisao" ? 20 : 34)),
+    sub: (n.sub ?? []).flatMap((s) => quebra(s, 40)),
   };
 }
-function rotuloDot(n) {
+// ELK: linhas em ângulo reto, rótulo colado na própria linha.
+const PX = 100; // ELK trabalha em "px": 100 por polegada
+// Os atalhos de mensagem ("/fotos_produto") moram no RODAPÉ da caixa, em
+// pílulas que quebram linha. Medidos na escala 1, em polegadas.
+const CHIP = { fs: 9, h: 0.23, gap: 0.06, pad: 0.1, topo: 0.04 };
+const larguraDoChip = (barra) => (barra.length + 1) * CHIP.fs * 0.0080 + 0.16;
+function chipsDoNo(n, larg) {
+  const linhas = [];
+  let atual = [], usado = 0;
+  for (const b of n.atalhos ?? []) {
+    const w = larguraDoChip(b);
+    if (atual.length && usado + CHIP.gap + w > larg - 2 * CHIP.pad) { linhas.push(atual); atual = []; usado = 0; }
+    atual.push({ barra: b, w }); usado += (atual.length > 1 ? CHIP.gap : 0) + w;
+  }
+  if (atual.length) linhas.push(atual);
+  return linhas;
+}
+const alturaDosChips = (linhas) => (linhas.length ? CHIP.topo + linhas.length * CHIP.h + (linhas.length - 1) * CHIP.gap + CHIP.pad : 0);
+function tamanhoDoNo(n) {
   const { titulo, sub } = linhasDoNo(n);
   const ft = n.tipo === "decisao" ? FS.decisao : FS.titulo;
-  return `<<FONT POINT-SIZE="${ft}"><B>${titulo.map(escDot).join("<BR/>")}</B></FONT>` +
-    sub.map((s) => `<BR/><FONT POINT-SIZE="${FS.sub}">${escDot(s)}</FONT>`).join("") + ">";
+  const larg = { vai: 1.45, decisao: 2.45, fim: 1.9, link: 2.45, entrada: 2.45, inicio: 2.3 }[n.tipo] ?? 2.6;
+  const alt = 0.2 + titulo.length * ft * 1.22 / 72 + sub.length * FS.sub * 1.25 / 72 + (n.tipo === "decisao" ? 0.06 : 0)
+    + alturaDosChips(chipsDoNo(n, larg));
+  return { w: larg, h: n.tipo === "vai" ? 0.34 : Math.max(alt, n.tipo === "fim" ? 0.42 : 0.5) };
 }
+function tamanhoDoRotulo(r) {
+  const linhas = quebra(r, 22);
+  return { linhas, w: Math.max(...linhas.map((t) => t.length)) * FS.rotulo * 0.0080 + 0.16, h: linhas.length * FS.rotulo * 0.0175 + 0.08 };
+}
+async function layout(pag, direcao, extra = {}) {
+  const g = await elk.layout({
+    id: "root",
+    layoutOptions: {
+      "elk.algorithm": "layered", "elk.direction": direcao, "elk.edgeRouting": "ORTHOGONAL",
+      "elk.layered.spacing.nodeNodeBetweenLayers": String(0.3 * PX), "elk.spacing.nodeNode": String(0.28 * PX),
+      "elk.spacing.edgeNode": String(0.14 * PX), "elk.spacing.edgeEdge": String(0.1 * PX),
+      "elk.layered.spacing.edgeNodeBetweenLayers": String(0.14 * PX), "elk.spacing.edgeLabel": "4",
+      "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX", "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES",
+      "elk.edgeLabels.placement": "CENTER", "elk.layered.edgeLabels.sideSelection": "SMART_DOWN",
+      ...extra,
+    },
+    children: pag.nos.map((n) => { const t = tamanhoDoNo(n); return { id: n.id, width: t.w * PX, height: t.h * PX }; }),
+    edges: pag.arestas.map((a, i) => ({ id: `e${i}`, sources: [a.de], targets: [a.para],
+      labels: a.rotulo ? [(() => { const t = tamanhoDoRotulo(a.rotulo); return { text: a.rotulo, width: t.w * PX, height: t.h * PX }; })()] : [] })),
+  });
+  const porId = new Map(g.children.map((c) => [c.id, { cx: (c.x + c.width / 2) / PX, cy: (c.y + c.height / 2) / PX, w: c.width / PX, h: c.height / PX }]));
+  const arestas = g.edges.map((e) => {
+    const i = Number(e.id.slice(1)); const sec = e.sections[0];
+    const pts = [sec.startPoint, ...(sec.bendPoints ?? []), sec.endPoint].map((p) => ({ x: p.x / PX, y: p.y / PX }));
+    const l = e.labels?.[0];
+    return { ...pag.arestas[i], pts, lp: l ? { x: (l.x + l.width / 2) / PX, y: (l.y + l.height / 2) / PX } : null };
+  });
+  return { W: g.width / PX, H: g.height / PX, porId, arestas };
+}
+const ehPasso = (n) => n && (n.tipo === "acao" || n.tipo === "decisao");
+const GAP = 0.45; // entre colunas, em polegadas
 
-function rodarDot(pag, direcao, cruza, extras = []) {
-  const linhas = [
-    "digraph G {",
-    `  graph [rankdir=${direcao}, nodesep=${pag.nodesep ?? 0.3}, ranksep=${pag.ranksep ?? 0.38}, splines=spline, pad=0, margin=0, newrank=true];`,
-    `  node [fontname="${FONTE}", shape=box, margin="0.14,0.11"];`,
-    `  edge [fontname="${FONTE}", fontsize=${FS.rotulo}, arrowhead=none];`,
-  ];
-  for (const n of pag.nos) {
-    const forma = n.tipo === "decisao" ? "diamond" : "box";
-    const extra = n.tipo === "decisao" ? ', margin="0.04,0.03"' : n.tipo === "link" ? ', margin="0.3,0.07"' : "";
-    linhas.push(`  "${n.id}" [shape=${forma}, label=${rotuloDot(n)}${extra}];`);
+/** Numera os passos na ordem do fluxo (em largura). */
+function numerar(pag) {
+  const porId = new Map(pag.nos.map((n) => [n.id, n]));
+  const entra = new Set(pag.arestas.map((a) => a.para));
+  const fila = pag.nos.filter((n) => !entra.has(n.id)).map((n) => n.id);
+  const vistos = new Set(); let k = 0;
+  while (fila.length) {
+    const id = fila.shift(); if (vistos.has(id)) continue; vistos.add(id);
+    const n = porId.get(id); if (ehPasso(n) && n.num == null) n.num = ++k;
+    for (const a of pag.arestas) if (a.de === id) fila.push(a.para);
   }
-  pag.arestas.forEach((a, i) => {
-    const l = a.rotulo ? `label=<${quebra(a.rotulo, 20).map(escDot).join("<BR/>")}>` : "";
-    const c = cruza?.has(i) ? "constraint=false" : "";
-    // O id liga a aresta do graphviz à NOSSA: a ordem de saída do json não é
-    // a de declaração, e trocá-las põe o "Não" na seta do "Sim".
-    linhas.push(`  "${a.de}" -> "${a.para}" [${[`id="e${i}"`, l, c].filter(Boolean).join(", ")}];`);
-  });
-  linhas.push(...extras, "}");
-  const arq = join(tmp, `g${Math.random().toString(36).slice(2)}.dot`);
-  writeFileSync(arq, linhas.join("\n"));
-  const g = JSON.parse(execFileSync("dot", ["-Tjson", arq]).toString());
-  const [, , W, H] = g.bb.split(",").map(Number);
-  const porId = new Map();
-  for (const o of g.objects ?? []) {
-    if (!o.pos) continue;                          // subgrafo (o rank=same das colunas)
-    const [x, y] = o.pos.split(",").map(Number);
-    porId.set(o.name, { cx: x / 72, cy: (H - y) / 72, w: Number(o.width), h: Number(o.height), rank: direcao === "TB" ? y : x });
-  }
-  const arestas = (g.edges ?? []).filter((e) => /^e\d+$/.test(String(e.id ?? ""))).map((e) => {
-    const pts = e.pos.split(" ").filter((t) => !/^[se],/.test(t)).map((t) => {
-      const [x, y] = t.split(",").map(Number);
-      return { x: x / 72, y: (H - y) / 72 };
-    });
-    const lp = e.lp ? e.lp.split(",").map(Number) : null;
-    const i = Number(String(e.id).replace(/^e/, ""));
-    if (!pag.arestas[i] || pag.arestas[i].de !== g.objects[e.tail].name || pag.arestas[i].para !== g.objects[e.head].name)
-      throw new Error(`aresta ${e.id} não casa com ${g.objects[e.tail].name} → ${g.objects[e.head].name}`);
-    return { ...pag.arestas[i], pts, lp: lp ? { x: lp[0] / 72, y: (H - lp[1]) / 72 } : null };
-  });
-  return { W: W / 72, H: H / 72, porId, arestas };
+  for (const n of pag.nos) if (ehPasso(n) && n.num == null) n.num = ++k;
 }
 
 /**
- * Fluxo comprido vira COLUNAS (ou faixas, no LR), como no rascunho do dono do
- * processo: as camadas do graphviz são divididas em `k` blocos e toda seta que
- * passa de um bloco a outro deixa de empurrar a camada (`constraint=false`) —
- * o bloco seguinte recomeça no topo, ao lado.
+ * O fluxo de cima para baixo, em ATÉ 3 COLUNAS lidas da esquerda para a
+ * direita. Seta que passaria de uma coluna para outra (ou voltaria para cima)
+ * NÃO é desenhada: vira "→ vá ao passo N" logo abaixo de quem a solta.
  */
-function layout(pag, direcao, k = 1) {
-  const base = rodarDot(pag, direcao);
-  if (k === 1) return base;
-  const ranks = [...new Set([...base.porId.values()].map((b) => Math.round(b.rank)))];
-  ranks.sort((a, b) => (direcao === "TB" ? b - a : a - b));
-  const bloco = (id) => Math.floor((ranks.indexOf(Math.round(base.porId.get(id).rank)) * k) / ranks.length);
-  const cruza = new Set(pag.arestas.map((a, i) => (bloco(a.de) !== bloco(a.para) ? i : -1)).filter((i) => i >= 0));
-  // As colunas na ORDEM do fluxo, da esquerda para a direita: o primeiro nó de
-  // cada bloco vai para o topo, lado a lado, ligado ao do bloco seguinte por
-  // uma seta invisível (seta na mesma camada = esquerda → direita).
-  const topos = [];
-  for (let b = 0; b < k; b++) {
-    const ids = pag.nos.map((n) => n.id).filter((id) => bloco(id) === b);
-    if (!ids.length) continue;
-    ids.sort((x, y) => ranks.indexOf(Math.round(base.porId.get(x).rank)) - ranks.indexOf(Math.round(base.porId.get(y).rank)));
-    topos.push(ids[0]);
-  }
-  const extras = topos.length > 1
-    ? [`  { rank=same; ${topos.map((t) => `"${t}"`).join("; ")}; }`,
-       ...topos.slice(1).map((t, i) => `  "${topos[i]}" -> "${t}" [style=invis];`)]
-    : [];
-  return rodarDot(pag, direcao, cruza, extras);
-}
-
-/** Escolhe entre 1 e 4 COLUNAS (de cima para baixo, como no rascunho) a que deixa o desenho maior. */
-function melhorLayout(pag) {
+async function melhorLayout(pag) {
+  numerar(pag);
+  const porId = new Map(pag.nos.map((n) => [n.id, n]));
+  const base = await layout(pag, "DOWN");
+  // A camada de cada nó (pela altura no desenho de uma coluna só).
+  const ys = [...new Set([...base.porId.values()].map((b) => Math.round(b.cy * 20)))].sort((x, y) => x - y);
+  const camada = (id) => ys.indexOf(Math.round(base.porId.get(id).cy * 20));
+  // Onde cortar as colunas: todas as combinações de 1, 2 ou 3 colunas, cortando
+  // entre camadas (o fluxo continua sempre de cima para baixo, coluna a coluna).
+  const cortes = [[]];
+  for (let c = 1; c < ys.length; c++) cortes.push([c]);
+  for (let c1 = 1; c1 < ys.length; c1++) for (let c2 = c1 + 1; c2 < ys.length; c2++) cortes.push([c1, c2]);
   const opcoes = [];
-  for (const d of pag.direcoes ?? ["TB"]) for (const k of pag.colunas ?? [1, 2, 3, 4]) {
-    const l = layout(pag, d, k);
-    opcoes.push({ ...l, d, k, escala: Math.min(AREA.w / l.W, AREA.h / l.H, 1.25) });
+  for (const corte of cortes) {
+    const k = corte.length + 1;
+    const grupo = new Map();
+    for (const n of pag.nos) grupo.set(n.id, corte.filter((c) => camada(n.id) >= c).length);
+    // Fim, conector e "vem de" ficam na coluna de quem os liga.
+    for (const n of pag.nos) {
+      if (n.tipo === "fim" || n.tipo === "link") {
+        const de = pag.arestas.find((a) => a.para === n.id); if (de) grupo.set(n.id, grupo.get(de.de));
+      }
+      if (n.tipo === "entrada" || n.tipo === "inicio") {
+        const pa = pag.arestas.find((a) => a.de === n.id); if (pa) grupo.set(n.id, grupo.get(pa.para));
+      }
+    }
+    const nos = pag.nos.map((n) => ({ ...n })), arestas = [];
+    pag.arestas.forEach((a, i) => {
+      const ga = grupo.get(a.de), gb = grupo.get(a.para);
+      const sobe = base.porId.get(a.para).cy < base.porId.get(a.de).cy - 0.05;
+      if (ga === gb && !(sobe && ehPasso(porId.get(a.para)))) { arestas.push(a); return; }
+      const alvo = porId.get(a.para);
+      const id = `vai_${i}`;
+      nos.push({ id, alvo: a.para, tipo: "vai", titulo: ehPasso(alvo) ? `→ vá ao passo ${alvo.num}` : `→ ${alvo.titulo}`, sub: [], cor: alvo.tipo === "decisao" ? "#B45309" : "#1D4ED8" });
+      grupo.set(id, ga);
+      arestas.push({ ...a, para: id });
+    });
+    const colunas = [];
+    for (let g = 0; g < k; g++) {
+      const ns = nos.filter((n) => grupo.get(n.id) === g);
+      if (!ns.length) continue;
+      const ids = new Set(ns.map((n) => n.id));
+      colunas.push(await layout({ ...pag, nos: ns, arestas: arestas.filter((a) => ids.has(a.de) && ids.has(a.para)) }, "DOWN"));
+    }
+    const W = colunas.reduce((t, c) => t + c.W, 0) + GAP * (colunas.length - 1);
+    const H = Math.max(...colunas.map((c) => c.H));
+    const porIdF = new Map(); const arestasF = []; let x0 = 0;
+    for (const c of colunas) {
+      for (const [id, b] of c.porId) porIdF.set(id, { ...b, cx: b.cx + x0 });
+      for (const e of c.arestas) arestasF.push({ ...e, pts: e.pts.map((p) => ({ x: p.x + x0, y: p.y })), lp: e.lp && { x: e.lp.x + x0, y: e.lp.y } });
+      x0 += c.W + GAP;
+    }
+    opcoes.push({ W, H, larguras: colunas.map((c) => c.W), porId: porIdF, arestas: arestasF, pagFinal: { ...pag, nos, arestas }, d: "DOWN", k: colunas.length,
+      escala: Math.min(AREA.w / W, AREA.h / H, 1.15) });
   }
-  // Menos colunas leem mais direto: fica com a MENOR que já deixa o texto
-  // grande o bastante (ou chega a 93% da melhor); só divide quando precisa.
+  // Cada "vá ao passo" é um salto que a pessoa tem de fazer com os olhos: entre
+  // as opções com texto grande o bastante, fica a de MENOS saltos (e, no empate,
+  // a de menos colunas).
   const melhor = Math.max(...opcoes.map((o) => o.escala));
-  return opcoes.sort((a, b) => a.k - b.k).find((o) => o.escala >= Math.min(0.9, melhor * 0.93));
+  const saltos = (o) => o.pagFinal.nos.filter((n) => n.tipo === "vai").length;
+  const boas = opcoes.filter((o) => o.escala >= Math.min(0.85, melhor * 0.9));
+  const L = boas.sort((a, b) => (saltos(a) - saltos(b)) || (a.k - b.k) || (b.escala - a.escala))[0];
+  if (process.env.DEPURAR) console.log(pag.titulo, `→ ${L.k} col · escala ${L.escala.toFixed(2)} · ${saltos(L)} saltos (melhor escala ${melhor.toFixed(2)})`);
+  // Número pela ordem de LEITURA: coluna a coluna, de cima para baixo.
+  const colDe = (b) => { let x = 0, i = 0; for (const w of L.larguras) { if (b.cx < x + w + GAP / 2) return i; x += w + GAP; i++; } return i; };
+  const passos = L.pagFinal.nos.filter(ehPasso).sort((a, b) => {
+    const pa = L.porId.get(a.id), pb = L.porId.get(b.id);
+    return (colDe(pa) - colDe(pb)) || (pa.cy - pb.cy) || (pa.cx - pb.cx);
+  });
+  passos.forEach((n, i) => { n.num = i + 1; });
+  const num = new Map(passos.map((n) => [n.id, n.num]));
+  for (const n of L.pagFinal.nos) if (n.tipo === "vai" && num.has(n.alvo)) { n.alvoNum = num.get(n.alvo); n.titulo = `→ vá ao passo ${n.alvoNum}`; }
+  return L;
 }
 
 // ── desenho ──────────────────────────────────────────────────────────────────
@@ -312,8 +380,9 @@ const MAPA = new Map(); // slide → { titulo, links: [{ x, y, w, h, slide }] }
 const anotar = (num, link) => { if (!MAPA.has(num)) MAPA.set(num, { titulo: "", links: [] }); if (link) MAPA.get(num).links.push(link); };
 const r3 = (v) => Math.round(v * 1000) / 1000;
 
-function desenhar(pres, slide, pag, num) {
-  const L = melhorLayout(pag);
+async function desenhar(pres, slide, pag, num) {
+  const L = await melhorLayout(pag);
+  pag = L.pagFinal;
   const s = L.escala;
   if (s < ESCALA_MIN) console.warn(`⚠ ${pag.titulo}: escala ${s.toFixed(2)} — considere dividir (PARTES)`);
   const ox = AREA.x + (AREA.w - L.W * s) / 2;
@@ -328,27 +397,24 @@ function desenhar(pres, slide, pag, num) {
     const minX = Math.min(...xs), minY = Math.min(...ys);
     const w = Math.max(Math.max(...xs) - minX, 0.01), h = Math.max(Math.max(...ys) - minY, 0.01);
     const rel = (i) => ({ x: xs[i] - minX, y: ys[i] - minY });
-    const points = [rel(0)];
-    for (let i = 1; i + 2 < a.pts.length; i += 3) {
-      const c1 = rel(i), c2 = rel(i + 1), p = rel(i + 2);
-      points.push({ x: p.x, y: p.y, curve: { type: "cubic", x1: c1.x, y1: c1.y, x2: c2.x, y2: c2.y } });
-    }
+    const points = a.pts.map((_, i) => rel(i));
     slide.addShape(pres.ShapeType.custGeom, {
       x: minX, y: minY, w, h, points, objectName: `seta ${a.de} → ${a.para}`,
-      line: { color: a.nao ? COR.nao : COR.linha, width: 1.25, endArrowType: "triangle" },
+      line: { color: a.nao ? COR.nao : a.sim ? "059669" : COR.linha, width: 1.5, endArrowType: "triangle" },
     });
   }
   // Rótulos das setas por cima das setas (fundo branco).
   for (const a of L.arestas) {
     if (!a.rotulo || !a.lp) continue;
-    const linhas = quebra(a.rotulo, 20);
+    const t = tamanhoDoRotulo(a.rotulo); const linhas = t.linhas;
     const fs = round1(FS.rotulo * s);
-    const lw = (Math.max(...linhas.map((t) => t.length)) * fs * 0.0078) + 0.08;
-    const lh = linhas.length * fs * 0.0175 + 0.04;
+    const lw = t.w * s, lh = t.h * s;
     slide.addText(linhas.join("\n"), {
       x: X(a.lp.x) - lw / 2, y: Y(a.lp.y) - lh / 2, w: lw, h: lh, margin: 0, isTextBox: true,
-      fontFace: FONTE, fontSize: fs, color: a.nao ? COR.nao : "334155", align: "center", valign: "middle",
-      fill: { color: "FFFFFF" }, objectName: `rótulo ${a.de} → ${a.para}`,
+      fontFace: FONTE, fontSize: fs, bold: true, color: a.nao ? COR.nao : a.sim ? "047857" : "334155", align: "center", valign: "middle",
+      shape: pres.ShapeType.roundRect, rectRadius: 0.05,
+      fill: { color: a.nao ? "FEF2F2" : a.sim ? "ECFDF5" : "FFFFFF" }, line: { color: a.nao ? "FCA5A5" : a.sim ? "6EE7B7" : "CBD5E1", width: 0.75 },
+      objectName: `rótulo ${a.de} → ${a.para}`,
     });
   }
 
@@ -356,24 +422,51 @@ function desenhar(pres, slide, pag, num) {
     const b = L.porId.get(n.id);
     const x = X(b.cx - b.w / 2), y = Y(b.cy - b.h / 2), w = b.w * s, h = b.h * s;
     let forma = pres.ShapeType.flowChartProcess, fundo = COR.acao.fundo, borda = COR.acao.borda, largura = 1.25, dash, corTitulo = COR.texto;
-    if (n.tipo === "decisao") { forma = pres.ShapeType.flowChartDecision; fundo = COR.decisao.fundo; borda = COR.decisao.borda; largura = 1.5; }
+    if (n.tipo === "decisao") { forma = pres.ShapeType.roundRect; fundo = COR.decisao.fundo; borda = COR.decisao.borda; largura = 1.5; }
     else if (n.tipo === "inicio") { forma = pres.ShapeType.flowChartTerminator; fundo = COR.inicio.fundo; borda = COR.inicio.borda; largura = 1.75; }
     else if (n.tipo === "fim") { forma = pres.ShapeType.flowChartTerminator; fundo = "FFFFFF"; borda = corTitulo = hex(n.cor); largura = 2.25; }
     else if (n.tipo === "link") { forma = pres.ShapeType.homePlate; fundo = "FFFFFF"; borda = corTitulo = hex(n.cor ?? "#475569"); largura = 1.75; dash = "dash"; }
     else if (n.tipo === "entrada") { forma = pres.ShapeType.roundRect; fundo = "FFFFFF"; borda = corTitulo = hex(n.cor ?? "#475569"); largura = 1.75; dash = "dash"; }
     else if (n.fin) { fundo = COR.fin.fundo; borda = COR.fin.borda; }
+    else if (n.tipo === "vai") { forma = pres.ShapeType.roundRect; fundo = "FFFFFF"; borda = corTitulo = hex(n.cor); largura = 1.25; dash = "dash"; }
 
     slide.addShape(forma, {
       x, y, w, h, fill: { color: fundo }, line: { color: borda, width: largura, ...(dash ? { dashType: dash } : {}) },
       ...(forma === pres.ShapeType.roundRect ? { rectRadius: 0.08 } : {}), objectName: `caixa ${n.id}`,
     });
-    // Texto por cima, na caixa que o graphviz mediu (as formas do PowerPoint
+    // Texto por cima, na caixa que o layout mediu (as formas do PowerPoint
     // têm área de texto menor que o desenho — o losango, a metade).
     const recuo = n.tipo === "link" ? 0.05 * s : 0;
+    const chips = chipsDoNo(n, b.w);
+    const hChips = alturaDosChips(chips) * s;
     slide.addText(textoDoNo(n, s, corTitulo), {
-      x: x + recuo, y, w: w - (n.tipo === "link" ? 0.25 * s : 0), h, margin: 0, isTextBox: true, fontFace: FONTE,
+      x: x + recuo, y, w: w - (n.tipo === "link" ? 0.25 * s : 0), h: h - hChips, margin: 0, isTextBox: true, fontFace: FONTE,
       align: "center", valign: "middle", objectName: `texto ${n.id}`,
     });
+    // Os atalhos: pílulas centradas no rodapé da caixa. No app, clicar abre a mensagem.
+    chips.forEach((linha, li) => {
+      const total = linha.reduce((t, c) => t + c.w, 0) + CHIP.gap * (linha.length - 1);
+      let cx = x + (w - total * s) / 2;
+      const cy = y + h - hChips + (CHIP.topo + li * (CHIP.h + CHIP.gap)) * s;
+      for (const c of linha) {
+        slide.addText(`/${c.barra}`, {
+          x: cx, y: cy, w: c.w * s, h: CHIP.h * s, margin: 0, shape: pres.ShapeType.roundRect, rectRadius: 0.1 * s,
+          fill: { color: "DCFCE7" }, line: { color: "16A34A", width: 1 }, fontFace: FONTE, fontSize: round1(CHIP.fs * s),
+          bold: true, color: "166534", align: "center", valign: "middle", objectName: `atalho /${c.barra}`,
+        });
+        if (num) { anotar(num); (MAPA.get(num).atalhos ??= []).push({ x: r3(cx), y: r3(cy), w: r3(c.w * s), h: r3(CHIP.h * s), barra: c.barra }); }
+        cx += (c.w + CHIP.gap) * s;
+      }
+    });
+    if (n.num != null) {
+      const d = 0.27 * Math.max(s, 0.8);
+      slide.addText(String(n.num), { x: x - d * 0.35, y: y - d * 0.35, w: d, h: d, shape: pres.ShapeType.ellipse, margin: 0,
+        fill: { color: n.tipo === "decisao" ? "B45309" : n.fin ? "0F766E" : "1D4ED8" }, line: { color: "FFFFFF", width: 1.5 },
+        fontFace: FONTE, fontSize: round1(9 * Math.max(s, 0.8)), bold: true, color: "FFFFFF", align: "center", valign: "middle", objectName: `número ${n.id}` });
+    }
+    // O app acende a caixa do passo quando se clica no "→ vá ao passo N".
+    if (num && n.num != null) { anotar(num); (MAPA.get(num).caixas ??= {})[n.num] = { x: r3(x), y: r3(y), w: r3(w), h: r3(h) }; }
+    if (num && n.tipo === "vai" && n.alvoNum != null) { anotar(num); (MAPA.get(num).vai ??= []).push({ x: r3(x), y: r3(y), w: r3(w), h: r3(h), passo: n.alvoNum }); }
     // Onde cada PASSO do roteiro cai: o app marca o passo em que o caso está.
     if (num && (n.tipo === "acao" || n.tipo === "decisao")) {
       anotar(num); (MAPA.get(num).passos ??= {})[n.id] = { x: r3(x), y: r3(y), w: r3(w), h: r3(h) };
@@ -443,18 +536,22 @@ function cabecalho(slide, titulo, sub, num, cor) {
   const leg = [
     [pres.ShapeType.flowChartTerminator, COR.inicio.fundo, COR.inicio.borda, "Início do caso", null],
     [pres.ShapeType.flowChartProcess, COR.acao.fundo, COR.acao.borda, "Ação de quem atende", null],
-    [pres.ShapeType.flowChartDecision, COR.decisao.fundo, COR.decisao.borda, "Decisão", null],
+    [pres.ShapeType.roundRect, COR.decisao.fundo, COR.decisao.borda, "Pergunta (escolha a resposta)", null],
     [pres.ShapeType.flowChartTerminator, "FFFFFF", "059669", "Desfecho do caso", null],
     [pres.ShapeType.homePlate, "FFFFFF", "475569", "Continua em outra página", "dash"],
     [pres.ShapeType.roundRect, "FFFFFF", "475569", "Vem de outra página", "dash"],
+    [pres.ShapeType.roundRect, "FFFFFF", "B45309", "→ vá ao passo N (mesma página)", "dash"],
   ];
   leg.forEach(([forma, fundo, borda, txt, dash], i) => {
-    const y = 1.9 + i * 0.62;
+    const y = 1.85 + i * 0.56;
     slide.addShape(forma, { x: lx, y, w: 0.95, h: 0.45, fill: { color: fundo }, line: { color: borda, width: 1.5, ...(dash ? { dashType: dash } : {}) }, ...(forma === pres.ShapeType.roundRect ? { rectRadius: 0.06 } : {}) });
     slide.addText(txt, { x: lx + 1.1, y, w: 2.4, h: 0.45, margin: 0, isTextBox: true, fontFace: FONTE, fontSize: 12, color: COR.texto, valign: "middle" });
   });
-  slide.addShape(pres.ShapeType.line, { x: lx, y: 5.72, w: 0.95, h: 0, line: { color: COR.nao, width: 1.5, endArrowType: "triangle" } });
-  slide.addText("Seta vermelha = resposta “não”", { x: lx + 1.1, y: 5.55, w: 2.4, h: 0.35, margin: 0, isTextBox: true, fontFace: FONTE, fontSize: 12, color: COR.texto, valign: "middle" });
+  slide.addText("/atalho", { x: lx, y: 5.83, w: 0.95, h: 0.3, margin: 0, shape: pres.ShapeType.roundRect, rectRadius: 0.1,
+    fill: { color: "DCFCE7" }, line: { color: "16A34A", width: 1 }, fontFace: FONTE, fontSize: 10, bold: true, color: "166534", align: "center", valign: "middle" });
+  slide.addText("Mensagem pronta: digite a barra na conversa", { x: lx + 1.1, y: 5.76, w: 2.6, h: 0.45, margin: 0, isTextBox: true, fontFace: FONTE, fontSize: 12, color: COR.texto, valign: "middle" });
+  slide.addShape(pres.ShapeType.line, { x: lx, y: 6.47, w: 0.95, h: 0, line: { color: COR.nao, width: 1.5, endArrowType: "triangle" } });
+  slide.addText("Seta vermelha = resposta “não”", { x: lx + 1.1, y: 6.3, w: 2.4, h: 0.35, margin: 0, isTextBox: true, fontFace: FONTE, fontSize: 12, color: COR.texto, valign: "middle" });
   slide.addText("Gerado dos roteiros do Atendimento (Pós-venda › Tratar): o que está aqui é o que a tela guia.", {
     x: 0.45, y: 7.06, w: 9, h: 0.27, margin: 0, isTextBox: true, fontFace: FONTE, fontSize: 10, color: COR.cinza });
 }
@@ -480,31 +577,31 @@ function cabecalho(slide, titulo, sub, num, cor) {
   ];
   const slide = pres.addSlide();
   cabecalho(slide, "Qual fluxo seguir", "O sistema lê a reclamação no WhatsApp e sugere o tipo; quem atende confirma ao abrir o caso.", 2);
-  desenhar(pres, slide, { nos, arestas, titulo: "Visão geral", direcoes: ["LR"], nodesep: 0.1, ranksep: 0.6 }, 2);
+  await desenhar(pres, slide, { nos, arestas, titulo: "Visão geral", direcoes: ["LR"], nodesep: 0.1, ranksep: 0.6 }, 2);
 }
 
 // 3… — os fluxos
 const relatorio = [];
-ORDEM.forEach((t, i) => {
+for (const [i, t] of ORDEM.entries()) {
   for (const pag of paginasDoFluxo(FLUXO[t], i + 1, slideDe)) {
     const slide = pres.addSlide();
     cabecalho(slide, pag.titulo, pag.sub, pag.slide, pag.cor);
-    const r = desenhar(pres, slide, pag, pag.slide);
+    const r = await desenhar(pres, slide, pag, pag.slide);
     relatorio.push(`pág. ${pag.slide}  ${pag.titulo}  escala ${r.s.toFixed(2)} ${r.d}×${r.k}`);
   }
-});
+}
 
 // último — o reembolso
 {
   const nos = [
     { id: "entra", tipo: "entrada", titulo: "Vem de qualquer fluxo", sub: ["“Reembolso parcial” ou “integral”"], cor: "#0D9488" },
-    { id: "pedir", tipo: "acao", titulo: "Pedir o reembolso ao Financeiro", sub: ["valor · Pix, estorno ou transferência", "chave Pix ou dados bancários", "o caso fica esperando"] },
+    { id: "pedir", tipo: "acao", titulo: "Pedir o reembolso ao Financeiro", sub: ["valor · Pix, estorno ou transferência", "chave Pix ou dados bancários", "o caso fica esperando"], atalhos: ["reembolso_dados"] },
     { id: "aviso", tipo: "fin", titulo: "Financeiro recebe o aviso", sub: ["Finanças › Reembolsos"] },
     { id: "ok", tipo: "decisao", titulo: "Dados e valor conferem?", sub: [] },
     { id: "pagar", tipo: "fin", titulo: "Paga e confirma", sub: ["comprovante obrigatório", "valor pago e data"] },
     { id: "devolver", tipo: "fin", titulo: "Devolve ao atendente", sub: ["com o motivo"] },
     { id: "corrigir", tipo: "acao", titulo: "Corrigir e pedir de novo", sub: ["aviso “Reembolso devolvido”"] },
-    { id: "comprovante", tipo: "acao", titulo: "Enviar o comprovante ao cliente", sub: ["aviso “Reembolso pago”", "mensagem pronta com o valor", "pelo WhatsApp ou por outro meio"] },
+    { id: "comprovante", tipo: "acao", titulo: "Enviar o comprovante ao cliente", sub: ["aviso “Reembolso pago”", "pelo WhatsApp ou por outro meio"], atalhos: ["reembolso_pago"] },
     { id: "fim", tipo: "fim", titulo: "Reembolso feito · caso encerrado", cor: "#0D9488" },
     { id: "voltar", tipo: "acao", titulo: "Voltar o passo antes de pago", sub: ["o pedido ao Financeiro é cancelado"] },
     { id: "fim_canc", tipo: "fim", titulo: "Pedido cancelado", cor: "#94A3B8" },
@@ -519,7 +616,7 @@ ORDEM.forEach((t, i) => {
   const slide = pres.addSlide();
   cabecalho(slide, "Reembolso pelo Financeiro", "Quem atende não faz reembolso: pede ao Financeiro, que paga com comprovante; o caso volta para avisar o cliente.", SLIDE_REEMBOLSO, "#0D9488");
   // "fin" desenha como ação na cor do Financeiro.
-  const s = desenhar(pres, slide, { nos: nos.map((n) => n.tipo === "fin" ? { ...n, tipo: "acao", fin: true } : n), arestas, titulo: "Reembolso", colunas: [1] }, SLIDE_REEMBOLSO);
+  const s = await desenhar(pres, slide, { nos: nos.map((n) => n.tipo === "fin" ? { ...n, tipo: "acao", fin: true } : n), arestas, titulo: "Reembolso", colunas: [1] }, SLIDE_REEMBOLSO);
   relatorio.push(`pág. ${SLIDE_REEMBOLSO}  Reembolso  escala ${s.s.toFixed(2)} ${s.d}×${s.k}`);
 }
 
@@ -538,6 +635,8 @@ await pres.writeFile({ fileName: SAIDA });
 // página de cada tipo (o "Ver o fluxo deste caso" abre direto nela).
 writeFileSync(SAIDA.replace(/\.pptx$/, ".json"), JSON.stringify({
   largura: 13.333, altura: 7.5, reembolso: SLIDE_REEMBOLSO,
+  // As mensagens padrão de cada atalho (`/fotos_produto` → título e texto).
+  mensagens: ATALHOS,
   tipos: Object.fromEntries([...slidesDoTipo].map(([t, ns]) => [t, ns[0]])),
   // Em que slide mora cada passo (o reembolso tem slide próprio; "outro" fica na visão geral).
   passos: Object.fromEntries(FLUXOS.map((f) => {

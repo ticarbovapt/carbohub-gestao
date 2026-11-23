@@ -187,3 +187,40 @@ describe("arrependimento segue o fluxo do dono do processo", () => {
     expect(prox("aberto", "sim").mudaPara).toBe("defeito");
   });
 });
+
+// ── Atalhos de mensagem (23/11/2026) ─────────────────────────────────────────
+import { ATALHOS, ATALHOS_DO_PASSO, atalhosDoPasso } from "../../../apps/atendimento/src/lib/posvendaAtalhos";
+
+describe("atalhos de mensagem do pós-venda", () => {
+  it("o nome da barra é minúsculo, sem acento, com _", () => {
+    for (const b of Object.keys(ATALHOS)) expect(b).toMatch(/^[a-z0-9_]{2,40}$/);
+  });
+
+  it("todo atalho usado num passo está cadastrado, e todo cadastrado é usado", () => {
+    const usados = new Set(Object.values(ATALHOS_DO_PASSO).flatMap((m) => Object.values(m).flat()));
+    for (const b of usados) expect(ATALHOS[b], `/${b} usado e não cadastrado`).toBeTruthy();
+    for (const b of Object.keys(ATALHOS)) expect(usados.has(b), `/${b} cadastrado e nunca usado`).toBe(true);
+  });
+
+  it("todo passo citado existe no roteiro daquele tipo", () => {
+    for (const [tipo, passos] of Object.entries(ATALHOS_DO_PASSO)) {
+      for (const id of Object.keys(passos)) {
+        if (tipo === "*") expect(FLUXOS.some((f) => f.passos.some((p) => p.id === id)), id).toBe(true);
+        else expect(FLUXO[tipo as keyof typeof FLUXO]?.passos.some((p) => p.id === id), `${tipo}.${id}`).toBe(true);
+      }
+    }
+  });
+
+  it("os passos que já têm mensagem pronta também têm atalho", () => {
+    for (const f of FLUXOS) for (const p of f.passos) {
+      if (p.mensagem) expect(atalhosDoPasso(f.tipo, p.id).length, `${f.tipo}.${p.id}`).toBeGreaterThan(0);
+    }
+  });
+
+  it("as variáveis das mensagens são as que o atendimento conhece", () => {
+    const conhecidas = new Set(["nome", "pedido", "entregue", "previsao", "rastreio", "valor"]);
+    for (const [b, a] of Object.entries(ATALHOS)) {
+      for (const m of a.texto.matchAll(/\{(\w+)\}/g)) expect(conhecidas.has(m[1]), `/${b}: {${m[1]}}`).toBe(true);
+    }
+  });
+});

@@ -3,6 +3,7 @@
   "name": "posvenda-fluxos",
   "description": "Gera os fluxogramas (PNG) e o PowerPoint do pós-venda a partir dos roteiros",
   "dependencies": {
+    "elkjs": "0.9.3",
     "pptxgenjs": "3.12.0"
   }
 }

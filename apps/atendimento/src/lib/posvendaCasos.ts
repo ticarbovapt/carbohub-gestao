@@ -20,6 +20,8 @@
 //      E no de-para da tratativa (`carbo_posvenda_caso_trato`), na mesma tarefa.
 // ─────────────────────────────────────────────────────────────────────────────
 
+export { ATALHOS, ATALHOS_DO_PASSO, atalhosDoPasso, type Atalho } from "./posvendaAtalhos";
+
 export type TipoCaso =
   | "faltante" | "avaria" | "defeito" | "errado" | "arrependimento"
   | "nao_recebido" | "atraso" | "devolvido" | "outro";
