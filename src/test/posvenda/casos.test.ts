@@ -224,3 +224,22 @@ describe("atalhos de mensagem do pós-venda", () => {
     }
   });
 });
+
+describe("as mensagens padrão na barra / das Conversas", () => {
+  it("a migração mais nova tem EXATAMENTE os textos do código (senão rode gerar-sql-atalhos.mjs)", async () => {
+    const { readdirSync, readFileSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const { ATALHOS } = await import("../../../apps/atendimento/src/lib/posvendaAtalhos");
+    const dir = join(__dirname, "../../../supabase/migrations");
+    const ultima = readdirSync(dir).filter((f) => f.endsWith("_atalhos_posvenda_nas_conversas.sql")).sort().pop();
+    expect(ultima, "nenhuma migração _atalhos_posvenda_nas_conversas.sql").toBeTruthy();
+    const sql = readFileSync(join(dir, ultima!), "utf8");
+    const m = /\$atalhos\$\n([\s\S]*?)\n\$atalhos\$/.exec(sql);
+    expect(m).toBeTruthy();
+    const doBanco = JSON.parse(m![1]) as Record<string, string>;
+    const doCodigo = Object.fromEntries(Object.entries(ATALHOS).map(([k, a]) => [k, a.texto]));
+    expect(doBanco).toEqual(doCodigo);
+    // o CHECK de carbo_wa_respostas
+    for (const k of Object.keys(doCodigo)) expect(k).toMatch(/^[a-z0-9_-]{1,24}$/);
+  });
+});

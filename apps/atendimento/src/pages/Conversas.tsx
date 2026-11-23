@@ -38,6 +38,7 @@ import {
   // A barra `/atalho`: as frases que o time repete todo dia.
   useRespostasRapidas, useSalvarResposta, useApagarResposta,
   termoDaBarra, filtrarRespostas, normalizarAtalho, atalhoValido,
+  preencherResposta, primeiroNome,
   type RespostaRapida,
   type AchadoNaConversa, type ItemDaGaleria,
   useNotas, useAnotar, useApagarNota, type Nota,
@@ -1417,7 +1418,10 @@ function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false }: {
   /** ⚠️ COLA, nunca envia — ver a migração `20261021`. A resposta quase sempre
    *  precisa do nome do cliente ou de um ajuste, e enviar direto faria um Enter
    *  a mais mandar a frase errada para o cliente. */
-  const colarResposta = (r: RespostaRapida) => { setTexto(r.corpo); setBarraFechada(true); };
+  const colarResposta = (r: RespostaRapida) => {
+    setTexto(preencherResposta(r.corpo, { nome: primeiroNome(c.cliente ?? c.nome_whatsapp) }));
+    setBarraFechada(true);
+  };
 
   // Busca e galeria: as duas respondem "onde foi que ele mandou aquilo?" por
   // caminhos diferentes — pelo que foi escrito e pelo que foi anexado.

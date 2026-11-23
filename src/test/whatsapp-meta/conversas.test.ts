@@ -427,3 +427,26 @@ describe("statusEfetivo — a intenção do time, corrigida pela realidade", () 
     expect(statusEfetivo(a, "2026-08-24T10:00:00Z", 0, false)).toBe("resolvido");
   });
 });
+
+describe("preencherResposta — a barra cola a resposta padrão", () => {
+  it("põe o primeiro nome e marca o que falta", async () => {
+    const { preencherResposta, primeiroNome } = await import("../../../apps/atendimento/src/lib/conversas");
+    const t = "Oi, {nome}! Pedido {pedido}, rastreio {rastreio}.";
+    expect(preencherResposta(t, { nome: primeiroNome("MARIANA TESTE SOUZA") }))
+      .toBe("Oi, Mariana! Pedido [pedido], rastreio [rastreio].");
+    // sem nome, o lugar aparece para ser preenchido — nunca some
+    expect(preencherResposta(t, { nome: primeiroNome(null) }))
+      .toBe("Oi, [nome]! Pedido [pedido], rastreio [rastreio].");
+  });
+
+  it("⚠️ chave desconhecida fica como está (resposta do time)", async () => {
+    const { preencherResposta } = await import("../../../apps/atendimento/src/lib/conversas");
+    expect(preencherResposta("Use o cupom {VOLTA10}", {})).toBe("Use o cupom {VOLTA10}");
+  });
+
+  it("primeiroNome ignora número de telefone no lugar do nome", async () => {
+    const { primeiroNome } = await import("../../../apps/atendimento/src/lib/conversas");
+    expect(primeiroNome("5584900000000")).toBe("");
+    expect(primeiroNome("  joão  ")).toBe("João");
+  });
+});

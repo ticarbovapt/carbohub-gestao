@@ -40,6 +40,7 @@ export type { FiltrosDaCaixa, OrdemDaCaixa } from "@/lib/conversas";
 // é PURO e mora na `lib` — dá para conferir sem montar tela.
 export {
   termoDaBarra, filtrarRespostas, normalizarAtalho, atalhoValido,
+  preencherResposta, primeiroNome,
 } from "@/lib/conversas";
 export type { RespostaRapida } from "@/lib/conversas";
 

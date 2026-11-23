@@ -2916,6 +2916,13 @@ Livre); navegar SEMANA A SEMANA (domingo a sábado) pelas setas ‹ semana › (
    EXEMPLOS: quando chegarem os oficiais, troque SÓ esse arquivo e rode os dois geradores. ⚠️ O campo
    `mensagem` do passo (a "mensagem pronta" do caso aberto) continua separado — ao trocar pelas
    oficiais, decida se o caso passa a ler do atalho.
+   **As mesmas mensagens são respostas rápidas nas CONVERSAS** (`20261180`, gerada por
+   `node docs/posvenda/gerar-sql-atalhos.mjs <prefixo>`): `carbo_wa_respostas.fonte =
+   'posvenda'`, sincronizada por inteiro (texto muda, atalho que saiu é apagado); resposta do
+   TIME com o mesmo nome nunca é tocada (WARNING). `criado_por` nulo = ninguém edita pela tela.
+   Ao colar, `{nome}` vira o primeiro nome do cliente (`preencherResposta`) e o resto vira
+   `[pedido]`… — o pedido NÃO é preenchido (o vínculo da conversa pode ser aproximado).
+   ⚠️ Mudou o texto ⇒ migração NOVA na mesma tarefa (o teste compara a mais nova com o código).
 10. **O pedido aberto é uma tela de chamado** (18/11/2026, queixa do dono do processo: "feio e
    esquisito, precisa ser mais profissional"): cabeçalho fixo, o CASO no centro (cabeça com ícone
    do tipo, linha do tempo e o PASSO ATUAL em cartão com as ações no rodapé) e uma coluna com
