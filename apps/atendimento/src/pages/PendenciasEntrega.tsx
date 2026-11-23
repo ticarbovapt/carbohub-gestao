@@ -1,8 +1,8 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   AlertTriangle, BarChart3, ChevronLeft, ChevronRight, Download, ExternalLink, Loader2, MessageCircle, MessageSquareWarning,
-  PackageSearch, Search,
+  MoreHorizontal, PackageSearch, Search, SlidersHorizontal, Workflow,
 } from "lucide-react";
 import { useParamUrl } from "@carbo/shell";
 import { cn } from "@/lib/utils";
@@ -13,6 +13,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DatePickerInput } from "@/components/ui/date-picker-input";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import CasoPosVenda, { ChipDesfecho, ChipReembolso, ChipTipo, PrazoCaso } from "@/components/posvenda/CasoPosVenda";
 import { FLUXOS, etapaDoReembolso, passoDe, rotuloDesfecho, rotuloTipo } from "@/lib/posvendaCasos";
 import {
@@ -24,26 +26,23 @@ import {
 // ─────────────────────────────────────────────────────────────────────────────
 // Pós-venda — `/pos-venda` (ex-`/pendencias`, Pendências de entrega).
 //
-// 17/11/2026, pedido do dono do processo: TODO pedido aparece, mesmo entregue
-// ("depois de entregue pode ter problema também"), MENOS o ML Full (logística
-// e pós-venda são do Mercado Livre) — quem tira o Full é o banco
-// (`carbo_posvenda`, 20261172). A tela pagina por PERÍODO: semana (domingo a
-// sábado, clicando, sem dropdown), mês ou intervalo livre.
+// 23/11/2026, pedido do dono do processo ("muita informação, cheio de botões,
+// confuso"): TRÊS abas, cada uma respondendo uma pergunta.
+//   · Para tratar (padrão) — o que precisa de alguém agora, de qualquer data:
+//     problema sem caso aberto nem tratativa encerrada, ou reclamação do
+//     WhatsApp pendente (`carbo_posvenda(p_so_atencao)`, 20261181). O passivo
+//     de antes do corte (06/11) vem numa segunda lista, logo abaixo.
+//   · Casos abertos — tipo, passo e prazo de cada caso.
+//   · Todos os pedidos — semana/mês/período, busca e o botão Filtros.
+// O pedido aberto (o caso no centro) não mudou.
 //
-// As duas abas continuam, cortadas em 06/11/2026: "Antes" é o passivo,
-// "A partir" é o dia a dia. A semana que atravessa o corte aparece nas duas,
-// cada uma com a sua parte.
+// ⚠️ Quem decide o que é problema é o BANCO; a tela não recalcula nada. O
+// `precisaDeAtencao` daqui é o MESMO critério do banco (20261181) — mudou lá,
+// mude aqui. Tudo menos o ML Full (20261172).
 //
-// ⚠️ Quem decide o que é problema é o BANCO; a tela não recalcula nada. E o
-// trato é anotação: marcar "Resolvido" aqui NÃO move o card da esteira.
-//
-// CASOS (20261173): no pedido aberto escolhe-se o TIPO (faltante, avaria,
-// defeito, arrependimento…) e o roteiro do CDC guia passo a passo
-// (`components/posvenda/CasoPosVenda.tsx`, roteiros em `lib/posvendaCasos.ts`).
-// O modo "Casos abertos" lista os pedidos com caso aberto, de qualquer data.
-//
-// Estado na URL: ?aba=antes|novos · ?modo=semana|mes|periodo|casos · ?de= · ?ate=
-//                ?status= · ?problema= · ?tratativa= · ?caso= · ?canal= · ?busca= · ?pedido=
+// Estado na URL: ?aba=tratar|casos|todos · ?modo=semana|mes|periodo · ?de= · ?ate=
+//                ?situacao= · ?caso= · ?canal= · ?busca= · ?pedido=
+// Endereços antigos (?modo=casos, ?aba=antes|novos) continuam abrindo.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const POR_PAGINA = 100;
@@ -163,38 +162,6 @@ function ChipReclamou({ p }: { p: Pendencia }) {
       <MessageSquareWarning className="h-3 w-3 shrink-0" />
       <span className="truncate">Reclamou: {assunto}{r.assuntos.length > 1 ? ` +${r.assuntos.length - 1}` : ""}</span>
     </span>
-  );
-}
-
-/** O que o pedido é agora: o problema, ou a etapa com a data que importa. */
-function Situacao({ p }: { p: Pendencia }) {
-  if (p.problema) {
-    const d = diasDesde(p.desde);
-    return (
-      <>
-        <ChipProblema p={p.problema} />
-        {d != null && (
-          <div className="mt-0.5 text-xs text-muted-foreground">{d === 0 ? "hoje" : d === 1 ? "há 1 dia" : `há ${d} dias`}</div>
-        )}
-      </>
-    );
-  }
-  const nota = p.etapa === "entregue" && p.entregue_em ? `em ${diaMes(p.entregue_em.slice(0, 10))}`
-    : p.etapa === "em_transito" && p.previsao ? `previsão ${diaMes(p.previsao)}` : null;
-  return (
-    <>
-      <ChipEtapa p={p} />
-      {nota && <div className="mt-0.5 text-xs text-muted-foreground">{nota}</div>}
-    </>
-  );
-}
-
-function SituacaoComReclamacao({ p }: { p: Pendencia }) {
-  return (
-    <>
-      <Situacao p={p} />
-      {p.reclamacao && <div className="mt-1"><ChipReclamou p={p} /></div>}
-    </>
   );
 }
 
@@ -396,82 +363,133 @@ function DialogoPedido({ p, onFechar }: { p: Pendencia; onFechar: () => void }) 
   );
 }
 
-/** A coluna "Tratativa": o caso (tipo + onde está), ou a tratativa antiga. */
-function Tratativa({ p }: { p: Pendencia }) {
-  if (p.caso) {
-    const aberto = p.caso.status === "aberto";
-    return (
-      <div className="space-y-0.5">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <ChipTipo tipo={p.caso.tipo} />
-          {!aberto && p.caso.desfecho && <ChipDesfecho desfecho={p.caso.desfecho} />}
-        </div>
-        {aberto && (etapaDoReembolso(p.caso.tipo, p.caso.passo) ? (
-          <ChipReembolso etapa={etapaDoReembolso(p.caso.tipo, p.caso.passo)!} />
-        ) : (
-          <p className="line-clamp-2 text-xs text-muted-foreground">{passoDe(p.caso.tipo, p.caso.passo)?.titulo ?? p.caso.passo}</p>
-        ))}
-        {aberto && <PrazoCaso tipo={p.caso.tipo} abertoEm={p.caso.aberto_em} />}
-      </div>
-    );
-  }
-  if (!p.trato) return <span className="text-xs text-muted-foreground">—</span>;
+// ── As linhas da lista: uma por aba, cada uma só com o que aquela aba pergunta ─
+const GRADE_TRATAR = "lg:grid-cols-[minmax(0,1.6fr)_minmax(0,2fr)_7rem_1rem]";
+const GRADE_CASOS = "lg:grid-cols-[minmax(0,1.6fr)_minmax(0,2fr)_minmax(0,1fr)_1rem]";
+const GRADE_TODOS = "lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1.3fr)_minmax(0,1.3fr)_7rem_1rem]";
+
+function Quem({ p }: { p: Pendencia }) {
+  const codigo = p.pedido_codigo ?? p.pedido_numero ?? `#${Math.abs(p.bling_id)}`;
   return (
-    <>
-      <ChipSituacao s={p.trato.situacao} />
-      {p.trato.observacao && <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{p.trato.observacao}</p>}
-    </>
+    <span className="min-w-0">
+      <span className="block truncate font-medium">{p.cliente ?? "Cliente"}</span>
+      <span className="block truncate text-xs text-muted-foreground">
+        {[codigo, p.canal, dia(p.data_pedido)].filter(Boolean).join(" · ")}
+      </span>
+    </span>
   );
 }
 
-// ── A linha da lista (o mesmo desenho dos Reembolsos do Finanças) ────────────
-const GRADE = "lg:grid-cols-[minmax(0,1.8fr)_minmax(0,1.4fr)_minmax(0,1.1fr)_minmax(0,1.5fr)_7rem_1rem]";
+const haDias = (iso: string | null | undefined) => {
+  const d = diasDesde(iso);
+  return d == null ? null : d === 0 ? "hoje" : d === 1 ? "há 1 dia" : `há ${d} dias`;
+};
 
-function LinhaPedido({ p, onAbrir }: { p: Pendencia; onAbrir: () => void }) {
-  const codigo = p.pedido_codigo ?? p.pedido_numero ?? `#${Math.abs(p.bling_id)}`;
-  const temTrato = !!(p.caso || p.trato);
+/** Por que o pedido está na fila: a reclamação vem primeiro (é o cliente falando). */
+function Motivo({ p }: { p: Pendencia }) {
+  const r = p.reclamacao?.pendente ? p.reclamacao : null;
+  return (
+    <span className="flex min-w-0 flex-col gap-1">
+      {r && (
+        <span className="flex min-w-0 items-center gap-1.5 text-sm">
+          <MessageSquareWarning className="h-4 w-4 shrink-0 text-red-600 dark:text-red-400" />
+          <span className="truncate font-medium text-red-700 dark:text-red-400">{r.assuntos[0]?.rotulo ?? "Reclamou no WhatsApp"}</span>
+          <span className="shrink-0 text-xs text-muted-foreground">{haDias(r.ultima_em)}</span>
+        </span>
+      )}
+      {p.problema && (
+        <span className="flex min-w-0 items-center gap-1.5">
+          <ChipProblema p={p.problema} />
+          <span className="shrink-0 text-xs text-muted-foreground">{haDias(p.desde)}</span>
+        </span>
+      )}
+    </span>
+  );
+}
+
+function Fila({ grade, onAbrir, children }: { grade: string; onAbrir: () => void; children: React.ReactNode }) {
   return (
     <button type="button" onClick={onAbrir}
-      className={cn("grid w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 gap-y-2 px-4 py-3 text-left transition-colors hover:bg-muted/40 lg:items-center", GRADE)}>
-      <span className="min-w-0">
-        <span className="block truncate font-medium">{p.cliente ?? "Cliente"}</span>
-        <span className="block truncate text-xs text-muted-foreground">
-          {[codigo, p.canal, dia(p.data_pedido)].filter(Boolean).join(" · ")}
-        </span>
-      </span>
-      <span className="flex items-center justify-end gap-1 lg:order-5 lg:block lg:text-right">
-        <span className="text-sm font-medium tabular-nums">{brl(p.total)}</span>
-        <ChevronRight className="h-4 w-4 text-muted-foreground lg:hidden" />
-      </span>
-      <span className="col-span-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 lg:order-2 lg:col-span-1 lg:block">
-        <SituacaoComReclamacao p={p} />
-      </span>
-      <span className="hidden min-w-0 lg:order-3 lg:block">
-        <span className="block truncate text-sm">{p.transportadora ?? "—"}</span>
-        {p.rastreio && <span className="block truncate font-mono text-xs text-muted-foreground">{p.rastreio}</span>}
-      </span>
-      <span className={cn("col-span-2 min-w-0 lg:order-4 lg:col-span-1 lg:block", !temTrato && "hidden")}>
-        <Tratativa p={p} />
-      </span>
-      <ChevronRight className="hidden h-4 w-4 text-muted-foreground lg:order-6 lg:block" />
+      className={cn("grid w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 gap-y-1.5 px-4 py-3 text-left transition-colors hover:bg-muted/40 lg:items-center", grade)}>
+      {children}
     </button>
   );
 }
 
+const Valor = ({ p, className }: { p: Pendencia; className?: string }) => (
+  <span className={cn("text-right text-sm tabular-nums", className)}>{brl(p.total)}</span>
+);
+const Seta = () => <ChevronRight className="hidden h-4 w-4 text-muted-foreground lg:block" />;
+
+function LinhaTratar({ p, onAbrir }: { p: Pendencia; onAbrir: () => void }) {
+  return (
+    <Fila grade={GRADE_TRATAR} onAbrir={onAbrir}>
+      <Quem p={p} />
+      <Valor p={p} className="lg:order-3" />
+      <span className="col-span-2 min-w-0 lg:order-2 lg:col-span-1"><Motivo p={p} /></span>
+      <span className="lg:order-4"><Seta /></span>
+    </Fila>
+  );
+}
+
+function LinhaCaso({ p, onAbrir }: { p: Pendencia; onAbrir: () => void }) {
+  const c = p.caso!;
+  const reemb = etapaDoReembolso(c.tipo, c.passo);
+  return (
+    <Fila grade={GRADE_CASOS} onAbrir={onAbrir}>
+      <Quem p={p} />
+      <span className="text-right lg:order-3 lg:text-left"><PrazoCaso tipo={c.tipo} abertoEm={c.aberto_em} /></span>
+      <span className="col-span-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 lg:order-2 lg:col-span-1">
+        <ChipTipo tipo={c.tipo} />
+        {reemb ? <ChipReembolso etapa={reemb} />
+          : <span className="min-w-0 truncate text-sm text-muted-foreground">{passoDe(c.tipo, c.passo)?.titulo ?? c.passo}</span>}
+      </span>
+      <span className="lg:order-4"><Seta /></span>
+    </Fila>
+  );
+}
+
+function LinhaTodos({ p, onAbrir }: { p: Pendencia; onAbrir: () => void }) {
+  const c = p.caso;
+  return (
+    <Fila grade={GRADE_TODOS} onAbrir={onAbrir}>
+      <Quem p={p} />
+      <Valor p={p} className="lg:order-4" />
+      <span className="col-span-2 flex min-w-0 flex-wrap items-center gap-2 lg:order-2 lg:col-span-1">
+        {p.problema ? <ChipProblema p={p.problema} /> : <ChipEtapa p={p} />}
+        {p.reclamacao && (
+          <MessageSquareWarning className={cn("h-4 w-4", p.reclamacao.pendente ? "text-red-600" : "text-muted-foreground")}
+            aria-label="Reclamou no WhatsApp" />
+        )}
+      </span>
+      <span className={cn("col-span-2 min-w-0 lg:order-3 lg:col-span-1", !c && "hidden lg:block")}>
+        {c ? (
+          <span className="flex flex-wrap items-center gap-1.5">
+            <ChipTipo tipo={c.tipo} />
+            {c.status !== "aberto" && c.desfecho && <ChipDesfecho desfecho={c.desfecho} />}
+          </span>
+        ) : <span className="text-xs text-muted-foreground">—</span>}
+      </span>
+      <span className="lg:order-5"><Seta /></span>
+    </Fila>
+  );
+}
+
 /** Abas e modos: o controle segmentado dos Reembolsos. */
-function Segmentos<T extends string>({ itens, ativo, onTrocar }: {
-  itens: { id: T; rotulo: string; n?: number; alerta?: boolean }[]; ativo: T; onTrocar: (id: T) => void;
+function Segmentos<T extends string>({ itens, ativo, onTrocar, grande }: {
+  itens: { id: T; rotulo: string; curto?: string; n?: number; alerta?: boolean }[]; ativo: T; onTrocar: (id: T) => void; grande?: boolean;
 }) {
   return (
     <div role="tablist" className="inline-flex max-w-full shrink-0 self-start overflow-x-auto rounded-lg border bg-muted/40 p-1">
       {itens.map((it) => (
         <button key={it.id} role="tab" type="button" aria-selected={ativo === it.id} onClick={() => onTrocar(it.id)}
-          className={cn("inline-flex items-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm transition-colors",
+          className={cn("inline-flex items-center whitespace-nowrap rounded-md transition-colors",
+            grande ? "px-3 py-2 text-sm sm:px-4" : "px-3 py-1.5 text-sm",
             ativo === it.id ? "bg-background font-medium text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>
-          {it.rotulo}
+          {it.curto ? <><span className="sm:hidden">{it.curto}</span><span className="hidden sm:inline">{it.rotulo}</span></> : it.rotulo}
           {it.n != null && it.n > 0 && (
-            <span className={cn("ml-1.5 rounded-full px-1.5 text-xs tabular-nums",
-              it.alerta ? "bg-destructive/15 text-destructive" : "bg-primary/15 text-primary")}>
+            <span className={cn("ml-2 rounded-full px-1.5 text-xs font-semibold tabular-nums",
+              it.alerta ? "bg-destructive text-destructive-foreground" : "bg-primary/15 text-primary")}>
               {it.n}
             </span>
           )}
@@ -480,9 +498,6 @@ function Segmentos<T extends string>({ itens, ativo, onTrocar }: {
     </div>
   );
 }
-
-// ── O seletor de período ─────────────────────────────────────────────────────
-type Modo = "semana" | "mes" | "periodo" | "casos";
 
 function BotaoSeta({ lado, disabled, onClick }: { lado: "antes" | "depois"; disabled: boolean; onClick: () => void }) {
   const Icone = lado === "antes" ? ChevronLeft : ChevronRight;
@@ -494,27 +509,46 @@ function BotaoSeta({ lado, disabled, onClick }: { lado: "antes" | "depois"; disa
   );
 }
 
+function Lista({ titulo, n, vazio, children }: { titulo?: string; n?: number; vazio: string; children: React.ReactNode[] }) {
+  return (
+    <div className="overflow-hidden rounded-xl border bg-card">
+      {titulo && (
+        <div className="flex items-baseline justify-between gap-3 border-b bg-muted/30 px-4 py-2">
+          <span className="text-sm font-semibold">{titulo}</span>
+          {n != null && <span className="text-xs tabular-nums text-muted-foreground">{n}</span>}
+        </div>
+      )}
+      {children.length ? <div className="divide-y">{children}</div>
+        : <p className="px-4 py-12 text-center text-sm text-muted-foreground">{vazio}</p>}
+    </div>
+  );
+}
+
 // ── A tela ───────────────────────────────────────────────────────────────────
+type Aba = "tratar" | "casos" | "todos";
+type Modo = "semana" | "mes" | "periodo";
+
+/** Precisa de alguém: reclamou e ninguém trata, ou tem problema e não há caso
+ *  aberto nem tratativa encerrada. */
+const precisaDeAtencao = (p: Pendencia) =>
+  !!p.reclamacao?.pendente || (!!p.problema && p.caso?.status !== "aberto" && !ehFinal(p.trato?.situacao));
+
 export default function PendenciasEntrega() {
-  const [abaUrl, setAba] = useParamUrl("aba", "antes");
-  const aba = abaUrl === "novos" ? "novos" : "antes";
+  const [abaUrl, setAba] = useParamUrl("aba", "tratar");
   const [modoUrl, setModo] = useParamUrl("modo", "semana");
-  const modo: Modo = modoUrl === "mes" || modoUrl === "periodo" || modoUrl === "casos" ? modoUrl : "semana";
+  // Endereços antigos: ?modo=casos e ?aba=antes|novos continuam abrindo.
+  const aba: Aba = modoUrl === "casos" || abaUrl === "casos" ? "casos"
+    : abaUrl === "todos" || abaUrl === "antes" || abaUrl === "novos" ? "todos" : "tratar";
+  const modo: Modo = modoUrl === "mes" || modoUrl === "periodo" ? modoUrl : "semana";
   const [deUrl, setDe] = useParamUrl("de", "");
   const [ateUrl, setAte] = useParamUrl("ate", "");
-  const [statusUrl, setStatus] = useParamUrl("status", "");
-  const status = STATUS.some((s) => s.id === statusUrl) ? (statusUrl as Status) : "";
-  const [problema, setProblema] = useParamUrl("problema", "");
-  const [tratativaUrl, setTratativa] = useParamUrl("tratativa", "todas");
-  const tratativa = tratativaUrl === "abertas" || tratativaUrl === "encerradas" ? tratativaUrl : "todas";
+  const [situacao, setSituacao] = useParamUrl("situacao", "");
   const [canal, setCanal] = useParamUrl("canal", "");
   const [casoTipo, setCasoTipo] = useParamUrl("caso", "");
-  const [reclamou, setReclamou] = useParamUrl("reclamou", "");
   const [busca, setBusca] = useParamUrl("busca", "", { replace: true });
   const [pedidoUrl, setPedido] = useParamUrl("pedido", "");
   const [mostrar, setMostrar] = useState(POR_PAGINA);
 
-  // A busca escreve na URL só quando a pessoa para de digitar.
   const [buscaLocal, setBuscaLocal] = useState(busca);
   useEffect(() => { setBuscaLocal(busca); }, [busca]);
   useEffect(() => {
@@ -523,187 +557,188 @@ export default function PendenciasEntrega() {
     return () => clearTimeout(t);
   }, [buscaLocal]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── O período ──
-  // O corte e o dia mais antigo vêm do banco; até a 1ª resposta valem os
-  // conhecidos (o corte é fixo desde 13/11).
-  const [corte, setCorte] = useState("2026-11-06");
+  // ── As três leituras: a fila e os casos sempre (são pequenas e dão os números
+  // das abas); o período só na aba "Todos os pedidos".
+  const qTratar = usePosVenda("atencao");
+  const qCasos = usePosVenda("casos");
   const [primeiro, setPrimeiro] = useState<string | null>(null);
+  const [corte, setCorte] = useState("2026-11-06");
   const hoje = hojeBrasilia();
-  // Os limites da aba: "Antes" vai até a véspera do corte; "A partir", até hoje.
-  const limite = aba === "antes"
-    ? { de: primeiro ?? "2020-01-01", ate: maisDias(corte, -1) }
-    : { de: corte, ate: hoje };
-  const ancora = ehDia(deUrl) ? deUrl : limite.ate;
+  const limite = { de: primeiro ?? "2020-01-01", ate: hoje };
+  const ancora = ehDia(deUrl) ? deUrl : hoje;
   const janela = modo === "semana"
     ? { de: domingoDe(ancora), ate: maisDias(domingoDe(ancora), 6) }
     : modo === "mes"
     ? { de: inicioDoMes(ancora), ate: fimDoMes(ancora) }
     : (() => {
-        const a = ehDia(deUrl) ? deUrl : maisDias(limite.ate, -29);
-        const b = ehDia(ateUrl) ? ateUrl : limite.ate;
+        const a = ehDia(deUrl) ? deUrl : maisDias(hoje, -29);
+        const b = ehDia(ateUrl) ? ateUrl : hoje;
         return a <= b ? { de: a, ate: b } : { de: b, ate: a };
       })();
-  // O que se pede ao banco: a janela dentro dos limites da aba.
-  const recorte = { de: maior(janela.de, limite.de), ate: menor(janela.ate, limite.ate) };
-  const periodo = recorte.de <= recorte.ate ? recorte : null;
-
-  const q = usePosVenda(modo === "casos" ? "casos" : periodo);
+  const periodo = { de: maior(janela.de, limite.de), ate: menor(janela.ate, limite.ate) };
+  const qTodos = usePosVenda(aba === "todos" ? periodo : null);
+  const q = aba === "tratar" ? qTratar : aba === "casos" ? qCasos : qTodos;
   const d = q.data;
   const erro = q.error ? lerErro(q.error) : null;
+  const algum = qTratar.data ?? qCasos.data ?? qTodos.data;
   useEffect(() => {
-    if (d?.corte) setCorte(d.corte.slice(0, 10));
-    if (d?.primeiro !== undefined) setPrimeiro(d.primeiro ? d.primeiro.slice(0, 10) : null);
-  }, [d?.corte, d?.primeiro]);
+    if (algum?.corte) setCorte(algum.corte.slice(0, 10));
+    if (algum?.primeiro !== undefined) setPrimeiro(algum.primeiro ? algum.primeiro.slice(0, 10) : null);
+  }, [algum?.corte, algum?.primeiro]);
 
   const passo = (n: number) => {
     if (modo === "semana") setDe(maisDias(janela.de, 7 * n));
     else if (modo === "mes") setDe(maisMeses(janela.de, n));
   };
-  const temAntes = janela.de > limite.de;
-  const temDepois = janela.ate < limite.ate;
   const trocarModo = (m: Modo) => {
     if (m === modo) return;
     setModo(m === "semana" ? "" : m);
-    if (m === "periodo") { setDe(recorte.de); setAte(recorte.ate); }
-    else if (m === "casos") { setDe(""); setAte(""); }
-    else { setDe(recorte.ate); setAte(""); }
+    if (m === "periodo") { setDe(periodo.de); setAte(periodo.ate); } else { setDe(periodo.ate); setAte(""); }
   };
-  const trocarAba = (a: "antes" | "novos") => {
-    setAba(a === "antes" ? "" : a); setDe(""); setAte(""); setProblema(""); setStatus("");
+  const trocarAba = (a: Aba) => {
+    setAba(a === "tratar" ? "" : a); setModo(""); setDe(""); setAte(""); setSituacao(""); setCasoTipo(""); setCanal("");
   };
+  useEffect(() => { setMostrar(POR_PAGINA); }, [aba, modo, situacao, casoTipo, canal, busca, janela.de, janela.ate]);
 
-  useEffect(() => { setMostrar(POR_PAGINA); }, [aba, modo, status, problema, tratativa, casoTipo, reclamou, canal, busca, janela.de, janela.ate]);
+  // ── As listas ──
+  const tratar = useMemo(() => (qTratar.data?.itens ?? []).filter(precisaDeAtencao)
+    .sort((a, b) => Number(!!b.reclamacao?.pendente) - Number(!!a.reclamacao?.pendente)
+      || String(a.desde ?? a.data_pedido).localeCompare(String(b.desde ?? b.data_pedido))), [qTratar.data]);
+  const casos = useMemo(() => (qCasos.data?.itens ?? []).filter((p) => p.caso?.status === "aberto")
+    .sort((a, b) => a.caso!.aberto_em.localeCompare(b.caso!.aberto_em)), [qCasos.data]);
+  const todos = useMemo(() => (qTodos.data?.itens ?? [])
+    .filter((p) => p.data_pedido >= periodo.de && p.data_pedido <= periodo.ate),
+    [qTodos.data, periodo.de, periodo.ate]);  
 
-  // ── A lista ──
-  const daAba = useMemo(
-    () => (d?.itens ?? []).filter((p) => (aba === "antes") === p.antes_do_corte && (modo === "casos"
-      ? p.caso?.status === "aberto"
-      : periodo != null && p.data_pedido >= periodo.de && p.data_pedido <= periodo.ate)),
-    [d, aba, modo, periodo?.de, periodo?.ate], // eslint-disable-line react-hooks/exhaustive-deps
-  );
-  const passaTratativa = (p: Pendencia) =>
-    tratativa === "todas" ? true : tratativa === "encerradas" ? ehFinal(p.trato?.situacao) : !ehFinal(p.trato?.situacao);
-  const passaCaso = (p: Pendencia) =>
-    !casoTipo ? true : casoTipo === "sem" ? !p.caso : p.caso?.tipo === casoTipo;
-  const passaReclamou = (p: Pendencia) =>
-    !reclamou ? true : reclamou === "pendente" ? !!p.reclamacao?.pendente : !!p.reclamacao;
-  const passaResto = (p: Pendencia) => passaTratativa(p) && passaCaso(p) && passaReclamou(p)
-    && (!canal || p.canal === canal) && casa(p, busca);
-  // Cada contagem usa os OUTROS filtros e solta o dela.
-  const contaStatus = useMemo(() => {
-    const m = new Map<Status | "todos", number>();
-    for (const p of daAba) if (passaResto(p)) {
-      m.set("todos", (m.get("todos") ?? 0) + 1);
-      m.set(statusDe(p), (m.get(statusDe(p)) ?? 0) + 1);
-    }
-    return m;
-  }, [daAba, tratativa, casoTipo, reclamou, canal, busca]); // eslint-disable-line react-hooks/exhaustive-deps
-  // O "Reclamou" conta com os outros filtros (status inclusive) e solta o dele.
-  const contaReclamou = useMemo(() => {
-    let todas = 0, pendentes = 0;
-    for (const p of daAba) {
-      if (!p.reclamacao || !(passaTratativa(p) && passaCaso(p) && (!canal || p.canal === canal) && casa(p, busca))) continue;
-      if (status && statusDe(p) !== status) continue;
-      if (problema && p.problema !== problema) continue;
-      todas++;
-      if (p.reclamacao.pendente) pendentes++;
-    }
-    return { todas, pendentes };
-  }, [daAba, status, problema, tratativa, casoTipo, canal, busca]); // eslint-disable-line react-hooks/exhaustive-deps
-  const contaProblema = useMemo(() => {
-    const m = new Map<Problema, number>();
-    for (const p of daAba) if (p.problema && passaResto(p)) m.set(p.problema, (m.get(p.problema) ?? 0) + 1);
-    return m;
-  }, [daAba, tratativa, casoTipo, reclamou, canal, busca]); // eslint-disable-line react-hooks/exhaustive-deps
-  const canais = useMemo(() => [...new Set(daAba.map((p) => p.canal).filter(Boolean))].sort() as string[], [daAba]);
+  const passaSituacao = (p: Pendencia) => !situacao ? true
+    : situacao === "reclamou" ? !!p.reclamacao : situacao === "problema" ? !!p.problema
+    : (PROBLEMAS.some((x) => x.id === situacao) ? p.problema === situacao : statusDe(p) === situacao);
+  const base = aba === "tratar" ? tratar : aba === "casos" ? casos : todos;
+  const lista = useMemo(() => base.filter((p) => casa(p, busca)
+      && (aba !== "todos" || (passaSituacao(p) && (!canal || p.canal === canal)
+        && (!casoTipo || (casoTipo === "sem" ? !p.caso : p.caso?.tipo === casoTipo))))
+      && (aba !== "casos" || !casoTipo || p.caso?.tipo === casoTipo)),
+    [base, busca, aba, situacao, canal, casoTipo]); // eslint-disable-line react-hooks/exhaustive-deps
+  const canais = useMemo(() => [...new Set(todos.map((p) => p.canal).filter(Boolean))].sort() as string[], [todos]);
 
-  const lista = useMemo(
-    () => daAba.filter((p) => (!status || statusDe(p) === status)
-      && (!problema || p.problema === problema) && passaResto(p)),
-    [daAba, status, problema, tratativa, casoTipo, reclamou, canal, busca], // eslint-disable-line react-hooks/exhaustive-deps
-  );
-  // Fora da semana, a lista vem com um cabeçalho por semana.
-  const agrupa = modo === "mes" || modo === "periodo";
-  const cabecalhoDe = (p: Pendencia, i: number, pagina: Pendencia[]) => {
-    if (!agrupa) return null;
-    const k = domingoDe(p.data_pedido);
-    if (i > 0 && domingoDe(pagina[i - 1].data_pedido) === k) return null;
-    const daSemana = lista.filter((x) => domingoDe(x.data_pedido) === k);
-    return { rotulo: `Semana ${rotuloSemana(k)}`, n: daSemana.length, problemas: daSemana.filter((x) => x.problema).length };
-  };
-  // O pedido aberto continua aberto mesmo se sair da lista (ex.: encerrar o
-  // caso no modo "Casos abertos"): fica o último lido dele até fechar.
-  const achado = pedidoUrl ? (d?.itens ?? []).find((p) => String(p.bling_id) === pedidoUrl) ?? null : null;
+  const achado = pedidoUrl ? [...tratar, ...casos, ...todos].find((p) => String(p.bling_id) === pedidoUrl) ?? null : null;
   const [ultimoAberto, setUltimoAberto] = useState<Pendencia | null>(null);
   useEffect(() => { if (achado) setUltimoAberto(achado); }, [achado]);
   const doUltimo = pedidoUrl && ultimoAberto && String(ultimoAberto.bling_id) === pedidoUrl ? ultimoAberto : null;
-  // Pedido fora da lista (link das Conversas, do painel, de outra semana): lê só ele.
   const idAvulso = pedidoUrl && d && !achado && /^-?\d+$/.test(pedidoUrl) ? Number(pedidoUrl) : null;
   const avulso = usePosVendaPedido(idAvulso);
   const aberto = achado ?? doUltimo ?? (idAvulso != null ? avulso.data ?? null : null);
   const carregandoOutro = q.isPlaceholderData || (q.isFetching && !q.isRefetching);
+  const abrir = (p: Pendencia) => setPedido(String(p.bling_id));
 
   const corteCurto = diaMes(corte);
-  const rotuloJanela = modo === "casos" ? "Casos abertos" : modo === "semana" ? `Semana ${rotuloSemana(janela.de)}`
-    : modo === "mes" ? rotuloMes(janela.de) : `${dia(janela.de)} a ${dia(janela.ate)}`;
-  const nomeArquivo = `pos-venda-${aba === "antes" ? "antes" : "a-partir"}-de-${corteCurto.replace("/", "-")}-${
-    modo === "casos" ? "casos-abertos" : `${recorte.de}-a-${recorte.ate}`}.csv`;
+  const nomeArquivo = `pos-venda-${aba === "todos" ? `${periodo.de}-a-${periodo.ate}` : aba === "casos" ? "casos-abertos" : "para-tratar"}.csv`;
+  const filtrosAtivos = [situacao, canal, casoTipo].filter(Boolean).length;
+
+  // A fila em duas partes: o dia a dia primeiro, o passivo de antes do corte depois.
+  const novos = lista.filter((p) => !p.antes_do_corte);
+  const antigos = lista.filter((p) => p.antes_do_corte);
 
   return (
     <div className="p-4 md:p-6">
-      <div className="mx-auto max-w-[1600px] space-y-4">
+      <div className="mx-auto max-w-[1400px] space-y-4">
         <CarboPageHeader
           title="Pós-venda"
           icon={PackageSearch}
-          actions={d && (
+          actions={(
             <>
               <Button asChild variant="outline" size="sm">
                 <Link to="/pos-venda/acompanhamento"><BarChart3 className="mr-1.5 h-4 w-4" />Acompanhamento</Link>
               </Button>
-              <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                {q.isFetching && <Loader2 className="h-3 w-3 animate-spin" />}
-                Atualizado às {new Date(d.gerado_em).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-              </span>
-              <Button variant="outline" size="sm" disabled={!lista.length} onClick={() => baixarPlanilha(lista, nomeArquivo)}>
-                <Download className="mr-1.5 h-4 w-4" /> Baixar planilha
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon" className="h-9 w-9" aria-label="Mais"><MoreHorizontal className="h-4 w-4" /></Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem asChild><Link to="/pos-venda/fluxos"><Workflow className="mr-2 h-4 w-4" />Fluxos de atendimento</Link></DropdownMenuItem>
+                  <DropdownMenuItem disabled={!lista.length} onSelect={() => baixarPlanilha(lista, nomeArquivo)}>
+                    <Download className="mr-2 h-4 w-4" />Baixar planilha desta lista
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </>
           )}
         />
 
-        {/* A aba (antes/a partir do corte), o modo e o período, numa barra só */}
-        <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap lg:items-center">
-          <Segmentos ativo={aba} onTrocar={trocarAba}
-            itens={(["antes", "novos"] as const).map((a) => ({
-              id: a, rotulo: a === "antes" ? `Antes de ${corteCurto}` : `A partir de ${corteCurto}`,
-              n: d?.abertos[a], alerta: true,
-            }))} />
-          <Segmentos ativo={modo} onTrocar={trocarModo}
-            itens={([["semana", "Semana"], ["mes", "Mês"], ["periodo", "Período"], ["casos", "Casos abertos"]] as const)
-              .map(([m, r]) => ({ id: m, rotulo: r, n: m === "casos" ? d?.casos_abertos?.[aba] : undefined }))} />
-          {modo === "semana" && (
-            <div className="flex items-center gap-1.5">
-              <BotaoSeta lado="antes" disabled={!temAntes} onClick={() => passo(-1)} />
-              <span className="min-w-44 text-center text-sm font-semibold tabular-nums">
-                {diaMes(janela.de)} a {diaMes(janela.ate)} de {janela.ate.slice(0, 4)}
-              </span>
-              <BotaoSeta lado="depois" disabled={!temDepois} onClick={() => passo(1)} />
-            </div>
+        <Segmentos grande ativo={aba} onTrocar={trocarAba} itens={[
+          { id: "tratar", rotulo: "Para tratar", n: qTratar.data ? tratar.length : undefined, alerta: true },
+          { id: "casos", rotulo: "Casos abertos", curto: "Casos", n: qCasos.data ? casos.length : undefined },
+          { id: "todos", rotulo: "Todos os pedidos", curto: "Todos" },
+        ]} />
+
+        {/* A barra: só a busca nas filas; período e filtros em "Todos os pedidos" */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative min-w-0 basis-full sm:basis-72">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input value={buscaLocal} onChange={(e) => setBuscaLocal(e.target.value)}
+              placeholder="Cliente, telefone, pedido, rastreio…" className="h-9 pl-8" />
+          </div>
+          {aba === "casos" && (
+            <Select value={casoTipo || "todos"} onValueChange={(v) => setCasoTipo(v === "todos" ? "" : v)}>
+              <SelectTrigger className="h-9 w-48"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos os tipos</SelectItem>
+                {FLUXOS.map((f) => <SelectItem key={f.tipo} value={f.tipo}>{f.rotulo}</SelectItem>)}
+              </SelectContent>
+            </Select>
           )}
-          {modo === "mes" && (
-            <div className="flex items-center gap-1.5">
-              <BotaoSeta lado="antes" disabled={!temAntes} onClick={() => passo(-1)} />
-              <span className="min-w-44 text-center text-sm font-semibold">{maiuscula(rotuloMes(janela.de))}</span>
-              <BotaoSeta lado="depois" disabled={!temDepois} onClick={() => passo(1)} />
-            </div>
+          {aba === "todos" && (
+            <>
+              <div className="flex items-center gap-1.5">
+                {modo !== "periodo" && <BotaoSeta lado="antes" disabled={janela.de <= limite.de} onClick={() => passo(-1)} />}
+                <Select value={modo} onValueChange={(v) => trocarModo(v as Modo)}>
+                  <SelectTrigger className="h-9 w-auto min-w-44 gap-2 font-medium">
+                    <span>{modo === "semana" ? `${diaMes(janela.de)} a ${diaMes(janela.ate)}`
+                      : modo === "mes" ? maiuscula(rotuloMes(janela.de)) : "Período"}</span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="semana">Semana</SelectItem>
+                    <SelectItem value="mes">Mês</SelectItem>
+                    <SelectItem value="periodo">Escolher período</SelectItem>
+                  </SelectContent>
+                </Select>
+                {modo !== "periodo" && <BotaoSeta lado="depois" disabled={janela.ate >= limite.ate} onClick={() => passo(1)} />}
+              </div>
+              {modo === "periodo" && (
+                <div className="flex items-center gap-2">
+                  <div className="w-40"><DatePickerInput value={janela.de} onChange={(v) => v && setDe(v)} /></div>
+                  <span className="text-sm text-muted-foreground">a</span>
+                  <div className="w-40"><DatePickerInput value={janela.ate} onChange={(v) => v && setAte(v)} /></div>
+                </div>
+              )}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-9">
+                    <SlidersHorizontal className="mr-1.5 h-4 w-4" />Filtros
+                    {filtrosAtivos > 0 && <span className="ml-1.5 rounded-full bg-primary px-1.5 text-xs text-primary-foreground">{filtrosAtivos}</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-72 space-y-3">
+                  <FiltroSelect rotulo="Situação" valor={situacao} onTrocar={setSituacao} opcoes={[
+                    ["problema", "Com problema"], ["reclamou", "Reclamou no WhatsApp"], ["andamento", "Em andamento"],
+                    ["entregue", "Entregue"], ["cancelado", "Cancelado"], ...PROBLEMAS.map((x) => [x.id, x.rotulo] as [string, string]),
+                  ]} />
+                  <FiltroSelect rotulo="Caso" valor={casoTipo} onTrocar={setCasoTipo}
+                    opcoes={[["sem", "Sem caso"], ...FLUXOS.map((f) => [f.tipo, f.rotulo] as [string, string])]} />
+                  <FiltroSelect rotulo="Canal" valor={canal} onTrocar={setCanal} opcoes={canais.map((c) => [c, c] as [string, string])} />
+                  {filtrosAtivos > 0 && (
+                    <Button variant="ghost" size="sm" className="w-full" onClick={() => { setSituacao(""); setCasoTipo(""); setCanal(""); }}>
+                      Limpar filtros
+                    </Button>
+                  )}
+                </PopoverContent>
+              </Popover>
+            </>
           )}
-          {modo === "periodo" && (
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="w-40"><DatePickerInput value={janela.de} onChange={(v) => v && setDe(v)} /></div>
-              <span className="text-sm text-muted-foreground">a</span>
-              <div className="w-40"><DatePickerInput value={janela.ate} onChange={(v) => v && setAte(v)} /></div>
-            </div>
-          )}
+          <span className="ml-auto inline-flex items-center gap-1.5 text-sm text-muted-foreground tabular-nums">
+            {(carregandoOutro || q.isFetching) && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {d && `${lista.length} ${lista.length === 1 ? "pedido" : "pedidos"}`}
+          </span>
         </div>
 
         {erro && !d ? (
@@ -716,16 +751,12 @@ export default function PendenciasEntrega() {
             </p>
             {erro.tipo === "outro" && <p className="max-w-xl break-words text-sm text-muted-foreground">{erro.mensagem}</p>}
           </div>
-        ) : !periodo && modo !== "casos" ? (
-          <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-            {aba === "antes" ? `${rotuloJanela} é depois de ${corteCurto}.` : `${rotuloJanela} é antes de ${corteCurto}.`}
-          </div>
         ) : !d ? (
           <div className="space-y-2 rounded-xl border bg-card p-4">
             {Array.from({ length: 8 }, (_, i) => <Skeleton key={i} className="h-12 w-full" />)}
           </div>
         ) : (
-          <>
+          <div className={cn("space-y-4 transition-opacity", carregandoOutro && "opacity-50")}>
             {erro && (
               <p className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -733,141 +764,56 @@ export default function PendenciasEntrega() {
               </p>
             )}
 
-            <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:flex-wrap md:px-0">
-              {([{ id: "" as const, rotulo: "Todos", cor: "" }, ...STATUS]).map((st) => {
-                const n = contaStatus.get(st.id || "todos") ?? 0;
-                const ativo = status === st.id;
-                return (
-                  <button key={st.id || "todos"} type="button" aria-pressed={ativo}
-                    onClick={() => { setStatus(st.id); setProblema(""); }}
-                    className={cn("inline-flex shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors",
-                      ativo ? "border-transparent bg-foreground text-background" : "hover:bg-muted")}
-                    style={ativo && st.cor ? { background: st.cor, color: "white" } : undefined}>
-                    {!ativo && st.cor && <span className="h-2 w-2 rounded-full" style={{ background: st.cor }} />}
-                    {st.rotulo}
-                    <span className="font-semibold tabular-nums">{n}</span>
-                  </button>
-                );
-              })}
-              {(contaReclamou.todas > 0 || reclamou) && (
-                <>
-                  <span className="mx-1 hidden w-px self-stretch bg-border md:block" />
-                  {([["todas", "Reclamou no WhatsApp", contaReclamou.todas], ["pendente", "Reclamou, sem caso", contaReclamou.pendentes]] as const)
-                    .map(([id, rotulo, n]) => {
-                      const ativo = reclamou === id;
-                      return (
-                        <button key={id} type="button" aria-pressed={ativo} onClick={() => setReclamou(ativo ? "" : id)}
-                          className={cn("inline-flex shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors",
-                            ativo ? "border-transparent bg-red-600 text-white" : "hover:bg-muted",
-                            !ativo && id === "pendente" && n > 0 && "border-red-500/40 text-red-700 dark:text-red-400")}>
-                          <MessageSquareWarning className="h-3.5 w-3.5" />
-                          {rotulo}
-                          <span className="font-semibold tabular-nums">{n}</span>
-                        </button>
-                      );
-                    })}
-                </>
-              )}
-            </div>
-
-            {status === "problema" && (contaProblema.size > 0 || !!problema) && (
-              <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:flex-wrap md:px-0">
-                {PROBLEMAS.map((pr) => {
-                  const n = contaProblema.get(pr.id) ?? 0;
-                  const ativo = problema === pr.id;
-                  if (!n && !ativo) return null;
-                  return (
-                    <button key={pr.id} type="button" aria-pressed={ativo}
-                      onClick={() => setProblema(ativo ? "" : pr.id)}
-                      className={cn("inline-flex shrink-0 items-center gap-2 rounded-full border px-3 py-1 text-xs transition-colors",
-                        ativo ? "border-transparent text-white" : "hover:bg-muted")}
-                      style={ativo ? { background: pr.cor } : undefined}>
-                      {!ativo && <span className="h-2 w-2 rounded-full" style={{ background: pr.cor }} />}
-                      {pr.rotulo}
-                      <span className="font-semibold tabular-nums">{n}</span>
-                    </button>
-                  );
-                })}
-              </div>
+            {aba === "tratar" && (
+              <>
+                <Lista titulo={`A partir de ${corteCurto}`} n={novos.length} vazio={busca ? "Nada encontrado." : "Nada para tratar."}>
+                  {novos.slice(0, mostrar).map((p) => <LinhaTratar key={p.bling_id} p={p} onAbrir={() => abrir(p)} />)}
+                </Lista>
+                {antigos.length > 0 && (
+                  <Lista titulo={`Antes de ${corteCurto}`} n={antigos.length} vazio="">
+                    {antigos.slice(0, mostrar).map((p) => <LinhaTratar key={p.bling_id} p={p} onAbrir={() => abrir(p)} />)}
+                  </Lista>
+                )}
+              </>
+            )}
+            {aba === "casos" && (
+              <Lista vazio={busca ? "Nada encontrado." : "Nenhum caso aberto."}>
+                {lista.slice(0, mostrar).map((p) => <LinhaCaso key={p.bling_id} p={p} onAbrir={() => abrir(p)} />)}
+              </Lista>
+            )}
+            {aba === "todos" && (
+              <Lista vazio={busca || filtrosAtivos ? "Nada encontrado." : "Nenhum pedido neste período."}>
+                {lista.slice(0, mostrar).map((p) => <LinhaTodos key={p.bling_id} p={p} onAbrir={() => abrir(p)} />)}
+              </Lista>
             )}
 
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="relative min-w-0 basis-full md:basis-80">
-                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input value={buscaLocal} onChange={(e) => setBuscaLocal(e.target.value)}
-                  placeholder="Cliente, telefone, pedido, rastreio, NF…" className="h-9 pl-8" />
-              </div>
-              <Select value={tratativa} onValueChange={(v) => setTratativa(v === "todas" ? "" : v)}>
-                <SelectTrigger className="h-9 min-w-[9.5rem] flex-1 sm:w-52 sm:flex-none"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todas">Todas as tratativas</SelectItem>
-                  <SelectItem value="abertas">Tratativa em aberto</SelectItem>
-                  <SelectItem value="encerradas">Tratativa encerrada</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={casoTipo || "todos"} onValueChange={(v) => setCasoTipo(v === "todos" ? "" : v)}>
-                <SelectTrigger className="h-9 min-w-[9.5rem] flex-1 sm:w-48 sm:flex-none"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos os casos</SelectItem>
-                  {modo !== "casos" && <SelectItem value="sem">Sem caso</SelectItem>}
-                  {FLUXOS.map((f) => <SelectItem key={f.tipo} value={f.tipo}>{f.rotulo}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Select value={canal || "todos"} onValueChange={(v) => setCanal(v === "todos" ? "" : v)}>
-                <SelectTrigger className="h-9 min-w-[9.5rem] flex-1 sm:w-48 sm:flex-none"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos os canais</SelectItem>
-                  {canais.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <span className="ml-auto inline-flex items-center gap-1.5 text-sm text-muted-foreground tabular-nums">
-                {carregandoOutro && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                {lista.length} {lista.length === 1 ? "pedido" : "pedidos"}
-              </span>
-            </div>
-
-            <div className={cn("overflow-hidden rounded-xl border bg-card transition-opacity", carregandoOutro && "opacity-50")}>
-              <div className={cn("hidden gap-x-4 border-b bg-muted/40 px-4 py-2 text-xs font-medium text-muted-foreground lg:grid", GRADE)}>
-                <span>Cliente</span><span>Situação</span><span>Entrega</span><span>Caso</span><span className="text-right">Valor</span><span />
-              </div>
-              {!lista.length ? (
-                <p className="px-4 py-14 text-center text-sm text-muted-foreground">
-                  {busca ? "Nada encontrado." : modo === "casos" ? "Nenhum caso aberto." : "Nenhum pedido aqui."}
-                </p>
-              ) : (
-                <div className="divide-y">
-                  {lista.slice(0, mostrar).map((p, i, pagina) => {
-                    const cab = cabecalhoDe(p, i, pagina);
-                    return (
-                      <Fragment key={p.bling_id}>
-                        {cab && (
-                          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 bg-muted/30 px-4 py-2">
-                            <span className="text-sm font-semibold">{cab.rotulo}</span>
-                            <span className="text-xs tabular-nums text-muted-foreground">
-                              {cab.n} {cab.n === 1 ? "pedido" : "pedidos"}{cab.problemas ? ` · ${cab.problemas} com problema` : ""}
-                            </span>
-                          </div>
-                        )}
-                        <LinhaPedido p={p} onAbrir={() => setPedido(String(p.bling_id))} />
-                      </Fragment>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {lista.length > mostrar && (
+            {Math.max(novos.length, antigos.length, aba === "tratar" ? 0 : lista.length) > mostrar && (
               <div className="flex justify-center">
-                <Button variant="outline" onClick={() => setMostrar((n) => n + POR_PAGINA)}>
-                  Mostrar mais ({lista.length - mostrar})
-                </Button>
+                <Button variant="outline" onClick={() => setMostrar((n) => n + POR_PAGINA)}>Mostrar mais</Button>
               </div>
             )}
-          </>
+          </div>
         )}
 
         {aberto && <DialogoPedido key={aberto.bling_id} p={aberto} onFechar={() => setPedido("")} />}
       </div>
     </div>
+  );
+}
+
+function FiltroSelect({ rotulo, valor, onTrocar, opcoes }: {
+  rotulo: string; valor: string; onTrocar: (v: string) => void; opcoes: [string, string][];
+}) {
+  return (
+    <label className="block space-y-1">
+      <span className="text-xs font-medium text-muted-foreground">{rotulo}</span>
+      <Select value={valor || "todos"} onValueChange={(v) => onTrocar(v === "todos" ? "" : v)}>
+        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="todos">Todos</SelectItem>
+          {opcoes.map(([id, r]) => <SelectItem key={id} value={id}>{r}</SelectItem>)}
+        </SelectContent>
+      </Select>
+    </label>
   );
 }

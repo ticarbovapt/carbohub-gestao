@@ -139,12 +139,13 @@ export function lerErro(e: any): ErroPendencias {
 
 /** A página da tela: um período (semana, mês ou intervalo), ou "casos" (os
  *  pedidos com caso aberto, de qualquer data). Nulo = nada a ler. */
-export function usePosVenda(periodo: { de: string; ate: string } | "casos" | null) {
+export function usePosVenda(periodo: { de: string; ate: string } | "casos" | "atencao" | null) {
   const casos = periodo === "casos";
-  const de = periodo && periodo !== "casos" ? periodo.de : null;
-  const ate = periodo && periodo !== "casos" ? periodo.ate : null;
+  const atencao = periodo === "atencao";
+  const de = periodo && typeof periodo === "object" ? periodo.de : null;
+  const ate = periodo && typeof periodo === "object" ? periodo.ate : null;
   return useQuery({
-    queryKey: ["posvenda", casos ? "casos" : de, ate],
+    queryKey: ["posvenda", casos ? "casos" : atencao ? "atencao" : de, ate],
     enabled: !!periodo,
     staleTime: 60_000,
     refetchInterval: 5 * 60_000,
@@ -153,7 +154,8 @@ export function usePosVenda(periodo: { de: string; ate: string } | "casos" | nul
     placeholderData: (anterior) => anterior,
     retry: (n, e: any) => n < 1 && lerErro(e).tipo === "outro",
     queryFn: async (): Promise<PosVenda> => {
-      const { data, error } = await db.rpc("carbo_posvenda", casos ? { p_so_casos: true } : { p_de: de, p_ate: ate });
+      const { data, error } = await db.rpc("carbo_posvenda",
+        casos ? { p_so_casos: true } : atencao ? { p_so_atencao: true } : { p_de: de, p_ate: ate });
       if (error) throw error;
       return data as PosVenda;
     },

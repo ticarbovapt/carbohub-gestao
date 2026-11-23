@@ -178,7 +178,7 @@ export default function PosVendaPainel() {
         ) : (
           <div className={cn("space-y-4 transition-opacity", q.isPlaceholderData && "opacity-60")}>
             <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-              <Kpi titulo="Casos abertos agora" valor={num(d.agora.abertos)} href="/pos-venda?modo=casos"
+              <Kpi titulo="Casos abertos agora" valor={num(d.agora.abertos)} href="/pos-venda?aba=casos"
                 tom={d.agora.vencidos > 0 ? "alerta" : undefined}
                 detalhe={<>{d.agora.vencidos > 0 ? <span className="font-semibold text-red-600 dark:text-red-400">{num(d.agora.vencidos)} com prazo vencido</span> : "nenhum com prazo vencido"}
                   {antigo != null && <> · o mais antigo há {antigo} {antigo === 1 ? "dia" : "dias"}</>}</>} />
@@ -195,7 +195,7 @@ export default function PosVendaPainel() {
               <Kpi titulo="Reclamações que viraram caso" valor={pct(rec.com_caso, rec.pedidos) == null ? "—" : `${pct(rec.com_caso, rec.pedidos)}%`}
                 detalhe={`${num(rec.com_caso)} de ${num(rec.pedidos)} pedidos`} />
               <Kpi titulo="Reclamações sem caso" valor={num(rec.sem_caso_total)} tom={rec.sem_caso_total > 0 ? "alerta" : undefined}
-                href="/pos-venda?modo=periodo&reclamou=pendente"
+                href="/pos-venda"
                 detalhe={rec.ameacas > 0 ? <span className="font-semibold text-red-600 dark:text-red-400">{num(rec.ameacas)} citaram Procon, Reclame Aqui ou similar</span> : "nenhuma ameaça no período"} />
             </div>
 
@@ -327,7 +327,7 @@ export default function PosVendaPainel() {
                           </p>
                         </div>
                         <Button asChild variant="outline" size="sm">
-                          <Link to={`/pos-venda?${x.antes_do_corte ? "" : "aba=novos&"}pedido=${x.bling_id}`}>Tratar</Link>
+                          <Link to={`/pos-venda?pedido=${x.bling_id}`}>Tratar</Link>
                         </Button>
                       </div>
                     ))}
