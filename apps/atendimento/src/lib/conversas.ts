@@ -640,3 +640,36 @@ export function normalizarAtalho(bruto: string): string {
 export function atalhoValido(bruto: string): boolean {
   return /^[a-z0-9_-]{1,24}$/.test(normalizarAtalho(bruto));
 }
+
+/** As variáveis que as respostas padrão (as do pós-venda) usam, e o rótulo que
+ *  aparece no lugar quando a tela não sabe o valor. */
+export const VARIAVEIS_DA_RESPOSTA: Record<string, string> = {
+  nome: "nome", pedido: "pedido", entregue: "data da entrega",
+  previsao: "previsão", rastreio: "rastreio", valor: "valor",
+};
+
+/** "MARIA DA SILVA" → "Maria". Vazio quando não há nome. */
+export function primeiroNome(nome: string | null | undefined): string {
+  const p = (nome ?? "").trim().split(/\s+/)[0] ?? "";
+  if (!p || /\d/.test(p)) return "";
+  return p.charAt(0).toUpperCase() + p.slice(1).toLowerCase();
+}
+
+/**
+ * O texto que a barra COLA: `{nome}` vira o primeiro nome do cliente, e o que a
+ * tela não sabe vira `[rótulo]` — visível, para quem atende preencher antes de
+ * enviar.
+ *
+ * ⚠️ Só o NOME é preenchido. O pedido da conversa pode ter vindo do vínculo
+ * APROXIMADO (o último aviso enviado ao número), e preencher número de pedido
+ * por aproximação é responder sobre o pedido errado com cara de certeza.
+ * ⚠️ Chave desconhecida fica como está: resposta escrita pelo time pode ter
+ * chaves por outro motivo.
+ */
+export function preencherResposta(corpo: string, valores: Partial<Record<string, string>>): string {
+  return corpo.replace(/\{(\w+)\}/g, (inteiro, k: string) => {
+    if (!(k in VARIAVEIS_DA_RESPOSTA)) return inteiro;
+    const v = valores[k]?.trim();
+    return v ? v : `[${VARIAVEIS_DA_RESPOSTA[k]}]`;
+  });
+}

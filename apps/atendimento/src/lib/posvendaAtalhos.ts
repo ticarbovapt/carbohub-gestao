@@ -8,7 +8,10 @@
 //
 // ⚠️ ESTE é o arquivo que muda quando chegarem as mensagens OFICIAIS: troque o
 // texto aqui e rode `node docs/posvenda/gerar-pptx.mjs && node
-// docs/posvenda/publicar-nos-apps.mjs`. Os textos abaixo são EXEMPLOS.
+// docs/posvenda/publicar-nos-apps.mjs` (slides) E `node
+// docs/posvenda/gerar-sql-atalhos.mjs <prefixo novo>` (a barra `/` das
+// Conversas: gera a migração; o teste recusa se ela não bater com este
+// arquivo). Os textos abaixo são EXEMPLOS.
 //
 // Variáveis: {nome} {pedido} {entregue} {previsao} {rastreio} {valor} — o que
 // não se sabe sai entre colchetes para o atendente completar.
