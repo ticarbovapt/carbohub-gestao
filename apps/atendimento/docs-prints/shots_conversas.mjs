@@ -79,7 +79,7 @@ export const SHOTS = [
     [7, (p) => conversa(p).getByText("Acompanhar pedido").locator("..").locator("..")],
     [8, balao("Recebi o aviso, obrigada")],
     [9, balao("Qualquer dúvida é só chamar")],
-    [10, (p) => conversa(p).getByRole("button", { name: /Áudio/ })],
+    [10, (p) => conversa(p).getByRole("button", { name: "Tocar" }).locator("..")],
     [11, (p) => conversa(p).getByText("A Jadlog confirmou").locator("xpath=ancestor::div[contains(@class,'border-dashed')][1]")],
     [12, btn("Responder")],
     [13, btn("Recado interno")],
@@ -88,10 +88,10 @@ export const SHOTS = [
     [16, sel('button[title="Enviar foto ou documento"]')],
     [17, sel('button[title="Gravar áudio"]')],
     [18, btn(/Agendar/)],
-    [19, sel('button[title="Enviar — ⌘/Ctrl + Enter"]')],
+    [19, sel('button[title^="Enviar —"]')],
   ] },
   // ── O painel do contato ──
-  { chave: "conversa-painel", papel: "colaborador", url: `/conversas?de=${RODRIGO}`, viewport: TELA, pad: 4,
+  { chave: "conversa-painel", papel: "colaborador", url: `/conversas?de=${RODRIGO}`, viewport: ALTA, pad: 4,
     clip: (p) => painel(p), marcas: [
     [1, (p) => painel(p).locator("p.text-\\[15px\\]").first()],
     [2, sel('button[aria-label="Copiar número"]')],
@@ -105,6 +105,7 @@ export const SHOTS = [
     [10, (p) => painel(p).getByRole("button", { name: /\+ etiqueta/ })],
     [11, (p) => painel(p).locator("button").filter({ hasText: "#9004" })],
     [12, (p) => painel(p).getByText("Links de checkout").locator("..")],
+    [13, (p) => painel(p).getByText("Pós-venda", { exact: true }).first()],
   ] },
   // ── Agendar e mensagem agendada (Rodrigo, em atendimento) ──
   { chave: "conversa-agendar", papel: "colaborador", url: `/conversas?de=${RODRIGO}`, viewport: ALTA, pad: 4,
@@ -123,12 +124,15 @@ export const SHOTS = [
     antes: async (p) => {
       await btn("Recado interno")(p).click();
       await sel('textarea[placeholder="Recado para o time…"]')(p).fill("Cliente vai viajar no sábado — priorizar a resposta.");
+      await p.locator('input[type=file][multiple]').setInputFiles("public/docs/conversa-painel.jpg");
+      await p.waitForTimeout(600);
     },
     clip: (p) => [btn("Responder")(p), conversa(p).locator("div.border-dashed.border-amber-500\\/40").last()], marcas: [
     [1, btn("Recado interno")],
     [2, sel('textarea[placeholder="Recado para o time…"]')],
     [3, (p) => conversa(p).getByText("não vai para o WhatsApp")],
     [4, btn(/^Anotar$/)],
+    [5, sel('button[title="Anexar imagem ou PDF"]')],
   ] },
   // ── Barra de respostas rápidas (/) ──
   { chave: "conversa-barra", papel: "colaborador", url: `/conversas?de=${LUANA}`, viewport: TELA, pad: 6,

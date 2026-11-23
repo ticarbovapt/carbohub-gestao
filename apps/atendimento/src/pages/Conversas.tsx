@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useParamUrl, confirmar } from "@carbo/shell";
 import {
@@ -41,7 +41,8 @@ import {
   preencherResposta, primeiroNome,
   type RespostaRapida,
   type AchadoNaConversa, type ItemDaGaleria,
-  useNotas, useAnotar, useApagarNota, type Nota,
+  useNotas, useAnotar, useApagarNota, type Nota, type AnexoRecado, useUrlDoRecado,
+  RECADO_MAX_ANEXOS, RECADO_LIMITE_BYTES, tipoAceitoNoRecado,
   useDefinirStatus, useDefinirResponsavel, useAtendentes,
   useTags, useCriarTag, useMarcarTag,
   useNaoContatar, useMarcarNaoContatar,
@@ -367,6 +368,7 @@ const ehNomeDeGravacao = (t: string) => /^audio-\d+\.(ogg|m4a|webm|mp4)$/i.test(
  * cada recado é o mesmo carimbo que o horário dos balões evita.
  */
 function Recado({ n, apagar }: { n: Nota; apagar: () => void }) {
+  const anexos = n.anexos ?? [];
   return (
     <div className="my-3 flex justify-center">
       <div className="group w-[92%] rounded-lg border border-dashed border-amber-500/40
@@ -384,11 +386,75 @@ function Recado({ n, apagar }: { n: Nota; apagar: () => void }) {
             <Trash2 className="h-3 w-3" />
           </button>
         </p>
-        <p className="mt-1.5 whitespace-pre-wrap break-words text-[13px] leading-relaxed">
-          {n.texto}
-        </p>
+        {n.texto.trim() && (
+          <p className="mt-1.5 whitespace-pre-wrap break-words text-[13px] leading-relaxed">
+            {n.texto}
+          </p>
+        )}
+        {anexos.length > 0 && (
+          <div className="mt-2 flex flex-wrap items-start gap-2">
+            {anexos.map((a, i) => <AnexoDoRecado key={`${i}-${a.path}`} a={a} />)}
+          </div>
+        )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Um arquivo do recado. Imagem aparece em miniatura e abre em tela cheia; PDF
+ * é um link. A URL é assinada (bucket privado) e pedida só para quem desenha.
+ */
+function AnexoDoRecado({ a }: { a: AnexoRecado }) {
+  const url = useUrlDoRecado(a.path);
+  const [amplo, setAmplo] = useState(false);
+  const imagem = a.mime.startsWith("image/");
+
+  if (url.isLoading) {
+    return <div className="flex h-24 w-32 items-center justify-center rounded-md border bg-muted/40">
+      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+    </div>;
+  }
+  if (url.isError || !url.data) {
+    return (
+      <button type="button" onClick={() => url.refetch()}
+              className="flex items-center gap-1.5 rounded-md border border-red-500/30 px-2 py-1.5
+                         text-[11px] text-red-500 hover:bg-red-500/5">
+        <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+        <span className="truncate">{a.nome} · tentar de novo</span>
+      </button>
+    );
+  }
+  if (!imagem) {
+    return (
+      <a href={url.data} target="_blank" rel="noreferrer"
+         className="flex max-w-full items-center gap-2 rounded-md border bg-background/40 px-2 py-1.5
+                    text-[11px] font-medium hover:bg-background/70">
+        <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <span className="truncate">{a.nome}</span>
+      </a>
+    );
+  }
+  return (
+    <>
+      <button type="button" onClick={() => setAmplo(true)} title="Abrir em tela cheia"
+              className="overflow-hidden rounded-md border bg-background/40">
+        <img src={url.data} alt={a.nome} loading="lazy"
+             className="max-h-40 w-auto max-w-[240px] object-contain" />
+      </button>
+      {amplo && (
+        <div role="dialog" aria-modal="true" aria-label={a.nome}
+             onClick={() => setAmplo(false)}
+             className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4">
+          <button type="button" onClick={() => setAmplo(false)} title="Fechar"
+                  className="absolute right-4 top-4 rounded-md bg-white/10 p-2 text-white hover:bg-white/20">
+            <X className="h-5 w-5" />
+          </button>
+          <img src={url.data} alt={a.nome} onClick={(e) => e.stopPropagation()}
+               className="max-h-full max-w-full rounded-md object-contain" />
+        </div>
+      )}
+    </>
   );
 }
 
@@ -1385,6 +1451,8 @@ function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false, historic
   const anotar = useAnotar();
   const apagarNota = useApagarNota();
   const [recado, setRecado] = useState("");
+  const [anexosRecado, setAnexosRecado] = useState<{ arquivo: File; url: string }[]>([]);
+  const recadoArquivoRef = useRef<HTMLInputElement | null>(null);
   const [aba, setAba] = useState<"responder" | "nota">("responder");
   const [previa, setPrevia] = useState<{ arquivo: File; url: string; som: boolean } | null>(null);
   const [legendaPrevia, setLegendaPrevia] = useState("");
@@ -1402,10 +1470,49 @@ function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false, historic
     setLegendaPrevia("");
   };
 
+  // As miniaturas do recado em preparo são revogadas ao sair — mesma razão da
+  // prévia do anexo: a aba fica aberta o dia inteiro.
+  const anexosRecadoRef = useRef(anexosRecado);
+  anexosRecadoRef.current = anexosRecado;
+  useEffect(() => () => { anexosRecadoRef.current.forEach((a) => URL.revokeObjectURL(a.url)); }, []);
+
+  /** Junta arquivos ao recado em preparo: imagem vira JPEG leve; o resto que o
+   *  bucket não aceita é recusado AQUI, antes de subir. */
+  const juntarAoRecado = async (arquivos: File[]) => {
+    const prontos: { arquivo: File; url: string }[] = [];
+    for (const bruto of arquivos) {
+      let f = ehImagem(bruto) ? await prepararImagem(bruto) : bruto;
+      if (!f.type && /\.pdf$/i.test(f.name)) f = new File([f], f.name, { type: "application/pdf" });
+      if (!tipoAceitoNoRecado(f.type)) { toast.error(`"${bruto.name}": só imagem ou PDF.`); continue; }
+      if (f.size > RECADO_LIMITE_BYTES) { toast.error(`"${bruto.name}" passa de 10 MB.`); continue; }
+      prontos.push({ arquivo: f, url: URL.createObjectURL(f) });
+    }
+    setAnexosRecado((atual) => {
+      const cabe = RECADO_MAX_ANEXOS - atual.length;
+      if (prontos.length > cabe) {
+        toast.error(`No máximo ${RECADO_MAX_ANEXOS} arquivos por recado.`);
+        prontos.slice(cabe).forEach((p) => URL.revokeObjectURL(p.url));
+      }
+      return [...atual, ...prontos.slice(0, Math.max(0, cabe))];
+    });
+  };
+
+  const tirarDoRecado = (i: number) => setAnexosRecado((atual) => {
+    URL.revokeObjectURL(atual[i].url);
+    return atual.filter((_, j) => j !== i);
+  });
+
   const anotarAgora = () => {
-    if (!recado.trim()) return;
-    anotar.mutate({ wa_id: c.wa_id, numero_id: c.numero_id, texto: recado }, {
-      onSuccess: () => { setRecado(""); setAba("responder"); toast.success("Anotado"); },
+    if (!recado.trim() && anexosRecado.length === 0) return;
+    anotar.mutate({
+      wa_id: c.wa_id, numero_id: c.numero_id, texto: recado,
+      arquivos: anexosRecado.map((a) => a.arquivo),
+    }, {
+      onSuccess: () => {
+        anexosRecado.forEach((a) => URL.revokeObjectURL(a.url));
+        setAnexosRecado([]);
+        setRecado(""); setAba("responder"); toast.success("Anotado");
+      },
       onError: (e) => toast.error((e as Error).message),
     });
   };
@@ -1500,29 +1607,38 @@ function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false, historic
    * área de transferência guarda o que foi recortado há dez minutos.
    */
   useEffect(() => {
-    if (!aberta) return;                       // janela fechada: não há o que enviar
+    // ⚠️ Na aba do recado o print vai para o RECADO, com a janela aberta ou
+    // fechada — anotar não passa pela Meta. Na aba de responder, só com a
+    // janela aberta (fechada não há o que enviar).
+    const noRecado = aba === "nota";
+    if (!noRecado && !aberta) return;
     const colar = (e: ClipboardEvent) => {
       const itens = Array.from(e.clipboardData?.items ?? []);
-      const img = itens.find((i) => i.kind === "file" && i.type.startsWith("image/"));
-      if (!img) return;                        // texto segue o caminho normal
-      const arquivo = img.getAsFile();
-      if (!arquivo) return;
+      const imgs = itens.filter((i) => i.kind === "file" && i.type.startsWith("image/"));
+      if (!imgs.length) return;                // texto segue o caminho normal
+      const arquivos = imgs.map((i) => i.getAsFile()).filter((f): f is File => !!f);
+      if (!arquivos.length) return;
       e.preventDefault();
-      if (previa) { toast.error("Envie ou descarte o anexo atual antes de colar outro."); return; }
 
       // ⚠️ Nome próprio. O que vem da área de transferência costuma chegar como
       // "image.png", e três prints na mesma conversa ficariam indistinguíveis
       // para quem for procurar depois.
-      const ext = (arquivo.type.split("/")[1] || "png").replace("jpeg", "jpg");
-      const comNome = new File([arquivo], `print-${Date.now()}.${ext}`, { type: arquivo.type });
+      const comNome = arquivos.map((arquivo, i) => {
+        const ext = (arquivo.type.split("/")[1] || "png").replace("jpeg", "jpg");
+        return new File([arquivo], `print-${Date.now()}${i ? `-${i}` : ""}.${ext}`, { type: arquivo.type });
+      });
+      if (noRecado) { void juntarAoRecado(comNome); return; }
+
+      if (previa) { toast.error("Envie ou descarte o anexo atual antes de colar outro."); return; }
       // ⚠️ Print de site vem webp/gif e foto grande passa de 5 MB: os dois a
       // Meta recusa. Vira JPEG antes da prévia — a prévia mostra o que sai.
-      void prepararImagem(comNome).then((pronto) =>
+      void prepararImagem(comNome[0]).then((pronto) =>
         setPrevia({ arquivo: pronto, url: URL.createObjectURL(pronto), som: false }));
     };
     document.addEventListener("paste", colar);
     return () => document.removeEventListener("paste", colar);
-  }, [aberta, previa]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aberta, previa, aba]);
   const nivel = nivelDaJanela(c.janela_ate);
   const tom = TOM_JANELA[nivel];
   const fracao = fracaoDaJanela(c.janela_ate);
@@ -1553,6 +1669,36 @@ function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false, historic
     if (pertoDoFim.current) { fim.current?.scrollIntoView({ block: "end" }); setNovasAbaixo(0); }
     else if (novas > 0) setNovasAbaixo((n) => n + novas);
   }, [c.mensagens.length]);
+  /* O conteúdo cresce DEPOIS da primeira rolagem: os recados chegam numa
+     consulta à parte e as imagens (do cliente e do recado) carregam depois.
+     Quem estava no fim continua no fim — sem isso a conversa abria parada
+     acima do recado mais recente. Quem estava lendo o histórico não é mexido. */
+  // ⚠️ Ref de CALLBACK, não `useRef` + `useEffect([])`: a área da conversa
+  // não existe na primeira montagem (as mensagens ainda carregam), e o efeito
+  // rodava uma vez com o ref nulo — o observador nunca era ligado.
+  const observador = useRef<ResizeObserver | null>(null);
+  const conteudo = useCallback((el: HTMLDivElement | null) => {
+    observador.current?.disconnect();
+    observador.current = null;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    // "Estava no fim" é medido contra a altura de ANTES de crescer: depois do
+    // crescimento a distância ao fim já inclui o conteúdo novo, e uma imagem
+    // de 160 px passava do limite e deixava a conversa parada acima dela.
+    let alturaAntes = 0;
+    const obs = new ResizeObserver(() => {
+      const caixa = rolagem.current;
+      if (!caixa) return;
+      // ⚠️ Sem `pertoDoFim` aqui: a ancoragem de rolagem do navegador dispara
+      // um `scroll` DEPOIS do crescimento e ANTES deste aviso, e o `aoRolar`
+      // já marcava "longe do fim" com a altura nova (medido no Chromium).
+      const estavaNoFim = alturaAntes === 0
+        || alturaAntes - caixa.scrollTop - caixa.clientHeight < 120;
+      alturaAntes = caixa.scrollHeight;
+      if (estavaNoFim) { caixa.scrollTop = caixa.scrollHeight; pertoDoFim.current = true; }
+    });
+    obs.observe(el);
+    observador.current = obs;
+  }, []);
   const aoRolar = () => {
     const el = rolagem.current;
     if (!el) return;
@@ -1904,20 +2050,19 @@ function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false, historic
         <div className="relative min-h-0 flex-1">
         <div ref={rolagem} onScroll={aoRolar}
              className="h-full overflow-y-auto px-0.5 pb-1 pr-1">
-          {(() => {
-            const linhas = montarLinhaDoTempo(c.mensagens, notas.data ?? []);
-            // ⚠️ "Peça para reenviar" UMA vez, na mensagem não entregue mais
-            // RECENTE. Repetir a instrução em cada linha não faz ninguém pedir
-            // mais de uma vez — faz parar de ler, que é a doença do sininho
-            // com 70 itens não lidos.
-            const ultimoNaoEntregue = [...linhas].reverse()
-              .find((l) => l.kind === "msg" && l.m.tipo === "unsupported");
-            const alvo = ultimoNaoEntregue && ultimoNaoEntregue.kind === "msg"
-              ? ultimoNaoEntregue.m.wamid : null;
-            return linhas.map((l) =>
-              l.kind === "dia"
-                ? <SeparadorDeDia key={l.chave} rotulo={l.rotulo} />
-                : l.kind === "nota"
+          <div ref={conteudo}>
+            {(() => {
+              const linhas = montarLinhaDoTempo(c.mensagens, notas.data ?? []);
+              // ⚠️ "Peça para reenviar" UMA vez, na mensagem não entregue mais
+              // RECENTE. Repetir a instrução em cada linha não faz ninguém pedir
+              // mais de uma vez — faz parar de ler, que é a doença do sininho
+              // com 70 itens não lidos.
+              const ultimoNaoEntregue = [...linhas].reverse()
+                .find((l) => l.kind === "msg" && l.m.tipo === "unsupported");
+              const alvo = ultimoNaoEntregue && ultimoNaoEntregue.kind === "msg"
+                ? ultimoNaoEntregue.m.wamid : null;
+              const item = (l: Exclude<typeof linhas[number], { kind: "dia" }>) =>
+                l.kind === "nota"
                   ? <Recado key={l.n.id} n={l.n}
                             apagar={() => apagarNota.mutate({ id: l.n.id, wa_id: c.wa_id })} />
                   : <div key={l.m.wamid} id={`msg-${l.m.wamid}`}
@@ -1926,10 +2071,27 @@ function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false, historic
                            : undefined}>
                       <Balao m={l.m} primeira={l.primeira} ultima={l.ultima}
                              mostrarComoReenviar={l.m.wamid === alvo} />
-                    </div>,
-            );
-          })()}
-          <div ref={fim} />
+                    </div>;
+              // ⚠️ Um BLOCO por dia: o chip da data é `sticky` dentro do dia
+              // dele e o dia seguinte o empurra para fora. Soltos na mesma
+              // lista, todos grudavam no topo e um ficava por cima do outro.
+              const dias: { chave: string; rotulo: string | null; itens: typeof linhas }[] = [];
+              for (const l of linhas) {
+                if (l.kind === "dia") dias.push({ chave: l.chave, rotulo: l.rotulo, itens: [] });
+                else {
+                  if (!dias.length) dias.push({ chave: "inicio", rotulo: null, itens: [] });
+                  dias[dias.length - 1].itens.push(l);
+                }
+              }
+              return dias.map((d) => (
+                <section key={d.chave}>
+                  {d.rotulo != null && <SeparadorDeDia rotulo={d.rotulo} />}
+                  {d.itens.map((l) => l.kind === "dia" ? null : item(l))}
+                </section>
+              ));
+            })()}
+            <div ref={fim} />
+          </div>
         </div>
         {novasAbaixo > 0 && (
           <button type="button"
@@ -2074,6 +2236,31 @@ function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false, historic
                 if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); anotarAgora(); }
               }}
             />
+            {anexosRecado.length > 0 && (
+              <div className="mt-1.5 flex flex-wrap gap-1.5 px-1">
+                {anexosRecado.map((a, i) => (
+                  <div key={a.url} className="group/anexo relative">
+                    {a.arquivo.type.startsWith("image/") ? (
+                      <img src={a.url} alt={a.arquivo.name}
+                           className="h-16 w-16 rounded-md border object-cover" />
+                    ) : (
+                      <div className="flex h-16 w-28 flex-col items-center justify-center gap-1 rounded-md
+                                      border bg-background/60 px-1.5 text-center">
+                        <FileText className="h-4 w-4 text-muted-foreground" />
+                        <span className="w-full truncate text-[10px]">{a.arquivo.name}</span>
+                      </div>
+                    )}
+                    <button type="button" onClick={() => tirarDoRecado(i)}
+                            disabled={anotar.isPending}
+                            aria-label={`Tirar ${a.arquivo.name}`}
+                            className="absolute -right-1.5 -top-1.5 rounded-full border bg-background p-0.5
+                                       text-muted-foreground shadow-sm hover:text-red-500">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="mt-1.5 flex items-center justify-between gap-2 border-t
                             border-amber-500/20 pt-1.5">
               {/* ⚠️ Este é o aviso que FICA, porque está colado no botão: é aqui
@@ -2086,14 +2273,29 @@ function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false, historic
                 <EyeOff className="h-3 w-3 shrink-0" />
                 não vai para o WhatsApp
               </p>
-              <Button size="sm" className="h-8 gap-1.5"
-                      disabled={!recado.trim() || anotar.isPending}
-                      onClick={anotarAgora}>
-                {anotar.isPending
-                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  : <StickyNote className="h-3.5 w-3.5" />}
-                Anotar
-              </Button>
+              <div className="flex items-center gap-1.5">
+                <input ref={recadoArquivoRef} type="file" className="hidden" multiple
+                       accept="image/*,application/pdf"
+                       onChange={(e) => {
+                         const escolhidos = Array.from(e.target.files ?? []);
+                         e.target.value = "";
+                         if (escolhidos.length) void juntarAoRecado(escolhidos);
+                       }} />
+                <Button size="sm" variant="outline" className="h-8 w-8 p-0"
+                        title="Anexar imagem ou PDF"
+                        disabled={anotar.isPending || anexosRecado.length >= RECADO_MAX_ANEXOS}
+                        onClick={() => recadoArquivoRef.current?.click()}>
+                  <Paperclip className="h-3.5 w-3.5" />
+                </Button>
+                <Button size="sm" className="h-8 gap-1.5"
+                        disabled={(!recado.trim() && anexosRecado.length === 0) || anotar.isPending}
+                        onClick={anotarAgora}>
+                  {anotar.isPending
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : <StickyNote className="h-3.5 w-3.5" />}
+                  Anotar
+                </Button>
+              </div>
             </div>
           </div>
         ) : aberta ? (

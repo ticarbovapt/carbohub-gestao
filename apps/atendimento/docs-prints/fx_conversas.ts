@@ -157,6 +157,9 @@ const CONVERSA_TAG = [
 
 const NOTAS = [
   { id: "nota1", wa_id: luana.wa_id, texto: "A Jadlog confirmou a previsão para quinta. Se ela perguntar de novo, pode garantir antes de sábado.", autor: U.gestor.id, autor_nome: "Marina Alves", criado_em: min(18), apagada_em: null },
+  { id: "nota2", wa_id: luana.wa_id, texto: "Print do rastreio de hoje.", autor: U.colab.id, autor_nome: "Rafael Costa", criado_em: min(12), apagada_em: null,
+    anexos: [{ path: "/docs/conversa-aberta.jpg", nome: "print-rastreio.jpg", mime: "image/jpeg", tamanho: 180000 },
+             { path: "/docs/conversa-aberta.jpg", nome: "comprovante-jadlog.pdf", mime: "application/pdf", tamanho: 90000 }] },
 ];
 const AGENDADAS = [
   { id: "ag1", wa_id: rodrigo.wa_id, texto: "Rodrigo, a troca foi aprovada! O kit de sachês sai amanhã.", enviar_em: new Date(agora + 150 * 60000).toISOString(), status: "pendente", motivo: null, erro_codigo: null, criado_em: min(30) },

@@ -80,7 +80,8 @@ export const supabase: Record<string, unknown> = {
   getChannels: () => [],
   storage: { from: () => ({
     getPublicUrl: (p: string) => ({ data: { publicUrl: `/docs-mock/${p}` } }),
-    createSignedUrl: async () => ({ data: { signedUrl: "" }, error: null }),
+    // Caminho que já é do `public/` (começa com "/") vira a própria URL.
+    createSignedUrl: async (p: string) => ({ data: { signedUrl: p.startsWith("/") ? p : "" }, error: null }),
     createSignedUrls: async () => ({ data: [], error: null }),
     upload: async () => ({ data: { path: "x" }, error: null }),
     remove: async () => ({ data: [], error: null }),

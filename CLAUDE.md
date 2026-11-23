@@ -3078,6 +3078,24 @@ webhook com log cru e reprocessamento.
    nulo, e NULL tirava a conversa das DUAS listas (achado no teste local).
    Testado: 2.000 conversas, nenhuma que pede alguém fora das ativas; conversa
    só com aviso fica quieta.
+10. **Recado interno com imagem e PDF** (`20261189`): `carbo_wa_notas.anexos`
+   (lista de `{path, nome, mime, tamanho}`, até 10) e o bucket PRIVADO
+   `wa-recados` (`<numero>/<wa_id>/<uuid>.<ext>`, 10 MB, imagem ou PDF; ler e
+   subir = time interno; sem UPDATE/DELETE). Recado pode ser só a imagem. Clipe
+   ou Ctrl+V na aba Recado interno (com a janela aberta OU fechada); imagem passa
+   pelo `prepararImagem`. A tela lê por URL assinada (`useUrlDoRecado`, 1 h).
+   ⚠️ Separado do `wa-midia` (arquivo do CLIENTE, só a edge function entrega).
+   ⚠️ O arquivo sobe ANTES da linha; a linha falhando deixa arquivo solto no
+   bucket privado (o lado barato do erro).
+11. **Rolagem**: quem está no fim continua no fim quando o conteúdo cresce
+   DEPOIS (recados chegam numa consulta à parte, imagens carregam depois) —
+   `ResizeObserver` num ref de CALLBACK (a área não existe na 1ª montagem; com
+   `useRef` + `useEffect([])` ele nunca ligava). ⚠️ "Estava no fim" é medido
+   contra a altura de ANTES de crescer, sem o `pertoDoFim`: a ancoragem de
+   rolagem do navegador dispara um `scroll` entre o crescimento e o aviso e
+   marcava "longe do fim" (medido no Chromium). E cada DIA é um `<section>`: o
+   chip da data gruda só dentro do dia dele (antes todos grudavam no topo, um
+   sobre o outro).
 
 ### ⚠️ Conversas e Esteira a 500 vendas/semana: o teto e o índice (19/10/2026)
 Queixa do dono do processo: *"demora para abrir"* e *"diz que foi enviada
