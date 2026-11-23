@@ -146,7 +146,7 @@ export const SECOES_CONVERSAS: Secao[] = [
           { n: 7, titulo: "Botão do aviso", texto: "O botão “Acompanhar pedido” que o cliente recebeu junto, com o código de rastreio." },
           { n: 8, titulo: "Mensagem do cliente", texto: "O que o cliente escreveu, com a hora." },
           { n: 9, titulo: "Resposta do time", texto: "Embaixo, quem do time enviou e a hora (o cliente não vê o nome). Um tique: enviada; dois: entregue; dois azuis: lida. Se não chegar, aparece em vermelho “não chegou ao cliente” com o motivo." },
-          { n: 10, titulo: "Áudio, documento ou foto", texto: "Foto aparece sozinha; áudio e documento abrem no clique (“toque para ouvir”, “toque para abrir”). Se o cliente mandou um formato que o WhatsApp não entrega, aparece “mensagem não entregue pelo WhatsApp” — peça para ele reenviar como texto, foto ou áudio." },
+          { n: 10, titulo: "Áudio, documento ou foto", texto: "Foto e áudio aparecem sozinhos (o áudio já vem pronto para tocar); documento abre no clique. Se o arquivo não carregar, o próprio balão oferece tentar de novo ou baixar. Se o cliente mandou um formato que o WhatsApp não entrega, aparece “mensagem não entregue pelo WhatsApp” — peça para ele reenviar como texto, foto ou áudio." },
           { n: 11, titulo: "Recado interno", texto: "Anotação do time, com moldura tracejada laranja e “só o time vê”. Fica no ponto da conversa em que foi escrita, com o autor e a hora. Nunca vai para o cliente." },
           { n: 12, titulo: "Responder", texto: "Aba para escrever ao cliente." },
           { n: 13, titulo: "Recado interno", texto: "Aba para escrever um recado para o time em vez de para o cliente." },
@@ -171,12 +171,14 @@ export const SECOES_CONVERSAS: Secao[] = [
       },
       {
         titulo: "Recado interno",
-        print: { chave: "conversa-recado", legenda: "A aba Recado interno, com um recado sendo escrito." },
+        print: { chave: "conversa-recado", legenda: "A aba Recado interno, com um recado sendo escrito e um print anexado." },
         itens: [
           { n: 1, titulo: "Aba Recado interno", texto: "O campo passa a escrever para o time, em laranja." },
           { n: 2, titulo: "O recado", texto: "Escreva o que o colega precisa saber (até 2.000 letras). Ctrl + Enter também anota." },
-          { n: 3, titulo: "Não vai para o WhatsApp", texto: "Lembrete de que o cliente nunca vê este texto." },
+          { n: 3, titulo: "Não vai para o WhatsApp", texto: "Lembrete de que o cliente nunca vê este texto nem as imagens do recado." },
           { n: 4, titulo: "Anotar", texto: "Grava o recado na conversa e volta para a aba Responder. Funciona mesmo com a janela fechada." },
+          { n: 5, titulo: "Anexar", texto: "Junta imagens ou PDF ao recado (até 10, de até 10 MB cada). Com a aba Recado interno aberta, Ctrl + V cola um print direto no recado. O recado pode ser só a imagem, sem texto; o × tira o arquivo antes de anotar." },
+          { titulo: "Ver a imagem", texto: "No recado gravado, a imagem aparece em miniatura: clique para abrir em tela cheia. O PDF abre numa aba nova." },
         ],
       },
       {
@@ -240,6 +242,7 @@ export const SECOES_CONVERSAS: Secao[] = [
           { n: 10, titulo: "+ etiqueta", texto: "Abre a lista de etiquetas para marcar, e um campo para criar uma nova." },
           { n: 11, titulo: "Pedido", texto: "O pedido de que a conversa trata: número, etapa, valor, data e os itens comprados. Clique para abrir o card completo da Esteira do On-line sem sair da conversa." },
           { n: 12, titulo: "Links de checkout", texto: "Os links de compra dos kits, do preço cheio ao maior desconto. O ícone de copiar põe o link na área de transferência para colar na resposta; a seta abre o checkout numa nova aba. Nada é enviado sozinho." },
+          { n: 13, titulo: "Pós-venda", texto: "Os pedidos deste telefone com o caso de pós-venda de cada um. “Abrir caso” começa um caso daqui mesmo; a seta abre o pedido no Pós-venda." },
         ],
       },
       {

@@ -9,6 +9,14 @@ const AQUI = path.dirname(fileURLToPath(import.meta.url));
 const { chromium } = await import(process.env.PW ?? "playwright");
 const OUT = process.env.OUT ?? path.join(AQUI, "../public/docs"), MARC = process.env.MARC ?? path.join(AQUI, "marcadores.json");
 const CHROME = process.env.CHROME ?? "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
+// 3 s de silêncio, 8 kHz, 8 bits, mono.
+const WAV = (() => {
+  const n = 8000 * 3, b = Buffer.alloc(44 + n, 128);
+  b.write("RIFF", 0); b.writeUInt32LE(36 + n, 4); b.write("WAVEfmt ", 8); b.writeUInt32LE(16, 16);
+  b.writeUInt16LE(1, 20); b.writeUInt16LE(1, 22); b.writeUInt32LE(8000, 24); b.writeUInt32LE(8000, 28);
+  b.writeUInt16LE(1, 32); b.writeUInt16LE(8, 34); b.write("data", 36); b.writeUInt32LE(n, 40);
+  return b;
+})();
 const SO = (process.env.SO ?? "").split(",").filter(Boolean);
 const BASE = process.env.BASE ?? "http://localhost:8099";
 const marc = fs.existsSync(MARC) ? JSON.parse(fs.readFileSync(MARC, "utf8")) : {};
@@ -23,6 +31,9 @@ for (const s of SHOTS) {
   p.on("pageerror", (e) => console.log("  ERRO", s.chave, e.message));
   await p.addInitScript((pp) => { localStorage.setItem("mock-papel", pp); localStorage.setItem("carbo-theme", "light"); }, s.papel);
   await p.route(/nominatim|tile\.openstreetmap|brasilapi|viacep|dicebear|record_app_access/, (r) => r.fulfill({ status: 200, body: "[]" }));
+  // A mídia da conversa (áudio, documento): sem isto o balão mostra "Sem
+  // conexão" no print. Um WAV de 3 s de silêncio serve para os dois.
+  await p.route(/functions\/v1\/whatsapp-midia-baixar/, (r) => r.fulfill({ status: 200, contentType: "audio/wav", body: WAV }));
   try {
     await p.goto(BASE + s.url, { waitUntil: "domcontentloaded", timeout: 30000 }); await p.waitForTimeout(1800);
     if (s.antes) await s.antes(p);

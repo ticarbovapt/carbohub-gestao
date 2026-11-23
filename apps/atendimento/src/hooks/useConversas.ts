@@ -881,6 +881,14 @@ export function useCancelarAgendada() {
 
 // ─── Recado interno ──────────────────────────────────────────────────────────
 
+/** Arquivo anexado ao recado (bucket privado `wa-recados`, 20261189). */
+export interface AnexoRecado {
+  path: string;
+  nome: string;
+  mime: string;
+  tamanho: number;
+}
+
 export interface Nota {
   id: string;
   wa_id: string;
@@ -888,6 +896,23 @@ export interface Nota {
   autor: string | null;
   autor_nome: string | null;
   criado_em: string;
+  /** Ausente antes da 20261189 — a tela trata como lista vazia. */
+  anexos?: AnexoRecado[] | null;
+}
+
+export const BUCKET_RECADOS = "wa-recados";
+/** O mesmo teto do bucket (10 MB) e da trava da tabela (10 anexos). */
+export const RECADO_LIMITE_BYTES = 10 * 1024 * 1024;
+export const RECADO_MAX_ANEXOS = 10;
+
+const EXT_RECADO: Record<string, string> = {
+  "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif",
+  "application/pdf": "pdf",
+};
+
+/** Os tipos que o bucket aceita — o resto é recusado ANTES de subir. */
+export function tipoAceitoNoRecado(mime: string): boolean {
+  return mime in EXT_RECADO;
 }
 
 /**
@@ -920,23 +945,66 @@ export function useNotas(wa_id: string | null, numero_id?: string | null) {
 export function useAnotar() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ wa_id, texto, numero_id }:
-                       { wa_id: string; texto: string; numero_id?: string | null }) => {
+    mutationFn: async ({ wa_id, texto, numero_id, arquivos = [] }:
+                       { wa_id: string; texto: string; numero_id?: string | null; arquivos?: File[] }) => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Sessão expirada. Faça login novamente.");
+      if (arquivos.length > RECADO_MAX_ANEXOS) {
+        throw new Error(`No máximo ${RECADO_MAX_ANEXOS} arquivos por recado.`);
+      }
+      for (const f of arquivos) {
+        if (!tipoAceitoNoRecado(f.type)) throw new Error(`"${f.name}": só imagem ou PDF.`);
+        if (f.size > RECADO_LIMITE_BYTES) throw new Error(`"${f.name}" passa de 10 MB.`);
+      }
 
       // O nome é COPIADO para a linha: quem escreveu continua sendo quem
       // escreveu depois de sair da empresa ou ter o perfil desativado.
       const { data: perfil } = await (supabase as any)
         .from("profiles").select("full_name").eq("id", session.user.id).maybeSingle();
 
-      const { error } = await (supabase as any).from("carbo_wa_notas").insert({
+      // ⚠️ Os arquivos sobem ANTES da linha: recado gravado apontando para
+      // arquivo que não subiu seria imagem quebrada para sempre. O contrário
+      // (subiu e a linha falhou) deixa um arquivo solto no bucket privado,
+      // que ninguém vê — o lado barato do erro.
+      const anexos: AnexoRecado[] = [];
+      for (const f of arquivos) {
+        const path = `${numero_id ?? "sem-numero"}/${wa_id}/${crypto.randomUUID()}.${EXT_RECADO[f.type]}`;
+        const { error: eUp } = await (supabase as any).storage.from(BUCKET_RECADOS)
+          .upload(path, f, { contentType: f.type, upsert: false });
+        if (eUp) throw new Error(`Não subiu "${f.name}": ${eUp.message}`);
+        anexos.push({ path, nome: f.name, mime: f.type, tamanho: f.size });
+      }
+
+      const linha: Record<string, unknown> = {
         wa_id, numero_id, texto: texto.trim(), autor: session.user.id,
         autor_nome: perfil?.full_name ?? session.user.email ?? null,
-      });
+      };
+      // Só manda a coluna quando há anexo: front no ar antes da 20261189
+      // continua gravando recado de texto.
+      if (anexos.length) linha.anexos = anexos;
+      const { error } = await (supabase as any).from("carbo_wa_notas").insert(linha);
       if (error) throw error;
     },
     onSuccess: (_d, v) => { qc.invalidateQueries({ queryKey: ["wa-notas", v.wa_id] }); },
+  });
+}
+
+/**
+ * URL assinada de um anexo do recado (bucket privado). Vale 1 h; a consulta é
+ * refeita antes de vencer para a imagem não quebrar com a conversa aberta.
+ */
+export function useUrlDoRecado(path: string | null) {
+  return useQuery({
+    queryKey: ["wa-recado-url", path],
+    enabled: !!path,
+    staleTime: 50 * 60_000,
+    refetchInterval: 50 * 60_000,
+    queryFn: async (): Promise<string> => {
+      const { data, error } = await (supabase as any).storage.from(BUCKET_RECADOS)
+        .createSignedUrl(path, 3600);
+      if (error || !data?.signedUrl) throw new Error(error?.message ?? "Arquivo indisponível.");
+      return data.signedUrl as string;
+    },
   });
 }
 
