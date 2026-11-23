@@ -673,3 +673,25 @@ export function preencherResposta(corpo: string, valores: Partial<Record<string,
     return v ? v : `[${VARIAVEIS_DA_RESPOSTA[k]}]`;
   });
 }
+
+/**
+ * A conversa que NÃO está na caixa carregada (mais de 30 dias, ou aberta por
+ * link do Pós-venda/Painel), montada só com as mensagens DELA.
+ *
+ * ⚠️ Existe porque a reserva antiga era `lista[0]`: o link `?de=` de uma
+ * conversa fora da caixa abria OUTRO cliente, calado, com a URL dizendo um
+ * número e a tela mostrando outro — risco de responder à pessoa errada.
+ *
+ * A janela sai da última mensagem do cliente (é exatamente o que o
+ * `last_inbound_at` guarda). Status, responsável e etiquetas não vêm: a caixa
+ * não as leu, e inventá-las seria pior que mostrá-las vazias.
+ */
+export function conversaAvulsa(msgs: MensagemConversa[]): Conversa | null {
+  if (!msgs.length) return null;
+  const waId = msgs[0].wa_id;
+  const entradas = msgs.filter((m) => m.direcao === "entrada")
+    .map((m) => new Date(m.ocorrido_em).getTime());
+  const ultima = entradas.length ? Math.max(...entradas) : null;
+  const janelas = { [waId]: ultima ? new Date(ultima + JANELA_MS).toISOString() : null };
+  return agruparConversas(msgs, janelas)[0] ?? null;
+}

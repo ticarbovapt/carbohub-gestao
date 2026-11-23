@@ -51,8 +51,12 @@ export function RiscoBadge() {
 
 export function AbrirConversa({ numeroId, waId, className, compacto = false }: { numeroId: string; waId: string; className?: string; compacto?: boolean }) {
   return (
+    // Nova guia (pedido do atendimento, 19/11/2026): o painel fica aberto e a
+    // conversa ao lado — quem cobra a fila não perde o lugar.
     <Link
       to={linkDaConversa(numeroId, waId)}
+      target="_blank"
+      rel="noopener"
       className={cn(
         "inline-flex shrink-0 items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted",
         className,

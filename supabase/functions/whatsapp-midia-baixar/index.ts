@@ -14,18 +14,22 @@
 // Esta função é a ponte: autentica quem pede, busca com o nosso token e
 // devolve os bytes.
 //
-// ── ⚠️ O que ela NÃO resolve ────────────────────────────────────────────────
+// ── O cofre (23/11/2026) ─────────────────────────────────────────────────────
 //
-// A Meta guarda a mídia por cerca de 30 dias. Depois disso o `media_id` morre e
-// não há o que buscar. Para atendimento é tempo de sobra; para histórico, não —
-// e aí o caminho é baixar no recebimento e guardar no nosso storage, que é
-// outra decisão (custo, LGPD, retenção).
+// A Meta guarda a mídia por ~30 dias. Desde 23/11 o arquivo fica também no
+// bucket privado `wa-midia` (ver `_shared/waMidiaCofre.ts`): esta função lê
+// de lá primeiro e, quando não acha, busca na Meta e GUARDA — o histórico de
+// antes da mudança vai sendo guardado na primeira abertura, enquanto a Meta
+// ainda o tiver.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 import { ehTimeInterno } from "../_shared/interfacesInternas.ts";
 import { cors } from "../_shared/cors.ts";
+import {
+  baixarDaMeta, guardarNoCofre, lerDoCofre,
+} from "../_shared/waMidiaCofre.ts";
 // deno-lint-ignore-file no-explicit-any
 
 
@@ -84,49 +88,32 @@ Deno.serve(async (req: Request) => {
     .from("carbo_wa_mensagens").select("wamid").eq("midia_id", mediaId).limit(1);
   if (!existe?.length) return json({ error: "mídia não encontrada nas conversas" }, 404);
 
-  // ── 1. A URL temporária ─────────────────────────────────────────────────
-  let url = "", mime = "application/octet-stream";
-  try {
-    const res = await fetch(`https://graph.facebook.com/${VERSAO}/${mediaId}`, {
-      headers: { "Authorization": `Bearer ${TOKEN}` },
-    });
-    const meta = await res.json().catch(() => ({}));
-    if (!res.ok || !meta?.url) {
-      // O 404 aqui quase sempre é a retenção de 30 dias, e dizer isso poupa
-      // meia hora de gente procurando bug onde não há.
-      return json({
-        error: "midia_indisponivel",
-        detalhe: res.status === 404
-          ? "A Meta guarda a mídia por cerca de 30 dias — este arquivo já expirou."
-          : (meta?.error?.message ?? `HTTP ${res.status}`),
-      }, 404);
-    }
-    url = String(meta.url);
-    mime = String(meta.mime_type ?? mime);
-  } catch (e) {
-    return json({ error: "midia_indisponivel", detalhe: String((e as Error)?.message ?? e) }, 502);
-  }
+  // ⚠️ (23/11/2026) Cache de UM ANO: o arquivo do cofre não muda nunca, e o
+  // `media_id` aponta sempre para o mesmo arquivo.
+  const responder = (bytes: Uint8Array, mime: string) => new Response(bytes, {
+    status: 200,
+    headers: {
+      ...base,
+      "Content-Type": mime,
+      // `private`: o conteúdo é de cliente e não pode ficar em cache compartilhado.
+      "Cache-Control": "private, max-age=31536000, immutable",
+    },
+  });
 
-  // ── 2. Os bytes, e o Authorization vai JUNTO ────────────────────────────
-  try {
-    const res = await fetch(url, { headers: { "Authorization": `Bearer ${TOKEN}` } });
-    if (!res.ok) {
-      return json({ error: "midia_indisponivel", detalhe: `download HTTP ${res.status}` }, 502);
-    }
-    return new Response(res.body, {
-      status: 200,
-      headers: {
-        ...base,
-        "Content-Type": mime,
-        // ⚠️ `private`: o conteúdo é de cliente e não pode ficar em cache
-        // compartilhado. `immutable` porque o `media_id` aponta sempre para o
-        // mesmo arquivo — o que expira é o id (uns 30 dias na Meta), não o
-        // conteúdo. Um dia de cache poupa o download a cada F5 sem prometer
-        // mais do que a Meta guarda.
-        "Cache-Control": "private, max-age=86400, immutable",
-      },
-    });
-  } catch (e) {
-    return json({ error: "midia_indisponivel", detalhe: String((e as Error)?.message ?? e) }, 502);
+  // ── 1. O cofre (bucket `wa-midia`) ───────────────────────────────────────
+  // Lá mora o que o webhook guardou ao receber, o que nós enviamos, e o que
+  // alguém já abriu antes. Não depende da Meta nem do prazo dela.
+  const doCofre = await lerDoCofre(supabase, mediaId);
+  if (doCofre) return responder(doCofre.bytes, doCofre.mime);
+
+  // ── 2. A Meta, e guarda para a próxima vez ──────────────────────────────
+  const b = await baixarDaMeta(mediaId, TOKEN, VERSAO);
+  if (!b.ok) {
+    // ⚠️ A frase em português chega à tela; o erro cru da Graph ("Unsupported
+    // get request…") chegava em inglês e não dizia nada a quem atende.
+    return json({ error: b.expirada ? "midia_expirada" : "midia_indisponivel", detalhe: b.detalhe },
+                b.expirada ? 404 : 502);
   }
+  await guardarNoCofre(supabase, mediaId, b.bytes, b.mime);
+  return responder(b.bytes, b.mime);
 });

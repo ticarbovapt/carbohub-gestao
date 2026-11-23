@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  conferirMidia, corpoDaMidia, mimeBase, aceitaLegenda,
+  conferirMidia, corpoDaMidia, mimeBase, aceitaLegenda, mimeDoArquivo,
 } from "../../../supabase/functions/_shared/metaMidia.ts";
 
 const MB = 1024 * 1024;
@@ -115,5 +115,35 @@ describe("corpoDaMidia", () => {
   it("imagem não leva filename — só documento", () => {
     const b = corpoDaMidia("55849", "image", "m5", null, "foto.jpg") as any;
     expect(b.image.filename).toBeUndefined();
+  });
+});
+
+describe("mimeDoArquivo — foto que o sistema chama de outro jeito (23/11/2026)", () => {
+  it("image/jpg, image/pjpeg e image/x-png viram o nome certo", () => {
+    expect(mimeDoArquivo("image/jpg")).toBe("image/jpeg");
+    expect(mimeDoArquivo("image/pjpeg")).toBe("image/jpeg");
+    expect(mimeDoArquivo("image/x-png")).toBe("image/png");
+  });
+
+  it("sem tipo ou genérico: vale a extensão", () => {
+    expect(mimeDoArquivo("", "Foto 01.JPG")).toBe("image/jpeg");
+    expect(mimeDoArquivo("application/octet-stream", "print.png")).toBe("image/png");
+    expect(mimeDoArquivo("", "comprovante.pdf")).toBe("application/pdf");
+  });
+
+  it("tipo conhecido manda mais que a extensão", () => {
+    expect(mimeDoArquivo("image/png", "foto.jpg")).toBe("image/png");
+  });
+
+  it("extensão desconhecida continua sem tipo — e é recusada com frase", () => {
+    expect(mimeDoArquivo("", "foto.heic")).toBe("");
+    expect(conferirMidia("", 100_000, "foto.heic")).toMatchObject({ ok: false });
+  });
+
+  it("conferirMidia aceita a foto com apelido", () => {
+    expect(conferirMidia("image/jpg", 2 * MB, "foto.jpg"))
+      .toMatchObject({ ok: true, tipo: "image", mime: "image/jpeg" });
+    expect(conferirMidia("", 2 * MB, "foto.jpeg"))
+      .toMatchObject({ ok: true, tipo: "image", mime: "image/jpeg" });
   });
 });

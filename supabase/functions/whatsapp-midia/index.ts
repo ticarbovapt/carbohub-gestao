@@ -25,8 +25,9 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { detalheDoErro } from "../_shared/metaTemplate.ts";
-import { conferirMidia, corpoDaMidia } from "../_shared/metaMidia.ts";
+import { conferirMidia, corpoDaMidia, mimeBase } from "../_shared/metaMidia.ts";
 import { webmParaOgg } from "../_shared/webmParaOgg.ts";
+import { guardarNoCofre } from "../_shared/waMidiaCofre.ts";
 
 import { ehTimeInterno } from "../_shared/interfacesInternas.ts";
 import { cors } from "../_shared/cors.ts";
@@ -149,6 +150,12 @@ Deno.serve(async (req: Request) => {
     console.log("[midia] remux webm→ogg", { pacotes: r.pacotes, duracao: r.duracao,
                                             de: arquivo.size, para: r.ogg.length });
   }
+  // ⚠️ O tipo DECLARADO do pedaço tem de ser o mesmo do `type` (23/11/2026):
+  // foto que chega como `image/jpg` ou sem tipo seguia com o tipo errado dentro
+  // do multipart, e a Meta a recusava mesmo aceita aqui.
+  else if (mimeBase(arquivo.type) !== veredito.mime) {
+    corpoArquivo = new Blob([await arquivo.arrayBuffer()], { type: veredito.mime });
+  }
 
   // ── 5. Sobe o arquivo ───────────────────────────────────────────────────
   const upload = new FormData();
@@ -178,6 +185,12 @@ Deno.serve(async (req: Request) => {
   } catch (e) {
     return json({ error: "falha_no_upload", detalhe: String((e as Error)?.message ?? e) }, 502);
   }
+
+  // ⚠️ (23/11/2026) O arquivo que MANDAMOS fica no nosso cofre (`wa-midia`):
+  // é o mesmo que acabou de subir, então guardar custa um upload e nunca mais
+  // depende da Meta para aparecer na conversa. Era o "aviso amarelo" nos
+  // áudios do atendimento. Falhar aqui não impede o envio.
+  await guardarNoCofre(supabase, mediaId, corpoArquivo, veredito.mime!);
 
   // ── 6. Manda ────────────────────────────────────────────────────────────
   const payload = corpoDaMidia(waId, veredito.tipo!, mediaId, legenda, nomeUpload);

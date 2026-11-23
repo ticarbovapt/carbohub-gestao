@@ -35,6 +35,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   interpretar, assinaturaConfere, statusDeTemplate,
 } from "../_shared/metaWebhook.ts";
+import { buscarEGuardar } from "../_shared/waMidiaCofre.ts";
 
 // deno-lint-ignore-file no-explicit-any
 
@@ -45,6 +46,8 @@ const supabase = createClient(
 
 const APP_SECRET   = Deno.env.get("WHATSAPP_APP_SECRET") ?? "";
 const VERIFY_TOKEN = Deno.env.get("WHATSAPP_WEBHOOK_VERIFY_TOKEN") ?? "";
+const TOKEN        = Deno.env.get("WHATSAPP_ACCESS_TOKEN") ?? "";
+const VERSAO       = Deno.env.get("WHATSAPP_API_VERSION") ?? "v25.0";
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body, null, 2), {
@@ -113,6 +116,8 @@ Deno.serve(async (req: Request) => {
   }
 
   let status = 0, inbound = 0, templates = 0, repetidos = 0;
+  // Mídia que o cliente mandou: guardada no NOSSO storage depois de responder.
+  const midiasAGuardar: string[] = [];
   const falhas: Array<{ chave: string; motivo: string }> = [];
 
   for (const entry of payload?.entry ?? []) {
@@ -207,6 +212,7 @@ Deno.serve(async (req: Request) => {
             }, { onConflict: "wamid" });
             if (e2b) throw new Error(`mensagem ${acao.wamid}: ${e2b.message}`);
             inbound++;
+            if (acao.midiaId) midiasAGuardar.push(acao.midiaId);
           } else if (acao.tipo === "template") {
             const novo = statusDeTemplate(acao.evento);
             // Evento desconhecido não vira status inventado: o CHECK recusaria
@@ -243,5 +249,15 @@ Deno.serve(async (req: Request) => {
     ...(falhas.length ? { falhas } : {}),
   };
   if (status || inbound || templates) console.log("[webhook]", JSON.stringify(resumo));
+
+  // ⚠️ (23/11/2026) A mídia do cliente vai para o cofre (`wa-midia`) DEPOIS de
+  // responder: a Meta espera um 200 rápido, e baixar um vídeo antes dele faria
+  // o aviso ser reentregue. Falhar aqui não muda nada no que já foi gravado —
+  // o `whatsapp-midia-baixar` guarda na primeira abertura, como reserva.
+  if (midiasAGuardar.length && TOKEN) {
+    const guardar = Promise.all(midiasAGuardar.map((id) => buscarEGuardar(supabase, id, TOKEN, VERSAO)));
+    const rt = (globalThis as any).EdgeRuntime;
+    if (rt?.waitUntil) rt.waitUntil(guardar); else await guardar;
+  }
   return json(resumo);
 });

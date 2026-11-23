@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, FUNCTIONS_URL } from "@/integrations/supabase/client";
 import { lerSemTeto, lerPorIdsSemTeto } from "@carbo/shell";
@@ -97,14 +97,18 @@ export function useNumeros() {
  * com o teto — a tela continua como era em vez de quebrar. O aviso vai ao
  * console para não passar calado.
  */
-/** Lê sem teto; erro vira `{ data: null }` (avisado no console), que era o que
- *  estas leituras auxiliares faziam: sem elas a caixa continua aparecendo. */
+/** Lê sem teto. ⚠️ O erro SOBE (23/11/2026). Antes virava `{ data: null }`, e
+ *  a falha de UMA leitura auxiliar desenhava uma caixa errada com cara de
+ *  certa: sem `carbo_wa_contatos` todas as janelas apareciam fechadas (o campo
+ *  de resposta sumia de todas as conversas); sem `carbo_wa_atendimento` tudo
+ *  aparecia "sem dono", e quem atende assumia conversa que já tinha dono.
+ *  Subindo o erro, a recarga que falha MANTÉM a caixa anterior na tela (o
+ *  react-query não descarta o dado bom) e a primeira carga mostra o erro. */
 async function semTetoOuNulo(nome: string, montar: () => any): Promise<{ data: any[] | null }> {
   try {
     return { data: await lerSemTeto<any>(montar) };
   } catch (e) {
-    console.error(`[conversas] ${nome}:`, (e as Error).message);
-    return { data: null };
+    throw new Error(`${nome}: ${(e as Error).message}`);
   }
 }
 
@@ -303,23 +307,28 @@ export function useConversas(dias = 30, numeroId?: string | null) {
  * exatamente o erro que fez a notificação de venda online julgar sozinha e dar
  * três toasts por pedido antigo depois de um F5.
  */
-export function useConversasAoVivo() {
+export function useConversasAoVivo(numeroId: string | null, waAberto: string | null) {
   const qc = useQueryClient();
   const canal = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  // A conversa aberta muda a cada clique; refazer a assinatura a cada clique
+  // perderia eventos no meio. Ela é lida por referência, na hora do evento.
+  const aberto = useRef(waAberto);
+  aberto.current = waAberto;
 
   useEffect(() => {
     if (canal.current) {
       supabase.removeChannel(canal.current);
       canal.current = null;
     }
-    /* ⚠️ A LISTA recarrega no máximo a cada 8 s; a CONVERSA aberta, na hora.
-       Cada aviso da esteira muda de status três vezes (enviado → entregue →
-       lido), e com 500 pedidos/semana isso é um evento a cada poucos segundos
-       — cada um recarregava a caixa INTEIRA, e a tela vivia "carregando". A
-       conversa aberta é uma consulta de milissegundos e continua instantânea. */
+    if (!numeroId) return;
+    /* ⚠️ A LISTA recarrega no máximo a cada 8 s; a CONVERSA aberta, na hora —
+       mas SÓ quando o evento é DELA (23/11/2026). Antes todo evento de qualquer
+       cliente (cada aviso da esteira muda de status três vezes) recarregava a
+       conversa aberta inteira, o histórico vivia em "carregando" e, quando a
+       leitura estourava o tempo, a tela ficava só com o resumo. Evento sem
+       `wa_id` (tags, cadastro) não toca na conversa. */
     let espera: ReturnType<typeof setTimeout> | null = null;
-    const invalidar = () => {
-      qc.invalidateQueries({ queryKey: ["wa-conversas", "mensagens"] });
+    const lista = () => {
       if (espera) return;
       espera = setTimeout(() => {
         espera = null;
@@ -329,15 +338,27 @@ export function useConversasAoVivo() {
         });
       }, 8_000);
     };
+    const invalidar = (ev?: { new?: any; old?: any }) => {
+      const wa = ev?.new?.wa_id ?? ev?.old?.wa_id ?? null;
+      if (wa && wa === aberto.current) {
+        qc.invalidateQueries({ queryKey: ["wa-conversas", "mensagens", numeroId, wa] });
+      }
+      lista();
+    };
+    // ⚠️ Só o que é DESTE número chega (filtro do Realtime): os avisos dos
+    // outros números não recarregam esta caixa. As tabelas pequenas ficam sem
+    // filtro de propósito — o Realtime não aplica filtro a DELETE, e tirar
+    // etiqueta é DELETE.
+    const doNumero = `numero_id=eq.${numeroId}`;
 
     canal.current = supabase
-      .channel("wa-conversas")
+      .channel(`wa-conversas-${numeroId}`)
       .on("postgres_changes" as never,
-          { event: "*", schema: "public", table: "carbo_wa_mensagens" }, invalidar)
+          { event: "*", schema: "public", table: "carbo_wa_mensagens", filter: doNumero }, invalidar)
       // UPDATE também: o status do envio (enviado → entregue → lido) muda a
       // linha sem inserir nada.
       .on("postgres_changes" as never,
-          { event: "*", schema: "public", table: "carbo_msg_envios" }, invalidar)
+          { event: "*", schema: "public", table: "carbo_msg_envios", filter: doNumero }, invalidar)
       // ⚠️ E a marca de resolvida: sem ela, duas pessoas atendendo veriam filas
       // diferentes, e a segunda responderia o que a primeira já respondeu.
       .on("postgres_changes" as never,
@@ -347,7 +368,7 @@ export function useConversasAoVivo() {
       // refetch da lista de agendadas.
       .on("postgres_changes" as never,
           { event: "*", schema: "public", table: "carbo_wa_agendadas" },
-          () => { qc.invalidateQueries({ queryKey: ["wa-agendadas"] }); invalidar(); })
+          (ev: any) => { qc.invalidateQueries({ queryKey: ["wa-agendadas"] }); invalidar(ev); })
       // ⚠️ E o recado interno: duas pessoas atendendo é o caso normal, e o
       // recado existe justamente para uma avisar a outra. Chegar 30 s depois é
       // chegar depois da resposta.
@@ -363,7 +384,7 @@ export function useConversasAoVivo() {
           { event: "*", schema: "public", table: "carbo_wa_conversa_tag" }, invalidar)
       .on("postgres_changes" as never,
           { event: "*", schema: "public", table: "carbo_wa_tags" },
-          () => { qc.invalidateQueries({ queryKey: ["wa-tags"] }); invalidar(); })
+          () => { qc.invalidateQueries({ queryKey: ["wa-tags"] }); lista(); })
       .subscribe();
 
     return () => {
@@ -371,7 +392,7 @@ export function useConversasAoVivo() {
       if (canal.current) supabase.removeChannel(canal.current);
       canal.current = null;
     };
-  }, [qc]);
+  }, [qc, numeroId]);
 }
 
 export function useResponder() {
@@ -546,8 +567,12 @@ export function useMarcarTag() {
         // ⚠️ Aqui DELETE é certo: tirar etiqueta errada é operação do dia, e
         // guardar o vínculo desfeito não serve a ninguém. O que não se apaga é
         // a TAG (vira `ativo = false`), porque conversa antiga aponta para ela.
-        const { error } = await (supabase as any).from("carbo_wa_conversa_tag")
+        // ⚠️ Só DESTE número: o mesmo cliente no Clube é outra conversa, e
+        // tirar a etiqueta aqui não pode tirá-la de lá.
+        let q = (supabase as any).from("carbo_wa_conversa_tag")
           .delete().eq("wa_id", wa_id).eq("tag_id", tag_id);
+        if (numero_id) q = q.eq("numero_id", numero_id);
+        const { error } = await q;
         if (error) throw error;
         return;
       }
@@ -633,14 +658,19 @@ export interface Agendada {
  * achando que estava resolvido — a falha não aparece na cara de ninguém como
  * num envio manual. Se ela não estiver na tela, não está em lugar nenhum.
  */
-export function useAgendadas(wa_id: string | null) {
+export function useAgendadas(wa_id: string | null, numero_id?: string | null) {
   return useQuery({
-    queryKey: ["wa-agendadas", wa_id],
+    queryKey: ["wa-agendadas", wa_id, numero_id ?? null],
     enabled: !!wa_id,
     queryFn: async (): Promise<Agendada[]> => {
-      const { data, error } = await (supabase as any)
+      // ⚠️ Por NÚMERO (23/11/2026): a mesma pessoa no Clube é outra conversa, e
+      // a agendada de lá aparecia aqui — dava para cancelá-la sem saber de onde
+      // ela sairia. Linha antiga sem número continua aparecendo.
+      let q = (supabase as any)
         .from("carbo_wa_agendadas").select("*")
-        .eq("wa_id", wa_id)
+        .eq("wa_id", wa_id);
+      if (numero_id) q = q.or(`numero_id.eq.${numero_id},numero_id.is.null`);
+      const { data, error } = await q
         .in("status", ["pendente", "falhou"])
         .order("enviar_em", { ascending: true });
       if (error) throw error;
@@ -710,14 +740,18 @@ export interface Nota {
  * `carbo_wa_mensagens` com uma coluna `interna`, o sigilo dependeria de todo
  * SELECT futuro lembrar do filtro.
  */
-export function useNotas(wa_id: string | null) {
+export function useNotas(wa_id: string | null, numero_id?: string | null) {
   return useQuery({
-    queryKey: ["wa-notas", wa_id],
+    queryKey: ["wa-notas", wa_id, numero_id ?? null],
     enabled: !!wa_id,
     queryFn: async (): Promise<Nota[]> => {
-      const { data, error } = await (supabase as any)
+      // ⚠️ Por NÚMERO (23/11/2026): o recado escrito na conversa do Clube
+      // aparecia na do serviço. Linha antiga sem número continua aparecendo.
+      let q = (supabase as any)
         .from("carbo_wa_notas").select("*")
-        .eq("wa_id", wa_id).is("apagada_em", null)
+        .eq("wa_id", wa_id).is("apagada_em", null);
+      if (numero_id) q = q.or(`numero_id.eq.${numero_id},numero_id.is.null`);
+      const { data, error } = await q
         .order("criado_em", { ascending: true });
       if (error) throw error;
       return (data ?? []) as Nota[];
@@ -800,7 +834,7 @@ export function useMidia(media_id: string | null, ligado: boolean) {
     staleTime: Infinity,
     gcTime: 10 * 60_000,
     retry: false,
-    queryFn: async (): Promise<{ url: string; mime: string }> => {
+    queryFn: async (): Promise<{ blob: Blob; mime: string }> => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Sessão expirada. Faça login novamente.");
 
@@ -819,14 +853,19 @@ export function useMidia(media_id: string | null, ligado: boolean) {
         throw new Error(corpo?.detalhe || corpo?.error || `Falhou (${res.status})`);
       }
       const blob = await res.blob();
-      return { url: URL.createObjectURL(blob), mime: blob.type };
+      return { blob, mime: blob.type };
     },
   });
 
-  const url = q.data?.url;
+  /* ⚠️ O cache guarda o BLOB, e a URL é de quem DESENHA (23/11/2026). Antes o
+     cache guardava a URL e o balão a revogava ao desmontar: trocar de aba e
+     voltar remontava o balão com a URL do cache — já revogada — e a imagem
+     virava ícone quebrado. Cada montagem cria a sua e solta a sua. */
+  const blob = q.data?.blob;
+  const url = useMemo(() => (blob ? URL.createObjectURL(blob) : null), [blob]);
   useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
 
-  return q;
+  return { ...q, data: blob && url ? { url, mime: q.data!.mime } : undefined };
 }
 
 export function useEnviarMidia() {
@@ -884,20 +923,24 @@ export interface AchadoNaConversa {
   direcao: "entrada" | "saida";
 }
 
-export function useBuscaNaConversa(wa_id: string | null, termo: string) {
+export function useBuscaNaConversa(wa_id: string | null, termo: string, numero_id?: string | null) {
   const t = termo.trim();
   return useQuery({
-    queryKey: ["wa-busca", wa_id, t],
+    queryKey: ["wa-busca", wa_id, numero_id ?? null, t],
     enabled: !!wa_id && t.length >= 2,
     staleTime: 30_000,
     queryFn: async (): Promise<AchadoNaConversa[]> => {
       // ⚠️ `%` e `_` são curingas do `ilike`: digitar "50%" sem escapar varre
       // tudo o que começa com 50 e o resultado parece aleatório.
       const alvo = `%${t.replace(/[\\%_]/g, (c) => "\\" + c)}%`;
-      const { data, error } = await (supabase as any)
+      // ⚠️ Por NÚMERO: sem isso a busca achava a mensagem do outro número e
+      // dizia "fora do período carregado" — uma explicação falsa.
+      let q = (supabase as any)
         .from("carbo_wa_conversas")
         .select("wamid, texto, ocorrido_em, direcao")
-        .eq("wa_id", wa_id)
+        .eq("wa_id", wa_id);
+      if (numero_id) q = q.eq("numero_id", numero_id);
+      const { data, error } = await q
         .ilike("texto", alvo)
         .order("ocorrido_em", { ascending: false })
         .limit(50);
@@ -929,16 +972,18 @@ export interface ItemDaGaleria {
   direcao: "entrada" | "saida";
 }
 
-export function useGaleriaDaConversa(wa_id: string | null, ligado: boolean) {
+export function useGaleriaDaConversa(wa_id: string | null, ligado: boolean, numero_id?: string | null) {
   return useQuery({
-    queryKey: ["wa-galeria", wa_id],
+    queryKey: ["wa-galeria", wa_id, numero_id ?? null],
     enabled: !!wa_id && ligado,
     staleTime: 60_000,
     queryFn: async (): Promise<ItemDaGaleria[]> => {
-      const { data, error } = await (supabase as any)
+      let q = (supabase as any)
         .from("carbo_wa_conversas")
         .select("wamid, tipo, texto, midia_id, ocorrido_em, direcao")
-        .eq("wa_id", wa_id)
+        .eq("wa_id", wa_id);
+      if (numero_id) q = q.eq("numero_id", numero_id);
+      const { data, error } = await q
         .not("midia_id", "is", null)
         .order("ocorrido_em", { ascending: false })
         .limit(200);
@@ -1056,6 +1101,54 @@ export function useMarcarNaoContatar() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["nao-contatar"] });
       qc.invalidateQueries({ queryKey: ["nao-contatar-lista"] });
+    },
+  });
+}
+
+// ─── Mensagem-modelo (janela fechada) ────────────────────────────────────────
+
+export interface ModeloAtendimento {
+  codigo: string;
+  rotulo: string;
+  texto: string;
+}
+
+/** Os modelos que quem atende pode mandar à mão (`carbo_wa_modelos_atendimento`,
+ *  20261185). Sem a tabela (front antes do SQL), lista vazia: o botão não aparece. */
+export function useModelosAtendimento() {
+  return useQuery({
+    queryKey: ["wa-modelos-atendimento"],
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<ModeloAtendimento[]> => {
+      const { data, error } = await (supabase as any)
+        .from("carbo_wa_modelos_atendimento").select("codigo, rotulo, texto")
+        .eq("ativo", true).order("ordem");
+      if (error) {
+        if (error.code === "42P01" || error.code === "PGRST205") return [];
+        throw error;
+      }
+      return (data ?? []) as ModeloAtendimento[];
+    },
+  });
+}
+
+export function useEnviarModelo() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ wa_id, numero_id, modelo, nome }:
+                       { wa_id: string; numero_id: string | null; modelo: string; nome: string | null }) => {
+      const res = await supabase.functions.invoke("whatsapp-responder", {
+        body: { wa_id, numero_id, modelo, nome },
+      });
+      if (res.error) {
+        const ctx = (res.error as { context?: Response }).context;
+        const corpo = ctx ? await ctx.json().catch(() => null) : null;
+        throw new Error(corpo?.detalhe || corpo?.error || res.error.message || "Falhou");
+      }
+      return res.data;
+    },
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ["wa-conversas", "mensagens", v.numero_id, v.wa_id] });
     },
   });
 }
