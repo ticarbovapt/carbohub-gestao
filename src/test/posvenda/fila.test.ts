@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   somarHorasUteis, horasUteisEntre, prazoResposta, textoPrazo, motivoDe, precisaDeAtencao, ehAntiga,
-  compararPrioridade, estadoDoCaso, clienteRespondeu, passaFiltroCaso, MOTIVOS,
+  compararPrioridade, estadoDoCaso, clienteRespondeu, passaFiltroCaso, MOTIVOS, tipoProvavel,
 } from "../../../apps/atendimento/src/lib/posvendaFila";
 import type { Pendencia } from "../../../apps/atendimento/src/hooks/usePendenciasEntrega";
 
@@ -56,6 +56,13 @@ describe("a fila", () => {
     expect(motivoDe(pedido({ problema: "vencida" }))).toBe("parada");
     expect(motivoDe(pedido({ reclamacao: rec({ assuntos: [{ codigo: "outra_reclamacao", rotulo: "" }] }) }))).toBe("outro");
     expect(MOTIVOS.map((m) => m.id)).toContain("outro");
+  });
+  it("tipo provável: do assunto (o do motivo primeiro), do atraso na entrega, e nenhum para problema nosso", () => {
+    expect(tipoProvavel(pedido({ reclamacao: rec({ assuntos: [{ codigo: "faltou_item", rotulo: "a" }, { codigo: "ameaca", rotulo: "b" }] }) }))).toBe("faltante");
+    expect(tipoProvavel(pedido({ reclamacao: rec({ assuntos: [{ codigo: "atraso", rotulo: "a" }, { codigo: "avaria", rotulo: "b" }] }) }))).toBe("avaria");
+    expect(tipoProvavel(pedido({ problema: "atrasado" }))).toBe("atraso");
+    expect(tipoProvavel(pedido({ problema: "vencida" }))).toBeNull();
+    expect(tipoProvavel(pedido({ reclamacao: rec({ assuntos: [{ codigo: "ameaca", rotulo: "a" }] }) }))).toBeNull();
   });
   it("precisa de atenção = a condição do banco", () => {
     expect(precisaDeAtencao(pedido({ reclamacao: rec() }))).toBe(true);
