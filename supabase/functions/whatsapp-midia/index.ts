@@ -237,6 +237,16 @@ Deno.serve(async (req: Request) => {
       payload: { por: perfil?.full_name ?? user.email ?? user.id, ...payload },
     }, { onConflict: "wamid" });
     if (erroGrava) console.error("[midia] enviou mas não gravou", wamid, erroGrava);
+    // ⚠️ (23/11/2026) Quem responde conversa SEM dono vira o responsável —
+    // duas atendentes na mesma fila não respondem o mesmo cliente. Só preenche
+    // o vazio (20261186); falhar aqui não desfaz o envio.
+    {
+      const { error: erroDono } = await supabase.rpc("carbo_wa_assumir_ao_responder", {
+        p_numero_id: numeroId, p_wa_id: waId, p_pessoa: user.id,
+        p_nome: perfil?.full_name ?? user.email ?? null,
+      });
+      if (erroDono) console.error("[atendimento] assumir ao responder", erroDono.message);
+    }
     return json({ ok: true, wamid, media_id: mediaId, tipo: veredito.tipo,
                   gravado: !erroGrava });
   }

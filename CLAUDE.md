@@ -3016,6 +3016,29 @@ webhook com log cru e reprocessamento.
 6. ⚠️ O alarme do teto (`packages/shell/src/leitura.ts`, os 8 apps) só olha
    GET: a contagem `head: true` é HEAD e volta `Content-Range: 0-999/N` — era o
    "notifications CORTADO" falso no console.
+7. **Fase 2 — várias atendentes** (`20261186`):
+   - ⚠️ A espera do cliente só acaba com resposta de GENTE (`ehRespostaDeGente`:
+     saída que não é template, ou template com autor — a retomada). Aviso
+     automático não responde ninguém. A MESMA regra na `carbo_wa_caixa` (que
+     passou a devolver `enviado_por_nome`) e no `agruparConversas`.
+   - "Sem responsável" = cliente escreveu, não resolvida, sem dono
+     (`semDonoDeVerdade`); antes contava quem só recebeu aviso.
+   - Resposta automática do WhatsApp do cliente ("agradece seu contato") vira
+     SUGESTÃO (`sugestao: "automatica"`), como o agradecimento, e vai para o
+     fim da fila. ⚠️ Só na tela — o `carbo_wa_pede_resposta` do Painel tem a
+     regra dele (divergência assumida, como a do `pareceEncerramento`).
+   - Ordem padrão = "Esperando há mais tempo" (`ordem` ausente na URL);
+     `?ordem=recentes|antigas` continuam.
+   - Status e dono pelo BANCO: `carbo_wa_definir_status` (relógio do servidor;
+     recusa `mensagem_nova` quando o cliente escreveu depois do que a tela
+     mostrava; recusa `ja_tem_dono` ao assumir) e
+     `carbo_wa_definir_responsavel` (trava pelo dono que a tela mostrava;
+     tirar de outra pessoa pede confirmação). Sem as funções, cai na gravação
+     antiga. Quem responde conversa sem dono vira o dono
+     (`carbo_wa_assumir_ao_responder`, só service role, chamada pelo
+     `whatsapp-responder` e pelo `whatsapp-midia`).
+   - Áudio carrega sozinho (vem do cofre); erro tem "tentar de novo"; player
+     que não toca diz isso e oferece baixar.
 
 ### ⚠️ Conversas e Esteira a 500 vendas/semana: o teto e o índice (19/10/2026)
 Queixa do dono do processo: *"demora para abrir"* e *"diz que foi enviada

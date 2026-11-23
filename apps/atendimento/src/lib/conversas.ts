@@ -183,6 +183,7 @@ export function foiReaberta(
 }
 
 export type EstadoConversa = "precisa_resposta" | "resolvida" | "sem_pendencia";
+export type SugestaoConversa = "agradecimento" | "automatica" | null;
 
 export interface Conversa {
   wa_id: string;
@@ -217,6 +218,12 @@ export interface Conversa {
    *  sozinha. Aproximação que se passa por certeza é como uma pergunta de
    *  verdade some da fila. */
   parece_encerrada: boolean;
+  /** Qual sugestão: "agradecimento" (só um ok/obrigado) ou "automatica"
+   *  (resposta automática do WhatsApp do cliente). Null = nenhuma. */
+  sugestao: SugestaoConversa;
+  /** A PRIMEIRA mensagem do cliente ainda sem resposta — de onde conta a
+   *  espera. Null = não espera nada. */
+  aguardando_desde: string | null;
   /** O que o time decidiu — já com a reabertura aplicada. Null = sem status. */
   status: StatusAtendimento | null;
   responsavel: string | null;
@@ -285,6 +292,41 @@ const ENCERRAMENTOS = [
  *  está nela não vira sugestão. */
 const EMOJI_OK = ["👍", "👌", "🙏", "✅", "❤️", "❤", "💚", "😊", "🙂", "😉", "🤝", "👏", "🚀", "🫂", "🥰", "😁", "😀", "🙌", "💪", "👊"];
 
+/**
+ * Resposta AUTOMÁTICA do WhatsApp Business do CLIENTE (ou de outra empresa):
+ * "ACAssistência agradece seu contato", "Deixe seu nome e recado…". Medido na
+ * tela em 23/11/2026: elas contavam como pergunta sem resposta. É SUGESTÃO,
+ * como o agradecimento — a tela oferece resolver, nunca resolve sozinha.
+ */
+const AUTOMATICA = [
+  /agradece (o |a )?(seu |sua )?(contato|mensagem)/,
+  /agradecemos (o |a )?(seu |sua )?(contato|mensagem)/,
+  /obrigad[oa] por (entrar em contato|sua mensagem|seu contato|nos contatar)/,
+  /mensagem automatica/, /resposta automatica/,
+  /deixe (seu nome|sua mensagem|seu recado|o seu recado)/,
+  /no momento nao (podemos|estamos|conseguimos)/,
+  /(estamos )?fora do (nosso )?horario (de atendimento)?/,
+  /nosso horario de atendimento/,
+  /(retornaremos|responderemos|entraremos em contato) (o mais breve|em breve|assim que)/,
+  /em breve (retornaremos|responderemos|entraremos em contato)/,
+  /como (podemos|posso) (te |lhe )?ajudar/,
+];
+
+export function pareceRespostaAutomatica(texto: string | null): boolean {
+  if (!texto) return false;
+  const t = texto.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ");
+  return AUTOMATICA.some((re) => re.test(t));
+}
+
+/** Nossa mensagem que ENCERRA a espera do cliente: resposta de gente. Aviso
+ *  automático da esteira (template sem autor) NÃO é resposta (23/11/2026):
+ *  pergunta seguida de "NF emitida" saía da fila sem ninguém responder. O
+ *  template mandado por uma PESSOA (retomada) conta — ela agiu. */
+export function ehRespostaDeGente(m: Pick<MensagemConversa, "direcao" | "tipo" | "enviado_por_nome">): boolean {
+  return m.direcao === "saida" && (m.tipo !== "template" || !!m.enviado_por_nome);
+}
+
 export function pareceEncerramento(texto: string | null): boolean {
   if (!texto) return false;
   const t = texto.trim();
@@ -351,7 +393,7 @@ export function agruparConversas(
     // ⚠️ DOIS cortes, e vale o mais recente: a nossa última resposta e a marca
     // de "resolvida". Sem o segundo, "Ok obrigado" ficaria pendente para sempre
     // — a única forma de zerar seria responder um "de nada" ao cliente.
-    const ultimaNossa = [...ordenadas].reverse().find((m) => m.direcao === "saida");
+    const ultimaNossa = [...ordenadas].reverse().find(ehRespostaDeGente);
     const corteResposta = ultimaNossa ? new Date(ultimaNossa.ocorrido_em).getTime() : 0;
     const resolvidoAte = resolvidos[wa_id] ?? null;
     const corteResolvido = resolvidoAte ? new Date(resolvidoAte).getTime() : 0;
@@ -373,8 +415,13 @@ export function agruparConversas(
       : "sem_pendencia";
 
     // A sugestão olha só a ÚLTIMA pendente: é ela que a pessoa vai ler ao abrir.
-    const parece_encerrada =
-      aguardando > 0 && pareceEncerramento(pendentes[pendentes.length - 1].texto);
+    const textoPendente = aguardando > 0 ? pendentes[pendentes.length - 1].texto : null;
+    const sugestao: SugestaoConversa =
+      aguardando === 0 ? null
+      : pareceRespostaAutomatica(textoPendente) ? "automatica"
+      : pareceEncerramento(textoPendente) ? "agradecimento"
+      : null;
+    const parece_encerrada = sugestao !== null;
 
     // O pedido vem da mensagem mais recente que tenha um — a conversa é da
     // pessoa, mas o assunto é o do último contato.
@@ -407,13 +454,14 @@ export function agruparConversas(
       estado,
       resolvido_ate: resolvidoAte,
       parece_encerrada,
+      sugestao,
+      aguardando_desde: aguardando > 0 ? pendentes[0].ocorrido_em : null,
       // ⚠️ `respondidaPorGente` olha o TIPO: aviso automático da esteira não é
       // atendimento, e sem essa distinção toda conversa que recebeu um
       // "nota fiscal emitida" apareceria como "em atendimento" sem ninguém ter
       // atendido.
       status: statusEfetivo(
-        atendimentos[wa_id], ultimaEntradaEm, aguardando,
-        !!ultimaNossa && ultimaNossa.tipo !== "template"),
+        atendimentos[wa_id], ultimaEntradaEm, aguardando, !!ultimaNossa),
       reaberta: foiReaberta(atendimentos[wa_id], ultimaEntradaEm),
       responsavel: atendimentos[wa_id]?.responsavel ?? null,
       responsavel_nome: atendimentos[wa_id]?.responsavel_nome ?? null,
@@ -427,6 +475,8 @@ export function agruparConversas(
   // de uma conversa já resolvida de agora.
   return conversas.sort((a, b) => {
     if ((a.aguardando > 0) !== (b.aguardando > 0)) return a.aguardando > 0 ? -1 : 1;
+    // ⚠️ "Ok obrigado" e resposta automática esperam DEPOIS das perguntas.
+    if (a.parece_encerrada !== b.parece_encerrada) return a.parece_encerrada ? 1 : -1;
     return new Date(b.ultima_em).getTime() - new Date(a.ultima_em).getTime();
   });
 }
@@ -509,7 +559,7 @@ export function fracaoDaJanela(janela_ate: string | null): number {
  * tela — a mesma doença do relatório que só sabe concordar consigo mesmo, na
  * versão mais barata de cometer.
  */
-export type OrdemDaCaixa = "recentes" | "antigas";
+export type OrdemDaCaixa = "recentes" | "antigas" | "espera";
 
 export interface FiltrosDaCaixa {
   /** Id do responsável. `null` = qualquer. As abas cobrem "minhas" e "sem dono". */
@@ -524,7 +574,7 @@ export interface FiltrosDaCaixa {
 }
 
 export const FILTROS_VAZIOS: FiltrosDaCaixa = {
-  responsavel: null, tag: null, etapa: null, status: null, ordem: "recentes",
+  responsavel: null, tag: null, etapa: null, status: null, ordem: "espera",
 };
 
 /** Quantos filtros estão de fato mudando o que se vê — é o número do selo.
@@ -532,7 +582,7 @@ export const FILTROS_VAZIOS: FiltrosDaCaixa = {
  *  selo nascer com 1 e perder o significado. */
 export function quantosFiltrosAtivos(f: FiltrosDaCaixa): number {
   return (f.responsavel ? 1 : 0) + (f.tag ? 1 : 0) + (f.etapa ? 1 : 0)
-    + (f.status ? 1 : 0) + (f.ordem !== "recentes" ? 1 : 0);
+    + (f.status ? 1 : 0) + (f.ordem !== "espera" ? 1 : 0);
 }
 
 /**
@@ -556,6 +606,21 @@ export function aplicarFiltrosDaCaixa(
 
   const quando = (c: Conversa) => new Date(c.ultima_em).getTime();
 
+  // ⚠️ "Esperando há mais tempo" (23/11/2026): quem perguntou primeiro e ainda
+  // não teve resposta vem no topo — ordenar por recente enterrava a reclamação
+  // de dois dias atrás atrás do "Mostrar mais". Sugestão (ok/automática) vai
+  // para o fim; quem não espera nada, depois de todos, pelo mais recente.
+  if (f.ordem === "espera") {
+    return [...filtrada].sort((a, b) => {
+      const ea = a.aguardando_desde && !a.parece_encerrada ? new Date(a.aguardando_desde).getTime() : null;
+      const eb = b.aguardando_desde && !b.parece_encerrada ? new Date(b.aguardando_desde).getTime() : null;
+      if (ea !== null && eb !== null) return ea - eb;
+      if (ea !== null) return -1;
+      if (eb !== null) return 1;
+      if (a.parece_encerrada !== b.parece_encerrada) return a.parece_encerrada ? -1 : 1;
+      return quando(b) - quando(a);
+    });
+  }
   if (f.ordem === "antigas") return [...filtrada].sort((a, b) => quando(a) - quando(b));
   return [...filtrada].sort((a, b) => quando(b) - quando(a));
 }
