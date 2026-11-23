@@ -21,12 +21,17 @@ export interface Caso {
   aberto_por: string | null;
   atualizado_em: string;
   encerrado_em: string | null;
+  /** Ausentes antes da 20261182. */
+  responsavel?: string | null;
+  estado?: "em_atendimento" | "aguardando_cliente" | "aguardando_terceiro" | null;
+  estado_em?: string | null;
+  responsavel_nome?: string | null;
 }
 
 export interface HistCaso {
   id: number;
   caso_id: string;
-  acao: "abriu" | "respondeu" | "mudou_tipo" | "voltou" | "nota" | "encerrou";
+  acao: "abriu" | "respondeu" | "mudou_tipo" | "voltou" | "nota" | "encerrou" | "atribuiu" | "estado";
   tipo: string | null;
   passo: string | null;
   opcao: string | null;
@@ -72,7 +77,8 @@ export function useCasosDoPedido(blingId: number | null) {
     queryFn: async (): Promise<CasosDoPedido> => {
       // Janela DECLARADA: os casos de UM pedido (poucos) e o histórico deles.
       const { data: casos, error } = await db.from("carbo_posvenda_casos")
-        .select("id, bling_id, tipo, passo, status, desfecho, valor, aberto_em, aberto_por, atualizado_em, encerrado_em")
+        // `*`: o caso continua abrindo no intervalo entre o front e a 20261182.
+        .select("*")
         .eq("bling_id", blingId).order("aberto_em", { ascending: false }).order("id").limit(50);
       if (error) throw error;
       const lista = (casos ?? []) as Caso[];
@@ -91,8 +97,10 @@ export function useCasosDoPedido(blingId: number | null) {
       const reembolsos = (rb.error ? [] : (rb.data ?? [])) as Reembolso[];
       if (rb.error && !["42P01", "PGRST205"].includes(rb.error.code ?? "")) throw rb.error;
       const linhas = (h.data ?? []) as HistCaso[];
-      const ids = [...new Set([...linhas.map((l) => l.por), ...reembolsos.flatMap((r) => [r.solicitado_por, r.pago_por])]
-        .filter(Boolean))] as string[];
+      // "atribuiu" guarda os ids de quem saiu e de quem entrou (20261182).
+      const deAtribuir = linhas.filter((l) => l.acao === "atribuiu").flatMap((l) => [l.campos?.de, l.campos?.para]);
+      const ids = [...new Set([...linhas.map((l) => l.por), ...deAtribuir, ...lista.map((c) => c.responsavel),
+        ...reembolsos.flatMap((r) => [r.solicitado_por, r.pago_por])].filter(Boolean))] as string[];
       const nomes = new Map<string, string>();
       if (ids.length) {
         const { data: ps } = await db.from("profiles").select("id, full_name").in("id", ids);
@@ -102,8 +110,12 @@ export function useCasosDoPedido(blingId: number | null) {
       }
       const nome = (id: string | null) => (id ? nomes.get(id) ?? null : null);
       return {
-        casos: lista,
-        hist: linhas.map((l) => ({ ...l, por: nome(l.por) })),
+        casos: lista.map((c) => ({ ...c, responsavel_nome: nome(c.responsavel ?? null) })),
+        hist: linhas.map((l) => ({
+          ...l, por: nome(l.por),
+          campos: l.acao === "atribuiu" && l.campos
+            ? { de: nome(l.campos.de ?? null) ?? "", para: nome(l.campos.para ?? null) ?? "" } : l.campos,
+        })),
         reembolsos: reembolsos.map((r) => ({ ...r, solicitado_por: nome(r.solicitado_por), pago_por: nome(r.pago_por) })),
       };
     },
@@ -194,6 +206,18 @@ export async function arquivoDoComprovante(path: string): Promise<File> {
   if (error || !data) throw error ?? new Error("Não foi possível baixar o comprovante");
   const nome = path.split("/").pop() || "comprovante";
   return new File([data as Blob], nome.replace(/^\d+-/, ""), { type: (data as Blob).type || "application/pdf" });
+}
+
+/** "Pegar" (pessoa nula = eu) ou passar o caso a alguém (20261182). */
+export function useAtribuirCaso(blingId: number) {
+  return useMutacaoCaso((v: { caso: string; pessoa?: string | null }) =>
+    rpc("carbo_posvenda_caso_atribuir", { p_caso: v.caso, p_pessoa: v.pessoa ?? null }), blingId);
+}
+
+/** Com quem está a bola: em atendimento, aguardando cliente, aguardando terceiro (20261182). */
+export function useEstadoCaso(blingId: number) {
+  return useMutacaoCaso((v: { caso: string; estado: string }) =>
+    rpc("carbo_posvenda_caso_estado", { p_caso: v.caso, p_estado: v.estado }), blingId);
 }
 
 export function useVoltarCaso(blingId: number) {

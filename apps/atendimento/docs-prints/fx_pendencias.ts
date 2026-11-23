@@ -1,8 +1,9 @@
-import { EU as EU_P } from "./pessoas";
+import { EU as EU_P, U } from "./pessoas";
 // Fixtures da área "pendencias": a tela /pendencias (Pendências de entrega).
 // Dados FICTÍCIOS (pessoas.ts não tem clientes); as datas andam com o relógio.
 const dia = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
 const ts = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString();
+const horas = (n: number) => new Date(Date.now() - n * 3_600_000).toISOString();
 const hoje = new Date();
 const diasAteCorte = Math.round((hoje.getTime() - new Date("2026-11-06T12:00:00").getTime()) / 86_400_000);
 
@@ -49,24 +50,34 @@ const OK: P[] = Array.from({ length: 70 }, (_, k) => ped({
 const TODOS = [...ITENS, ...OK].map((p) => ({ ...p, antes_do_corte: String(p.data_pedido) < "2026-11-06" }));
 // Reclamações do WhatsApp (assuntos do painel do atendimento), por pedido.
 const RECL: Record<number, P> = {
-  900006: { n: 2, primeira_em: ts(3), ultima_em: ts(1), trecho: "Chegou a caixa mas faltou um frasco, só vieram 4. Vou no Procon se não resolverem.",
+  900016: { n: 1, primeira_em: horas(5), ultima_em: horas(5), aguarda_desde: horas(5), trecho: "Paguei duas vezes o mesmo pedido, aparece duas cobranças no cartão",
+            wa_id: "5584991033001", numero_id: "1255756280958635", assuntos: [{ codigo: "cobranca_duplicada", rotulo: "Cobrança ou pedido em dobro (roleta)" }] },
+  900020: { n: 1, primeira_em: horas(30), ultima_em: horas(30), respondida_em: horas(20), trecho: "O frasco chegou vazando, molhou a caixa toda",
+            wa_id: "5584991033002", numero_id: "1255756280958635", assuntos: [{ codigo: "avaria", rotulo: "Chegou violado, vazando ou amassado" }] },
+  900024: { n: 1, primeira_em: ts(41), ultima_em: ts(41), aguarda_desde: ts(41), antiga: true, trecho: "Ainda não chegou meu pedido",
+            wa_id: "5584991033003", numero_id: "1255756280958635", assuntos: [{ codigo: "atraso", rotulo: "Atraso, ainda não chegou" }] },
+  900028: { n: 1, primeira_em: ts(55), ultima_em: ts(55), aguarda_desde: ts(55), antiga: true, trecho: "Veio o kit errado",
+            wa_id: "5584991033004", numero_id: "1255756280958635", assuntos: [{ codigo: "produto_diferente", rotulo: "Produto diferente ou suspeita de falso" }] },
+  900006: { n: 2, primeira_em: ts(3), ultima_em: ts(1), aguarda_desde: ts(3), ultima_entrada_em: horas(3), trecho: "Chegou a caixa mas faltou um frasco, só vieram 4. Vou no Procon se não resolverem.",
             wa_id: "5584991047514", numero_id: "1255756280958635", assuntos: [{ codigo: "faltou_item", rotulo: "Veio faltando ou veio errado" }, { codigo: "ameaca", rotulo: "Ameaça (Procon, Reclame Aqui, polícia, redes)" }] },
-  900002: { n: 1, primeira_em: ts(4), ultima_em: ts(4), trecho: "Diz que foi entregue mas não recebi nada",
+  900002: { n: 1, primeira_em: ts(4), ultima_em: ts(4), respondida_em: ts(3), ultima_entrada_em: horas(2), trecho: "Diz que foi entregue mas não recebi nada",
             wa_id: "5584991015838", numero_id: "1255756280958635", assuntos: [{ codigo: "entrega_falhou", rotulo: "Consta entregue e não recebeu" }] },
-  900003: { n: 1, primeira_em: ts(2), ultima_em: ts(2), trecho: "Já faz 20 dias e não chegou",
+  900003: { n: 1, primeira_em: ts(2), ultima_em: ts(2), aguarda_desde: ts(2), trecho: "Já faz 20 dias e não chegou",
             wa_id: "5584991023757", numero_id: "1255756280958635", assuntos: [{ codigo: "atraso", rotulo: "Atraso, ainda não chegou" }] },
 };
 const comReclamacao = (p: P) => {
   const r = RECL[p.bling_id as number];
   if (!r) return { reclamacao: null };
   const c = casoDe(p.bling_id).caso;
-  return { reclamacao: { ...r, pendente: c?.status !== "aberto" && (!c || c.desfecho === "cancelado" || String(c.encerrado_em) < String(r.ultima_em)) } };
+  return { reclamacao: { ...r, pendente: !r.resolvida_na_conversa && c?.status !== "aberto" && (!c || c.desfecho === "cancelado" || String(c.encerrado_em) < String(r.ultima_em)) } };
 };
 const domingo = (iso: string) => { const t = new Date(iso + "T12:00:00Z"); t.setUTCDate(t.getUTCDate() - t.getUTCDay()); return t.toISOString().slice(0, 10); };
 
 // ── Casos (20261173): guardados em memória, com a MESMA lógica das funções ──
 type Caso = { id: string; bling_id: number; tipo: string; passo: string; status: string; desfecho: string | null; valor: number | null;
-  aberto_em: string; aberto_por: string | null; atualizado_em: string; encerrado_em: string | null };
+  aberto_em: string; aberto_por: string | null; atualizado_em: string; encerrado_em: string | null;
+  responsavel: string | null; estado: string; estado_em: string | null };
+const NOMES: Record<string, string> = Object.fromEntries(Object.values(U).map((x) => [x.id, x.full_name]));
 type H = Record<string, unknown> & { id: number; caso_id: string; acao: string };
 const EU = EU_P.id;
 const CASOS: Caso[] = [];
@@ -75,7 +86,8 @@ let hid = 0;
 const hist = (o: Partial<H> & { caso_id: string; acao: string }) => HIST.push({ id: ++hid, por: EU, em: new Date().toISOString(), ...o } as H);
 const novoCaso = (bling_id: number, tipo: string, passo: string, diasAtras = 0) => {
   const c: Caso = { id: crypto.randomUUID(), bling_id, tipo, passo, status: "aberto", desfecho: null, valor: null,
-    aberto_em: ts(diasAtras), aberto_por: EU, atualizado_em: ts(diasAtras), encerrado_em: null };
+    aberto_em: ts(diasAtras), aberto_por: EU, atualizado_em: ts(diasAtras), encerrado_em: null,
+    responsavel: EU, estado: "em_atendimento", estado_em: null };
   CASOS.push(c); hist({ caso_id: c.id, acao: "abriu", tipo, passo, em: ts(diasAtras) }); return c;
 };
 // Um caso andando (Fernanda) e um encerrado (Thiago).
@@ -85,6 +97,7 @@ const novoCaso = (bling_id: number, tipo: string, passo: string, diasAtras = 0) 
     campos: { comprovante: "Entregue 14:32, recebido por 'portaria'" }, em: ts(2) });
   hist({ caso_id: c.id, acao: "respondeu", tipo: c.tipo, passo: "vizinhos", opcao: "pedido", proximo: "achou", em: ts(1) });
   c.passo = "achou";
+  Object.assign(c, { estado: "aguardando_cliente", estado_em: ts(1) });
   const e = novoCaso(900009, "atraso", "rastreio", 6);
   hist({ caso_id: e.id, acao: "respondeu", tipo: e.tipo, passo: "rastreio", opcao: "prazo", proximo: "informar", em: ts(6) });
   hist({ caso_id: e.id, acao: "respondeu", tipo: e.tipo, passo: "informar", opcao: "informado", proximo: "acompanhar", em: ts(5) });
@@ -92,9 +105,9 @@ const novoCaso = (bling_id: number, tipo: string, passo: string, diasAtras = 0) 
   Object.assign(e, { passo: "acompanhar", status: "encerrado", desfecho: "resolvido", encerrado_em: ts(2) });
 }
 if ((globalThis as any).localStorage?.getItem("mock-mais-casos")) {
-  novoCaso(900005, "nao_recebido", "vizinhos", 9);
-  novoCaso(900012, "avaria", "fotos", 1);
-  novoCaso(900004, "atraso", "rastreio", 3);
+  novoCaso(900005, "nao_recebido", "vizinhos", 9).responsavel = U.vend2.id;
+  Object.assign(novoCaso(900012, "avaria", "fotos", 1), { responsavel: null });
+  Object.assign(novoCaso(900004, "atraso", "rastreio", 3), { estado: "aguardando_terceiro", estado_em: ts(2), responsavel: U.closer.id });
   novoCaso(900011, "faltante", "conferir", 4);
 }
 const erro = (message: string) => { throw Object.assign(new Error(message), { message }); };
@@ -114,10 +127,25 @@ const REEMB: Record<string, unknown>[] = [];
 };
 const casoDe = (bling: unknown) => {
   const doPedido = CASOS.filter((c) => c.bling_id === bling).sort((a, b) => (a.status === "aberto" ? -1 : 1) - (b.status === "aberto" ? -1 : 1) || b.aberto_em.localeCompare(a.aberto_em));
-  return { caso: doPedido[0] ?? null, casos_n: doPedido.length };
+  const c = doPedido[0];
+  return { caso: c ? { ...c, responsavel_nome: c.responsavel ? NOMES[c.responsavel] ?? null : null } : null, casos_n: doPedido.length };
 };
 
 export const RPC_FX: Record<string, unknown> = {
+  carbo_posvenda_caso_atribuir: (a: { p_caso: string; p_pessoa: string | null }) => {
+    const c = CASOS.find((x) => x.id === a.p_caso)!;
+    const para = a.p_pessoa ?? EU;
+    if (c.responsavel === para) return null;
+    hist({ caso_id: c.id, acao: "atribuiu", tipo: c.tipo, passo: c.passo, campos: { de: c.responsavel, para } });
+    c.responsavel = para;
+    return null;
+  },
+  carbo_posvenda_caso_estado: (a: { p_caso: string; p_estado: string }) => {
+    const c = CASOS.find((x) => x.id === a.p_caso)!;
+    hist({ caso_id: c.id, acao: "estado", tipo: c.tipo, passo: c.passo, opcao: a.p_estado, campos: { de: c.estado, para: a.p_estado } });
+    Object.assign(c, { estado: a.p_estado, estado_em: new Date().toISOString() });
+    return null;
+  },
   carbo_posvenda_caso_abrir: (a: { p_bling_id: number; p_tipo: string; p_passo: string }) => {
     if (CASOS.some((c) => c.bling_id === a.p_bling_id && c.status === "aberto")) erro("Este pedido já tem um caso aberto");
     return novoCaso(a.p_bling_id, a.p_tipo, a.p_passo).id;
@@ -128,7 +156,7 @@ export const RPC_FX: Record<string, unknown> = {
     hist({ caso_id: c.id, acao: a.p_tipo ? "mudou_tipo" : "respondeu", tipo: c.tipo, passo: c.passo, opcao: a.p_opcao,
       proximo: a.p_proximo, desfecho: a.p_desfecho, valor: a.p_valor, nota: a.p_nota, campos: a.p_campos });
     if (a.p_tipo) c.tipo = a.p_tipo;
-    if (a.p_proximo) c.passo = a.p_proximo;
+    if (a.p_proximo && a.p_proximo !== c.passo) Object.assign(c, { passo: a.p_proximo, estado: "em_atendimento" });
     if (a.p_desfecho) Object.assign(c, { status: "encerrado", desfecho: a.p_desfecho, encerrado_em: new Date().toISOString() });
     if (a.p_valor != null) c.valor = a.p_valor;
     c.atualizado_em = new Date().toISOString();

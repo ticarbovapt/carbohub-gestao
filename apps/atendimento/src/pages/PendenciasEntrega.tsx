@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  AlertTriangle, BarChart3, ChevronLeft, ChevronRight, Download, ExternalLink, Loader2, MessageCircle, MessageSquareWarning,
+  AlertTriangle, BarChart3, Check, ChevronLeft, ChevronRight, Clock, Download, ExternalLink, Loader2, MessageCircle, MessageSquareWarning,
   MoreHorizontal, PackageSearch, Search, SlidersHorizontal, Workflow,
 } from "lucide-react";
 import { useParamUrl } from "@carbo/shell";
@@ -16,6 +16,14 @@ import { DatePickerInput } from "@/components/ui/date-picker-input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import CasoPosVenda, { ChipDesfecho, ChipReembolso, ChipTipo, PrazoCaso } from "@/components/posvenda/CasoPosVenda";
+import { useAuth } from "@/contexts/AuthContext";
+import { useMensagensDaConversa } from "@/hooks/useConversas";
+import { useAtribuirCaso, mensagemDoErro } from "@/hooks/usePosVendaCasos";
+import {
+  MOTIVOS, ROTULO_ESTADO, ROTULO_MOTIVO, assuntoDoMotivo, clienteRespondeu, compararPrioridade, ehAntiga, entrouEm, estadoDoCaso,
+  motivoDe, passaFiltroCaso, prazoResposta, precisaDeAtencao, textoPrazo, type FiltroCasos, type Motivo,
+} from "@/lib/posvendaFila";
+import { toast } from "sonner";
 import { FLUXOS, etapaDoReembolso, passoDe, rotuloDesfecho, rotuloTipo } from "@/lib/posvendaCasos";
 import {
   COR_PROBLEMA, ETAPA_ROTULO, PROBLEMAS, ROTULO_PROBLEMA, ROTULO_SITUACAO,
@@ -31,11 +39,17 @@ import {
 // é a PRIMEIRA e a padrão; as listas vão em páginas de 50 (?pagina=).
 //   · Para tratar — o que precisa de alguém agora, de qualquer data:
 //     problema sem caso aberto nem tratativa encerrada, ou reclamação do
-//     WhatsApp pendente (`carbo_posvenda(p_so_atencao)`, 20261181). O passivo
-//     de antes do corte (06/11) vem numa segunda lista, logo abaixo.
+//     WhatsApp pendente (`carbo_posvenda(p_so_atencao)`, 20261181).
 //   · Casos abertos — tipo, passo e prazo de cada caso.
 //   · Todos os pedidos — semana/mês/período, busca e o botão Filtros.
 // O pedido aberto (o caso no centro) não mudou.
+//
+// 23/11/2026, segunda rodada ("um pós-venda de verdade"): a fila tem MOTIVO
+// (por que está aqui), PRAZO de 1ª resposta (24 h úteis) e ordem de
+// PRIORIDADE; reclamação de mais de 30 dias vai para "Antigas"; conversa
+// marcada resolvida tira a reclamação da fila (20261182). O caso tem
+// responsável e estado, e "Casos abertos" filtra por eles. As regras puras
+// moram em `lib/posvendaFila.ts`.
 //
 // ⚠️ Quem decide o que é problema é o BANCO; a tela não recalcula nada. O
 // `precisaDeAtencao` daqui é o MESMO critério do banco (20261181) — mudou lá,
@@ -43,6 +57,7 @@ import {
 //
 // Estado na URL: ?aba=todos|tratar|casos · ?pagina= · ?modo=semana|mes|periodo · ?de= · ?ate=
 //                ?situacao= · ?caso= · ?canal= · ?busca= · ?pedido=
+//                fila: ?motivo= · ?ordem=antigos|recentes · ?antigas=1   casos: ?casos=comigo|sem_dono|…
 // Endereços antigos (?modo=casos, ?aba=antes|novos) continuam abrindo.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -280,8 +295,10 @@ function LateralDoPedido({ p }: { p: Pendencia }) {
             <p className="text-xs text-muted-foreground">
               {r.n > 1 ? `${r.n} mensagens · última ` : ""}
               {new Date(r.ultima_em).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
+              {r.resolvida_na_conversa && " · conversa resolvida"}
             </p>
           </div>
+          {r.wa_id && r.numero_id && <UltimasMensagens numeroId={r.numero_id} waId={r.wa_id} />}
         </Bloco>
       )}
 
@@ -337,6 +354,29 @@ function LateralDoPedido({ p }: { p: Pendencia }) {
   );
 }
 
+/** As últimas mensagens da conversa do cliente: o que foi dito depois da reclamação. */
+function UltimasMensagens({ numeroId, waId }: { numeroId: string; waId: string }) {
+  const q = useMensagensDaConversa(numeroId, waId);
+  const ultimas = (q.data ?? []).filter((m) => m.texto?.trim()).slice(-4);
+  if (!ultimas.length) return null;
+  return (
+    <ul className="space-y-1.5">
+      {ultimas.map((m) => (
+        <li key={m.wamid} className={cn("flex", m.direcao === "saida" ? "justify-end" : "justify-start")}>
+          <span className={cn("max-w-[85%] rounded-lg px-2.5 py-1.5 text-xs leading-snug",
+            m.direcao === "saida" ? "bg-emerald-500/10" : "border bg-background")}>
+            <span className="line-clamp-3 whitespace-pre-wrap break-words">{m.texto}</span>
+            <span className="mt-0.5 block text-[10px] text-muted-foreground">
+              {m.direcao === "saida" ? (m.enviado_por_nome ?? "Automática") : "Cliente"} ·{" "}
+              {new Date(m.ocorrido_em).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
+            </span>
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function DialogoPedido({ p, onFechar }: { p: Pendencia; onFechar: () => void }) {
   return (
     <Dialog open onOpenChange={(o) => !o && onFechar()}>
@@ -365,8 +405,8 @@ function DialogoPedido({ p, onFechar }: { p: Pendencia; onFechar: () => void }) 
 }
 
 // ── As linhas da lista: uma por aba, cada uma só com o que aquela aba pergunta ─
-const GRADE_TRATAR = "lg:grid-cols-[minmax(0,1.6fr)_minmax(0,2fr)_7rem_1rem]";
-const GRADE_CASOS = "lg:grid-cols-[minmax(0,1.6fr)_minmax(0,2fr)_minmax(0,1fr)_1rem]";
+const GRADE_TRATAR = "lg:grid-cols-[minmax(0,1.6fr)_minmax(0,2fr)_8rem_7rem_1rem]";
+const GRADE_CASOS = "lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1.7fr)_minmax(0,1fr)_minmax(0,1fr)_7.5rem_1rem]";
 const GRADE_TODOS = "lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1.3fr)_minmax(0,1.3fr)_7rem_1rem]";
 
 function Quem({ p }: { p: Pendencia }) {
@@ -393,11 +433,15 @@ function Motivo({ p }: { p: Pendencia }) {
     <span className="flex min-w-0 flex-col gap-1">
       {r && (
         <span className="flex min-w-0 items-center gap-1.5 text-sm">
-          <MessageSquareWarning className="h-4 w-4 shrink-0 text-red-600 dark:text-red-400" />
-          <span className="truncate font-medium text-red-700 dark:text-red-400">{r.assuntos[0]?.rotulo ?? "Reclamou no WhatsApp"}</span>
+          <MessageSquareWarning className={cn("h-4 w-4 shrink-0", motivoDe(p) === "risco" ? "text-red-600 dark:text-red-400" : "text-amber-600 dark:text-amber-400")} />
+          <span className="truncate font-medium">
+            {assuntoDoMotivo(p)?.rotulo ?? "Reclamou no WhatsApp"}
+            {(assuntoDoMotivo(p)?.mais ?? 0) > 0 && <span className="font-normal text-muted-foreground"> +{assuntoDoMotivo(p)!.mais}</span>}
+          </span>
           <span className="shrink-0 text-xs text-muted-foreground">{haDias(r.ultima_em)}</span>
         </span>
       )}
+      {r?.trecho && <span className="truncate text-xs text-muted-foreground">“{r.trecho}”</span>}
       {p.problema && (
         <span className="flex min-w-0 items-center gap-1.5">
           <ChipProblema p={p.problema} />
@@ -409,11 +453,14 @@ function Motivo({ p }: { p: Pendencia }) {
 }
 
 function Fila({ grade, onAbrir, children }: { grade: string; onAbrir: () => void; children: React.ReactNode }) {
+  // `div` com papel de botão: a linha tem botões dentro ("Pegar"), e botão
+  // dentro de botão não existe.
   return (
-    <button type="button" onClick={onAbrir}
-      className={cn("grid w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 gap-y-1.5 px-4 py-3 text-left transition-colors hover:bg-muted/40 lg:items-center", grade)}>
+    <div role="button" tabIndex={0} onClick={onAbrir}
+      onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onAbrir(); } }}
+      className={cn("grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 gap-y-1.5 px-4 py-3 text-left outline-none transition-colors hover:bg-muted/40 focus-visible:bg-muted/60 lg:items-center", grade)}>
       {children}
-    </button>
+    </div>
   );
 }
 
@@ -422,14 +469,78 @@ const Valor = ({ p, className }: { p: Pendencia; className?: string }) => (
 );
 const Seta = () => <ChevronRight className="hidden h-4 w-4 text-muted-foreground lg:block" />;
 
+/** O prazo da 1ª resposta à reclamação (24 h úteis). */
+function Responder({ p }: { p: Pendencia }) {
+  const pz = p.reclamacao?.pendente ? prazoResposta(p) : null;
+  if (!pz) return <span className="hidden text-sm text-muted-foreground lg:inline">—</span>;
+  return (
+    <span className={cn("inline-flex items-center gap-1.5 whitespace-nowrap text-sm tabular-nums",
+      pz.situacao === "respondida" ? "text-emerald-700 dark:text-emerald-400"
+        : pz.situacao === "atrasada" ? "font-semibold text-red-600 dark:text-red-400"
+        : pz.situacao === "vence_logo" ? "font-medium text-amber-700 dark:text-amber-400" : "text-muted-foreground")}
+      title={pz.limite ? `Responder até ${pz.limite.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}` : undefined}>
+      {pz.situacao === "respondida" ? <Check className="h-3.5 w-3.5" /> : <Clock className="h-3.5 w-3.5" />}
+      {textoPrazo(pz)}
+    </span>
+  );
+}
+
 function LinhaTratar({ p, onAbrir }: { p: Pendencia; onAbrir: () => void }) {
   return (
     <Fila grade={GRADE_TRATAR} onAbrir={onAbrir}>
       <Quem p={p} />
-      <Valor p={p} className="lg:order-3" />
+      <Valor p={p} className="lg:order-4" />
       <span className="col-span-2 min-w-0 lg:order-2 lg:col-span-1"><Motivo p={p} /></span>
-      <span className="lg:order-4"><Seta /></span>
+      <span className="col-span-2 lg:order-3 lg:col-span-1"><Responder p={p} /></span>
+      <span className="lg:order-5"><Seta /></span>
     </Fila>
+  );
+}
+
+const COR_ESTADO: Record<string, string> = {
+  em_atendimento: "bg-sky-500/15 text-sky-700 dark:text-sky-400",
+  aguardando_cliente: "bg-violet-500/15 text-violet-700 dark:text-violet-400",
+  aguardando_terceiro: "bg-slate-500/15 text-slate-700 dark:text-slate-300",
+  aguardando_financeiro: "bg-amber-500/15 text-amber-800 dark:text-amber-300",
+};
+
+function ChipEstado({ p }: { p: Pendencia }) {
+  const c = p.caso!;
+  const est = estadoDoCaso(c);
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1.5">
+      <span className={cn("inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium", COR_ESTADO[est])}>
+        {est === "aguardando_financeiro" ? "Aguardando Financeiro" : ROTULO_ESTADO[est]}
+      </span>
+      {clienteRespondeu(p) && (
+        <span className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-medium text-emerald-700 dark:text-emerald-400">
+          <span className="h-2 w-2 rounded-full bg-emerald-500" />Cliente respondeu
+        </span>
+      )}
+    </span>
+  );
+}
+
+function Responsavel({ p }: { p: Pendencia }) {
+  const c = p.caso!;
+  const { user } = useAuth();
+  const atribuir = useAtribuirCaso(p.bling_id);
+  if (c.responsavel && c.responsavel === user?.id) return <span className="text-sm font-medium">Você</span>;
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      <span className={cn("truncate text-sm", !c.responsavel && "text-muted-foreground")}>{c.responsavel_nome ?? (c.responsavel ? "—" : "Ninguém")}</span>
+      {!c.responsavel && (
+        <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={atribuir.isPending}
+          onClick={(e) => {
+            e.stopPropagation();
+            atribuir.mutate({ caso: c.id }, {
+              onError: (er) => toast.error("Não foi possível pegar o caso", { description: mensagemDoErro(er) }),
+            });
+          }}>
+          Pegar
+        </Button>
+      )}
+    </span>
   );
 }
 
@@ -439,13 +550,15 @@ function LinhaCaso({ p, onAbrir }: { p: Pendencia; onAbrir: () => void }) {
   return (
     <Fila grade={GRADE_CASOS} onAbrir={onAbrir}>
       <Quem p={p} />
-      <span className="text-right lg:order-3 lg:text-left"><PrazoCaso tipo={c.tipo} abertoEm={c.aberto_em} /></span>
+      <span className="text-right lg:order-5 lg:text-left"><PrazoCaso tipo={c.tipo} abertoEm={c.aberto_em} /></span>
       <span className="col-span-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 lg:order-2 lg:col-span-1">
         <ChipTipo tipo={c.tipo} />
         {reemb ? <ChipReembolso etapa={reemb} />
           : <span className="min-w-0 truncate text-sm text-muted-foreground">{passoDe(c.tipo, c.passo)?.titulo ?? c.passo}</span>}
       </span>
-      <span className="lg:order-4"><Seta /></span>
+      <span className="min-w-0 lg:order-3"><ChipEstado p={p} /></span>
+      <span className="min-w-0 text-right lg:order-4 lg:text-left"><Responsavel p={p} /></span>
+      <span className="lg:order-6"><Seta /></span>
     </Fila>
   );
 }
@@ -563,11 +676,6 @@ function Paginador({ pagina, total, itens, onTrocar }: { pagina: number; total: 
 type Aba = "tratar" | "casos" | "todos";
 type Modo = "semana" | "mes" | "periodo";
 
-/** Precisa de alguém: reclamou e ninguém trata, ou tem problema e não há caso
- *  aberto nem tratativa encerrada. */
-const precisaDeAtencao = (p: Pendencia) =>
-  !!p.reclamacao?.pendente || (!!p.problema && p.caso?.status !== "aberto" && !ehFinal(p.trato?.situacao));
-
 export default function PendenciasEntrega() {
   const [abaUrl, setAba] = useParamUrl("aba", "todos");
   const [modoUrl, setModo] = useParamUrl("modo", "semana");
@@ -582,6 +690,15 @@ export default function PendenciasEntrega() {
   const [busca, setBusca] = useParamUrl("busca", "", { replace: true });
   const [pedidoUrl, setPedido] = useParamUrl("pedido", "");
   const [paginaUrl, setPagina] = useParamUrl("pagina", "");
+  const [motivoUrl, setMotivo] = useParamUrl("motivo", "");
+  const [ordem, setOrdem] = useParamUrl("ordem", "");
+  const [antigasUrl, setAntigas] = useParamUrl("antigas", "");
+  const [casosUrl, setFiltroCasos] = useParamUrl("casos", "");
+  const verAntigas = aba === "tratar" && antigasUrl === "1";
+  const motivo = MOTIVOS.some((m) => m.id === motivoUrl) ? (motivoUrl as Motivo) : null;
+  const FILTROS_CASOS: FiltroCasos[] = ["comigo", "sem_dono", "cliente", "terceiro", "financeiro"];
+  const filtroCasos: FiltroCasos = FILTROS_CASOS.includes(casosUrl as FiltroCasos) ? (casosUrl as FiltroCasos) : "todos";
+  const { user } = useAuth();
 
   const [buscaLocal, setBuscaLocal] = useState(busca);
   useEffect(() => { setBuscaLocal(busca); }, [busca]);
@@ -596,7 +713,6 @@ export default function PendenciasEntrega() {
   const qTratar = usePosVenda("atencao");
   const qCasos = usePosVenda("casos");
   const [primeiro, setPrimeiro] = useState<string | null>(null);
-  const [corte, setCorte] = useState("2026-11-06");
   const hoje = hojeBrasilia();
   const limite = { de: primeiro ?? "2020-01-01", ate: hoje };
   const ancora = ehDia(deUrl) ? deUrl : hoje;
@@ -616,9 +732,8 @@ export default function PendenciasEntrega() {
   const erro = q.error ? lerErro(q.error) : null;
   const algum = qTratar.data ?? qCasos.data ?? qTodos.data;
   useEffect(() => {
-    if (algum?.corte) setCorte(algum.corte.slice(0, 10));
     if (algum?.primeiro !== undefined) setPrimeiro(algum.primeiro ? algum.primeiro.slice(0, 10) : null);
-  }, [algum?.corte, algum?.primeiro]);
+  }, [algum?.primeiro]);
 
   const passo = (n: number) => {
     if (modo === "semana") setDe(maisDias(janela.de, 7 * n));
@@ -631,6 +746,7 @@ export default function PendenciasEntrega() {
   };
   const trocarAba = (a: Aba) => {
     setAba(a === "todos" ? "" : a); setModo(""); setDe(""); setAte(""); setSituacao(""); setCasoTipo(""); setCanal("");
+    setMotivo(""); setOrdem(""); setAntigas(""); setFiltroCasos("");
   };
   // Mudou o que se vê ⇒ volta à página 1 (menos na primeira montagem: o link
   // com ?pagina= tem de abrir naquela página).
@@ -638,14 +754,22 @@ export default function PendenciasEntrega() {
   useEffect(() => {
     if (!montou.current) { montou.current = true; return; }
     setPagina("");
-  }, [aba, modo, situacao, casoTipo, canal, busca, janela.de, janela.ate]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [aba, modo, situacao, casoTipo, canal, busca, janela.de, janela.ate, motivo, ordem, verAntigas, filtroCasos]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── As listas ──
-  const tratar = useMemo(() => (qTratar.data?.itens ?? []).filter(precisaDeAtencao)
-    .sort((a, b) => Number(!!b.reclamacao?.pendente) - Number(!!a.reclamacao?.pendente)
-      || String(a.desde ?? a.data_pedido).localeCompare(String(b.desde ?? b.data_pedido))), [qTratar.data]);
   const casos = useMemo(() => (qCasos.data?.itens ?? []).filter((p) => p.caso?.status === "aberto")
     .sort((a, b) => a.caso!.aberto_em.localeCompare(b.caso!.aberto_em)), [qCasos.data]);
+  // A fila (o que precisa de alguém) e as "Antigas" (só reclamação de mais de 30 dias).
+  const atencao = useMemo(() => (qTratar.data?.itens ?? []).filter(precisaDeAtencao), [qTratar.data]);
+  const fila = useMemo(() => atencao.filter((p) => !ehAntiga(p)), [atencao]);
+  const antigas = useMemo(() => atencao.filter(ehAntiga), [atencao]);
+  const tratar = verAntigas ? antigas : fila;
+  const porMotivo = useMemo(() => {
+    const n = new Map<Motivo, number>();
+    for (const p of tratar) n.set(motivoDe(p), (n.get(motivoDe(p)) ?? 0) + 1);
+    return n;
+  }, [tratar]);
+  const porFiltroCaso = (f: FiltroCasos) => casos.filter((p) => passaFiltroCaso(p, f, user?.id ?? null)).length;
   const todos = useMemo(() => (qTodos.data?.itens ?? [])
     .filter((p) => p.data_pedido >= periodo.de && p.data_pedido <= periodo.ate),
     [qTodos.data, periodo.de, periodo.ate]);  
@@ -654,14 +778,22 @@ export default function PendenciasEntrega() {
     : situacao === "reclamou" ? !!p.reclamacao : situacao === "problema" ? !!p.problema
     : (PROBLEMAS.some((x) => x.id === situacao) ? p.problema === situacao : statusDe(p) === situacao);
   const base = aba === "tratar" ? tratar : aba === "casos" ? casos : todos;
-  const lista = useMemo(() => base.filter((p) => casa(p, busca)
+  const lista = useMemo(() => {
+    const l = base.filter((p) => casa(p, busca)
       && (aba !== "todos" || (passaSituacao(p) && (!canal || p.canal === canal)
         && (!casoTipo || (casoTipo === "sem" ? !p.caso : p.caso?.tipo === casoTipo))))
-      && (aba !== "casos" || !casoTipo || p.caso?.tipo === casoTipo)),
-    [base, busca, aba, situacao, canal, casoTipo]); // eslint-disable-line react-hooks/exhaustive-deps
-  const canais = useMemo(() => [...new Set(todos.map((p) => p.canal).filter(Boolean))].sort() as string[], [todos]);
+      && (aba !== "tratar" || ((!motivo || motivoDe(p) === motivo) && (!canal || p.canal === canal)))
+      && (aba !== "casos" || ((!casoTipo || p.caso?.tipo === casoTipo) && passaFiltroCaso(p, filtroCasos, user?.id ?? null))));
+    if (aba !== "tratar") return l;
+    const agora = new Date();
+    return ordem === "antigos" ? [...l].sort((a, b) => String(entrouEm(a)).localeCompare(String(entrouEm(b))))
+      : ordem === "recentes" ? [...l].sort((a, b) => String(entrouEm(b)).localeCompare(String(entrouEm(a))))
+      : [...l].sort((a, b) => compararPrioridade(a, b, agora));
+  }, [base, busca, aba, situacao, canal, casoTipo, motivo, ordem, filtroCasos, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const canais = useMemo(() => [...new Set((aba === "tratar" ? tratar : todos).map((p) => p.canal).filter(Boolean))].sort() as string[],
+    [aba, tratar, todos]);
 
-  const achado = pedidoUrl ? [...tratar, ...casos, ...todos].find((p) => String(p.bling_id) === pedidoUrl) ?? null : null;
+  const achado = pedidoUrl ? [...atencao, ...casos, ...todos].find((p) => String(p.bling_id) === pedidoUrl) ?? null : null;
   const [ultimoAberto, setUltimoAberto] = useState<Pendencia | null>(null);
   useEffect(() => { if (achado) setUltimoAberto(achado); }, [achado]);
   const doUltimo = pedidoUrl && ultimoAberto && String(ultimoAberto.bling_id) === pedidoUrl ? ultimoAberto : null;
@@ -671,14 +803,10 @@ export default function PendenciasEntrega() {
   const carregandoOutro = q.isPlaceholderData || (q.isFetching && !q.isRefetching);
   const abrir = (p: Pendencia) => setPedido(String(p.bling_id));
 
-  const corteCurto = diaMes(corte);
-  const nomeArquivo = `pos-venda-${aba === "todos" ? `${periodo.de}-a-${periodo.ate}` : aba === "casos" ? "casos-abertos" : "para-tratar"}.csv`;
+  const nomeArquivo = `pos-venda-${aba === "todos" ? `${periodo.de}-a-${periodo.ate}` : aba === "casos" ? "casos-abertos" : verAntigas ? "reclamacoes-antigas" : "para-tratar"}.csv`;
   const filtrosAtivos = [situacao, canal, casoTipo].filter(Boolean).length;
 
-  // A fila em duas partes: o dia a dia primeiro, o passivo de antes do corte depois.
-  const ordenada = useMemo(() => aba !== "tratar" ? lista
-    : [...lista.filter((p) => !p.antes_do_corte), ...lista.filter((p) => p.antes_do_corte)], [lista, aba]);
-  const nAntigos = aba === "tratar" ? lista.filter((p) => p.antes_do_corte).length : 0;
+  const ordenada = lista;
   const totalPaginas = Math.max(1, Math.ceil(ordenada.length / POR_PAGINA));
   const pagina = Math.min(totalPaginas, Math.max(1, Number(paginaUrl) || 1));
   const daPagina = ordenada.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA);
@@ -686,19 +814,6 @@ export default function PendenciasEntrega() {
     setPagina(n <= 1 ? "" : String(n));
     document.querySelector("main")?.scrollTo({ top: 0 });
     window.scrollTo({ top: 0 });
-  };
-  // Na fila, a faixa "A partir de… / Antes de…" abre cada parte, dentro da página.
-  const faixa = (p: Pendencia, i: number) => {
-    if (aba !== "tratar") return null;
-    const anterior = i > 0 ? daPagina[i - 1] : null;
-    if (anterior && anterior.antes_do_corte === p.antes_do_corte) return null;
-    const n = p.antes_do_corte ? nAntigos : ordenada.length - nAntigos;
-    return (
-      <div className="flex items-baseline justify-between gap-3 border-b bg-muted/30 px-4 py-2">
-        <span className="text-sm font-semibold">{p.antes_do_corte ? `Antes de ${corteCurto}` : `A partir de ${corteCurto}`}</span>
-        <span className="text-xs tabular-nums text-muted-foreground">{n}</span>
-      </div>
-    );
   };
   const LinhaDaAba = aba === "tratar" ? LinhaTratar : aba === "casos" ? LinhaCaso : LinhaTodos;
 
@@ -730,17 +845,71 @@ export default function PendenciasEntrega() {
 
         <Segmentos grande ativo={aba} onTrocar={trocarAba} itens={[
           { id: "todos", rotulo: "Todos os pedidos", curto: "Todos" },
-          { id: "tratar", rotulo: "Para tratar", n: qTratar.data ? tratar.length : undefined, alerta: true },
+          { id: "tratar", rotulo: "Para tratar", n: qTratar.data ? fila.length : undefined, alerta: true },
           { id: "casos", rotulo: "Casos abertos", curto: "Casos", n: qCasos.data ? casos.length : undefined },
         ]} />
 
-        {/* A barra: só a busca nas filas; período e filtros em "Todos os pedidos" */}
+        {aba === "tratar" && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {verAntigas ? (
+              <Button variant="ghost" size="sm" className="h-8 -ml-2" onClick={() => { setAntigas(""); setMotivo(""); }}>
+                <ChevronLeft className="mr-1 h-4 w-4" />Fila
+              </Button>
+            ) : null}
+            <Pilula ativo={!motivo} onClick={() => setMotivo("")} n={tratar.length}>{verAntigas ? "Reclamações antigas" : "Tudo"}</Pilula>
+            {MOTIVOS.filter((m) => porMotivo.get(m.id)).map((m) => (
+              <Pilula key={m.id} ativo={motivo === m.id} onClick={() => setMotivo(motivo === m.id ? "" : m.id)}
+                n={porMotivo.get(m.id)} alerta={m.id === "risco"}>{ROTULO_MOTIVO[m.id]}</Pilula>
+            ))}
+          </div>
+        )}
+        {aba === "casos" && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Pilula ativo={filtroCasos === "todos"} onClick={() => setFiltroCasos("")} n={casos.length}>Todos</Pilula>
+            {([
+              ["comigo", "Comigo"], ["sem_dono", "Sem responsável"], ["cliente", "Aguardando cliente"],
+              ["terceiro", "Aguardando terceiro"], ["financeiro", "Aguardando Financeiro"],
+            ] as [FiltroCasos, string][]).map(([id, rotulo]) => {
+              const n = porFiltroCaso(id);
+              if (!n && filtroCasos !== id && id !== "comigo") return null;
+              return <Pilula key={id} ativo={filtroCasos === id} onClick={() => setFiltroCasos(filtroCasos === id ? "" : id)} n={n}>{rotulo}</Pilula>;
+            })}
+          </div>
+        )}
+
+        {/* A barra: busca em todas; filtros de cada aba */}
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative min-w-0 basis-full sm:basis-72">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input value={buscaLocal} onChange={(e) => setBuscaLocal(e.target.value)}
               placeholder="Cliente, telefone, pedido, rastreio…" className="h-9 pl-8" />
           </div>
+          {aba === "tratar" && (
+            <>
+              {canais.length > 1 && (
+                <Select value={canal || "todos"} onValueChange={(v) => setCanal(v === "todos" ? "" : v)}>
+                  <SelectTrigger className="h-9 w-40"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos os canais</SelectItem>
+                    {canais.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
+              <Select value={ordem || "prioridade"} onValueChange={(v) => setOrdem(v === "prioridade" ? "" : v)}>
+                <SelectTrigger className="h-9 w-44"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="prioridade">Prioridade</SelectItem>
+                  <SelectItem value="antigos">Mais antigos primeiro</SelectItem>
+                  <SelectItem value="recentes">Mais recentes primeiro</SelectItem>
+                </SelectContent>
+              </Select>
+              {!verAntigas && antigas.length > 0 && (
+                <Button variant="ghost" size="sm" className="h-9 text-muted-foreground" onClick={() => { setAntigas("1"); setMotivo(""); }}>
+                  Antigas <span className="ml-1.5 tabular-nums">{antigas.length}</span>
+                </Button>
+              )}
+            </>
+          )}
           {aba === "casos" && (
             <Select value={casoTipo || "todos"} onValueChange={(v) => setCasoTipo(v === "todos" ? "" : v)}>
               <SelectTrigger className="h-9 w-48"><SelectValue /></SelectTrigger>
@@ -828,17 +997,14 @@ export default function PendenciasEntrega() {
             )}
 
             <Lista
-              vazio={busca || filtrosAtivos ? "Nada encontrado."
-                : aba === "tratar" ? "Nada para tratar." : aba === "casos" ? "Nenhum caso aberto." : "Nenhum pedido neste período."}
+              vazio={busca || filtrosAtivos || motivo || (aba === "casos" && filtroCasos !== "todos") ? "Nada encontrado."
+                : verAntigas ? "Nenhuma reclamação antiga." : aba === "tratar" ? "Nada para tratar." : aba === "casos" ? "Nenhum caso aberto." : "Nenhum pedido neste período."}
               cabecalho={<Colunas grade={aba === "tratar" ? GRADE_TRATAR : aba === "casos" ? GRADE_CASOS : GRADE_TODOS}
-                nomes={aba === "tratar" ? ["Cliente", "Por que está aqui", "Valor", ""]
-                  : aba === "casos" ? ["Cliente", "Caso", "Prazo", ""]
+                nomes={aba === "tratar" ? ["Cliente", "O que aconteceu", "Responder", "Valor", ""]
+                  : aba === "casos" ? ["Cliente", "Caso", "Estado", "Responsável", "Prazo", ""]
                   : ["Cliente", "Situação", "Entrega", "Valor", ""]} />}>
-              {daPagina.map((p, i) => (
-                <div key={p.bling_id}>
-                  {faixa(p, i)}
-                  <LinhaDaAba p={p} onAbrir={() => abrir(p)} />
-                </div>
+              {daPagina.map((p) => (
+                <LinhaDaAba key={p.bling_id} p={p} onAbrir={() => abrir(p)} />
               ))}
             </Lista>
 
@@ -849,6 +1015,23 @@ export default function PendenciasEntrega() {
         {aberto && <DialogoPedido key={aberto.bling_id} p={aberto} onFechar={() => setPedido("")} />}
       </div>
     </div>
+  );
+}
+
+/** Um filtro rápido com a contagem. */
+function Pilula({ ativo, onClick, n, alerta, children }: {
+  ativo: boolean; onClick: () => void; n?: number; alerta?: boolean; children: React.ReactNode;
+}) {
+  return (
+    <button type="button" onClick={onClick} aria-pressed={ativo}
+      className={cn("inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1 text-sm transition-colors",
+        ativo ? "border-foreground/20 bg-foreground text-background" : "bg-card text-muted-foreground hover:text-foreground")}>
+      {children}
+      {n != null && (
+        <span className={cn("tabular-nums text-xs font-semibold",
+          !ativo && alerta ? "text-red-600 dark:text-red-400" : ativo ? "text-background/80" : "text-foreground/70")}>{n}</span>
+      )}
+    </button>
   );
 }
 

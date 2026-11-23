@@ -95,8 +95,19 @@ export interface Reclamacao {
   trecho: string | null;
   wa_id: string | null;
   numero_id: string | null;
-  /** Ninguém está tratando: sem caso aberto, e o último caso fechou antes dela. */
+  /** Ninguém está tratando: sem caso aberto, o último caso fechou antes dela, e
+   *  a conversa não foi marcada resolvida depois dela (20261182). */
   pendente: boolean;
+  /** A conversa foi marcada resolvida depois da última reclamação (20261182). */
+  resolvida_na_conversa?: boolean;
+  /** 1ª resposta de GENTE depois da última reclamação. */
+  respondida_em?: string | null;
+  /** A 1ª reclamação ainda sem resposta: de onde conta o prazo de 24 h úteis. */
+  aguarda_desde?: string | null;
+  /** Última mensagem do cliente na conversa (qualquer assunto). */
+  ultima_entrada_em?: string | null;
+  /** Mais de 30 dias: sai da fila e vai para "Antigas". */
+  antiga?: boolean;
 }
 
 export interface CasoResumo {
@@ -109,6 +120,11 @@ export interface CasoResumo {
   aberto_em: string;
   atualizado_em: string;
   encerrado_em?: string | null;
+  /** Quem cuida do caso e com quem está a bola (20261182). */
+  responsavel?: string | null;
+  responsavel_nome?: string | null;
+  estado?: "em_atendimento" | "aguardando_cliente" | "aguardando_terceiro" | null;
+  estado_em?: string | null;
 }
 
 export interface PosVenda {
