@@ -1,5 +1,5 @@
 import type { Pendencia } from "../hooks/usePendenciasEntrega";
-import { passoDe } from "./posvendaCasos";
+import { TIPO_DO_ASSUNTO, passoDe, type TipoCaso } from "./posvendaCasos";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // As regras PURAS da fila do pós-venda (`/pos-venda`, aba "Para tratar") e dos
@@ -140,6 +140,21 @@ export function assuntoDoMotivo(p: Pendencia): { rotulo: string; mais: number } 
   const m = motivoDe(p);
   const a = r.assuntos.find((x) => MOTIVO_DO_ASSUNTO[x.codigo] === m) ?? r.assuntos[0];
   return { rotulo: a.rotulo, mais: r.assuntos.length - 1 };
+}
+
+/** O tipo de caso em que o pedido PROVAVELMENTE se enquadra — um palpite (a
+ *  classificação por palavra erra), para quem atende revisar ao abrir o caso.
+ *  Nulo quando o problema é só nosso (etiqueta, NF): ali não há caso do cliente. */
+export function tipoProvavel(p: Pendencia): TipoCaso | null {
+  const r = p.reclamacao?.pendente ? p.reclamacao : null;
+  if (r) {
+    const doMotivo = assuntoDoMotivo(p);
+    const codigos = r.assuntos.map((a) => a.codigo);
+    const prim = r.assuntos.find((a) => a.rotulo === doMotivo?.rotulo)?.codigo;
+    for (const c of [prim, ...codigos]) if (c && TIPO_DO_ASSUNTO[c]) return TIPO_DO_ASSUNTO[c];
+  }
+  if (p.problema === "atrasado" || p.problema === "transportadora") return "atraso";
+  return null;
 }
 
 // ── A fila ───────────────────────────────────────────────────────────────────

@@ -20,8 +20,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useMensagensDaConversa } from "@/hooks/useConversas";
 import { useAtribuirCaso, mensagemDoErro } from "@/hooks/usePosVendaCasos";
 import {
-  MOTIVOS, ROTULO_ESTADO, ROTULO_MOTIVO, assuntoDoMotivo, clienteRespondeu, compararPrioridade, ehAntiga, entrouEm, estadoDoCaso,
-  motivoDe, passaFiltroCaso, prazoResposta, precisaDeAtencao, textoPrazo, type FiltroCasos, type Motivo,
+  MOTIVOS, ROTULO_ESTADO, ROTULO_MOTIVO, clienteRespondeu, compararPrioridade, ehAntiga, entrouEm, estadoDoCaso,
+  motivoDe, passaFiltroCaso, prazoResposta, precisaDeAtencao, textoPrazo, tipoProvavel, type FiltroCasos, type Motivo,
 } from "@/lib/posvendaFila";
 import { toast } from "sonner";
 import { FLUXOS, etapaDoReembolso, passoDe, rotuloDesfecho, rotuloTipo } from "@/lib/posvendaCasos";
@@ -427,27 +427,40 @@ const haDias = (iso: string | null | undefined) => {
 };
 
 /** Por que o pedido está na fila: a reclamação vem primeiro (é o cliente falando). */
+/** O que aconteceu: o tipo de caso PROVÁVEL (um palpite, a revisar ao abrir o
+ *  caso) e, embaixo, o assunto que o cliente falou ou o problema da entrega.
+ *  A mensagem inteira fica no passar do mouse e no pedido aberto. */
 function Motivo({ p }: { p: Pendencia }) {
   const r = p.reclamacao?.pendente ? p.reclamacao : null;
+  const tipo = tipoProvavel(p);
+  const risco = motivoDe(p) === "risco";
+  const assuntos = r ? r.assuntos.map((a) => a.rotulo) : [];
+  const detalhe = r
+    ? [haDias(r.ultima_em), assuntos.join(" · "), p.problema ? ROTULO_PROBLEMA[p.problema] : null]
+    : [haDias(p.desde), p.problema && tipo ? ROTULO_PROBLEMA[p.problema] : null];
   return (
-    <span className="flex min-w-0 flex-col gap-1">
-      {r && (
-        <span className="flex min-w-0 items-center gap-1.5 text-sm">
-          <MessageSquareWarning className={cn("h-4 w-4 shrink-0", motivoDe(p) === "risco" ? "text-red-600 dark:text-red-400" : "text-amber-600 dark:text-amber-400")} />
-          <span className="truncate font-medium">
-            {assuntoDoMotivo(p)?.rotulo ?? "Reclamou no WhatsApp"}
-            {(assuntoDoMotivo(p)?.mais ?? 0) > 0 && <span className="font-normal text-muted-foreground"> +{assuntoDoMotivo(p)!.mais}</span>}
+    <span className="flex min-w-0 flex-col gap-1" title={r?.trecho ?? undefined}>
+      <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+        {tipo ? (
+          <>
+            <ChipTipo tipo={tipo} />
+            <span className="text-[11px] text-muted-foreground">provável</span>
+          </>
+        ) : r ? (
+          <span className="inline-flex whitespace-nowrap rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-foreground/80">
+            {ROTULO_MOTIVO[motivoDe(p)]}
           </span>
-          <span className="shrink-0 text-xs text-muted-foreground">{haDias(r.ultima_em)}</span>
-        </span>
-      )}
-      {r?.trecho && <span className="truncate text-xs text-muted-foreground">“{r.trecho}”</span>}
-      {p.problema && (
-        <span className="flex min-w-0 items-center gap-1.5">
-          <ChipProblema p={p.problema} />
-          <span className="shrink-0 text-xs text-muted-foreground">{haDias(p.desde)}</span>
-        </span>
-      )}
+        ) : p.problema ? <ChipProblema p={p.problema} /> : null}
+        {risco && (
+          <span className="inline-flex items-center gap-1 rounded bg-red-500/15 px-1.5 py-0.5 text-[11px] font-semibold text-red-700 dark:text-red-400">
+            <AlertTriangle className="h-3 w-3" />risco
+          </span>
+        )}
+      </span>
+      <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+        {r && <MessageSquareWarning className="h-3.5 w-3.5 shrink-0" />}
+        <span className="truncate">{detalhe.filter(Boolean).join(" · ")}</span>
+      </span>
     </span>
   );
 }
@@ -850,31 +863,33 @@ export default function PendenciasEntrega() {
         ]} />
 
         {aba === "tratar" && (
-          <div className="flex flex-wrap items-center gap-1.5">
-            {verAntigas ? (
-              <Button variant="ghost" size="sm" className="h-8 -ml-2" onClick={() => { setAntigas(""); setMotivo(""); }}>
-                <ChevronLeft className="mr-1 h-4 w-4" />Fila
-              </Button>
-            ) : null}
-            <Pilula ativo={!motivo} onClick={() => setMotivo("")} n={tratar.length}>{verAntigas ? "Reclamações antigas" : "Tudo"}</Pilula>
-            {MOTIVOS.filter((m) => porMotivo.get(m.id)).map((m) => (
-              <Pilula key={m.id} ativo={motivo === m.id} onClick={() => setMotivo(motivo === m.id ? "" : m.id)}
-                n={porMotivo.get(m.id)} alerta={m.id === "risco"}>{ROTULO_MOTIVO[m.id]}</Pilula>
-            ))}
-          </div>
+          <>
+            {verAntigas && (
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="sm" className="-ml-2 h-8" onClick={() => { setAntigas(""); setMotivo(""); }}>
+                  <ChevronLeft className="mr-1 h-4 w-4" />Fila
+                </Button>
+                <span className="text-sm font-medium">Reclamações com mais de 30 dias</span>
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-[repeat(auto-fit,minmax(8.5rem,1fr))]">
+              <Cartao ativo={!motivo} rotulo="Tudo" n={tratar.length} onClick={() => setMotivo("")} />
+              {MOTIVOS.filter((m) => porMotivo.get(m.id)).map((m) => (
+                <Cartao key={m.id} ativo={motivo === m.id} rotulo={ROTULO_MOTIVO[m.id]} n={porMotivo.get(m.id) ?? 0}
+                  alerta={m.id === "risco"} onClick={() => setMotivo(motivo === m.id ? "" : m.id)} />
+              ))}
+            </div>
+          </>
         )}
         {aba === "casos" && (
-          <div className="flex flex-wrap items-center gap-1.5">
-            <Pilula ativo={filtroCasos === "todos"} onClick={() => setFiltroCasos("")} n={casos.length}>Todos</Pilula>
-            {([
-              ["comigo", "Comigo"], ["sem_dono", "Sem responsável"], ["cliente", "Aguardando cliente"],
-              ["terceiro", "Aguardando terceiro"], ["financeiro", "Aguardando Financeiro"],
-            ] as [FiltroCasos, string][]).map(([id, rotulo]) => {
-              const n = porFiltroCaso(id);
-              if (!n && filtroCasos !== id && id !== "comigo") return null;
-              return <Pilula key={id} ativo={filtroCasos === id} onClick={() => setFiltroCasos(filtroCasos === id ? "" : id)} n={n}>{rotulo}</Pilula>;
-            })}
-          </div>
+          <Segmentos ativo={filtroCasos} onTrocar={(f) => setFiltroCasos(f === "todos" ? "" : f)} itens={[
+            { id: "comigo" as FiltroCasos, rotulo: "Comigo", n: porFiltroCaso("comigo") },
+            { id: "sem_dono" as FiltroCasos, rotulo: "Sem responsável", n: porFiltroCaso("sem_dono"), alerta: true },
+            { id: "todos" as FiltroCasos, rotulo: "Abertos", n: casos.length },
+            { id: "cliente" as FiltroCasos, rotulo: "Aguardando cliente", n: porFiltroCaso("cliente") },
+            { id: "terceiro" as FiltroCasos, rotulo: "Aguardando terceiro", n: porFiltroCaso("terceiro") },
+            { id: "financeiro" as FiltroCasos, rotulo: "Aguardando Financeiro", n: porFiltroCaso("financeiro") },
+          ]} />
         )}
 
         {/* A barra: busca em todas; filtros de cada aba */}
@@ -888,33 +903,29 @@ export default function PendenciasEntrega() {
             <>
               {canais.length > 1 && (
                 <Select value={canal || "todos"} onValueChange={(v) => setCanal(v === "todos" ? "" : v)}>
-                  <SelectTrigger className="h-9 w-40"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-9 w-auto gap-2"><span className="text-muted-foreground">Canal:</span><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="todos">Todos os canais</SelectItem>
+                    <SelectItem value="todos">todos</SelectItem>
                     {canais.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                   </SelectContent>
                 </Select>
               )}
               <Select value={ordem || "prioridade"} onValueChange={(v) => setOrdem(v === "prioridade" ? "" : v)}>
-                <SelectTrigger className="h-9 w-44"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-9 w-auto gap-2"><span className="text-muted-foreground">Ordenar:</span><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="prioridade">Prioridade</SelectItem>
-                  <SelectItem value="antigos">Mais antigos primeiro</SelectItem>
-                  <SelectItem value="recentes">Mais recentes primeiro</SelectItem>
+                  <SelectItem value="prioridade">mais urgente</SelectItem>
+                  <SelectItem value="antigos">mais antigos</SelectItem>
+                  <SelectItem value="recentes">mais recentes</SelectItem>
                 </SelectContent>
               </Select>
-              {!verAntigas && antigas.length > 0 && (
-                <Button variant="ghost" size="sm" className="h-9 text-muted-foreground" onClick={() => { setAntigas("1"); setMotivo(""); }}>
-                  Antigas <span className="ml-1.5 tabular-nums">{antigas.length}</span>
-                </Button>
-              )}
+
             </>
           )}
           {aba === "casos" && (
             <Select value={casoTipo || "todos"} onValueChange={(v) => setCasoTipo(v === "todos" ? "" : v)}>
-              <SelectTrigger className="h-9 w-48"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-9 w-auto gap-2"><span className="text-muted-foreground">Tipo:</span><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="todos">Todos os tipos</SelectItem>
+                <SelectItem value="todos">todos</SelectItem>
                 {FLUXOS.map((f) => <SelectItem key={f.tipo} value={f.tipo}>{f.rotulo}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -967,7 +978,13 @@ export default function PendenciasEntrega() {
               </Popover>
             </>
           )}
-          <span className="ml-auto inline-flex items-center gap-1.5 text-sm text-muted-foreground tabular-nums">
+          <span className="ml-auto inline-flex items-center gap-3 text-sm text-muted-foreground tabular-nums">
+            {aba === "tratar" && !verAntigas && antigas.length > 0 && (
+              <button type="button" className="inline-flex items-center gap-1.5 hover:text-foreground"
+                onClick={() => { setAntigas("1"); setMotivo(""); }}>
+                <Clock className="h-4 w-4" />Antigas {antigas.length}
+              </button>
+            )}
             {(carregandoOutro || q.isFetching) && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             {d && `${lista.length} ${lista.length === 1 ? "pedido" : "pedidos"}`}
           </span>
@@ -1018,19 +1035,19 @@ export default function PendenciasEntrega() {
   );
 }
 
-/** Um filtro rápido com a contagem. */
-function Pilula({ ativo, onClick, n, alerta, children }: {
-  ativo: boolean; onClick: () => void; n?: number; alerta?: boolean; children: React.ReactNode;
+/** Um cartão de contagem que também é filtro (o motivo da fila). */
+function Cartao({ ativo, rotulo, n, alerta, onClick }: {
+  ativo: boolean; rotulo: string; n: number; alerta?: boolean; onClick: () => void;
 }) {
   return (
     <button type="button" onClick={onClick} aria-pressed={ativo}
-      className={cn("inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1 text-sm transition-colors",
-        ativo ? "border-foreground/20 bg-foreground text-background" : "bg-card text-muted-foreground hover:text-foreground")}>
-      {children}
-      {n != null && (
-        <span className={cn("tabular-nums text-xs font-semibold",
-          !ativo && alerta ? "text-red-600 dark:text-red-400" : ativo ? "text-background/80" : "text-foreground/70")}>{n}</span>
-      )}
+      className={cn("flex min-w-0 flex-col items-start rounded-xl border bg-card px-3.5 py-2.5 text-left transition-colors",
+        ativo ? "border-primary ring-1 ring-primary/30" : "hover:border-foreground/20")}>
+      <span className={cn("flex items-center gap-1 truncate text-xs",
+        alerta ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}>
+        {alerta && <AlertTriangle className="h-3 w-3 shrink-0" />}{rotulo}
+      </span>
+      <span className={cn("text-xl font-semibold tabular-nums", alerta && "text-red-600 dark:text-red-400")}>{n}</span>
     </button>
   );
 }
