@@ -5,7 +5,7 @@ import { lerSemTeto, lerPorIdsSemTeto } from "@carbo/shell";
 import { chaveDoFone } from "@/hooks/useEsteiraOnline";
 import { lerTudo } from "@/lib/lerTudo";
 import {
-  JANELA_MS, agruparConversas,
+  JANELA_MS, agruparConversas, conversaDoResumo, ordenarConversas, type ResumoConversa,
   type Conversa, type MensagemConversa, type Atendimento,
   type TagConversa, type StatusAtendimento, type RespostaRapida,
 } from "@/lib/conversas";
@@ -112,6 +112,48 @@ async function semTetoOuNulo(nome: string, montar: () => any): Promise<{ data: a
   }
 }
 
+async function lerResumo(numeroId: string, dias: number): Promise<Conversa[] | null> {
+  const { data, error } = await (supabase as any)
+    .rpc("carbo_wa_caixa_resumo", { p_numero_id: numeroId, p_dias: dias });
+  if (error) {
+    if (error.code === "PGRST202" || /carbo_wa_caixa_resumo/.test(error.message ?? "")) return null;
+    throw error;
+  }
+  const linhas = (data ?? []) as ResumoConversa[];
+
+  // Os nomes que a view não acha: carrinho (o `bling_id` é o checkout) e, por
+  // último, pelo telefone — as mesmas duas reservas do caminho antigo.
+  const checkouts = [...new Set(linhas
+    .filter((r) => !r.cliente_pedido && r.bling_id != null && r.sobre_a_etapa?.startsWith("carrinho_"))
+    .map((r) => r.bling_id as number))];
+  if (checkouts.length > 0) {
+    try {
+      const carrinhos = await lerPorIdsSemTeto<any>(checkouts, (lote) => (supabase as any)
+        .from("nuvemshop_carrinhos").select("checkout_id, cliente")
+        .in("checkout_id", lote).order("checkout_id"));
+      const nomes = new Map<number, string>();
+      for (const c of carrinhos ?? []) if (c.cliente?.trim()) nomes.set(Number(c.checkout_id), c.cliente.trim());
+      for (const r of linhas) {
+        if (!r.cliente_pedido && r.bling_id != null && r.sobre_a_etapa?.startsWith("carrinho_")) {
+          r.cliente_pedido = nomes.get(Number(r.bling_id)) ?? null;
+        }
+      }
+    } catch (errCar) {
+      console.error("[conversas] nome do carrinho:", (errCar as Error).message);
+    }
+  }
+  const semNome = linhas.filter((r) => !r.cliente_pedido && !r.nome_whatsapp).map((r) => r.wa_id);
+  if (semNome.length > 0) {
+    const { data: porFone, error: errFone } = await (supabase as any)
+      .rpc("carbo_wa_nomes_por_fone", { p_wa_ids: semNome });
+    if (errFone) console.error("[conversas] nome pelo telefone:", errFone.message);
+    const nomes = new Map<string, string>();
+    for (const r of (porFone ?? []) as any[]) if (r.nome) nomes.set(r.wa_id, r.nome);
+    for (const r of linhas) if (!r.cliente_pedido && nomes.has(r.wa_id)) r.cliente_pedido = nomes.get(r.wa_id)!;
+  }
+  return ordenarConversas(linhas.map(conversaDoResumo));
+}
+
 async function lerCaixa(numeroId: string, dias: number, desde: string) {
   const { data, error } = await (supabase as any)
     .rpc("carbo_wa_caixa", { p_numero_id: numeroId, p_dias: dias });
@@ -166,6 +208,14 @@ export function useConversas(dias = 30, numeroId?: string | null) {
     queryKey: ["wa-conversas", dias, numeroId ?? null],
     queryFn: async (): Promise<Conversa[]> => {
       const desde = new Date(Date.now() - dias * 86_400_000).toISOString();
+
+      // ⚠️ (23/11/2026, fase 3) A lista sai do RESUMO por conversa
+      // (`carbo_wa_caixa_resumo`, 20261187): uma linha por conversa, já com
+      // janela, status, dono e etiquetas — sem recalcular 30 dias de mensagens
+      // e sem baixar contatos/atendimentos/etiquetas do número inteiro.
+      // Sem a função (front antes do SQL), cai no caminho de antes, abaixo.
+      const doResumo = await lerResumo(numeroId as string, dias);
+      if (doResumo) return doResumo;
 
       const [{ data: msgs, error }, { data: contatos }, { data: atend }, { data: vinculos }] =
         await Promise.all([
@@ -351,8 +401,24 @@ export function useConversasAoVivo(numeroId: string | null, waAberto: string | n
     // etiqueta é DELETE.
     const doNumero = `numero_id=eq.${numeroId}`;
 
+    // ⚠️ (fase 3) O RESUMO muda quando a conversa muda — e recarregar a lista
+    // agora custa milissegundos, então ela anda em 1,5 s, não em 8.
+    let esperaResumo: ReturnType<typeof setTimeout> | null = null;
+    const listaRapida = () => {
+      if (esperaResumo) return;
+      esperaResumo = setTimeout(() => {
+        esperaResumo = null;
+        qc.invalidateQueries({
+          queryKey: ["wa-conversas"],
+          predicate: (q) => q.queryKey[1] !== "mensagens",
+        });
+      }, 1_500);
+    };
+
     canal.current = supabase
       .channel(`wa-conversas-${numeroId}`)
+      .on("postgres_changes" as never,
+          { event: "*", schema: "public", table: "carbo_wa_resumo", filter: doNumero }, listaRapida)
       .on("postgres_changes" as never,
           { event: "*", schema: "public", table: "carbo_wa_mensagens", filter: doNumero }, invalidar)
       // UPDATE também: o status do envio (enviado → entregue → lido) muda a
@@ -389,6 +455,7 @@ export function useConversasAoVivo(numeroId: string | null, waAberto: string | n
 
     return () => {
       if (espera) clearTimeout(espera);
+      if (esperaResumo) clearTimeout(esperaResumo);
       if (canal.current) supabase.removeChannel(canal.current);
       canal.current = null;
     };

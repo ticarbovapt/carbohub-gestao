@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   conversaAvulsa, agruparConversas, pareceRespostaAutomatica, aplicarFiltrosDaCaixa,
-  FILTROS_VAZIOS, quantosFiltrosAtivos, type MensagemConversa,
+  FILTROS_VAZIOS, quantosFiltrosAtivos, conversaDoResumo, type MensagemConversa, type ResumoConversa,
 } from "../../../apps/atendimento/src/lib/conversas";
 import {
   tipoDaImagem, decisaoDaImagem,
@@ -121,5 +121,42 @@ describe("fase 2 — ordem padrão: esperando há mais tempo", () => {
     expect(aplicarFiltrosDaCaixa(lista, FILTROS_VAZIOS).map((c) => c.wa_id))
       .toEqual(["velho", "novo", "ok"]);
     expect(quantosFiltrosAtivos(FILTROS_VAZIOS)).toBe(0);
+  });
+});
+
+describe("fase 3 — conversa montada do resumo", () => {
+  const base: ResumoConversa = {
+    wa_id: "5511900000009", numero_id: "N", ultima_em: "2026-11-23T10:10:00Z", ultima_wamid: "w3",
+    ultima_texto: "oi?", ultima_tipo: "text", ultima_direcao: "entrada",
+    ultima_entrada_em: "2026-11-23T10:10:00Z", ultima_resposta_em: "2026-11-23T09:00:00Z",
+    pendentes_em: ["2026-11-23T10:00:00Z", "2026-11-23T10:10:00Z"], ultima_pendente_texto: "oi?",
+    bling_id: 10, sobre_a_etapa: "nf_emitida", vinculo_exato: true, cliente_pedido: "Cliente Teste",
+    nome_whatsapp: "Zap", last_inbound_at: "2026-11-23T10:10:00Z",
+    at_status: null, at_desde: null, responsavel: null, responsavel_nome: null, tags: [],
+  };
+  it("pendentes depois da última resposta de gente", () => {
+    const c = conversaDoResumo(base);
+    expect(c.aguardando).toBe(2);
+    expect(c.aguardando_desde).toBe("2026-11-23T10:00:00Z");
+    expect(c.status).toBe("aberto");
+    expect(c.janela_ate).toBe("2026-11-24T10:10:00.000Z");
+    expect(c.cliente).toBe("Cliente Teste");
+    expect(c.nome_whatsapp).toBe("Zap");
+  });
+  it("resolvida DEPOIS das pendentes: nada esperando", () => {
+    const c = conversaDoResumo({ ...base, at_status: "resolvido", at_desde: "2026-11-23T10:20:00Z" });
+    expect(c.aguardando).toBe(0);
+    expect(c.estado).toBe("resolvida");
+    expect(c.status).toBe("resolvido");
+  });
+  it("resolvida ANTES da última: reabre e conta só a de depois", () => {
+    const c = conversaDoResumo({ ...base, at_status: "resolvido", at_desde: "2026-11-23T10:05:00Z" });
+    expect(c.aguardando).toBe(1);
+    expect(c.reaberta).toBe(true);
+    expect(c.status).toBe("aberto");
+  });
+  it("resposta automática do cliente vira sugestão", () => {
+    const c = conversaDoResumo({ ...base, ultima_pendente_texto: "Loja X agradece seu contato." });
+    expect(c.sugestao).toBe("automatica");
   });
 });

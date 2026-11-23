@@ -204,7 +204,41 @@ export const FX: Record<string, unknown> = {
   carbo_wa_conversas: MSGS,
 };
 
+// O resumo por conversa (`carbo_wa_caixa_resumo`, 20261187) montado das
+// mesmas mensagens — espelho da conta do banco, só para o harness.
+const resumoDoNumero = (n: unknown) => {
+  const porWa = new Map<string, Msg[]>();
+  for (const m of doNumero(n)) (porWa.get(String(m.wa_id)) ?? porWa.set(String(m.wa_id), []).get(String(m.wa_id))!).push(m);
+  const t = (m: Msg) => Date.parse(String(m.ocorrido_em));
+  return [...porWa.entries()].map(([wa, ms]) => {
+    const o = [...ms].sort((a, b) => t(a) - t(b));
+    const ult = o[o.length - 1];
+    const resp = o.filter((m) => m.direcao === "saida" && (m.tipo !== "template" || m.enviado_por_nome));
+    const ultResp = resp.length ? t(resp[resp.length - 1]) : -Infinity;
+    const pend = o.filter((m) => m.direcao === "entrada" && t(m) > ultResp);
+    const comPedido = [...o].reverse().find((m) => m.bling_id != null);
+    const ent = o.filter((m) => m.direcao === "entrada");
+    const c = CONTATOS.find((x: any) => x.numero_id === n && x.wa_id === wa) as any;
+    const a = ATENDIMENTO.find((x: any) => x.numero_id === n && x.wa_id === wa) as any;
+    return {
+      wa_id: wa, numero_id: n, ultima_em: ult.ocorrido_em, ultima_wamid: ult.wamid, ultima_texto: ult.texto,
+      ultima_tipo: ult.tipo, ultima_direcao: ult.direcao,
+      ultima_entrada_em: ent.length ? ent[ent.length - 1].ocorrido_em : null,
+      ultima_resposta_em: resp.length ? resp[resp.length - 1].ocorrido_em : null,
+      pendentes_em: pend.map((m) => m.ocorrido_em), ultima_pendente_texto: pend.length ? pend[pend.length - 1].texto : null,
+      bling_id: comPedido?.bling_id ?? null, sobre_a_etapa: comPedido?.sobre_a_etapa ?? null,
+      vinculo_exato: comPedido?.vinculo_exato ?? null,
+      cliente_pedido: o.find((m) => m.cliente_pedido)?.cliente_pedido ?? null,
+      nome_whatsapp: c?.nome ?? null, last_inbound_at: c?.last_inbound_at ?? null,
+      at_status: a?.status ?? null, at_desde: a?.desde ?? null,
+      responsavel: a?.responsavel ?? null, responsavel_nome: a?.responsavel_nome ?? null,
+      tags: CONVERSA_TAG.filter((x: any) => x.numero_id === n && x.wa_id === wa).map((x: any) => x.carbo_wa_tags),
+    };
+  });
+};
+
 export const RPC_FX: Record<string, unknown> = {
+  carbo_wa_caixa_resumo: (a: { p_numero_id?: string }) => resumoDoNumero(a.p_numero_id),
   carbo_wa_caixa: (a: { p_numero_id?: string }) => doNumero(a.p_numero_id),
   carbo_wa_conversa_mensagens: (a: { p_numero_id?: string; p_wa_id?: string }) =>
     MSGS.filter((m) => m.numero_id === a.p_numero_id && m.wa_id === a.p_wa_id)

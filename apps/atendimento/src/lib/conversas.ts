@@ -760,3 +760,120 @@ export function conversaAvulsa(msgs: MensagemConversa[]): Conversa | null {
   const janelas = { [waId]: ultima ? new Date(ultima + JANELA_MS).toISOString() : null };
   return agruparConversas(msgs, janelas)[0] ?? null;
 }
+
+/**
+ * A linha da `carbo_wa_resumo` como a lista recebe (`carbo_wa_caixa_resumo`,
+ * 20261187): uma por conversa, já com janela, status, dono e etiquetas.
+ */
+export interface ResumoConversa {
+  wa_id: string;
+  numero_id: string | null;
+  ultima_em: string;
+  ultima_wamid: string | null;
+  ultima_texto: string | null;
+  ultima_tipo: string | null;
+  ultima_direcao: "entrada" | "saida" | null;
+  ultima_entrada_em: string | null;
+  /** Última resposta de GENTE (aviso automático não conta). */
+  ultima_resposta_em: string | null;
+  /** Instantes das mensagens do cliente depois da última resposta de gente. */
+  pendentes_em: string[] | null;
+  ultima_pendente_texto: string | null;
+  bling_id: number | null;
+  sobre_a_etapa: string | null;
+  vinculo_exato: boolean | null;
+  cliente_pedido: string | null;
+  nome_whatsapp: string | null;
+  last_inbound_at: string | null;
+  at_status: StatusAtendimento | null;
+  at_desde: string | null;
+  responsavel: string | null;
+  responsavel_nome: string | null;
+  tags: TagConversa[] | null;
+}
+
+/**
+ * A conversa da lista montada do RESUMO — a MESMA regra do
+ * `agruparConversas`, aplicada a uma linha em vez de às mensagens. A marca de
+ * "resolvida" é aplicada aqui (leitura), por isso o resumo traz os instantes
+ * das pendentes e não só a contagem. ⚠️ Mudou a regra num, mude no outro: o
+ * teste `conversasResumo.test.ts` confere os dois lado a lado.
+ */
+export function conversaDoResumo(r: ResumoConversa): Conversa {
+  const ms = (s: string | null | undefined) => (s ? new Date(s).getTime() : 0);
+  const at: Atendimento | undefined = r.at_status
+    ? { wa_id: r.wa_id, status: r.at_status, desde: r.at_desde ?? r.ultima_em,
+        responsavel: r.responsavel, responsavel_nome: r.responsavel_nome }
+    : undefined;
+  const resolvidoAte = at?.status === "resolvido" ? at.desde : null;
+  const corteResolvido = ms(resolvidoAte);
+  const corteResposta = ms(r.ultima_resposta_em);
+  const corte = Math.max(corteResposta, corteResolvido);
+  const pend = (r.pendentes_em ?? []).filter((t) => ms(t) > corte);
+  const aguardando = pend.length;
+
+  const estado: EstadoConversa =
+    aguardando > 0 ? "precisa_resposta"
+    : corteResolvido >= corteResposta && corteResolvido > 0 ? "resolvida"
+    : "sem_pendencia";
+
+  const textoPendente = aguardando > 0 ? r.ultima_pendente_texto : null;
+  const sugestao: SugestaoConversa =
+    aguardando === 0 ? null
+    : pareceRespostaAutomatica(textoPendente) ? "automatica"
+    : pareceEncerramento(textoPendente) ? "agradecimento"
+    : null;
+
+  const doPedido = r.cliente_pedido;
+  const doWhats = r.nome_whatsapp;
+  const direcao = (r.ultima_direcao ?? "entrada") as "entrada" | "saida";
+  const tipo = r.ultima_tipo ?? "text";
+
+  // A última mensagem, para a conversa aberta ter o que mostrar enquanto a
+  // linha do tempo inteira (`useMensagensDaConversa`) não chega.
+  const ultima: MensagemConversa = {
+    wamid: r.ultima_wamid ?? `resumo-${r.wa_id}`, wa_id: r.wa_id, numero_id: r.numero_id,
+    cliente: doWhats, direcao, tipo, texto: r.ultima_texto, midia_id: null,
+    ocorrido_em: r.ultima_em, bling_id: r.bling_id, sobre_a_etapa: r.sobre_a_etapa,
+    vinculo_exato: r.vinculo_exato ?? false, botao_rastreio: null,
+    cliente_pedido: doPedido, nome_whatsapp: doWhats,
+  } as MensagemConversa;
+
+  return {
+    wa_id: r.wa_id,
+    numero_id: r.numero_id,
+    cliente: doPedido ?? doWhats,
+    nome_whatsapp:
+      doWhats && doPedido && doWhats.trim().toLowerCase() !== doPedido.trim().toLowerCase()
+        ? doWhats : null,
+    ultima_em: r.ultima_em,
+    ultima_texto: r.ultima_texto,
+    ultima_tipo: tipo,
+    ultima_direcao: direcao,
+    aguardando,
+    janela_ate: r.last_inbound_at ? new Date(ms(r.last_inbound_at) + JANELA_MS).toISOString() : null,
+    bling_id: r.bling_id,
+    sobre_a_etapa: r.sobre_a_etapa,
+    mensagens: [ultima],
+    estado,
+    resolvido_ate: resolvidoAte,
+    parece_encerrada: sugestao !== null,
+    sugestao,
+    aguardando_desde: aguardando > 0 ? pend[0] : null,
+    status: statusEfetivo(at, r.ultima_entrada_em, aguardando, !!r.ultima_resposta_em),
+    reaberta: foiReaberta(at, r.ultima_entrada_em),
+    responsavel: at?.responsavel ?? null,
+    responsavel_nome: at?.responsavel_nome ?? null,
+    tags: r.tags ?? [],
+    ultima_entrada_em: r.ultima_entrada_em,
+  };
+}
+
+/** A mesma ordem do `agruparConversas`: quem espera primeiro; sugestão depois. */
+export function ordenarConversas(conversas: Conversa[]): Conversa[] {
+  return [...conversas].sort((a, b) => {
+    if ((a.aguardando > 0) !== (b.aguardando > 0)) return a.aguardando > 0 ? -1 : 1;
+    if (a.parece_encerrada !== b.parece_encerrada) return a.parece_encerrada ? 1 : -1;
+    return new Date(b.ultima_em).getTime() - new Date(a.ultima_em).getTime();
+  });
+}
