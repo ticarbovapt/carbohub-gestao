@@ -2979,6 +2979,44 @@ Livre); navegar SEMANA A SEMANA (domingo a sábado) pelas setas ‹ semana › (
    com o cabeçalho de semana como faixa dentro da lista; aba, modo e período numa barra só
    (`Segmentos`, o controle dos Reembolsos — no celular rola de lado, não quebra). Só TELA:
    filtros, contagens e URL não mudaram. Mudou o desenho de um, confira o outro.
+### Conversas — fase 1 da varredura (23/11/2026)
+Chamados do Atendimento ("mensagens não carregam", "histórico some", "mensagem
+amarela", "não consigo mandar PNG/JPG") + varredura do front e do banco. Plano
+em fases: 1 tela/robustez (esta), 2 várias atendentes (Assumir com trava,
+template não conta como resposta, "sem responsável" só com cliente escrevendo,
+fila por risco), 3 escala (tabela-resumo por conversa, molde da esteira), 4
+webhook com log cru e reprocessamento.
+1. ⚠️ **`carbo_wa_conversa_mensagens` (20261125) NUNCA chegou ao banco** — foi
+   da época de colar à mão. Cada conversa aberta dava 404 e caía na view sob a
+   RLS (~150 ms por mensagem). A `20261183` é a mesma função de novo. Medido
+   antes: a caixa (`carbo_wa_caixa`) leva 0,6–2,3 s e 85 mil buffers para ~60
+   conversas/dia — é o alvo da fase 3.
+2. **Mídia no NOSSO storage** (`wa-midia`, privado, `m/<media_id>`,
+   `_shared/waMidiaCofre.ts`): o webhook guarda o que chega (depois de
+   responder, `waitUntil`), o `whatsapp-midia` guarda o que enviamos, o
+   `whatsapp-midia-baixar` lê o cofre PRIMEIRO e guarda o que ainda não estava.
+   ⚠️ A Meta diz "expirou" também com 400/code 100 ("Unsupported get
+   request…"), que chegava cru na tela: `ehMidiaExpirada`.
+   ⚠️ O cache do `useMidia` guarda o BLOB; a URL é de quem desenha (a URL
+   revogada era a imagem quebrada ao voltar à conversa).
+3. **A conversa aberta não troca sozinha** (fixa na primeira sem `?de=`), e
+   `?de=` fora da caixa abre ESSA conversa (`conversaAvulsa`) — nunca mais
+   `lista[0]`, que abria outro cliente. Ao vivo: canal filtrado pelo número e
+   a conversa aberta só recarrega com evento DELA. Leitura auxiliar que falha
+   SOBE (a caixa anterior fica na tela). Rascunho por conversa; rola para o fim
+   só se já estava no fim ("N novas ↓"). Recados, agendadas, busca, galeria e
+   tirar etiqueta filtram pelo número.
+4. **Foto**: `image/jpg`, sem tipo ou `octet-stream` viram o tipo certo
+   (`mimeDoArquivo` no servidor, `tipoDaImagem` na tela); webp/gif/foto > 5 MB
+   viram JPEG no navegador (`lib/imagemParaEnvio.ts`). HEIC segue recusado.
+5. **Retomar atendimento** (janela fechada): `carbo_wa_modelos_atendimento`
+   (CADASTRO, 20261185 — não é `carbo_msg_templates`, que é da fila) +
+   `whatsapp-responder` com `modelo`. ⚠️ Comercial respeita "Não contatar";
+   uma vez por 24 h por conversa (o servidor recusa a segunda).
+6. ⚠️ O alarme do teto (`packages/shell/src/leitura.ts`, os 8 apps) só olha
+   GET: a contagem `head: true` é HEAD e volta `Content-Range: 0-999/N` — era o
+   "notifications CORTADO" falso no console.
+
 ### ⚠️ Conversas e Esteira a 500 vendas/semana: o teto e o índice (19/10/2026)
 Queixa do dono do processo: *"demora para abrir"* e *"diz que foi enviada
 mensagem mas o cara não aparece aqui quando pesquisa"* (Deividi Rodrigues: NF

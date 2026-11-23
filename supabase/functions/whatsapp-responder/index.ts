@@ -27,7 +27,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { detalheDoErro, ehTransitorio } from "../_shared/metaTemplate.ts";
+import { detalheDoErro, ehTransitorio, montarPayload, chaveDoFone, type VarTemplate } from "../_shared/metaTemplate.ts";
 
 import { ehTimeInterno } from "../_shared/interfacesInternas.ts";
 import { cors } from "../_shared/cors.ts";
@@ -86,6 +86,79 @@ Deno.serve(async (req: Request) => {
   const waId = String(corpo?.wa_id ?? "").replace(/\D/g, "");
   const texto = String(corpo?.texto ?? "").trim();
   if (!waId) return json({ error: "wa_id ausente" }, 400);
+
+  // ── MENSAGEM-MODELO (23/11/2026) ────────────────────────────────────────
+  // Com a janela fechada só template aprovado alcança o cliente. `modelo` é o
+  // código de `carbo_wa_modelos_atendimento` (ex.: `retomada`); o resto do
+  // caminho — autoria, gravação na conversa — é o mesmo do texto livre.
+  const modelo = String((corpo as any)?.modelo ?? "").trim();
+  if (modelo) {
+    const { data: m, error: erroM } = await supabase.from("carbo_wa_modelos_atendimento")
+      .select("codigo, rotulo, meta_template_nome, meta_idioma, meta_variaveis, texto, comercial")
+      .eq("codigo", modelo).eq("ativo", true).maybeSingle();
+    if (erroM) return json({ error: "Não consegui ler o modelo.", detalhe: erroM.message }, 500);
+    if (!m) return json({ error: "modelo_inexistente", detalhe: `Modelo "${modelo}" não existe ou está desligado.` }, 400);
+
+    // ⚠️ Comercial (MARKETING na Meta) respeita "Não contatar". A chave é a
+    // MESMA do `whatsapp-meta` (DDD + 8 últimos dígitos).
+    if (m.comercial) {
+      const chave = chaveDoFone(waId);
+      const { data: bloqueio } = chave
+        ? await supabase.from("carbo_wa_nao_contatar").select("chave")
+            .eq("chave", chave).is("removido_em", null).maybeSingle()
+        : { data: null };
+      if (bloqueio) {
+        return json({ error: "nao_contatar",
+                      detalhe: "Este cliente está em \"Não contatar\" — desmarque no painel ao lado para enviar." }, 409);
+      }
+    }
+
+    // ⚠️ UMA vez por dia por conversa: dois cliques (ou duas pessoas) não podem
+    // mandar o mesmo modelo duas vezes — é o que denuncia o número como spam.
+    const desde = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { data: recente } = await supabase.from("carbo_wa_mensagens")
+      .select("ocorrido_em").eq("numero_id", numeroId).eq("wa_id", waId)
+      .eq("direcao", "saida").eq("tipo", "template")
+      .eq("payload->template->>name", m.meta_template_nome)
+      .gte("ocorrido_em", desde).limit(1);
+    if (recente?.length) {
+      return json({ error: "ja_enviado",
+                    detalhe: "Este modelo já foi enviado a este cliente nas últimas 24 h. Aguarde a resposta dele." }, 409);
+    }
+
+    // O primeiro nome vem da tela (é o que ela mostra); sem ele, a reserva.
+    const nomeTela = String((corpo as any)?.nome ?? "").trim().split(/\s+/)[0] ?? "";
+    const primeiro = nomeTela ? nomeTela[0].toUpperCase() + nomeTela.slice(1).toLowerCase() : "";
+    const montado = montarPayload(waId, m.meta_template_nome, m.meta_idioma,
+                                  (m.meta_variaveis ?? []) as VarTemplate[], { primeiro_nome: primeiro });
+    if (!montado.body) {
+      return json({ error: "modelo_incompleto", detalhe: `Falta: ${montado.faltando.join(", ")}` }, 400);
+    }
+
+    const r = await fetch(`https://graph.facebook.com/${VERSAO}/${numeroId}/messages`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${TOKEN}`, "Content-Type": "application/json" },
+      body: JSON.stringify(montado.body),
+    });
+    const resp = await r.json().catch(() => ({}));
+    const wamidM = resp?.messages?.[0]?.id ?? null;
+    if (!r.ok || !wamidM) {
+      return json({ error: "falha_no_envio", codigo: resp?.error?.code ?? null,
+                    detalhe: detalheDoErro(resp) || `HTTP ${r.status}` }, 502);
+    }
+    // O balão mostra o ESPELHO com as variáveis preenchidas.
+    const textoBalao = String(m.texto).replace(/\{\{\s*(\w+)\s*\}\}/g,
+      (_x: string, k: string) => montado.valores[k] ?? "");
+    const { error: erroGravaM } = await supabase.from("carbo_wa_mensagens").upsert({
+      wamid: wamidM, wa_id: waId, numero_id: numeroId, direcao: "saida", tipo: "template",
+      texto: textoBalao, ocorrido_em: new Date().toISOString(),
+      enviado_por: user.id, enviado_por_nome: perfil?.full_name ?? user.email ?? null,
+      payload: { por: perfil?.full_name ?? user.email ?? user.id, modelo: m.codigo, ...montado.body },
+    }, { onConflict: "wamid" });
+    if (erroGravaM) console.error("[responder] modelo enviado mas não gravado", wamidM, erroGravaM);
+    return json({ ok: true, wamid: wamidM, gravado: !erroGravaM });
+  }
+
   if (!texto) return json({ error: "mensagem vazia" }, 400);
   // A Cloud API aceita 4096 caracteres em texto livre. Cortar aqui, com aviso,
   // é melhor do que a Meta recusar a mensagem inteira depois de escrita.

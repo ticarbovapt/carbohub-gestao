@@ -120,6 +120,13 @@ export function fetchQueAcusaTeto(app: string): typeof fetch {
       const u = new URL(url);
       // Pedido explícito de página (`.range()`/`.limit()`): quem pediu sabe.
       if (u.searchParams.has("limit") || cabecalho(init, input, "Range")) return res;
+      // ⚠️ Só LEITURA de linhas (GET). Contagem com `head: true` é HEAD, não
+      // traz linha nenhuma, e o PostgREST responde `Content-Range: 0-999/N` —
+      // o alarme a lia como "cortada em 1.000" (o `notifications` do sininho,
+      // nos oito apps, para quem tem mais de mil avisos). Escrita também não
+      // conta. (23/11/2026)
+      const metodo = String(init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
+      if (metodo !== "GET") return res;
 
       const cr = res.headers.get("content-range");
       const m = cr ? /^(\d+)-(\d+)\//.exec(cr) : null;

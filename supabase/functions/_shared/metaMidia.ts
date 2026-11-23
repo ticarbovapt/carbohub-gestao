@@ -79,8 +79,40 @@ export function mimeBase(mime: string): string {
 const humano = (bytes: number) =>
   bytes >= MB ? `${(bytes / MB).toFixed(0)} MB` : `${Math.ceil(bytes / 1024)} KB`;
 
-export function conferirMidia(mime: string, tamanho: number, nome?: string): Veredito {
+/** Apelidos que navegador e sistema operacional mandam para o MESMO tipo. */
+const APELIDOS: Record<string, string> = {
+  "image/jpg": "image/jpeg", "image/pjpeg": "image/jpeg", "image/x-png": "image/png",
+};
+/** Pela extensão, quando o tipo não veio (ou veio genérico). */
+const POR_EXTENSAO: Record<string, string> = {
+  jpg: "image/jpeg", jpeg: "image/jpeg", jfif: "image/jpeg", png: "image/png",
+  pdf: "application/pdf", txt: "text/plain",
+  doc: "application/msword",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  xls: "application/vnd.ms-excel",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  mp4: "video/mp4", mp3: "audio/mpeg", ogg: "audio/ogg", m4a: "audio/mp4",
+};
+
+/**
+ * O tipo do arquivo como a Meta o chama.
+ *
+ * ⚠️ (23/11/2026) Foto JPG/PNG era recusada como "tipo não aceito": há
+ * navegador/sistema que manda `image/jpg` (não existe — o certo é
+ * `image/jpeg`), e há arquivo que chega SEM tipo ou como
+ * `application/octet-stream`. O apelido vira o nome certo; sem tipo, vale a
+ * extensão. Extensão desconhecida continua sem tipo, e é recusada com frase.
+ */
+export function mimeDoArquivo(mime: string, nome?: string): string {
   const base = mimeBase(mime);
+  if (APELIDOS[base]) return APELIDOS[base];
+  if (base && base !== "application/octet-stream") return base;
+  const ext = String(nome ?? "").split(".").pop()?.toLowerCase() ?? "";
+  return POR_EXTENSAO[ext] ?? base;
+}
+
+export function conferirMidia(mime: string, tamanho: number, nome?: string): Veredito {
+  const base = mimeDoArquivo(mime, nome);
   const regra = REGRAS[base];
 
   if (!regra) {

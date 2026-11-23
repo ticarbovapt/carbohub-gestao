@@ -62,6 +62,8 @@ const juliana = base(NUM_SERVICO, "5584991231001", "Juliana Prado", 9001, "confi
 const renato = base(NUM_CLUBE, "5582998761212", "Renato Dias", 9012, "recompra");
 const debora = base(NUM_CLUBE, "5584998761234", "Débora Freire", null, "recompra");
 const heitor = base(NUM_LOJA, "5581996541275", "Heitor Campos", -7011, "carrinho_1");
+// Helena — conversa de MAIS de 30 dias: fora da caixa, abre só por link (?de=).
+const helena = base(NUM_SERVICO, "5584991231045", "Helena Duarte", 9045, "entregue");
 
 const MSGS: Msg[] = [
   // Luana — a conversa aberta nos prints: pergunta nova, sem responsável.
@@ -106,9 +108,13 @@ const MSGS: Msg[] = [
   // CarboZé Loja — carrinho.
   aviso(heitor, 40, "carrinho_1", "Oi, Heitor! Vi que você começou um pedido com CarboZé 100ml - Kit 5 frascos. Ele continua salvo: https://loja.exemplo.com.br/checkout/carrinho"),
   dele(heitor, 12, "Tive problema no cartão, dá pra pagar no Pix?"),
+  aviso(helena, 60 * 24 * 45, "entregue", "Helena, seu pedido CZ2026090045 foi entregue. Chegou tudo certo? Qualquer coisa, é só responder aqui."),
+  dele(helena, 60 * 24 * 45 - 30, "Chegou sim, obrigada!"),
 ];
 
-const doNumero = (n: unknown) => MSGS.filter((m) => m.numero_id === n);
+// A caixa é de 30 dias, como a `carbo_wa_caixa`.
+const doNumero = (n: unknown) => MSGS.filter((m) => m.numero_id === n
+  && Date.parse(String(m.ocorrido_em)) >= Date.now() - 30 * 86_400_000);
 
 // ── Janela (última mensagem do cliente), status, etiquetas ─────────────────
 const ultimaEntrada = (wa: string) => {
@@ -189,6 +195,8 @@ export const FX: Record<string, unknown> = {
   carbo_wa_notas: NOTAS,
   carbo_wa_agendadas: AGENDADAS,
   carbo_wa_respostas: RESPOSTAS,
+  carbo_wa_modelos_atendimento: [{ codigo: "retomada", rotulo: "Retomar atendimento",
+    texto: "Oi, {{primeiro_nome}}! Aqui é do CarboZé 💚\n\nSeu atendimento ficou em aberto por aqui. Podemos continuar agora?" }],
   carbo_wa_notificaveis: NOTIFICAVEIS,
   carbo_wa_atendentes: ATENDENTES,
   // Busca e galeria dentro de uma conversa leem a view direto (o mock ignora o

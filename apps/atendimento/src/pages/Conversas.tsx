@@ -1,8 +1,8 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { useParamUrl } from "@carbo/shell";
+import { useParamUrl, confirmar } from "@carbo/shell";
 import {
-  MessagesSquare, Send, Loader2, AlertTriangle, Clock, ArrowLeft, Lock, Paperclip,
+  MessagesSquare, Send, Loader2, AlertTriangle, ArrowDown, Clock, ArrowLeft, Lock, Paperclip,
   Image as ImageIcon, Video, Mic, FileText, MapPin, User,
   File as FileIcon, HelpCircle,
   Search, SearchX, X, Package, ArrowUpRight, Megaphone,
@@ -45,9 +45,12 @@ import {
   useDefinirStatus, useDefinirResponsavel, useAtendentes,
   useTags, useCriarTag, useMarcarTag,
   useNaoContatar, useMarcarNaoContatar,
+  useModelosAtendimento, useEnviarModelo,
   type StatusAtendimento, type TagConversa,
   type Conversa, type MensagemConversa, type EstadoConversa,
 } from "@/hooks/useConversas";
+import { conversaAvulsa } from "@/lib/conversas";
+import { prepararImagem, ehImagem } from "@/lib/imagemParaEnvio";
 
 /**
  * Conversas do WhatsApp oficial.
@@ -638,8 +641,11 @@ function Anexo({ mediaId, tipo, nome, Icone }: {
 function SeparadorDeDia({ rotulo }: { rotulo: string }) {
   return (
     <div className="sticky top-0 z-10 flex justify-center py-1.5">
-      <span className="rounded-full border bg-muted/80 px-2.5 py-0.5 text-[10px]
-                       font-medium text-muted-foreground backdrop-blur">
+      {/* ⚠️ Fundo SÓLIDO e sombra (23/11/2026): grudado no topo ele passa por
+          cima das mensagens, e o fundo translúcido misturava a data com o texto
+          de baixo ("Ficou com dúv[Sex., 20/11] produto?"). */}
+      <span className="rounded-full border bg-muted px-2.5 py-0.5 text-[10px]
+                       font-medium text-muted-foreground shadow-sm">
         {rotulo}
       </span>
     </div>
@@ -653,13 +659,14 @@ function SeparadorDeDia({ rotulo }: { rotulo: string }) {
  * todas as letras. A tela carrega 30 dias; quem procura um comprovante de
  * junho e recebe "nada" concluiria que ele não existe.
  */
-function BuscaNaConversa({ waId, aoFechar, aoAbrir }: {
+function BuscaNaConversa({ waId, numeroId, aoFechar, aoAbrir }: {
   waId: string;
+  numeroId: string | null;
   aoFechar: () => void;
   aoAbrir: (a: AchadoNaConversa) => void;
 }) {
   const [termo, setTermo] = useState("");
-  const { data: achados = [], isFetching } = useBuscaNaConversa(waId, termo);
+  const { data: achados = [], isFetching } = useBuscaNaConversa(waId, termo, numeroId);
   const campo = useRef<HTMLInputElement>(null);
   useEffect(() => { campo.current?.focus(); }, []);
   const curto = termo.trim().length < 2;
@@ -753,8 +760,10 @@ function destacar(texto: string | null, termo: string) {
  * baixaria vinte arquivos no clique de abrir; quem abre a galeria quer UM.
  * Clicar abre pelo mesmo caminho do balão.
  */
-function GaleriaDaConversa({ waId, aoFechar }: { waId: string; aoFechar: () => void }) {
-  const { data: itens = [], isFetching } = useGaleriaDaConversa(waId, true);
+function GaleriaDaConversa({ waId, numeroId, aoFechar }: {
+  waId: string; numeroId: string | null; aoFechar: () => void;
+}) {
+  const { data: itens = [], isFetching } = useGaleriaDaConversa(waId, true, numeroId);
   const [aberto, setAberto] = useState<ItemDaGaleria | null>(null);
 
   useEffect(() => {
@@ -1333,8 +1342,16 @@ function GerenciadorDeRespostas({ lista, aoUsar }: {
   );
 }
 
-function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false }: {
+/** Rascunho por conversa (`numero:wa_id`), na memória da aba. */
+const RASCUNHOS = new Map<string, string>();
+
+function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false, historico }: {
   c: Conversa;
+  /** A leitura da conversa INTEIRA. ⚠️ Falhar não pode virar "balões vazios":
+   *  enquanto ela não chega a tela mostra o resumo da lista, e o resumo só
+   *  tem as últimas mensagens — sem dizer isso, parecia que o histórico tinha
+   *  sumido. */
+  historico?: { carregando: boolean; erro: string | null; tentar: () => void };
   /** Só no celular (abaixo do `lg`): lista e conversa não cabem lado a lado,
    *  então a conversa ocupa a tela e este botão volta para a lista. */
   aoVoltar?: () => void;
@@ -1345,7 +1362,7 @@ function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false }: {
   onVerPedido: (blingId: number) => void;
 }) {
   const responder = useResponder();
-  const notas = useNotas(c.wa_id);
+  const notas = useNotas(c.wa_id, c.numero_id);
   const anotar = useAnotar();
   const apagarNota = useApagarNota();
   const [recado, setRecado] = useState("");
@@ -1386,7 +1403,7 @@ function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false }: {
   // migração é o modo de falha mais caro deste projeto: não dá erro, dá tela
   // que discorda de si mesma.
   const resolver = useDefinirStatus();
-  const { data: agendadas } = useAgendadas(c.wa_id);
+  const { data: agendadas } = useAgendadas(c.wa_id, c.numero_id);
   const agendar = useAgendar();
   const cancelarAgendada = useCancelarAgendada();
   const enviarMidia = useEnviarMidia();
@@ -1396,13 +1413,24 @@ function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false }: {
   const pedacosRef = useRef<BlobPart[]>([]);
   const [verAgendar, setVerAgendar] = useState(false);
   const [quando, setQuando] = useState("");
-  const [texto, setTexto] = useState("");
+  /* ⚠️ O rascunho é da CONVERSA, não da tela (23/11/2026): quem abre outra
+     conversa para consultar algo no meio da resposta volta e encontra o texto
+     onde deixou. Mora na memória da aba, nunca no banco. */
+  const chaveRascunho = `${c.numero_id ?? ""}:${c.wa_id}`;
+  const [texto, setTextoCru] = useState(() => RASCUNHOS.get(chaveRascunho) ?? "");
+  const setTexto = (v: string | ((t: string) => string)) => setTextoCru((t) => {
+    const n = typeof v === "function" ? v(t) : v;
+    if (n) RASCUNHOS.set(chaveRascunho, n); else RASCUNHOS.delete(chaveRascunho);
+    return n;
+  });
 
   /* ── A barra `/atalho` ────────────────────────────────────────────────────
      ⚠️ TDZ: tudo isto roda no RENDER (`useMemo`), então depende de `texto` já
      estar declarado acima. É a armadilha que derrubou o /vender nos seis apps
      e que nem o `tsc` nem o build pegam. */
   const respostas = useRespostasRapidas();
+  const modelos = useModelosAtendimento();
+  const enviarModelo = useEnviarModelo();
   const termoBarra = termoDaBarra(texto);
   const sugestoes = useMemo(
     () => (termoBarra === null ? [] : filtrarRespostas(respostas.data ?? [], termoBarra)),
@@ -1468,7 +1496,10 @@ function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false }: {
       // para quem for procurar depois.
       const ext = (arquivo.type.split("/")[1] || "png").replace("jpeg", "jpg");
       const comNome = new File([arquivo], `print-${Date.now()}.${ext}`, { type: arquivo.type });
-      setPrevia({ arquivo: comNome, url: URL.createObjectURL(comNome), som: false });
+      // ⚠️ Print de site vem webp/gif e foto grande passa de 5 MB: os dois a
+      // Meta recusa. Vira JPEG antes da prévia — a prévia mostra o que sai.
+      void prepararImagem(comNome).then((pronto) =>
+        setPrevia({ arquivo: pronto, url: URL.createObjectURL(pronto), som: false }));
     };
     document.addEventListener("paste", colar);
     return () => document.removeEventListener("paste", colar);
@@ -1490,7 +1521,25 @@ function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false }: {
      "3/4096" o tempo todo é ruído; mostrar nada até estourar é surpresa. */
   const perto = texto.length >= 3_500;
 
-  useEffect(() => { fim.current?.scrollIntoView({ block: "end" }); }, [c.mensagens.length]);
+  /* ⚠️ Rola para o fim SÓ se a pessoa já estava perto dele (23/11/2026). Antes
+     rolava a cada mensagem nova ou recarga, e quem lia o histórico era
+     arrastado para baixo no meio da leitura. A primeira vez sempre rola. */
+  const rolagem = useRef<HTMLDivElement>(null);
+  const pertoDoFim = useRef(true);
+  const [novasAbaixo, setNovasAbaixo] = useState(0);
+  const qtdAntes = useRef(c.mensagens.length);
+  useEffect(() => {
+    const novas = c.mensagens.length - qtdAntes.current;
+    qtdAntes.current = c.mensagens.length;
+    if (pertoDoFim.current) { fim.current?.scrollIntoView({ block: "end" }); setNovasAbaixo(0); }
+    else if (novas > 0) setNovasAbaixo((n) => n + novas);
+  }, [c.mensagens.length]);
+  const aoRolar = () => {
+    const el = rolagem.current;
+    if (!el) return;
+    pertoDoFim.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    if (pertoDoFim.current) setNovasAbaixo(0);
+  };
 
   const mandarArquivo = (arquivo: File, legenda?: string) => {
     enviarMidia.mutate({ wa_id: c.wa_id, numero_id: c.numero_id, arquivo, legenda: legenda?.trim() || undefined }, {
@@ -1795,6 +1844,7 @@ function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false }: {
         {buscando && (
           <BuscaNaConversa
             waId={c.wa_id}
+            numeroId={c.numero_id}
             aoFechar={() => { setBuscando(false); setRealce(null); }}
             aoAbrir={(a) => {
               const alvo = document.getElementById(`msg-${a.wamid}`);
@@ -1812,9 +1862,29 @@ function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false }: {
           />
         )}
 
-        {galeria && <GaleriaDaConversa waId={c.wa_id} aoFechar={() => setGaleria(false)} />}
+        {galeria && <GaleriaDaConversa waId={c.wa_id} numeroId={c.numero_id} aoFechar={() => setGaleria(false)} />}
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-0.5 pb-1 pr-1">
+        {historico?.erro && (
+          <div className="mb-1.5 flex items-center gap-2 rounded-md border border-red-500/30
+                          bg-red-500/5 px-2 py-1.5 text-[11px] text-red-500">
+            <AlertTriangle className="h-3 w-3 shrink-0" />
+            <span className="min-w-0 flex-1 truncate" title={historico.erro}>
+              O histórico não carregou — mostrando só as últimas mensagens.
+            </span>
+            <button type="button" onClick={historico.tentar}
+                    className="shrink-0 font-medium underline-offset-2 hover:underline">
+              Tentar de novo
+            </button>
+          </div>
+        )}
+        {!historico?.erro && historico?.carregando && (
+          <p className="mb-1.5 flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground">
+            <Loader2 className="h-3 w-3 animate-spin" /> Carregando o histórico…
+          </p>
+        )}
+        <div className="relative min-h-0 flex-1">
+        <div ref={rolagem} onScroll={aoRolar}
+             className="h-full overflow-y-auto px-0.5 pb-1 pr-1">
           {(() => {
             const linhas = montarLinhaDoTempo(c.mensagens, notas.data ?? []);
             // ⚠️ "Peça para reenviar" UMA vez, na mensagem não entregue mais
@@ -1841,6 +1911,15 @@ function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false }: {
             );
           })()}
           <div ref={fim} />
+        </div>
+        {novasAbaixo > 0 && (
+          <button type="button"
+                  onClick={() => { fim.current?.scrollIntoView({ block: "end", behavior: "smooth" }); setNovasAbaixo(0); }}
+                  className="absolute bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full
+                             border bg-background px-3 py-1 text-[11px] font-medium shadow-md hover:bg-muted">
+            {novasAbaixo === 1 ? "1 nova" : `${novasAbaixo} novas`} <ArrowDown className="h-3 w-3" />
+          </button>
+        )}
         </div>
 
         {/* ⚠️ Os agendamentos ficam VISÍVEIS o tempo todo, inclusive os que
@@ -2079,10 +2158,12 @@ function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false }: {
                     inteiro está disponível — limitar a atendimento a texto é
                     desperdiçar o canal. */}
                 <input ref={arquivoRef} type="file" className="hidden"
-                       accept="image/jpeg,image/png,application/pdf,text/plain"
-                       onChange={(e) => {
-                         const f = e.target.files?.[0];
+                       accept="image/*,application/pdf,text/plain"
+                       onChange={async (e) => {
+                         const escolhido = e.target.files?.[0];
                          e.target.value = "";
+                         const f = escolhido && ehImagem(escolhido)
+                           ? await prepararImagem(escolhido) : escolhido;
                          // ⚠️ Também passa pela prévia. Escolher arquivo erra
                          // igual a gravar: é um clique numa lista de nomes
                          // parecidos, e o print errado sai antes de a pessoa
@@ -2197,6 +2278,37 @@ function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false }: {
                 </p>
               </div>
             </div>
+            {/* ⚠️ (23/11/2026) Com a janela fechada só template aprovado chega
+                ao cliente. O modelo de retomada devolve a conversa: o cliente
+                toca "Podemos sim" e a janela abre. Uma vez por dia por
+                conversa (o servidor recusa a segunda). */}
+            {(modelos.data ?? []).length > 0 && (
+              <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-amber-500/20 pt-2.5">
+                {(modelos.data ?? []).map((m) => (
+                  <Button key={m.codigo} size="sm" variant="outline" className="h-8 gap-1.5"
+                          title={m.texto.replace("{{primeiro_nome}}", primeiroNome(c.cliente ?? c.nome_whatsapp) || "tudo bem")}
+                          disabled={enviarModelo.isPending}
+                          onClick={async () => {
+                            if (!(await confirmar({
+                              titulo: `${m.rotulo}?`,
+                              mensagem: m.texto.replace("{{primeiro_nome}}",
+                                primeiroNome(c.cliente ?? c.nome_whatsapp) || "tudo bem"),
+                              confirmar: "Enviar",
+                            }))) return;
+                            enviarModelo.mutate(
+                              { wa_id: c.wa_id, numero_id: c.numero_id, modelo: m.codigo,
+                                nome: c.cliente ?? c.nome_whatsapp },
+                              { onSuccess: () => toast.success("Enviado"),
+                                onError: (e) => toast.error((e as Error).message) });
+                          }}>
+                    {enviarModelo.isPending
+                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      : <Send className="h-3.5 w-3.5" />}
+                    {m.rotulo}
+                  </Button>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </CarboCardContent>
@@ -3311,8 +3423,6 @@ export default function Conversas() {
   // ⚠️ Antes de qualquer coisa que leia a hora: é o que faz o relógio da janela
   // andar sem F5 e sem depender da rede.
   useRelogio();
-  // E a mensagem nova chega sozinha, sem esperar o intervalo de 30 s.
-  useConversasAoVivo();
 
   /* ── Qual NÚMERO esta caixa está mostrando ─────────────────────────────
      ⚠️ Desde 02/10/2026 o WABA tem três números (serviço, CarboZé Clube /
@@ -3355,23 +3465,47 @@ export default function Conversas() {
   const { data: conversas, isLoading, error } = useConversas(30, numeroId);
 
   const lista = conversas ?? [];
-  const atual = useMemo(
-    () => lista.find((c) => c.wa_id === aberta) ?? lista[0] ?? null,
-    [lista, aberta],
+  /* ⚠️ Sem `?de=` (desktop recém-aberto) a tela mostra a primeira da lista —
+     mas FIXA nela (23/11/2026). Antes era `lista[0]` a cada render: chegava
+     mensagem de outro cliente, a ordem mudava e a conversa trocava no meio da
+     leitura, levando junto o que estava sendo digitado. */
+  const [fixa, setFixa] = useState<string | null>(null);
+  useEffect(() => {
+    if (aberta || lista.length === 0) return;
+    if (!fixa || !lista.some((c) => c.wa_id === fixa)) setFixa(lista[0].wa_id);
+  }, [aberta, lista, fixa]);
+  useEffect(() => { setFixa(null); }, [numeroId]);
+  const alvo = aberta ?? fixa;
+  const daLista = useMemo(
+    () => (alvo ? lista.find((c) => c.wa_id === alvo) ?? null : null),
+    [lista, alvo],
   );
-  /* No celular a tela mostra a CONVERSA só quando há uma aberta na URL que
-     existe nesta caixa; senão mostra a LISTA. Não muda o `atual` (o desktop
-     continua abrindo a primeira). */
-  const naConversa = !!aberta && atual?.wa_id === aberta;
 
   /* ⚠️ A lista traz só o RESUMO de cada conversa (`carbo_wa_caixa`); a linha do
      tempo da conversa aberta vem inteira daqui. Enquanto carrega, mostra o que
      a lista já tem (as últimas) em vez de tela vazia. */
-  const { data: mensagensDaAtual } = useMensagensDaConversa(numeroId, atual?.wa_id);
-  const atualCompleta = useMemo(
-    () => (atual && mensagensDaAtual?.length ? { ...atual, mensagens: mensagensDaAtual } : atual),
-    [atual, mensagensDaAtual],
+  const historico = useMensagensDaConversa(numeroId, alvo);
+  const mensagensDaAtual = historico.data;
+  /* ⚠️ `?de=` de uma conversa que NÃO está na caixa (mais de 30 dias, link do
+     Pós-venda ou do Painel) abre ESSA conversa, montada pelas mensagens dela.
+     A reserva antiga era `lista[0]`: abria OUTRO cliente, calado. */
+  const avulsa = useMemo(
+    () => (!daLista && aberta && mensagensDaAtual?.length ? conversaAvulsa(mensagensDaAtual) : null),
+    [daLista, aberta, mensagensDaAtual],
   );
+  const atual = daLista ?? avulsa;
+  /* No celular a tela mostra a CONVERSA só quando há uma aberta na URL; senão
+     mostra a LISTA. */
+  const naConversa = !!aberta && atual?.wa_id === aberta;
+
+  const atualCompleta = useMemo(
+    () => (daLista && mensagensDaAtual?.length ? { ...daLista, mensagens: mensagensDaAtual } : atual),
+    [daLista, atual, mensagensDaAtual],
+  );
+
+  // E a mensagem nova chega sozinha, sem esperar o intervalo de 30 s — só a
+  // deste número, e a conversa aberta só recarrega com evento DELA.
+  useConversasAoVivo(numeroId, alvo);
 
   /* ⚠️ Busca e filtro são LOCAIS e só escondem linhas. A ordenação vem pronta
      do hook (quem espera resposta primeiro) e não é tocada aqui: reordenar na
@@ -3949,7 +4083,7 @@ export default function Conversas() {
                                 className="w-full border-b border-border/60 px-3 py-2.5 text-center text-[11px]
                                            font-medium text-muted-foreground hover:bg-muted/40 hover:text-foreground">
                           Mostrar mais {Math.min(PASSO_LISTA * 3, doGrupo.length - (mostrarAte[String(estado)] ?? PASSO_LISTA))}
-                          {" "}de {doGrupo.length - (mostrarAte[String(estado)] ?? PASSO_LISTA)}
+                          {" "}· faltam {doGrupo.length - (mostrarAte[String(estado)] ?? PASSO_LISTA)}
                         </button>,
                       ] : []),
                     ];
@@ -3960,7 +4094,21 @@ export default function Conversas() {
           </CarboCard>
 
           {atualCompleta && <Conversa key={atualCompleta.wa_id} c={atualCompleta} onVerPedido={setVerPedido}
-                              aoVoltar={fecharConversa} ocultarNoCelular={!naConversa} />}
+                              aoVoltar={fecharConversa} ocultarNoCelular={!naConversa}
+                              historico={{
+                                carregando: historico.isLoading,
+                                erro: historico.error ? (historico.error as Error).message : null,
+                                tentar: () => { void historico.refetch(); },
+                              }} />}
+          {!atualCompleta && aberta && (
+            <CarboCard className="hidden h-full min-h-0 min-w-0 flex-col items-center justify-center p-6 lg:flex">
+              {historico.isLoading
+                ? <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                : historico.error
+                  ? <p className="text-sm text-red-500">{(historico.error as Error).message}</p>
+                  : <p className="text-sm text-muted-foreground">Nenhuma conversa com {aberta} neste número.</p>}
+            </CarboCard>
+          )}
           {atualCompleta && <PainelContato key={`p-${atualCompleta.wa_id}`} c={atualCompleta} meuId={meuId}
                                    onVerPedido={setVerPedido} />}
         </div>
