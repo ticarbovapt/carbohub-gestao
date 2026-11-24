@@ -180,7 +180,7 @@ SHOTS.push(
     [3, (p) => p.getByPlaceholder(/Buscar cliente, CNPJ, pedido/)],
     [4, (p) => p.locator("thead th").filter({ hasText: /^Status$/i })],
     [5, (p) => p.getByText("Unidade de negócio:").locator("..").locator("..")],
-    [6, (p) => p.getByRole("button", { name: /Editar \/ Converter/ })],
+    [6, (p) => p.locator('button[title="Editar ou converter o orçamento"]')],
     [7, (p) => p.getByRole("button", { name: /Baixar NF/ })],
     [8, row("V2026100027")],
   ] },
