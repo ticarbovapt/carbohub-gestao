@@ -356,3 +356,37 @@ describe("detalheDoErro", () => {
     expect(detalheDoErro(null)).toBe("");
   });
 });
+
+describe("montarPayload — variáveis POSICIONAIS ({{1}}, {{2}}, {{3}})", () => {
+  // O aviso de pedido atrasado (20261194) foi aprovado por número.
+  const VARS = [
+    { nome: "3", de: "link_checkout", fallback: "https://payt.site/exemplo" },
+    { nome: "1", de: "primeiro_nome" },
+    { nome: "2", de: "link_rastreio" },
+  ];
+  const linha = { primeiro_nome: "Ana", link_rastreio: "https://rastreio.carboze.com.br/rastreio/AA1BR" };
+
+  it("manda sem parameter_name, na ordem do NÚMERO (não na do array)", () => {
+    const m = montarPayload("5584999990000", "aviso_atraso", "pt_BR", VARS, linha);
+    const corpo = (m.body as any).template.components[0];
+    expect(corpo.parameters).toEqual([
+      { type: "text", text: "Ana" },
+      { type: "text", text: "https://rastreio.carboze.com.br/rastreio/AA1BR" },
+      { type: "text", text: "https://payt.site/exemplo" },
+    ]);
+    expect(m.valores).toEqual({ "1": "Ana", "2": "https://rastreio.carboze.com.br/rastreio/AA1BR", "3": "https://payt.site/exemplo" });
+  });
+
+  it("variável obrigatória vazia continua SEGURANDO", () => {
+    const m = montarPayload("5584999990000", "aviso_atraso", "pt_BR", VARS, { primeiro_nome: "Ana" });
+    expect(m.body).toBeNull();
+    expect(m.faltando).toEqual(["2"]);
+  });
+
+  it("nome misturado (um número, um nome) continua NOMEADO", () => {
+    const m = montarPayload("5584999990000", "x", "pt_BR",
+      [{ nome: "1", de: "a" }, { nome: "b", de: "b" }], { a: "x", b: "y" });
+    const p = (m.body as any).template.components[0].parameters;
+    expect(p[0].parameter_name).toBe("1");
+  });
+});

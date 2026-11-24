@@ -6474,6 +6474,40 @@ supabase/consultas/recompra_7_dias.sql   conferir, cadastrar os links, ligar
    dos números, teste real no próprio celular, quando frasco/sachê entram,
    pausa manual). Teste do banco: `docs/whatsapp/recompra/teste-local/qualidade.sql`.
 
+### Disparo PONTUAL de template para uma lista (24/11/2026, `20261194`)
+Pedido do dono do processo: os pedidos que atrasaram muito e estão saindo agora
+recebem UM aviso (template aprovado, `{{1}}` nome · `{{2}}` link do rastreio ·
+`{{3}}` checkout com 20% off), e SÓ quem está na lista que o time manda.
+
+```
+carbo_msg_disparo         a LISTA (etapa, bling_id do card, telefone, nome, dados jsonb)
+carbo_msg_disparo_fila    o que falta mandar (mesmas travas da fila: ligado, aprovado, número ativo)
+etapa `aviso_atraso`      número de SERVIÇO; nasce desligada e sem nome do modelo
+supabase/consultas/aviso_pedido_atrasado.sql   A nome+link · B/C conferir · D teste · E localizar · F carregar · G ensaio · H ligar · I acompanhar
+```
+
+1. ⚠️ **Não é etapa da `carbo_msg_fila`** (a consulta mais cara do banco e o
+   gatilho de todo aviso). O `whatsapp-meta` lê a view à parte e junta as linhas
+   DEPOIS da fila, no MESMO laço (registro antes da chamada, `pendente` no
+   transitório, wa_id conhecido, TETO). Falha ao ler a lista não derruba a fila.
+   `dados` vira coluna da linha, sem pisar nas colunas da view.
+2. ⚠️ **Uma vez por pedido, para sempre**: a PK `(bling_id, etapa)` de
+   `carbo_msg_envios`. Carregar a lista de novo não duplica. A mesma PESSOA com
+   dois pedidos entra uma vez (o BLOCO F escolhe o mais recente); busca que casa
+   com mais de um pedido fica FORA até alguém escolher.
+3. ⚠️ **Variável POSICIONAL**: `meta_variaveis` com `nome` só de número ("1",
+   "2"…) faz o `montarPayload` mandar SEM `parameter_name`, na ordem do número
+   (`ehPosicional`); a Meta proíbe nome nomeado começando por dígito, então não
+   há ambiguidade. Nunca misturado. O `?conferir=1` aceita os dois formatos e o
+   balão da conversa (`carbo_wa_texto_do_template`) substitui `{{N}}` pela
+   posição.
+4. O teste (`?teste=&etapa=`) aceita qualquer variável pelo nome da coluna
+   (`&link_rastreio=…`).
+5. ⚠️ É aviso do PEDIDO (sai pelo serviço), então a lista "não contatar" — que
+   vale para o comercial — não o filtra. Disparo novo de outro tipo: etapa nova
+   no CHECK de `carbo_msg_templates` + linha no template + `NOME_ETAPA` das
+   Conversas; a tabela e a view servem para qualquer um.
+
 ### ⏸️ Carrinho abandonado pela Meta: pronto e DESLIGADO (05/10/2026)
 A terceira pipeline saiu da Evolution e passou a sair pela Cloud API, pelo
 número da LOJA. Testado com os três templates reais no celular do dono do
