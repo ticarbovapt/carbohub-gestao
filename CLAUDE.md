@@ -3326,6 +3326,34 @@ Fechar = remover o secret e fazer deploy. ⚠️ E o deploy é o push em `main`
 (`ecommerce-webhook` está na lista `dep`) — remover o secret sozinho não basta
 se a função no ar for antiga.
 
+### ⚠️ CRON_SECRET em claro no repositório — e o repositório é PÚBLICO (24/11/2026)
+Dois valores de `X-Cron-Secret` estão escritos por extenso em migrações JÁ
+APLICADAS, num repositório **público** — qualquer pessoa os lê no GitHub:
+
+```
+A  md5 6497996d…  20260625150000 · 20260710330000 · 20260711120000 ·
+                  20260837000000 · 20260838000000 · 20261024000000 (BLOCO 1)
+B  md5 102f2cc2…  20260993000000 (ml-estoque-full-15min)
+```
+
+1. ⚠️ **Os arquivos NÃO foram reescritos, de propósito**: já foram aplicados, e
+   apagar o valor do arquivo não o tira do histórico do git — o valor antigo
+   está exposto para sempre. A correção é TROCAR o segredo, nunca editar a
+   migração. Tratar A e B como públicos daqui em diante.
+2. **Diagnóstico e troca**: `supabase/consultas/cron_segredo_exposto.sql`. O
+   BLOCO 0a diz, sem imprimir o valor (md5 e `position()` contra o segredo
+   lido do `bling2-sync-incremental`), se A ou B ainda é o que os crons usam. A
+   troca gera o novo NO BANCO, a pessoa o cola em Supabase → Edge Functions →
+   Secrets e em GitHub → Actions (`CRON_SECRET`), e o BLOCO 2 reagenda TODOS os
+   jobs que chamam função nossa copiando do banco, atualiza
+   `private.cron_config` e ABORTA se sobrar o antigo em job ou corpo de função.
+3. ⚠️ **Migração nova NUNCA escreve o segredo**: lê de um job que funciona
+   (`bling2-sync-incremental`) ou de `private.cron_config`, com `%L` (molde da
+   `20261036`). Exemplo em comentário também não — use `COLE-AQUI…`/`null`.
+4. Placeholders que NÃO são segredo: `TROQUE_PELO_CRON_SECRET` (`20260972`) e
+   `COLE-A…` (`20260870`). As chaves `anon` dos `client.ts`/`.env.example` são
+   públicas por desenho.
+
 ### Importar quadro do Trello — Quadros do Marketing (08/10/2026)
 Botão **"Importar do Trello"** em `mkt.carbohub.com.br/quadros`: lê o JSON de
 export do Trello e cria um quadro NOVO. `apps/mkt/src/lib/trelloImport.ts` é
