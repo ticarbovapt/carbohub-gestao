@@ -213,3 +213,143 @@ select d.nome, d.telefone, v.status, v.motivo, v.erro_detalhe,
 
 -- BLOCO J — DESLIGAR (para no próximo minuto; o que já saiu não volta).
 -- update public.carbo_msg_templates set ativo = false where etapa = 'aviso_atraso';
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- LISTA DE 24/11/2026 — os 438 expedidos em 23/11 (migração 20261195, lote
+-- `atraso_2026_11_23`). Casa pelo PEDIDO DA LOJA (PAYT_LYK2ZA_…), com o pedido do
+-- Bling como reserva; o telefone vem da esteira e, na falta, do pedido da PayT.
+-- O link é o do CSV (melhorrastreio).
+-- ═══════════════════════════════════════════════════════════════════════════
+
+-- BLOCO L1 — LOCALIZAR (só lê). Uma linha por situação, com a contagem.
+-- ESPERADO: quase tudo em `ok`. Qualquer outra situação: rode o L2 e me mande.
+with ent as (
+  select * from public.carbo_msg_disparo_entrada where lote = 'atraso_2026_11_23'
+),
+m as (
+  select ent.id_pedido_loja, e.bling_id, e.pedido_loja, e.pedido_numero::text as pedido_numero,
+         e.nf_numero::text as nf_numero, e.cliente, e.cliente_fone, 'pedido da loja' as via
+    from ent join public.bling2_esteira e on e.pedido_loja = ent.id_pedido_loja
+  union all
+  select ent.id_pedido_loja, e.bling_id, e.pedido_loja, e.pedido_numero::text,
+         e.nf_numero::text, e.cliente, e.cliente_fone, 'pedido do Bling'
+    from ent join public.bling2_esteira e on e.bling_id > 0 and e.pedido_numero::text = ent.pedido_bling
+   where not exists (select 1 from public.bling2_esteira x where x.pedido_loja = ent.id_pedido_loja)
+),
+r as (
+  select ent.*, m.bling_id, m.via, m.cliente, m.nf_numero,
+         count(m.bling_id) over (partition by ent.id_pedido_loja) as achados,
+         coalesce(nullif(btrim(m.cliente_fone), ''),
+                  (select o.cliente_fone from public.ecommerce_orders o
+                    where o.platform = 'payt' and ent.id_pedido_loja like 'PAYT\_%'
+                      and o.order_id like split_part(ent.id_pedido_loja, '_', 3) || '-%'
+                      and nullif(btrim(o.cliente_fone), '') is not null
+                    order by o.ordered_at desc limit 1)) as fone
+    from ent left join m on m.id_pedido_loja = ent.id_pedido_loja
+),
+s as (
+  select r.*,
+         case when r.bling_id is null then 'NÃO ACHADO'
+              when r.achados > 1 then 'AMBÍGUO'
+              when r.fone is null then 'sem telefone'
+              when exists (select 1 from public.carbo_wa_nao_contatar n
+                            where n.removido_em is null and n.chave = public.carbo_fone_chave(r.fone))
+                then 'não contatar'
+              when exists (select 1 from public.carbo_msg_envios v
+                            where v.bling_id = r.bling_id and v.etapa = 'aviso_atraso' and v.status <> 'pendente')
+                then 'já enviado'
+              else 'ok' end as situacao
+    from r
+)
+select situacao, count(distinct id_pedido_loja) as pedidos,
+       count(distinct public.carbo_fone_chave(fone)) as pessoas,
+       count(*) filter (where via = 'pedido do Bling') as achados_pelo_bling,
+       count(*) filter (where nf_numero is not null and ltrim(nf_numero, '0') <> ltrim(nf, '0')) as nf_diferente
+  from s group by situacao order by pedidos desc;
+
+
+-- BLOCO L2 — o DETALHE de quem não está `ok` (só lê).
+with ent as (
+  select * from public.carbo_msg_disparo_entrada where lote = 'atraso_2026_11_23'
+),
+m as (
+  select ent.id_pedido_loja, e.bling_id, e.pedido_loja, e.cliente, e.cliente_fone, e.nf_numero::text as nf_numero
+    from ent join public.bling2_esteira e on e.pedido_loja = ent.id_pedido_loja
+  union all
+  select ent.id_pedido_loja, e.bling_id, e.pedido_loja, e.cliente, e.cliente_fone, e.nf_numero::text
+    from ent join public.bling2_esteira e on e.bling_id > 0 and e.pedido_numero::text = ent.pedido_bling
+   where not exists (select 1 from public.bling2_esteira x where x.pedido_loja = ent.id_pedido_loja)
+),
+r as (
+  select ent.id_pedido_loja, ent.nf, ent.pedido_bling, ent.primeiro_nome, m.bling_id, m.cliente, m.nf_numero,
+         count(m.bling_id) over (partition by ent.id_pedido_loja) as achados,
+         coalesce(nullif(btrim(m.cliente_fone), ''),
+                  (select o.cliente_fone from public.ecommerce_orders o
+                    where o.platform = 'payt' and ent.id_pedido_loja like 'PAYT\_%'
+                      and o.order_id like split_part(ent.id_pedido_loja, '_', 3) || '-%'
+                      and nullif(btrim(o.cliente_fone), '') is not null
+                    order by o.ordered_at desc limit 1)) as fone
+    from ent left join m on m.id_pedido_loja = ent.id_pedido_loja
+)
+select case when bling_id is null then 'NÃO ACHADO' when achados > 1 then 'AMBÍGUO'
+            when fone is null then 'sem telefone'
+            when exists (select 1 from public.carbo_wa_nao_contatar n
+                          where n.removido_em is null and n.chave = public.carbo_fone_chave(fone)) then 'não contatar'
+            else 'ok, mas NF diferente' end as situacao,
+       id_pedido_loja, nf, nf_numero as nf_no_sistema, pedido_bling, primeiro_nome, cliente, fone, bling_id
+  from r
+ where bling_id is null or achados > 1 or fone is null
+    or exists (select 1 from public.carbo_wa_nao_contatar n
+                where n.removido_em is null and n.chave = public.carbo_fone_chave(fone))
+    or (nf_numero is not null and ltrim(nf_numero, '0') <> ltrim(nf, '0'))
+ order by 1, id_pedido_loja;
+
+
+-- BLOCO L3 — CARREGAR na lista do disparo só os `ok`. Não envia nada (o envio
+-- continua desligado). A mesma PESSOA com dois pedidos entra UMA vez (o pedido
+-- mais recente). Rodar de novo não duplica.
+-- ESPERADO: `carregados_agora` = os `ok` do L1 menos as pessoas repetidas.
+with ent as (
+  select * from public.carbo_msg_disparo_entrada where lote = 'atraso_2026_11_23'
+),
+m as (
+  select ent.id_pedido_loja, e.bling_id, e.cliente, e.cliente_fone, e.data_pedido
+    from ent join public.bling2_esteira e on e.pedido_loja = ent.id_pedido_loja
+  union all
+  select ent.id_pedido_loja, e.bling_id, e.cliente, e.cliente_fone, e.data_pedido
+    from ent join public.bling2_esteira e on e.bling_id > 0 and e.pedido_numero::text = ent.pedido_bling
+   where not exists (select 1 from public.bling2_esteira x where x.pedido_loja = ent.id_pedido_loja)
+),
+r as (
+  select ent.*, m.bling_id, m.cliente, m.data_pedido,
+         count(m.bling_id) over (partition by ent.id_pedido_loja) as achados,
+         coalesce(nullif(btrim(m.cliente_fone), ''),
+                  (select o.cliente_fone from public.ecommerce_orders o
+                    where o.platform = 'payt' and ent.id_pedido_loja like 'PAYT\_%'
+                      and o.order_id like split_part(ent.id_pedido_loja, '_', 3) || '-%'
+                      and nullif(btrim(o.cliente_fone), '') is not null
+                    order by o.ordered_at desc limit 1)) as fone
+    from ent join m on m.id_pedido_loja = ent.id_pedido_loja
+),
+bons as (
+  select r.*, row_number() over (partition by public.carbo_fone_chave(r.fone)
+                                 order by r.data_pedido desc nulls last, r.bling_id desc) as n
+    from r
+   where r.achados = 1 and r.fone is not null
+     and not exists (select 1 from public.carbo_wa_nao_contatar x
+                      where x.removido_em is null and x.chave = public.carbo_fone_chave(r.fone))
+),
+ins as (
+  insert into public.carbo_msg_disparo (etapa, bling_id, telefone, nome, dados, observacao)
+  select 'aviso_atraso', bling_id, fone, coalesce(nullif(btrim(primeiro_nome), ''), cliente),
+         jsonb_build_object('link_rastreio', link_rastreio),
+         'lote atraso_2026_11_23 · ' || id_pedido_loja || ' · NF ' || nf
+    from bons where n = 1
+  on conflict (etapa, bling_id) do nothing
+  returning 1
+)
+select (select count(*) from ent) as na_lista,
+       (select count(*) from ins) as carregados_agora,
+       (select count(*) from public.carbo_msg_disparo where etapa = 'aviso_atraso')
+         + (select count(*) from ins) as total_no_disparo;
