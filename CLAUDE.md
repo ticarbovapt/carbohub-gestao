@@ -5619,6 +5619,15 @@ matriz, Bling 2 = filial SP.
    chegam com observação vazia. Caminho: `external_ref` → `bling2_orders` →
    `nf_bling_id` → `bling2_nfe` (`carbo_vincula_nf_filial`, cron 5 min).
    Depende do `bling2-order-details-10min`, que é quem traz `raw_detalhe`.
+   ⚠️ **E ele lê cada pedido UMA vez** (fila = `items`/`raw_detalhe` nulos):
+   pedido B2B lido no dia da venda, antes da nota, ficava com `nf_bling_id`
+   nulo PARA SEMPRE (V2026110001, NF 000005 série 2, 24/11/2026: "Sem NF" no
+   Faturamento, card parado em "Gerar NF"). `20261190`: o cron
+   `bling2-reler-pedido-sem-nf-10min` (:01) devolve à fila
+   (`raw_detalhe = null`) os pedidos do NOSSO sistema na filial que ainda
+   esperam nota — 30 min entre releituras (6 h depois de 30 dias, nada depois
+   de 90), registro em `carbo_bling2_releitura`. ⚠️ Nunca pedido on-line: a
+   esteira lê o `raw_detalhe` deles.
 5. **A conta é sempre EXPLÍCITA**, no front e no servidor. Errar emite no CNPJ
    errado, e só se desfaz com cancelamento depois de o documento circular.
 
