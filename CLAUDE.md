@@ -5632,6 +5632,14 @@ matriz, Bling 2 = filial SP.
    `coalesce(o.status, '')` dá 22P02, use `o.status::text`; e o Bling devolve
    `notaFiscal.id = 0` (não nulo) no pedido sem nota — "sem nota" é
    `coalesce(nf_bling_id, 0) = 0`. Teste local com tipo de texto não pega o enum.
+   ⚠️ **A NOTA também era lida uma vez só** (`20261192`): o `detalharNfe` (fila
+   `raw_detalhe is null`) lia a NF B2B ainda "Pendente", SEM XML, e ela ficava
+   sem rodapé e sem natureza para sempre — o casamento pelo rodapé não a via
+   (NF 000005, que tem "V2026110001 Vendedor: …" no Bling). O cron
+   `bling2-reler-nfe-sem-natureza-10min` devolve à fila a nota JÁ VÁLIDA dos
+   últimos 60 dias sem natureza: 30 min entre tentativas, no máximo 6
+   (`carbo_bling2_nfe_releitura`). Leitura única de algo que MUDA depois é a
+   doença: pedido e nota da filial nascem antes de estarem prontos.
 5. **A conta é sempre EXPLÍCITA**, no front e no servidor. Errar emite no CNPJ
    errado, e só se desfaz com cancelamento depois de o documento circular.
 
