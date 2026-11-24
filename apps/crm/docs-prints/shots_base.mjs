@@ -188,8 +188,8 @@ SHOTS.push(
     antes: async (p) => { await row("V2026100031")(p).click(); },
     clip: (p) => [row("V2026100031")(p), p.locator("tbody tr").nth(1)], marcas: [
     [1, (p) => p.locator("tbody").getByText("Cliente", { exact: true }).first().locator("..")],
-    [2, (p) => p.getByText(/Endereço de Entrega/).first().locator("..")],
-    [3, (p) => p.getByText(/Nota Fiscal/).first()],
+    [2, (p) => p.getByText(/Endereço de Entrega/).locator("..")],
+    [3, (p) => p.getByText(/Nota Fiscal/)],
     [4, (p) => p.locator("tbody").getByText("Produtos", { exact: true }).first().locator("..")],
   ] },
   { chave: "vendas-gestor", papel: "gestor", url: "/vendas", viewport: { width: 1600, height: 1000 },
@@ -207,7 +207,7 @@ SHOTS.push(
     [1, btn("Editar venda")],
     [2, btn("Cancelar venda")],
     [3, btn("Excluir venda")],
-    [4, (p) => p.getByText(/Notas internas/).first()],
+    [4, (p) => p.getByText(/Notas internas/)],
   ] },
   // Bugs e sugestões
   { chave: "bug-dialogo", papel: "colaborador", url: "/funis", viewport: { width: 1440, height: 1500 },

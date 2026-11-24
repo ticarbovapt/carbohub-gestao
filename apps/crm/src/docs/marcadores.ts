@@ -242,6 +242,7 @@ export const MARCADORES: Record<string, Record<number, Caixa>> = {
     5: { x: 69.37, y: 23.5, w: 8.85, h: 4 },
     6: { x: 78.64, y: 24.7, w: 16.67, h: 1.6 },
     7: { x: 82.77, y: 32.8, w: 5.39, h: 1.6 },
+    8: { x: 38.36, y: 42.6, w: 4.88, h: 1.5 },
     9: { x: 64.39, y: 35.25, w: 7.29, h: 5.7 },
     10: { x: 23.75, y: 63.2, w: 4.89, h: 2.4 },
     11: { x: 18.49, y: 66.45, w: 75.52, h: 5.65 },
@@ -258,6 +259,7 @@ export const MARCADORES: Record<string, Record<number, Caixa>> = {
   },
   "pipeline": {
     1: { x: 88.61, y: 9, w: 9.72, h: 4.89 },
+    2: { x: 18.33, y: 15.67, w: 80, h: 9.11 },
     3: { x: 18.33, y: 26.56, w: 80, h: 4 },
     4: { x: 18.33, y: 32.33, w: 80, h: 2.5 },
     5: { x: 18.33, y: 40.89, w: 26.67, h: 4.89 },
@@ -318,6 +320,8 @@ export const MARCADORES: Record<string, Record<number, Caixa>> = {
   },
   "vendas-detalhe": {
     1: { x: 2.84, y: 17.16, w: 94.32, h: 10.59 },
+    2: { x: 2.84, y: 30.88, w: 46.56, h: 7.06 },
+    3: { x: 2.84, y: 41.08, w: 5.24, h: 2.94 },
     4: { x: 2.84, y: 47.35, w: 94.32, h: 3.14 },
   },
   "vendas-gestor": {
@@ -331,6 +335,7 @@ export const MARCADORES: Record<string, Record<number, Caixa>> = {
     1: { x: 2.84, y: 91.87, w: 9.55, h: 5.66 },
     2: { x: 76.18, y: 91.87, w: 10.89, h: 5.66 },
     3: { x: 87.37, y: 91.87, w: 9.79, h: 5.66 },
+    4: { x: 3.66, y: 79.13, w: 92.67, h: 2.83 },
   },
   "vender-endereco": {
     1: { x: 6.28, y: 21.38, w: 28.23, h: 6.43 },
