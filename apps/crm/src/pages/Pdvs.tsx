@@ -139,12 +139,13 @@ function SortTh({ col, label, sort, onSort, align = "left", className = "" }: {
   );
 }
 
-/** Coluna que só existe na tela larga (2xl). No notebook, com a barra lateral
+/** Coluna que só existe na tela larga (≥ 1800 px; 1920 com escala de 125%
+ *  do Windows é 1536 e NÃO é larga). No notebook, com a barra lateral
  *  aberta, as onze colunas não cabiam e Comprado/Ações ficavam fora da tela:
  *  o código e o CNPJ descem para baixo do nome, o status vira etiqueta ao lado
  *  dele (só quando não é Ativo) e pedidos/última compra descem para baixo do
  *  valor comprado. */
-const SO_LARGA = "hidden 2xl:table-cell";
+const SO_LARGA = "hidden min-[1800px]:table-cell";
 
 /** Quantos produtos o PDV declara vender — é por isso que se ordena o Mix. */
 const mixVendidos = (p: PdvRow) => PRODUTOS.filter((k) => p.mix?.[k]?.oferece === "sim").length;
@@ -463,12 +464,12 @@ export default function Pdvs() {
                               Microdistribuidor
                             </span>
                           )}
-                          <span className="2xl:hidden block truncate font-mono text-[11px] text-muted-foreground">
+                          <span className="min-[1800px]:hidden block truncate font-mono text-[11px] text-muted-foreground">
                             {p.pdv_code}{" · "}
                             {p.sem_documento ? <span className="text-amber-500">sem documento</span> : fmtDoc(p.cnpj)}
                           </span>
                           {p.status !== "active" && (
-                            <span className="2xl:hidden mt-0.5 inline-block">
+                            <span className="min-[1800px]:hidden mt-0.5 inline-block">
                               <CarboBadge variant={PDV_STATUS_VARIANT[p.status]} size="sm">{PDV_STATUS_LABEL[p.status]}</CarboBadge>
                             </span>
                           )}
@@ -483,7 +484,7 @@ export default function Pdvs() {
                           `title`: endereço completo tem 60+ caracteres e, solto
                           numa célula, empurraria Mix e Comprado para fora da
                           tela — que é o oposto de mostrar mais informação. */}
-                      <td className="px-3 py-2 text-xs max-w-[180px] 2xl:max-w-[220px]">
+                      <td className="px-3 py-2 text-xs max-w-[180px] min-[1800px]:max-w-[220px]">
                         <p className="truncate" title={[p.address_city, p.address_state].filter(Boolean).join("/") || undefined}>
                           {[p.address_city, p.address_state].filter(Boolean).join("/") || "—"}
                         </p>
@@ -509,7 +510,7 @@ export default function Pdvs() {
                       <td className="px-3 py-2 text-right tabular-nums font-medium whitespace-nowrap">
                         {p.total_comprado ? brl(p.total_comprado) : "—"}
                         {p.pedidos > 0 && (
-                          <span className="2xl:hidden block text-[11px] font-normal text-muted-foreground">
+                          <span className="min-[1800px]:hidden block text-[11px] font-normal text-muted-foreground">
                             {p.pedidos} {p.pedidos === 1 ? "pedido" : "pedidos"} · {fmtData(p.ultima_compra)}
                           </span>
                         )}

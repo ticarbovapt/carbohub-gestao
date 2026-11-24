@@ -97,7 +97,7 @@ export const SECOES_COMERCIAL: Secao[] = [
           { n: 4, titulo: "UF", texto: "Mostra só os PDVs de um estado." },
           { n: 5, titulo: "Dono", texto: "Mostra só a carteira de um vendedor." },
           { n: 6, titulo: "Resumo", texto: "Quantos aparecem com os filtros, quantos já compraram, quantos estão sem documento e sem dono." },
-          { n: 7, titulo: "Ordenar", texto: "Clique no nome de qualquer coluna para ordenar; clique de novo para inverter. Pedidos, Comprado e Última começam do maior/mais recente." },
+          { n: 7, titulo: "Ordenar", texto: "Clique no nome de qualquer coluna para ordenar; clique de novo para inverter. Pedidos, Comprado e Última começam do maior/mais recente. No notebook, código e CNPJ aparecem embaixo do nome, e pedidos e última compra embaixo do valor comprado; as colunas separadas (e a ordenação por elas) aparecem só em tela grande." },
           { n: 8, titulo: "Sem documento", texto: "PDV sem CNPJ/CPF. As vendas dele não viram Revenda sozinhas e o histórico de pedidos não aparece. Preencha o documento." },
           { n: 9, titulo: "Mix", texto: "O que o ponto revende: 10ml (sachê), 100ml e 1L. Verde = vende, cinza = não vende, laranja = a confirmar (ninguém conferiu ainda — é onde falta visita). Passe o mouse para ver o preço." },
           { n: 10, titulo: "Microdistribuidor", texto: "Etiqueta do PDV que também é microdistribuidor. Ele continua sendo ponto de venda e contando na base." },

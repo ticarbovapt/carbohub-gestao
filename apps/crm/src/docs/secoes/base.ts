@@ -269,7 +269,7 @@ export const SECOES_BASE: Secao[] = [
           { n: 2, titulo: "Seleção", texto: "Marque as vendas (ou todas) para agir em massa." },
           { n: 3, titulo: "Atribuir vendedor", texto: "Troca o vendedor das vendas selecionadas de uma vez (e, com isso, de quem é a comissão)." },
           { n: 4, titulo: "Vendedor", texto: "De quem é a venda." },
-          { n: 5, titulo: "Criado por", texto: "Quem lançou, quando foi outra pessoa (ex.: o gestor lançando em nome do vendedor)." },
+          { n: 5, titulo: "Criado por", texto: "Quem lançou, quando foi outra pessoa (ex.: o gestor lançando em nome do vendedor). No notebook ele aparece embaixo do vendedor, em laranja, só quando é outra pessoa." },
         ],
       },
       {

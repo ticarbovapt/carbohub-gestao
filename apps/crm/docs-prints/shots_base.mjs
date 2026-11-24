@@ -192,7 +192,7 @@ SHOTS.push(
     [3, (p) => p.getByText(/Nota Fiscal/)],
     [4, (p) => p.locator("tbody").getByText("Produtos", { exact: true }).first().locator("..")],
   ] },
-  { chave: "vendas-gestor", papel: "gestor", url: "/vendas", viewport: { width: 1600, height: 1000 },
+  { chave: "vendas-gestor", papel: "gestor", url: "/vendas", viewport: { width: 1840, height: 1000 },
     antes: async (p) => { await p.getByRole("checkbox", { name: /Selecionar V2026100027/ }).click(); },
     marcas: [
     [1, (p) => p.getByRole("combobox").filter({ hasText: /Todos os vendedores/ })],
