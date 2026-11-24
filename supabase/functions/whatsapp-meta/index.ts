@@ -364,6 +364,13 @@ Deno.serve(async (req: Request) => {
         linhaFalsa.valor = url.searchParams.get("valor") || "149";
         linhaFalsa.link_carrinho = url.searchParams.get("link") || "https://payt.site/gGCmnnL";
       }
+      // Qualquer variável pode ser dada pelo próprio nome da coluna
+      // (`&link_rastreio=…`) — é assim que se treina o disparo pontual, cujas
+      // variáveis não existem sem um pedido por trás.
+      for (const v of (tpl.meta_variaveis ?? []) as VarTemplate[]) {
+        const dado = url.searchParams.get(v.de);
+        if (dado) linhaFalsa[v.de] = dado;
+      }
       const m = montarPayload(
         numero, tpl.meta_template_nome, tpl.meta_idioma ?? "pt_BR",
         (tpl.meta_variaveis ?? []) as any, linhaFalsa, tpl.meta_botao_url_de,
@@ -511,13 +518,37 @@ Deno.serve(async (req: Request) => {
   try { numerosEstado = await estadoDosNumeros(false); }
   catch (e) { console.error("[whatsapp-meta] qualidade:", (e as Error).message); }
 
-  const { data: fila, error } = await supabase
+  const { data: filaEsteira, error } = await supabase
     .from("carbo_msg_fila").select("*")
     .eq("canal_envio", "meta")
     .order("prioridade", { ascending: true })
     .limit(LEITURA);
   if (error) return json({ error: `fila: ${error.message}` }, 500);
-  if (!fila?.length) return json({ ok: true, fila: 0, nota: "nada a avisar pela Meta" });
+  let fila = (filaEsteira ?? []) as LinhaFila[];
+
+  // ── Disparo PONTUAL para uma lista escolhida (20261194) ─────────────────
+  //
+  // Mensagem que não nasce de etapa nenhuma (o aviso aos pedidos atrasados):
+  // a lista mora em `carbo_msg_disparo`, e a view devolve só o que ainda não
+  // saiu, com o template ligado e aprovado. Entra DEPOIS da fila, então os
+  // avisos do pedido nunca esperam por ela, e passa pelo MESMO laço abaixo —
+  // registro antes da chamada, `pendente` no que é transitório, o `wa_id`
+  // conhecido, o TETO e a pausa. `dados` vira coluna da linha (o rastreio, o
+  // link), e nunca pisa nas colunas da view.
+  //
+  // ⚠️ Falha aqui NÃO derruba a fila da esteira: o aviso do pedido vale mais
+  // que o disparo. Tabela ausente (front antes do SQL) nem vira log.
+  const { data: disparo, error: errDisparo } = await supabase
+    .from("carbo_msg_disparo_fila").select("*").limit(LEITURA);
+  if (errDisparo) {
+    if (errDisparo.code !== "PGRST205" && errDisparo.code !== "42P01") {
+      console.error("[whatsapp-meta] disparo pontual ilegível:", errDisparo.message);
+    }
+  } else if (disparo?.length) {
+    fila = fila.concat(disparo.map((r: any) => ({ ...(r.dados ?? {}), ...r }) as LinhaFila));
+  }
+
+  if (!fila.length) return json({ ok: true, fila: 0, nota: "nada a avisar pela Meta" });
 
   if (!TOKEN) {
     return json({

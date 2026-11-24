@@ -164,6 +164,8 @@ const NOME_ETAPA: Record<string, string> = {
   carrinho_1: "Carrinho · 1º lembrete",
   carrinho_2: "Carrinho · 2º lembrete",
   carrinho_3: "Carrinho · última mensagem",
+  // Disparo pontual à lista de pedidos atrasados (20261194).
+  aviso_atraso: "Pedido atrasado · já enviado",
 };
 
 /**

@@ -83,3 +83,29 @@ describe("conferência do modelo contra a Meta", () => {
     for (const [, , , t] of TEXTOS) expect(variaveisDoTexto(t)).toEqual(["primeiro_nome", "link_checkout"]);
   });
 });
+
+describe("conferência — modelo aprovado por NÚMERO", () => {
+  const corpoNum = "Oi, {{1}}! Rastreio: {{2}} · Checkout: {{3}}";
+  const nossoNum: TemplateNosso = {
+    etapa: "aviso_atraso", meta_template_nome: "aviso_atraso", meta_idioma: "pt_BR",
+    meta_variaveis: [{ nome: "1" }, { nome: "2" }, { nome: "3", fallback: "https://payt.site/x" }],
+    meta_botao_url_de: null, meta_status: "APPROVED", texto: corpoNum,
+  };
+  const apr = (texto = corpoNum, formato = "POSITIONAL"): TemplateMeta => ({
+    name: "aviso_atraso", status: "APPROVED", language: "pt_BR", category: "UTILITY",
+    parameter_format: formato, quality_score: { score: "GREEN" },
+    components: [{ type: "BODY", text: texto }],
+  });
+
+  it("envio por número contra modelo por número passa limpo", () => {
+    expect(conferirTemplate(nossoNum, apr()).problemas).toEqual([]);
+  });
+  it("faltando uma variável é problema", () => {
+    const c = conferirTemplate({ ...nossoNum, meta_variaveis: [{ nome: "1" }, { nome: "2" }] }, apr());
+    expect(c.problemas.join()).toMatch(/\{\{3\}\}/);
+  });
+  it("envio por número contra modelo NOMEADO é problema", () => {
+    const c = conferirTemplate(nossoNum, apr("Oi {{nome}}", "NAMED"));
+    expect(c.ok).toBe(false);
+  });
+});

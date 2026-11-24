@@ -145,6 +145,15 @@ export function formatarValor(v: unknown): string {
 }
 
 /**
+ * As variáveis são POSICIONAIS ({{1}}, {{2}}…)? Só quando TODAS têm nome de
+ * número. Lista vazia não é posicional (não há o que mandar).
+ */
+export function ehPosicional(vars: Array<{ nome: string }> | null | undefined): boolean {
+  const l = vars ?? [];
+  return l.length > 0 && l.every((v) => /^\d+$/.test(String(v.nome)));
+}
+
+/**
  * Monta o POST de `/{PHONE_NUMBER_ID}/messages` para um template.
  *
  * @param to        telefone já normalizado (E.164 sem `+`)
@@ -166,10 +175,23 @@ export function montarPayload(
   const valores: Record<string, string> = {};
   const parametros: Array<Record<string, string>> = [];
 
+  // ⚠️ Modelo aprovado com {{1}}, {{2}} (POSITIONAL) não aceita
+  // `parameter_name`: a Meta recusa a mensagem inteira. Ele é reconhecido pelo
+  // NOME da variável no banco ser só número — a própria Meta proíbe nome
+  // nomeado que comece por dígito, então não há como confundir. E nunca
+  // misturado: se um é número, todos têm de ser.
+  const lista = vars ?? [];
+  const posicional = ehPosicional(lista);
+  // Posicional vai na ordem do NÚMERO, nunca na do array: trocar a ordem no
+  // banco mandaria o link do checkout no lugar do rastreio, calado.
+  const ordenadas = posicional
+    ? [...lista].sort((a, b) => Number(a.nome) - Number(b.nome))
+    : lista;
+
   // ⚠️ A ORDEM é a do array, não a das chaves do objeto. O formato é nomeado
   // (`parameter_name`), o que protege de trocar rastreio por número do pedido,
   // mas a Meta ainda espera os parâmetros na ordem em que aparecem no corpo.
-  for (const v of vars ?? []) {
+  for (const v of ordenadas) {
     const cru = linha?.[v.de];
     let texto = limparParametro(v.formato === "brl" ? brl(cru) : formatarValor(cru));
     if (!texto) {
@@ -180,7 +202,9 @@ export function montarPayload(
       texto = reserva;
     }
     valores[v.nome] = texto;
-    parametros.push({ type: "text", parameter_name: v.nome, text: texto });
+    parametros.push(posicional
+      ? { type: "text", text: texto }
+      : { type: "text", parameter_name: v.nome, text: texto });
   }
 
   // ⚠️ O botão é POSICIONAL mesmo com o corpo nomeado, e o parâmetro é só o

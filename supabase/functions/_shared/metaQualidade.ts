@@ -146,14 +146,24 @@ export function conferirTemplate(nosso: TemplateNosso, meta: TemplateMeta | null
   base.rodape_na_meta = rodape?.text ?? null;
 
   // ── As variáveis do corpo ─────────────────────────────────────────────────
-  // ⚠️ O envio manda parâmetro NOMEADO. Modelo aprovado com {{1}}, {{2}}
-  // (POSITIONAL) recusa a mensagem inteira.
+  // ⚠️ O envio manda parâmetro NOMEADO, a não ser que as variáveis do banco
+  // tenham nome de NÚMERO ("1", "2"…) — aí manda posicional (`montarPayload`).
+  // Formato diferente do aprovado recusa a mensagem inteira.
   const naMeta = variaveisDoTexto(corpo?.text);
   const nossas = (nosso.meta_variaveis ?? []).map((v) => v.nome);
   const posicional = String(meta.parameter_format ?? "").toUpperCase() === "POSITIONAL"
     || naMeta.some((v) => /^\d+$/.test(v));
-  if (posicional && naMeta.length) {
+  const nossasPorNumero = nossas.length > 0 && nossas.every((v) => /^\d+$/.test(v));
+  if (posicional && naMeta.length && !nossasPorNumero) {
     problemas.push(`o modelo foi aprovado com variáveis por NÚMERO (${naMeta.map((v) => `{{${v}}}`).join(", ")}); o envio manda por NOME`);
+  } else if (!posicional && nossasPorNumero) {
+    problemas.push("o envio manda variáveis por NÚMERO e o modelo da Meta foi aprovado por NOME");
+  } else if (posicional && naMeta.length) {
+    const esperadas = [...new Set(naMeta)].sort((a, b) => Number(a) - Number(b));
+    const nossasOrd = [...nossas].sort((a, b) => Number(a) - Number(b));
+    if (esperadas.join() !== nossasOrd.join()) {
+      problemas.push(`a Meta espera ${esperadas.map((v) => `{{${v}}}`).join(", ")} e o envio manda ${nossasOrd.map((v) => `{{${v}}}`).join(", ") || "nenhuma"}`);
+    }
   } else {
     const faltamNoEnvio = naMeta.filter((v) => !nossas.includes(v));
     const sobramNoEnvio = nossas.filter((v) => !naMeta.includes(v));
