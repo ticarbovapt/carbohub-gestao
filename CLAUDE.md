@@ -6503,10 +6503,17 @@ supabase/consultas/aviso_pedido_atrasado.sql   A nome+link · B/C conferir · D 
    posição.
 4. O teste (`?teste=&etapa=`) aceita qualquer variável pelo nome da coluna
    (`&link_rastreio=…`).
-5. ⚠️ É aviso do PEDIDO (sai pelo serviço), então a lista "não contatar" — que
-   vale para o comercial — não o filtra. Disparo novo de outro tipo: etapa nova
+5. ⚠️ É aviso do PEDIDO (sai pelo serviço); a régua da Esteira não filtra
+   "não contatar", mas o carregamento da lista (BLOCO L3) deixa de fora quem
+   pediu para não receber — a mensagem tem oferta. Disparo novo de outro tipo: etapa nova
    no CHECK de `carbo_msg_templates` + linha no template + `NOME_ETAPA` das
    Conversas; a tabela e a view servem para qualquer um.
+6. **A lista que o time manda entra CRUA** em `carbo_msg_disparo_entrada`
+   (`lote`, pedido da loja, NF, pedido do Bling, primeiro nome, rastreio — sem
+   CPF nem nome completo), por migração (`20261195`, lote `atraso_2026_11_23`,
+   438 pedidos). Os BLOCOS L1/L2 localizam na esteira (pedido da loja; reserva:
+   pedido do Bling) e o L3 carrega `carbo_msg_disparo` só com quem casou sem
+   dúvida; telefone da esteira, reserva no pedido da PayT.
 
 ### ⏸️ Carrinho abandonado pela Meta: pronto e DESLIGADO (05/10/2026)
 A terceira pipeline saiu da Evolution e passou a sair pela Cloud API, pelo
