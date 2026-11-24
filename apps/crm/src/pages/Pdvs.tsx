@@ -120,14 +120,14 @@ function MixChips({ mix }: { mix: Partial<Record<PdvProduto, PdvMixItem>> }) {
 type PdvCol = "codigo" | "nome" | "cnpj" | "cidade" | "dono" | "mix" | "status" | "pedidos" | "comprado" | "ultima";
 const ORDENAVEIS: PdvCol[] = ["codigo", "nome", "cnpj", "cidade", "dono", "mix", "status", "pedidos", "comprado", "ultima"];
 
-function SortTh({ col, label, sort, onSort, align = "left" }: {
+function SortTh({ col, label, sort, onSort, align = "left", className = "" }: {
   col: PdvCol; label: string; sort: { col: PdvCol; dir: "asc" | "desc" };
-  onSort: (c: PdvCol) => void; align?: "left" | "center" | "right";
+  onSort: (c: PdvCol) => void; align?: "left" | "center" | "right"; className?: string;
 }) {
   const active = sort.col === col;
   const justify = align === "right" ? "justify-end" : align === "center" ? "justify-center" : "justify-start";
   return (
-    <th className="px-3 py-2 font-medium">
+    <th className={`px-3 py-2 font-medium ${className}`}>
       <button onClick={() => onSort(col)}
         className={`flex items-center gap-1 w-full ${justify} hover:text-foreground transition-colors ${active ? "text-foreground" : ""}`}>
         {label}
@@ -138,6 +138,13 @@ function SortTh({ col, label, sort, onSort, align = "left" }: {
     </th>
   );
 }
+
+/** Coluna que só existe na tela larga (2xl). No notebook, com a barra lateral
+ *  aberta, as onze colunas não cabiam e Comprado/Ações ficavam fora da tela:
+ *  o código e o CNPJ descem para baixo do nome, o status vira etiqueta ao lado
+ *  dele (só quando não é Ativo) e pedidos/última compra descem para baixo do
+ *  valor comprado. */
+const SO_LARGA = "hidden 2xl:table-cell";
 
 /** Quantos produtos o PDV declara vender — é por isso que se ordena o Mix. */
 const mixVendidos = (p: PdvRow) => PRODUTOS.filter((k) => p.mix?.[k]?.oferece === "sim").length;
@@ -418,16 +425,16 @@ export default function Pdvs() {
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-board-surface">
                   <tr className="border-b text-left text-xs text-muted-foreground">
-                    <SortTh col="codigo"   label="Código"      sort={sort} onSort={toggleSort} />
+                    <SortTh col="codigo"   label="Código"      sort={sort} onSort={toggleSort} className={SO_LARGA} />
                     <SortTh col="nome"     label="PDV"         sort={sort} onSort={toggleSort} />
-                    <SortTh col="cnpj"     label="CNPJ"        sort={sort} onSort={toggleSort} />
+                    <SortTh col="cnpj"     label="CNPJ"        sort={sort} onSort={toggleSort} className={SO_LARGA} />
                     <SortTh col="cidade"   label="Cidade / UF" sort={sort} onSort={toggleSort} />
                     <SortTh col="dono"     label="Dono"        sort={sort} onSort={toggleSort} />
                     <SortTh col="mix"      label="Mix"         sort={sort} onSort={toggleSort} align="center" />
-                    <SortTh col="status"   label="Status"      sort={sort} onSort={toggleSort} align="center" />
-                    <SortTh col="pedidos"  label="Pedidos"     sort={sort} onSort={toggleSort} align="right" />
+                    <SortTh col="status"   label="Status"      sort={sort} onSort={toggleSort} align="center" className={SO_LARGA} />
+                    <SortTh col="pedidos"  label="Pedidos"     sort={sort} onSort={toggleSort} align="right" className={SO_LARGA} />
                     <SortTh col="comprado" label="Comprado"    sort={sort} onSort={toggleSort} align="right" />
-                    <SortTh col="ultima"   label="Última"      sort={sort} onSort={toggleSort} />
+                    <SortTh col="ultima"   label="Última"      sort={sort} onSort={toggleSort} className={SO_LARGA} />
                     {isGestor && <th className="px-3 py-2 font-medium text-center">Ações</th>}
                   </tr>
                 </thead>
@@ -439,7 +446,7 @@ export default function Pdvs() {
                     // com stopPropagation para não abrir o detalhe junto.
                     <tr key={p.id} onClick={() => setDetalhe(p)}
                       className={`border-b last:border-0 hover:bg-accent/40 cursor-pointer ${p.status !== "active" ? "opacity-60" : ""}`}>
-                      <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{p.pdv_code}</td>
+                      <td className={`${SO_LARGA} px-3 py-2 font-mono text-xs whitespace-nowrap`}>{p.pdv_code}</td>
                       <td className="px-3 py-2 max-w-[260px]">
                         <div className="text-left w-full">
                           <span className="block truncate font-medium">{p.name}</span>
@@ -456,9 +463,18 @@ export default function Pdvs() {
                               Microdistribuidor
                             </span>
                           )}
+                          <span className="2xl:hidden block truncate font-mono text-[11px] text-muted-foreground">
+                            {p.pdv_code}{" · "}
+                            {p.sem_documento ? <span className="text-amber-500">sem documento</span> : fmtDoc(p.cnpj)}
+                          </span>
+                          {p.status !== "active" && (
+                            <span className="2xl:hidden mt-0.5 inline-block">
+                              <CarboBadge variant={PDV_STATUS_VARIANT[p.status]} size="sm">{PDV_STATUS_LABEL[p.status]}</CarboBadge>
+                            </span>
+                          )}
                         </div>
                       </td>
-                      <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">
+                      <td className={`${SO_LARGA} px-3 py-2 font-mono text-xs whitespace-nowrap`}>
                         {p.sem_documento
                           ? <span className="text-amber-500" title="Sem documento">sem documento</span>
                           : fmtDoc(p.cnpj)}
@@ -467,7 +483,7 @@ export default function Pdvs() {
                           `title`: endereço completo tem 60+ caracteres e, solto
                           numa célula, empurraria Mix e Comprado para fora da
                           tela — que é o oposto de mostrar mais informação. */}
-                      <td className="px-3 py-2 text-xs max-w-[220px]">
+                      <td className="px-3 py-2 text-xs max-w-[180px] 2xl:max-w-[220px]">
                         <p className="truncate" title={[p.address_city, p.address_state].filter(Boolean).join("/") || undefined}>
                           {[p.address_city, p.address_state].filter(Boolean).join("/") || "—"}
                         </p>
@@ -484,16 +500,21 @@ export default function Pdvs() {
                       <td className="px-3 py-2">
                         <MixChips mix={p.mix} />
                       </td>
-                      <td className="px-3 py-2 text-center">
+                      <td className={`${SO_LARGA} px-3 py-2 text-center`}>
                         <CarboBadge variant={PDV_STATUS_VARIANT[p.status]} size="sm">
                           {PDV_STATUS_LABEL[p.status]}
                         </CarboBadge>
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums">{p.pedidos || "—"}</td>
-                      <td className="px-3 py-2 text-right tabular-nums font-medium">
+                      <td className={`${SO_LARGA} px-3 py-2 text-right tabular-nums`}>{p.pedidos || "—"}</td>
+                      <td className="px-3 py-2 text-right tabular-nums font-medium whitespace-nowrap">
                         {p.total_comprado ? brl(p.total_comprado) : "—"}
+                        {p.pedidos > 0 && (
+                          <span className="2xl:hidden block text-[11px] font-normal text-muted-foreground">
+                            {p.pedidos} {p.pedidos === 1 ? "pedido" : "pedidos"} · {fmtData(p.ultima_compra)}
+                          </span>
+                        )}
                       </td>
-                      <td className="px-3 py-2 text-xs whitespace-nowrap text-muted-foreground">
+                      <td className={`${SO_LARGA} px-3 py-2 text-xs whitespace-nowrap text-muted-foreground`}>
                         {fmtData(p.ultima_compra)}
                       </td>
                       {isGestor && (

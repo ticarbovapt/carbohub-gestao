@@ -712,7 +712,7 @@ export default function Vendas() {
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>
                                     <button className="h-8 px-2.5 inline-flex items-center gap-1 rounded-md text-xs font-medium whitespace-nowrap bg-carbo-green/10 text-carbo-green hover:bg-carbo-green/20 border border-carbo-green/30 transition-colors" title="Editar ou converter o orçamento">
-                                      <span className="hidden sm:inline">Editar / Converter</span><span className="sm:hidden" data-curto>Ações</span>
+                                      <span className="hidden 2xl:inline">Editar / Converter</span><span className="2xl:hidden" data-curto>Ações</span>
                                       <ChevronDown className="h-3 w-3" />
                                     </button>
                                   </DropdownMenuTrigger>
@@ -743,7 +743,7 @@ export default function Vendas() {
                                       title={`Baixar NF ${notaDaVenda(venda, "venda").numero ?? notaDaVenda(venda, "venda").id}`}
                                     >
                                       {nfLoadingId === venda.id + "venda" ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileDown className="h-3 w-3" />}
-                                      <span className="hidden sm:inline">Baixar NF</span>
+                                      <span className="hidden 2xl:inline">Baixar NF</span>
                                     </button>
                                   )}
                                   {/* ⚠️ Botão PRÓPRIO, âmbar, e não um segundo "Baixar NF".
@@ -758,12 +758,12 @@ export default function Vendas() {
                                       title={`Baixar NF de bonificação ${notaDaVenda(venda, "bonificacao").numero ?? notaDaVenda(venda, "bonificacao").id}`}
                                     >
                                       {nfLoadingId === venda.id + "bonificacao" ? <Loader2 className="h-3 w-3 animate-spin" /> : <Gift className="h-3 w-3" />}
-                                      <span className="hidden sm:inline">NF bonif.</span>
+                                      <span className="hidden 2xl:inline">NF bonif.</span>
                                     </button>
                                   )}
                                   <button onClick={() => baixarPdf(venda.id)} title="Baixar orçamento (PDF)"
                                     className="h-8 px-2.5 inline-flex items-center gap-1 rounded-md text-xs font-medium whitespace-nowrap border border-border/60 text-muted-foreground hover:bg-muted transition-colors">
-                                    <FileText className="h-3 w-3" /><span className="hidden sm:inline">PDF</span>
+                                    <FileText className="h-3 w-3" /><span className="hidden 2xl:inline">PDF</span>
                                   </button>
                                 </>
                               )}
@@ -1292,7 +1292,7 @@ export default function Vendas() {
           </div>
           <CarboCard padding="none" className="hidden md:block">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[960px] text-sm">
+              <table className="w-full min-w-[820px] 2xl:min-w-[960px] text-sm">
                 <thead>
                   <tr className="border-b bg-muted/30">
                     {isHead && (
@@ -1306,14 +1306,14 @@ export default function Vendas() {
                     <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Pedido</th>
                     <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Data</th>
                     <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Cliente</th>
-                    <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Cidade/UF</th>
+                    <th className="hidden 2xl:table-cell text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Cidade/UF</th>
                     {/* ⚠️ "Vendedor" e "Criado por" são perguntas DIFERENTES e
                         andam juntas: a primeira é de quem é a venda (e a
                         comissão), a segunda é quem digitou. Elas coincidem na
                         maioria das linhas — e é justamente por isso que a
                         divergência precisa aparecer, em vez de ser presumida. */}
                     {isHead && <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Vendedor</th>}
-                    {isHead && <th className="text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide whitespace-nowrap">Criado por</th>}
+                    {isHead && <th className="hidden 2xl:table-cell text-left p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide whitespace-nowrap">Criado por</th>}
                     <th className="text-right p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide">Total</th>
                     <th className="text-right p-3 font-medium text-xs text-muted-foreground uppercase tracking-wide whitespace-nowrap">Ações</th>
                   </tr>
@@ -1393,15 +1393,26 @@ export default function Vendas() {
                               )
                             )}
                           </td>
-                          <td className="p-3 font-medium max-w-[180px] truncate">{venda.customer_name}</td>
-                          <td className="p-3 text-muted-foreground whitespace-nowrap">{[venda.delivery_city, venda.delivery_state].filter(Boolean).join("/") || "—"}</td>
+                          {/* Abaixo de 2xl (notebook com a barra lateral aberta) a cidade
+                              mora embaixo do cliente e "Criado por" embaixo do vendedor:
+                              com as colunas separadas a tabela não cabia e cortava o Total. */}
+                          <td className="p-3 max-w-[180px]">
+                            <div className="font-medium truncate">{venda.customer_name}</div>
+                            <div className="2xl:hidden text-xs text-muted-foreground truncate">{[venda.delivery_city, venda.delivery_state].filter(Boolean).join("/") || "—"}</div>
+                          </td>
+                          <td className="hidden 2xl:table-cell p-3 text-muted-foreground whitespace-nowrap">{[venda.delivery_city, venda.delivery_state].filter(Boolean).join("/") || "—"}</td>
                           {isHead && (
                             <td className="p-3 text-muted-foreground">
                               <span>{(venda.vendedor_id && nomeById[venda.vendedor_id]) || venda.vendedor_name || "—"}</span>
+                              {criadorDiferente && (
+                                <div className="2xl:hidden text-xs font-medium text-amber-500" title="Lançada por uma pessoa e atribuída a outra">
+                                  por {criadorNome}
+                                </div>
+                              )}
                             </td>
                           )}
                           {isHead && (
-                            <td className="p-3 text-muted-foreground">
+                            <td className="hidden 2xl:table-cell p-3 text-muted-foreground">
                               {criadorNome ? (
                                 <span className={criadorDiferente ? "font-medium text-amber-500" : undefined}
                                   title={criadorDiferente

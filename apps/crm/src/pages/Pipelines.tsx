@@ -562,7 +562,9 @@ export default function Pipelines() {
             <CarboKPI title="Funis" value={FUNNELS.length} icon={KanbanSquare} iconColor="green" />
           </div>
         ) : (
-          <div className={`${FAIXA_KPI_CELULAR} md:grid md:gap-3 ${MOSTRA_QUENTES_E_TENTATIVAS ? "md:grid-cols-3 xl:grid-cols-5" : "md:grid-cols-3"}`}>
+          // No notebook (xl, barra lateral aberta) o 4º cartão — Pipeline (R$) —
+          // é mais largo: com os cinco iguais o valor em reais quebrava em duas linhas.
+          <div className={`${FAIXA_KPI_CELULAR} md:grid md:gap-3 ${MOSTRA_QUENTES_E_TENTATIVAS ? "md:grid-cols-3 xl:grid-cols-[repeat(3,minmax(0,1fr))_minmax(0,1.4fr)_minmax(0,1fr)] 2xl:grid-cols-5" : "md:grid-cols-3"}`}>
             <CarboKPI title="Total Leads" value={stats?.total || 0} icon={Users} iconColor="blue" loading={!stats} />
             {MOSTRA_QUENTES_E_TENTATIVAS && <CarboKPI title="Quentes" value={stats?.hot || 0} icon={Flame} iconColor="warning" loading={!stats} />}
             <CarboKPI title="Sem Atividade >3d" value={stats?.stale || 0} icon={AlertTriangle} iconColor="warning" loading={!stats} />
