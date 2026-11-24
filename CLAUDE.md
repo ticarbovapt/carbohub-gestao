@@ -1606,6 +1606,22 @@ monitor de 1920. Medido no navegador (Supabase falso), app a app.
    varredura): a Agenda abre a visita com `geo: null` (não espera o GPS) e
    `Visita.tsx`/`rtmFila.ts` liam `geo_checkin.lat` direto. O `tsc` não pega —
    o `crm` tem `strictNullChecks: false`. Hoje é `?.` nos dois lugares.
+5. **Sales no NOTEBOOK (24/11/2026)**: queixa do time, o dono do processo usa
+   27" e não via. Medido em 1024/1280/1366/1440 com a barra aberta: nenhuma
+   PÁGINA rolava de lado, mas TABELAS cortavam a última coluna (Vendas 1211 px
+   em 990, Pontos de Venda 1446 em 942, OS em lista 1138 em 1076) e o rodapé do
+   Vender em edição empurrava a página em 1024. A regra que ficou: **abaixo de
+   `2xl` a tabela junta colunas, nunca esconde dado** — Cidade sob o cliente,
+   "Criado por" sob o vendedor (só quando diverge), código+CNPJ sob o PDV,
+   pedidos+última compra sob o valor, status do PDV vira etiqueta (só se não é
+   Ativo), portes da OS sob a barra; botões de ação só com ícone (o cartão do
+   celular continua forçando o texto). Em `2xl` (o monitor grande) nada muda.
+   ⚠️ Ordenar pelas colunas escondidas só existe no `2xl`.
+   ⚠️ Texto dentro de `Button`/`CarboButton` (`gap-2`) vai num `<span>` só: dois
+   pedaços soltos ganham o `gap` entre si ("Gerar   Orçamento").
+   ⚠️ Quadros (Funis, Rastreio, OS) rolam de lado POR DESENHO (`QuadroRolavel`)
+   — não é defeito. Medidor: script Playwright sobre o harness `docs-prints`
+   (porta 8099), `scrollWidth > clientWidth` no documento e em cada contêiner.
 
 ### Tooltip de gráfico no tema escuro — corrigido no `index.css`, não no gráfico
 As variáveis de cor são TRIPLETOS HSL; `background: var(--background)` (em ~20

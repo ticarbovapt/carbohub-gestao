@@ -42,7 +42,9 @@ for (const s of SHOTS) {
     }
     const caixas = {};
     for (const [n, f] of s.marcas ?? []) {
-      const loc = f(p).first();
+      // O primeiro VISÍVEL: a lista do celular (md:hidden) vem antes da tabela
+      // no DOM e repete o mesmo detalhe — `.first()` pegava a cópia escondida.
+      const loc = f(p).filter({ visible: true }).first();
       const bb = await loc.boundingBox().catch(() => null);
       if (!bb) { console.log("  SEM CAIXA", s.chave, n); continue; }
       const x = Math.max(bb.x, clip.x), y = Math.max(bb.y, clip.y);

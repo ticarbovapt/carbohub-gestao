@@ -23,7 +23,7 @@ export const SHOTS = [
   // ── Pipeline ──
   { chave: "pipeline", papel: "colaborador", url: "/funis", espera: 1300, marcas: [
     [1, btn("Novo Lead")],
-    [2, (p) => p.locator("main div.grid").filter({ hasText: "Total Leads" }).first()],
+    [2, (p) => p.locator('main div[class*="md:grid"]').filter({ hasText: "Total Leads" }).first()],
     [3, (p) => p.getByRole("button", { name: /Outbound/ }).locator("..")],
     [4, (p) => p.getByText("Situação:").locator("..")],
     [5, sel('input[placeholder="Buscar por nome, CNPJ, cidade..."]')],

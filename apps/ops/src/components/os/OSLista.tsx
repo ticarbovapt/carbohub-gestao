@@ -49,7 +49,7 @@ function TipoSelo({ o }: { o: OSView }) {
 function Progresso({ o, className }: { o: OSView; className?: string }) {
   const pct = o.vagas > 0 ? Math.min(100, (o.vagasExecutadas / o.vagas) * 100) : 0;
   return (
-    <div className={cn("flex items-center gap-2.5", className)}>
+    <div className={cn("flex flex-wrap items-center gap-x-2.5 gap-y-0.5 2xl:flex-nowrap", className)}>
       <span className="w-11 shrink-0 text-sm tabular-nums">
         <span className="font-medium text-foreground">{o.vagasExecutadas}</span>
         <span className="text-muted-foreground">/{o.vagas}</span>
@@ -57,7 +57,7 @@ function Progresso({ o, className }: { o: OSView; className?: string }) {
       <div className="h-1 w-16 shrink-0 overflow-hidden rounded-full bg-muted">
         <div className={cn("h-full rounded-full", stageMeta(o.stage).bar)} style={{ width: `${pct}%` }} />
       </div>
-      {o.portes && <span className="truncate text-xs text-muted-foreground">{o.portes}</span>}
+      {o.portes && <span className="basis-full truncate text-xs text-muted-foreground 2xl:basis-auto">{o.portes}</span>}
     </div>
   );
 }
@@ -149,7 +149,10 @@ export function OSLista({ items }: { items: OSView[] }) {
 
       {/* Tela larga */}
       <div className="hidden overflow-x-auto md:block">
-        <table className="w-full text-sm">
+        {/* Abaixo de 2xl (notebook com a barra lateral aberta) as células
+            apertam e os portes descem para baixo da barra — senão a Etapa
+            ficava fora da tela. */}
+        <table className="w-full text-sm [&_td]:px-3 [&_th]:px-3 2xl:[&_td]:px-4 2xl:[&_th]:px-4">
           <thead className="border-b bg-muted/40">
             <tr>
               <Cabecalho rotulo="OS" ordem={ordem} onOrdenar={ordenar} />
@@ -171,7 +174,7 @@ export function OSLista({ items }: { items: OSView[] }) {
                   {o.veiculo && <p className="mt-0.5 truncate text-xs text-muted-foreground">{o.veiculo}</p>}
                 </td>
                 <td className="px-4 py-3"><TipoSelo o={o} /></td>
-                <td className="px-4 py-3"><Progresso o={o} className="min-w-[12rem]" /></td>
+                <td className="px-4 py-3"><Progresso o={o} className="min-w-[8rem] 2xl:min-w-[12rem]" /></td>
                 <td className="px-4 py-3"><Data o={o} hoje={hoje} /></td>
                 <td className="whitespace-nowrap px-4 py-3">
                   {o.pedido

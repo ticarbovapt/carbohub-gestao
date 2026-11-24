@@ -2441,10 +2441,10 @@ export default function Vender() {
         <div className="grid grid-cols-2 gap-2 w-full lg:flex lg:items-center lg:w-auto">
           <Button variant="ghost" className="hidden lg:inline-flex" onClick={sairDaTela}>Cancelar</Button>
           <Button variant="outline" className="min-w-0 lg:flex-none" onClick={handleQuote} disabled={generating || !podeSalvar || editandoVenda}>
-            <FileText className="h-4 w-4 mr-1" /> {generating ? "Gerando..." : (editId ? (<><span className="hidden sm:inline">Salvar e&nbsp;</span>Gerar PDF</>) : (<><span className="hidden sm:inline">Gerar&nbsp;</span>Orçamento</>))}
+            <FileText className="h-4 w-4 mr-1" /> {generating ? "Gerando..." : (editId ? (<span><span className="hidden sm:inline lg:hidden xl:inline">Salvar e </span>Gerar PDF</span>) : (<span><span className="hidden sm:inline lg:hidden xl:inline">Gerar </span>Orçamento</span>))}
           </Button>
           <Button variant="outline" className="min-w-0 lg:flex-none" onClick={handleEmailQuote} disabled={emailing || !podeSalvar} title="Enviar orçamento por e-mail">
-            <Mail className="h-4 w-4 mr-1" /> {emailing ? "Enviando..." : (<><span className="hidden sm:inline">Enviar por&nbsp;</span>E-mail</>)}
+            <Mail className="h-4 w-4 mr-1" /> {emailing ? "Enviando..." : (<span><span className="hidden sm:inline lg:hidden xl:inline">Enviar por </span>E-mail</span>)}
           </Button>
           <CarboButton onClick={handleSell} className="col-span-2 order-first lg:order-none lg:flex-none lg:min-w-[150px]" disabled={!podeSalvar || editFaturado}>
             <ShoppingCart className="h-4 w-4 mr-1" /> {editFaturado ? "Nota já emitida" : editandoVenda ? "Salvar alterações" : editId ? "Salvar e Vender" : "Gerar Venda"}
