@@ -52,3 +52,13 @@ select j.jobname, j.schedule, j.active,
          order by d.start_time desc limit 1)                                         as status
   from cron.job j
  where j.jobname = 'bling2-reler-pedido-sem-nf-10min';
+
+-- BLOCO 5 — A NOTA 000005: foi relida e ganhou rodapé e natureza? (20261192)
+--   Espero natureza_operacao e rodape preenchidos; `vezes` diz quantas releituras.
+select nf.numero, nf.situacao, nf.natureza_operacao,
+       left(nf.informacoes_adicionais, 60)   as rodape,
+       nf.raw_detalhe is not null           as tem_detalhe,
+       r.relido_em, r.vezes
+  from public.bling2_nfe nf
+  left join public.carbo_bling2_nfe_releitura r on r.bling_id = nf.bling_id
+ where nf.bling_id = 27432513343;
