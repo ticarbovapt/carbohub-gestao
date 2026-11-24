@@ -5640,6 +5640,9 @@ matriz, Bling 2 = filial SP.
    últimos 60 dias sem natureza: 30 min entre tentativas, no máximo 6
    (`carbo_bling2_nfe_releitura`). Leitura única de algo que MUDA depois é a
    doença: pedido e nota da filial nascem antes de estarem prontos.
+   `20261193`: a releitura da nota e o `vincula-nf-filial` rodam a CADA MINUTO
+   (o nome do job continua "-10min"): a nota liga em ~3 min, não ~20 — a
+   logística espera por ela para imprimir a etiqueta. Os dois são SQL puro.
 5. **A conta é sempre EXPLÍCITA**, no front e no servidor. Errar emite no CNPJ
    errado, e só se desfaz com cancelamento depois de o documento circular.
 
