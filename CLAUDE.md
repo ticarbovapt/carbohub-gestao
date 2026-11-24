@@ -1615,8 +1615,12 @@ monitor de 1920. Medido no navegador (Supabase falso), app a app.
    "Criado por" sob o vendedor (só quando diverge), código+CNPJ sob o PDV,
    pedidos+última compra sob o valor, status do PDV vira etiqueta (só se não é
    Ativo), portes da OS sob a barra; botões de ação só com ícone (o cartão do
-   celular continua forçando o texto). Em `2xl` (o monitor grande) nada muda.
-   ⚠️ Ordenar pelas colunas escondidas só existe no `2xl`.
+   celular continua forçando o texto). A partir de **1800 px** (`min-[1800px]:`)
+   volta o layout de colunas separadas; os rótulos dos botões de Vendas só em 2100.
+   ⚠️ **O corte NÃO é `2xl` (1536)**: a 1ª versão usou `2xl` e não resolveu —
+   notebook de 1920 com a escala de 125% do Windows (o padrão) mede **1536 px**
+   no navegador e caía no layout largo. Meça em 1536 também, não só 1280/1366.
+   ⚠️ Ordenar pelas colunas escondidas só existe na tela larga.
    ⚠️ Texto dentro de `Button`/`CarboButton` (`gap-2`) vai num `<span>` só: dois
    pedaços soltos ganham o `gap` entre si ("Gerar   Orçamento").
    ⚠️ Quadros (Funis, Rastreio, OS) rolam de lado POR DESENHO (`QuadroRolavel`)
