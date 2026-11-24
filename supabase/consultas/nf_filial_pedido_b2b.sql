@@ -5,7 +5,7 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- BLOCO 1 — Os pedidos e o que o espelho do Bling 2 sabe deles.
---   nf_no_pedido_do_bling nulo + tem_detalhe true  = o defeito (lido antes da nota)
+--   nf_no_pedido_do_bling nulo/0 + tem_detalhe true  = o defeito (lido antes da nota)
 --   tem_detalhe false                              = na fila, relido em até 10 min
 --   nf_no_pedido_do_bling preenchido + bling2_nf_id nulo = falta o vínculo (*/5)
 select o.order_number, o.external_ref, o.bling_conta, o.status, o.fulfillment_stage,
@@ -32,9 +32,9 @@ select nf.bling_id, nf.numero, nf.serie, nf.situacao, nf.data_emissao, nf.contat
  order by nf.data_emissao desc;
 
 -- BLOCO 3 — Quantos pedidos da filial estão nessa situação HOJE (o tamanho do problema).
-select count(*) filter (where bo.raw_detalhe is not null and bo.nf_bling_id is null) as lidos_antes_da_nota,
+select count(*) filter (where bo.raw_detalhe is not null and coalesce(bo.nf_bling_id, 0) = 0) as lidos_antes_da_nota,
        count(*) filter (where bo.raw_detalhe is null)                                 as na_fila_agora,
-       count(*) filter (where bo.nf_bling_id is not null)                             as nota_no_pedido_sem_vinculo,
+       count(*) filter (where coalesce(bo.nf_bling_id, 0) <> 0)                             as nota_no_pedido_sem_vinculo,
        count(*)                                                                        as pedidos_esperando_nf
   from public.carboze_orders o
   join public.bling2_orders bo
@@ -42,7 +42,7 @@ select count(*) filter (where bo.raw_detalhe is not null and bo.nf_bling_id is n
  where o.bling_conta = 2
    and o.external_ref ~ '^bling2-[0-9]+$'
    and o.bling2_nf_id is null
-   and coalesce(o.status, '') not in ('quote', 'cancelled')
+   and coalesce(o.status::text, '') not in ('quote', 'cancelled')
    and o.created_at > now() - interval '90 days';
 
 -- BLOCO 4 — O cron está de pé e rodando sem erro (SQL puro: aqui `succeeded` vale).

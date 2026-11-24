@@ -5628,6 +5628,10 @@ matriz, Bling 2 = filial SP.
    esperam nota — 30 min entre releituras (6 h depois de 30 dias, nada depois
    de 90), registro em `carbo_bling2_releitura`. ⚠️ Nunca pedido on-line: a
    esteira lê o `raw_detalhe` deles.
+   ⚠️ Duas que o 1º uso pegou (`20261191`): `carboze_orders.status` é ENUM —
+   `coalesce(o.status, '')` dá 22P02, use `o.status::text`; e o Bling devolve
+   `notaFiscal.id = 0` (não nulo) no pedido sem nota — "sem nota" é
+   `coalesce(nf_bling_id, 0) = 0`. Teste local com tipo de texto não pega o enum.
 5. **A conta é sempre EXPLÍCITA**, no front e no servidor. Errar emite no CNPJ
    errado, e só se desfaz com cancelamento depois de o documento circular.
 
