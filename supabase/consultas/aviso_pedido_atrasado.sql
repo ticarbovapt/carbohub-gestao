@@ -321,8 +321,8 @@ select case when bling_id is null then 'NÃO ACHADO' when achados > 1 then 'AMB�
             when exists (select 1 from public.carbo_wa_nao_contatar n
                           where n.removido_em is null and n.chave = public.carbo_fone_chave(fone)) then 'não contatar'
             when exists (select 1 from public.carbo_msg_disparo q
-                        where q.etapa = 'aviso_atraso' and q.bling_id <> bling_id
-                          and public.carbo_fone_chave(q.telefone) = public.carbo_fone_chave(fone)) then 'já recebeu por outro pedido'
+                        where q.etapa = 'aviso_atraso' and q.bling_id <> r.bling_id
+                          and public.carbo_fone_chave(q.telefone) = public.carbo_fone_chave(r.fone)) then 'já recebeu por outro pedido'
             else 'ok, mas NF diferente' end as situacao,
        id_pedido_loja, nf, nf_numero as nf_no_sistema, pedido_bling, primeiro_nome, cliente, fone, bling_id
   from r
@@ -330,8 +330,8 @@ select case when bling_id is null then 'NÃO ACHADO' when achados > 1 then 'AMB�
     or exists (select 1 from public.carbo_wa_nao_contatar n
                 where n.removido_em is null and n.chave = public.carbo_fone_chave(fone))
     or exists (select 1 from public.carbo_msg_disparo q
-                        where q.etapa = 'aviso_atraso' and q.bling_id <> bling_id
-                          and public.carbo_fone_chave(q.telefone) = public.carbo_fone_chave(fone))
+                        where q.etapa = 'aviso_atraso' and q.bling_id <> r.bling_id
+                          and public.carbo_fone_chave(q.telefone) = public.carbo_fone_chave(r.fone))
     or (nf_numero is not null and ltrim(nf_numero, '0') <> ltrim(nf, '0'))
  order by 1, id_pedido_loja;
 
