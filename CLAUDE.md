@@ -6514,6 +6514,14 @@ supabase/consultas/aviso_pedido_atrasado.sql   A nome+link · B/C conferir · D 
    438 pedidos). Os BLOCOS L1/L2 localizam na esteira (pedido da loja; reserva:
    pedido do Bling) e o L3 carrega `carbo_msg_disparo` só com quem casou sem
    dúvida; telefone da esteira, reserva no pedido da PayT.
+   Lotes: `atraso_2026_11_23` (438, enviado em 24/11) e `atraso_2026_11_24`
+   (259, `20261196`). Lote novo = migração nova + o nome do lote nos três L.
+7. ⚠️ **Uma mensagem por PESSOA, não por pedido.** A PK de `carbo_msg_envios`
+   só trava o MESMO pedido; quem já está em `carbo_msg_disparo` por OUTRO
+   pedido (mesma `carbo_fone_chave`) fica fora no L3 ("já recebeu por outro
+   pedido" no L1/L2). O BLOCO R devolve à fila só o 131049 de dia ANTERIOR
+   (limite de marketing por pessoa, libera no dia seguinte); 131026 e 130472
+   não voltam.
 
 ### ⏸️ Carrinho abandonado pela Meta: pronto e DESLIGADO (05/10/2026)
 A terceira pipeline saiu da Evolution e passou a sair pela Cloud API, pelo

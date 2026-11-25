@@ -216,16 +216,36 @@ select d.nome, d.telefone, v.status, v.motivo, v.erro_detalhe,
 
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- LISTA DE 24/11/2026 — os 438 expedidos em 23/11 (migração 20261195, lote
--- `atraso_2026_11_23`). Casa pelo PEDIDO DA LOJA (PAYT_LYK2ZA_…), com o pedido do
--- Bling como reserva; o telefone vem da esteira e, na falta, do pedido da PayT.
--- O link é o do CSV (melhorrastreio).
+-- LISTAS POR LOTE — cada CSV do time vira um lote em `carbo_msg_disparo_entrada`
+-- (migração própria). Lotes: `atraso_2026_11_23` (438, 20261195, enviado em
+-- 24/11) e `atraso_2026_11_24` (259, 20261196). Lote novo: troque o nome nos
+-- TRÊS blocos L.
+-- Casa pelo PEDIDO DA LOJA (PAYT_LYK2ZA_…), com o pedido do Bling como reserva;
+-- o telefone vem da esteira e, na falta, do pedido da PayT. O link é o do CSV.
+-- ⚠️ UMA mensagem por PESSOA, não por pedido: quem já está na lista do disparo
+-- (recebeu, falhou ou espera) por OUTRO pedido fica fora (`já recebeu por outro
+-- pedido`). A PK de `carbo_msg_envios` só trava o MESMO pedido.
 -- ═══════════════════════════════════════════════════════════════════════════
+
+-- BLOCO R — REPESCAGEM do 131049 (limite de marketing da Meta POR PESSOA, que
+-- libera no dia seguinte). Apaga só esses registros: o pedido volta à fila e
+-- sai quando o envio for ligado. 131026 (número sem WhatsApp) e 130472
+-- (pessoa no grupo de controle da Meta) NÃO voltam: tentar de novo só falha.
+-- ⚠️ Rode no MÍNIMO um dia depois da falha.
+-- ESPERADO: as linhas apagadas (pedido, nome, quando falhou).
+delete from public.carbo_msg_envios v
+ using public.carbo_msg_disparo d
+ where v.etapa = 'aviso_atraso' and v.status = 'falhou' and v.erro_codigo = 131049
+   and d.etapa = v.etapa and d.bling_id = v.bling_id
+   and v.enviado_em < date_trunc('day', now() at time zone 'America/Sao_Paulo') at time zone 'America/Sao_Paulo'
+returning v.bling_id, d.nome,
+          to_char(v.enviado_em at time zone 'America/Sao_Paulo', 'DD/MM HH24:MI') as falhou_em;
+
 
 -- BLOCO L1 — LOCALIZAR (só lê). Uma linha por situação, com a contagem.
 -- ESPERADO: quase tudo em `ok`. Qualquer outra situação: rode o L2 e me mande.
 with ent as (
-  select * from public.carbo_msg_disparo_entrada where lote = 'atraso_2026_11_23'
+  select * from public.carbo_msg_disparo_entrada where lote = 'atraso_2026_11_24'
 ),
 m as (
   select ent.id_pedido_loja, e.bling_id, e.pedido_loja, e.pedido_numero::text as pedido_numero,
@@ -259,6 +279,10 @@ s as (
               when exists (select 1 from public.carbo_msg_envios v
                             where v.bling_id = r.bling_id and v.etapa = 'aviso_atraso' and v.status <> 'pendente')
                 then 'já enviado'
+              when exists (select 1 from public.carbo_msg_disparo q
+                        where q.etapa = 'aviso_atraso' and q.bling_id <> r.bling_id
+                          and public.carbo_fone_chave(q.telefone) = public.carbo_fone_chave(r.fone))
+                then 'já recebeu por outro pedido'
               else 'ok' end as situacao
     from r
 )
@@ -271,7 +295,7 @@ select situacao, count(distinct id_pedido_loja) as pedidos,
 
 -- BLOCO L2 — o DETALHE de quem não está `ok` (só lê).
 with ent as (
-  select * from public.carbo_msg_disparo_entrada where lote = 'atraso_2026_11_23'
+  select * from public.carbo_msg_disparo_entrada where lote = 'atraso_2026_11_24'
 ),
 m as (
   select ent.id_pedido_loja, e.bling_id, e.pedido_loja, e.cliente, e.cliente_fone, e.nf_numero::text as nf_numero
@@ -296,22 +320,29 @@ select case when bling_id is null then 'NÃO ACHADO' when achados > 1 then 'AMB�
             when fone is null then 'sem telefone'
             when exists (select 1 from public.carbo_wa_nao_contatar n
                           where n.removido_em is null and n.chave = public.carbo_fone_chave(fone)) then 'não contatar'
+            when exists (select 1 from public.carbo_msg_disparo q
+                        where q.etapa = 'aviso_atraso' and q.bling_id <> bling_id
+                          and public.carbo_fone_chave(q.telefone) = public.carbo_fone_chave(fone)) then 'já recebeu por outro pedido'
             else 'ok, mas NF diferente' end as situacao,
        id_pedido_loja, nf, nf_numero as nf_no_sistema, pedido_bling, primeiro_nome, cliente, fone, bling_id
   from r
  where bling_id is null or achados > 1 or fone is null
     or exists (select 1 from public.carbo_wa_nao_contatar n
                 where n.removido_em is null and n.chave = public.carbo_fone_chave(fone))
+    or exists (select 1 from public.carbo_msg_disparo q
+                        where q.etapa = 'aviso_atraso' and q.bling_id <> bling_id
+                          and public.carbo_fone_chave(q.telefone) = public.carbo_fone_chave(fone))
     or (nf_numero is not null and ltrim(nf_numero, '0') <> ltrim(nf, '0'))
  order by 1, id_pedido_loja;
 
 
 -- BLOCO L3 — CARREGAR na lista do disparo só os `ok`. Não envia nada (o envio
 -- continua desligado). A mesma PESSOA com dois pedidos entra UMA vez (o pedido
--- mais recente). Rodar de novo não duplica.
+-- mais recente), e quem já está na lista por pedido de OUTRO lote não entra.
+-- Rodar de novo não duplica.
 -- ESPERADO: `carregados_agora` = os `ok` do L1 menos as pessoas repetidas.
 with ent as (
-  select * from public.carbo_msg_disparo_entrada where lote = 'atraso_2026_11_23'
+  select * from public.carbo_msg_disparo_entrada where lote = 'atraso_2026_11_24'
 ),
 m as (
   select ent.id_pedido_loja, e.bling_id, e.cliente, e.cliente_fone, e.data_pedido
@@ -339,12 +370,15 @@ bons as (
    where r.achados = 1 and r.fone is not null
      and not exists (select 1 from public.carbo_wa_nao_contatar x
                       where x.removido_em is null and x.chave = public.carbo_fone_chave(r.fone))
+     and not exists (select 1 from public.carbo_msg_disparo q
+                        where q.etapa = 'aviso_atraso' and q.bling_id <> r.bling_id
+                          and public.carbo_fone_chave(q.telefone) = public.carbo_fone_chave(r.fone))
 ),
 ins as (
   insert into public.carbo_msg_disparo (etapa, bling_id, telefone, nome, dados, observacao)
   select 'aviso_atraso', bling_id, fone, coalesce(nullif(btrim(primeiro_nome), ''), cliente),
          jsonb_build_object('link_rastreio', link_rastreio),
-         'lote atraso_2026_11_23 · ' || id_pedido_loja || ' · NF ' || nf
+         'lote atraso_2026_11_24 · ' || id_pedido_loja || ' · NF ' || nf
     from bons where n = 1
   on conflict (etapa, bling_id) do nothing
   returning 1
