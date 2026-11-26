@@ -44,6 +44,31 @@ export const SECOES_PAINEIS: Secao[] = [
           { n: 11, titulo: "Legenda", texto: "Verde = conquistado. Âmbar = conquistado dentro do período escolhido (só aparece com os municípios). Escuro = ainda não." },
           { n: 12, titulo: "Conquistas do período", texto: "As cidades mais recentes, com o dia da primeira compra. Mostra até 12; quando há mais, diz “12 de N”." },
           { n: 13, titulo: "Cidades por estado", texto: "Quantos municípios de cada estado já acenderam, de quantos existem. Clique num estado para abri-lo no mapa." },
+          { n: 14, titulo: "Mapa / Vendas por estado", texto: "Troca o mapa pelo ranking de vendas: quanto cada estado, cada cidade e cada produto vendeu, com B2B e on-line separados. O período e o estado escolhido continuam os mesmos." },
+        ],
+      },
+      {
+        titulo: "Vendas por estado",
+        print: { chave: "mapa-vendas", legenda: "O Brasil, com B2B e on-line juntos e o ranking por pedidos." },
+        itens: [
+          { n: 1, titulo: "A visão", texto: "Abre com o botão “Vendas por estado” no topo; “Mapa” volta. O endereço guarda a escolha, então o link abre igual." },
+          { n: 2, titulo: "Tudo · B2B · On-line", texto: "Qual canal contar. On-line é a venda das lojas e marketplaces (Nuvemshop, Mercado Livre, Amazon, Shopee, PayT); B2B é o resto. Em “Tudo” as barras mostram as duas partes: verde = B2B, azul = on-line. Use B2B e On-line separados quando um canal for muito maior que o outro — senão o grande esconde o pequeno." },
+          { n: 3, titulo: "Pedidos · Unidades · Faturamento", texto: "Por qual número ordenar e medir as barras. Unidades conta o que o cliente levou: um kit de 5 frascos são 5 unidades, um kit de sachês são 10." },
+          { n: 4, titulo: "Regiões", texto: "Quanto de cada região entra no total do período, em %. É a conta que ajuda a decidir de onde despachar (Natal ou o CD de São Paulo)." },
+          { n: 5, titulo: "Estados", texto: "Do que mais vendeu ao que menos vendeu, com a % do total. Embaixo: pedidos, unidades e em quantas cidades houve venda. Clique num estado para abri-lo." },
+          { n: 6, titulo: "Produtos", texto: "O que foi vendido, com a embalagem (avulsa ou kit de N), os pedidos, a quantidade vendida (kits contam como 1), as unidades e a % das unidades. Em “Tudo”, a mesma embalagem do mesmo produto junta os dois canais e diz quanto foi de cada um. Serviços (descarbonização) ficam à parte, no rodapé, porque não são unidade de produto." },
+          { n: 7, titulo: "Sem cadastro", texto: "Item de pedido que não casou com nenhum produto do catálogo nem com o mapa de SKU. Ele conta como 1 unidade por item, que pode estar errado. O código ao lado é o que o pedido trouxe; mande ao TI ou cadastre em Ops → Suprimentos → Mapeamento SKU." },
+          { titulo: "O que entra na conta", texto: "As mesmas vendas do mapa: pedidos que não são orçamento nem cancelados e que não foram tirados das métricas, pela cidade de entrega (ou a de cobrança) e pela data da venda. A venda on-line só aparece depois de faturada no Bling, então pedido pago e ainda sem nota não conta aqui." },
+        ],
+      },
+      {
+        titulo: "Um estado aberto",
+        print: { chave: "mapa-vendas-estado", legenda: "O Rio Grande do Norte aberto, com B2B e on-line juntos." },
+        itens: [
+          { n: 1, titulo: "O estado", texto: "Os totais do estado no canal escolhido e, em “Tudo”, a barra de quanto foi B2B e quanto foi on-line. “Brasil” fecha o estado." },
+          { n: 2, titulo: "Cidades", texto: "O ranking das cidades do estado, com pedidos, unidades, faturamento e a % do estado. Mostra 30; “Mostrar todas” traz o resto." },
+          { n: 3, titulo: "Produtos do estado", texto: "A mesma tabela de produtos, só com as vendas do estado." },
+          { n: 4, titulo: "Serviços", texto: "A descarbonização vendida no estado: pedidos e veículos." },
         ],
       },
       {

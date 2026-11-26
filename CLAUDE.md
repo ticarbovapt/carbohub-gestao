@@ -4004,6 +4004,27 @@ mkt    Quadros (Board)                          admin·mkt·atendimento  Esteira
 6. ⚠️ A RAIZ (controle, congelada) tem quatro quadros (`CRMKanbanBoard`,
    `LogisticsKanban`, `OSKanbanBoard`, `OPKanbanBoard`) e NÃO foi tocada.
 
+### Admin: Mapa da Conquista ganhou "Vendas por estado" (26/11/2026)
+Pedido do dono do processo: ver estado a estado quanto se vende (cidades,
+pedidos, unidades, produto por embalagem) com B2B e on-line SEPARADOS, para
+decidir se despachar de Natal sai mais barato que do CD de SP. `?ver=vendas`
+em `/mapa-da-conquista` (`components/mapa/VendasPorEstado.tsx`, `?canal=`,
+`?medida=`; período e `?uf=` são os do mapa). Dados:
+`carbo_mapa_vendas(de, ate, uf)` (`20261199`, jsonb, guarda `carbo_admin`).
+1. ⚠️ **Todo número vem em `_b2b` e `_online`** e a tela soma ou escolhe
+   (`noCanal`). On-line = `segmento = 'online'`. "Tudo" mostra a barra empilhada
+   — é o que impede 99 mil de B2B de esconder mil de on-line.
+2. ⚠️ **A base é a do `mapa_conquista`** (sem orçamento/cancelado/
+   `excluir_metricas`, cidade pela `carbo_cidade_canonica`, data efetiva).
+   On-line só entra FATURADO (atravessou do Bling); o resto do e-commerce mora
+   em `ecommerce_orders` e não está aqui.
+3. **Unidade = o que o cliente LEVOU**: item → `product_id` (sobe ao pai de
+   bonificação/faixa) → `sku_product_mappings` (genérico vence; pack =
+   `display_units_per_pack`) → código único do catálogo → senão `conhecido =
+   false`, 1 por item, e a tela MOSTRA ("sem cadastro"). Serviço vem à parte.
+   ⚠️ Kit B2B vendido por `product_id` conta 1 por item (o catálogo não guarda
+   o tamanho do kit) — não medido em produção.
+
 ### Admin: Visão Geral e Estratégico SAÍRAM (20/10/2026)
 `/dashboards/comercial` e `/dashboards/estrategico` foram apagados, por decisão do
 dono do processo: o Dashboard Comercial (`/comercial/dashboard`) cobre os dois,

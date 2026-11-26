@@ -8,11 +8,12 @@ import "leaflet/dist/leaflet.css";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Loader2, MapPin, Sparkles, Store, Building2, ShoppingCart, AlertTriangle, Grid3x3, Map as MapIcon, Maximize2, Minimize2 } from "lucide-react";
+import { ArrowLeft, BarChart3, Loader2, MapPin, Sparkles, Store, Building2, ShoppingCart, AlertTriangle, Grid3x3, Map as MapIcon, Maximize2, Minimize2 } from "lucide-react";
 import {
   useCidadesConquistadas, useMunicipiosIBGE, useMalha,
   UF_POR_CODIGO, type CidadeConquistada, type FiltroPresenca, type Granularidade,
 } from "@/hooks/useMapaConquista";
+import VendasPorEstado from "@/components/mapa/VendasPorEstado";
 
 /**
  * Mapa da conquista — onde a Carbo já chegou.
@@ -201,7 +202,13 @@ export default function MapaConquista() {
    * ao mapa — cerca de um terço a mais de Brasil. É também o formato para
    * deixar a tela numa TV, que era a intenção original desta página. */
   const [telaUrl, setTelaUrl] = useParamUrl("tela", "");
-  const telaCheia = telaUrl === "cheia";
+  // `?ver=vendas`: o ranking de vendas por estado, cidade e produto (B2B e
+  // on-line separados). O mapa diz ONDE chegamos; esta visão, QUANTO se vende.
+  // Ela não tem tela cheia nem filtro de presença: o período e o estado (`uf`)
+  // são os mesmos do mapa, e trocar de visão os mantém.
+  const [verUrl, setVerUrl] = useParamUrl("ver", "");
+  const verVendas = verUrl === "vendas";
+  const telaCheia = telaUrl === "cheia" && !verVendas;
 
   // Comparação em string ISO: `primeira_venda` é 'YYYY-MM-DD', e nesse formato
   // a ordem lexical É a cronológica. Converter para Date daria fuso de brinde.
@@ -400,7 +407,17 @@ export default function MapaConquista() {
             <MapPin className="h-6 w-6 text-emerald-500" />
             Mapa da conquista
           </h1>
-          {uf && (
+          <div className="flex items-center gap-1 rounded-md border p-0.5">
+            <Button size="sm" variant={!verVendas ? "secondary" : "ghost"} className="h-7 gap-1.5"
+                    onClick={() => setVerUrl(null)}>
+              <MapIcon className="h-4 w-4" /> Mapa
+            </Button>
+            <Button size="sm" variant={verVendas ? "secondary" : "ghost"} className="h-7 gap-1.5"
+                    onClick={() => setVerUrl("vendas")}>
+              <BarChart3 className="h-4 w-4" /> Vendas por estado
+            </Button>
+          </div>
+          {uf && !verVendas && (
             <Button variant="outline" size="sm" onClick={() => setUf(null)}>
               <ArrowLeft className="h-4 w-4 mr-1" /> Ver o Brasil
             </Button>
@@ -409,7 +426,7 @@ export default function MapaConquista() {
       )}
 
       {/* Placar */}
-      <div className={`grid shrink-0 grid-cols-2 gap-3 md:grid-cols-5 ${telaCheia ? "hidden" : ""}`}>
+      <div className={`grid shrink-0 grid-cols-2 gap-3 md:grid-cols-5 ${telaCheia || verVendas ? "hidden" : ""}`}>
         <Placar titulo="Cidades" valor={placar.cidades.toLocaleString("pt-BR")}
           rodape={placar.municipiosBR ? `de ${placar.municipiosBR.toLocaleString("pt-BR")} no Brasil` : "—"} />
         <Placar titulo="Estados" valor={`${placar.estados}`} rodape="de 27" />
@@ -420,7 +437,7 @@ export default function MapaConquista() {
 
       {/* Filtro de presença + período + granularidade do Brasil */}
       <div className="flex shrink-0 flex-wrap items-center gap-2">
-        {FILTROS.map((f) => (
+        {!verVendas && FILTROS.map((f) => (
           <Button key={f.id} size="sm" variant={filtro === f.id ? "default" : "outline"}
             onClick={() => setFiltro(f.id)} className="gap-1.5">
             {f.icon}{f.label}
@@ -431,11 +448,13 @@ export default function MapaConquista() {
             placar de novas e a lista lateral. Um seletor que mudasse só a lista
             deixaria o mapa contando outra coisa — que era exatamente o problema
             de "30 dias" pintando o mapa enquanto o painel dizia "do mês". */}
-        <Button size="sm" variant={telaCheia ? "default" : "outline"}
-                className="gap-1.5" onClick={() => setTelaUrl(telaCheia ? null : "cheia")}>
-          {telaCheia ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-          {telaCheia ? "Sair da tela cheia" : "Tela cheia"}
-        </Button>
+        {!verVendas && (
+          <Button size="sm" variant={telaCheia ? "default" : "outline"}
+                  className="gap-1.5" onClick={() => setTelaUrl(telaCheia ? null : "cheia")}>
+            {telaCheia ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            {telaCheia ? "Sair da tela cheia" : "Tela cheia"}
+          </Button>
+        )}
 
         {telaCheia && uf && (
           <Button variant="outline" size="sm" onClick={() => setUf(null)}>
@@ -446,7 +465,7 @@ export default function MapaConquista() {
         <PeriodoFiltro value={periodo} onChange={setPeriodo} longos disableFuture />
 
         {/* Só faz sentido no Brasil: dentro de um estado já é sempre município. */}
-        {!uf && (
+        {!uf && !verVendas && (
           <div className="flex items-center gap-1 ml-auto rounded-md border p-0.5">
             <Button size="sm" variant={granularidade === "estado" ? "secondary" : "ghost"}
               onClick={() => setGranularidade("estado")} className="gap-1.5 h-7">
@@ -460,6 +479,11 @@ export default function MapaConquista() {
         )}
       </div>
 
+      {verVendas && (
+        <VendasPorEstado de={periodo.from} ate={periodo.to} rotuloPeriodo={rotuloPeriodo} uf={uf} setUf={setUf} />
+      )}
+
+      {!verVendas && <>
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-4">
         <Card className={`flex min-h-0 flex-col overflow-hidden ${telaCheia ? "lg:col-span-4" : "lg:col-span-3"}`}>
           {/* ⚠️ ALTURA POR FLEX, não por `calc(100vh - 300px)`.
@@ -611,6 +635,7 @@ export default function MapaConquista() {
           </CardContent>
         </Card>
       )}
+      </>}
     </div>
   );
 }

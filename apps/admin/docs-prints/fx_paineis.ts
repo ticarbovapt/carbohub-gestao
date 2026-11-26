@@ -239,6 +239,65 @@ const pedidosEcom = () => PLATS.map(([platform, , real], i) => ({
   id: `eo${i}`, platform, order_id: `CFG-${i}`, total: real, status: "paid", ordered_at: isoAtras(3),
 }));
 
+// ── Mapa da Conquista · Vendas por estado (rpc carbo_mapa_vendas) ───────────
+// Números FICTÍCIOS, de propósito com o Nordeste pesado em B2B e SP pesado em
+// on-line — é o contraste que a tela existe para mostrar.
+const REG: Record<string, string> = { RN: "Nordeste", PE: "Nordeste", PB: "Nordeste", CE: "Nordeste", BA: "Nordeste", AL: "Nordeste", SE: "Nordeste", SP: "Sudeste", MG: "Sudeste", RJ: "Sudeste", PR: "Sul", RS: "Sul", GO: "Centro-Oeste", DF: "Centro-Oeste", PA: "Norte" };
+// uf: [pedidos b2b, pedidos online, unidades b2b, unidades online, valor b2b, valor online, cidades b2b, cidades online, cidades]
+const EST: Record<string, number[]> = {
+  RN: [142, 38, 9840, 260, 128400, 5900, 14, 9, 18], PE: [88, 41, 6120, 290, 79300, 6300, 9, 12, 16],
+  PB: [41, 17, 2380, 120, 30100, 2600, 5, 6, 8], CE: [36, 29, 2050, 210, 26600, 4500, 4, 10, 11],
+  BA: [19, 34, 980, 240, 12700, 5200, 3, 14, 15], AL: [9, 8, 410, 55, 5300, 1200, 2, 4, 5],
+  SE: [6, 6, 290, 40, 3800, 900, 1, 3, 3], SP: [27, 210, 1450, 1480, 18900, 32400, 6, 88, 90],
+  MG: [4, 62, 160, 430, 2100, 9400, 2, 31, 32], RJ: [2, 58, 90, 400, 1200, 8800, 1, 22, 22],
+  PR: [3, 33, 120, 230, 1600, 5100, 1, 17, 17], RS: [0, 29, 0, 205, 0, 4500, 0, 16, 16],
+  GO: [5, 18, 200, 125, 2600, 2700, 2, 9, 10], DF: [0, 14, 0, 95, 0, 2100, 0, 1, 1], PA: [0, 9, 0, 60, 0, 1300, 0, 6, 6],
+};
+const CID_RN: [string, ...number[]][] = [
+  ["NATAL", 61, 21, 4380, 150, 55200, 3300], ["PARNAMIRIM", 22, 7, 1640, 48, 21100, 1100],
+  ["MOSSORO", 19, 3, 1390, 20, 17800, 450], ["SAO GONCALO DO AMARANTE", 11, 2, 760, 12, 9600, 260],
+  ["MACAIBA", 9, 1, 540, 6, 6900, 130], ["CAICO", 7, 1, 410, 6, 5300, 130],
+  ["CEARA-MIRIM", 5, 1, 300, 6, 3900, 130], ["CURRAIS NOVOS", 4, 0, 230, 0, 3000, 0],
+  ["ASSU", 2, 1, 110, 6, 1500, 130], ["SANTA CRUZ", 2, 1, 80, 6, 1100, 130],
+];
+// [canal, produto, pack, pedidos, quantidade, unidades, valor, conhecido?, codigo?, servico?]
+const PROD_BR: [string, string, number, number, number, number, number, boolean?, string?, boolean?][] = [
+  ["b2b", "CarboZé 100ml", 1, 248, 14120, 14120, 220300],
+  ["b2b", "CarboZé 1 Litro", 1, 96, 3880, 3880, 128600],
+  ["b2b", "CarboZé Sachê 10ml", 1, 61, 5400, 5400, 21600],
+  ["b2b", "CarboPRO 100ml", 1, 22, 1250, 1250, 26300],
+  ["online", "CarboZé 100ml", 5, 402, 418, 2090, 59800],
+  ["online", "Kit CarboZé Sachê 10ml", 10, 118, 124, 1240, 18400],
+  ["online", "CarboZé 100ml", 1, 77, 94, 94, 1450],
+  ["online", "CarboZé 100ml", 3, 54, 55, 165, 4900],
+  ["online", "Kit Viagem Carbo", 1, 6, 6, 6, 540, false, "KIT-VIAGEM"],
+  ["b2b", "Descarbonização CarboVAPT", 1, 14, 38, 38, 26600, true, undefined, true],
+];
+const PROD_RN: typeof PROD_BR = [
+  ["b2b", "CarboZé 100ml", 1, 104, 6380, 6380, 82400],
+  ["b2b", "CarboZé 1 Litro", 1, 41, 1690, 1690, 31200],
+  ["b2b", "CarboZé Sachê 10ml", 1, 25, 1770, 1770, 14800],
+  ["online", "CarboZé 100ml", 5, 24, 25, 125, 3700],
+  ["online", "Kit CarboZé Sachê 10ml", 10, 9, 9, 90, 1300],
+  ["online", "CarboZé 100ml", 1, 9, 45, 45, 900],
+  ["b2b", "Descarbonização CarboVAPT", 1, 6, 17, 17, 11900, true, undefined, true],
+];
+const mapaVendas = (a: Record<string, unknown>) => {
+  const uf = typeof a.p_uf === "string" && a.p_uf ? a.p_uf : null;
+  const estados = Object.entries(EST).map(([u, v]) => ({
+    uf: u, regiao: REG[u], pedidos_b2b: v[0], pedidos_online: v[1], unidades_b2b: v[2], unidades_online: v[3],
+    valor_b2b: v[4], valor_online: v[5], cidades_b2b: v[6], cidades_online: v[7], cidades: v[8],
+  }));
+  const cidades = uf === "RN" ? CID_RN.map(([cidade, pb, po, ub, uo, vb, vo]) => ({
+    cidade, pedidos_b2b: pb, pedidos_online: po, unidades_b2b: ub, unidades_online: uo, valor_b2b: vb, valor_online: vo,
+  })) : uf ? [] : null;
+  const produtos = (uf === "RN" ? PROD_RN : uf ? [] : PROD_BR).map(([canal, produto, pack, pedidos, quantidade, unidades, valor, conhecido, codigo, servico]) => ({
+    canal, chave: produto.toLowerCase(), produto, pack, servico: !!servico, conhecido: conhecido !== false,
+    codigo: codigo ?? null, pedidos, quantidade, unidades, valor,
+  }));
+  return { estados, cidades, produtos, uf, de: a.p_de, ate: a.p_ate };
+};
+
 export const FX: Record<string, unknown> = {
   mapa_conquista: mapaConquista,
   warehouse_stock: porRota("warehouse_stock", supEstoque),
@@ -265,4 +324,5 @@ export const RPC_FX: Record<string, unknown> = {
   admin_get_licensees_kpis: () => [{ avg_ticket: r2(totRec / totServ) }],
   admin_get_licensees_timeseries: licSerie,
   get_global_recent_services: recentes,
+  carbo_mapa_vendas: mapaVendas,
 };

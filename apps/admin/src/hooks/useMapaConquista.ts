@@ -133,3 +133,88 @@ export const UF_POR_CODIGO: Record<string, string> = {
   "28": "SE", "29": "BA", "31": "MG", "32": "ES", "33": "RJ", "35": "SP",
   "41": "PR", "42": "SC", "43": "RS", "50": "MS", "51": "MT", "52": "GO", "53": "DF",
 };
+
+// ─── Vendas por estado (26/11/2026, `carbo_mapa_vendas`) ─────────────────────
+
+/** Tudo · B2B · On-line. On-line = `segmento = 'online'`; o resto é B2B. */
+export type CanalMapa = "todos" | "b2b" | "online";
+
+/** Uma UF ou cidade, com cada número em B2B e on-line SEPARADOS — é a tela
+ *  que soma ou escolhe, para nenhum número sair mascarado pelo outro canal. */
+export interface LinhaCanal {
+  pedidos_b2b: number; pedidos_online: number;
+  unidades_b2b: number; unidades_online: number;
+  valor_b2b: number; valor_online: number;
+}
+export interface EstadoVendas extends LinhaCanal {
+  uf: string; regiao: string | null;
+  cidades: number; cidades_b2b: number; cidades_online: number;
+}
+export interface CidadeVendas extends LinhaCanal { cidade: string }
+export interface ProdutoVendas {
+  canal: "b2b" | "online";
+  chave: string;
+  produto: string;
+  /** Unidades por venda (kit de 5 = 5). 1 = avulsa, ou kit sem cadastro de embalagem. */
+  pack: number;
+  servico: boolean;
+  /** `false` = o item não casou com o catálogo: vale o nome dele e 1 por item. */
+  conhecido: boolean;
+  codigo: string | null;
+  pedidos: number;
+  quantidade: number;
+  unidades: number;
+  valor: number;
+}
+export interface MapaVendas {
+  estados: EstadoVendas[];
+  cidades: CidadeVendas[] | null;
+  produtos: ProdutoVendas[];
+}
+
+/** O número de UMA linha no canal escolhido. */
+export function noCanal(l: LinhaCanal, campo: "pedidos" | "unidades" | "valor", canal: CanalMapa): number {
+  const b2b = Number(l[`${campo}_b2b`] ?? 0);
+  const online = Number(l[`${campo}_online`] ?? 0);
+  return canal === "b2b" ? b2b : canal === "online" ? online : b2b + online;
+}
+
+/**
+ * Agregado no BANCO (jsonb): a tela não baixa pedido nenhum. Com `uf` vêm as
+ * cidades e os produtos daquele estado; sem, os produtos do Brasil.
+ * ⚠️ Erro SOBE: "sem acesso" ou "banco sem a função" não podem virar
+ * "não vendemos nada".
+ */
+export function useMapaVendas(de: string, ate: string, uf: string | null, ligado = true) {
+  return useQuery({
+    queryKey: ["mapa-vendas", de, ate, uf],
+    enabled: ligado && !!de && !!ate,
+    placeholderData: (anterior) => anterior,
+    queryFn: async (): Promise<MapaVendas> => {
+      const { data, error } = await (supabase as any)
+        .rpc("carbo_mapa_vendas", { p_de: de, p_ate: ate, p_uf: uf });
+      if (error) {
+        if (error.code === "PGRST202") throw new Error("O banco ainda não tem a consulta de vendas por estado.");
+        throw new Error(error.message);
+      }
+      const num = (o: any) => Object.fromEntries(Object.entries(o).map(([k, v]) =>
+        [k, typeof v === "string" && /^-?\d+(\.\d+)?$/.test(v) && !["uf", "cidade", "codigo", "chave", "produto"].includes(k)
+          ? Number(v) : v]));
+      return {
+        estados: ((data?.estados ?? []) as any[]).map(num) as unknown as EstadoVendas[],
+        cidades: data?.cidades ? ((data.cidades as any[]).map(num) as unknown as CidadeVendas[]) : null,
+        produtos: ((data?.produtos ?? []) as any[]).map(num) as unknown as ProdutoVendas[],
+      };
+    },
+    staleTime: 60_000,
+  });
+}
+
+export const NOME_UF: Record<string, string> = {
+  AC: "Acre", AL: "Alagoas", AM: "Amazonas", AP: "Amapá", BA: "Bahia", CE: "Ceará",
+  DF: "Distrito Federal", ES: "Espírito Santo", GO: "Goiás", MA: "Maranhão", MG: "Minas Gerais",
+  MS: "Mato Grosso do Sul", MT: "Mato Grosso", PA: "Pará", PB: "Paraíba", PE: "Pernambuco",
+  PI: "Piauí", PR: "Paraná", RJ: "Rio de Janeiro", RN: "Rio Grande do Norte", RO: "Rondônia",
+  RR: "Roraima", RS: "Rio Grande do Sul", SC: "Santa Catarina", SE: "Sergipe", SP: "São Paulo",
+  TO: "Tocantins",
+};

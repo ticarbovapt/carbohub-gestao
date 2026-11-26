@@ -65,6 +65,22 @@ export const SHOTS = [
     [11, (p) => p.getByText("Ainda não", { exact: true }).locator("xpath=ancestor::div[contains(@class,'absolute')][1]")],
     [12, (p) => p.locator("main div.rounded-lg, main div.rounded-xl").filter({ has: p.getByText(/Conquistas ·/) }).last()],
     [13, (p) => p.locator("main div.rounded-lg, main div.rounded-xl").filter({ has: p.getByText("Cidades por estado", { exact: true }) }).last()],
+    [14, (p) => btn("Vendas por estado")(p).locator("..")],
+  ] },
+  { chave: "mapa-vendas", papel: "gestor", url: "/mapa-da-conquista?ver=vendas", viewport: ALTO(1250), espera: 800, marcas: [
+    [1, (p) => btn("Vendas por estado")(p).locator("..")],
+    [2, (p) => btn("On-line")(p).locator("..")],
+    [3, (p) => btn("Faturamento")(p).locator("..")],
+    [4, (p) => p.locator("main div.rounded-lg, main div.rounded-xl").filter({ has: p.getByText("Nordeste", { exact: true }) }).first()],
+    [5, (p) => p.locator("main div.rounded-lg, main div.rounded-xl").filter({ has: p.getByText(/^Estados por/) }).last()],
+    [6, (p) => p.locator("main div.rounded-lg, main div.rounded-xl").filter({ has: p.getByText(/^Produtos ·/) }).last()],
+    [7, txt("sem cadastro · KIT-VIAGEM")],
+  ] },
+  { chave: "mapa-vendas-estado", papel: "gestor", url: "/mapa-da-conquista?ver=vendas&uf=RN", viewport: ALTO(1750), espera: 800, marcas: [
+    [1, (p) => p.locator("main div.rounded-lg, main div.rounded-xl").filter({ has: p.getByRole("button", { name: "Brasil" }) }).last()],
+    [2, (p) => p.locator("main div.rounded-lg, main div.rounded-xl").filter({ has: p.getByText(/^Cidades por/) }).last()],
+    [3, (p) => p.locator("main div.rounded-lg, main div.rounded-xl").filter({ has: p.getByText(/^Produtos ·/) }).last()],
+    [4, txt("Serviços")],
   ] },
   { chave: "mapa-nao-localizadas", papel: "gestor", url: "/mapa-da-conquista", viewport: ALTO(1300), antes: ibge,
     clip: (p) => p.locator("main div.rounded-lg, main div.rounded-xl").filter({ has: p.getByText(/não localizada/) }).last(), marcas: [
