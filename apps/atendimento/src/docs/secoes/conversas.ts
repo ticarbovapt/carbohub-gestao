@@ -159,6 +159,34 @@ export const SECOES_CONVERSAS: Secao[] = [
         ],
       },
       {
+        titulo: "Responder citando e reagir",
+        texto:
+          "Passe o mouse sobre uma mensagem (no celular os botões ficam sempre à mostra) para citá-la na resposta ou reagir com um emoji, como no WhatsApp. As duas coisas chegam ao cliente: ele vê a mensagem citada em cima da sua resposta e a reação no balão dele. Só funcionam com a janela de 24 h aberta.",
+        print: { chave: "conversa-citar", legenda: "A conversa do Rodrigo: a pergunta dele sendo citada, e o comprovante com a nossa reação." },
+        itens: [
+          { n: 1, titulo: "Reagir", texto: "Abre os emoji para reagir à mensagem. Só aparece nas mensagens do cliente." },
+          { n: 2, titulo: "Responder citando", texto: "Prende esta mensagem à sua próxima resposta (texto, foto, documento ou áudio)." },
+          { n: 3, titulo: "Nossa reação", texto: "O emoji que o time pôs, embaixo da mensagem. Passe o mouse para ver quem reagiu; clique para tirar a reação (o cliente vê que ela saiu). Reagir não conta como resposta: a conversa continua esperando alguém escrever." },
+          { n: 4, titulo: "Mensagem citada", texto: "Em cima da resposta aparece quem disse e o começo do que disse. Clique para ir até a mensagem original." },
+          { n: 5, titulo: "Respondendo…", texto: "A mensagem que vai junto com a próxima resposta. O × (ou a tecla Esc) desiste de citar; o texto escrito continua." },
+        ],
+      },
+      {
+        titulo: "Escolher a reação",
+        print: { chave: "conversa-reagir", legenda: "Os emoji abertos sobre a pergunta do Rodrigo." },
+        itens: [
+          { n: 1, titulo: "Emoji", texto: "Clique num para reagir. Clicar no mesmo emoji que já está na mensagem tira a reação; clicar em outro troca. Vale uma reação nossa por mensagem, como no WhatsApp." },
+        ],
+      },
+      {
+        titulo: "Quando o cliente reage",
+        print: { chave: "conversa-reacao-cliente", legenda: "A Luana reagiu com ❤️ à resposta do Rafael." },
+        itens: [
+          { n: 1, titulo: "Reação do cliente", texto: "O emoji fica embaixo da mensagem que ele reagiu. Se ele tirar a reação, o emoji some." },
+          { n: 2, titulo: "Quando reagiu", texto: "Na hora em que aconteceu aparece “reagiu a” e o começo da mensagem reagida — clique para ir até ela. Assim uma reação a algo antigo não passa despercebida. Se ele tirou a reação, aparece “tirou a reação”." },
+        ],
+      },
+      {
         titulo: "Agendar uma mensagem",
         print: { chave: "conversa-agendar", legenda: "A conversa do Rodrigo, com uma mensagem já agendada e outra sendo agendada." },
         itens: [

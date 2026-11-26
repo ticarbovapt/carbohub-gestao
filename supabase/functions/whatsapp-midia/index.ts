@@ -30,6 +30,7 @@ import { webmParaOgg } from "../_shared/webmParaOgg.ts";
 import { guardarNoCofre } from "../_shared/waMidiaCofre.ts";
 
 import { ehTimeInterno } from "../_shared/interfacesInternas.ts";
+import { alvoDaConversa, comCitacao } from "../_shared/waCitacao.ts";
 import { cors } from "../_shared/cors.ts";
 // deno-lint-ignore-file no-explicit-any
 
@@ -94,6 +95,14 @@ Deno.serve(async (req: Request) => {
 
   if (!waId) return json({ error: "wa_id ausente" }, 400);
   if (!(arquivo instanceof File)) return json({ error: "arquivo ausente" }, 400);
+
+  // Responder CITANDO (26/11/2026): a foto/áudio sai com a mensagem citada em
+  // cima, no celular do cliente. Tem de ser desta conversa (ver waCitacao.ts).
+  const respondeA = String(form.get("responde_a") ?? "").trim();
+  if (respondeA) {
+    const alvo = await alvoDaConversa(supabase, numeroId, waId, respondeA);
+    if (!alvo.ok) return json({ error: "mensagem_fora_da_conversa", detalhe: alvo.erro }, 400);
+  }
 
   // ⚠️ Recusa AQUI, com frase, em vez de deixar a Meta recusar com código. O
   // webm do Chrome é o caso mais provável e tem explicação própria.
@@ -193,7 +202,7 @@ Deno.serve(async (req: Request) => {
   await guardarNoCofre(supabase, mediaId, corpoArquivo, veredito.mime!);
 
   // ── 6. Manda ────────────────────────────────────────────────────────────
-  const payload = corpoDaMidia(waId, veredito.tipo!, mediaId, legenda, nomeUpload);
+  const payload = comCitacao(corpoDaMidia(waId, veredito.tipo!, mediaId, legenda, nomeUpload), respondeA);
 
   let resposta: any = null, status = 0;
   try {
@@ -226,6 +235,7 @@ Deno.serve(async (req: Request) => {
       // escrito — ruído embaixo da própria imagem.
       texto: legenda || (veredito.tipo === "document" ? nomeUpload : null) || null,
       midia_id: mediaId, midia_mime: veredito.mime,
+      responde_a: respondeA || null,
       ocorrido_em: new Date().toISOString(),
       // ⚠️ AUTORIA EM COLUNA, não só no payload. O `payload.por` continua
       // (histórico já gravado depende dele), mas quem a tela lê é a coluna:

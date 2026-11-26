@@ -472,6 +472,15 @@ export function useConversasAoVivo(numeroId: string | null, waAberto: string | n
       // linha sem inserir nada.
       .on("postgres_changes" as never,
           { event: "*", schema: "public", table: "carbo_msg_envios", filter: doNumero }, invalidar)
+      // A reação da colega: só a conversa aberta muda (a lista não mostra reação).
+      .on("postgres_changes" as never,
+          { event: "*", schema: "public", table: "carbo_wa_reacoes", filter: doNumero },
+          (ev: any) => {
+            const wa = ev?.new?.wa_id ?? ev?.old?.wa_id ?? null;
+            if (wa && wa === aberto.current) {
+              qc.invalidateQueries({ queryKey: ["wa-conversas", "mensagens", numeroId, wa] });
+            }
+          })
       // ⚠️ E a marca de resolvida: sem ela, duas pessoas atendendo veriam filas
       // diferentes, e a segunda responderia o que a primeira já respondeu.
       .on("postgres_changes" as never,
@@ -512,15 +521,17 @@ export function useConversasAoVivo(numeroId: string | null, waAberto: string | n
 export function useResponder() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ wa_id, texto, numero_id }:
-                       { wa_id: string; texto: string; numero_id?: string | null }) => {
+    mutationFn: async ({ wa_id, texto, numero_id, responde_a }:
+                       { wa_id: string; texto: string; numero_id?: string | null;
+                         /** O wamid CITADO (responder citando). O cliente vê a citação. */
+                         responde_a?: string | null }) => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Sessão expirada. Faça login novamente.");
 
       const res = await supabase.functions.invoke("whatsapp-responder", {
         // ⚠️ POR QUAL número a resposta sai. A função tem reserva no número de
         // serviço, então omitir não quebra — manda do número errado, que é pior.
-        body: { wa_id, texto, numero_id },
+        body: { wa_id, texto, numero_id, ...(responde_a ? { responde_a } : {}) },
       });
 
       if (res.error) {
@@ -536,6 +547,46 @@ export function useResponder() {
       return res.data;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["wa-conversas"] }); },
+  });
+}
+
+/**
+ * Reagir a uma mensagem do CLIENTE (26/11/2026). Emoji vazio tira a reação.
+ * O cliente vê a reação no WhatsApp dele. ⚠️ Reagir NÃO é responder: a reação
+ * não entra na conversa como fala nossa (não fecha a espera nem conta no SLA).
+ */
+export function useReagir() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ wa_id, numero_id, alvo, emoji }:
+                       { wa_id: string; numero_id?: string | null; alvo: string; emoji: string }) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Sessão expirada. Faça login novamente.");
+      const res = await supabase.functions.invoke("whatsapp-responder", {
+        body: { wa_id, numero_id, reacao: { alvo, emoji } },
+      });
+      if (res.error) {
+        const ctx = (res.error as { context?: Response }).context;
+        const corpo = ctx ? await ctx.json().catch(() => null) : null;
+        throw new Error(corpo?.detalhe || corpo?.error || res.error.message || "Falhou");
+      }
+      return res.data;
+    },
+    // Na hora: o emoji aparece no clique, e volta se a Meta recusar.
+    onMutate: async ({ wa_id, numero_id, alvo, emoji }) => {
+      const chave = ["wa-conversas", "mensagens", numero_id ?? null, wa_id];
+      await qc.cancelQueries({ queryKey: chave });
+      const antes = qc.getQueryData<MensagemConversa[]>(chave);
+      if (antes) {
+        qc.setQueryData<MensagemConversa[]>(chave, antes.map((m) => m.wamid === alvo
+          ? { ...m, nossa_reacao: emoji || null } : m));
+      }
+      return { chave, antes };
+    },
+    onError: (_e, _v, ctx) => { if (ctx?.antes) qc.setQueryData(ctx.chave, ctx.antes); },
+    onSettled: (_d, _e, v) => {
+      qc.invalidateQueries({ queryKey: ["wa-conversas", "mensagens", v.numero_id ?? null, v.wa_id] });
+    },
   });
 }
 
@@ -1098,9 +1149,9 @@ export function useMidia(media_id: string | null, ligado: boolean) {
 export function useEnviarMidia() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ wa_id, arquivo, legenda, numero_id }:
+    mutationFn: async ({ wa_id, arquivo, legenda, numero_id, responde_a }:
                        { wa_id: string; arquivo: File; legenda?: string;
-                         numero_id?: string | null }) => {
+                         numero_id?: string | null; responde_a?: string | null }) => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Sessão expirada. Faça login novamente.");
 
@@ -1112,6 +1163,7 @@ export function useEnviarMidia() {
       if (numero_id) form.append("numero_id", numero_id);
       form.append("arquivo", arquivo, arquivo.name || "arquivo");
       if (legenda?.trim()) form.append("legenda", legenda.trim());
+      if (responde_a) form.append("responde_a", responde_a);
 
       const res = await fetch(`${FUNCTIONS_URL}/whatsapp-midia`, {
         method: "POST",

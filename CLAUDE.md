@@ -3116,6 +3116,28 @@ webhook com log cru e reprocessamento.
    marcava "longe do fim" (medido no Chromium). E cada DIA é um `<section>`: o
    chip da data gruda só dentro do dia dele (antes todos grudavam no topo, um
    sobre o outro).
+12. **Responder citando e reagir** (`20261198`, 26/11/2026, sugestão do time
+   pelo app do TI). Os dois são da Cloud API e o CLIENTE vê: a citação é
+   `context.message_id` no envio (`whatsapp-responder` texto, `whatsapp-midia`
+   foto/áudio/documento; grava `responde_a`), a reação é mensagem
+   `type: reaction` (emoji vazio tira). Regras puras em `_shared/waCitacao.ts`
+   e no fim de `lib/conversas.ts` (teste `src/test/whatsapp-meta/citacao.test.ts`).
+   - ⚠️ A mensagem citada/reagida tem de ser DESTA conversa (wamid + número +
+     cliente, em `carbo_wa_mensagens` ou `carbo_msg_envios`); erro de leitura
+     aparece como erro, nunca como "não é desta conversa".
+   - ⚠️ **Reação nossa NÃO é linha em `carbo_wa_mensagens`** — lá toda saída de
+     gente conta como resposta (lista, resumo, painel, SLA) e um 👍 fecharia a
+     espera do cliente sem ninguém responder. Mora em `carbo_wa_reacoes` (uma
+     por mensagem, emoji nulo = tirada, só a função escreve) e não assume a
+     conversa sem dono. Só se reage a mensagem do CLIENTE.
+   - A leitura da conversa aberta (`carbo_wa_conversa_mensagens`) passou a
+     trazer `responde_a`, `reage_a` (do payload da reação do cliente),
+     `nossa_reacao`/`_por`. A VIEW `carbo_wa_conversas` não foi tocada.
+   - ⚠️ Reação TIRADA pelo cliente chega como `reaction` sem emoji: apaga a
+     anterior (`reacoesDoCliente`), e a pílula diz "tirou a reação".
+   - ⚠️ Os botões do balão FLUTUAM (absolute) ao lado dele: dentro da linha
+     roubavam largura, o texto quebrava antes e o player de áudio vazava.
+     O seletor de emoji ancora no balão, não nos botões (era cortado à direita).
 
 ### ⚠️ Conversas e Esteira a 500 vendas/semana: o teto e o índice (19/10/2026)
 Queixa do dono do processo: *"demora para abrir"* e *"diz que foi enviada

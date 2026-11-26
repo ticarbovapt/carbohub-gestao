@@ -118,6 +118,41 @@ export const SHOTS = [
     [3, (p) => conversa(p).locator('input[type="datetime-local"]')],
     [4, btn(/Confirmar/)],
   ] },
+  // ── Responder citando e reagir (26/11/2026) ──
+  { chave: "conversa-citar", papel: "colaborador", url: `/conversas?de=${RODRIGO}`, viewport: ALTA, pad: 6,
+    antes: async (p) => {
+      const pergunta = conversa(p).locator("div.group\\/balao").filter({ hasText: "Boa tarde! Dá pra trocar" }).first();
+      await pergunta.hover();
+      await pergunta.locator('button[title="Responder citando"]').click();
+      await p.waitForTimeout(300);
+      await conversa(p).locator("div.group\\/balao").filter({ hasText: "comprovante-pix.pdf" }).last().hover();
+      await p.waitForTimeout(300);
+    },
+    clip: (p) => [conversa(p).locator("div.group\\/balao").filter({ hasText: "Boa tarde! Dá pra trocar" }).first(),
+                  conversa(p).locator("div.rounded-lg.border.bg-muted\\/40.p-2").last()], marcas: [
+    [1, (p) => conversa(p).locator("div.group\\/balao").filter({ hasText: "comprovante-pix.pdf" }).last().locator('button[title="Reagir"]')],
+    [2, (p) => conversa(p).locator("div.group\\/balao").filter({ hasText: "comprovante-pix.pdf" }).last().locator('button[title="Responder citando"]')],
+    [3, (p) => conversa(p).locator('button[title^="Reagimos"]').first()],
+    [4, (p) => conversa(p).locator("div.group\\/balao").filter({ hasText: "Dá sim, Rodrigo" }).last().locator("button").filter({ hasText: "Rodrigo Alves" }).first()],
+    [5, (p) => conversa(p).getByText("Respondendo Rodrigo Alves").locator("../..")],
+  ] },
+  { chave: "conversa-reagir", papel: "colaborador", url: `/conversas?de=${RODRIGO}`, viewport: ALTA, pad: 6,
+    antes: async (p) => {
+      const pergunta = conversa(p).locator("div.group\\/balao").filter({ hasText: "Boa tarde! Dá pra trocar" }).first();
+      await pergunta.hover();
+      await pergunta.locator('button[title="Reagir"]').click();
+      await p.waitForTimeout(300);
+    },
+    clip: (p) => [conversa(p).locator("div.group\\/balao").filter({ hasText: "Boa tarde! Dá pra trocar" }).first().locator("div.bg-popover"),
+                  conversa(p).locator("div.group\\/balao").filter({ hasText: "comprovante-pix.pdf" }).last()], marcas: [
+    [1, (p) => conversa(p).locator("div.bg-popover").filter({ hasText: "👍" }).first()],
+  ] },
+  { chave: "conversa-reacao-cliente", papel: "colaborador", url: `/conversas?de=${LUANA}`, viewport: ALTA, pad: 6,
+    clip: (p) => [conversa(p).locator("div.group\\/balao").filter({ hasText: "Imagina, Luana" }).last(),
+                  conversa(p).getByText(/reagiu a/).first().locator("..")], marcas: [
+    [1, (p) => conversa(p).locator('span[title$="reagiu"]').first()],
+    [2, (p) => conversa(p).getByText(/reagiu a/).first().locator("..")],
+  ] },
   // ── Recado interno ──
   { chave: "conversa-recado", papel: "colaborador", url: `/conversas?de=${LUANA}`, viewport: TELA, pad: 6,
     antes: async (p) => {

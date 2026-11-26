@@ -65,12 +65,20 @@ const heitor = base(NUM_SERVICO, "5581996541275", "Heitor Campos", -7011, "carri
 // Helena — conversa de MAIS de 30 dias: fora da caixa, abre só por link (?de=).
 const helena = base(NUM_SERVICO, "5584991231045", "Helena Duarte", 9045, "entregue");
 
+// Citação e reação (26/11/2026): a resposta do Rafael CITA a pergunta do
+// Rodrigo, e nós reagimos 👍 ao comprovante; a Luana reagiu ❤️ à resposta dele.
+const rodrigoPergunta = dele(rodrigo, 125, "Boa tarde! Dá pra trocar o kit de 5 frascos pelo de sachês?");
+const rodrigoComprovante = dele(rodrigo, 124, null, { tipo: "document", midia_id: "midia-doc-1", texto: "comprovante-pix.pdf",
+  nossa_reacao: "👍", nossa_reacao_por: "Rafael Costa" });
+const luanaResposta = nossa(luana, 60 * 23 - 12, "Rafael Costa", "Imagina, Luana! Qualquer dúvida é só chamar por aqui. 😊");
+
 const MSGS: Msg[] = [
   // Luana — a conversa aberta nos prints: pergunta nova, sem responsável.
   aviso(luana, 60 * 50, "etiqueta", "Luana, a etiqueta do seu pedido CZ2026100107 foi gerada. Ele segue pela Jadlog, código ME2600EXEMPLO2BR.", { botao_rastreio: "ME2600EXEMPLO2BR" }),
   aviso(luana, 60 * 26, "em_transito", "Luana, seu pedido CZ2026100107 está a caminho! Previsão de entrega: quinta-feira. Acompanhe pelo botão abaixo.", { botao_rastreio: "ME2600EXEMPLO2BR" }),
   dele(luana, 60 * 23, "Oi! Recebi o aviso, obrigada"),
-  nossa(luana, 60 * 23 - 12, "Rafael Costa", "Imagina, Luana! Qualquer dúvida é só chamar por aqui. 😊"),
+  luanaResposta,
+  dele(luana, 60 * 23 - 14, "❤️", { tipo: "reaction", reage_a: luanaResposta.wamid }),
   dele(luana, 42, null, { tipo: "audio", midia_id: "midia-audio-1" }),
   dele(luana, 25, "Meu pedido chega até sexta? Vou viajar no sábado cedo"),
   // Patrícia — "obrigada 👍" com a janela quase fechando.
@@ -78,9 +86,10 @@ const MSGS: Msg[] = [
   dele(patricia, 60 * 23 + 20, "Recebi, obrigada! 👍"),
   // Rodrigo — em atendimento comigo (Rafael), com mensagem agendada.
   aviso(rodrigo, 60 * 52, "nf_emitida", "Rodrigo, a nota fiscal 000415 do seu pedido CZ2026100104 foi emitida. Em breve ele sai para a transportadora."),
-  dele(rodrigo, 125, "Boa tarde! Dá pra trocar o kit de 5 frascos pelo de sachês?"),
-  dele(rodrigo, 124, null, { tipo: "document", midia_id: "midia-doc-1", texto: "comprovante-pix.pdf" }),
-  nossa(rodrigo, 62, "Rafael Costa", "Dá sim, Rodrigo! Vou confirmar com a logística e te retorno ainda hoje.", { status: "entregue" }),
+  rodrigoPergunta,
+  rodrigoComprovante,
+  nossa(rodrigo, 62, "Rafael Costa", "Dá sim, Rodrigo! Vou confirmar com a logística e te retorno ainda hoje.",
+        { status: "entregue", responde_a: rodrigoPergunta.wamid }),
   // Fernanda — aguardando o comprovante, com a Ana.
   aviso(fernanda, 60 * 30, "etiqueta", "Fernanda, a etiqueta do seu pedido CZ2026100105 foi gerada. Ele segue pela Jadlog, código ME2600EXEMPLO1BR.", { botao_rastreio: "ME2600EXEMPLO1BR" }),
   dele(fernanda, 60 * 4, "Paguei a diferença do frete, vou te mandar o comprovante"),
