@@ -218,7 +218,8 @@ select d.nome, d.telefone, v.status, v.motivo, v.erro_detalhe,
 -- ═══════════════════════════════════════════════════════════════════════════
 -- LISTAS POR LOTE — cada CSV do time vira um lote em `carbo_msg_disparo_entrada`
 -- (migração própria). Lotes: `atraso_2026_11_23` (438, 20261195, enviado em
--- 24/11) e `atraso_2026_11_24` (259, 20261196). Lote novo: troque o nome nos
+-- 24/11), `atraso_2026_11_24` (259, 20261196) e `atraso_2026_11_25` (226,
+-- 20261201). Lote novo: troque o nome nos
 -- TRÊS blocos L.
 -- Casa pelo PEDIDO DA LOJA (PAYT_LYK2ZA_…), com o pedido do Bling como reserva;
 -- o telefone vem da esteira e, na falta, do pedido da PayT. O link é o do CSV.
@@ -245,7 +246,7 @@ returning v.bling_id, d.nome,
 -- BLOCO L1 — LOCALIZAR (só lê). Uma linha por situação, com a contagem.
 -- ESPERADO: quase tudo em `ok`. Qualquer outra situação: rode o L2 e me mande.
 with ent as (
-  select * from public.carbo_msg_disparo_entrada where lote = 'atraso_2026_11_24'
+  select * from public.carbo_msg_disparo_entrada where lote = 'atraso_2026_11_25'
 ),
 m as (
   select ent.id_pedido_loja, e.bling_id, e.pedido_loja, e.pedido_numero::text as pedido_numero,
@@ -295,7 +296,7 @@ select situacao, count(distinct id_pedido_loja) as pedidos,
 
 -- BLOCO L2 — o DETALHE de quem não está `ok` (só lê).
 with ent as (
-  select * from public.carbo_msg_disparo_entrada where lote = 'atraso_2026_11_24'
+  select * from public.carbo_msg_disparo_entrada where lote = 'atraso_2026_11_25'
 ),
 m as (
   select ent.id_pedido_loja, e.bling_id, e.pedido_loja, e.cliente, e.cliente_fone, e.nf_numero::text as nf_numero
@@ -342,7 +343,7 @@ select case when bling_id is null then 'NÃO ACHADO' when achados > 1 then 'AMB�
 -- Rodar de novo não duplica.
 -- ESPERADO: `carregados_agora` = os `ok` do L1 menos as pessoas repetidas.
 with ent as (
-  select * from public.carbo_msg_disparo_entrada where lote = 'atraso_2026_11_24'
+  select * from public.carbo_msg_disparo_entrada where lote = 'atraso_2026_11_25'
 ),
 m as (
   select ent.id_pedido_loja, e.bling_id, e.cliente, e.cliente_fone, e.data_pedido
@@ -378,7 +379,7 @@ ins as (
   insert into public.carbo_msg_disparo (etapa, bling_id, telefone, nome, dados, observacao)
   select 'aviso_atraso', bling_id, fone, coalesce(nullif(btrim(primeiro_nome), ''), cliente),
          jsonb_build_object('link_rastreio', link_rastreio),
-         'lote atraso_2026_11_24 · ' || id_pedido_loja || ' · NF ' || nf
+         'lote atraso_2026_11_25 · ' || id_pedido_loja || ' · NF ' || nf
     from bons where n = 1
   on conflict (etapa, bling_id) do nothing
   returning 1
