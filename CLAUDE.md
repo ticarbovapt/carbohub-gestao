@@ -5714,6 +5714,20 @@ matriz, Bling 2 = filial SP.
    ou pedido situação 12. Quem foi cancelado assim reabre arrastando o card no
    Rastreio (`supabase/consultas/ponte_bling2_cancelou_nota_em_voo.sql` dá a
    etapa de antes).
+   ⭐ **CONFERÊNCIA DE NF das vendas** (`20261203`, pedido do dono do processo:
+   "nota perdida é comissão que o vendedor não recebe"):
+   `carbo_nf_reconferir_vendas(p_ensaio)`, cron `carbo-nf-reconferir-30min`
+   (:29/:59). Venda V cancelada por ROTINA (último cancelamento no
+   `order_audit_logs` com `user_id` nulo, até 60 dias) cuja nota hoje VALE
+   (matriz ou filial, pedido no Bling ≠ 12) é REABERTA no status/etapa de
+   antes (`gerar_nf` → `emitir_etiqueta`) e avisa vendedor e TI; se o
+   cancelamento devolveu estoque (`stock_deducted` mudou) só AVISA
+   ("reabrir à mão" — reabrir não deduz de novo). Cancelamento automático
+   recente (< 2 dias) por nota inválida ou pedido 12 também avisa. Registro em
+   `carbo_nf_reconferencia` (uma vez por pedido/ação/cancelamento).
+   ⚠️ A trava `carbo_cancelamento_nao_ressuscita` aceita SÓ a marca local
+   `carbo.reabre_por_nf` (troca no texto vivo). Cancelamento por GENTE nunca
+   é desfeito. Ensaio: `select jsonb_pretty(public.carbo_nf_reconferir_vendas(true));`
 5. **A conta é sempre EXPLÍCITA**, no front e no servidor. Errar emite no CNPJ
    errado, e só se desfaz com cancelamento depois de o documento circular.
 
