@@ -68,6 +68,15 @@ export interface MensagemConversa {
   status?: string | null;
   erro_codigo?: number | null;
   erro_detalhe?: string | null;
+  /** O wamid da mensagem que ESTA cita (o `context` da Cloud API): o cliente
+   *  respondendo a algo nosso, ou nós respondendo citando. Só vem da leitura da
+   *  conversa aberta (20261198); a lista não o traz. */
+  responde_a?: string | null;
+  /** Quando esta linha é uma REAÇÃO do cliente: a mensagem a que ela se refere. */
+  reage_a?: string | null;
+  /** A reação que NÓS pusemos nesta mensagem (nulo = nenhuma) e quem pôs. */
+  nossa_reacao?: string | null;
+  nossa_reacao_por?: string | null;
 }
 
 /**
@@ -876,4 +885,71 @@ export function ordenarConversas(conversas: Conversa[]): Conversa[] {
     if (a.parece_encerrada !== b.parece_encerrada) return a.parece_encerrada ? 1 : -1;
     return new Date(b.ultima_em).getTime() - new Date(a.ultima_em).getTime();
   });
+}
+
+
+// ─── Citação e reação (26/11/2026) ───────────────────────────────────────────
+
+/** Os emoji do seletor de reação — os do Carbo Chat, menos o ✅ (que no
+ *  WhatsApp do cliente parece "visto", não reação). */
+export const REACOES = ["👍", "❤️", "😂", "😮", "😢", "🙏"] as const;
+
+/**
+ * A reação ATUAL do cliente em cada mensagem: a última que ele mandou para
+ * aquele alvo. ⚠️ Reação TIRADA chega como `reaction` SEM emoji — e ela tem de
+ * apagar a anterior, senão o 👍 que o cliente desfez continuaria na tela.
+ */
+export function reacoesDoCliente(
+  mensagens: Pick<MensagemConversa, "direcao" | "tipo" | "texto" | "reage_a" | "ocorrido_em">[],
+): Map<string, string> {
+  const ultima = new Map<string, { em: string; emoji: string | null }>();
+  for (const m of mensagens) {
+    if (m.direcao !== "entrada" || m.tipo !== "reaction" || !m.reage_a) continue;
+    const ant = ultima.get(m.reage_a);
+    if (!ant || ant.em <= m.ocorrido_em) ultima.set(m.reage_a, { em: m.ocorrido_em, emoji: m.texto || null });
+  }
+  const out = new Map<string, string>();
+  for (const [alvo, r] of ultima) if (r.emoji) out.set(alvo, r.emoji);
+  return out;
+}
+
+const ROTULO_TIPO: Record<string, string> = {
+  image: "Foto", sticker: "Figurinha", video: "Vídeo", audio: "Áudio",
+  document: "Documento", location: "Localização", contacts: "Contato",
+  reaction: "Reação", unsupported: "Mensagem não entregue",
+};
+
+/** Quem falou e o começo do que disse — o cabeçalho da citação. */
+export function resumoDaCitada(
+  m: Pick<MensagemConversa, "direcao" | "tipo" | "texto" | "enviado_por_nome">,
+  nomeCliente?: string | null,
+): { autor: string; trecho: string } {
+  const autor = m.direcao === "entrada"
+    ? (nomeCliente?.trim() || "Cliente")
+    : m.tipo === "template" && !m.enviado_por_nome
+      ? "Aviso automático"
+      : (m.enviado_por_nome?.trim() || "Nós");
+  const texto = (m.texto ?? "").replace(/\s+/g, " ").trim();
+  const ehArquivoNosso = /^(audio|print|foto)-\d+\.[a-z0-9]+$/i.test(texto);
+  const trecho = texto && !ehArquivoNosso
+    ? (texto.length > 120 ? `${texto.slice(0, 119)}…` : texto)
+    : (ROTULO_TIPO[m.tipo] ?? "Mensagem");
+  return { autor, trecho };
+}
+
+/**
+ * Esta mensagem pode ser CITADA numa resposta? Precisa ter chegado ao cliente:
+ * citar o que falhou (ou reação, ou o que a Meta não entregou) mostraria a ele
+ * uma referência a algo que ele nunca viu.
+ */
+export function podeCitar(m: Pick<MensagemConversa, "tipo" | "status" | "wamid">): boolean {
+  if (!m.wamid) return false;
+  if (m.tipo === "reaction" || m.tipo === "unsupported") return false;
+  if (m.status === "falhou" || m.status === "failed") return false;
+  return true;
+}
+
+/** Esta mensagem pode receber reação NOSSA? Só a do cliente, e não reação. */
+export function podeReagir(m: Pick<MensagemConversa, "direcao" | "tipo" | "wamid">): boolean {
+  return !!m.wamid && m.direcao === "entrada" && m.tipo !== "reaction" && m.tipo !== "unsupported";
 }

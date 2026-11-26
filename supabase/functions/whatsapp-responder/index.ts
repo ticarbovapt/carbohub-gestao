@@ -30,6 +30,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { detalheDoErro, ehTransitorio, montarPayload, chaveDoFone, type VarTemplate } from "../_shared/metaTemplate.ts";
 
 import { ehTimeInterno } from "../_shared/interfacesInternas.ts";
+import { alvoDaConversa, comCitacao, corpoDaReacao, emojiValido } from "../_shared/waCitacao.ts";
 import { cors } from "../_shared/cors.ts";
 // deno-lint-ignore-file no-explicit-any
 
@@ -169,10 +170,36 @@ Deno.serve(async (req: Request) => {
     return json({ ok: true, wamid: wamidM, gravado: !erroGravaM });
   }
 
-  if (!texto) return json({ error: "mensagem vazia" }, 400);
-  // A Cloud API aceita 4096 caracteres em texto livre. Cortar aqui, com aviso,
-  // é melhor do que a Meta recusar a mensagem inteira depois de escrita.
-  if (texto.length > 4096) return json({ error: "mensagem acima de 4096 caracteres" }, 400);
+  // ── REAÇÃO (26/11/2026) ─────────────────────────────────────────────────
+  // `reacao: { alvo, emoji }` — emoji vazio TIRA a nossa reação. Só a mensagem
+  // do CLIENTE recebe reação nossa: reagir ao próprio aviso não diz nada a ele.
+  const reacao = (corpo as any)?.reacao ?? null;
+  const ehReacao = reacao != null && typeof reacao === "object";
+  const alvoReacao = ehReacao ? String(reacao.alvo ?? "").trim() : "";
+  const emoji = ehReacao ? String(reacao.emoji ?? "") : "";
+  if (ehReacao) {
+    if (!alvoReacao) return json({ error: "reação sem a mensagem alvo" }, 400);
+    if (!emojiValido(emoji)) return json({ error: "emoji inválido", detalhe: "Reaja com um emoji só." }, 400);
+  } else {
+    if (!texto) return json({ error: "mensagem vazia" }, 400);
+    // A Cloud API aceita 4096 caracteres em texto livre. Cortar aqui, com aviso,
+    // é melhor do que a Meta recusar a mensagem inteira depois de escrita.
+    if (texto.length > 4096) return json({ error: "mensagem acima de 4096 caracteres" }, 400);
+  }
+
+  // A mensagem CITADA (responder citando) — tem de ser desta conversa.
+  const respondeA = ehReacao ? "" : String((corpo as any)?.responde_a ?? "").trim();
+  const conferir = respondeA || alvoReacao;
+  if (conferir) {
+    const alvo = await alvoDaConversa(supabase, numeroId, waId, conferir);
+    if (!alvo.ok) return json({ error: "mensagem_fora_da_conversa", detalhe: alvo.erro }, 400);
+    if (ehReacao && alvo.direcao !== "entrada") {
+      return json({ error: "reacao_so_ao_cliente", detalhe: "Só dá para reagir a mensagem do cliente." }, 400);
+    }
+    if (ehReacao && alvo.tipo === "reaction") {
+      return json({ error: "reacao_a_reacao", detalhe: "Não dá para reagir a uma reação." }, 400);
+    }
+  }
 
   // ── 2. A janela ─────────────────────────────────────────────────────────
   //
@@ -207,14 +234,16 @@ Deno.serve(async (req: Request) => {
   }
 
   // ── 3. Manda ────────────────────────────────────────────────────────────
-  const payload = {
+  if (ehReacao) return reagir();
+
+  const payload = comCitacao({
     messaging_product: "whatsapp", recipient_type: "individual",
     to: waId, type: "text",
     // `preview_url: false` de propósito: prévia de link muda a altura da
     // mensagem e vaza o destino de um link interno se alguém colar um por
     // engano.
     text: { preview_url: false, body: texto },
-  };
+  }, respondeA);
 
   let resposta: any = null, status = 0;
   for (let tentativa = 0; tentativa <= 2; tentativa++) {
@@ -244,6 +273,7 @@ Deno.serve(async (req: Request) => {
   if (ok && wamid) {
     const { error: erroGrava } = await supabase.from("carbo_wa_mensagens").upsert({
       wamid, wa_id: waId, numero_id: numeroId, direcao: "saida", tipo: "text", texto,
+      responde_a: respondeA || null,
       ocorrido_em: new Date().toISOString(),
       // ⚠️ AUTORIA EM COLUNA, não só no payload. O `payload.por` continua
       // (histórico já gravado depende dele), mas quem a tela lê é a coluna:
@@ -275,4 +305,43 @@ Deno.serve(async (req: Request) => {
     codigo: resposta?.error?.code ?? null,
     detalhe: detalheDoErro(resposta) || `HTTP ${status}`,
   }, 502);
+
+  // ── A reação ──────────────────────────────────────────────────────────────
+  // ⚠️ NÃO vira linha em `carbo_wa_mensagens`: lá toda SAÍDA de gente conta
+  // como resposta (lista, resumo, painel e SLA). Um 👍 não responde pergunta
+  // nenhuma — se contasse, reagir "fecharia" a espera do cliente sem ninguém
+  // ter respondido. A reação nossa mora em `carbo_wa_reacoes`, uma por
+  // mensagem (a última vale, como no WhatsApp).
+  // ⚠️ E não assume a conversa sem dono, pelo mesmo motivo.
+  async function reagir(): Promise<Response> {
+    const corpoR = corpoDaReacao(waId, alvoReacao, emoji);
+    let resp: any = null, st = 0;
+    for (let tentativa = 0; tentativa <= 2; tentativa++) {
+      const res = await fetch(`https://graph.facebook.com/${VERSAO}/${numeroId}/messages`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${TOKEN}`, "Content-Type": "application/json" },
+        body: JSON.stringify(corpoR),
+      });
+      resp = await res.json().catch(() => ({}));
+      st = res.status;
+      if (res.ok) break;
+      if (ehTransitorio(res.status, resp?.error?.code) && tentativa < 2) {
+        await new Promise((r) => setTimeout(r, 2 ** tentativa * 1000));
+        continue;
+      }
+      break;
+    }
+    const wamidR = resp?.messages?.[0]?.id ?? null;
+    if (st < 200 || st >= 300 || !wamidR) {
+      return json({ error: "falha_no_envio", codigo: resp?.error?.code ?? null,
+                    detalhe: detalheDoErro(resp) || `HTTP ${st}` }, 502);
+    }
+    const { error: erroR } = await supabase.from("carbo_wa_reacoes").upsert({
+      numero_id: numeroId, wa_id: waId, alvo_wamid: alvoReacao,
+      emoji: emoji || null, wamid: wamidR, em: new Date().toISOString(),
+      por: user!.id, por_nome: perfil?.full_name ?? user!.email ?? null,
+    }, { onConflict: "numero_id,alvo_wamid" });
+    if (erroR) console.error("[responder] reagiu mas não gravou", wamidR, erroR);
+    return json({ ok: true, wamid: wamidR, gravado: !erroR });
+  }
 });

@@ -8,7 +8,7 @@ import {
   Search, SearchX, X, Package, ArrowUpRight, Megaphone,
   BellRing, BellOff, Check, CheckCheck, Inbox, Undo2, Sparkles, UserCheck, Tag as TagIcon, Plus,
   CalendarClock, Trash2, Square, Play, Pause, Download, StickyNote, EyeOff, Copy,
-  Maximize2, SlidersHorizontal, ChevronDown, MessageSquarePlus, Link2,
+  Maximize2, SlidersHorizontal, ChevronDown, MessageSquarePlus, Link2, Reply, SmilePlus, CornerUpLeft,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CarboPageHeader } from "@/components/ui/carbo-page-header";
@@ -26,7 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import {
-  useConversas, useConversasAoVivo, useMensagensDaConversa, useResponder, janelaAberta, faltaDaJanela,
+  useConversas, useConversasAoVivo, useMensagensDaConversa, useResponder, useReagir, janelaAberta, faltaDaJanela,
   useNumeros, type NumeroWa,
   // ⚠️ Puras e na `lib`, não aqui: dá para conferir o recorte sem montar tela.
   aplicarFiltrosDaCaixa, quantosFiltrosAtivos, FILTROS_VAZIOS,
@@ -50,7 +50,9 @@ import {
   type StatusAtendimento, type TagConversa,
   type Conversa, type MensagemConversa, type EstadoConversa,
 } from "@/hooks/useConversas";
-import { conversaAvulsa } from "@/lib/conversas";
+import {
+  conversaAvulsa, reacoesDoCliente, resumoDaCitada, podeCitar, podeReagir, REACOES,
+} from "@/lib/conversas";
 import { prepararImagem, ehImagem } from "@/lib/imagemParaEnvio";
 
 /**
@@ -930,8 +932,24 @@ function GaleriaDaConversa({ waId, numeroId, aoFechar }: {
  * dizer que chegou um áudio E que ele não está aqui. Fingir que não chegou nada
  * é o único erro caro; parecer feio, não.
  */
-function Balao({ m, primeira, ultima, mostrarComoReenviar }: {
+/** O que o balão precisa saber da CONVERSA para citar e reagir (26/11/2026). */
+interface ContextoDoBalao {
+  /** A mensagem que esta cita, se está carregada na tela. */
+  citada?: MensagemConversa | null;
+  /** Numa reação do cliente: a mensagem reagida, se está na tela. */
+  alvoDaReacao?: MensagemConversa | null;
+  /** A reação ATUAL do cliente nesta mensagem. */
+  reacaoCliente?: string | null;
+  nomeCliente?: string | null;
+  irPara?: (wamid: string) => void;
+  /** Ausentes = janela fechada: não há como citar nem reagir. */
+  aoResponder?: (m: MensagemConversa) => void;
+  aoReagir?: (m: MensagemConversa, emoji: string) => void;
+}
+
+function Balao({ m, primeira, ultima, mostrarComoReenviar, ctx }: {
   m: MensagemConversa; primeira: boolean; ultima: boolean;
+  ctx?: ContextoDoBalao;
   /** ⚠️ Só na mensagem não entregue MAIS RECENTE da conversa. Não dá para usar
    *  `ultima`: ela marca fim de BLOCO, e as sete do mesmo cliente caíram em
    *  dias diferentes — o texto de ação voltaria a aparecer em todas, que é
@@ -954,7 +972,109 @@ function Balao({ m, primeira, ultima, mostrarComoReenviar }: {
   // reagiu a uma mensagem nossa. Medido: 28 reações de 21 clientes, contra 7
   // `unsupported` de 1. O defeito de maior alcance era este, e ninguém o via
   // porque ele não parece defeito: parece uma resposta curta.
-  const reacao = m.tipo === "reaction" && !!m.texto;
+  // ⚠️ Reação TIRADA chega como `reaction` sem emoji — ela é reação também, e
+  // não "formato que a tela não conhece".
+  const reacao = m.tipo === "reaction";
+
+  // ── Citar e reagir (26/11/2026) ─────────────────────────────────────────
+  // ⚠️ As duas vão AO CLIENTE (Cloud API): a citação aparece em cima da nossa
+  // resposta no celular dele, e a reação, no balão dele. Por isso só existem
+  // com a janela aberta — o `ctx` não traz as ações quando ela fechou.
+  const [escolhendo, setEscolhendo] = useState(false);
+  const podeResp = !!ctx?.aoResponder && podeCitar(m);
+  const podeReag = !!ctx?.aoReagir && podeReagir(m);
+  const barraDeAcoes = (podeResp || podeReag) ? (
+    // ⚠️ FLUTUA ao lado do balão (absolute), nunca ocupa largura: dentro da
+    // linha ele roubava ~50 px do balão, o texto quebrava antes e o player de
+    // áudio vazava pela borda.
+    <div className={`absolute top-1/2 z-10 flex -translate-y-1/2 items-center gap-0.5 transition-opacity ${
+      nossa ? "right-full mr-1" : "left-full ml-1"} ${
+      escolhendo ? "opacity-100"
+        : "opacity-0 focus-within:opacity-100 group-hover/balao:opacity-100 [@media(hover:none)]:opacity-100"}`}>
+      {podeReag && (
+        <button type="button" title="Reagir" aria-label="Reagir à mensagem"
+                onClick={() => setEscolhendo((o) => !o)}
+                className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground">
+          <SmilePlus className="h-3.5 w-3.5" />
+        </button>
+      )}
+      {podeResp && (
+        <button type="button" title="Responder citando" aria-label="Responder citando esta mensagem"
+                onClick={() => ctx!.aoResponder!(m)}
+                className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground">
+          <Reply className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </div>
+  ) : null;
+  // ⚠️ O seletor ancora no BALÃO (a linha inteira), não nos botões: ancorado
+  // nos botões, à direita de um balão longo, ele saía para fora da conversa e
+  // o último emoji era cortado.
+  const seletorDeReacao = escolhendo && podeReag ? (
+        <>
+          <div className="fixed inset-0 z-20" onClick={() => setEscolhendo(false)} />
+          <div className={`absolute bottom-full z-30 mb-1 flex gap-0.5 rounded-full border bg-popover px-1.5 py-1
+                           shadow-lg ${nossa ? "right-0" : "left-0"}`}>
+            {REACOES.map((e) => (
+              <button key={e} type="button"
+                      title={e === m.nossa_reacao ? "Tirar a reação" : undefined}
+                      onClick={() => { ctx!.aoReagir!(m, e === m.nossa_reacao ? "" : e); setEscolhendo(false); }}
+                      className={`rounded-full px-1 text-lg leading-none transition-transform hover:scale-125 ${
+                        e === m.nossa_reacao ? "bg-carbo-green/20" : ""}`}>
+                {e}
+              </button>
+            ))}
+          </div>
+        </>
+  ) : null;
+
+  // As reações FICAM no balão reagido, como no WhatsApp: a do cliente e a nossa.
+  const reacaoCliente = ctx?.reacaoCliente ?? null;
+  const chipsDeReacao = (reacaoCliente || m.nossa_reacao) ? (
+    <div className={`mt-0.5 flex gap-1 ${nossa ? "justify-end pr-1" : "justify-start pl-1"}`}>
+      {reacaoCliente && (
+        <span title={`${ctx?.nomeCliente?.trim() || "Cliente"} reagiu`}
+              className="rounded-full border bg-background px-1.5 py-0.5 text-xs leading-none shadow-sm">
+          {reacaoCliente}
+        </span>
+      )}
+      {m.nossa_reacao && (
+        <button type="button" disabled={!podeReag}
+                title={`Reagimos${m.nossa_reacao_por ? ` · ${m.nossa_reacao_por}` : ""}${podeReag ? " — clique para tirar" : ""}`}
+                onClick={() => ctx?.aoReagir?.(m, "")}
+                className="rounded-full border border-carbo-green/50 bg-carbo-green/10 px-1.5 py-0.5 text-xs
+                           leading-none shadow-sm enabled:hover:bg-carbo-green/20">
+          {m.nossa_reacao}
+        </button>
+      )}
+    </div>
+  ) : null;
+
+  // A citação no topo do balão: quem falou e o começo do que disse. Clicar leva
+  // até a mensagem citada.
+  const citacao = m.responde_a ? (() => {
+    const r = ctx?.citada ? resumoDaCitada(ctx.citada, ctx.nomeCliente) : null;
+    return (
+      <button type="button" onClick={() => ctx?.irPara?.(m.responde_a!)}
+              className={`mb-1.5 block w-full min-w-0 rounded-md border-l-2 px-2 py-1 text-left text-[11px]
+                          leading-snug hover:opacity-80 ${nossa
+                            ? "border-carbo-green/70 bg-carbo-green/10"
+                            : "border-carbo-green bg-background/60"}`}>
+        {r ? (
+          <>
+            <span className="flex items-center gap-1 truncate font-medium text-carbo-green">
+              <CornerUpLeft className="h-3 w-3 shrink-0" />{r.autor}
+            </span>
+            <span className="block truncate text-muted-foreground">{r.trecho}</span>
+          </>
+        ) : (
+          <span className="flex items-center gap-1 italic text-muted-foreground">
+            <CornerUpLeft className="h-3 w-3 shrink-0" />respondendo a uma mensagem anterior
+          </span>
+        )}
+      </button>
+    );
+  })() : null;
 
   // ⚠️ O aviso mostra a MENSAGEM que o cliente recebeu, não o nome do template.
   // Ela é reconstruída no banco a partir do corpo aprovado + os parâmetros que
@@ -987,8 +1107,10 @@ function Balao({ m, primeira, ultima, mostrarComoReenviar }: {
       ? (NOME_ETAPA[m.sobre_a_etapa] ?? m.sobre_a_etapa)
       : null;
     return (
-      <div className={`flex justify-end ${primeira ? "mt-3 first:mt-0" : "mt-0.5"}`}>
-        <div className="max-w-[85%] rounded-lg border border-dashed bg-muted/30 px-3 py-2 sm:max-w-[70%]">
+      <div className={`group/balao flex justify-end ${primeira ? "mt-3 first:mt-0" : "mt-0.5"}`}>
+        <div className="relative flex max-w-[85%] flex-col items-end sm:max-w-[70%]">
+        {seletorDeReacao}
+        <div className="max-w-full rounded-lg border border-dashed bg-muted/30 px-3 py-2">
           {/* ⚠️ O rótulo fica ACIMA do texto: ele responde "isto foi gente ou
               sistema?", e essa pergunta se responde ANTES de ler a mensagem. A
               hora vem na mesma linha porque ela sobrava vazia à direita — e
@@ -1020,6 +1142,9 @@ function Balao({ m, primeira, ultima, mostrarComoReenviar }: {
               )}
             </p>
           )}
+        </div>
+        {chipsDeReacao}
+        {barraDeAcoes}
         </div>
       </div>
     );
@@ -1068,28 +1193,45 @@ function Balao({ m, primeira, ultima, mostrarComoReenviar }: {
   // ⚠️ O emoji fica GRANDE e o "reagiu" pequeno, nessa ordem: o que importa é
   // QUAL foi a reação. Escrever `reagiu com "👍"` entre aspas faria parecer
   // texto digitado, que é justamente a confusão que isto corrige.
+  // ⚠️ (26/11/2026) A reação também aparece NO balão reagido (`chipsDeReacao`);
+  // esta pílula fica no instante em que ela aconteceu, dizendo A QUAL mensagem —
+  // reação a algo de três dias atrás não pode passar sem ninguém ver.
   if (reacao) {
+    const alvo = ctx?.alvoDaReacao ? resumoDaCitada(ctx.alvoDaReacao, ctx.nomeCliente) : null;
     return (
       <div className={`flex ${nossa ? "justify-end" : "justify-start"} ${primeira ? "mt-3 first:mt-0" : "mt-0.5"}`}>
-        <div className="flex items-center gap-1.5 rounded-full border bg-muted/30 px-2.5 py-1">
-          <span className="text-base leading-none">{m.texto}</span>
-          <span className="text-[10px] text-muted-foreground">
-            {nossa ? "reagimos" : "reagiu"} · {soHora(m.ocorrido_em)}
+        <div className="flex min-w-0 max-w-[85%] items-center gap-1.5 rounded-full border bg-muted/30 px-2.5 py-1 sm:max-w-[70%]">
+          {m.texto && <span className="text-base leading-none">{m.texto}</span>}
+          <span className="shrink-0 text-[10px] text-muted-foreground">
+            {m.texto ? (nossa ? "reagimos" : "reagiu") : "tirou a reação"}
+            {m.reage_a ? " a" : ""}
           </span>
+          {m.reage_a && (
+            <button type="button" onClick={() => ctx?.irPara?.(m.reage_a!)}
+                    className="min-w-0 truncate text-[10px] italic text-muted-foreground underline-offset-2
+                               hover:text-foreground hover:underline">
+              {alvo ? `“${alvo.trecho}”` : "uma mensagem anterior"}
+            </button>
+          )}
+          <span className="shrink-0 text-[10px] text-muted-foreground">· {soHora(m.ocorrido_em)}</span>
         </div>
       </div>
     );
   }
 
   return (
-    <div className={`flex ${nossa ? "justify-end" : "justify-start"} ${
+    <div className={`group/balao flex ${nossa ? "justify-end" : "justify-start"} ${
       /* Bloco novo respira; mensagem colada na anterior quase encosta — é isso
          que faz três mensagens seguidas lerem como uma fala só. */
       primeira ? "mt-3 first:mt-0" : "mt-0.5"}`}>
-      <div className={`max-w-[85%] rounded-lg px-3 py-2 sm:max-w-[70%] ${
+      <div className={`relative flex max-w-[85%] flex-col sm:max-w-[70%] ${nossa ? "items-end" : "items-start"}`}>
+      {seletorDeReacao}
+      <div className={`max-w-full rounded-lg px-3 py-2 ${
         nossa
           ? `bg-carbo-green/10 ${ultima ? "rounded-br-sm" : ""}`
           : `border bg-muted/40 ${ultima ? "rounded-bl-sm" : ""}`}`}>
+
+        {citacao}
 
         {anexo && (
           <Anexo mediaId={m.midia_id!} tipo={m.tipo}
@@ -1171,6 +1313,9 @@ function Balao({ m, primeira, ultima, mostrarComoReenviar }: {
           </p>
         )}
         {desconhecida && <span className="sr-only">{hora(m.ocorrido_em)}</span>}
+      </div>
+      {chipsDeReacao}
+      {barraDeAcoes}
       </div>
     </div>
   );
@@ -1591,6 +1736,45 @@ function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false, historic
   const fim = useRef<HTMLDivElement>(null);
   const aberta = janelaAberta(c.janela_ate);
 
+  /* ── Responder CITANDO e REAGIR (26/11/2026) ──────────────────────────────
+     A citação vai junto da próxima resposta (texto, foto ou áudio) e o cliente
+     a vê no celular. Some ao enviar, no X, no Escape — e ao fechar a janela de
+     24 h, que leva junto o campo de resposta. */
+  const [citando, setCitando] = useState<MensagemConversa | null>(null);
+  useEffect(() => { setCitando(null); }, [c.numero_id, c.wa_id]);
+  const campoResposta = useRef<HTMLTextAreaElement | null>(null);
+  const reagir = useReagir();
+  const nomeDoCliente = c.cliente ?? c.nome_whatsapp ?? null;
+  const porWamid = useMemo(() => new Map(c.mensagens.map((m) => [m.wamid, m])), [c.mensagens]);
+  const reacoesCli = useMemo(() => reacoesDoCliente(c.mensagens), [c.mensagens]);
+  const irPara = (wamid: string) => {
+    const el = document.getElementById(`msg-${wamid}`);
+    if (el) {
+      el.scrollIntoView({ block: "center", behavior: "smooth" });
+      setRealce(wamid);
+      setTimeout(() => setRealce((r) => (r === wamid ? null : r)), 2_000);
+    } else {
+      toast.info("A mensagem citada é anterior ao que está carregado na tela.");
+    }
+  };
+  const ctxDoBalao = (m: MensagemConversa): ContextoDoBalao => ({
+    citada: m.responde_a ? porWamid.get(m.responde_a) ?? null : null,
+    alvoDaReacao: m.reage_a ? porWamid.get(m.reage_a) ?? null : null,
+    reacaoCliente: reacoesCli.get(m.wamid) ?? null,
+    nomeCliente: nomeDoCliente,
+    irPara,
+    aoResponder: aberta ? (alvo) => {
+      setCitando(alvo); setAba("responder");
+      // O foco vai para o campo: citar é sempre o primeiro passo de escrever.
+      setTimeout(() => campoResposta.current?.focus(), 0);
+    } : undefined,
+    aoReagir: aberta ? (alvo, emoji) => {
+      reagir.mutate({ wa_id: c.wa_id, numero_id: c.numero_id, alvo: alvo.wamid, emoji }, {
+        onError: (e) => toast.error((e as Error).message),
+      });
+    } : undefined,
+  });
+
   /**
    * Ctrl+V com print na área de transferência.
    *
@@ -1709,8 +1893,9 @@ function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false, historic
   };
 
   const mandarArquivo = (arquivo: File, legenda?: string) => {
-    enviarMidia.mutate({ wa_id: c.wa_id, numero_id: c.numero_id, arquivo, legenda: legenda?.trim() || undefined }, {
-      onSuccess: () => { toast.success("Enviado"); },
+    enviarMidia.mutate({ wa_id: c.wa_id, numero_id: c.numero_id, arquivo, legenda: legenda?.trim() || undefined,
+                         responde_a: citando?.wamid ?? null }, {
+      onSuccess: () => { setCitando(null); toast.success("Enviado"); },
       onError: (e) => toast.error((e as Error).message),
     });
   };
@@ -1759,8 +1944,8 @@ function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false, historic
     // ⚠️ `isPending`: com o Enter enviando, dois toques rápidos mandariam a
     // mesma mensagem duas vezes ao cliente — o botão já travava, o Enter não.
     if (!t || responder.isPending) return;
-    responder.mutate({ wa_id: c.wa_id, numero_id: c.numero_id, texto: t }, {
-      onSuccess: () => { setTexto(""); toast.success("Enviada"); },
+    responder.mutate({ wa_id: c.wa_id, numero_id: c.numero_id, texto: t, responde_a: citando?.wamid ?? null }, {
+      onSuccess: () => { setTexto(""); setCitando(null); toast.success("Enviada"); },
       onError: (e) => toast.error((e as Error).message),
     });
   };
@@ -2072,7 +2257,7 @@ function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false, historic
                            ? "rounded-lg ring-2 ring-carbo-green/60 transition-shadow"
                            : undefined}>
                       <Balao m={l.m} primeira={l.primeira} ultima={l.ultima}
-                             mostrarComoReenviar={l.m.wamid === alvo} />
+                             mostrarComoReenviar={l.m.wamid === alvo} ctx={ctxDoBalao(l.m)} />
                     </div>;
               // ⚠️ Um BLOCO por dia: o chip da data é `sticky` dentro do dia
               // dele e o dia seguinte o empurra para fora. Soltos na mesma
@@ -2306,15 +2491,39 @@ function Conversa({ c, onVerPedido, aoVoltar, ocultarNoCelular = false, historic
             {barraAberta && (
               <PainelDaBarra itens={sugestoes} indice={iBarra} aoEscolher={colarResposta} />
             )}
+            {citando && (() => {
+              const r = resumoDaCitada(citando, nomeDoCliente);
+              return (
+                <div className="mb-1.5 flex items-center gap-2 rounded-md border-l-2 border-carbo-green
+                                bg-background/60 px-2 py-1.5">
+                  <CornerUpLeft className="h-3.5 w-3.5 shrink-0 text-carbo-green" />
+                  <button type="button" onClick={() => irPara(citando.wamid)}
+                          className="min-w-0 flex-1 text-left">
+                    <span className="block truncate text-[11px] font-medium text-carbo-green">
+                      Respondendo {r.autor}
+                    </span>
+                    <span className="block truncate text-[11px] text-muted-foreground">{r.trecho}</span>
+                  </button>
+                  <button type="button" onClick={() => setCitando(null)} aria-label="Não citar"
+                          className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              );
+            })()}
             <Textarea
+              ref={campoResposta}
               value={texto} onChange={(e) => setTexto(e.target.value)}
-              placeholder="Responder…" rows={3} maxLength={4096}
+              placeholder={citando ? "Responder citando…" : "Responder…"} rows={3} maxLength={4096}
               className="resize-y border-0 bg-transparent px-1 py-0.5 text-base shadow-none sm:text-xs
                          focus-visible:ring-0 focus-visible:ring-offset-0"
               onKeyDown={(e) => {
                 /* ⚠️ A barra vem ANTES do envio. Com o painel aberto o campo tem
                    só `/frete` escrito: Ctrl+Enter ali mandaria "/frete" para o
                    cliente, que é a pior coisa que este recurso poderia fazer. */
+                if (!barraAberta && citando && e.key === "Escape") {
+                  e.preventDefault(); setCitando(null); return;
+                }
                 if (barraAberta) {
                   if (e.key === "Escape") { e.preventDefault(); setBarraFechada(true); return; }
                   if (sugestoes.length > 0) {
