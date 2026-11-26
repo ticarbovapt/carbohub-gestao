@@ -49,7 +49,7 @@ export const SECOES_PAINEL: Secao[] = [
         print: { chave: "painel", legenda: "O topo do painel, com os filtros, os números de agora, os indicadores do período e as abas." },
         itens: [
           { n: 1, titulo: "Período", texto: "Os dias contados nos indicadores, gráficos e tabelas. Abre em “Últimos 30 dias”. Cada indicador compara com o período anterior do mesmo tamanho." },
-          { n: 2, titulo: "Número", texto: "Todos os números juntos ou um só (CarboZé, Clube, Loja). Também dá para escolher clicando no número na tabela “Por número”." },
+          { n: 2, titulo: "Número", texto: "Todos os números juntos ou um só (CarboZé, CarboZé SAC, CarboVAPT). Também dá para escolher clicando no número na tabela “Por número”." },
           { n: 3, titulo: "Horário útil | Corrido", texto: "Como os tempos são contados (veja “Como as contas funcionam”). A Duração do atendimento é sempre corrida." },
           { n: 4, titulo: "Horário e metas", texto: "O horário de atendimento e as metas do time. Veja “Horário e metas”, abaixo." },
           { n: 5, titulo: "Atualizado às", texto: "Quando os números foram calculados. A tela recalcula sozinha a cada minuto." },

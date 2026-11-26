@@ -6128,6 +6128,19 @@ as conversas desse número com esse outro que já funciona"*.
 98175-8713  CarboZé Atendimento  carrinho  1347087218483622  DESLIGADO, não registrado
 ```
 
+⭐ **Desde 26/11/2026 UM número dispara tudo** (`20261197`, dono do processo:
+*"concentrar tudo em um só número"*): recompra e carrinho saem pelo CarboZé,
+junto com os avisos do pedido. O Clube virou **CarboVAPT** (`funcao =
+'carbovapt'`, caixa do outro produto) e o de carrinho virou **CarboZé SAC**
+(`funcao = 'sac'`, dúvidas/ajuda/pós-venda) — os dois continuam ATIVOS, como
+caixas. O que decide de onde sai a mensagem automática é
+`carbo_msg_templates.numero_id`; nada no código roteia por `funcao`, e o nome
+na tela é o `rotulo`. ⚠️ Régua no meio do caminho troca de número e segue: as
+respostas casam (wa_id + número) com CADA envio. ⚠️ O risco ASSUMIDO: oferta
+pelo número dos avisos — se a nota cair, a Meta corta o limite dele; a trava é
+a `pausa_qualidade` (AMARELO) do CarboZé, que pausa só o comercial. ⚠️ O nome
+que o cliente vê é o de exibição na Meta, não o `rotulo`.
+
 Mesmo WABA (`1777955220017913`) ⇒ **mesmo token, MESMO webhook**, e template
 aprovado vale para os três. Quem separa no webhook é `metadata.phone_number_id`.
 

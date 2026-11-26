@@ -9,7 +9,6 @@ const PATRICIA = "5584991231003";
 const BEATRIZ = "5584991231009";
 const GUSTAVO = "5584991231010";
 const DEBORA = "5584998761234";
-const CLUBE = "1274076859132981";
 
 /** As três colunas: a lista (1ª), a conversa (2ª) e o painel do contato (3ª). */
 const grade = (p) => p.locator("main div.grid.min-h-0.flex-1").first();
@@ -27,7 +26,7 @@ const balao = (t) => (p) => conversa(p).locator("div.rounded-lg").filter({ hasTe
 export const SHOTS = [
   // ── A tela inteira ──
   { chave: "conversas", papel: "colaborador", url: `/conversas?de=${LUANA}`, viewport: TELA, marcas: [
-    [1, (p) => p.locator('button[aria-pressed]').filter({ hasText: "CarboZé Clube" }).locator("..")],
+    [1, (p) => p.locator('button[aria-pressed]').filter({ hasText: "CarboVAPT" }).locator("..")],
     [2, (p) => p.locator("main").getByText(/esperando resposta/).locator("..")],
     [3, btn(/recebem aviso|recebe aviso|Ninguém recebe aviso/)],
     [4, (p) => p.getByRole("link", { name: "Voltar" })],
@@ -175,17 +174,17 @@ export const SHOTS = [
     [3, (p) => conversa(p).getByText(/Janela de 24 h fechada/).locator("xpath=ancestor::div[contains(@class,'rounded-lg')][1]")],
   ] },
   // ── Não contatar (confirmação) ──
-  { chave: "nao-contatar", papel: "colaborador", url: `/conversas?numero=${CLUBE}&de=5582998761212`, viewport: TELA, pad: 6,
+  { chave: "nao-contatar", papel: "colaborador", url: `/conversas?de=5582998761212`, viewport: TELA, pad: 6,
     antes: async (p) => { await painel(p).getByRole("button", { name: /Parar de enviar ofertas/ }).click(); },
     clip: (p) => painel(p).locator("div.space-y-2\\.5").first(), marcas: [
     [1, (p) => painel(p).getByText(/deixa de receber oferta/)],
     [2, (p) => painel(p).getByRole("button", { name: /^Parar ofertas$/ })],
   ] },
-  // ── A caixa do Clube, com quem já não recebe ofertas ──
-  { chave: "conversas-clube", papel: "colaborador", url: `/conversas?numero=${CLUBE}&de=${DEBORA}`, viewport: TELA,
+  // ── A oferta (recompra/carrinho) na caixa do CarboZé, com quem já não recebe ofertas ──
+  { chave: "conversas-ofertas", papel: "colaborador", url: `/conversas?de=${DEBORA}`, viewport: TELA,
     antes: async (p) => { await btn(/^Todas/)(p).click(); },
     marcas: [
-    [1, (p) => p.locator('button[aria-pressed="true"]')],
+    [1, (p) => p.locator('button[aria-pressed]').filter({ hasText: "CarboZé SAC" }).locator("..")],
     [2, linha("Débora Freire")],
     [3, (p) => conversa(p).getByText(/automático · Hora de repor/).first()],
     [4, noPainel("Não recebe ofertas desde")],

@@ -264,27 +264,27 @@ const TEMPLATES = [
   tpl("entregue", "Pedido entregue", true, NUM_SERVICO, "pedido_entregue",
     "{{primeiro_nome}}, seu pedido {{pedido}} foi entregue. Chegou tudo certo? Qualquer coisa, é só responder aqui.",
     [v("primeiro_nome", "primeiro_nome", "tudo bem"), v("pedido", "pedido")]),
-  tpl("recompra", "Hora de repor", false, NUM_CLUBE, "recompra_lembrete",
+  tpl("recompra", "Hora de repor", false, NUM_SERVICO, "recompra_lembrete",
     "Oi, {{primeiro_nome}}! Já faz um mês que seu CarboZé chegou. Que tal repor antes de acabar? Bora repor?",
     [v("primeiro_nome", "primeiro_nome", "tudo bem")]),
   ...(["sache", "frasco"] as const).flatMap((f) => [1, 2, 3, 4, 5, 6, 7].map((d) =>
-    tpl(`recompra_${f}_d${d}`, `${f === "sache" ? "Kit 10 Sachês" : "Kit 5 Frascos"} · Dia ${d}`, false, NUM_CLUBE, `carboze_recompra_${f}_d${d}`,
+    tpl(`recompra_${f}_d${d}`, `${f === "sache" ? "Kit 10 Sachês" : "Kit 5 Frascos"} · Dia ${d}`, false, NUM_SERVICO, `carboze_recompra_${f}_d${d}`,
       `Ei {{primeiro_nome}}, sua reposição com 20% OFF já tá pronta: 👉 {{link_checkout}}\n\nZé, do CarboZé 💚`,
       [v("primeiro_nome", "primeiro_nome", "amigo"), v("link_checkout", "link_checkout")]))),
-  tpl("carrinho_1", "Carrinho — lembrete 1", false, NUM_LOJA, "carrinho_lembrete_1",
+  tpl("carrinho_1", "Carrinho — lembrete 1", false, NUM_SERVICO, "carrinho_lembrete_1",
     "Oi, {{primeiro_nome}}! Vi que você começou um pedido com {{produtos}}. Ele continua salvo: {{link_carrinho}}",
     [v("primeiro_nome", "primeiro_nome", "tudo bem"), v("produtos", "produtos", "os produtos que você escolheu"), v("link_carrinho", "link_carrinho")]),
-  tpl("carrinho_2", "Carrinho — lembrete 2", false, NUM_LOJA, "carrinho_lembrete_2",
+  tpl("carrinho_2", "Carrinho — lembrete 2", false, NUM_SERVICO, "carrinho_lembrete_2",
     "{{primeiro_nome}}, seu carrinho de {{valor}} com {{produtos}} continua esperando por você: {{link_carrinho}}",
     [v("primeiro_nome", "primeiro_nome", "tudo bem"), v("valor", "valor", "compras"), v("produtos", "produtos", "os produtos que você escolheu"), v("link_carrinho", "link_carrinho")]),
-  tpl("carrinho_3", "Carrinho — lembrete 3", false, NUM_LOJA, "carrinho_lembrete_3",
+  tpl("carrinho_3", "Carrinho — lembrete 3", false, NUM_SERVICO, "carrinho_lembrete_3",
     "{{primeiro_nome}}, última chamada: seu carrinho ainda está salvo aqui {{link_carrinho}}",
     [v("primeiro_nome", "primeiro_nome", "tudo bem"), v("link_carrinho", "link_carrinho")]),
 ];
 const NUMEROS = [
   { phone_number_id: NUM_SERVICO, rotulo: "CarboZé", numero_exibicao: "(84) 90000-0001" },
-  { phone_number_id: NUM_CLUBE, rotulo: "CarboZé Clube", numero_exibicao: "(84) 90000-0002" },
-  { phone_number_id: NUM_LOJA, rotulo: "CarboZé Loja", numero_exibicao: "(84) 90000-0003" },
+  { phone_number_id: NUM_CLUBE, rotulo: "CarboVAPT", numero_exibicao: "(84) 90000-0002" },
+  { phone_number_id: NUM_LOJA, rotulo: "CarboZé SAC", numero_exibicao: "(84) 90000-0003" },
 ];
 
 // Uma fonte parada só quando a URL pede (`&alarme=1`) — para o print do alarme.
