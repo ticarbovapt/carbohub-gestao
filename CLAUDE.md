@@ -6183,6 +6183,17 @@ respostas casam (wa_id + número) com CADA envio. ⚠️ O risco ASSUMIDO: ofert
 pelo número dos avisos — se a nota cair, a Meta corta o limite dele; a trava é
 a `pausa_qualidade` (AMARELO) do CarboZé, que pausa só o comercial. ⚠️ O nome
 que o cliente vê é o de exibição na Meta, não o `rotulo`.
+⭐ **As conversas ANTIGAS dos dois foram trazidas para o CarboZé** (`20261200`,
+`carbo_wa_trazer_conversas_antigas(corte, ensaio, limite)`, rodada pelo SQL
+Editor com `supabase/consultas/conversas_antigas_para_o_carboze.sql`): a
+conversa inteira vai quando nada dela aconteceu depois da troca, a janela com o
+número antigo está fechada e não há agendada pendente. ⚠️ A JANELA não viaja (o
+contato do CarboZé nasce sem `last_inbound_at`; a Meta recusaria o texto
+livre). ⚠️ `numero_original` (mensagens e envios) guarda o número de verdade, e
+as duas réguas casam a resposta por `coalesce(numero_original, numero_id)` —
+resposta nova no número antigo continua parando a régua; ela cai na caixa
+daquele número, só com a mensagem nova. ⚠️ Status/dono só viajam se o CarboZé
+não tem linha própria nem pergunta do cliente pendente.
 
 Mesmo WABA (`1777955220017913`) ⇒ **mesmo token, MESMO webhook**, e template
 aprovado vale para os três. Quem separa no webhook é `metadata.phone_number_id`.
