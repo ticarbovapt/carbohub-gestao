@@ -21,13 +21,13 @@ const daEsteira = (t: string) => {
 const porRota = (t: string, meu: () => unknown) => () => (naConversas() ? meu() : daEsteira(t));
 
 export const NUM_SERVICO = "1255756280958635";
-export const NUM_CLUBE = "1274076859132981";
-export const NUM_LOJA = "1347087218483622";
+export const NUM_VAPT = "1274076859132981";
+export const NUM_SAC = "1347087218483622";
 
 const NUMEROS = [
   { phone_number_id: NUM_SERVICO, rotulo: "CarboZé", numero_exibicao: "(84) 90000-0001", funcao: "servico", cor: "#3BC770", ordem: 1, ativo: true },
-  { phone_number_id: NUM_CLUBE, rotulo: "CarboZé Clube", numero_exibicao: "(84) 90000-0002", funcao: "recompra", cor: "#8B5CF6", ordem: 2, ativo: true },
-  { phone_number_id: NUM_LOJA, rotulo: "CarboZé Loja", numero_exibicao: "(84) 90000-0003", funcao: "carrinho", cor: "#F59E0B", ordem: 3, ativo: true },
+  { phone_number_id: NUM_VAPT, rotulo: "CarboVAPT", numero_exibicao: "(84) 90000-0002", funcao: "carbovapt", cor: "#8B5CF6", ordem: 2, ativo: true },
+  { phone_number_id: NUM_SAC, rotulo: "CarboZé SAC", numero_exibicao: "(84) 90000-0003", funcao: "sac", cor: "#F59E0B", ordem: 3, ativo: true },
 ];
 
 // ── As mensagens ────────────────────────────────────────────────────────────
@@ -59,9 +59,9 @@ const beatriz = { ...base(NUM_SERVICO, "5584991231009", "Beatriz Nunes", 9009, "
 const gustavo = base(NUM_SERVICO, "5584991231010", "Gustavo Pereira", 9010, "entregue");
 const marcos = base(NUM_SERVICO, "5519991231006", "Marcos Teixeira", 9006, "etiqueta");
 const juliana = base(NUM_SERVICO, "5584991231001", "Juliana Prado", 9001, "confirmado");
-const renato = base(NUM_CLUBE, "5582998761212", "Renato Dias", 9012, "recompra");
-const debora = base(NUM_CLUBE, "5584998761234", "Débora Freire", null, "recompra");
-const heitor = base(NUM_LOJA, "5581996541275", "Heitor Campos", -7011, "carrinho_1");
+const renato = base(NUM_SERVICO, "5582998761212", "Renato Dias", 9012, "recompra");
+const debora = base(NUM_SERVICO, "5584998761234", "Débora Freire", null, "recompra");
+const heitor = base(NUM_SERVICO, "5581996541275", "Heitor Campos", -7011, "carrinho_1");
 // Helena — conversa de MAIS de 30 dias: fora da caixa, abre só por link (?de=).
 const helena = base(NUM_SERVICO, "5584991231045", "Helena Duarte", 9045, "entregue");
 
@@ -99,13 +99,13 @@ const MSGS: Msg[] = [
   // Juliana — pergunta sem ninguém.
   aviso(juliana, 130, "confirmado", "Oi, Juliana! Seu pedido CZ2026100101 foi confirmado e já está sendo separado. Avisamos aqui a cada passo."),
   dele(juliana, 55, "Oi! Qual o prazo pra chegar em Natal?"),
-  // CarboZé Clube — recompra.
+  // Recompra — desde 26/11/2026 sai pelo CarboZé.
   aviso(renato, 60 * 48, "recompra", "Oi, Renato! Já faz um mês que seu CarboZé chegou. Que tal repor antes de acabar? Bora repor?"),
   dele(renato, 180, "Bora! Me manda o link do kit de 5 de novo"),
   aviso(debora, 60 * 26, "recompra", "Oi, Débora! Já faz um mês que seu CarboZé chegou. Que tal repor antes de acabar? Bora repor?"),
   dele(debora, 60 * 5, "Não quero mais receber essas ofertas, por favor"),
   nossa(debora, 60 * 5 - 10, "Rafael Costa", "Tudo bem, Débora! Tirei seu número das ofertas. Os avisos dos seus pedidos continuam chegando."),
-  // CarboZé Loja — carrinho.
+  // Carrinho — desde 26/11/2026 sai pelo CarboZé.
   aviso(heitor, 40, "carrinho_1", "Oi, Heitor! Vi que você começou um pedido com CarboZé 100ml - Kit 5 frascos. Ele continua salvo: https://loja.exemplo.com.br/checkout/carrinho"),
   dele(heitor, 12, "Tive problema no cartão, dá pra pagar no Pix?"),
   aviso(helena, 60 * 24 * 45, "entregue", "Helena, seu pedido CZ2026090045 foi entregue. Chegou tudo certo? Qualquer coisa, é só responder aqui."),

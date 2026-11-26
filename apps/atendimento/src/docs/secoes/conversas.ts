@@ -37,7 +37,7 @@ export const SECOES_CONVERSAS: Secao[] = [
           "São três colunas: à esquerda a lista de conversas, no meio a conversa aberta e à direita o painel do contato. Em telas menores o painel do contato sai e o que ele mostra fica no topo da conversa; no celular aparece a lista OU a conversa, como num aplicativo de mensagens.",
         print: { chave: "conversas", legenda: "A caixa do número CarboZé, com a conversa da Luana aberta." },
         itens: [
-          { n: 1, titulo: "Qual número (caixa)", texto: "Cada número oficial tem a sua caixa: CarboZé (os avisos do pedido e o atendimento), CarboZé Clube (a oferta de recompra) e CarboZé Loja (o lembrete de carrinho abandonado). A mesma pessoa em dois números são duas conversas diferentes, cada uma com a sua janela de 24 h. Trocar de caixa fecha a conversa que estava aberta." },
+          { n: 1, titulo: "Qual número (caixa)", texto: "Cada número oficial tem a sua caixa: CarboZé (todas as mensagens automáticas — avisos do pedido, oferta de recompra e lembrete de carrinho — e as respostas a elas), CarboZé SAC (dúvidas, ajuda e pós-venda) e CarboVAPT (o outro produto). A mesma pessoa em dois números são duas conversas diferentes, cada uma com a sua janela de 24 h. Trocar de caixa fecha a conversa que estava aberta." },
           { n: 2, titulo: "Esperando resposta", texto: "Quantas conversas desta caixa precisam de resposta. A primeira conta é das que ainda estão dentro da janela (dá para responder); a segunda, quando aparece, é das que já estão com a janela fechada. Conta a caixa inteira, sem olhar busca ou filtro." },
           { n: 3, titulo: "Quem recebe aviso", texto: "Quantas pessoas são avisadas (sininho e notificação) quando um cliente escreve. Em laranja, “Ninguém recebe aviso”, quer dizer que ninguém está sendo avisado. Clique para escolher quem recebe — veja “Quem recebe o aviso”, abaixo." },
           { n: 4, titulo: "Voltar", texto: "Volta para a tela de onde você veio (por padrão, Mensagens ao cliente)." },
@@ -85,12 +85,12 @@ export const SECOES_CONVERSAS: Secao[] = [
         ],
       },
       {
-        titulo: "As outras caixas: Clube e Loja",
+        titulo: "Oferta de recompra e lembrete de carrinho",
         texto:
-          "A caixa do CarboZé Clube recebe as respostas à oferta de recompra (“Hora de repor”), e a do CarboZé Loja as respostas ao lembrete de carrinho abandonado. A conversa aparece na lista assim que a mensagem é enviada — com o nome do cliente —, mas o campo de resposta só aparece quando o cliente responde: a oferta não abre a janela. A oferta não leva link; quem manda o link é você, pelo painel “Links de checkout”.",
-        print: { chave: "conversas-clube", legenda: "A caixa do CarboZé Clube, com uma cliente que pediu para não receber ofertas." },
+          "Desde 26/11/2026 tudo que o sistema manda sozinho sai pelo número CarboZé — os avisos do pedido, a oferta de recompra (“Hora de repor”) e o lembrete de carrinho abandonado —, e a resposta do cliente cai na caixa do CarboZé. As caixas CarboZé SAC e CarboVAPT são de atendimento: nelas não sai nada automático (conversas antigas da recompra e do carrinho continuam lá). A conversa aparece na lista assim que a mensagem é enviada — com o nome do cliente —, mas o campo de resposta só aparece quando o cliente responde: a oferta não abre a janela. A oferta não leva link; quem manda o link é você, pelo painel “Links de checkout”.",
+        print: { chave: "conversas-ofertas", legenda: "A caixa do CarboZé, com uma cliente que pediu para não receber ofertas." },
         itens: [
-          { n: 1, titulo: "Caixa escolhida", texto: "A caixa aberta fica destacada. Cada caixa tem a sua lista, as suas janelas, situações e etiquetas." },
+          { n: 1, titulo: "As outras caixas", texto: "CarboZé SAC e CarboVAPT: clique para abrir a caixa de cada número. Cada caixa tem a sua lista, as suas janelas, situações e etiquetas." },
           { n: 2, titulo: "Conversa da recompra", texto: "A cliente respondeu à oferta. Responda dentro das 24 h." },
           { n: 3, titulo: "Aviso automático da oferta", texto: "A mensagem “Hora de repor” que o sistema mandou, com o nome da etapa." },
           { n: 4, titulo: "Não recebe ofertas", texto: "Esta pessoa pediu para parar: não recebe mais oferta de recompra nem lembrete de carrinho, em nenhum dos números. A data é de quando foi marcado." },
