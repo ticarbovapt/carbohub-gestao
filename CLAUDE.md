@@ -5706,6 +5706,14 @@ matriz, Bling 2 = filial SP.
    `20261193`: a releitura da nota e o `vincula-nf-filial` rodam a CADA MINUTO
    (o nome do job continua "-10min"): a nota liga em ~3 min, não ~20 — a
    logística espera por ela para imprimir a etiqueta. Os dois são SQL puro.
+   ⚠️ **A ponte cancelava venda com nota EM AUTORIZAÇÃO** (`20261202`,
+   26/11/2026, V2026110025, R$ 26.000): o ramo de cancelamento usava `not
+   bling2_nf_e_valida` (lista do que é FATURAMENTO), e Pendente não está nela.
+   Com a releitura a cada minuto a ponte passou a ver a nota em voo. Hoje
+   cancela só com `carbo_nf_invalida` (Cancelada/Denegada/Rejeitada/Bloqueada)
+   ou pedido situação 12. Quem foi cancelado assim reabre arrastando o card no
+   Rastreio (`supabase/consultas/ponte_bling2_cancelou_nota_em_voo.sql` dá a
+   etapa de antes).
 5. **A conta é sempre EXPLÍCITA**, no front e no servidor. Errar emite no CNPJ
    errado, e só se desfaz com cancelamento depois de o documento circular.
 
