@@ -489,9 +489,34 @@ function relogioDoAudio(s: number): string {
  * `durationchange` e no fim, e o relógio mostra `--:--` em vez de `NaN`
  * enquanto não sabe.
  */
+/** Velocidades do áudio, na ordem do botão (como no WhatsApp). A escolhida
+ *  vale para os próximos áudios e fica guardada neste navegador. */
+const VELOCIDADES = [1, 1.5, 2] as const;
+const CHAVE_VELOCIDADE = "carbo:conversas:velocidade-audio";
+function velocidadeGuardada(): number {
+  try {
+    const v = Number(localStorage.getItem(CHAVE_VELOCIDADE));
+    return (VELOCIDADES as readonly number[]).includes(v) ? v : 1;
+  } catch { return 1; }
+}
+const rotuloVelocidade = (v: number) => `${String(v).replace(".", ",")}x`;
+
 function Reprodutor({ url }: { url: string }) {
   const ref = useRef<HTMLAudioElement | null>(null);
   const [tocando, setTocando] = useState(false);
+  const [velocidade, setVelocidade] = useState(velocidadeGuardada);
+  // A velocidade vai para o elemento sempre que muda — e de novo ao carregar,
+  // porque trocar o `src` volta o navegador a 1x.
+  useEffect(() => {
+    const a = ref.current;
+    if (a) { a.defaultPlaybackRate = velocidade; a.playbackRate = velocidade; }
+  }, [velocidade]);
+  const trocarVelocidade = () => {
+    const i = VELOCIDADES.indexOf(velocidade as (typeof VELOCIDADES)[number]);
+    const v = VELOCIDADES[(i + 1) % VELOCIDADES.length];
+    setVelocidade(v);
+    try { localStorage.setItem(CHAVE_VELOCIDADE, String(v)); } catch { /* sem armazenamento */ }
+  };
   const [agora, setAgora] = useState(0);
   const [total, setTotal] = useState(NaN);
   // ⚠️ O navegador que não toca o formato não diz nada: o player ficava em
@@ -503,8 +528,8 @@ function Reprodutor({ url }: { url: string }) {
   };
 
   return (
-    <div className="mb-1.5 flex w-[15rem] items-center gap-2 rounded-md border
-                    bg-background/40 px-2 py-1.5 sm:w-[17rem]">
+    <div className="mb-1.5 flex w-[16rem] items-center gap-2 rounded-md border
+                    bg-background/40 px-2 py-1.5 sm:w-[18rem]">
       <button type="button" aria-label={tocando ? "Pausar" : "Tocar"}
               onClick={() => {
                 const a = ref.current;
@@ -534,11 +559,25 @@ function Reprodutor({ url }: { url: string }) {
         </p>
       </div>
 
+      <button type="button" onClick={trocarVelocidade}
+              aria-label={`Velocidade ${rotuloVelocidade(velocidade)}`}
+              title="Velocidade"
+              className={`h-6 min-w-[2.5rem] shrink-0 rounded-full px-1.5 text-[11px] font-semibold
+                          tabular-nums transition-colors ${
+                velocidade === 1
+                  ? "bg-muted text-muted-foreground hover:text-foreground"
+                  : "bg-carbo-green/20 text-carbo-green hover:bg-carbo-green/30"}`}>
+        {rotuloVelocidade(velocidade)}
+      </button>
+
       <audio ref={ref} src={url} preload="metadata"
              onError={() => setFalhou(true)}
              onPlay={() => setTocando(true)}
              onPause={() => setTocando(false)}
-             onLoadedMetadata={(e) => duracao(e.currentTarget)}
+             onLoadedMetadata={(e) => {
+               duracao(e.currentTarget);
+               e.currentTarget.playbackRate = velocidade;
+             }}
              onDurationChange={(e) => duracao(e.currentTarget)}
              onTimeUpdate={(e) => setAgora(e.currentTarget.currentTime)}
              onEnded={(e) => {
