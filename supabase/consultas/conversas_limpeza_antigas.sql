@@ -7,6 +7,8 @@
 -- ⚠️ Cliente que escrever depois REABRE a conversa, como sempre.
 -- ═══════════════════════════════════════════════════════════════════════════
 
+-- O corte vai até o COMEÇO DE HOJE (20261205). Em 27/11 rodou com 25/11 00:00
+-- (651) e depois com 27/11 00:00.
 -- BLOCO 1 — ENSAIO (não muda nada). Quantas, por número e por situação.
 -- ESPERADO: "ensaio": true, "marcadas_agora": 0, e em por_numero o CarboZé
 -- com a maior parte (sem_resposta + respondida_sem_encerrar + aguardando).
