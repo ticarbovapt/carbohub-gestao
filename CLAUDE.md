@@ -3167,6 +3167,13 @@ webhook com log cru e reprocessamento.
      conta "fechada sem resposta" de ninguém e o Pós-venda não tira reclamação
      da fila ("resolvida na conversa" lê `marca`).
 
+14. **Áudio em 1x · 1,5x · 2x** (27/11/2026, pedido do dono do processo): botão
+   ao lado da barra do `Reprodutor` (`Conversas.tsx`), como no WhatsApp. A
+   escolhida vale para os próximos áudios e fica no `localStorage` do navegador
+   (`carbo:conversas:velocidade-audio`) — preferência pessoal, não dado.
+   ⚠️ Trocar o `src` volta o navegador a 1x: a velocidade é reaplicada no
+   `loadedmetadata`.
+
 ### ⚠️ Conversas e Esteira a 500 vendas/semana: o teto e o índice (19/10/2026)
 Queixa do dono do processo: *"demora para abrir"* e *"diz que foi enviada
 mensagem mas o cara não aparece aqui quando pesquisa"* (Deividi Rodrigues: NF
