@@ -107,7 +107,7 @@ export const SHOTS = [
     clip: (p) => dlg(p), marcas: [
     [1, (p) => dlg(p).getByText("Emitir por").locator("..")],
     [2, (p) => dlg(p).getByText("V2026100094").first().locator("../..")],
-    [3, campo("Nome / Razão social")],
+    [3, campo("Razão social")],
     [4, campo("CNPJ")],
     [5, campo("Inscrição Estadual")],
     [6, campo("Contribuinte")],

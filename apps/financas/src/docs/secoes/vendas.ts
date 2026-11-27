@@ -158,7 +158,7 @@ export const SECOES_VENDAS: Secao[] = [
         itens: [
           { n: 1, titulo: "Emitir por", texto: "Matriz (padrão) ou Filial SP. Trocar recarrega a conferência, porque cada conta Bling tem o seu catálogo de produtos e o seu cadastro de clientes." },
           { n: 2, titulo: "O pedido", texto: "Número da venda (V…) e cliente." },
-          { n: 3, titulo: "Nome / Razão social *", texto: "Como deve sair na nota. Para empresa, a razão social do CNPJ." },
+          { n: 3, titulo: "Razão social *", texto: "Como deve sair na nota (para pessoa física, o campo se chama “Nome”). Logo abaixo, o nome fantasia: vai no campo “Fantasia” do cadastro do Bling e não aparece na nota." },
           { n: 4, titulo: "CNPJ / CPF", texto: "Vem da venda e não se edita aqui. O Bling identifica o cliente pelo documento: se estiver errado, corrija na venda antes de criar." },
           { n: 5, titulo: "Inscrição Estadual", texto: "O número da IE, ou ISENTO." },
           { n: 6, titulo: "Contribuinte (ICMS)", texto: "1 - Contribuinte ICMS (tem IE), 2 - Contribuinte isento (IE “ISENTO”) ou 9 - Não contribuinte (pessoa física, ou empresa sem IE). Precisa combinar com a inscrição estadual ao lado." },

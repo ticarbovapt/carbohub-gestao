@@ -175,6 +175,32 @@ licenciados, onde os funcionários registram e executam. Isso atravessa DOIS
 repositórios. Pôr o local em `carboze_orders` criaria a segunda verdade sobre
 onde o serviço acontece.
 
+### `/vender`: RAZÃO SOCIAL e NOME FANTASIA são dois campos (27/11/2026)
+Chamado do TI: o pedido tinha um nome só (`customer_name`), e a busca do CNPJ o
+enchia com o FANTASIA — que ia ao Bling como nome do contato (destinatário da
+NF) e ao tomador da NFS-e. Hoje (`20261206`):
+```
+customer_name        RAZÃO SOCIAL (CPF: o nome). NF, Bling "Nome", NFS-e, PDF.
+customer_trade_name  NOME FANTASIA. Bling "Fantasia"; nas telas abaixo da razão.
+```
+1. A busca da Receita preenche os dois (sem fantasia, repete a razão); o card
+   do CRM manda `legalName` na razão e o nome do card no fantasia; a busca de
+   cliente da base (`carbo_clientes_busca`, troca no texto vivo) devolve e
+   acha pelo fantasia.
+2. ⚠️ **As listas leem `carbo_vendas_metrica`, que NÃO tem a coluna** (expandiu
+   `o.*` na criação; republicá-la é a operação que já derrubou tela). O
+   fantasia vem numa leitura À PARTE, só dos ids da tela: `comFantasia()` nos
+   oito `useCarbozeVendas` e `useFantasiaDosPedidos` no Faturamento. Falhou ⇒
+   a lista sai sem o fantasia, nunca vazia.
+3. ⚠️ Mostrar só quando DIFERE da razão: `fantasiaDiferente()` (em
+   `lib/quotePdf.ts`, os oito) compara sem acento, caixa e pontuação.
+4. ⚠️ Front antes do SQL: venda NOVA sem fantasia não manda o campo; edição
+   que apaga o fantasia manda `""` (grava nulo).
+5. O aviso "seguir assim RENOMEIA o cadastro" do `bling-sync` passou a ignorar
+   PONTUAÇÃO: "CASSIO R FLORENTINO" × "CASSIO R. FLORENTINO" disparava.
+6. Pedido antigo segue com o nome que tinha (pode ser o fantasia). Corrigir o
+   histórico pela razão do Bling/NF é passo separado, e se mede antes.
+
 ### FAIXA DE PREÇO por tipo de cliente — é PRODUTO, igual à bonificação
 Pedido do dono do processo em 29/09/2026: o mesmo produto tem três preços
 conforme quem compra.

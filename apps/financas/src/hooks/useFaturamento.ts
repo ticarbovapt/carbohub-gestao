@@ -287,6 +287,7 @@ export interface BlingEndereco {
 
 export interface BlingContactToCreate {
   nome: string;
+  fantasia?: string;
   tipo: "F" | "J" | "E";
   numeroDocumento: string;
   ie?: string;

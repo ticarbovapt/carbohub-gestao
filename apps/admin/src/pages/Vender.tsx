@@ -322,7 +322,11 @@ export default function Vender() {
   // /vender em produção nos seis apps.
   const ehCarboze = mode === "carboze";
   const [doc, setDoc] = useState("");
+  // Razão social (CPF: o nome da pessoa) — é ela que vai na NF, no Bling e no
+  // PDF. O nome fantasia é campo À PARTE (20261206): antes a busca do CNPJ
+  // punha o fantasia aqui e a nota saía com ele.
   const [customerName, setCustomerName] = useState("");
+  const [nomeFantasia, setNomeFantasia] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [isLicenciado, setIsLicenciado] = useState(false);
@@ -444,6 +448,8 @@ export default function Vender() {
     if (fl.id) setLeadOrigemId(fl.id);
     // Razão social manda sobre o nome do card: é ela que sai na nota.
     if (fl.legalName || fl.name) setCustomerName(fl.legalName || fl.name || "");
+    // Com razão social no card, o nome do card é o fantasia.
+    if (fl.legalName && fl.name && fl.name.trim() !== fl.legalName.trim()) setNomeFantasia(fl.name);
     if (fl.cnpj) setDoc(fl.cnpj);
     if (fl.phone) setPhone(fl.phone);
     if (fl.email) setEmail(fl.email);
@@ -555,7 +561,7 @@ export default function Vender() {
   // o dado antigo do sistema não pode apagar por cima.
   function aplicarClienteExistente(c: ClienteSugestao) {
     setDoc(formatDoc(c.doc));
-    if (c.nome) setCustomerName(c.nome);
+    if (c.nome) { setCustomerName(c.nome); setNomeFantasia(c.fantasia ?? ""); }
     if (c.email && !email) setEmail(c.email);
     if (c.telefone && !phone) setPhone(String(c.telefone));
     if (c.ie && !ie) setIe(c.ie);
@@ -591,7 +597,10 @@ export default function Vender() {
       if (res.status === 404) { setDocFeedback({ kind: "err", msg: "CNPJ não encontrado na Receita Federal. Verifique o número ou preencha manualmente." }); return; }
       if (!res.ok) throw new Error(`Erro ${res.status}`);
       const raw = await res.json();
-      setCustomerName(raw.nome_fantasia || raw.razao_social || "");
+      // Razão social no nome (é o que vai na nota); o fantasia no campo dele —
+      // sem fantasia na Receita, repete a razão social.
+      setCustomerName(raw.razao_social || raw.nome_fantasia || "");
+      setNomeFantasia(raw.nome_fantasia || raw.razao_social || "");
       if (raw.email) setEmail(raw.email);
       const tel = raw.ddd_telefone_1 || raw.ddd_telefone_2;
       if (tel) setPhone(String(tel));
@@ -885,7 +894,7 @@ export default function Vender() {
 
   // ── Snapshot do formulário: grava tudo (JSON) e reidrata fielmente na edição ──
   type FormSnapshot = {
-    mode: VendaModo; doc: string; customerName: string; email: string; phone: string; isLicenciado: boolean;
+    mode: VendaModo; doc: string; customerName: string; nomeFantasia?: string; email: string; phone: string; isLicenciado: boolean;
     rows: ItemRow[]; obsPublica: string; notasInternas: string; tipoPonto: string; classificacao: string;
     volumeMedio: string; atuaDiesel: boolean; atuaFrotas: boolean; vendedorId: string;
     endereco: typeof endereco; fatMesmo: boolean; fatEndereco: typeof fatEndereco;
@@ -898,7 +907,7 @@ export default function Vender() {
   };
   function formSnapshot(): FormSnapshot {
     return {
-      mode, doc, customerName, email, phone, isLicenciado, rows, obsPublica, notasInternas,
+      mode, doc, customerName, nomeFantasia, email, phone, isLicenciado, rows, obsPublica, notasInternas,
       tipoPonto, classificacao, volumeMedio, atuaDiesel, atuaFrotas, vendedorId, endereco, fatMesmo,
       fatEndereco, ie, ieUf, pagModalidade, pagParcelas, pagFaturamento, discReason, deliveryDate,
       serviceRows, executionDate, serviceType, extras, extrasQtd,
@@ -912,6 +921,7 @@ export default function Vender() {
     const snap = editOrder.quote_form_snapshot as FormSnapshot | null;
     if (snap && typeof snap === "object") {
       setMode(normalizarModo(snap.mode, snap.serviceRows)); setDoc(snap.doc ?? ""); setCustomerName(snap.customerName ?? "");
+      setNomeFantasia(snap.nomeFantasia ?? editOrder.customer_trade_name ?? "");
       setEmail(snap.email ?? ""); setPhone(snap.phone ?? ""); setIsLicenciado(!!snap.isLicenciado);
       setRows(Array.isArray(snap.rows) && snap.rows.length ? snap.rows : [emptyRow()]);
       setObsPublica(snap.obsPublica ?? ""); setNotasInternas(snap.notasInternas ?? "");
@@ -943,6 +953,7 @@ export default function Vender() {
     } else {
       // Best-effort (orçamento antigo, sem snapshot) — restaura o que dá pelas colunas.
       setCustomerName(editOrder.customer_name ?? ""); setDoc(editOrder.cnpj ?? "");
+      setNomeFantasia(editOrder.customer_trade_name ?? "");
       setEmail(editOrder.customer_email ?? ""); setPhone(editOrder.customer_phone ?? ""); setIe(editOrder.customer_ie ?? "");
       const items = Array.isArray(editOrder.items) ? editOrder.items : [];
       setRows(items.length ? items.map((it: any) => ({
@@ -1017,6 +1028,8 @@ export default function Vender() {
       vendedor_id: vendedorId || undefined,
       internal_notes: buildInternalNotes(),
       customer_name: customerName || undefined,
+      // Vazio na edição grava nulo; vazio em venda nova não manda o campo.
+      customer_trade_name: nomeFantasia.trim() || (editId ? "" : undefined),
       customer_doc: doc || undefined,
       customer_email: email || undefined,
       customer_phone: phone || undefined,
@@ -1045,7 +1058,7 @@ export default function Vender() {
 
   // Limpa o formulário após salvar.
   function resetForm() {
-    setMode("carboze"); setDoc(""); setCustomerName(""); setEmail(""); setPhone("");
+    setMode("carboze"); setDoc(""); setCustomerName(""); setNomeFantasia(""); setEmail(""); setPhone("");
     setIsLicenciado(false); setRows([emptyRow()]); setObsPublica(""); setSegmento("");
     setNotasInternas(""); setTipoPonto(""); setClassificacao(""); setVolumeMedio("");
     setAtuaDiesel(false); setAtuaFrotas(false); setVendedorId("");
@@ -1103,6 +1116,7 @@ export default function Vender() {
       await generateQuotePdf({
         order_number: numero ?? undefined,
         customer_name: customerName || "Cliente", cnpj: doc || undefined,
+        customer_trade_name: nomeFantasia.trim() || undefined,
         ie: ie || undefined,
         endereco,
         endereco_faturamento: enderecoFaturamentoOuNulo(),
@@ -1134,6 +1148,7 @@ export default function Vender() {
       const { base64, filename } = await generateQuotePdf({
         order_number: numero ?? undefined,
         customer_name: customerName || "Cliente", cnpj: doc || undefined,
+        customer_trade_name: nomeFantasia.trim() || undefined,
         ie: ie || undefined,
         endereco,
         endereco_faturamento: enderecoFaturamentoOuNulo(),
@@ -1409,12 +1424,17 @@ export default function Vender() {
           <h3 className="font-semibold flex items-center gap-2"><Building2 className="h-4 w-4 text-carbo-green" /> Informações do Cliente</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Nome / Razão Social <span className="text-destructive">*</span></Label>
-              <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Nome do cliente"
+              <Label>{doc.replace(/\D/g, "").length === 11 ? "Nome" : "Razão social"} <span className="text-destructive">*</span></Label>
+              <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)}
+                placeholder="Nome do cliente"
                 className={!nomeValido ? "border-destructive/50 focus-visible:ring-destructive/40" : undefined} />
               {!nomeValido && (
                 <p className="text-[11px] text-destructive">Obrigatório — sem o nome o pedido não fatura nem se acha depois.</p>
               )}
+            </div>
+            <div className="space-y-1.5">
+              <Label>Nome fantasia</Label>
+              <Input value={nomeFantasia} onChange={(e) => setNomeFantasia(e.target.value)} placeholder="Nome fantasia" />
             </div>
             <div className="space-y-1.5">
               <Label>Email</Label>

@@ -40,6 +40,8 @@ export interface VendaItemInput {
 export interface NovaVendaInput {
   tipo: VendaTipo; status: VendaStatus;
   customer_name?: string; customer_doc?: string; customer_email?: string; customer_phone?: string; customer_ie?: string;
+  /** Nome fantasia (20261206). `customer_name` é a razão social — é ela que vai na NF. */
+  customer_trade_name?: string;
   is_licenciado?: boolean;
   endereco?: Record<string, unknown> | null; endereco_faturamento?: Record<string, unknown> | null;
   payment_terms?: string; freight_type?: string; total: number; notes?: string;
@@ -75,6 +77,7 @@ export interface VendaItemRow { produto: string | null; quantidade: number; prec
 export interface VendaRow {
   id: string; numero: string | null; vendedor_id: string; tipo: VendaTipo; status: VendaStatus;
   customer_name: string | null; customer_doc: string | null; customer_email: string | null; customer_phone: string | null; customer_ie: string | null;
+  customer_trade_name: string | null;
   is_licenciado: boolean; endereco: Record<string, unknown> | null; endereco_faturamento: Record<string, unknown> | null;
   payment_terms: string | null; freight_type: string | null; total: number; notes: string | null;
   sale_date: string | null; extra: Record<string, unknown> | null; created_at: string; updated_at: string; itens?: VendaItemRow[];
@@ -118,6 +121,7 @@ function toVenda(row: any): VendaRow {
     id: row.id, numero: row.order_number ?? null, vendedor_id: row.vendedor_id ?? "", tipo: "venda",
     status: toCrmStatus(row.status),
     customer_name: row.customer_name ?? null, customer_doc: row.cnpj ?? null,
+    customer_trade_name: row.customer_trade_name ?? null,
     customer_email: row.customer_email ?? null, customer_phone: row.customer_phone ?? null, customer_ie: row.customer_ie ?? null,
     is_licenciado: false, endereco: e, endereco_faturamento: (row.billing_address ?? null),
     payment_terms: row.payment_terms ?? null, freight_type: row.freight_type ?? null,
@@ -313,6 +317,11 @@ async function buildOrderFields(input: NovaVendaInput) {
   }
   return {
     customer_name: input.customer_name || "",
+    // Só vai quando a tela manda o campo: front no ar antes da migração
+    // 20261206 não derruba a venda nova sem fantasia. "" (edição que apagou o
+    // fantasia) grava nulo.
+    ...(input.customer_trade_name !== undefined
+      ? { customer_trade_name: input.customer_trade_name.trim() || null } : {}),
     customer_email: input.customer_email || null,
     customer_phone: input.customer_phone || null,
     cnpj: input.customer_doc || null,

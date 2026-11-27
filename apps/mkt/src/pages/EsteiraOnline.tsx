@@ -65,8 +65,10 @@ const fmtDoc = (v: string | null) => {
   if (d.length === 11) return d.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, "$1.$2.$3-$4");
   return v?.trim() || "—";
 };
+/** Telefone legível: (84) 99123-1007. Tira o 55 do país quando vem junto. */
 const fmtFone = (v: string | null) => {
-  const d = (v ?? "").replace(/\D/g, "");
+  const bruto = (v ?? "").replace(/\D/g, "");
+  const d = (bruto.length === 12 || bruto.length === 13) && bruto.startsWith("55") ? bruto.slice(2) : bruto;
   if (d.length === 11) return d.replace(/^(\d{2})(\d{5})(\d{4})$/, "($1) $2-$3");
   if (d.length === 10) return d.replace(/^(\d{2})(\d{4})(\d{4})$/, "($1) $2-$3");
   return v?.trim() || "—";
@@ -1064,7 +1066,7 @@ export function Detalhe({ row, rastreio, parada, avisos, templates, onClose }: {
             <Bloco titulo="Cliente" icon={User}>
               <Linha label="Documento" valor={fmtDoc(row.cliente_doc)} />
               <Linha label="Telefone" valor={row.cliente_fone ? (
-                <BotaoCopiar texto={row.cliente_fone} oque="Telefone" />
+                <BotaoCopiar texto={fmtFone(row.cliente_fone)} oque="Telefone" />
               ) : <span className="text-muted-foreground">não informado</span>} />
             </Bloco>
 
@@ -1317,7 +1319,7 @@ function CardCarrinho({ row, cor, erro, resposta }: { row: CarrinhoRow; cor: str
       <div className="mt-1 flex items-center gap-2 text-[10px] leading-4 text-muted-foreground/70">
         <Phone className="h-3 w-3 shrink-0" />
         <span className="min-w-0 shrink truncate">
-          {row.telefone ?? <span className="text-rose-500">sem telefone</span>}
+          {row.telefone ? fmtFone(row.telefone) : <span className="text-rose-500">sem telefone</span>}
         </span>
         {row.email && (
           <>

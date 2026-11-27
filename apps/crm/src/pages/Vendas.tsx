@@ -22,7 +22,7 @@ import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { generateQuotePdf } from "@/lib/quotePdf";
+import { generateQuotePdf, fantasiaDiferente } from "@/lib/quotePdf";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -516,6 +516,7 @@ export default function Vendas() {
       await generateQuotePdf({
         order_number: data.order_number ?? undefined,
         customer_name: data.customer_name ?? undefined,
+        customer_trade_name: data.customer_trade_name ?? undefined,
         cnpj: data.cnpj ?? undefined,
         ie: data.customer_ie ?? undefined,
         endereco: snap?.endereco ?? { logradouro: data.delivery_address, cidade: data.delivery_city, uf: data.delivery_state, cep: data.delivery_zip },
@@ -774,7 +775,10 @@ export default function Vendas() {
                               <div>
                                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Cliente</p>
                                 <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-1 text-xs">
-                                  <div><span className="text-muted-foreground">Nome:</span> <span className="font-medium">{venda.customer_name}</span></div>
+                                  <div><span className="text-muted-foreground">Razão social:</span> <span className="font-medium">{venda.customer_name}</span></div>
+                                  {fantasiaDiferente(venda) && (
+                                    <div><span className="text-muted-foreground">Nome fantasia:</span> <span className="font-medium">{fantasiaDiferente(venda)}</span></div>
+                                  )}
                                   <div><span className="text-muted-foreground">CNPJ/CPF:</span> <span className="font-medium">{venda.customer_doc || "—"}</span></div>
                                   <div><span className="text-muted-foreground">Inscr. Estadual:</span> <span className="font-medium">{venda.customer_ie || "—"}</span></div>
                                   <div><span className="text-muted-foreground">Contato:</span> <span className="font-medium">{[venda.customer_email, venda.customer_phone].filter(Boolean).join(" · ") || "—"}</span></div>
@@ -1263,6 +1267,7 @@ export default function Vendas() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="truncate font-semibold">{venda.customer_name}</p>
+                        {fantasiaDiferente(venda) && <p className="truncate text-xs text-muted-foreground">{fantasiaDiferente(venda)}</p>}
                         <p className="mt-0.5 truncate text-xs text-muted-foreground">
                           <span className="font-mono">{venda.order_number}</span>
                           {" · "}{fmtDate(effectiveDate(venda))}
@@ -1398,6 +1403,7 @@ export default function Vendas() {
                               com as colunas separadas a tabela não cabia e cortava o Total. */}
                           <td className="p-3 max-w-[180px]">
                             <div className="font-medium truncate">{venda.customer_name}</div>
+                            {fantasiaDiferente(venda) && <div className="text-xs text-muted-foreground truncate">{fantasiaDiferente(venda)}</div>}
                             <div className="min-[1800px]:hidden text-xs text-muted-foreground truncate">{[venda.delivery_city, venda.delivery_state].filter(Boolean).join("/") || "—"}</div>
                           </td>
                           <td className="hidden min-[1800px]:table-cell p-3 text-muted-foreground max-w-[170px] truncate">{[venda.delivery_city, venda.delivery_state].filter(Boolean).join("/") || "—"}</td>
