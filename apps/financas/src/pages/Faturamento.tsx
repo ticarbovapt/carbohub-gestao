@@ -28,6 +28,8 @@ import { NfseEmitirDialog } from "@/components/faturamento/NfseEmitirDialog";
 import { BlingConfirmDialog } from "@/components/faturamento/BlingConfirmDialog";
 import { BaixarNFButton } from "@/components/faturamento/BaixarNFButton";
 import { useNotasDosPedidos, notaInvalida } from "@/hooks/useNotasDosPedidos";
+import { useFantasiaDosPedidos } from "@/hooks/useFantasiaDosPedidos";
+import { fantasiaDiferente } from "@/lib/quotePdf";
 import { VincularNFsTab } from "@/components/faturamento/VincularNFsTab";
 import { VincularNFsFilialTab } from "@/components/faturamento/VincularNFsFilialTab";
 import { TodasNFsTab } from "@/components/faturamento/TodasNFsTab";
@@ -208,6 +210,12 @@ export default function Faturamento() {
   const { data: notas } = useNotasDosPedidos(
     activeTab === "bling" ? blingPag.slice : activeTab === "online" ? onlinePag.slice : sistPag.slice,
   );
+  // O nome fantasia de cada pedido da página (a razão social é o `customer_name`).
+  const { data: fantasias } = useFantasiaDosPedidos(
+    (activeTab === "bling" ? blingPag.slice : activeTab === "online" ? onlinePag.slice : sistPag.slice).map((o) => o.id),
+  );
+  const fantasiaDe = (o: FaturamentoOrder) =>
+    fantasiaDiferente({ customer_name: o.customer_name, customer_trade_name: fantasias?.[o.id] ?? null });
   // Nova busca/mês/aba → volta pra página 1.
   function resetPages() { setPagina(1); }
 
@@ -273,7 +281,10 @@ export default function Faturamento() {
                   onClick={() => setExpandedId(expandedId === o.id ? null : o.id)}
                 >
                   <CarboTableCell className="font-medium">{o.order_number}</CarboTableCell>
-                  <CarboTableCell>{o.customer_name}</CarboTableCell>
+                  <CarboTableCell>
+                    <div>{o.customer_name}</div>
+                    {fantasiaDe(o) && <div className="text-xs text-muted-foreground">{fantasiaDe(o)}</div>}
+                  </CarboTableCell>
                   <CarboTableCell>{fmtDate(o.sale_date || o.created_at)}</CarboTableCell>
                   <CarboTableCell>{o.vendedor_name || <span className="text-muted-foreground">—</span>}</CarboTableCell>
                   <CarboTableCell className="text-right font-medium">{fmtCurrency(Number(o.total))}</CarboTableCell>
@@ -361,7 +372,10 @@ export default function Faturamento() {
                       <div>
                         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Cliente</p>
                         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-1 text-xs">
-                          <div><span className="text-muted-foreground">Nome:</span> <span className="font-medium">{o.customer_name}</span></div>
+                          <div><span className="text-muted-foreground">Razão social:</span> <span className="font-medium">{o.customer_name}</span></div>
+                          {fantasiaDe(o) && (
+                            <div><span className="text-muted-foreground">Nome fantasia:</span> <span className="font-medium">{fantasiaDe(o)}</span></div>
+                          )}
                           <div><span className="text-muted-foreground">CNPJ/CPF:</span> <span className="font-medium">{o.cnpj || "—"}</span></div>
                           <div><span className="text-muted-foreground">Inscr. Estadual:</span> <span className="font-medium">{o.customer_ie || "—"}</span></div>
                           <div><span className="text-muted-foreground">Contato:</span> <span className="font-medium">{[o.customer_email, o.customer_phone].filter(Boolean).join(" · ") || "—"}</span></div>

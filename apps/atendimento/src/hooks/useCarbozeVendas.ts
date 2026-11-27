@@ -30,6 +30,8 @@ export interface CarbozeVendaRow {
   created_at: string;
   sale_date: string | null;
   customer_name: string;
+  /** Nome fantasia (20261206); `customer_name` é a razão social. */
+  customer_trade_name: string | null;
   customer_doc: string | null;
   customer_ie: string | null;
   customer_email: string | null;
@@ -139,7 +141,7 @@ export function useCarbozeVendas({ month, customFrom, customTo, vendedorFilter, 
       if (buscando) {
         const { data, error } = await db.rpc("carbo_vendas_busca", { p_termo: termo, p_limit: 300 });
         if (error) throw error;
-        return ((data ?? []) as any[]).map(mapVenda);
+        return comFantasia(((data ?? []) as any[]).map(mapVenda));
       }
 
       // ⚠️ Só DUAS datas agora, as duas em `AAAA-MM-DD`. Antes havia quatro:
@@ -217,7 +219,7 @@ export function useCarbozeVendas({ month, customFrom, customTo, vendedorFilter, 
       // coluna. Refiltrar em memória não protegia de nada — o que faltava
       // nunca chegava — e mantinha viva a segunda definição de "data da
       // venda", que era o defeito.
-      return ((data ?? []) as any[]).map(mapVenda);
+      return comFantasia(((data ?? []) as any[]).map(mapVenda));
     },
   });
 }
@@ -232,6 +234,7 @@ function mapVenda(row: any): CarbozeVendaRow {
           created_at: row.created_at,
           sale_date: row.sale_date ?? null,
           customer_name: row.customer_name ?? "—",
+          customer_trade_name: row.customer_trade_name ?? null,
           customer_doc: row.cnpj ?? null,
           customer_ie: row.customer_ie ?? null,
           customer_email: row.customer_email ?? null,
@@ -422,4 +425,36 @@ export function useBulkAssignVendedor() {
     },
     onError: (e: Error) => toast.error("Erro ao atribuir vendedor: " + e.message),
   });
+}
+
+
+/**
+ * Nome fantasia (20261206). As listas leem `carbo_vendas_metrica`, que expandiu
+ * as colunas do pedido NA CRIAÇÃO e não ganha coluna nova sem ser republicada
+ * (operação que já derrubou tela duas vezes). Então o fantasia vem numa
+ * leitura à parte, só dos pedidos que vieram, em lotes de 100 ids.
+ * ⚠️ Falhar aqui (coluna ainda não existe, rede) NÃO derruba a lista: ela sai
+ * sem o fantasia, e a razão social continua aparecendo.
+ */
+async function comFantasia(rows: CarbozeVendaRow[]): Promise<CarbozeVendaRow[]> {
+  const ids = rows.map((r) => r.id);
+  if (ids.length === 0) return rows;
+  const mapa = new Map<string, string>();
+  try {
+    for (let i = 0; i < ids.length; i += 100) {
+      const lote = ids.slice(i, i + 100);
+      const { data, error } = await (supabase as any)
+        .from("carboze_orders").select("id, customer_trade_name")
+        .in("id", lote).not("customer_trade_name", "is", null)
+        .order("id").range(0, lote.length - 1);
+      if (error) throw error;
+      for (const r of (data ?? []) as { id: string; customer_trade_name: string | null }[]) {
+        if (r.customer_trade_name) mapa.set(r.id, r.customer_trade_name);
+      }
+    }
+  } catch (e) {
+    console.warn("[vendas] nome fantasia não carregou:", e);
+    return rows;
+  }
+  return mapa.size ? rows.map((r) => (mapa.has(r.id) ? { ...r, customer_trade_name: mapa.get(r.id)! } : r)) : rows;
 }

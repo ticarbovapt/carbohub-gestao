@@ -50,9 +50,19 @@ interface QuoteItem {
 
 type Endereco = Record<string, unknown> | null | undefined;
 
+/** O fantasia, quando existe e não é a própria razão social (sem caixa/pontuação). */
+export function fantasiaDiferente(o: { customer_name?: string | null; legal_name?: string | null; customer_trade_name?: string | null }): string | null {
+  const f = (o.customer_trade_name ?? "").trim();
+  if (!f) return null;
+  const chave = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/gi, "").toLowerCase();
+  return chave(f) === chave(o.customer_name || o.legal_name || "") ? null : f;
+}
+
 export interface QuotePdfData {
   order_number?: string | null;
   customer_name?: string | null;
+  /** Nome fantasia (20261206). Sai abaixo da razão social só quando DIFERE dela. */
+  customer_trade_name?: string | null;
   legal_name?: string | null;
   cnpj?: string | null;
   ie?: string | null;
@@ -332,7 +342,7 @@ async function gerarPropostaCarbovapt(order: QuotePdfData, opts?: { download?: b
   const cidade = s(e, "cidade"), uf = s(e, "uf").toUpperCase();
   const local = [cidade, UF_NOME[uf] ?? uf].filter(Boolean).join(" · ") || "—";
   const colunas: [number, string, string[]][] = [
-    [27, "Empresa:", [order.customer_name || order.legal_name || "—", order.cnpj ? `CNPJ/CPF ${order.cnpj}` : ""]],
+    [27, "Empresa:", [order.customer_name || order.legal_name || "—", fantasiaDiferente(order) ?? "", order.cnpj ? `CNPJ/CPF ${order.cnpj}` : ""]],
     [92, "Quantidade:", [`${nVeic} ${nVeic === 1 ? "veículo" : "veículos"}`]],
     [150, "Localização:", [local]],
   ];
@@ -586,6 +596,7 @@ export async function generateQuotePdf(order: QuotePdfData, opts?: { download?: 
   let ly = y + 11;
   const clienteFields: [string, string][] = [
     ["Nome / Razão Social", order.customer_name || order.legal_name || "—"],
+    ...(fantasiaDiferente(order) ? [["Nome fantasia", fantasiaDiferente(order) as string] as [string, string]] : []),
     ["CNPJ / CPF", order.cnpj || "—"],
     ["Inscrição Estadual", order.ie || "—"],
     ["Vendedor", order.vendedor_name || "—"],

@@ -374,8 +374,13 @@ function buildContactPayload(order: any): { payload: Record<string, any> | null;
   const endereco = extractOrderAddress(order);
   const fone = telefoneParaBling(order.customer_phone);
 
+  // Nome = RAZÃO SOCIAL (é o destinatário da NF); o fantasia vai no campo
+  // "Fantasia" do contato (20261206). Antes só existia um nome no pedido, e a
+  // busca do CNPJ no /vender o enchia com o fantasia.
+  const fantasia = String(order.customer_trade_name ?? "").trim();
   const payload: Record<string, any> = {
     nome: order.customer_name || "",
+    ...(fantasia ? { fantasia } : {}),
     tipo,
     numeroDocumento: doc,
     situacao: "A",
@@ -423,6 +428,7 @@ function sanitizeContactPayload(input: any): { payload: Record<string, any> | nu
 
   const payload: Record<string, any> = {
     nome: String(input.nome ?? "").trim(),
+    ...(String(input.fantasia ?? "").trim() ? { fantasia: String(input.fantasia).trim() } : {}),
     tipo,
     numeroDocumento: doc,
     situacao: "A",
@@ -531,7 +537,11 @@ async function createBlingPedido(
       // Reusa o normalizador que já existe no arquivo — comparar nome sem
       // tirar acento e caixa acusaria "José" contra "Jose" como pessoas
       // diferentes, e o aviso viraria ruído no primeiro dia.
-      const chave = (s: string) => normDiacritics(s).replace(/\s+/g, " ").trim();
+      // E sem PONTUAÇÃO: "CASSIO R FLORENTINO" contra "CASSIO R. FLORENTINO"
+      // é o mesmo nome, e o aviso de "renomear o cadastro" disparava por um
+      // ponto (V2026110041, 27/11/2026).
+      const chave = (s: string) =>
+        normDiacritics(s).replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
       if (blingContactId && nomeCadastro && nomePedido &&
           chave(nomeCadastro) !== chave(nomePedido)) {
         warnings.push(

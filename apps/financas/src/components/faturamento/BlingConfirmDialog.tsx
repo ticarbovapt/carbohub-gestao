@@ -21,7 +21,7 @@ const fmtDoc = (d: string) => {
 };
 
 interface ContactForm {
-  nome: string; tipo: "F" | "J" | "E"; numeroDocumento: string;
+  nome: string; fantasia: string; tipo: "F" | "J" | "E"; numeroDocumento: string;
   ie: string; indicadorIe: 1 | 2 | 9; email: string; telefone: string;
   endereco: string; numero: string; complemento: string;
   bairro: string; cep: string; municipio: string; uf: string;
@@ -30,7 +30,7 @@ interface ContactForm {
 function toForm(c: BlingContactToCreate): ContactForm {
   const g = c.endereco?.geral ?? {};
   return {
-    nome: c.nome ?? "", tipo: c.tipo ?? "J", numeroDocumento: c.numeroDocumento ?? "",
+    nome: c.nome ?? "", fantasia: c.fantasia ?? "", tipo: c.tipo ?? "J", numeroDocumento: c.numeroDocumento ?? "",
     ie: c.ie ?? "", indicadorIe: (c.indicadorIe ?? (c.ie ? 1 : 9)) as 1 | 2 | 9,
     email: c.email ?? "", telefone: c.telefone ?? "",
     endereco: g.endereco ?? "", numero: g.numero ?? "", complemento: g.complemento ?? "",
@@ -96,6 +96,7 @@ export function BlingConfirmDialog({
     try {
       const contact: BlingContactToCreate | null = willCreate && form ? {
         nome: form.nome.trim(),
+        ...(form.fantasia.trim() ? { fantasia: form.fantasia.trim() } : {}),
         tipo: form.tipo,
         numeroDocumento: form.numeroDocumento,
         indicadorIe: form.indicadorIe,
@@ -201,9 +202,15 @@ export function BlingConfirmDialog({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 min-w-0">
                   <div className="sm:col-span-2 space-y-1">
-                    <Label className="text-xs">Nome / Razão social *</Label>
+                    <Label className="text-xs">{form.tipo === "J" ? "Razão social *" : "Nome *"}</Label>
                     <Input className={fieldCls} value={form.nome} onChange={(e) => set("nome", e.target.value)} />
                   </div>
+                  {form.tipo === "J" && (
+                    <div className="sm:col-span-2 space-y-1">
+                      <Label className="text-xs">Nome fantasia</Label>
+                      <Input className={fieldCls} value={form.fantasia} onChange={(e) => set("fantasia", e.target.value)} />
+                    </div>
+                  )}
                   <div className="space-y-1">
                     <Label className="text-xs">{form.tipo === "J" ? "CNPJ" : "CPF"}</Label>
                     <Input className={`${fieldCls} bg-muted/40`} value={fmtDoc(form.numeroDocumento)} readOnly />

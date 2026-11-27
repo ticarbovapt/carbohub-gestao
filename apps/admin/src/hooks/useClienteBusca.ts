@@ -15,6 +15,8 @@ import { supabase } from "@/integrations/supabase/client";
 export interface ClienteSugestao {
   doc: string;
   nome: string | null;
+  /** Nome fantasia mais recente do documento (20261206; ausente antes dela). */
+  fantasia?: string | null;
   email: string | null;
   telefone: string | null;
   ie: string | null;

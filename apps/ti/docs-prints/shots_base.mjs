@@ -37,8 +37,9 @@ SHOTS.push(
     [3, sel('input[placeholder="CNPJ ou CPF"]')],
     [4, btn("Buscar dados")],
     [5, sel('input[placeholder="Nome do cliente"]')],
-    [6, (p) => vc("Informações do Cliente")(p).getByText("É Licenciado?").locator("..").locator("..")],
-    [7, (p) => vc("Informações do Cliente")(p).getByText("Inscrição Estadual").first().locator("..").locator("..")],
+    [6, sel('input[placeholder="Nome fantasia"]')],
+    [7, (p) => vc("Informações do Cliente")(p).getByText("É Licenciado?").locator("..").locator("..")],
+    [8, (p) => vc("Informações do Cliente")(p).getByText("Inscrição Estadual").first().locator("..").locator("..")],
   ] },
   { chave: "vender-gestor", papel: "gestor", url: "/vender", viewport: ALTO,
     clip: (p) => [p.getByText("Responsável pela venda").locator("xpath=ancestor::div[contains(@class,'rounded-xl')][1]"), vc("Tipo de Operação")(p)], marcas: [
