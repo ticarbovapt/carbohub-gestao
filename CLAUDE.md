@@ -3139,6 +3139,34 @@ webhook com log cru e reprocessamento.
      roubavam largura, o texto quebrava antes e o player de áudio vazava.
      O seletor de emoji ancora no balão, não nos botões (era cortado à direita).
 
+13. **Os números moram na BARRA LATERAL, com a bolinha de "sem resposta"**
+   (`20261204`, 27/11/2026, pedido do dono do processo: 694 não respondidas,
+   muitas de semanas atrás). Cada número ativo é subitem de Conversas
+   (`/conversas?numero=`); a contagem vem de `carbo_wa_pendentes_por_numero()`
+   (`usePendentesPorNumero`), ESPELHO da aba "Não respondidas"
+   (`conversaDoResumo`/`statusEfetivo`, janela de 30 dias) — mudou a regra lá,
+   mude a função. Na tela de Conversas a bolinha recebe a contagem que a tela
+   já tem (`setQueryData`). O seletor de número do topo saiu (ficou a etiqueta).
+   ⚠️ Item de menu que difere só pela QUERY precisa de `ativo` no
+   `ShellNavItem` (`packages/shell`, os oito apps): o `NavLink` olha só o
+   caminho e acenderia os três números juntos.
+   - **A tela abre em "Todas"** — as outras abas são filtro (antes abria em
+     "Não respondidas" quando havia pendência).
+   - **Aviso ao abrir o número** (`conversasParadas` em `lib/conversas.ts`,
+     testado): sem resposta há > 24 h ou "em atendimento" parada há > 2 dias ⇒
+     diálogo com "Ver" (abre filtrado, mais antiga primeiro) e "Ciente";
+     fechar por qualquer caminho conta como ciente, e fica em
+     `carbo_wa_aviso_ciente` (quem, quando, quantas, o que fez). Volta a cada
+     abertura do número enquanto houver parada. "Aguardando" fica fora (foi
+     decisão de alguém).
+   - **Limpeza** (`carbo_wa_resolver_antigas(corte, ensaio)`, só SQL Editor,
+     `supabase/consultas/conversas_limpeza_antigas.sql`): resolve o que parou
+     antes do corte e a tela ainda mostra como trabalho. ⚠️ No histórico vai
+     `origem = 'limpeza'` e `marca = false` (marca local
+     `carbo.origem_atendimento` no gatilho, troca no texto vivo): o Painel não
+     conta "fechada sem resposta" de ninguém e o Pós-venda não tira reclamação
+     da fila ("resolvida na conversa" lê `marca`).
+
 ### ⚠️ Conversas e Esteira a 500 vendas/semana: o teto e o índice (19/10/2026)
 Queixa do dono do processo: *"demora para abrir"* e *"diz que foi enviada
 mensagem mas o cara não aparece aqui quando pesquisa"* (Deividi Rodrigues: NF

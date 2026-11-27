@@ -1,5 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
+import { CHAVE_PENDENTES_POR_NUMERO, registrarAvisoCiente } from "@/hooks/usePendentesPorNumero";
 import { useParamUrl, confirmar } from "@carbo/shell";
 import {
   MessagesSquare, Send, Loader2, AlertTriangle, ArrowDown, Clock, ArrowLeft, Lock, Paperclip,
@@ -52,6 +54,7 @@ import {
 } from "@/hooks/useConversas";
 import {
   conversaAvulsa, reacoesDoCliente, resumoDaCitada, podeCitar, podeReagir, REACOES,
+  conversasParadas,
 } from "@/lib/conversas";
 import { prepararImagem, ehImagem } from "@/lib/imagemParaEnvio";
 
@@ -3896,20 +3899,11 @@ export default function Conversas() {
      voltaria a misturar as caixas. */
   const numeroId = numeroDaUrl
     ?? (numeros?.[0]?.phone_number_id ?? null);
+  const numeroAtual = (numeros ?? []).find((n: NumeroWa) => n.phone_number_id === numeroId) ?? null;
   /* Só o celular usa: lá a conversa ocupa a tela, e voltar é tirar o `?de=`.
      No `lg` a lista está sempre ao lado e o botão nem aparece. */
   const fecharConversa = () => {
     const p = new URLSearchParams(params);
-    p.delete("de");
-    setParams(p, { replace: true });
-  };
-  const trocarNumero = (id: string) => {
-    const p = new URLSearchParams(params);
-    p.set("numero", id);
-    /* ⚠️ Fecha a conversa aberta: `?de=` é um `wa_id`, e o MESMO `wa_id` em
-       outro número é outra conversa. Levar o parâmetro junto abriria uma
-       conversa que não existe naquela caixa, ou — pior — a conversa certa da
-       pessoa errada no contexto errado. */
     p.delete("de");
     setParams(p, { replace: true });
   };
@@ -3992,27 +3986,13 @@ export default function Conversas() {
      desta tela guarda qual CONVERSA está aberta, e empilhar o card ali faria o
      "voltar" do navegador fechar a conversa junto. */
   const [verPedido, setVerPedido] = useState<number | null>(null);
-  /* ⚠️ Abre em "Pendentes" QUANDO HÁ pendência — e em "Todas" quando não há.
-     A regra original era só a primeira metade, e ela quebrou no dia em que a
-     caixa cresceu: com 243 conversas e ZERO pendentes, a tela abria dizendo
-     "Nenhuma conversa com esse filtro" numa caixa cheia. Quem chega não lê
-     isso como "está tudo respondido" — lê como sistema fora do ar, e é a
-     mesma doença do erro que se disfarça de vazio.
-
-     A intenção continua de pé: a caixa de entrada existe para mostrar o
-     TRABALHO, e o contador ao lado de cada aba diz o que há nas outras.
-     `null` = ninguém escolheu ainda; quem escolhe a primeira vez é o efeito
-     abaixo, uma vez só. */
-  /* ⚠️ A aba ESCOLHIDA vai para a URL (`?aba=sem-dono`); a DECIDIDA pelo
-     efeito abaixo não — ela é a abertura da tela, e escrevê-la faria o link de
-     quem abriu sem escolher congelar "Pendentes" para quem recebe. Aba na URL
-     dispensa a decisão: quem mandou o link escolheu. */
+  /* ⚠️ A tela abre em "Todas" (27/11/2026, pedido do dono do processo): as
+     outras abas são FILTRO, e abrir já filtrado atrapalhava o uso. Antes
+     abria em "Não respondidas" quando havia pendência. A aba escolhida vai
+     para a URL (`?aba=sem-dono`); "Todas" é o padrão e não vai. */
   const [abaUrl, setAbaUrl] = useParamUrl("aba", "", { replace: true });
   const filtroDaUrl = FILTROS.find((f) => abaNaUrl(f.id) === abaUrl)?.id ?? null;
-  const [filtroAuto, setFiltroAuto] = useState<FiltroConversa | null>(null);
-  const filtro = filtroDaUrl ?? filtroAuto;
-  const setFiltro = (f: FiltroConversa) => setAbaUrl(abaNaUrl(f));
-  const abaDecidida = useRef(false);
+  const setFiltro = (f: FiltroConversa) => setAbaUrl(f === "todas" ? "" : abaNaUrl(f));
   // ⚠️ As dependências são os VALORES, nunca o `params` inteiro: abrir uma
   // conversa (`?de=`) troca o objeto e recriaria os filtros — e o "Mostrar
   // mais" da lista, que zera quando os filtros mudam, voltaria aos 100.
@@ -4049,21 +4029,52 @@ export default function Conversas() {
     aberta: lista.filter((c) => janelaAberta(c.janela_ate)).length,
   }), [lista, meuId, caixa?.total]);
 
-  /* ⚠️ UMA VEZ SÓ, e depois que a lista chegou. Sem a trava, a contagem sai de
-     zero durante o carregamento, a aba seria decidida como "Todas" e trocaria
-     sozinha para "Pendentes" quando o dado chegasse — a lista mudando debaixo
-     do cursor de quem já começou a ler. E sem `lista.length` no teste, a caixa
-     legitimamente vazia congelaria a decisão no instante errado. */
+  /* A bolinha do menu (`usePendentesPorNumero`) recebe a contagem que esta
+     tela JÁ tem — marcou resolvida, o número do menu muda na hora, sem esperar
+     a releitura de 2 min. É a mesma conta: a aba "Não respondidas". */
+  const qc = useQueryClient();
   useEffect(() => {
-    if (abaDecidida.current || isLoading || lista.length === 0) return;
-    abaDecidida.current = true;
-    if (filtroDaUrl) return;
-    setFiltroAuto(contagens.pendentes > 0 ? "pendentes" : "todas");
-  }, [isLoading, lista.length, contagens.pendentes]);
+    if (!numeroId || isLoading || !caixa) return;
+    qc.setQueryData<Record<string, number>>(CHAVE_PENDENTES_POR_NUMERO,
+      (antes) => ({ ...(antes ?? {}), [numeroId]: contagens.pendentes }));
+  }, [qc, numeroId, isLoading, caixa, contagens.pendentes]);
 
-  /* Antes de a decisão acontecer a tela mostra TODAS — nunca uma aba que pode
-     estar vazia. Vazio no primeiro quadro é indistinguível de tela quebrada. */
-  const aba: FiltroConversa = filtro ?? "todas";
+  /* ── O AVISO das conversas PARADAS (27/11/2026) ─────────────────────────
+     Ao abrir um número com conversa sem resposta há mais de 24 h, ou
+     respondida e não encerrada há mais de 2 dias, a tela pede para tratar e a
+     pessoa marca "Ciente" (fica registrado). Uma vez por abertura do número —
+     F5 e voltar ao número contam como abrir de novo, de propósito. */
+  const [avisoParadas, setAvisoParadas] = useState<
+    { numero: string; semResposta: number; semEncerrar: number; desde: string | null } | null>(null);
+  const avisado = useRef<string | null>(null);
+  useEffect(() => {
+    if (!numeroId || isLoading || !caixa || avisado.current === numeroId) return;
+    avisado.current = numeroId;
+    const p = conversasParadas(lista);
+    if (p.semResposta + p.semEncerrar === 0) return;
+    setAvisoParadas({ numero: numeroId, semResposta: p.semResposta,
+                      semEncerrar: p.semEncerrar, desde: p.maisAntigaSemResposta });
+  }, [numeroId, isLoading, caixa, lista]);
+  const fecharAviso = (acao: "ciente" | "ver_sem_resposta" | "ver_sem_resolver") => {
+    if (!avisoParadas) return;
+    void registrarAvisoCiente({
+      numero_id: avisoParadas.numero, sem_resposta: avisoParadas.semResposta,
+      sem_resolver: avisoParadas.semEncerrar, acao,
+    });
+    setAvisoParadas(null);
+    if (acao === "ciente") return;
+    // Parte da URL ATUAL: aba, status e ordem trocam de uma vez.
+    const p = new URLSearchParams(window.location.search);
+    if (acao === "ver_sem_resposta") {
+      p.set("aba", abaNaUrl("pendentes")); p.delete("status");
+    } else {
+      p.delete("aba"); p.set("status", "em_atendimento");
+    }
+    p.set("ordem", "antigas");
+    setParams(p, { replace: true });
+  };
+
+  const aba: FiltroConversa = filtroDaUrl ?? "todas";
 
   const filtradas = useMemo(() => {
     const termo = busca.trim();
@@ -4155,40 +4166,19 @@ export default function Conversas() {
            quem chega sem contexto em vez de a cada abertura da tela. */
         actions={
           <div className="flex flex-wrap items-center gap-3">
-            {/* ── O SELETOR DE NÚMERO ──────────────────────────────────────
-                ⚠️ Só aparece com DOIS ou mais: com um número ele seria um botão
-                que não faz nada, e controle que não muda nada ensina a ignorar
-                os que mudam. Hoje são dois ativos (serviço e Clube) — o de
-                carrinho não está registrado na Meta e o `useNumeros` o esconde,
-                porque oferecer um número que não envia é prometer o que a Graph
-                API recusa com erro genérico.
-
-                ⚠️ E ele mostra TODOS os números, não só o aberto: "qual caixa
-                estou vendo?" e "quais caixas existem?" são a mesma pergunta
-                para quem atende, e um dropdown esconderia a segunda. */}
-            {(numeros?.length ?? 0) > 1 && (
-              <div className="flex items-center gap-1 rounded-lg border border-border
-                              bg-muted/40 p-0.5">
-                {(numeros ?? []).map((n: NumeroWa) => {
-                  const ativo = n.phone_number_id === numeroId;
-                  return (
-                    <button key={n.phone_number_id} type="button"
-                            onClick={() => trocarNumero(n.phone_number_id)}
-                            title={`${n.rotulo} · ${n.numero_exibicao ?? ""}`}
-                            aria-pressed={ativo}
-                            className={`flex min-h-8 items-center gap-1.5 rounded-md px-2.5 py-1 sm:min-h-0
-                                        text-[11px] font-medium transition-colors ${
-                              ativo ? "bg-background text-foreground shadow-sm"
-                                    : "text-muted-foreground hover:text-foreground"}`}>
-                      {/* A cor vem do CADASTRO, não de um mapa aqui: número novo
-                          entra com um INSERT e já chega com a cor dele. */}
-                      <span className="h-2 w-2 shrink-0 rounded-full"
-                            style={{ backgroundColor: n.cor ?? "#64748B" }} />
-                      {n.rotulo}
-                    </button>
-                  );
-                })}
-              </div>
+            {/* ── QUAL NÚMERO é esta caixa ────────────────────────────────
+                Desde 27/11/2026 os números são itens da barra lateral, com a
+                contagem de "sem resposta" (pedido do dono do processo). Aqui
+                fica só a etiqueta — dois lugares para trocar de caixa seriam
+                dois caminhos para a mesma ação. */}
+            {numeroAtual && (numeros?.length ?? 0) > 1 && (
+              <span title={numeroAtual.numero_exibicao ?? undefined}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border
+                               bg-muted/40 px-2.5 text-[11px] font-medium text-foreground">
+                <span className="h-2 w-2 shrink-0 rounded-full"
+                      style={{ backgroundColor: numeroAtual.cor ?? "#64748B" }} />
+                {numeroAtual.rotulo}
+              </span>
             )}
             {/* ⚠️ UM placar, não dois números soltos — mas as DUAS contas
                 continuam na tela, porque elas pedem coisas OPOSTAS: janela
@@ -4239,6 +4229,56 @@ export default function Conversas() {
       />
 
       {verQuemRecebe && <QuemRecebe aoFechar={() => setVerQuemRecebe(false)} />}
+
+      {/* O aviso das conversas paradas. Fechar por qualquer caminho conta como
+          "Ciente"; clicar fora não fecha. */}
+      <Dialog open={!!avisoParadas} onOpenChange={(o) => { if (!o) fecharAviso("ciente"); }}>
+        <DialogContent className="max-w-md" onInteractOutside={(e) => e.preventDefault()}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
+              Conversas paradas{numeroAtual ? ` · ${numeroAtual.rotulo}` : ""}
+            </DialogTitle>
+          </DialogHeader>
+          {avisoParadas && (
+            <div className="space-y-2">
+              {avisoParadas.semResposta > 0 && (
+                <div className="flex items-center gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium tabular-nums">
+                      {avisoParadas.semResposta} sem resposta há mais de 24 h
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Responda ou marque como resolvida
+                      {avisoParadas.desde && <> · a mais antiga desde {new Date(avisoParadas.desde)
+                        .toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}</>}
+                    </p>
+                  </div>
+                  <Button size="sm" variant="outline" className="shrink-0"
+                          onClick={() => fecharAviso("ver_sem_resposta")}>Ver</Button>
+                </div>
+              )}
+              {avisoParadas.semEncerrar > 0 && (
+                <div className="flex items-center gap-3 rounded-lg border border-sky-500/30 bg-sky-500/5 p-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium tabular-nums">
+                      {avisoParadas.semEncerrar} respondidas e não encerradas há mais de 2 dias
+                    </p>
+                    <p className="text-xs text-muted-foreground">Marque como resolvida</p>
+                  </div>
+                  <Button size="sm" variant="outline" className="shrink-0"
+                          onClick={() => fecharAviso("ver_sem_resolver")}>Ver</Button>
+                </div>
+              )}
+              <div className="flex justify-end pt-1">
+                <Button size="sm" onClick={() => fecharAviso("ciente")}>
+                  <Check className="mr-1.5 h-3.5 w-3.5" /> Ciente
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* ⚠️ Erro e vazio são coisas diferentes, e mostrá-los igual já custou
           caro nesta base: a tela de estoque dos vendedores dizia "ninguém tem

@@ -26,7 +26,8 @@ const balao = (t) => (p) => conversa(p).locator("div.rounded-lg").filter({ hasTe
 export const SHOTS = [
   // ── A tela inteira ──
   { chave: "conversas", papel: "colaborador", url: `/conversas?de=${LUANA}`, viewport: TELA, marcas: [
-    [1, (p) => p.locator('button[aria-pressed]').filter({ hasText: "CarboVAPT" }).locator("..")],
+    // Os números moram na barra lateral desde 27/11/2026.
+    [1, (p) => p.getByRole("link", { name: /CarboVAPT/ }).locator("..")],
     [2, (p) => p.locator("main").getByText(/esperando resposta/).locator("..")],
     [3, btn(/recebem aviso|recebe aviso|Ninguém recebe aviso/)],
     [4, (p) => p.getByRole("link", { name: "Voltar" })],
@@ -219,11 +220,25 @@ export const SHOTS = [
   { chave: "conversas-ofertas", papel: "colaborador", url: `/conversas?de=${DEBORA}`, viewport: TELA,
     antes: async (p) => { await btn(/^Todas/)(p).click(); },
     marcas: [
-    [1, (p) => p.locator('button[aria-pressed]').filter({ hasText: "CarboZé SAC" }).locator("..")],
+    [1, (p) => p.getByRole("link", { name: /CarboZé SAC/ })],
     [2, linha("Débora Freire")],
     [3, (p) => conversa(p).getByText(/automático · Hora de repor/).first()],
     [4, noPainel("Não recebe ofertas desde")],
     [5, (p) => painel(p).getByRole("button", { name: /Voltar a enviar/ })],
+  ] },
+  // ── O aviso das conversas paradas: o relógio anda 3 dias DEPOIS de os dados
+  //    (relativos a "agora") carregarem, e a caixa é aberta pelo menu. ──
+  { chave: "conversas-paradas", papel: "colaborador", url: "/painel", viewport: TELA, pad: 10, relogio: true,
+    antes: async (p) => {
+      await p.clock.setSystemTime(new Date(Date.now() + 3 * 86400000));
+      await p.getByRole("link", { name: "CarboZé" }).first().click();
+      await p.waitForTimeout(2500);
+    },
+    clip: (p) => p.locator('[role="dialog"]'), marcas: [
+    [1, (p) => p.locator('[role="dialog"]').getByText(/sem resposta há mais de 24 h/).locator("xpath=ancestor::div[contains(@class,'rounded-lg')][1]")],
+    [2, (p) => p.locator('[role="dialog"]').getByText(/não encerradas há mais de 2 dias/).locator("xpath=ancestor::div[contains(@class,'rounded-lg')][1]")],
+    [3, (p) => p.locator('[role="dialog"]').getByRole("button", { name: "Ver" }).first()],
+    [4, (p) => p.locator('[role="dialog"]').getByRole("button", { name: "Ciente" })],
   ] },
   // ── Quem recebe o aviso ──
   { chave: "quem-recebe", papel: "colaborador", url: `/conversas?de=${LUANA}`, viewport: TELA, pad: 6,

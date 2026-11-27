@@ -34,6 +34,8 @@ for (const s of SHOTS) {
   // A mídia da conversa (áudio, documento): sem isto o balão mostra "Sem
   // conexão" no print. Um WAV de 3 s de silêncio serve para os dois.
   await p.route(/functions\/v1\/whatsapp-midia-baixar/, (r) => r.fulfill({ status: 200, contentType: "audio/wav", body: WAV }));
+  // Prints que precisam mexer no relógio (o aviso das conversas paradas).
+  if (s.relogio) await p.clock.install({ time: new Date() });
   try {
     await p.goto(BASE + s.url, { waitUntil: "domcontentloaded", timeout: 30000 }); await p.waitForTimeout(1800);
     if (s.antes) await s.antes(p);
