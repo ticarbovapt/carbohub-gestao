@@ -953,3 +953,47 @@ export function podeCitar(m: Pick<MensagemConversa, "tipo" | "status" | "wamid">
 export function podeReagir(m: Pick<MensagemConversa, "direcao" | "tipo" | "wamid">): boolean {
   return !!m.wamid && m.direcao === "entrada" && m.tipo !== "reaction" && m.tipo !== "unsupported";
 }
+
+/* ── Conversas PARADAS: o aviso ao abrir um número (27/11/2026) ─────────────
+   Pedido do dono do processo: a caixa do CarboZé chegou a 694 "não
+   respondidas", muitas de semanas atrás. Ao abrir um número, a tela pede para
+   responder ou encerrar o que parou, e a pessoa marca "Ciente".
+   ⚠️ São duas filas, e as duas pedem coisas diferentes:
+     sem resposta     o cliente escreveu e ninguém respondeu  → responder
+     sem encerrar     respondemos, o cliente sumiu            → marcar resolvida
+   ⚠️ "Aguardando" fica FORA: foi uma decisão de alguém, e ela reabre sozinha
+   quando o cliente escreve. */
+export const PARADA_SEM_RESPOSTA_MS = 24 * 3_600_000;
+export const PARADA_SEM_ENCERRAR_MS = 48 * 3_600_000;
+
+export interface ConversasParadas {
+  semResposta: number;
+  semEncerrar: number;
+  /** Desde quando a mais antiga sem resposta espera (ISO), ou nulo. */
+  maisAntigaSemResposta: string | null;
+}
+
+export function conversasParadas(
+  lista: Pick<Conversa, "status" | "aguardando_desde" | "ultima_em">[],
+  agora: number = Date.now(),
+): ConversasParadas {
+  let semResposta = 0;
+  let semEncerrar = 0;
+  let maisAntiga: number | null = null;
+  for (const c of lista) {
+    if (c.status === "aberto" && c.aguardando_desde) {
+      const desde = new Date(c.aguardando_desde).getTime();
+      if (agora - desde > PARADA_SEM_RESPOSTA_MS) {
+        semResposta++;
+        if (maisAntiga === null || desde < maisAntiga) maisAntiga = desde;
+      }
+    } else if (c.status === "em_atendimento") {
+      if (agora - new Date(c.ultima_em).getTime() > PARADA_SEM_ENCERRAR_MS) semEncerrar++;
+    }
+  }
+  return {
+    semResposta,
+    semEncerrar,
+    maisAntigaSemResposta: maisAntiga === null ? null : new Date(maisAntiga).toISOString(),
+  };
+}

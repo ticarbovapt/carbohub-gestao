@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import { Lock, X } from "lucide-react";
 import { cn } from "./cn";
 import { AcademyNavLink } from "./AcademyNavLink";
@@ -26,6 +26,10 @@ function DrawerItem({
   depth?: number;
 }) {
   const Icon = item.icon;
+  const loc = useLocation();
+  // ⚠️ Antes do `return` do item travado: hook não pode ser condicional.
+  const proprio = item.ativo ? item.ativo(loc.pathname, new URLSearchParams(loc.search)) : null;
+  const aceso = (casa: boolean) => proprio ?? casa;
 
   if (item.locked) {
     return (
@@ -52,7 +56,7 @@ function DrawerItem({
         className={({ isActive }) =>
           cn(
             "group relative flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-            isActive
+            aceso(isActive)
               ? "bg-primary/10 text-primary"
               : "text-muted-foreground hover:bg-muted hover:text-foreground",
           )
@@ -60,7 +64,7 @@ function DrawerItem({
       >
         {({ isActive }) => (
           <>
-            {isActive && (
+            {aceso(isActive) && (
               <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-primary" />
             )}
             <Icon className="h-4 w-4 shrink-0" />

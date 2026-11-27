@@ -15,6 +15,12 @@ export interface ShellNavItem {
   lockedHint?: string;
   /** nested sub-items (indented, thinner) */
   sub?: ShellNavItem[];
+  /**
+   * Regra própria de "estou nesta tela". O `NavLink` só olha o CAMINHO: dois
+   * itens que diferem pela query (`/conversas?numero=A` e `?numero=B`) ficariam
+   * acesos juntos. Sem ela, vale o `NavLink`.
+   */
+  ativo?: (pathname: string, search: URLSearchParams) => boolean;
 }
 
 export interface ShellNavSection {

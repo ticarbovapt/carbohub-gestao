@@ -1,6 +1,6 @@
 import { useMemo, useState, useRef } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
-import { MessagesSquare, LayoutDashboard, MessageCircle, PackageSearch, PackageX, Send, BookOpen, Gauge, BarChart3, GitBranch } from "lucide-react";
+import { MessagesSquare, LayoutDashboard, MessageCircle, PackageSearch, PackageX, Send, BookOpen, Gauge, BarChart3, GitBranch, type LucideIcon } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAccessPing } from "@/hooks/useAccessPing";
@@ -12,6 +12,30 @@ import { HUB_URL } from "@/lib/sso";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEcommerceNotifications } from "@/hooks/useEcommerceNotifications";
+import { useNumeros } from "@/hooks/useConversas";
+import { usePendentesPorNumero } from "@/hooks/usePendentesPorNumero";
+
+/** O ícone do número é a bolinha da cor do CADASTRO (`carbo_wa_numeros.cor`). */
+function pontoDaCor(cor: string | null): LucideIcon {
+  const Ponto = ({ className }: { className?: string }) => (
+    <span className={`${className ?? ""} inline-flex items-center justify-center`}>
+      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: cor ?? "#64748B" }} />
+    </span>
+  );
+  return Ponto as unknown as LucideIcon;
+}
+
+/** Quantas conversas do número estão sem resposta. Zero não mostra nada. */
+function BolinhaPendentes({ n }: { n: number | undefined }) {
+  if (!n) return null;
+  return (
+    <span title={`${n} sem resposta`}
+          className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500
+                     px-1.5 text-[10px] font-semibold leading-none text-white tabular-nums">
+      {n > 999 ? "999+" : n}
+    </span>
+  );
+}
 
 export function Layout() {
   // Venda online avisa em qualquer app que a pessoa esteja usando.
@@ -29,6 +53,27 @@ export function Layout() {
   );
 
   const navigate = useNavigate();
+
+  /* ── Os NÚMEROS de WhatsApp como telas, cada um com a bolinha de "sem
+     resposta" (27/11/2026). A caixa já era uma por número (`?numero=`); o que
+     muda é o lugar do seletor — e a contagem fica à vista de qualquer página.
+     ⚠️ A lista sai do CADASTRO: número novo aparece com um INSERT. Sem número
+     (ainda carregando ou sem acesso) o item "Conversas" continua sozinho. */
+  const { data: numeros } = useNumeros();
+  const { data: pendentes } = usePendentesPorNumero();
+  const subConversas = useMemo(() => {
+    const lista = numeros ?? [];
+    const primeiro = lista[0]?.phone_number_id ?? null;
+    return lista.map((n) => ({
+      to: `/conversas?numero=${n.phone_number_id}`,
+      label: n.rotulo,
+      icon: pontoDaCor(n.cor),
+      badge: <BolinhaPendentes n={pendentes?.[n.phone_number_id]} />,
+      // Sem `?numero=` a caixa mostra o PRIMEIRO do cadastro — e ele é que acende.
+      ativo: (p: string, q: URLSearchParams) =>
+        p === "/conversas" && (q.get("numero") ?? primeiro) === n.phone_number_id,
+    }));
+  }, [numeros, pendentes]);
 
   // Mobile: abre a gaveta. Desktop: recolhe/expande a sidebar (rail).
   const handleMenu = () => {
@@ -58,7 +103,10 @@ export function Layout() {
         // API nao aparece na Caixa de Entrada do Meta Business Suite e a API nao
         // tem endpoint de historico. O que o webhook nao gravar so existe no
         // celular do cliente.
-        { to: "/conversas", label: "Conversas", icon: MessageCircle },
+        { to: "/conversas", label: "Conversas", icon: MessageCircle,
+          // Um número só: a bolinha vai no próprio item, sem subitem repetido.
+          badge: subConversas.length === 1 ? subConversas[0].badge : undefined,
+          sub: subConversas.length > 1 ? subConversas : undefined },
         { to: "/ecommerce/esteira", label: "Esteira do On-line", icon: PackageSearch },
         { to: "/pos-venda", label: "Pós-venda", icon: PackageX, end: true },
         { to: "/pos-venda/fluxos", label: "Fluxos do pós-venda", icon: GitBranch },

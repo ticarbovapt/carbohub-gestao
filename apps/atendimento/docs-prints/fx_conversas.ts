@@ -256,6 +256,9 @@ export const RPC_FX: Record<string, unknown> = {
     return { total: itens.length, ativas: itens.length, quietas_total: 0, itens };
   },
   carbo_wa_caixa: (a: { p_numero_id?: string }) => doNumero(a.p_numero_id),
+  // A bolinha de "sem resposta" de cada número no menu (20261204).
+  carbo_wa_pendentes_por_numero: () => ({ [NUM_SERVICO]: 12, [NUM_SAC]: 4 }),
+  carbo_wa_aviso_ciente: [],
   carbo_wa_conversa_mensagens: (a: { p_numero_id?: string; p_wa_id?: string }) =>
     MSGS.filter((m) => m.numero_id === a.p_numero_id && m.wa_id === a.p_wa_id)
       .sort((x, y) => String(x.ocorrido_em).localeCompare(String(y.ocorrido_em))),

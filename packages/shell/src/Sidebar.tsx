@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import {
   ChevronDown,
   Lock,
@@ -25,6 +25,10 @@ function NavItem({
   depth?: number;
 }) {
   const Icon = item.icon;
+  const loc = useLocation();
+  // ⚠️ Antes do `return` do item travado: hook não pode ser condicional.
+  const proprio = item.ativo ? item.ativo(loc.pathname, new URLSearchParams(loc.search)) : null;
+  const aceso = (casa: boolean) => proprio ?? casa;
 
   // Locked → non-clickable div
   if (item.locked) {
@@ -60,7 +64,7 @@ function NavItem({
           cn(
             "group relative flex items-center rounded-lg text-sm font-medium transition-colors",
             collapsed ? "h-9 w-9 justify-center" : "gap-2.5 px-3 py-2",
-            isActive
+            aceso(isActive)
               ? "bg-primary/10 text-primary"
               : "text-muted-foreground hover:bg-muted hover:text-foreground",
           )
@@ -68,7 +72,7 @@ function NavItem({
       >
         {({ isActive }) => (
           <>
-            {isActive && !collapsed && (
+            {aceso(isActive) && !collapsed && (
               <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-primary" />
             )}
             <Icon className="h-4 w-4 shrink-0" />
