@@ -130,8 +130,20 @@ async function ingerir(base: string, ambiente: string, cli: Deno.HttpClient) {
     nsu = Number(ultimo ?? 0);
     nsuInicial = nsu;
 
+    // ⚠️ Desde ~31/10/2026 o ADN RECUSA a consulta "pela inscrição do
+    // certificado" (`/contribuintes/DFe/{NSU}` puro): 400 `REJEICAO` com
+    // `Erros: []`, primeiro intermitente, contínua desde 06/11 — o espelho
+    // parou em 834 e ninguém viu (o 400 virava linha de erro no log). Com
+    // `cnpjConsulta` + `lote=true` a mesma consulta volta 200
+    // (`TipoConsulta: CnpjBase`), medido em 27/11 pela sonda. O CNPJ é o do
+    // CADASTRO (`carbo_nfse_cnpj`), nunca escrito aqui. Sem ele, cai no
+    // caminho antigo — e o 400 continua APARECENDO no log, nunca calado.
+    const { data: cnpjCad } = await sb.rpc("carbo_nfse_cnpj");
+    const cnpj = String(cnpjCad ?? "").replace(/\D/g, "");
+    const consulta = cnpj.length === 14 ? `?cnpjConsulta=${cnpj}&lote=true` : "";
+
     while (lotes < MAX_LOTES) {
-      const alvo = `${base}/contribuintes/DFe/${nsu}`;
+      const alvo = `${base}/contribuintes/DFe/${nsu}${consulta}`;
       const res = await fetch(alvo, { client: cli, headers: { Accept: "application/json" } });
       const texto = await res.text();
       let corpo: Record<string, unknown> = {};

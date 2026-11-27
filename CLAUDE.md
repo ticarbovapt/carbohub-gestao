@@ -5927,6 +5927,16 @@ Outras decisões que não se desfazem sem entender:
    fechar e a conferência ficar impossível — a razão de o usuário bloqueado não
    sumir da tela de Usuários.
 
+⚠️ **Desde ~31/10/2026 a consulta precisa de `cnpjConsulta`** (27/11/2026).
+O ADN passou a recusar `/contribuintes/DFe/{NSU}` puro (consulta "pela
+inscrição do certificado") com 400 `REJEICAO` e `Erros: []` — intermitente
+até 05/11, contínuo desde 06/11; o espelho parou no NSU 834 por três semanas
+e só apareceu porque outra investigação olhou a tela. Com
+`?cnpjConsulta=<carbo_nfse_cnpj()>&lote=true` volta 200 (`TipoConsulta:
+CnpjBase`), medido pela sonda. ⚠️ O log tinha a resposta o tempo todo
+(`carbo_nfse_sync_log.erro`): fonte com erro em TODAS as rodadas por dias é
+alarme que ninguém ligou — candidato ao vigia das fontes.
+
 ⚠️ **O parse do XML é MATERIALIZADO** (`carbo_nfse_notas_mat`,
 `carbo_nfse_eventos_mat`), e isso corrigiu um timeout real: com 697 notas a
 tela dava `canceling statement due to statement timeout`. A conta que eu não
