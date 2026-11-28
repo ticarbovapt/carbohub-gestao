@@ -1653,6 +1653,34 @@ monitor de 1920. Medido no navegador (Supabase falso), app a app.
    — não é defeito. Medidor: script Playwright sobre o harness `docs-prints`
    (porta 8099), `scrollWidth > clientWidth` no documento e em cada contêiner.
 
+### Responsividade app por app — tabela que vira CARTÕES e campo sem zoom (28/11/2026)
+Pedido do dono do processo: todas as telas em qualquer tamanho, sem a tela
+"lotada" no celular e sem o zoom ao tocar em campo — app por app, no molde do
+que foi feito no Sales. Ordem: **Ops ✅** → Finanças → Admin → Atendimento →
+Marketing → TI → Pré-Vendas.
+1. **Medidor**: o harness `docs-prints` de cada app, com Playwright, em
+   360/390/768/1024/1280/1366/1536/1920 com a barra ABERTA — rolagem do
+   `<main>`, do documento e de toda caixa que rola de lado (o `QuadroRolavel`
+   leva `data-quadro-rolavel` e fica de fora: rola por desenho).
+2. ⭐ **`CaixaTabela` / `useTabelaAdaptavel`** (`packages/shell`): a tabela que
+   NÃO CABE na caixa vira um cartão por linha ("rótulo · valor", rótulo tirado
+   do `thead`); cabe ⇒ continua tabela. Quem decide é a largura da CAIXA, medida
+   (no modo tabela, no mesmo quadro — não pisca), nunca breakpoint de janela.
+   App ligado = `ui/table.tsx` (e `carbo-table.tsx` no Ops) com `CaixaTabela` no
+   lugar do `div overflow-auto`, e tabela crua trocando o `div overflow-x-auto`.
+   ⚠️ O visual mora no bloco "Tabela que vira cartões" dos OITO `index.css`
+   (já em todos). ⚠️ Coluna escondida pela tela (`hidden md:table-cell`) segue
+   escondida; célula só de botões não leva rótulo; linha com `colSpan` vira
+   cartão inteiro. ⚠️ Ordenar pelo cabeçalho só existe no modo tabela.
+   ⚠️ `ui/table.tsx` DIVERGE entre os apps durante a rodada (o do app ainda
+   não revisado é o antigo) — ao terminar os sete, os oito voltam iguais.
+3. **Campo sem zoom**: bloco "Campo sem zoom no celular" nos OITO `index.css`
+   — no toque e abaixo de 768 px todo campo digitável vai a 16 px (o iPhone
+   amplia abaixo disso; o `maximum-scale=1` não segura em todo navegador).
+4. `/vender` (os oito): o aviso "Editando o orçamento…" era `flex` com o texto
+   solto — cada pedaço virava uma coluna e no celular a frase saía espremida,
+   e o "Sair" passava 4 px da borda. Hoje o texto vai num `<span>` só.
+
 ### Tooltip de gráfico no tema escuro — corrigido no `index.css`, não no gráfico
 As variáveis de cor são TRIPLETOS HSL; `background: var(--background)` (em ~20
 gráficos) é cor inválida, descartada calada — o tooltip ficava transparente. E

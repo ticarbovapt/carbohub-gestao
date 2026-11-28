@@ -209,6 +209,7 @@ export function QuadroRolavel({ className, children, envolve, rolaRef, onScroll,
     <div className={envolve ?? "relative flex-1 min-h-0 flex flex-col"}>
       <div
         ref={prender}
+        data-quadro-rolavel=""
         className={className}
         style={style as never}
         onScroll={onScroll}

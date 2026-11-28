@@ -46,3 +46,4 @@ export {
   intervaloDoAtalho, detectarAtalho, mesesParaEscolher, diasDoPeriodo, periodoAnterior, rotuloDoPeriodo, diaIso,
 } from "./periodo";
 export type { Periodo, AtalhoPeriodo } from "./periodo";
+export { useTabelaAdaptavel, CaixaTabela } from "./tabelaAdaptavel";

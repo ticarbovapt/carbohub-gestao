@@ -1117,3 +1117,52 @@ a, button, input, select, textarea, label, [role="button"], [role="tab"], [role=
   .group .group-hover\:flex { display: flex; }
   .group .group-hover\:block { display: block; }
 }
+
+/* ── Campo sem zoom no celular ───────────────────────────────────────────────
+ * O iPhone AMPLIA a tela ao tocar em campo com fonte menor que 16px, e ela fica
+ * "estourada" até a pessoa reduzir com os dedos. O `maximum-scale=1` do
+ * index.html segura isso no Safari, mas não em todo navegador nem em toda
+ * versão — e boa parte dos campos das telas é `text-sm`/`text-xs`. No toque e
+ * na tela pequena todo campo digitável fica com 16px; no computador nada muda. */
+@media (pointer: coarse) and (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+  select, textarea, [contenteditable="true"] {
+    font-size: 16px !important;
+  }
+}
+
+/* ── Tabela que vira cartões (packages/shell/src/tabelaAdaptavel.tsx) ─────────
+ * Só vale quando a tabela NÃO CABE na caixa (o atributo é posto por medida, não
+ * por breakpoint): cada linha vira um cartão com "rótulo · valor", e os cartões
+ * se arrumam em colunas quando há largura. Cabe ⇒ nada aqui se aplica. */
+[data-tabela-cartao] { overflow-x: visible !important; border-color: transparent !important; border-radius: 0 !important; background: transparent !important; }
+[data-tabela-cartao] table { display: block; width: 100% !important; min-width: 0 !important; table-layout: auto; }
+[data-tabela-cartao] thead { display: none; }
+[data-tabela-cartao] tbody, [data-tabela-cartao] tfoot {
+  display: grid; gap: 0.5rem; border: 0 !important; background: transparent;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
+}
+[data-tabela-cartao] tbody + tbody, [data-tabela-cartao] tbody + tfoot { margin-top: 0.5rem; }
+[data-tabela-cartao] tr {
+  display: block; min-width: 0; padding: 0.625rem 0.75rem;
+  border: 1px solid hsl(var(--border)) !important; border-radius: 0.75rem; background-color: hsl(var(--card));
+}
+[data-tabela-cartao] tr[data-cartao-largo] { grid-column: 1 / -1; }
+[data-tabela-cartao] td {
+  display: block; padding: 0.125rem 0 !important; border: 0 !important;
+  width: auto !important; max-width: none !important; min-width: 0 !important; height: auto !important;
+  white-space: normal !important; overflow-wrap: anywhere; text-align: right !important; position: static !important;
+}
+[data-tabela-cartao] td::before {
+  content: attr(data-rotulo); float: left; margin-right: 0.75rem; max-width: 45%;
+  text-align: left; font-size: 0.75rem; line-height: 1.25rem; font-weight: 400;
+  color: hsl(var(--muted-foreground)); text-transform: none; letter-spacing: normal;
+}
+[data-tabela-cartao] td::after { content: ""; display: table; clear: both; }
+[data-tabela-cartao] td[data-rotulo=""]::before, [data-tabela-cartao] td:not([data-rotulo])::before { content: none; }
+[data-tabela-cartao] td > [class~="flex"] { justify-content: flex-end; }
+[data-tabela-cartao] td[data-cartao-titulo] { text-align: left !important; font-weight: 500; padding-bottom: 0.375rem !important; }
+[data-tabela-cartao] td[data-cartao-titulo]::before { content: none; }
+[data-tabela-cartao] td[data-cartao-titulo] > [class~="flex"] { justify-content: flex-start; }
+[data-tabela-cartao] tr[data-cartao-largo] td { text-align: center !important; }
+[data-tabela-cartao] td[data-cartao-oculto], [data-tabela-cartao] td:empty { display: none; }

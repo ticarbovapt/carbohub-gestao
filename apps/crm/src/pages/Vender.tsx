@@ -1286,8 +1286,11 @@ export default function Vender() {
         <div className={`flex items-center justify-between gap-3 rounded-lg border px-4 py-2.5 text-sm ${
           editFaturado ? "border-destructive/40 bg-destructive/10" : "border-amber-500/30 bg-amber-500/10"
         }`}>
-          <span className={`flex items-center gap-2 ${editFaturado ? "text-destructive" : "text-amber-700 dark:text-amber-300"}`}>
+          <span className={`flex min-w-0 items-center gap-2 ${editFaturado ? "text-destructive" : "text-amber-700 dark:text-amber-300"}`}>
             <FileText className="h-4 w-4 shrink-0" />
+            {/* Um <span> só: solto, cada pedaço do texto virava um item do flex
+                e no celular a frase saía em colunas espremidas. */}
+            <span className="min-w-0">
             {editFaturado ? (
               <>A venda <b>{editNumero ?? "…"}</b> já tem nota emitida — itens e valores não podem mais mudar. Para corrigir, cancele e refaça.</>
             ) : editandoVenda ? (
@@ -1295,6 +1298,7 @@ export default function Vender() {
             ) : (
               <>Editando o orçamento <b>{editNumero ?? "…"}</b> — ao salvar, ele vira a nova versão (mesmo número).</>
             )}
+            </span>
           </span>
           <Button variant="ghost" size="sm" className="shrink-0" onClick={sairDaTela}>Sair</Button>
         </div>

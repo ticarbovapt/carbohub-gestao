@@ -5,7 +5,7 @@ import {
   ClipboardList, CalendarDays, Zap, CheckCircle2, Search, LayoutGrid, List, Plus,
   RefreshCw, Loader2, AlertTriangle, Calendar,
 } from "lucide-react";
-import { useParamUrl } from "@carbo/shell";
+import { useParamUrl, CaixaTabela } from "@carbo/shell";
 import { cn } from "@/lib/utils";
 import { NovaDescarbonizacaoDialog } from "@/components/NovaDescarbonizacaoDialog";
 import { useOS, useVendasSemOS } from "@/hooks/useOS";
@@ -114,7 +114,7 @@ export default function OrdensServico() {
               </div>
             </div>
             {semOsAberto && (
-              <div className="overflow-x-auto border-t border-amber-500/20">
+              <CaixaTabela className="overflow-x-auto border-t border-amber-500/20">
                 <table className="w-full min-w-[640px] text-xs">
                   <thead className="text-muted-foreground">
                     <tr>
@@ -136,7 +136,7 @@ export default function OrdensServico() {
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </CaixaTabela>
             )}
           </div>
         )}
