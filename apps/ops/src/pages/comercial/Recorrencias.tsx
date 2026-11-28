@@ -13,6 +13,7 @@ import {
   useRecorrencias, useExcluirParcela, useCancelarParcela,
   temNota, stageLabel, type ContratoRow, type ParcelaRow,
 } from "@/hooks/useRecorrencias";
+import { CaixaTabela } from "@carbo/shell";
 
 const brl = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
@@ -180,7 +181,7 @@ export default function Recorrencias() {
 
       {!isLoading && !error && (
         <div className="rounded-xl border bg-card overflow-hidden">
-          <div className="overflow-x-auto">
+          <CaixaTabela className="overflow-x-auto">
             <table className="w-full text-sm min-w-[760px]">
               <thead>
                 <tr className="border-b bg-muted/30 text-xs uppercase tracking-wide text-muted-foreground">
@@ -257,7 +258,7 @@ export default function Recorrencias() {
                 )}
               </tbody>
             </table>
-          </div>
+          </CaixaTabela>
         </div>
       )}
 

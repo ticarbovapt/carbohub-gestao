@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useParamUrl } from "@carbo/shell";
+import { useParamUrl, CaixaTabela } from "@carbo/shell";
 import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type OSView, TIPO_TONE, brl, dt, parseData, stageMeta } from "./osView";
@@ -148,7 +148,7 @@ export function OSLista({ items }: { items: OSView[] }) {
       </ul>
 
       {/* Tela larga */}
-      <div className="hidden overflow-x-auto md:block">
+      <CaixaTabela className="hidden overflow-x-auto md:block">
         {/* Abaixo de 1800 px (notebook; 1920 com escala de 125% é 1536) as células
             apertam e os portes descem para baixo da barra — senão a Etapa
             ficava fora da tela. */}
@@ -189,7 +189,7 @@ export function OSLista({ items }: { items: OSView[] }) {
             ))}
           </tbody>
         </table>
-      </div>
+      </CaixaTabela>
     </div>
   );
 }

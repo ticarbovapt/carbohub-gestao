@@ -13,7 +13,7 @@ import {
   useMlFullEstoque, useMlFullRemessas, useRegistrarRemessa,
   useReceberRemessa, useCancelarRemessa, type LinhaMlFull,
 } from "@/hooks/useMlFull";
-import { pedirTexto } from "@carbo/shell";
+import { pedirTexto, CaixaTabela } from "@carbo/shell";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ML Full — o galpão do Mercado Livre, visto daqui.
@@ -115,7 +115,7 @@ export function MlFullPainel() {
       ) : (
         <Card>
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
+            <CaixaTabela className="overflow-x-auto">
               <table className="w-full min-w-[640px] text-sm">
                 <thead className="border-b text-xs text-muted-foreground">
                   <tr>
@@ -191,7 +191,7 @@ export function MlFullPainel() {
                   })}
                 </tbody>
               </table>
-            </div>
+            </CaixaTabela>
           </CardContent>
         </Card>
       )}

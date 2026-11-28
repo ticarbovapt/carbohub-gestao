@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { CarboBadge } from "@/components/ui/carbo-badge";
 import { Link2, FileText } from "lucide-react";
 import { toast } from "sonner";
+import { CaixaTabela } from "@carbo/shell";
 
 const brl = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
@@ -52,7 +53,7 @@ export function BlingPreviewDialog({ order, open, onOpenChange }: Props) {
           </div>
 
           {/* Itens */}
-          <div className="rounded-lg border overflow-x-auto">
+          <CaixaTabela className="rounded-lg border overflow-x-auto">
             <table className="w-full text-xs">
               <thead className="bg-muted/40 text-muted-foreground">
                 <tr><th className="text-left p-2 font-medium">Item</th><th className="text-right p-2 font-medium">Qtd</th><th className="text-right p-2 font-medium">Subtotal</th></tr>
@@ -73,7 +74,7 @@ export function BlingPreviewDialog({ order, open, onOpenChange }: Props) {
                 <tr className="border-t bg-muted/20 font-semibold"><td className="p-2" colSpan={2}>Total</td><td className="p-2 text-right tabular-nums">{brl(order.total)}</td></tr>
               </tfoot>
             </table>
-          </div>
+          </CaixaTabela>
         </div>
 
         <DialogFooter>

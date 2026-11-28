@@ -6,6 +6,7 @@ import {
   AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 import { useProductionDashboard } from "@/hooks/useProductionDashboard";
+import { CaixaTabela } from "@carbo/shell";
 
 const TOOLTIP = { backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px" } as const;
 
@@ -84,7 +85,7 @@ export default function DashboardProducao() {
           <div className="border-b border-border px-6 py-4">
             <h2 className="text-lg font-semibold text-board-text">Checklists Recentes</h2>
           </div>
-          <div className="overflow-x-auto">
+          <CaixaTabela className="overflow-x-auto">
             <table className="w-full min-w-[560px]">
               <thead>
                 <tr className="border-b border-border bg-secondary/30">
@@ -114,7 +115,7 @@ export default function DashboardProducao() {
                 })}
               </tbody>
             </table>
-          </div>
+          </CaixaTabela>
         </div>
         </>
         )}

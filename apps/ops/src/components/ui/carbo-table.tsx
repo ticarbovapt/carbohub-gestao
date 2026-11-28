@@ -1,18 +1,19 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
+import { CaixaTabela } from "@carbo/shell";
 import { ChevronDown, ChevronUp, ChevronsUpDown } from "lucide-react";
 
 const CarboTable = React.forwardRef<
   HTMLTableElement,
   React.HTMLAttributes<HTMLTableElement>
 >(({ className, ...props }, ref) => (
-  <div className="relative w-full overflow-auto rounded-xl border border-border">
+  <CaixaTabela className="relative w-full overflow-auto rounded-xl border border-border">
     <table
       ref={ref}
       className={cn("w-full caption-bottom text-sm", className)}
       {...props}
     />
-  </div>
+  </CaixaTabela>
 ));
 CarboTable.displayName = "CarboTable";
 
